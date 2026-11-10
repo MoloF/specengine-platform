@@ -319,10 +319,10 @@ describe("the panel (ST-5)", () => {
     expect(region?.hidden).toBe(true);
     expect([fact("Name"), fact("Kind"), fact("Where")]).toEqual(["G", "domain", "docs/spec/g.md:1"]);
     expect(region?.contains(within(panel()).getAllByText("Name", { selector: "dt" })[0] ?? null)).toBe(true);
-    expect(shown.getByText("2 confirmed, 3 no card")).toBeTruthy();
+    expect(shown.getByText("2 confirmed, 3 no task")).toBeTruthy();
     // The scope's acts (doc-modal DM-14): Open document, the one primary, and New card; the tree is the modal's to open.
     expect(shown.getByRole("button", { name: "Open document" }).className).toContain("button-primary");
-    expect(shown.getByRole("button", { name: "New card" })).toBeTruthy();
+    expect(shown.getByRole("button", { name: "New task" })).toBeTruthy();
     expect(shown.queryByRole("link", { name: "Open in Spec tree" })).toBeNull();
     expect(panel().querySelectorAll("li.flow-gap")).toHaveLength(0);
   });
@@ -790,11 +790,11 @@ describe("gap items and the hand-off (D11, cut 2c), from the Gaps control (flow-
     await drawn("A");
     const item = within(openGaps()).getByRole("button", { name: "Bind + Engrave" }).closest("li");
     fireEvent.click(within(item as HTMLElement).getByRole("button", { name: /^Hand to your AI/ }));
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     expect(within(dialog).getByLabelText<HTMLInputElement>("Title").value).toBe("Gap cycle-no-repeat: B + E");
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Goal").value).toBe("a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}");
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Source", { exact: false }).value).toBe("B\nE");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
     });
@@ -819,7 +819,7 @@ describe("gap items and the hand-off (D11, cut 2c), from the Gaps control (flow-
     await drawn("A");
     const row = within(openGaps()).getByText("no-start").closest("li");
     fireEvent.click(within(row as HTMLElement).getByRole("button", { name: /^Hand to your AI/ }));
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Source", { exact: false }).value).toBe("G");
   });
 });
@@ -1065,9 +1065,9 @@ describe("the scenario on flow-aside (RM-0094)", () => {
       await drawn("WBAY-KILN");
       const item = (await within(openGaps()).findByRole("button", { name: "Wedging + Open day" })).closest("li");
       fireEvent.click(within(item as HTMLElement).getByRole("button", { name: /^Hand to your AI/ }));
-      const dialog = await screen.findByRole("dialog", { name: "New card" });
+      const dialog = await screen.findByRole("dialog", { name: "New task" });
       expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Source", { exact: false }).value).toBe(`POT-WEDGE\n${OPEN_DAY}`);
-      fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
       await waitFor(() => {
         expect(client.createCard).toHaveBeenCalledTimes(1);
       });
@@ -1488,11 +1488,11 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
   it("acts with Open document, the one primary, and New card alone; a group adds its Open; no links, cards, tree or graph in the panel", async () => {
     await bisque();
     const acts = Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent);
-    expect(acts).toEqual(["Open document", "New card"]);
+    expect(acts).toEqual(["Open document", "New task"]);
     expect(within(panel()).getByRole("button", { name: "Open document" }).className).toContain("button-primary");
     expect(panel().querySelectorAll(".button-primary")).toHaveLength(1);
     expect(panel().querySelector(".links-panel, .cards-block")).toBeNull();
-    expect(within(panel()).queryByRole("region", { name: "Cards" })).toBeNull();
+    expect(within(panel()).queryByRole("region", { name: "Tasks" })).toBeNull();
     for (const name of ["Open in Spec tree", "Open in Graph"]) {
       expect([name, within(panel()).queryByRole("link", { name })]).toEqual([name, null]);
     }
@@ -1502,7 +1502,7 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
     await waitFor(() => {
       expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Firing run");
     });
-    expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New card", "Open Firing run"]);
+    expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New task", "Open Firing run"]);
   });
 
   it("folds name, kind, place and distance under Technical details, collapsed", async () => {
@@ -1544,11 +1544,11 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
   it("says a card made from a box in that box's panel alone: another selection takes the note away (the review's nit)", async () => {
     const client = await bisque();
     client.createCard.mockResolvedValue(aCardWrite("C-0042"));
-    fireEvent.click(within(panel()).getByRole("button", { name: "New card" }));
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    fireEvent.click(within(panel()).getByRole("button", { name: "New task" }));
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Source", { exact: false }).value).toBe("POT-BISQUE");
     fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Fire it" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     expect(await within(panel()).findByText("C-0042 created.")).toBeTruthy();
     fireEvent.keyDown(box("POT-BISQUE"), { key: "Escape" });
     await waitFor(() => {
@@ -1561,13 +1561,13 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
     renderApp(asideClient(), FIRING);
     await drawn("POT-BISQUE");
     await waitFor(() => {
-      expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New card"]);
+      expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New task"]);
     });
     renderApp(studioClient(reads({ top: aFlowView([aFlowNode({ id: "P", distance: 0 }), aFlowNode({ id: "Q", distance: 1 })], []) })), "#/alpha/flow");
     await drawn("Q");
     const panels = screen.getAllByRole("complementary", { name: "Details" });
     const top = panels[panels.length - 1] as HTMLElement;
     expect(within(top).queryByRole("button", { name: "Open document" })).toBeNull();
-    expect(within(top).queryByRole("button", { name: "New card" })).toBeNull();
+    expect(within(top).queryByRole("button", { name: "New task" })).toBeNull();
   });
 });

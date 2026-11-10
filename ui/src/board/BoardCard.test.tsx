@@ -8,7 +8,7 @@ import { stubClient } from "../test/stubClient";
 // tile. A plain click is prevented and opens the modal; a Meta, Ctrl or Shift click, a middle click
 // and the context menu are the browser's, so they open the page, and change neither the hash nor the
 // history here. A1 of the same: a tile in its flow's return column says Returned, a parent counts its
-// hand-offs.
+// subtasks.
 
 const FLOW = aCardFlow({ return: "doing" });
 
@@ -128,10 +128,10 @@ describe("a tile's hand-off words (BH-15, BH-16)", () => {
     expect(tile("C-0003").textContent).not.toContain("Returned");
   });
 
-  it("a parent counts its standing hand-offs, and its returned ones with the badge", async () => {
+  it("a parent counts its standing subtasks, and its returned ones with the badge", async () => {
     await board();
     const line = tile("C-0001").querySelector(".board-card-handoffs");
-    expect(line?.textContent).toBe("2 hand-offs1 returned");
+    expect(line?.textContent).toBe("2 subtasks1 returned");
     expect(line?.querySelector(".badge")?.getAttribute("data-tone")).toBe("card-returned");
     expect(tile("C-0003").querySelector(".board-card-handoffs")).toBeNull();
   });

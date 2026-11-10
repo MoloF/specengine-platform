@@ -264,7 +264,7 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
     expect(fact(card, "Kind")).toBe("amendment");
     expect(fact(card, "Gap type")).toBe("None");
     expect(fact(card, "Severity")).toBe("None");
-    expect(fact(card, "Task")).toBe("No task");
+    expect(fact(card, "Agent task")).toBe("No agent task");
     expect(fact(card, "Status")).toBe("Open");
     expect(Array.from(card.querySelectorAll(".card-body h3"), (heading) => heading.textContent)).toEqual([
       "Targets",

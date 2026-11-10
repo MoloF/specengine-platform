@@ -261,7 +261,7 @@ describe("selection by the route (UI-3)", () => {
       "No key moves an item: the Roadmap is read only, and an item moves when its file's release, priority or depends_on changes. Keys act outside a text field, without Ctrl, Alt or Cmd; Cmd-K or Ctrl-K excepted: it opens Jump to from anywhere, a text field included.",
     );
     expect(Array.from(dialog.querySelectorAll(".shortcut dd"), (item) => item.textContent)).toEqual([
-      "Jump to a section, task, proposal, node or project",
+      "Jump to a section, agent task, proposal, node or project",
       "Show this list",
       "Close a dialog",
     ]);

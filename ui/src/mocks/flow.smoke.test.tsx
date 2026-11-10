@@ -268,14 +268,14 @@ describe("a gap to the AI (ST-12)", () => {
     const row = within(openGaps()).getByText("cycle-no-repeat").closest("li.flow-gap");
     const item = within(row as HTMLElement).getByRole("button", { name: "Fairway + Pilot boarding" }).closest("li");
     fireEvent.click(within(item as HTMLElement).getByRole("button", { name: /^Hand to your AI/ }));
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     const cause = "a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}";
     expect(within(dialog).getByLabelText<HTMLInputElement>("Title").value).toBe("Gap cycle-no-repeat: MEC-FAIRWAY + MEC-PILOTAGE");
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Goal").value).toBe(cause);
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Source", { exact: false }).value).toBe("MEC-FAIRWAY\nMEC-PILOTAGE");
     // harbor-sim's card flows each list their disciplines: the owner picks one, as on the Board.
     fireEvent.change(within(dialog).getByLabelText("Discipline", { exact: false }), { target: { value: "copy" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => {
       expect(spies.createCard).toHaveBeenCalledTimes(1);
     });
@@ -285,7 +285,7 @@ describe("a gap to the AI (ST-12)", () => {
     fireEvent.click(box("MEC-FAIRWAY"));
     // The box's cards are the document's: its modal holds them (doc-modal DM-14).
     fireEvent.click(await within(panel()).findByRole("button", { name: "Open document" }));
-    const cards = await within(await screen.findByRole("dialog")).findByRole("region", { name: /cards/i });
+    const cards = await within(await screen.findByRole("dialog")).findByRole("region", { name: /tasks/i });
     expect(await within(cards).findByText("Gap cycle-no-repeat: MEC-FAIRWAY + MEC-PILOTAGE")).toBeTruthy();
     expect(spies.getTask).not.toHaveBeenCalled();
     expect(spies.getTasks).not.toHaveBeenCalled();
@@ -378,7 +378,7 @@ describe("the studio over the mock's scenarios", () => {
   it("harbor-sim: badges, a group's counts, Entry and End as the scope's read folds them", async () => {
     renderMock(LENS);
     await drawn("DOM-BERTHS");
-    expect(box("MEC-PILOTAGE").querySelector(".badge")?.textContent).toBe("No card");
+    expect(box("MEC-PILOTAGE").querySelector(".badge")?.textContent).toBe("No task");
     expect(box("DOM-WATER").querySelector(".flow-box-state")?.textContent).toBe("2 confirmed, 2 in work, 1 departed");
     expect(box("DOM-WATER").querySelector(".flow-mark-start")?.textContent).toBe("Entry");
     expect(box("DOM-BERTHS").querySelector(".flow-mark-end")?.textContent).toBe("End");

@@ -28,7 +28,7 @@ import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
-import { landingHash, useWorkspaceChoice } from "../workspace/choice";
+import { isDirection, landingHash, useWorkspaceChoice } from "../workspace/choice";
 import { ModuleBar } from "../workspace/ModuleBar";
 import { ConfigNotes, WorkspaceSwitcher } from "../workspace/WorkspaceControls";
 import { isJumpChord, JUMP_KEYSHORTCUTS } from "./chord";
@@ -280,9 +280,12 @@ export function Shell({ scenario }: { scenario: string | null }) {
   /**
    * The root the Spec tree and the Flow read from: the chosen module's, null for the whole project
    * (no module, or the read failed), undefined while the read is out, so neither view reads before
-   * its module is known (WS-9).
+   * its module is known (WS-9). A direction has no root: the Tree lists its kinds instead
+   * (`moduleKinds`), and Flow reads it as All modules
+   * (docs/features/departments.md "Acceptance criteria", DP-11, DP-12).
    */
   const moduleRoot = workspaces.data !== undefined ? (choice.module?.root ?? null) : workspacesFailed ? null : undefined;
+  const moduleKinds = choice.module !== null && isDirection(choice.module) ? choice.module.kinds : null;
   const landingProject = route.type === "home" ? firstProject : null;
   const landing = landingProject === null ? null : workspaces.data !== undefined ? landingHash(landingProject, choice.workspace) : workspacesFailed ? homeHash(landingProject) : null;
 
@@ -566,7 +569,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
       />
     );
   } else if (route.section === "tree") {
-    view = <TreeView key={route.project} project={route.project} nodeRef={route.id} moduleRoot={moduleRoot ?? null} moduleKnown={moduleRoot !== undefined} />;
+    view = <TreeView key={route.project} project={route.project} nodeRef={route.id} moduleRoot={moduleRoot ?? null} moduleKinds={moduleKinds} moduleKnown={moduleRoot !== undefined} />;
   } else if (route.section === "graph") {
     view = <GraphView key={route.project} project={route.project} nodeRef={route.id} memory={graphMemory} />;
   } else if (route.section === "health") {

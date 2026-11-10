@@ -27,7 +27,7 @@ async function navIs(labels: readonly string[]) {
   });
 }
 
-const NINE = ["Overview", "Inbox", "Tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"];
+const NINE = ["Overview", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"];
 
 describe("the edge cases of the screen", () => {
   it("one workspace configured: no switcher, its sections and its landing apply", async () => {

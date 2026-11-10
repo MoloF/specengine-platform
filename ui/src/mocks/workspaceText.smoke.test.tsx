@@ -24,6 +24,7 @@ vi.mock("../i18n/en", async (importOriginal) => {
         workspaceHint: "[workspaceHint]",
         modulesLabel: "[modulesLabel]",
         allModules: "[allModules]",
+        directionsLabel: "[directionsLabel]",
         notesTitle: "[notesTitle]",
         notesButton: "[notesButton {{n}}]",
         readFailed: "[readFailed]",
@@ -91,9 +92,13 @@ describe("one place for the strings (WS-15)", () => {
     expect(leftOver(region(".board-flows-line"))).toBe("");
 
     window.location.hash = "#/harbor-sim/tree";
+    // Two groups: the rooted modules, then the directions (DP-11 of departments).
     const bar = await screen.findByRole("group", { name: "[modulesLabel]" });
-    expect(within(bar).getAllByRole("button").map((button) => button.textContent)).toEqual(["[allModules]", ...SERVED.modules.map((module) => module.title)]);
+    expect(within(bar).getAllByRole("button").map((button) => button.textContent)).toEqual(["[allModules]", ...SERVED.modules.filter((module) => module.root !== null).map((module) => module.title)]);
     expect(leftOver(bar)).toBe("");
+    const directions = screen.getByRole("group", { name: "[directionsLabel]" });
+    expect(within(directions).getAllByRole("button").map((button) => button.textContent)).toEqual(SERVED.modules.filter((module) => module.root === null).map((module) => module.title));
+    expect(leftOver(directions)).toBe("");
   });
 
   it("a failed read and the nav's wait draw their sentinels too", async () => {
@@ -111,6 +116,6 @@ describe("one place for the strings (WS-15)", () => {
   });
 
   it("keeps every section label in the catalog's app.sections", () => {
-    expect(SECTIONS.map((section) => en.app.sections[section.id].label)).toEqual(["Inbox", "Tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+    expect(SECTIONS.map((section) => en.app.sections[section.id].label)).toEqual(["Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
   });
 });

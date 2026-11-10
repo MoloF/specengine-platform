@@ -97,6 +97,7 @@ function everyMove(columns: readonly string[], closing: string) {
 
 const COPY: CardFlow = {
   name: "copy",
+  title: "Copy desk",
   disciplines: ["copy"],
   columns: [
     { id: "draft", title: "Draft" },
@@ -114,6 +115,7 @@ const COPY: CardFlow = {
 
 const PLATES: CardFlow = {
   name: "plates",
+  title: "plates",
   disciplines: ["plates"],
   columns: ["queued", "blocked", "checked", "struck"].map((id) => ({ id, title: id })),
   moves: everyMove(["queued", "blocked", "checked", "struck"], "struck"),
@@ -123,6 +125,7 @@ const PLATES: CardFlow = {
 
 const PLAIN: CardFlow = {
   name: "plain",
+  title: "plain",
   disciplines: [],
   columns: [
     { id: "backlog", title: "Backlog" },

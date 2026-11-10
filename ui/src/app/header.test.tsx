@@ -46,15 +46,15 @@ async function header(): Promise<HTMLElement> {
   if (shown === null) {
     throw new Error("no header");
   }
-  await within(shown).findByRole("combobox", { name: "Workspace" });
+  await within(shown).findByRole("combobox", { name: "Department" });
   return shown;
 }
 
 describe("the one-line header (DF-14)", () => {
-  it("names its selects Project, Workspace, Language and Theme, each label in the DOM and visually hidden", async () => {
+  it("names its selects Project, Department, Language and Theme, each label in the DOM and visually hidden", async () => {
     const shown = await header();
     const selects = within(shown).getAllByRole<HTMLSelectElement>("combobox");
-    expect(selects.map((select) => (select.labels[0]?.textContent ?? ""))).toEqual(["Project", "Workspace", "Language", "Theme"]);
+    expect(selects.map((select) => (select.labels[0]?.textContent ?? ""))).toEqual(["Project", "Department", "Language", "Theme"]);
     for (const select of selects) {
       const label = select.labels[0];
       expect([label?.textContent, label?.classList.contains("sr-only")]).toEqual([label?.textContent, true]);

@@ -176,7 +176,8 @@ fn expected_notes(label: &str, text: &str) -> Vec<String> {
             ),
             note(
                 nth_line_holding(text, "[[module]]", 2),
-                "`[[module]]` is required to hold `root`; no module is served",
+                // docs/features/departments.md (D4): `root` or `kinds`.
+                "`[[module]]` is required to hold `root` or `kinds`; no module is served",
             ),
         ],
         "(g)" => {

@@ -114,13 +114,13 @@ describe("the shell (AC-11)", () => {
 
   it("builds Tasks: its heading and list, no stand-in; the about speaks of what waits, not of a board (AC-15 of ui-tasks)", async () => {
     renderApp(stubClient(), "#/alpha/tasks");
-    expect(await screen.findByRole("heading", { level: 1, name: "Tasks" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Agent tasks" })).toBeTruthy();
     expect(screen.queryByText(/Not built yet/)).toBeNull();
-    const about = screen.getByText(/^Tasks from draft to done/);
-    expect(about.textContent).toBe("Tasks from draft to done: what waits for you, each task's plan, spec changes and runs.");
+    const about = screen.getByText(/^Agent tasks from draft to done/);
+    expect(about.textContent).toBe("Agent tasks from draft to done: what waits for you, each agent task's plan, spec changes and runs.");
     expect(about.textContent).not.toMatch(/accepted|board/);
     // Off the nav, still a route: the view renders at its hash and no item is current (WS-2, W4).
-    expect((await shownNav()).map((link) => link.textContent)).not.toContain("Tasks");
+    expect((await shownNav()).map((link) => link.textContent)).not.toContain("Agent tasks");
     expect(navLinks().filter((link) => link.getAttribute("aria-current") === "page")).toEqual([]);
     expect(window.location.hash).toBe("#/alpha/tasks");
   });

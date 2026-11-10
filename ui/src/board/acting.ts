@@ -55,6 +55,25 @@ export function rememberActing(name: string): void {
   }
 }
 
+/**
+ * The names the core keeps for no person, which can be no reviewer: `agent` and `local`, the one a
+ * write with no `as` records (`docs/canon/card-flows.md` "Hand-off"). Words of the daemon, compared
+ * so a form never offers what the daemon refuses.
+ */
+const NO_PERSON: readonly string[] = ["agent", "local"];
+
+/**
+ * A hand-off's reviewer as the form opens: the parent card's reviewer when it names one; else the
+ * acting name, unless it names no person or is empty; else empty, for the person to fill in.
+ */
+export function handOffReviewer(parentReviewer: string | null, acting: string): string {
+  if (parentReviewer !== null && parentReviewer.trim() !== "") {
+    return parentReviewer;
+  }
+  const name = acting.trim();
+  return name === "" || NO_PERSON.includes(name) ? "" : acting;
+}
+
 /** What a write sends as `as`: the name trimmed; none is null, which the daemon records `local`. */
 export function actingName(typed: string): string | null {
   const name = typed.trim();

@@ -21,7 +21,7 @@ function calls(spies: Record<string, { mock: { calls: unknown[] } }>): Record<st
   return Object.fromEntries(Object.entries(spies).flatMap(([name, spy]) => (spy.mock.calls.length > 0 ? [[name, spy.mock.calls.length]] : [])));
 }
 
-function region(name: "Tasks" | "Inbox"): HTMLElement {
+function region(name: "Agent tasks" | "Inbox"): HTMLElement {
   return screen.getByRole("region", { name });
 }
 
@@ -58,15 +58,15 @@ describe("the home over the mock", () => {
 
   it("shows harbor-sim's Tasks region as the spec's Data says (AC-03)", async () => {
     await loadedHome();
-    const tasks = region("Tasks");
+    const tasks = region("Agent tasks");
     const rows = Array.from(tasks.querySelectorAll(".home-block-waiting .home-row"));
     expect(rows.map((row) => [row.querySelector("a")?.getAttribute("href"), row.querySelector(".badge")?.textContent])).toEqual([
       ["#/harbor-sim/tasks/T-0107", "State: Plan review"],
       ["#/harbor-sim/tasks/T-0108", "State: Ready"],
     ]);
     expect(rows.map((row) => row.textContent.includes("Spec changed"))).toEqual([false, true]);
-    expect(tally(tasks, "Other open tasks")).toEqual(["Draft: 1", "Changes requested: 1", "Ready: 2", "In progress: 1"]);
-    const notes = Array.from(within(tasks).getByRole("list", { name: "Notes from the daemon on the task list" }).querySelectorAll("li"), (item) => item.textContent);
+    expect(tally(tasks, "Other open agent tasks")).toEqual(["Draft: 1", "Changes requested: 1", "Ready: 2", "In progress: 1"]);
+    const notes = Array.from(within(tasks).getByRole("list", { name: "Notes from the daemon on the agent task list" }).querySelectorAll("li"), (item) => item.textContent);
     expect(notes).toContain("T-0106: unreadable row (bad JSON in criteria); skipped");
   });
 
@@ -90,7 +90,7 @@ describe("the home over the mock", () => {
     window.history.replaceState(null, "", "/?scenario=slow#/harbor-sim");
     render(<App client={new MockClient("slow", { delayMs: 50 })} scenario="slow" />);
     await screen.findByRole("heading", { level: 1, name: "Overview" });
-    for (const name of ["Tasks", "Inbox"] as const) {
+    for (const name of ["Agent tasks", "Inbox"] as const) {
       expect(region(name).getAttribute("aria-busy")).toBe("true");
       expect(within(region(name)).getByRole("status").getAttribute("aria-busy")).toBe("true");
     }
@@ -101,7 +101,7 @@ describe("the home over the mock", () => {
 
   it("empty: both regions say so with their next step (AC-06)", async () => {
     await loadedHome("empty");
-    expect(within(region("Tasks")).getByText("No tasks yet.")).toBeTruthy();
+    expect(within(region("Agent tasks")).getByText("No agent tasks yet.")).toBeTruthy();
     expect(within(region("Inbox")).getByText("The queue is clear: no proposal waits for your decision.")).toBeTruthy();
   });
 
@@ -109,7 +109,7 @@ describe("the home over the mock", () => {
     renderMock("error", "#/harbor-sim");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
     // The projects fail too: the route's project cannot be checked, so its home is shown.
-    for (const name of ["Tasks", "Inbox"] as const) {
+    for (const name of ["Agent tasks", "Inbox"] as const) {
       expect(await within(region(name)).findByText(/^spec index unavailable/)).toBeTruthy();
       expect(within(region(name)).getByRole("button", { name: "Retry" })).toBeTruthy();
     }
@@ -118,7 +118,7 @@ describe("the home over the mock", () => {
 
 describe("the palette over the mock (AC-13)", () => {
   function combobox(): HTMLInputElement {
-    return screen.getByRole("combobox", { name: "Jump to a section, task, proposal, node or project" });
+    return screen.getByRole("combobox", { name: "Jump to a section, agent task, proposal, node or project" });
   }
 
   async function open() {
@@ -154,7 +154,7 @@ describe("the palette over the mock (AC-13)", () => {
     await loadedHome("large");
     await open();
     fireEvent.change(combobox(), { target: { value: "T-0" } });
-    const group = screen.getAllByRole("group").find((element) => element.textContent.startsWith("Tasks"));
-    expect(document.getElementById(group?.getAttribute("aria-labelledby") ?? "")?.textContent).toBe("Tasks, 10 of 329");
+    const group = screen.getAllByRole("group").find((element) => element.textContent.startsWith("Agent tasks"));
+    expect(document.getElementById(group?.getAttribute("aria-labelledby") ?? "")?.textContent).toBe("Agent tasks, 10 of 329");
   });
 });

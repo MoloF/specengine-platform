@@ -219,8 +219,8 @@ describe("the plan's read on the live tail (UI-5)", () => {
 
   it("off screen nothing is read; entering the Roadmap again reads once", async () => {
     await onRoadmap();
-    await go("Tasks");
-    await screen.findByRole("heading", { level: 1, name: "Tasks" });
+    await go("Agent tasks");
+    await screen.findByRole("heading", { level: 1, name: "Agent tasks" });
     fetchStub().mockClear();
     emit("task.claimed", '{"id":"T-0109","run":1}', "60");
     emit("proposal.applied", '{"id":"PR-0001","commit":"abc1234"}', "61");

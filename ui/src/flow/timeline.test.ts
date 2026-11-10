@@ -13,7 +13,7 @@ const NONE: TraceCounts = { no_card: 0, in_work: 0, suspect: 0, departed: 0, con
 describe("a rollup's word", () => {
   it("gives each state a label and an icon of its own, never by colour alone", () => {
     const looks = ["confirmed", "in work", "suspect", "departed", "no card"].map((rollup) => rollupLook(rollup, enT));
-    expect(looks.map((look) => look.label)).toEqual(["Confirmed", "In work", "Suspect", "Departed", "No card"]);
+    expect(looks.map((look) => look.label)).toEqual(["Confirmed", "In work", "Suspect", "Departed", "No task"]);
     expect(new Set(looks.map((look) => look.icon)).size).toBe(5);
     expect(new Set(looks.map((look) => look.tone)).size).toBe(5);
   });
@@ -29,7 +29,7 @@ describe("a rollup's word", () => {
 
 describe("served counts", () => {
   it("say a closed group's line, zero parts left out, from what is done to what is missing", () => {
-    expect(countsText({ ...NONE, confirmed: 3, suspect: 1, no_card: 2 }, enT)).toBe("3 confirmed, 1 suspect, 2 no card");
+    expect(countsText({ ...NONE, confirmed: 3, suspect: 1, no_card: 2 }, enT)).toBe("3 confirmed, 1 suspect, 2 no task");
     expect(countsText({ ...NONE, confirmed: 7 }, enT)).toBe("7 confirmed");
     expect(countsText(NONE, enT)).toBe("");
   });

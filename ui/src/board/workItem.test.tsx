@@ -144,7 +144,7 @@ describe("one primary per area (DF-4)", () => {
       ["Return", "Return C-0001"],
       ["Edit", "Edit C-0001"],
       ["Assign", "Assign C-0001"],
-      ["Cancel card", "Cancel C-0001"],
+      ["Cancel task", "Cancel C-0001"],
       ["Accept", "Accept C-0001"],
       ["Clear", "Clear C-0001"],
     ] as const) {
@@ -163,7 +163,7 @@ describe("one primary per area (DF-4)", () => {
     expect([primaries(part(view, ".issue-view-actions")), primaries(part(view, ".issue-view-side"))]).toEqual([1, 0]);
     const bare = await modal(BARE);
     expect(primaries(bare)).toBe(0);
-    expect(within(part(bare, ".issue-view-actions")).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Edit", "Assign", "Cancel card"]);
+    expect(within(part(bare, ".issue-view-actions")).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Edit", "Assign", "Cancel task"]);
   });
 });
 
@@ -172,7 +172,7 @@ describe("the work item's order (DF-6)", () => {
     const dialog = await modal(FULL);
     expect(sideLabels(dialog)).toEqual(SIDE_ORDER);
     expect(within(dialog).queryByRole("button", { name: /^More fields/ })).toBeNull();
-    expect(mainSections(dialog)).toEqual(["Against the brief", "Goal", "Criteria", "Source", "Hand-offs", "Evidence", "History"]);
+    expect(mainSections(dialog)).toEqual(["Against the brief", "Goal", "Criteria", "Source", "Subtasks", "Evidence", "History"]);
     // The status: the column's lozenge, then Move.
     const status = within(dialog).getByRole("region", { name: "Status" });
     expect([status.querySelector(".lozenge")?.getAttribute("data-appearance"), status.querySelector(".lozenge-label")?.textContent]).toEqual(["information", "Check"]);
@@ -181,7 +181,7 @@ describe("the work item's order (DF-6)", () => {
 
   it("puts the latest return reason among the card's blocks, before Goal", async () => {
     const view = await page(RETURNED);
-    expect(mainSections(view)).toEqual(["Against the brief", "Returned", "Goal", "Source", "Hand-offs", "Evidence", "History"]);
+    expect(mainSections(view)).toEqual(["Against the brief", "Returned", "Goal", "Source", "Subtasks", "Evidence", "History"]);
     const status = within(view).getByRole("region", { name: "Status" });
     expect(status.querySelector(".lozenge")?.getAttribute("data-appearance")).toBe("warning");
   });
@@ -213,27 +213,27 @@ describe("the work item's order (DF-6)", () => {
 });
 
 describe("Development, folded (DF-7)", () => {
-  it("reads Development · 2 agent tasks for two links, one not read here; its Tasks region out of the tree until clicked, then the rows", async () => {
+  it("reads Agent tasks · 2 linked for two links, one not read here; its Tasks region out of the tree until clicked, then the rows", async () => {
     const dialog = await modal(FULL);
     const side = part(dialog, ".issue-view-side");
-    const development = within(side).getByRole("button", { name: "Development · 2 agent tasks" });
+    const development = within(side).getByRole("button", { name: "Agent tasks · 2 linked" });
     expect(development.getAttribute("aria-expanded")).toBe("false");
-    expect(within(dialog).queryByRole("region", { name: "Tasks" })).toBeNull();
-    expect(within(dialog).queryByRole("list", { name: "Tasks linked to C-0001" })).toBeNull();
+    expect(within(dialog).queryByRole("region", { name: "Agent tasks" })).toBeNull();
+    expect(within(dialog).queryByRole("list", { name: "Agent tasks linked to C-0001" })).toBeNull();
     development.focus();
     fireEvent.click(development);
     expect(document.activeElement).toBe(development);
-    const tasks = within(dialog).getByRole("region", { name: "Tasks" });
+    const tasks = within(dialog).getByRole("region", { name: "Agent tasks" });
     expect(Array.from(tasks.querySelectorAll("li[data-task]"), (row) => row.getAttribute("data-task"))).toEqual(["T-0001", "T-0002"]);
     expect(within(tasks).getByText("spec task approve T-0001")).toBeTruthy();
   });
 
   it("reads No agent tasks with none linked; its empty state holds No task yet and both commands with Copy", async () => {
     const view = await page(BARE);
-    const development = within(view).getByRole("button", { name: "Development · No agent tasks" });
+    const development = within(view).getByRole("button", { name: "Agent tasks · none linked" });
     fireEvent.click(development);
-    const tasks = within(view).getByRole("region", { name: "Tasks" });
-    expect(within(tasks).getByRole("heading", { name: "No task yet." }).closest(".empty-state-box")).not.toBeNull();
+    const tasks = within(view).getByRole("region", { name: "Agent tasks" });
+    expect(within(tasks).getByRole("heading", { name: "No agent task yet." }).closest(".empty-state-box")).not.toBeNull();
     expect(Array.from(tasks.querySelectorAll("code"), (code) => code.textContent)).toEqual(['spec task new --nodes REF --title "..."', "spec card edit C-0002 --task T-NNNN"]);
     expect(within(tasks).getAllByRole("button").map((button) => button.textContent)).toEqual([
       'Copy the command: spec task new --nodes REF --title "..."',
@@ -288,7 +288,7 @@ describe("focus in the card's modal (the focus trap)", () => {
     await waitFor(() => {
       expect(document.activeElement).toBe(title);
     });
-    const development = within(dialog).getByRole("button", { name: "Development · 2 agent tasks" });
+    const development = within(dialog).getByRole("button", { name: "Agent tasks · 2 linked" });
     // The collapsed region holds a task link and a Copy button, in the DOM after Development.
     const region = part(document.body, `[id="${development.getAttribute("aria-controls") ?? ""}"]`);
     expect([region.hidden, region.querySelectorAll("a[href], button").length > 0]).toEqual([true, true]);

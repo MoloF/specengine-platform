@@ -66,7 +66,8 @@ pub fn workspace(env: &Env, globals: &Globals) -> Result<WorkspaceOutcome, CliEr
 const NONE: &str = "(none)";
 
 /// `workspaces <source> | workspaces <n>, modules <m>`, then a line per
-/// workspace and per module, in served order. Each line is one line and its
+/// workspace and per module (`root <REF>`, or a direction's
+/// `kinds <a, b>`), in served order. Each line is one line and its
 /// control characters escaped: a `[card]` that does not read serves `flows`
 /// as written.
 pub(crate) fn render_text(outcome: &WorkspaceOutcome) -> String {
@@ -94,10 +95,17 @@ pub(crate) fn render_text(outcome: &WorkspaceOutcome) -> String {
             workspace.module.as_deref().unwrap_or(NONE)
         ));
     }
+    // A direction names its kinds where a rooted module names its root
+    // (task spec `departments` DP-3); a workspace's `disciplines` are JSON
+    // only, so its line is unchanged.
     for module in &outcome.modules {
+        let scope = match &module.kinds {
+            Some(kinds) => format!("kinds {}", kinds.join(", ")),
+            None => format!("root {}", module.root.as_deref().unwrap_or(NONE)),
+        };
         lines.push(format!(
-            "module {} | {} | root {}",
-            module.name, module.title, module.root
+            "module {} | {} | {scope}",
+            module.name, module.title
         ));
     }
     lines

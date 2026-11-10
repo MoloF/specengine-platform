@@ -8,8 +8,8 @@ import { EmptyState } from "./EmptyState";
 
 describe("EmptyState (DF-7)", () => {
   it.each([2, 3, 4] as const)("puts its heading at level %i", (level) => {
-    render(<EmptyState title="No task yet." level={level} />);
-    expect(screen.getByRole("heading", { level, name: "No task yet." })).toBeTruthy();
+    render(<EmptyState title="No agent task yet." level={level} />);
+    expect(screen.getByRole("heading", { level, name: "No agent task yet." })).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
   });
 

@@ -79,7 +79,8 @@ describe("the Board over the mock", () => {
     // galley, the first workspace, shows copy alone (docs/features/workspaces.md WS-14): every flow for the visit.
     fireEvent.click(await screen.findByRole("button", { name: "Show all flows" }));
     const tabs = await screen.findAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["copy", "plates"]);
+    // Each tab by its flow's title, copy's "Copy desk", plates untitled (DP-10 of departments).
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Copy desk", "plates"]);
     await shows("C-0001");
     expect(within(card("C-0001")).getByRole("link", { name: "MEC-TIDE-TABLES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDE-TABLES/page");
     fireEvent.click(tabs[1] as HTMLElement);
@@ -90,10 +91,10 @@ describe("the Board over the mock", () => {
 
   it("a whole cycle on one screen: new, assign, move, accept; the name typed is the acceptance's and survives a reload (AC-05)", async () => {
     const first = renderMock("normal", "#/ledger-api/board");
-    fireEvent.click(await screen.findByRole("button", { name: "New card" }));
-    const created = await screen.findByRole("dialog", { name: "New card" });
+    fireEvent.click(await screen.findByRole("button", { name: "New task" }));
+    const created = await screen.findByRole("dialog", { name: "New task" });
     type(created, "Title", "Write the close checklist");
-    fireEvent.click(within(created).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(created).getByRole("button", { name: "Create task" }));
     await closed();
     await shows("C-0106");
     expect(columnOf("C-0106")).toBe("backlog");
@@ -120,7 +121,7 @@ describe("the Board over the mock", () => {
     type(document.body, "Acting as", "Ana Weiss");
     await choose("C-0106", "Accept");
     const accept = await screen.findByRole("dialog", { name: "Accept C-0106" });
-    fireEvent.click(within(accept).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(accept).getByRole("button", { name: "Accept task" }));
     await closed();
     await waitFor(() => {
       expect(columnOf("C-0106")).toBe("done");
@@ -143,7 +144,7 @@ describe("the Board over the mock", () => {
     renderMock("normal", "#/harbor-sim/board");
     await choose("C-0004", "Accept");
     const accept = await screen.findByRole("dialog", { name: "Accept C-0004" });
-    fireEvent.click(within(accept).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(accept).getByRole("button", { name: "Accept task" }));
     expect((await within(accept).findByRole("alert")).textContent).toContain("C-0004: `Mira Holt` is its assignee, who never accepts a result; nothing changed");
     fireEvent.click(within(accept).getByRole("button", { name: "Cancel" }));
     await closed();
@@ -199,20 +200,20 @@ describe("the Board over the mock", () => {
 
   it("empty: the columns of each flow and the line naming how to add a card (AC-09)", async () => {
     renderMock("empty", "#/harbor-sim/board");
-    await screen.findByText("No cards yet. Next: press New card, press New card on a node in the Spec tree, or have your AI call create_card.");
+    await screen.findByText("No tasks yet. Next: press New task, press New task on a node in the Spec tree, or have your AI call create_card.");
     fireEvent.click(screen.getByRole("button", { name: "Show all flows" }));
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["copy", "plates"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Copy desk", "plates"]);
     expect(screen.getByRole("heading", { level: 2, name: /^Draft/ })).toBeTruthy();
   });
 
   it("New card on a node opens with it as the target; the card links back to it (AC-09)", async () => {
     renderMock("normal", "#/harbor-sim/tree/MEC-TIDES");
-    fireEvent.click(await screen.findByRole("button", { name: "New card" }));
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    fireEvent.click(await screen.findByRole("button", { name: "New task" }));
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Source").value).toBe("MEC-TIDES");
     type(dialog, "Title", "Explain the tides");
     type(dialog, "Discipline", "copy");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await closed();
     const link = await screen.findByRole("link", { name: "Open it on the Board" });
     expect(link.getAttribute("href")).toBe("#/harbor-sim/board/C-0020");
@@ -282,10 +283,10 @@ describe("the card against its brief, over the mock", () => {
     expect(within(panel).getByRole("region", { name: "Against the brief" }).textContent).toContain("The brief changed at DOM-BERTHS");
     fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
     const dialog = await clearDialog();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toBe("Say why the mark clears.");
     type(dialog, "Reason", "Only the numbering moved.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     await closed();
     await waitFor(() => {
       expect(within(card("C-0002")).queryByText("Suspect")).toBeNull();
@@ -311,10 +312,10 @@ describe("the card against its brief, over the mock", () => {
     const dialog = await clearDialog();
     fireEvent.click(within(dialog).getByRole("radio", { name: "Needs correction" }));
     type(dialog, "Reason", "The rates moved.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toBe("A correction needs an estimate.");
     type(dialog, "Estimate", "2");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     await closed();
     const made = await shows("C-0020");
     expect(made.textContent).toContain("Correct Mooring fees table");
@@ -347,7 +348,7 @@ describe("the card against its brief, over the mock", () => {
     type(dialog, "Summary", "Hours printed from the old sheet");
     type(dialog, "What the result does", "Lock B closes at six.");
     type(dialog, "What the brief says", "Lock B closes at eight.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept task" }));
     await closed();
     await waitFor(() => {
       expect(columnOf("C-0004")).toBe("filed");
@@ -379,7 +380,7 @@ describe("the card against its brief, over the mock", () => {
     fireEvent.click(await within(panel).findByRole("button", { name: "Clear" }));
     const dialog = await clearDialog();
     type(dialog, "Reason", "The slipway is out of the book.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     await closed();
     await waitFor(() => {
       expect(card("C-0008").querySelector(".board-card-mark")).toBeNull();
@@ -444,28 +445,28 @@ describe("hand-offs and returns over the mock", () => {
     expect("history" in created ? created.history?.at(0)?.payload : null).toMatchObject({ reviewer: "Ivo Brandt" });
   });
 
-  it("tiles: Returned on a card in the plates' return column; a parent's hand-offs counted, its returned ones with the badge", async () => {
+  it("tiles: Returned on a card in the plates' return column; a parent's subtasks counted, its returned ones with the badge", async () => {
     renderMock("normal", "#/harbor-sim/board");
     fireEvent.click(await screen.findByRole("button", { name: "Show all flows" }));
     await shows("C-0001");
-    expect(card("C-0001").querySelector(".board-card-handoffs")?.textContent).toBe("3 hand-offs");
-    expect(card("C-0003").querySelector(".board-card-handoffs")?.textContent).toBe("1 hand-off1 returned");
+    expect(card("C-0001").querySelector(".board-card-handoffs")?.textContent).toBe("3 subtasks");
+    expect(card("C-0003").querySelector(".board-card-handoffs")?.textContent).toBe("1 subtask1 returned");
     expect(card("C-0002").querySelector(".board-card-handoffs")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "plates" }));
     await shows("C-0015");
     expect(within(card("C-0015")).getByText("Returned")).toBeTruthy();
     expect(within(card("C-0008")).getByText("Returned")).toBeTruthy();
     expect(within(card("C-0013")).queryByText("Returned")).toBeNull();
-    expect(card("C-0009").querySelector(".board-card-handoffs")?.textContent).toBe("1 hand-off");
+    expect(card("C-0009").querySelector(".board-card-handoffs")?.textContent).toBe("1 subtask");
   });
 
-  it("the modal: a parent's hand-offs with their words across both flows; a returned card's reason, or that its history keeps none", async () => {
+  it("the modal: a parent's subtasks with their words across both flows; a returned card's reason, or that its history keeps none", async () => {
     renderMock("normal", "#/harbor-sim/board/C-0001");
     const parent = await modal("Write the tide table foreword");
-    const handOffs = within(await within(parent).findByRole("region", { name: "Hand-offs" })).getAllByRole("listitem");
-    // Each child's flow by name and its status lozenge (DF-5 of design-foundation), the raw pair gone.
+    const handOffs = within(await within(parent).findByRole("region", { name: "Subtasks" })).getAllByRole("listitem");
+    // Each child's flow by title (DP-10 of departments) and its status lozenge (DF-5 of design-foundation), the raw pair gone.
     expect(handOffs.map((item) => item.textContent)).toEqual([
-      "C-0019Tide table glossarycopyEditTomas OakesTaken",
+      "C-0019Tide table glossaryCopy deskEditTomas OakesTaken",
       "C-0013Tide table plateplatesqueuedUnassignedHanded off",
       "C-0016Tide table coverplatesstruckNoor AinsleyAccepted",
     ]);
@@ -480,7 +481,7 @@ describe("hand-offs and returns over the mock", () => {
     expect(reason.textContent).toContain("The buoy numbers on the plate disagree with MEC-NIGHT-PASSAGE");
     window.location.hash = "#/harbor-sim/board/C-0008";
     const gone = await modal("Crane reach diagram");
-    expect((await within(gone).findByRole("region", { name: "Returned" })).textContent).toContain("is no longer in this card's history");
+    expect((await within(gone).findByRole("region", { name: "Returned" })).textContent).toContain("is no longer in this task's history");
   });
 
   it("serves each card's linked tasks read now, in link order, a task not read null with its note; a card with none, none (CT-5 of card-tasks)", async () => {
@@ -520,8 +521,8 @@ describe("hand-offs and returns over the mock", () => {
     renderMock("normal", "#/harbor-sim/board/C-0001");
     const opened = await modal("Write the tide table foreword");
     // Folded under Development (DF-7 of design-foundation): expanded first.
-    fireEvent.click(await within(opened).findByRole("button", { name: "Development \u00b7 3 agent tasks" }));
-    const part = within(opened).getByRole("region", { name: "Tasks" });
+    fireEvent.click(await within(opened).findByRole("button", { name: "Agent tasks \u00b7 3 linked" }));
+    const part = within(opened).getByRole("region", { name: "Agent tasks" });
     expect(Array.from(part.querySelectorAll("li[data-task]"), (row) => row.getAttribute("data-task"))).toEqual(["T-0107", "T-0109", "T-0106"]);
     expect(within(part).getByRole("link", { name: "T-0107" }).getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
     expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(["spec task approve T-0107"]);

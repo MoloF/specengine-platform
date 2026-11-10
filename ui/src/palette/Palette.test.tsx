@@ -30,7 +30,7 @@ function client() {
   return homeClient(TASKS, QUEUE);
 }
 
-const LABEL = "Jump to a section, task, proposal, node or project";
+const LABEL = "Jump to a section, agent task, proposal, node or project";
 
 function combobox(): HTMLInputElement {
   return screen.getByRole("combobox", { name: LABEL });
@@ -129,7 +129,7 @@ describe("the chord (AC-09)", () => {
   it.each([
     ["#/alpha", "Overview"],
     ["#/alpha/inbox", "Inbox"],
-    ["#/alpha/tasks", "Tasks"],
+    ["#/alpha/tasks", "Agent tasks"],
     ["#/alpha/tree", "Spec tree"],
     ["#/alpha/graph", "Graph"],
   ])("opens the palette on %s with Cmd-K and with Ctrl-K, from the body, the event prevented", async (hash, heading) => {
@@ -256,7 +256,7 @@ describe("the dialog and its combobox (AC-11)", () => {
     expect(options.map((option) => option.textContent)).toEqual([
       "Overview",
       "Inbox",
-      "Tasks",
+      "Agent tasks",
       "Board",
       "Roadmap",
       "Flow",
@@ -356,7 +356,7 @@ describe("the dialog and its combobox (AC-11)", () => {
     await openPalette();
     type("T-01");
     await waitFor(() => {
-      expect(groups().map(([label]) => label)).toEqual(["Tasks, loading", "Inbox", "Spec tree"]);
+      expect(groups().map(([label]) => label)).toEqual(["Agent tasks, loading", "Inbox", "Spec tree"]);
     });
     key("ArrowDown");
     const search = activeOption();
@@ -367,7 +367,7 @@ describe("the dialog and its combobox (AC-11)", () => {
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(groups()[0]?.[0]).toBe("Tasks");
+      expect(groups()[0]?.[0]).toBe("Agent tasks");
     });
     expect(combobox().getAttribute("aria-activedescendant")).toBe(id);
     expect(activeOption()?.textContent).toBe("Search the spec for 'T-01'");
@@ -405,7 +405,7 @@ describe("the dialog and its combobox (AC-11)", () => {
 
   it("closes on Esc, focus back on the task row the chord was pressed on", async () => {
     renderApp(client(), "#/alpha/tasks");
-    await screen.findByRole("listbox", { name: "Tasks, what waits for you first" });
+    await screen.findByRole("listbox", { name: "Agent tasks, what waits for you first" });
     const row = document.querySelector<HTMLElement>('[data-task="T-0108"]');
     if (row === null) {
       throw new Error("no row T-0108");
@@ -463,7 +463,7 @@ describe("what the palette reads (AC-12)", () => {
     await openPalette();
     type("T-01");
     await waitFor(() => {
-      expect(groups()[0]?.[0]).toBe("Tasks");
+      expect(groups()[0]?.[0]).toBe("Agent tasks");
     });
     expect([stub.getInbox.mock.calls.length, stub.getTasks.mock.calls.length]).toEqual([1, 1]);
     await closePalette();
@@ -504,14 +504,14 @@ describe("matching and jumps (AC-13)", () => {
     await home(homeClient([aTaskEntry({ id: "T-1", status: "draft", title: "Cafe\u0301 berth" })]));
     await openPalette();
     type("caf\u00e9");
-    expect(groups()[0]).toEqual(["Tasks", ["T-1: Cafe\u0301 berthState: Draft"]]);
+    expect(groups()[0]).toEqual(["Agent tasks", ["T-1: Cafe\u0301 berthState: Draft"]]);
   });
 
   it("puts T-0108 first for t-0108, its group first; Enter jumps with one history entry and focuses its heading", async () => {
     await home();
     await openPalette();
     type("t-0108");
-    expect(groups().map(([label]) => label)).toEqual(["Tasks", "Inbox", "Spec tree"]);
+    expect(groups().map(([label]) => label)).toEqual(["Agent tasks", "Inbox", "Spec tree"]);
     expect(activeOption()?.textContent).toBe("T-0108: Speed limit on night passagesState: Ready");
     const before = window.history.length;
     key("Enter");
@@ -638,7 +638,7 @@ describe("matching and jumps (AC-13)", () => {
     await openPalette();
     type("onerror");
     expect(groups()).toEqual([
-      ["Tasks", [`T-1: ${HOSTILE}State: Draft`]],
+      ["Agent tasks", [`T-1: ${HOSTILE}State: Draft`]],
       ["Inbox", [`PR-1: ${HOSTILE}Status: Open`]],
       ["Spec tree", ["Search the spec for 'onerror'", "Open document 'onerror'"]],
     ]);
@@ -650,7 +650,7 @@ describe("matching and jumps (AC-13)", () => {
     await home(homeClient(many));
     await openPalette();
     type("T-2");
-    expect(groups()[0]?.[0]).toBe("Tasks, 10 of 12");
+    expect(groups()[0]?.[0]).toBe("Agent tasks, 10 of 12");
     expect(groups()[0]?.[1]).toHaveLength(10);
   });
 });
@@ -660,12 +660,12 @@ describe("failures in their group (AC-14)", () => {
     const stub = client();
     stub.getTasks.mockRejectedValue(new ClientError({ status: 503, message: "t" }));
     renderApp(stub, "#/alpha");
-    await within(await screen.findByRole("region", { name: "Tasks" })).findByText("t");
+    await within(await screen.findByRole("region", { name: "Agent tasks" })).findByText("t");
     await within(screen.getByRole("region", { name: "Inbox" })).findByRole("link", { name: /^PR-0041/ });
     await openPalette();
     type("in");
     await waitFor(() => {
-      expect(within(palette() ?? document.body).getByRole("alert").textContent).toBe("Tasks could not be read: t");
+      expect(within(palette() ?? document.body).getByRole("alert").textContent).toBe("Agent tasks could not be read: t");
     });
     expect(groups().map(([label]) => label)).toEqual(["Sections", "Inbox", "Spec tree"]);
     expect(stub.getTasks).toHaveBeenCalledTimes(2);
@@ -677,13 +677,13 @@ describe("failures in their group (AC-14)", () => {
     const message = "Not served by the daemon yet: GET /api/projects/alpha/tasks is a missing endpoint";
     stub.getTasks.mockRejectedValue(new ClientError({ status: 501, message }, { notServed: true }));
     renderApp(stub, "#/alpha");
-    await within(await screen.findByRole("region", { name: "Tasks" })).findByText(message);
+    await within(await screen.findByRole("region", { name: "Agent tasks" })).findByText(message);
     await within(screen.getByRole("region", { name: "Inbox" })).findByRole("link", { name: /^PR-0041/ });
     await openPalette();
     type("in");
     const dialog = palette() ?? document.body;
     await waitFor(() => {
-      expect(within(dialog).getByText(message).closest("p")?.textContent).toBe(`Tasks: ${message}`);
+      expect(within(dialog).getByText(message).closest("p")?.textContent).toBe(`Agent tasks: ${message}`);
     });
     expect(within(dialog).getByText(message).closest("p")?.getAttribute("role")).toBe("status");
     expect(within(dialog).queryByRole("alert")).toBeNull();
@@ -713,13 +713,13 @@ describe("failures in their group (AC-14)", () => {
     await screen.findByRole("listbox", { name: "Proposals by severity, then age" });
     await openPalette();
     expect(groups()).toEqual([
-      ["Sections", ["Overview", "Inbox", "Tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]],
+      ["Sections", ["Overview", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]],
       ["Projects, loading", []],
     ]);
     expect(within(palette() ?? document.body).queryByText("No project yet.")).toBeNull();
     type("t-0108");
     await waitFor(() => {
-      expect(groups()[0]?.[0]).toBe("Tasks");
+      expect(groups()[0]?.[0]).toBe("Agent tasks");
     });
     key("Home");
     expect(activeOption()?.textContent).toBe("T-0108: Speed limit on night passagesState: Ready");
@@ -734,8 +734,8 @@ describe("failures in their group (AC-14)", () => {
     await screen.findByText("Projects could not be loaded:");
     await openPalette();
     expect(within(palette() ?? document.body).getByRole("alert").textContent).toBe("Projects could not be read: p");
-    expect(groups()).toEqual([["Sections", ["Overview", "Inbox", "Tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]]]);
-    fireEvent.click(within(listbox()).getByRole("option", { name: "Tasks" }));
+    expect(groups()).toEqual([["Sections", ["Overview", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]]]);
+    fireEvent.click(within(listbox()).getByRole("option", { name: "Agent tasks" }));
     await hashIs("#/alpha/tasks");
     await openPalette();
     type("pr-0042");

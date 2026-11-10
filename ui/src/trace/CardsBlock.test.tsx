@@ -23,7 +23,7 @@ function flowOn(name: string, trace: (options: TraceOptions | undefined) => Trac
 /** The block of `name`, its read landed. */
 async function block(client: ReturnType<typeof flowOn>, name = "A"): Promise<HTMLElement> {
   renderApp(client, `#/alpha/tree/${name}`);
-  const found = await screen.findByRole("region", { name: "Cards" });
+  const found = await screen.findByRole("region", { name: "Tasks" });
   await waitFor(() => {
     expect(found.querySelector(".cards-state, .verbatim, .error-message")).not.toBeNull();
   });
@@ -57,8 +57,8 @@ describe("what the block shows", () => {
 
   it("says a node with no card, and the next step", async () => {
     const shown = await block(flowOn("A", () => aTrace([aTraceNode("A", [], { rollup: "no card" })])));
-    expect(shown.querySelector(".cards-state")?.textContent).toBe("No card");
-    expect(within(shown).getByText("No card holds this yet. Next: press New card.")).toBeTruthy();
+    expect(shown.querySelector(".cards-state")?.textContent).toBe("No task");
+    expect(within(shown).getByText("No task holds this yet. Next: press New task.")).toBeTruthy();
   });
 
   it("lists the nodes using it, each linking its node and saying its rollup; in the tree to the tree", async () => {
@@ -66,7 +66,7 @@ describe("what the block shows", () => {
     const use = within(shown).getByRole("link", { name: "B" });
     expect(use.getAttribute("href")).toBe("#/alpha/tree/B");
     expect(use.closest("li")?.textContent).toContain("In work");
-    expect(use.closest("li")?.textContent).toContain("2 cards");
+    expect(use.closest("li")?.textContent).toContain("2 tasks");
   });
 
   it("says the daemon's notes on the read, and a REF it could not name in its own words", async () => {
@@ -109,7 +109,7 @@ describe("what the block shows", () => {
     expect(within(shown).queryByRole("alert")).toBeNull();
     // Retry went with the failure: focus lands on the block, never the body.
     await waitFor(() => {
-      expect(document.activeElement).toBe(within(shown).getByRole("heading", { name: "Cards" }));
+      expect(document.activeElement).toBe(within(shown).getByRole("heading", { name: "Tasks" }));
     });
   });
 
@@ -152,7 +152,7 @@ describe("what the block shows", () => {
       expect(shown.querySelector(".cards-state")?.textContent).toBe("Confirmed");
     });
     await waitFor(() => {
-      expect(document.activeElement).toBe(within(shown).getByRole("heading", { name: "Cards" }));
+      expect(document.activeElement).toBe(within(shown).getByRole("heading", { name: "Tasks" }));
     });
   });
 
@@ -161,10 +161,10 @@ describe("what the block shows", () => {
     const client = flowOn("A", () => aTrace([aTraceNode("A", [])]));
     client.createCard.mockResolvedValue(aCardWrite("C-0042"));
     const shown = await block(client);
-    fireEvent.click(within(shown).getByRole("button", { name: "New card" }));
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    fireEvent.click(within(shown).getByRole("button", { name: "New task" }));
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     type(dialog, "Title", "From the panel");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
@@ -194,7 +194,7 @@ describe("Clear on the page", () => {
     const dialog = await screen.findByRole("dialog", { name: "Clear C-0001" });
     expect(dialog.textContent).toContain("The brief changed at A.");
     type(dialog, "Reason", "Wording only");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
@@ -208,7 +208,7 @@ describe("Clear on the page", () => {
     expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("C-0001 is cleared");
     // Its button went with its mark: focus lands on the block, never the body.
     await waitFor(() => {
-      expect(document.activeElement).toBe(within(shown).getByRole("heading", { name: "Cards" }));
+      expect(document.activeElement).toBe(within(shown).getByRole("heading", { name: "Tasks" }));
     });
   });
 
@@ -219,7 +219,7 @@ describe("Clear on the page", () => {
     fireEvent.click(within(await block(client)).getByRole("button", { name: "Clear C-0001" }));
     const dialog = await screen.findByRole("dialog");
     type(dialog, "Reason", "Kept");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain("C-0001 is not suspect");
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").value).toBe("Kept");
   });
@@ -285,7 +285,7 @@ describe("a group's block", () => {
 
   it("says the counts served for the group, never its own rollup, whose cards may all sit under it", async () => {
     const shown = await block(flowOn("A", group));
-    expect(shown.querySelector(".cards-state")?.textContent).toBe("3 confirmed, 2 suspect, 1 no card");
+    expect(shown.querySelector(".cards-state")?.textContent).toBe("3 confirmed, 2 suspect, 1 no task");
   });
 
   it("lists each card of what it holds once, the mark a person can clear standing", async () => {
@@ -306,7 +306,7 @@ describe("a group's block", () => {
     const shown = await block(client);
     fireEvent.click(within(shown).getByRole("button", { name: "Clear all" }));
     const dialog = await screen.findByRole("dialog", { name: "Clear all under A" });
-    expect(dialog.textContent).toContain("2 suspect cards");
+    expect(dialog.textContent).toContain("2 suspect tasks");
     expect(within(dialog).queryByRole("radio")).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
     expect((await within(dialog).findByRole("alert")).textContent).toBe("Say why the marks clear.");
@@ -372,14 +372,14 @@ describe("in the Spec tree", () => {
     const client = treeClient();
     client.getTrace.mockResolvedValue(aTrace([aTraceNode(name, [SUSPECT], { rollup: "suspect", uses: [{ id: "B", rollup: "in work", cards: 1 }] })]));
     renderApp(client, `#/alpha/tree/${name}`);
-    const shown = await screen.findByRole("region", { name: "Cards" });
+    const shown = await screen.findByRole("region", { name: "Tasks" });
     await waitFor(() => {
       expect(within(shown).getByRole("link", { name: /C-0001/ }).getAttribute("href")).toBe("#/alpha/board/C-0001");
     });
     expect(within(shown).getByRole("link", { name: "B" }).getAttribute("href")).toBe("#/alpha/tree/B");
-    expect(within(shown).getByRole("heading", { level: 2, name: "Cards" })).toBeTruthy();
-    fireEvent.click(within(shown).getByRole("button", { name: "New card" }));
-    expect(await screen.findByRole("dialog", { name: "New card" })).toBeTruthy();
+    expect(within(shown).getByRole("heading", { level: 2, name: "Tasks" })).toBeTruthy();
+    fireEvent.click(within(shown).getByRole("button", { name: "New task" }));
+    expect(await screen.findByRole("dialog", { name: "New task" })).toBeTruthy();
   });
 });
 
@@ -391,11 +391,11 @@ describe("in the document view", () => {
     client.getTrace.mockResolvedValue(aTrace([aTraceNode("DOC-A", [SUSPECT], { rollup: "suspect", uses: [{ id: "DOC-C", rollup: "in work", cards: 1 }] })]));
     renderApp(client, "#/alpha/inbox?doc=DOC-A");
     const modal = await screen.findByRole("dialog", { name: "Title of DOC-A" });
-    const shown = await within(modal).findByRole("region", { name: "Cards" });
+    const shown = await within(modal).findByRole("region", { name: "Tasks" });
     const use = await within(shown).findByRole("link", { name: "DOC-C" });
     expect(use.getAttribute("href")).toBe("#/alpha/tree/DOC-C/page");
-    expect(within(shown).queryByRole("button", { name: "New card" })).toBeNull();
-    expect(within(shown).getByRole("heading", { level: 3, name: "Cards" })).toBeTruthy();
+    expect(within(shown).queryByRole("button", { name: "New task" })).toBeNull();
+    expect(within(shown).getByRole("heading", { level: 3, name: "Tasks" })).toBeTruthy();
     fireEvent.click(use);
     await waitFor(() => {
       expect(window.location.hash).toBe("#/alpha/inbox?doc=DOC-C");

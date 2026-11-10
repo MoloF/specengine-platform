@@ -20,7 +20,7 @@ The drawing read's ten rows: those found, in served order; those not measured; t
 
 - **A row:** its `flow.gapMeaning.*` sentence, its state in words (`<n> found`, `Not configured`, `Cannot measure`, the last in `cannot-verify`'s colour and icon), its items; its code and `cause` under a collapsed "Technical details" (`Disclosure`), the cause the daemon's words, `lang="en"`. An unknown code shows raw, `lang="en"`.
 - **Items:** eight, then "Show all <n>" (focus to the ninth); members by title joined ` + `; each a button, but `no-start`'s scope, text. Activating one closes the control, then selects its first member by a replace when drawn, else seeks it, the fix a push (`spec-flow-place.md` "The seek"); marks every drawn member, centres the first, focus to the panel heading.
-- **Hand to your AI**, beside each measured item: New card preset (`NewCardDialog` `preset`), members as targets in order, the `cause` verbatim as goal, `flow.handTitle` (`flow.handTitleCut` past 120 characters). Create is one `createCard`; no `T-` task. `no-start` hands the scope's root when rooted, nothing at Top.
+- **Hand to your AI**, beside each measured item: New task preset (`NewCardDialog` `preset`), members as targets in order, the `cause` verbatim as goal, `flow.handTitle` (`flow.handTitleCut` past 120 characters). Create is one `createCard`; no `T-` task. `no-start` hands the scope's root when rooted, nothing at Top.
 - **Marks.** A drawn box a row names shows "Gap"; a group box its served `gaps`.
 - **Titles.** A member's title is the drawing read's gap `titles` (`spec-flow.md` "Output"), else its name shows; the control reads nothing (RM-0101).
 

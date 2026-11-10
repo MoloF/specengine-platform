@@ -178,14 +178,14 @@ describe("a resolved login", () => {
       expect(stored()).toBe("Ana");
     });
 
-    it("New card", async () => {
+    it("New task", async () => {
       window.localStorage.setItem(ACTING_KEY, "Ana");
       const client = boardClient({ login: "mira" });
       renderApp(client, "#/alpha/board");
       await shows("mira");
-      const dialog = await dialogOf("New card");
+      const dialog = await dialogOf("New task");
       type(dialog, "Title", "A title");
-      fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
       await waitFor(() => {
         expect(client.createCard).toHaveBeenCalledTimes(1);
       });
@@ -226,14 +226,14 @@ describe("a resolved login", () => {
       expect(stored()).toBe("Ana");
     });
 
-    it("Cancel card", async () => {
+    it("Cancel task", async () => {
       window.localStorage.setItem(ACTING_KEY, "Ana");
       const client = boardClient({ login: "mira" });
       renderApp(client, "#/alpha/board/C-0001");
       await shows("mira");
-      const dialog = await dialogOf("Cancel card");
+      const dialog = await dialogOf("Cancel task");
       type(dialog, "Reason", "Not needed");
-      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel card" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel task" }));
       await waitFor(() => {
         expect(client.cancelCard).toHaveBeenCalledTimes(1);
       });
@@ -251,7 +251,7 @@ describe("a resolved login", () => {
     );
     client.clearCardGroup.mockRejectedValue(new ClientError({ status: 403, message: FORBIDDEN }));
     renderApp(client, "#/alpha/tree/A");
-    const block = await screen.findByRole("region", { name: "Cards" });
+    const block = await screen.findByRole("region", { name: "Tasks" });
     const dialog = await dialogOf("Clear all", block);
     const field = within(dialog).getByLabelText<HTMLInputElement>("Clearing as");
     await waitFor(() => {
@@ -286,7 +286,7 @@ describe("on a hub a control `allowed` lists still ends in the daemon's answer",
     await shows("mira");
     const dialog = await dialogOf("Accept");
     expect(within(dialog).getByLabelText<HTMLInputElement>("Accepting as").value).toBe("mira");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(FORBIDDEN);
     expect(client.acceptCard.mock.calls[0]?.[2].as).toBe("mira");
     expect(writeDialogs()).toEqual([dialog]);
@@ -301,7 +301,7 @@ describe("on a hub a control `allowed` lists still ends in the daemon's answer",
     await shows("mira");
     const dialog = await dialogOf("Clear");
     type(dialog, "Reason", "Wording only");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(FORBIDDEN);
     expect(client.clearCard.mock.calls[0]?.[2].as).toBe("mira");
     expect(writeDialogs()).toEqual([dialog]);
@@ -413,11 +413,11 @@ describe("while the identity read is out", () => {
     await waitFor(() => {
       expect(client.getIdentity).toHaveBeenCalled();
     });
-    const dialog = await dialogOf("New card");
+    const dialog = await dialogOf("New task");
     type(dialog, "Title", "A title");
     identity.answer({ login: "mira" });
     await shows("mira");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
     });
@@ -463,7 +463,7 @@ describe("a failed identity read", () => {
     expect(asked).toBeGreaterThan(0);
     expect(field.readOnly).toBe(false);
     client.getIdentity.mockImplementation(() => Promise.resolve({ login: "mira" }));
-    await dialogOf("New card");
+    await dialogOf("New task");
     await shows("mira");
     expect(client.getIdentity).toHaveBeenCalledTimes(asked + 1);
     expect(field.readOnly).toBe(true);
@@ -549,7 +549,7 @@ async function teamRead(client: StubClient) {
 
 async function nodeBlock(client: StubClient): Promise<HTMLElement> {
   renderApp(client, "#/alpha/tree/A");
-  const block = await screen.findByRole("region", { name: "Cards" });
+  const block = await screen.findByRole("region", { name: "Tasks" });
   await within(block).findByRole("button", { name: "Clear all" });
   return block;
 }
@@ -639,7 +639,7 @@ describe("a hub's dialogs (A9 of hub-team)", () => {
     const accepting = acceptClient(LEAD);
     const first = renderApp(accepting, "#/alpha/board/C-0001");
     await shows("mira");
-    fireEvent.click(within(await dialogOf("Accept")).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(await dialogOf("Accept")).getByRole("button", { name: "Accept task" }));
     await waitFor(() => {
       expect(accepting.acceptCard).toHaveBeenCalledTimes(1);
     });
@@ -651,7 +651,7 @@ describe("a hub's dialogs (A9 of hub-team)", () => {
     await shows("mira");
     const dialog = await dialogOf("Clear");
     type(dialog, "Reason", "Wording only");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     await waitFor(() => {
       expect(clearing.clearCard).toHaveBeenCalledTimes(1);
     });
@@ -664,7 +664,7 @@ describe("a hub's dialogs (A9 of hub-team)", () => {
     client.clearCardGroup.mockRejectedValue(new ClientError({ status: 409, message: line }));
     const block = await nodeBlock(client);
     const dialog = await dialogOf("Clear all", block);
-    expect(dialog.textContent).toContain("2 suspect cards of A");
+    expect(dialog.textContent).toContain("2 suspect tasks of A");
     type(dialog, "Reason", "Numbering only");
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(line);
@@ -686,8 +686,8 @@ describe("a hub's dialogs (A9 of hub-team)", () => {
     client.clearCardGroup.mockResolvedValue({ group: "A", cleared: ["C-0002", "C-0003"], notes: [line] });
     const block = await nodeBlock(client);
     const dialog = await dialogOf("Clear all", block);
-    expect(dialog.textContent).toContain("2 suspect cards of A");
-    expect(dialog.textContent).toContain("A card a correction holds, or one that reads departed, is passed over.");
+    expect(dialog.textContent).toContain("2 suspect tasks of A");
+    expect(dialog.textContent).toContain("A task a correction holds, or one that reads departed, is passed over.");
     type(dialog, "Reason", "Numbering only");
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
     await waitFor(() => {

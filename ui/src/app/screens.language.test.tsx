@@ -5,7 +5,7 @@ import type { ShownLinks } from "../api/types";
 import type { Translate } from "../i18n";
 import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
-import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aLink, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView } from "../test/builders";
+import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aLink, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView, aWorkspace, aWorkspaces } from "../test/builders";
 import { ASIDE, asideClient } from "../test/asideStub";
 import { renderApp } from "../test/render";
 import { stubClient, STAGED_AT, type StubClient } from "../test/stubClient";
@@ -53,7 +53,7 @@ const SCREENS: SweptScreen[] = [
     own: (t) => [t("inbox.filter")],
   },
   {
-    name: "Tasks",
+    name: "Agent tasks",
     hash: "#/alpha/tasks",
     client: () => stubClient(),
     heading: (t) => t("tasks.title"),
@@ -71,7 +71,7 @@ const SCREENS: SweptScreen[] = [
     own: (t) => [t("board.view.showCancelled"), t("board.view.newCard")],
   },
   {
-    // BH-21 of board-handoff: the lanes, a card's modal over the board and its hand-offs.
+    // BH-21 of board-handoff: the lanes, a card's modal over the board and its subtasks.
     name: "Board, its lanes and a card's modal",
     hash: "#/alpha/board/C-1",
     client: () => {
@@ -470,6 +470,60 @@ describe("Flow's scenario in Russian (FS-23 of flow-scenario)", () => {
     for (const word of english) {
       // The daemon's words stay as served, under lang="en".
       expect([word, screen.queryAllByText(word, { exact: false }).filter((element) => element.closest("[lang='en']") === null).map((element) => element.textContent)]).toEqual([word, []]);
+    }
+  });
+});
+
+// DP-9 of docs/features/departments.md: the Board, the card's modal and the Hand off dialog in
+// Russian. The chrome's owner's words come from ru.ts; a department's, a flow's and a card's titles
+// show as written, in any script, with no lang; the daemon's refusal stays byte for byte under
+// lang="en". The titles here are escaped Cyrillic, a project's data.
+describe("the departments' words in Russian (DP-9 of departments)", () => {
+  it("shows the switcher, the tabs by title, Subtasks and the Hand off dialog in Russian; titles as written; the daemon's refusal under lang=en", async () => {
+    const desk = "\u041a\u043e\u043f\u0438\u044f";
+    const galley = "\u041d\u0430\u0431\u043e\u0440";
+    const client = stubClient();
+    client.getWorkspaces.mockResolvedValue(
+      aWorkspaces([aWorkspace({ name: "galley", title: galley, flows: null, disciplines: ["copy"] }), aWorkspace({ name: "foundry", title: "Foundry", flows: null, disciplines: ["plates", "proofs"] })]),
+    );
+    client.getCards.mockResolvedValue(
+      aCardList([aCardRow({ id: "C-1", flow: "copy" }), aCardRow({ id: "C-2", flow: "plates", parent: "C-1" })], {
+        flows: [aCardFlow({ name: "copy", title: desk, disciplines: ["copy"] }), aCardFlow({ name: "plates", disciplines: ["plates", "proofs"] })],
+      }),
+    );
+    client.getCard.mockResolvedValue(aCard({ id: "C-1", flow: "copy", title: "Card C-1" }));
+    client.createCard.mockRejectedValue(new ClientError({ status: 409, message: "card C-1 changed: read it again" }));
+    renderApp(client, "#/alpha/board/C-1");
+    const dialog = await screen.findByRole("dialog", { name: "Card C-1" });
+    await within(dialog).findByRole("region", { name: en.board.modal.handOffs });
+    fireEvent.change(languageSelect(en.language.label), { target: { value: "ru" } });
+    await settle();
+    expect(screen.getByRole("combobox", { name: ru.workspace.workspaceLabel })).toBeTruthy();
+    expect(within(screen.getByRole("combobox", { name: ru.workspace.workspaceLabel })).getAllByRole("option").map((option) => option.textContent)).toEqual([galley, "Foundry"]);
+    expect(screen.getAllByRole("tab", { hidden: true }).map((tab) => tab.textContent)).toEqual([desk, "plates"]);
+    expect(screen.getByRole("group", { name: ruT("board.view.boardOf", { name: desk }), hidden: true })).toBeTruthy();
+    const subtasks = within(dialog).getByRole("region", { name: ru.board.modal.handOffs });
+    expect(subtasks.querySelector(".board-handoff-title + bdi")?.textContent).toBe("plates");
+    const flow = Array.from(dialog.querySelectorAll("dt")).find((term) => term.textContent === ru.board.item.flow);
+    expect([flow?.nextElementSibling?.textContent, flow?.nextElementSibling?.querySelector("[lang]")]).toEqual([desk, null]);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: ru.board.handoff.action }));
+    const handOff = await screen.findByRole("dialog", { name: ruT("board.handoff.title", { id: "C-1" }) });
+    const department = within(handOff).getByRole<HTMLSelectElement>("combobox", { name: ru.board.field.department });
+    expect(Array.from(department.options).map((option) => option.textContent)).toEqual([ru.board.handoff.chooseDepartment, galley, "Foundry"]);
+    expect(within(handOff).getByText(ru.board.handoff.departmentHint)).toBeTruthy();
+    fireEvent.click(within(handOff).getByRole("button", { name: ru.board.handoff.submit }));
+    expect((await within(handOff).findByRole("alert")).textContent).toBe(ru.board.handoff.needsDepartment);
+    fireEvent.change(department, { target: { value: "foundry" } });
+    expect(within(handOff).getByRole<HTMLSelectElement>("combobox", { name: ru.board.field.discipline }).value).toBe("plates");
+    fireEvent.change(within(handOff).getByLabelText(ru.board.field.reviewer), { target: { value: "Ann" } });
+    fireEvent.click(within(handOff).getByRole("button", { name: ru.board.handoff.submit }));
+    const refusal = await within(handOff).findByText("card C-1 changed: read it again");
+    expect(refusal.getAttribute("lang")).toBe("en");
+    expect(within(handOff).getByText(ru.board.view.refused)).toBeTruthy();
+    // No English of the slice's own words is left on the page.
+    for (const word of [en.workspace.workspaceLabel, en.board.modal.handOffs, en.board.field.department, en.board.handoff.chooseDepartment, en.board.handoff.departmentHint]) {
+      expect([word, screen.queryAllByText(word, { exact: false }).length]).toEqual([word, 0]);
     }
   });
 });

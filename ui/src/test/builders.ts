@@ -842,6 +842,8 @@ export function aRoadmap(groups: RoadmapGroup[], fields: Partial<RoadmapDocument
 export function aCardFlow(fields: Partial<CardFlow> & { name?: string } = {}): CardFlow {
   return {
     name: "work",
+    // Untitled, a flow's title is its name, as the daemon serves it.
+    title: fields.name ?? "work",
     disciplines: [],
     columns: [
       { id: "todo", title: "To do" },
@@ -957,12 +959,17 @@ export const IMPLICIT_SECTIONS = ["inbox", "board", "roadmap", "flow", "tree", "
 
 /** One workspace; omitted keys as the implicit one's (docs/features/workspaces.md "Data"). */
 export function aWorkspace(fields: Partial<Workspace> & Pick<Workspace, "name">): Workspace {
-  return { title: fields.name, landing: "overview", sections: [...IMPLICIT_SECTIONS], flows: null, module: null, ...fields };
+  return { title: fields.name, landing: "overview", sections: [...IMPLICIT_SECTIONS], flows: null, disciplines: [], module: null, ...fields };
 }
 
-/** One module. */
-export function aModule(fields: Partial<WorkspaceModule> & Pick<WorkspaceModule, "name" | "root">): WorkspaceModule {
-  return { title: fields.name, ...fields };
+/** One rooted module: `kinds` null. */
+export function aModule(fields: Partial<WorkspaceModule> & { name: string; root: string }): WorkspaceModule {
+  return { title: fields.name, kinds: null, ...fields };
+}
+
+/** One direction: a module by node kind, `root` null (docs/canon/workspaces.md "The lens"). */
+export function aDirection(fields: Partial<WorkspaceModule> & { name: string; kinds: string[] }): WorkspaceModule {
+  return { title: fields.name, root: null, ...fields };
 }
 
 /** `spec workspace --json` over a project with no table: the implicit document of docs/features/workspaces.md "Data". */

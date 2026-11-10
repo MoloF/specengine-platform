@@ -1,11 +1,12 @@
-import type { NodeView, Proposal, ShownLink, ShownLinks, TreeNode } from "../api/types";
-import { aLink, aNode, aTrace, aTraceCard, aTraceNode, aTreeNode, aTreeView } from "./builders";
+import type { NodeView, Proposal, ShownLink, ShownLinks, TreeNode, WorkspaceDocument } from "../api/types";
+import { aDirection, aLink, aModule, aNode, aTrace, aTraceCard, aTraceNode, aTreeNode, aTreeView, aWorkspace, aWorkspaces } from "./builders";
 import { stubClient } from "./stubClient";
 
 // A river ferry for the document view's tests (docs/features/doc-modal.md "Acceptance criteria",
 // DM-9 to DM-13), invented: one document with an ancestor, a section, links of every kind the view
-// sorts (strong out and in, a mention, a dangling one), a trace row with a card, and a rooted tree
-// read two deep. Kinds, statuses and link types are this stub's data, never app code's.
+// sorts (strong out and in, a mention, a dangling one), a trace row with a card, a rooted tree read
+// two deep, and a workspaces document with two directions. Kinds, statuses, link types and module
+// names are this stub's data, never app code's.
 
 export const FERRY = "DOM-FERRY";
 export const FERRY_PATH = "docs/ferry/ferry.md";
@@ -114,6 +115,18 @@ export function ferryTree(): TreeNode[] {
   ];
 }
 
+/**
+ * The ferry's workspaces: a rooted module, which groups nothing, then two directions, `records` by
+ * `assumption` and `asked` by `question` and `assumption`, so an assumption joins the first in served
+ * order (docs/features/departments.md "Acceptance criteria", DP-13). Names and kinds are this stub's.
+ */
+export function ferryWorkspaces(): WorkspaceDocument {
+  return aWorkspaces(
+    [aWorkspace({ name: "crossing" })],
+    [aModule({ name: "river", title: "The river", root: "DOM-RIVER" }), aDirection({ name: "records", title: "Records", kinds: ["assumption"] }), aDirection({ name: "asked", title: "Asked", kinds: ["question", "assumption"] })],
+  );
+}
+
 /** The ferry's trace row: in work, its one card. */
 export const FERRY_CARD = aTraceCard({ id: "C-0007", title: "Paint the ferry", mark: "open" });
 
@@ -127,5 +140,6 @@ export function docClient(proposals: Proposal[] = []) {
   client.getTree.mockImplementation((_project, options) =>
     Promise.resolve(options?.root === FERRY ? aTreeView(ferryTree(), { ref: FERRY, depth: 2 }) : aTreeView([], { ref: options?.root ?? null, depth: options?.depth ?? null })),
   );
+  client.getWorkspaces.mockImplementation(() => Promise.resolve(ferryWorkspaces()));
   return client;
 }

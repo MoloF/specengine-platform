@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
 import type { TreeView } from "../api/types";
 import { ASIDE, asideClient } from "../test/asideStub";
-import { aTreeNode, aTreeView } from "../test/builders";
-import { docClient, FERRY, FERRY_FRONT_MATTER, FERRY_LINES } from "../test/docStub";
+import { anImplicitWorkspaces, aTreeNode, aTreeView } from "../test/builders";
+import { docClient, FERRY, FERRY_FRONT_MATTER, FERRY_LINES, ferryWorkspaces } from "../test/docStub";
 import { renderApp } from "../test/render";
 import { argsOf } from "../test/stubClient";
 
@@ -49,7 +49,7 @@ describe("the sections (DM-12 of doc-modal)", () => {
   it("acts in order: New card, the one primary; Open in Flow under the last ancestor; Open in Spec tree; the tools Open as a page and Close", async () => {
     const { dialog, shown } = await ferry();
     const acts = Array.from(dialog.querySelectorAll(".doc-acts > *"));
-    expect(acts.map((act) => act.textContent)).toEqual(["New card", "Open in Flow", "Open in Spec tree"]);
+    expect(acts.map((act) => act.textContent)).toEqual(["New task", "Open in Flow", "Open in Spec tree"]);
     expect(dialog.querySelectorAll(".button-primary")).toHaveLength(1);
     expect(acts[0]?.className).toContain("button-primary");
     expect(shown.getByRole("link", { name: "Open in Flow" }).getAttribute("href")).toBe("#/alpha/flow/DOM-FERRY?scope=DOM-RIVER");
@@ -57,8 +57,8 @@ describe("the sections (DM-12 of doc-modal)", () => {
     const tools = dialog.querySelector(".issue-view-tools");
     expect(within(tools as HTMLElement).getByRole("link", { name: "Open as a page" }).getAttribute("href")).toBe("#/alpha/tree/DOM-FERRY/page");
     expect(within(tools as HTMLElement).getByRole("button", { name: /^Close/ })).toBeTruthy();
-    fireEvent.click(shown.getByRole("button", { name: "New card" }));
-    const card = await screen.findByRole("dialog", { name: "New card" });
+    fireEvent.click(shown.getByRole("button", { name: "New task" }));
+    const card = await screen.findByRole("dialog", { name: "New task" });
     expect(within(card).getByLabelText<HTMLTextAreaElement>("Source", { exact: false }).value).toBe(FERRY);
   });
 
@@ -98,9 +98,9 @@ describe("the sections (DM-12 of doc-modal)", () => {
 
   it("lists the cards with no New card of their own", async () => {
     const { shown } = await ferry();
-    const cards = within(shown.getByRole("region", { name: "Cards" }));
+    const cards = within(shown.getByRole("region", { name: "Tasks" }));
     expect(await cards.findByRole("link", { name: /C-0007/ })).toBeTruthy();
-    expect(cards.queryByRole("button", { name: "New card" })).toBeNull();
+    expect(cards.queryByRole("button", { name: "New task" })).toBeNull();
   });
 
   it("folds Technical details, collapsed; open: the ID with Copy, kind, place, rev, tokens, both hashes, the front-matter, the unresolved, Open in Graph (M: open by default)", async () => {
@@ -147,7 +147,10 @@ describe("Inside (DM-13 of doc-modal)", () => {
   });
 
   it("groups by holder, the document first, then by raw kind; the ID-less counted for the tree; the grandchild absent", async () => {
-    const { dialog } = await ferry();
+    // No direction served: the raw kinds alone, as before departments.
+    const client = docClient();
+    client.getWorkspaces.mockResolvedValue(anImplicitWorkspaces());
+    const { dialog } = await ferry(client);
     fireEvent.click(insideButton(dialog));
     const direct = (await within(dialog).findByRole("heading", { name: "Directly under this document" })).closest("section") as HTMLElement;
     const under = within(dialog).getByRole("heading", { name: "Under Tides" }).closest("section") as HTMLElement;
@@ -220,6 +223,86 @@ describe("Inside (DM-13 of doc-modal)", () => {
     });
     await waitFor(() => {
       expect(document.activeElement).toBe(hunch.getAllByRole("link")[50]);
+    });
+  });
+});
+
+describe("Inside by direction (DP-13 of departments)", () => {
+  /** A holder's sets as their names and their links' titles, in order. */
+  function sets(section: HTMLElement): [string, string[]][] {
+    return within(section)
+      .getAllByRole("group")
+      .map((group) => [document.getElementById(group.getAttribute("aria-labelledby") ?? "")?.textContent ?? "", within(group).getAllByRole("link").map((link) => link.textContent)]);
+  }
+
+  it("groups as the stub says: raw mechanic under the document; Records, then Asked, under Tides, each labelled by its title in a bdi with no lang; a raw kind keeps lang=en (M: the last matching direction; directions after raw kinds)", async () => {
+    const { dialog } = await ferry();
+    fireEvent.click(insideButton(dialog));
+    const direct = (await within(dialog).findByRole("heading", { name: "Directly under this document" })).closest("section") as HTMLElement;
+    const under = within(dialog).getByRole("heading", { name: "Under Tides" }).closest("section") as HTMLElement;
+    await waitFor(() => {
+      expect(sets(under)).toEqual([
+        ["Records", ["The tide table is right", "Fog stops the ferry"]],
+        ["Asked", ["Who rings the bell?"]],
+      ]);
+    });
+    expect(sets(direct)).toEqual([["mechanic", ["Boarding"]]]);
+    const records = within(under).getByRole("group", { name: "Records" });
+    const label = document.getElementById(records.getAttribute("aria-labelledby") ?? "") as HTMLElement;
+    // The project's words carry no lang: neither the label nor anything between it and the dialog.
+    expect([label.querySelector("bdi")?.textContent, label.querySelector("[lang]"), label.closest("[lang]") === document.documentElement]).toEqual(["Records", null, true]);
+    const mechanic = document.getElementById(within(direct).getByRole("group", { name: "mechanic" }).getAttribute("aria-labelledby") ?? "") as HTMLElement;
+    expect(mechanic.getAttribute("lang")).toBe("en");
+    expect(within(under).queryByRole("group", { name: "assumption" })).toBeNull();
+  });
+
+  it("expanding makes one getTree call and no getWorkspaces call beyond the Shell's", async () => {
+    const { client, dialog } = await ferry();
+    await waitFor(() => {
+      expect(client.getWorkspaces).toHaveBeenCalled();
+    });
+    const shells = client.getWorkspaces.mock.calls.length;
+    fireEvent.click(insideButton(dialog));
+    await within(dialog).findByRole("group", { name: "Records" });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(argsOf(client.getTree)).toEqual([["alpha", { root: FERRY, depth: 2 }]]);
+    expect(client.getWorkspaces).toHaveBeenCalledTimes(shells);
+  });
+
+  it("with the workspaces read failed, the groups are the raw kinds at once", async () => {
+    const client = docClient();
+    client.getWorkspaces.mockRejectedValue(new ClientError({ status: 503, message: "the config could not be read" }));
+    const { dialog } = await ferry(client);
+    fireEvent.click(insideButton(dialog));
+    const under = (await within(dialog).findByRole("heading", { name: "Under Tides" })).closest("section") as HTMLElement;
+    expect(sets(under)).toEqual([
+      ["assumption", ["The tide table is right", "Fog stops the ferry"]],
+      ["question", ["Who rings the bell?"]],
+    ]);
+  });
+
+  it("with the workspaces read pending, the groups are the raw kinds at once, never waiting; directions apply once it lands", async () => {
+    const client = docClient();
+    let land: () => void = () => undefined;
+    client.getWorkspaces.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          land = () => {
+            resolve(ferryWorkspaces());
+          };
+        }),
+    );
+    const { dialog } = await ferry(client);
+    fireEvent.click(insideButton(dialog));
+    const under = (await within(dialog).findByRole("heading", { name: "Under Tides" })).closest("section") as HTMLElement;
+    expect(sets(under).map(([name]) => name)).toEqual(["assumption", "question"]);
+    act(() => {
+      land();
+    });
+    await waitFor(() => {
+      expect(sets(under).map(([name]) => name)).toEqual(["Records", "Asked"]);
     });
   });
 });

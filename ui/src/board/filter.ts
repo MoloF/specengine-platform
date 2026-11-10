@@ -68,6 +68,15 @@ export function assigneeChoices(rows: readonly CardRow[], kept: string, t: Trans
   ];
 }
 
+/**
+ * A flow as people see it: its served `title`, the name for a flow the read no longer serves. Tabs,
+ * the board's name, a Parent lane head, the work item's Flow row and its Subtasks rows show it; a raw
+ * `<flow>/<column>` pair, the daemon's, stays raw (docs/features/departments.md "Acceptance criteria", DP-10).
+ */
+export function flowTitleOf(flow: CardFlow | undefined, name: string): string {
+  return flow?.title ?? name;
+}
+
 /** One board's tab: a flow served, or one only a row still names. */
 export interface BoardTab {
   name: string;

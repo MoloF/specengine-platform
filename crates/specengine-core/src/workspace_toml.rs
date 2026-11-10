@@ -1,9 +1,15 @@
 //! `[[workspace]]` and `[[module]]` of `specengine.toml` (task spec
-//! `workspaces`, "Data"; `docs/canon/workspaces.md`): a trade's lens on a
-//! project and the roots it may scope Tree and Flow to, read only by
-//! `spec workspace` and its daemon twin. Of [`crate::card_toml`]'s family,
-//! read apart: [`crate::ProjectConfig::from_toml`] only name-checks both
-//! keys, so neither table fails a read, a command, a check or a gate.
+//! `workspaces`, "Data"; `docs/canon/workspaces.md` "The lens"): a trade's
+//! lens on a project, and the modules it may scope its reads to, read only
+//! by `spec workspace` and its daemon twin. Of [`crate::card_toml`]'s
+//! family, read apart: [`crate::ProjectConfig::from_toml`] only name-checks
+//! both keys, so neither table fails a read, a command, a check or a gate.
+//!
+//! A module is a root document and its subtree, or a direction
+//! (`docs/features/departments.md` "Acceptance criteria", DP-2): the nodes
+//! of the kinds its `kinds` lists, with no root. It holds exactly one of
+//! `root` and `kinds`; a kind is the project's word, never checked against
+//! `[ids]` here.
 //!
 //! The reader never fails. A malformed table is replaced by its default,
 //! with one note, the first problem by line: `[[module]]` by no module,
@@ -14,13 +20,17 @@
 //! with a note, and the rest is served.
 //!
 //! - **Malformed**: not an array of tables, an unknown key or a wrong type
-//!   (the TOML reader's message), a missing `name` (or a module's `root`),
-//!   a bad name ([`name_problem`]), title or root, a name twice, more than
-//!   [`MAX_MODULES`] modules, [`MAX_WORKSPACES`] workspaces or
-//!   [`MAX_LIST`] entries in a list.
+//!   (the TOML reader's message), a missing `name`, a module with both or
+//!   neither of `root` and `kinds`, a bad name ([`name_problem`]), title,
+//!   root or kind, a kind twice, a name twice, more than [`MAX_MODULES`]
+//!   modules, [`MAX_WORKSPACES`] workspaces or [`MAX_LIST`] entries in a
+//!   list.
 //! - **Judged, per workspace in config order**: `sections`, `landing`,
 //!   `flows` (against [`card_from_toml`]; a `[card]` that does not read
 //!   serves the lists as written, one note for the document), `module`.
+//! - **Served from `[card]`**, read once: each workspace's `disciplines`
+//!   ([`disciplines_of`], DP-3 of the same criteria), none when `[card]`
+//!   does not read, with no note of their own.
 //!
 //! The section IDs are the engine's closed vocabulary, the UI's
 //! `ui/src/app/sections.ts` in its order: nothing here names a trade, and
@@ -37,7 +47,7 @@ use serde::{Deserialize, Serialize};
 use toml::Spanned;
 use toml::de::{DeTable, DeValue, ValueDeserializer};
 
-use crate::card_toml::{MAX_TITLE_BYTES, card_from_toml, name_problem};
+use crate::card_toml::{CardConfig, card_from_toml, name_problem, title_problem};
 use crate::health_toml::{Errors, line_of, unknown_field};
 use crate::project_toml::ProjectError;
 
@@ -81,6 +91,9 @@ pub const MAX_MODULES: usize = 64;
 pub const MAX_LIST: usize = 32;
 /// The longest module `root`, in bytes.
 pub const MAX_ROOT_BYTES: usize = 256;
+/// The longest entry of a direction's `kinds`, in bytes; the list holds at
+/// most [`MAX_LIST`].
+pub const MAX_KIND_BYTES: usize = 64;
 
 /// The top-level key of the workspaces.
 const WORKSPACE: &str = "workspace";
@@ -89,7 +102,7 @@ const MODULE: &str = "module";
 /// A workspace's keys, in the order a message lists them.
 const WORKSPACE_KEYS: [&str; 6] = ["name", "title", "sections", "landing", "flows", "module"];
 /// A module's keys, in the order a message lists them.
-const MODULE_KEYS: [&str; 3] = ["name", "title", "root"];
+const MODULE_KEYS: [&str; 4] = ["name", "title", "root", "kinds"];
 /// How a message names a workspace table.
 const WORKSPACE_TABLE: &str = "`[[workspace]]`";
 /// How a message names a module table.
@@ -127,13 +140,17 @@ pub struct Workspace {
     pub sections: Vec<String>,
     /// Each a `[[card.flow]]` name, once; `None`: every flow.
     pub flows: Option<Vec<String>>,
+    /// The disciplines a new card can take into one of `flows`
+    /// ([`disciplines_of`]); empty when `[card]` does not read.
+    pub disciplines: Vec<String>,
     /// A served module's name.
     pub module: Option<String>,
 }
 
 impl Workspace {
     /// The implicit workspace: every section but `tasks`, on the Overview,
-    /// every flow, no module.
+    /// every flow, no module; its `disciplines` empty until the reader fills
+    /// them from `[card]` ([`disciplines_of`] over every flow).
     pub fn implicit() -> Self {
         Self {
             name: IMPLICIT_NAME.to_owned(),
@@ -141,18 +158,26 @@ impl Workspace {
             landing: OVERVIEW.to_owned(),
             sections: IMPLICIT_SECTIONS.map(str::to_owned).to_vec(),
             flows: None,
+            disciplines: Vec::new(),
             module: None,
         }
     }
 }
 
-/// One module: a root document and its subtree.
+/// One module: a root document and its subtree, or a direction, the nodes
+/// of the kinds it lists, with no root. Exactly one of `root` and `kinds`
+/// is `Some`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct WorkspaceModule {
     pub name: String,
     pub title: String,
-    /// A REF in any `spec show` form, resolved by the read it roots.
-    pub root: String,
+    /// A REF in any `spec show` form, resolved by the read it roots;
+    /// `None` for a direction.
+    pub root: Option<String>,
+    /// A direction's kinds, as written: matched exactly against a node's
+    /// `kind` by the reads that take one, never against `[ids]`; `None` for
+    /// a rooted module.
+    pub kinds: Option<Vec<String>>,
 }
 
 /// What the reader left out or replaced: its 1-based line and why.
@@ -205,7 +230,8 @@ pub fn workspace_from_toml(text: &str) -> WorkspaceConfig {
                     error.message().trim()
                 ),
             });
-            return implicit(Vec::new(), notes);
+            // `[card]` does not read either: no discipline is served.
+            return implicit(Vec::new(), None, notes);
         }
     };
     let top = |key: &str| {
@@ -228,13 +254,18 @@ pub fn workspace_from_toml(text: &str) -> WorkspaceConfig {
             None
         }
     };
+    // `[card]`, read once: the flows `flows` are judged against and the
+    // disciplines each workspace serves. Its problem is noted only where a
+    // workspace's `flows` are judged; elsewhere it serves no discipline.
+    let card = card_from_toml(text);
     let Some(written) = written else {
-        return implicit(modules, notes);
+        return implicit(modules, card.as_ref().ok(), notes);
     };
     let mut judge = Judge {
         text,
         modules: &modules,
-        card: None,
+        card: card.as_ref(),
+        card_noted: false,
         notes: &mut notes,
     };
     let workspaces = written
@@ -250,15 +281,52 @@ pub fn workspace_from_toml(text: &str) -> WorkspaceConfig {
     }
 }
 
-/// The implicit document over `modules`, `notes` sorted.
-fn implicit(modules: Vec<WorkspaceModule>, mut notes: Vec<WorkspaceNote>) -> WorkspaceConfig {
+/// The implicit document over `modules`, `notes` sorted; its workspace's
+/// `disciplines` those of every flow of `card` (none when it does not read).
+fn implicit(
+    modules: Vec<WorkspaceModule>,
+    card: Option<&CardConfig>,
+    mut notes: Vec<WorkspaceNote>,
+) -> WorkspaceConfig {
     notes.sort_by_key(|note| note.line);
+    let mut workspace = Workspace::implicit();
+    if let Some(card) = card {
+        workspace.disciplines = disciplines_of(card, None);
+    }
     WorkspaceConfig {
         source: WorkspaceSource::Implicit,
-        workspaces: vec![Workspace::implicit()],
+        workspaces: vec![workspace],
         modules,
         notes,
     }
+}
+
+/// The disciplines a department shows (`docs/features/departments.md`
+/// "Acceptance criteria", DP-3): its flows in its order (`None`: every flow
+/// of `card`, in config order), each flow's disciplines as written, each
+/// once, a discipline kept only when the flow a new card of it takes
+/// ([`CardConfig::flow_for`], the first flow listing it) is one of those
+/// flows. A name `card` does not hold contributes nothing.
+pub fn disciplines_of(card: &CardConfig, flows: Option<&[String]>) -> Vec<String> {
+    let shown: Vec<&str> = match flows {
+        None => card.flows.iter().map(|flow| flow.name.as_str()).collect(),
+        Some(names) => names.iter().map(String::as_str).collect(),
+    };
+    let mut kept: Vec<String> = Vec::new();
+    for flow in shown.iter().filter_map(|name| card.flow(name)) {
+        for discipline in &flow.disciplines {
+            if kept.contains(discipline) {
+                continue;
+            }
+            let placed = card
+                .flow_for(Some(discipline))
+                .is_ok_and(|first| shown.contains(&first.name.as_str()));
+            if placed {
+                kept.push(discipline.clone());
+            }
+        }
+    }
+    kept
 }
 
 /// A malformed table's note: its first problem, then what is served.
@@ -294,23 +362,37 @@ fn read_modules(
     let mut names = BTreeSet::new();
     for (span, entry) in tables(value, MODULE_TABLE, MAX_MODULES, &mut errors) {
         // A required key: `Some` once written, its value `None` when of
-        // another type (pushed), so it is not also missing.
+        // another type (pushed), so it is not also missing. `root` and
+        // `kinds` alike: exactly one of the two is required.
         let mut name = None;
         let mut title = None;
         let mut root = None;
+        let mut kinds = None;
         for (key, value) in entry.iter() {
             match key.get_ref().as_ref() {
                 "name" => name = Some(string(value, &mut errors)),
                 "title" => title = string(value, &mut errors),
                 "root" => root = Some(string(value, &mut errors)),
+                "kinds" => kinds = Some((value.span(), strings(value, &mut errors))),
                 other => errors.push(key.span(), unknown_field(other, &MODULE_KEYS)),
             }
         }
+        let written_name = match &name {
+            Some(Some((name, _))) => Some(name.clone()),
+            _ => None,
+        };
         let name = named(&span, name, MODULE_TABLE, &mut names, &mut errors);
         if let Some((title, at)) = &title
             && let Some(problem) = title_problem(title)
         {
             errors.push(at.clone(), problem);
+        }
+        let both = root.is_some() && kinds.is_some();
+        if root.is_none() && kinds.is_none() {
+            errors.push(
+                span,
+                format!("{MODULE_TABLE} is required to hold `root` or `kinds`"),
+            );
         }
         let root = match root {
             Some(Some((root, at))) => {
@@ -319,17 +401,33 @@ fn read_modules(
                 }
                 Some(root)
             }
-            Some(None) => None,
-            None => {
-                errors.push(span, required(MODULE_TABLE, "root"));
-                None
-            }
+            _ => None,
         };
-        if let (Some(name), Some(root)) = (name, root) {
+        let kinds = match kinds {
+            Some((at, listed)) => {
+                if both {
+                    let named_as =
+                        written_name.map_or_else(String::new, |name| format!(" `{name}`"));
+                    errors.push(
+                        at.clone(),
+                        format!(
+                            "{MODULE_TABLE}{named_as} holds both `root` and `kinds`: a module \
+                             holds one"
+                        ),
+                    );
+                }
+                listed.and_then(|listed| kinds_of(at, listed, &mut errors))
+            }
+            None => None,
+        };
+        if let Some(name) = name
+            && root.is_some() != kinds.is_some()
+        {
             modules.push(WorkspaceModule {
                 title: title.map_or_else(|| name.clone(), |(title, _)| title),
                 name,
                 root,
+                kinds,
             });
         }
     }
@@ -453,21 +551,6 @@ fn required(table: &str, key: &str) -> String {
     format!("{table} is required to hold `{key}`")
 }
 
-/// Why `title` is none: 1 to [`MAX_TITLE_BYTES`] UTF-8 bytes, any script,
-/// no control character.
-fn title_problem(title: &str) -> Option<String> {
-    if title.is_empty() || title.len() > MAX_TITLE_BYTES {
-        return Some(format!(
-            "`title` is {} bytes long; a title has 1 to {MAX_TITLE_BYTES}",
-            title.len()
-        ));
-    }
-    title
-        .chars()
-        .any(char::is_control)
-        .then(|| "`title` holds a control character".to_owned())
-}
-
 /// Why `root` is none: 1 to [`MAX_ROOT_BYTES`] bytes, no control
 /// character, no space at either end. Never resolved here.
 fn root_problem(root: &str) -> Option<String> {
@@ -481,6 +564,50 @@ fn root_problem(root: &str) -> Option<String> {
         return Some("`root` holds a control character".to_owned());
     }
     (root.trim() != root).then(|| format!("`root` `{root}` has a space at an end"))
+}
+
+/// A direction's `kinds`, within [`strings`]' cap: at least one, each none
+/// of [`kind_problem`]'s, each once; the problems pushed. Never checked
+/// against `[ids]`: a kind is the project's word, matched by the reads
+/// (`docs/features/departments.md` "Acceptance criteria", DP-2).
+fn kinds_of(
+    at: Range<usize>,
+    listed: Vec<Written>,
+    errors: &mut Errors<'_>,
+) -> Option<Vec<String>> {
+    if listed.is_empty() {
+        errors.push(
+            at,
+            format!("`kinds` lists no kind; a direction lists 1 to {MAX_LIST}"),
+        );
+        return None;
+    }
+    let mut kept: Vec<String> = Vec::with_capacity(listed.len());
+    for (kind, at) in listed {
+        if let Some(problem) = kind_problem(&kind) {
+            errors.push(at, problem);
+        } else if kept.contains(&kind) {
+            errors.push(at, format!("`kinds`: `{kind}` is listed twice"));
+        } else {
+            kept.push(kind);
+        }
+    }
+    Some(kept)
+}
+
+/// Why `kind` is no entry of `kinds`: 1 to [`MAX_KIND_BYTES`] bytes, no
+/// control character, no space at either end.
+fn kind_problem(kind: &str) -> Option<String> {
+    if kind.is_empty() || kind.len() > MAX_KIND_BYTES {
+        return Some(format!(
+            "`kinds`: `{kind}` is {} bytes long; a kind has 1 to {MAX_KIND_BYTES}",
+            kind.len()
+        ));
+    }
+    if kind.chars().any(char::is_control) {
+        return Some("`kinds`: a kind holds a control character".to_owned());
+    }
+    (kind.trim() != kind).then(|| format!("`kinds`: `{kind}` has a space at an end"))
 }
 
 /// The string `value` and its span, else the TOML reader's error (pushed).
@@ -535,9 +662,10 @@ fn misread<'i, T: Deserialize<'i>>(value: &Spanned<DeValue<'i>>, errors: &mut Er
 struct Judge<'a, 't> {
     text: &'t str,
     modules: &'a [WorkspaceModule],
-    /// `[card]`'s flow names once read, or its problem; read at the first
-    /// `flows` met.
-    card: Option<Result<BTreeSet<String>, ()>>,
+    /// `[card]`, read once, or its problem.
+    card: Result<&'a CardConfig, &'a ProjectError>,
+    /// `card`'s problem is noted: once, at the first `flows` judged.
+    card_noted: bool,
     notes: &'a mut Vec<WorkspaceNote>,
 }
 
@@ -572,6 +700,10 @@ impl Judge<'_, '_> {
             }
         };
         let flows = written.flows.and_then(|listed| self.flows(&name, listed));
+        let disciplines = self.card.map_or_else(
+            |_| Vec::new(),
+            |card| disciplines_of(card, flows.as_deref()),
+        );
         let module = written.module.and_then(|(module, at)| {
             if self.modules.iter().any(|known| known.name == module) {
                 return Some(module);
@@ -590,6 +722,7 @@ impl Judge<'_, '_> {
             landing,
             sections,
             flows,
+            disciplines,
             module,
         }
     }
@@ -628,13 +761,22 @@ impl Judge<'_, '_> {
         if listed.is_empty() {
             return None;
         }
-        let known = match self.card_flows() {
-            Ok(known) => known,
-            Err(()) => return Some(listed.into_iter().map(|(flow, _)| flow).collect()),
+        let card = match self.card {
+            Ok(card) => card,
+            Err(error) => {
+                if !self.card_noted {
+                    self.card_noted = true;
+                    self.notes.push(fell_back(
+                        error,
+                        "the workspaces' flows are served unjudged",
+                    ));
+                }
+                return Some(listed.into_iter().map(|(flow, _)| flow).collect());
+            }
         };
         let mut kept: Vec<String> = Vec::with_capacity(listed.len());
         for (flow, at) in listed {
-            if !known.contains(&flow) {
+            if card.flow(&flow).is_none() {
                 self.note(
                     &at,
                     format!("workspace `{name}`: no `[[card.flow]]` is named `{flow}`: left out"),
@@ -651,24 +793,5 @@ impl Judge<'_, '_> {
             }
         }
         (!kept.is_empty()).then_some(kept)
-    }
-
-    /// `[card]`'s flow names, read once; its problem noted once.
-    fn card_flows(&mut self) -> Result<BTreeSet<String>, ()> {
-        if let Some(card) = &self.card {
-            return card.clone();
-        }
-        let read = match card_from_toml(self.text) {
-            Ok(card) => Ok(card.flows.into_iter().map(|flow| flow.name).collect()),
-            Err(error) => {
-                self.notes.push(fell_back(
-                    &error,
-                    "the workspaces' flows are served unjudged",
-                ));
-                Err(())
-            }
-        };
-        self.card = Some(read.clone());
-        read
     }
 }

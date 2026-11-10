@@ -286,7 +286,7 @@ describe("Tasks over the daemon (AC-11 of ui-live-tasks)", () => {
   it("lists the served entries in their groups from one `/tasks` read, its note verbatim; never Not built yet", async () => {
     const fetchStub = taskDaemon();
     renderApp(new HttpClient(), "#/harbor-sim/tasks");
-    const list = await screen.findByRole("listbox", { name: "Tasks, what waits for you first" });
+    const list = await screen.findByRole("listbox", { name: "Agent tasks, what waits for you first" });
     const groups = within(list)
       .getAllByRole("group")
       .map((group) => [
@@ -329,7 +329,7 @@ describe("Tasks over the daemon (AC-11 of ui-live-tasks)", () => {
     taskDaemon();
     renderApp(new HttpClient(), "#/harbor-sim/tasks/T-0099");
     expect(await screen.findByText(NO_T_0099.reason)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Back to tasks" }).getAttribute("href")).toBe("#/harbor-sim/tasks");
+    expect(screen.getByRole("link", { name: "Back to agent tasks" }).getAttribute("href")).toBe("#/harbor-sim/tasks");
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText(NOT_BUILT)).toBeNull();
   });
@@ -339,7 +339,7 @@ describe("Tasks over the daemon (AC-11 of ui-live-tasks)", () => {
     const fetchStub = taskDaemon({ status: 503, message });
     renderApp(new HttpClient(), "#/harbor-sim/tasks");
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe(`The tasks could not be loaded${message}`);
+    expect(alert.textContent).toBe(`The agent tasks could not be loaded${message}`);
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => {
       expect(taskReads(fetchStub)).toEqual(["/api/projects/harbor-sim/tasks", "/api/projects/harbor-sim/tasks"]);
@@ -350,7 +350,7 @@ describe("Tasks over the daemon (AC-11 of ui-live-tasks)", () => {
   it("Home's task panel lists what waits for you from `/tasks`", async () => {
     const fetchStub = taskDaemon();
     renderApp(new HttpClient(), "#/harbor-sim");
-    const tasks = await screen.findByRole("region", { name: "Tasks" });
+    const tasks = await screen.findByRole("region", { name: "Agent tasks" });
     await waitFor(() => {
       expect(tasks.getAttribute("aria-busy")).toBe("false");
     });
@@ -368,7 +368,7 @@ describe("Tasks over the daemon (AC-11 of ui-live-tasks)", () => {
     fireEvent.keyDown(document.body, { key: "k", code: "KeyK", metaKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Jump to" });
     fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "T-01" } });
-    const group = await within(dialog).findByRole("group", { name: "Tasks" });
+    const group = await within(dialog).findByRole("group", { name: "Agent tasks" });
     // The Tasks screen's order, Closed last.
     expect(within(group).getAllByRole("option").map((option) => option.textContent.split(":")[0])).toEqual(["T-0107", "T-0108", "T-0113", "T-0109", "T-0104"]);
     expect(taskReads(fetchStub)).toEqual(["/api/projects/harbor-sim/tasks"]);
@@ -397,7 +397,7 @@ describe("the Inbox card's Task fact over the daemon (AC-12 of ui-live-tasks)", 
     const card = await screen.findByRole("article");
     const task = await within(card).findByRole("link", { name: "T-0107" });
     expect(task.getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
-    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Task");
+    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Agent task");
 
     fireEvent.click(within(screen.getByRole("listbox")).getByText("Berth draft"));
     await waitFor(() => {
@@ -405,8 +405,8 @@ describe("the Inbox card's Task fact over the daemon (AC-12 of ui-live-tasks)", 
     });
     const other = screen.getByRole("article");
     await within(other).findByRole("heading", { level: 3, name: "Provenance" });
-    const fact = Array.from(other.querySelectorAll(".fact")).find((item) => item.querySelector("dt")?.textContent === "Task");
-    expect(fact?.querySelector("dd")?.textContent).toBe("No task");
+    const fact = Array.from(other.querySelectorAll(".fact")).find((item) => item.querySelector("dt")?.textContent === "Agent task");
+    expect(fact?.querySelector("dd")?.textContent).toBe("No agent task");
   });
 });
 

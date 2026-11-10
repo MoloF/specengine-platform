@@ -149,7 +149,7 @@ describe("the column heads' lozenges (DF-5)", () => {
     ]);
     // The lozenge comes first, the count after it; the head's name reads both.
     expect(heads.map((one) => one.firstElementChild?.classList.contains("lozenge"))).toEqual([true, true, true, true, true]);
-    expect(head("queued").textContent).toBe("queued, 1 card");
+    expect(head("queued").textContent).toBe("queued, 1 task");
     expect(head("Not in the flow").classList.contains("board-column-title-outside")).toBe(true);
   });
 });
@@ -182,7 +182,7 @@ describe("the workspace's flows", () => {
       release();
       await Promise.resolve();
     });
-    expect(await screen.findByText("Showing 1 of 2 card flows.")).toBeTruthy();
+    expect(await screen.findByText("Showing 1 of 2 flows.")).toBeTruthy();
     expect(screen.queryAllByRole("tab")).toEqual([]);
     expect(screen.getByRole("button", { name: "Show all flows" })).toBeTruthy();
     await waitFor(() => {
@@ -217,7 +217,7 @@ describe("the workspace's flows", () => {
         ["plates", "true"],
       ]);
     });
-    expect(screen.getByRole("button", { name: "Show this workspace's flows" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show this department's flows" })).toBeTruthy();
   });
 });
 
@@ -228,8 +228,8 @@ describe("the board", () => {
     await screen.findByRole("heading", { level: 2, name: /^To do/ });
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(column("To do").textContent).toContain("2");
-    expect(column("Doing").querySelector(".board-column-count")?.textContent).toBe(", 1 card");
-    expect(column("Closed").querySelector(".board-column-count")?.textContent).toBe(", 0 cards");
+    expect(column("Doing").querySelector(".board-column-count")?.textContent).toBe(", 1 task");
+    expect(column("Closed").querySelector(".board-column-count")?.textContent).toBe(", 0 tasks");
     expect(client.getCards).toHaveBeenCalledTimes(1);
   });
 
@@ -275,7 +275,7 @@ describe("the board", () => {
     expect(shown()).toEqual(["C-0001", "C-0002", "C-0004"]);
     fireEvent.change(assignee, { target: { value: "mira holt" } });
     expect(shown()).toEqual(["C-0001"]);
-    expect(column("To do").querySelector(".board-column-count")?.textContent).toBe(", 1 card");
+    expect(column("To do").querySelector(".board-column-count")?.textContent).toBe(", 1 task");
     fireEvent.change(assignee, { target: { value: within(assignee).getByRole<HTMLOptionElement>("option", { name: "Unassigned" }).value } });
     expect(shown()).toEqual(["C-0004"]);
     fireEvent.change(discipline, { target: { value: "plates" } });
@@ -318,7 +318,7 @@ describe("the board", () => {
     expect(within(card("C-0002")).getByText("Cancelled")).toBeTruthy();
     expect(within(card("C-0002")).queryByRole("button", { hidden: true })).toBeNull();
     expect(card("C-0002").draggable).toBe(false);
-    expect(column("To do").querySelector(".board-column-count")?.textContent).toBe(", 1 card");
+    expect(column("To do").querySelector(".board-column-count")?.textContent).toBe(", 1 task");
   });
 
   it("a card shows title, assignee or Unassigned, due, estimate, its source: the first target and +n, else By hand", async () => {
@@ -395,7 +395,7 @@ describe("the board", () => {
 
   it("empty: the columns and the line naming how to add a card (AC-09)", async () => {
     await open(boardClient(aCardList([])));
-    expect(await screen.findByText("No cards yet. Next: press New card, press New card on a node in the Spec tree, or have your AI call create_card.")).toBeTruthy();
+    expect(await screen.findByText("No tasks yet. Next: press New task, press New task on a node in the Spec tree, or have your AI call create_card.")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2, name: /^To do/ })).toBeTruthy();
   });
 
@@ -697,7 +697,7 @@ describe("the keyboard", () => {
     await ready();
     card("C-0001").focus();
     fireEvent.keyDown(card("C-0001"), { key: "\u0442", code: "KeyN" });
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     press("Escape", dialog.querySelector("input"));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -717,7 +717,7 @@ describe("the keyboard", () => {
     await ready();
     card("C-0001").focus();
     press("n");
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     press("Escape", dialog.querySelector("input"));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -732,11 +732,11 @@ describe("the keyboard", () => {
     card("C-0001").focus();
     press("?");
     const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(dialog).getByText("Cards: open the Move menu")).toBeTruthy();
-    expect(within(dialog).getByText("New card")).toBeTruthy();
-    expect(within(dialog).getByText("Cards: hand the card off")).toBeTruthy();
-    expect(within(dialog).getByText("Cards: return the card")).toBeTruthy();
-    const lanes = within(dialog).getByText("Cards: the same column in the next or previous lane").closest(".shortcut");
+    expect(within(dialog).getByText("Tasks: open the Move menu")).toBeTruthy();
+    expect(within(dialog).getByText("New task")).toBeTruthy();
+    expect(within(dialog).getByText("Tasks: hand the task off")).toBeTruthy();
+    expect(within(dialog).getByText("Tasks: return the task")).toBeTruthy();
+    const lanes = within(dialog).getByText("Tasks: the same column in the next or previous lane").closest(".shortcut");
     expect(lanes?.textContent).toContain("Page Down");
     expect(lanes?.textContent).toContain("Page Up");
   });
@@ -817,13 +817,13 @@ describe("the card's modal", () => {
   // card last; Move stands in the side column's Status.
   it("offers Accept first and primary, in accept.from alone, then Hand off, Edit, Assign and Cancel card, with Move in the side column's Status; no Return in a flow that names none", async () => {
     const panel = within(await panelOf(FULL));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Accept", "Hand off", "Edit", "Assign", "Cancel card"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Accept", "Hand off", "Edit", "Assign", "Cancel task"]);
     expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
   });
 
   it("has no Accept outside accept.from", async () => {
     const panel = within(await panelOf({ ...FULL, column: "todo" }));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Edit", "Assign", "Cancel card"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Edit", "Assign", "Cancel task"]);
     expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
   });
 
@@ -885,13 +885,13 @@ describe("the dialogs", () => {
     window.localStorage.setItem(ACTING_KEY, "Lena Fisk");
     const client = boardClient(aCardList([]));
     await open(client);
-    fireEvent.click(await screen.findByRole("button", { name: "New card" }));
-    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    fireEvent.click(await screen.findByRole("button", { name: "New task" }));
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
     type(dialog, "Title", "  A title ");
     type(dialog, "Source", "R-1\n\n R-2 ");
     type(dialog, "Criteria", "One\nTwo");
     type(dialog, "Due", "2026-12-01");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
     });
@@ -905,10 +905,10 @@ describe("the dialogs", () => {
   it("New card needs a title: nothing sent, said in an alert", async () => {
     const client = boardClient(aCardList([]));
     await open(client);
-    fireEvent.click(await screen.findByRole("button", { name: "New card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "New task" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
-    expect((await within(dialog).findByRole("alert")).textContent).toBe("A card needs a title.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("A task needs a title.");
     expect(client.createCard).not.toHaveBeenCalled();
   });
 
@@ -916,14 +916,14 @@ describe("the dialogs", () => {
     const client = boardClient(aCardList([]));
     client.createCard.mockRejectedValueOnce(new ClientError({ status: 409, message: "no flow takes the discipline `x`" }));
     await open(client);
-    fireEvent.click(await screen.findByRole("button", { name: "New card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "New task" }));
     const dialog = await screen.findByRole("dialog");
     type(dialog, "Title", "Kept");
     type(dialog, "Discipline", "x");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain("no flow takes the discipline `x`");
     expect(within(dialog).getByLabelText<HTMLInputElement>("Title").value).toBe("Kept");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(2);
     });
@@ -939,10 +939,10 @@ describe("the dialogs", () => {
         }),
     );
     await open(client);
-    fireEvent.click(await screen.findByRole("button", { name: "New card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "New task" }));
     const dialog = await screen.findByRole("dialog");
     type(dialog, "Title", "T");
-    const submit = within(dialog).getByRole("button", { name: "Create card" });
+    const submit = within(dialog).getByRole("button", { name: "Create task" });
     fireEvent.click(submit);
     fireEvent.click(submit);
     await waitFor(() => {
@@ -1006,12 +1006,12 @@ describe("the dialogs", () => {
   });
 
   it("Cancel card needs a reason", async () => {
-    const { client, dialog } = await action("Cancel card");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel card" }));
-    expect((await within(dialog).findByRole("alert")).textContent).toBe("Say why this card is cancelled.");
+    const { client, dialog } = await action("Cancel task");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel task" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Say why this task is cancelled.");
     expect(client.cancelCard).not.toHaveBeenCalled();
     type(dialog, "Reason", "Dropped.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel task" }));
     await waitFor(() => {
       expect(client.cancelCard).toHaveBeenCalledTimes(1);
     });
@@ -1020,7 +1020,7 @@ describe("the dialogs", () => {
 
   it("Accept is disabled while the name is empty; the name typed there is the Board's; sends as, note, revision", async () => {
     const { client, dialog } = await action("Accept", { ...CARD, column: "check" });
-    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Accept card" });
+    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Accept task" });
     expect(submit.disabled).toBe(true);
     type(dialog, "Accepting as", " Ivo Brandt ");
     expect(submit.disabled).toBe(false);
@@ -1053,11 +1053,11 @@ describe("the dialogs", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     const dialog = await topDialog();
     type(dialog, "Note", "Good.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept task" }));
     expect((await within(dialog).findByText(/changed since this run read it/)).closest('[role="alert"]')).not.toBeNull();
-    expect(await within(dialog).findByText("This card changed since you opened it")).toBeTruthy();
+    expect(await within(dialog).findByText("This task changed since you opened it")).toBeTruthy();
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Note").value).toBe("Good.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept task" }));
     await waitFor(() => {
       expect(client.acceptCard).toHaveBeenCalledTimes(2);
     });
@@ -1135,7 +1135,7 @@ describe("a revision while a dialog is open", () => {
     const dialog = await topDialog();
     client.getCard.mockImplementation(() => Promise.resolve({ ...first, reviewer: "ben", revision: "5" }));
     revise("C-0001");
-    await within(dialog).findByText("This card changed since you opened it");
+    await within(dialog).findByText("This task changed since you opened it");
     expect(within(dialog).getByText("Fields you left alone keep the new value; what you changed is sent.")).toBeTruthy();
     typeIn(dialog, "Assignee", "Omar Lind");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -1154,7 +1154,7 @@ describe("a revision while a dialog is open", () => {
     const dialog = await topDialog();
     client.getCard.mockImplementation(() => Promise.resolve({ ...first, reviewer: "ben", revision: "5" }));
     revise("C-0001");
-    await within(dialog).findByText("This card changed since you opened it");
+    await within(dialog).findByText("This task changed since you opened it");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect((await within(dialog).findByText("Nothing to save: no name changed.")).getAttribute("role")).toBe("alert");
     expect(client.assignCard).not.toHaveBeenCalled();
@@ -1169,7 +1169,7 @@ describe("a revision while a dialog is open", () => {
     const dialog = await topDialog();
     client.getCard.mockImplementation(() => Promise.resolve({ ...first, title: "New title", due: "2999-01-01", targets: ["R-9"], revision: "5" }));
     revise("C-0001");
-    await within(dialog).findByText("This card changed since you opened it");
+    await within(dialog).findByText("This task changed since you opened it");
     typeIn(dialog, "Goal", "");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => {
@@ -1299,14 +1299,14 @@ describe("focus after a write", () => {
       expect(shown()).toEqual(["C-0001"]);
     });
     fireEvent.change(screen.getByLabelText("Discipline"), { target: { value: "copy" } });
-    fireEvent.click(screen.getByRole("button", { name: "New card" }));
+    fireEvent.click(screen.getByRole("button", { name: "New task" }));
     const dialog = await screen.findByRole("dialog");
     typeIn(dialog, "Title", "Hidden");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create task" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    const button = screen.getByRole("button", { name: "New card" });
+    const button = screen.getByRole("button", { name: "New task" });
     await waitFor(() => {
       expect(document.activeElement).toBe(button);
     });
@@ -1345,10 +1345,10 @@ describe("focus after a write", () => {
       return Promise.resolve(aCardWrite(id));
     });
     await open(client, "#/alpha/board/C-0001");
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel task" }));
     const dialog = await topDialog();
     typeIn(dialog, "Reason", "Dropped.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel task" }));
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "The card" }));
     });
@@ -1365,7 +1365,7 @@ describe("focus after a write", () => {
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     const dialog = await topDialog();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept task" }));
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "The card" }));
     });
@@ -1383,7 +1383,7 @@ describe("focus after a write", () => {
     await open(client);
     fireEvent.click(within(await openMenuOf("C-0001")).getByRole("menuitem", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept task" }));
     await waitFor(() => {
       expect(document.activeElement).toBe(card("C-0001"));
     });
@@ -1424,7 +1424,7 @@ describe("the small edges", () => {
       expect(document.activeElement).toBe(card("C-0002"));
     });
     press("n");
-    expect(await screen.findByRole("dialog", { name: "New card" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "New task" })).toBeTruthy();
   });
 
   it("a lane takes the note naming its own place, not one whose name merely starts the same", async () => {
@@ -1472,7 +1472,7 @@ describe("the card against its brief", () => {
     client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the index is locked" }));
     await open(client, "#/alpha/board/C-0001");
     const panel = await modal("The card");
-    expect((await within(panel).findByText(sentence(/could not be read: the index is locked/))).textContent).toContain("The state of this card's targets");
+    expect((await within(panel).findByText(sentence(/could not be read: the index is locked/))).textContent).toContain("The state of this task's targets");
     expect(within(panel).getByRole("button", { name: "Clear" })).toBeTruthy();
     expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
   });
@@ -1728,7 +1728,7 @@ describe("the card against its brief", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
     const dialog = await screen.findByRole("dialog", { name: "Clear C-0001" });
     typeIn(dialog, "Reason", " Wording only ");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     await waitFor(() => {
       expect(client.clearCard).toHaveBeenCalledTimes(1);
     });
@@ -1743,7 +1743,7 @@ describe("the card against its brief", () => {
     await open(suspectClient(), "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
     const dialog = await topDialog();
-    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Clear card" });
+    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Clear task" });
     expect(submit.disabled).toBe(true);
     typeIn(dialog, "Clearing as", "Ivo Brandt");
     expect(submit.disabled).toBe(false);
@@ -1758,7 +1758,7 @@ describe("the card against its brief", () => {
     fireEvent.click(within(dialog).getByRole("radio", { name: "Needs correction" }));
     typeIn(dialog, "Reason", "The rates moved.");
     typeIn(dialog, "Estimate", "2");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     await waitFor(() => {
       expect(client.clearCard).toHaveBeenCalledTimes(1);
     });
@@ -1773,7 +1773,7 @@ describe("the card against its brief", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
     const dialog = await topDialog();
     typeIn(dialog, "Reason", "Kept");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain("C-0001 is not suspect");
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").value).toBe("Kept");
   });
@@ -1795,7 +1795,7 @@ describe("the card against its brief", () => {
     fireEvent.click(within(await openMenuOf("C-0001")).getByRole("menuitem", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog", { name: "Accept C-0001" });
     fireEvent.click(within(dialog).getByRole("radio", { name: "Departs from it" }));
-    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Accept card" });
+    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Accept task" });
     expect(submit.disabled).toBe(true);
     typeIn(dialog, "Departs from", "R-2");
     typeIn(dialog, "Summary", "S");
@@ -2010,7 +2010,7 @@ describe("swimlanes (BH-8)", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(document.querySelector('[data-card="C-0001"]')).toBeNull();
     const zoe = Array.from(document.querySelectorAll<HTMLElement>("section.board-cell")).filter((cell) => cell.dataset.lane?.includes("assignee:Zoe") === true);
-    expect(zoe.map((cell) => cell.querySelector(".board-cell-count")?.textContent)).toEqual(["1 card", "0 cards", "0 cards", "0 cards"]);
+    expect(zoe.map((cell) => cell.querySelector(".board-cell-count")?.textContent)).toEqual(["1 task", "0 tasks", "0 tasks", "0 tasks"]);
     expect(zoe.every((cell) => cell.querySelector("[data-card]") === null)).toBe(true);
     revise("C-0001");
     await waitFor(() => {
@@ -2095,7 +2095,7 @@ describe("lanes by keyboard (BH-10)", () => {
     for (const [key, code, name] of [
       ["\u0440", "KeyH", "Hand off C-0001"],
       ["\u043a", "KeyR", "Return C-0001"],
-      ["\u0442", "KeyN", "New card"],
+      ["\u0442", "KeyN", "New task"],
     ] as const) {
       tile.focus();
       fireEvent.keyDown(tile, { key, code });
@@ -2138,4 +2138,36 @@ describe("scale (BH-22)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Bo" }));
     expect(shown()).toHaveLength(2 * COLUMN_SHOWN);
   }, 30_000);
+});
+
+// DP-10 of docs/features/departments.md: a flow is shown by its title, a raw pair stays raw.
+describe("flow titles (DP-10 of departments)", () => {
+  const TITLED = aCardList(
+    [aCardRow({ id: "C-0001", flow: "copy", title: "Foreword" }), aCardRow({ id: "C-0002", flow: "plates", parent: "C-0001", title: "Plate" }), aCardRow({ id: "C-0003", flow: "inks", title: "Ink" })],
+    { flows: [aCardFlow({ name: "copy", title: "Copy desk" }), aCardFlow({ name: "plates" }), aCardFlow({ name: "inks", title: "Copy desk" })] },
+  );
+
+  it("labels each tab and the board's name by the flow's title, the name when untitled; equal titles stay two tabs (M: tabs labelled by name)", async () => {
+    await open(boardClient(TITLED));
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Copy desk", "plates", "Copy desk"]);
+    });
+    expect(screen.getByRole("group", { name: "Board Copy desk" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "plates" }));
+    expect(await screen.findByRole("group", { name: "Board plates" })).toBeTruthy();
+  });
+
+  it("a Parent lane head and the side Flow row show the parent's flow title; the head keeps no raw pair", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "parent");
+    await open(boardClient(TITLED, { "C-0001": aCard({ id: "C-0001", flow: "copy", title: "Foreword" }) }), "#/alpha/board");
+    fireEvent.click(await screen.findByRole("tab", { name: "plates" }));
+    await waitFor(() => card("C-0002"));
+    const head = document.querySelector<HTMLElement>(".board-lane-head");
+    expect(head?.querySelector(".board-lane-status bdi")?.textContent).toBe("Copy desk");
+    expect(head?.textContent).not.toContain("copy/");
+    fireEvent.click(within(head as HTMLElement).getByRole("link", { name: "C-0001" }));
+    const panel = await modal("Foreword");
+    const flow = Array.from(panel.querySelectorAll("dt")).find((term) => term.textContent === "Flow");
+    expect(flow?.nextElementSibling?.textContent).toBe("Copy desk");
+  });
 });

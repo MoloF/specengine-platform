@@ -1,0 +1,63 @@
+{
+  "recorded_with": "spec at 5bec07e (departments' spec commit, before any src change of the slice)",
+  "procedure": "card-press: a fresh copy less its `title` line, a fresh HOME, two cards made (`copy`, then a `plates` child of it), then three `card list` reads; studio-lamp: a fresh copy, a fresh HOME, `tree --kind scene` with --json and without; each read's exit code, stdout and stderr",
+  "rows": [
+    {
+      "fixture": "card-press",
+      "args": [
+        "card",
+        "list"
+      ],
+      "code": 0,
+      "stdout": "flow copy | draft 1 | edit 0 | proof 0 | filed 0\nflow plates | queued 1 | blocked 0 | checked 0 | struck 0\nC-0001 | copy/draft | 1 | Lead story | copy | - | - | -\nC-0002 | plates/queued | 1 | Plate | plates | - | - | -\n",
+      "stderr": ""
+    },
+    {
+      "fixture": "card-press",
+      "args": [
+        "card",
+        "list",
+        "--flow",
+        "copy"
+      ],
+      "code": 0,
+      "stdout": "flow copy | draft 1 | edit 0 | proof 0 | filed 0\nflow plates | queued 0 | blocked 0 | checked 0 | struck 0\nC-0001 | copy/draft | 1 | Lead story | copy | - | - | -\n",
+      "stderr": ""
+    },
+    {
+      "fixture": "card-press",
+      "args": [
+        "card",
+        "list",
+        "--parent",
+        "C-0001"
+      ],
+      "code": 0,
+      "stdout": "flow copy | draft 0 | edit 0 | proof 0 | filed 0\nflow plates | queued 1 | blocked 0 | checked 0 | struck 0\nC-0002 | plates/queued | 1 | Plate | plates | - | - | -\n",
+      "stderr": ""
+    },
+    {
+      "fixture": "studio-lamp",
+      "args": [
+        "tree",
+        "--kind",
+        "scene",
+        "--json"
+      ],
+      "code": 0,
+      "stdout": "{\"ref\":null,\"reason\":null,\"notes\":[],\"depth\":null,\"kinds\":[\"scene\"],\"archive\":false,\"left_out\":{\"generated\":0,\"tier3\":0},\"truncated\":false,\"nodes\":[{\"id\":\"SCN-ARRIVAL\",\"kind\":\"scene\",\"title\":\"Arrival\",\"path\":\"docs/spec/scn-arrival.md\",\"line\":1,\"depth\":1,\"parent\":\"CHP-SHORE\",\"mark\":null,\"status\":null,\"rev\":null,\"tokens_est\":96,\"archived\":false},{\"id\":\"SCN-STORM\",\"kind\":\"scene\",\"title\":\"The storm\",\"path\":\"docs/spec/scn-storm.md\",\"line\":1,\"depth\":1,\"parent\":\"CHP-SHORE\",\"mark\":null,\"status\":null,\"rev\":null,\"tokens_est\":123,\"archived\":false}]}\n",
+      "stderr": ""
+    },
+    {
+      "fixture": "studio-lamp",
+      "args": [
+        "tree",
+        "--kind",
+        "scene"
+      ],
+      "code": 0,
+      "stdout": "  SCN-ARRIVAL | scene | Arrival | docs/spec/scn-arrival.md:1\n  SCN-STORM | scene | The storm | docs/spec/scn-storm.md:1\nnodes 2, roots 0\n",
+      "stderr": ""
+    }
+  ]
+}

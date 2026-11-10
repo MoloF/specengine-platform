@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { DriftRow, QueueEvent, ShownLinks } from "../api/types";
-import { aDriftIn, aDriftRow, aHealthReport, aLink, aProposal, aSearchHit, aSearchResults, aTestedRow, aTreeView, measuredDrift } from "../test/builders";
+import { aDirection, aDriftIn, aDriftRow, aHealthReport, aLink, aModule, aProposal, aSearchHit, aSearchResults, aTestedRow, aTreeNode, aTreeView, aWorkspace, aWorkspaces, measuredDrift } from "../test/builders";
 import { renderApp } from "../test/render";
 import { START_ROWS, TREE, treeClient, viewOf } from "../test/treeStub";
 import { argsOf, type StubClient } from "../test/stubClient";
@@ -1160,5 +1160,149 @@ describe("the document view from the tree (DM-16 of doc-modal)", () => {
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open document" }));
     });
+  });
+});
+
+// DP-11 of docs/features/departments.md over a stub: a direction lists its kinds' nodes flat. The
+// kinds read keeps the whole tree's depths and parents, so the rows are drawn one level, in served
+// order, none expandable; Show as root leaves the list, Whole tree comes back to it.
+describe("a direction's list (DP-11 of departments)", () => {
+  const LISTED = [
+    aTreeNode({ id: "SCN-A", depth: 1, parent: "CHP-1", kind: "scene", title: "Arrival", path: "a.md" }),
+    aTreeNode({ id: "SCN-B", depth: 2, parent: "SCN-A", kind: "scene", title: "Storm", path: "b.md" }),
+    aTreeNode({ id: "SCN-C", depth: 0, parent: null, kind: "scene", title: "Coda", path: "c.md" }),
+  ];
+
+  function directionClient(): StubClient {
+    const client = treeClient();
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "writing" }), aWorkspace({ name: "art" })], [aModule({ name: "shore", root: "CHP-1" }), aDirection({ name: "scenes", title: "Scenes", kinds: ["scene"] })]));
+    const read = client.getTree.getMockImplementation();
+    client.getTree.mockImplementation((project, options, signal) =>
+      options?.kinds !== undefined ? Promise.resolve(aTreeView(LISTED, { kinds: options.kinds, truncated: true })) : (read?.(project, options, signal) ?? Promise.resolve(aTreeView([]))),
+    );
+    return client;
+  }
+
+  it("reads by kinds with no root and draws every row at level 1, none expandable, in served order (M: rows built on the served depths)", async () => {
+    window.localStorage.setItem("specengine.module.alpha", "scenes");
+    const client = directionClient();
+    renderApp(client, "#/alpha/tree");
+    await waitFor(() => {
+      expect(rows().map(nameOf)).toEqual(["SCN-A", "SCN-B", "SCN-C"]);
+    });
+    expect(argsOf(client.getTree)[0]).toEqual(["alpha", { kinds: ["scene"] }]);
+    expect(rows().map((item) => item.getAttribute("aria-level"))).toEqual(["1", "1", "1"]);
+    expect(rows().filter((item) => item.hasAttribute("aria-expanded"))).toEqual([]);
+    expect(screen.queryByText("Rooted at")).toBeNull();
+  });
+
+  it("Show as root reads from the row; Whole tree comes back to the list", async () => {
+    window.localStorage.setItem("specengine.module.alpha", "scenes");
+    const client = directionClient();
+    renderApp(client, "#/alpha/tree");
+    await waitFor(() => {
+      expect(rows()).toHaveLength(3);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Show SCN-A as root" }));
+    await waitFor(() => {
+      expect(argsOf(client.getTree).at(-1)).toEqual(["alpha", { root: "SCN-A" }]);
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Whole tree" }));
+    await waitFor(() => {
+      expect(rows().map(nameOf)).toEqual(["SCN-A", "SCN-B", "SCN-C"]);
+    });
+    expect(rows().every((item) => item.getAttribute("aria-level") === "1")).toBe(true);
+  });
+});
+
+// The review of departments (R1): flatness is the answer's, never the request's. While a new read is
+// out the last answer stays up as a placeholder, and it is drawn as it was read: a kinds list flat, a
+// rooted subtree by its depths.
+describe("a read pending between a direction and a root (R1 of departments' review)", () => {
+  const ROOTED = [
+    aTreeNode({ id: "CHP-1", depth: 0, kind: "chapter", title: "Shore", path: "c1.md" }),
+    aTreeNode({ id: "SCN-A", depth: 1, parent: "CHP-1", kind: "scene", title: "Arrival", path: "a.md" }),
+    aTreeNode({ id: "SCN-B", depth: 2, parent: "SCN-A", kind: "scene", title: "Storm", path: "b.md" }),
+  ];
+  const LISTED = [
+    aTreeNode({ id: "SCN-A", depth: 1, parent: "CHP-1", kind: "scene", title: "Arrival", path: "a.md" }),
+    aTreeNode({ id: "SCN-B", depth: 2, parent: "SCN-A", kind: "scene", title: "Storm", path: "b.md" }),
+  ];
+
+  /** A client whose reads land only when a test says so, each by its request. */
+  function heldClient() {
+    const client = treeClient();
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "writing", module: "shore" }), aWorkspace({ name: "art" })], [aModule({ name: "shore", root: "CHP-1" }), aDirection({ name: "scenes", title: "Scenes", kinds: ["scene"] })]));
+    const waiting = new Map<string, () => void>();
+    client.getTree.mockImplementation((_project, options) => {
+      const key = options?.kinds !== undefined ? "kinds" : (options?.root ?? "all");
+      const fromScene = [aTreeNode({ id: "SCN-A", depth: 0, kind: "scene", title: "Arrival", path: "a.md" }), aTreeNode({ id: "SCN-B", depth: 1, parent: "SCN-A", kind: "scene", title: "Storm", path: "b.md" })];
+      const answer = key === "kinds" ? aTreeView(LISTED, { kinds: ["scene"], truncated: true }) : aTreeView(key === "SCN-A" ? fromScene : ROOTED, { ref: key === "all" ? null : key });
+      return new Promise((resolve) => {
+        waiting.set(key, () => {
+          resolve(answer);
+        });
+      });
+    });
+    const land = (key: string) => {
+      act(() => {
+        waiting.get(key)?.();
+      });
+    };
+    return { client, land };
+  }
+
+  function levels(): (string | null)[] {
+    return rows().map((item) => item.getAttribute("aria-level"));
+  }
+
+  it("a rooted answer stays drawn by its depths while a direction's list is read; the list lands flat (M: flatness taken from the request)", async () => {
+    const { client, land } = heldClient();
+    renderApp(client, "#/alpha/tree");
+    await waitFor(() => {
+      expect(argsOf(client.getTree).at(-1)).toEqual(["alpha", { root: "CHP-1" }]);
+    });
+    land("CHP-1");
+    // Storm, a level deeper, stays folded under Arrival.
+    await waitFor(() => {
+      expect(levels()).toEqual(["1", "2"]);
+    });
+    fireEvent.click(within(screen.getByRole("group", { name: "Directions" })).getByRole("button", { name: "Scenes" }));
+    await waitFor(() => {
+      expect(argsOf(client.getTree).at(-1)).toEqual(["alpha", { kinds: ["scene"] }]);
+    });
+    // The list is out: the subtree is still drawn as it was read.
+    expect(levels()).toEqual(["1", "2"]);
+    expect(rows().map(nameOf)).toEqual(["CHP-1", "SCN-A"]);
+    land("kinds");
+    await waitFor(() => {
+      expect(rows().map(nameOf)).toEqual(["SCN-A", "SCN-B"]);
+    });
+    expect(levels()).toEqual(["1", "1"]);
+  });
+
+  it("a direction's list stays flat while Show as root reads; the rooted answer lands by its depths", async () => {
+    window.localStorage.setItem("specengine.module.alpha", "scenes");
+    const { client, land } = heldClient();
+    renderApp(client, "#/alpha/tree");
+    await waitFor(() => {
+      expect(argsOf(client.getTree).at(-1)).toEqual(["alpha", { kinds: ["scene"] }]);
+    });
+    land("kinds");
+    await waitFor(() => {
+      expect(levels()).toEqual(["1", "1"]);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Show SCN-A as root" }));
+    await waitFor(() => {
+      expect(argsOf(client.getTree).at(-1)).toEqual(["alpha", { root: "SCN-A" }]);
+    });
+    // The rooted read is out: the list is still one level, never hung on the whole tree's depths.
+    expect(levels()).toEqual(["1", "1"]);
+    land("SCN-A");
+    // Landed: Arrival heads its subtree, Storm folded under it a level deeper.
+    await waitFor(() => {
+      expect(rows().map((item) => [nameOf(item), item.getAttribute("aria-level"), item.getAttribute("aria-expanded")])).toEqual([["SCN-A", "1", "false"]]);
+    });
+    expect(screen.getByText("Rooted at").textContent).toBe("Rooted at SCN-A");
   });
 });

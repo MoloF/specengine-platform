@@ -5,10 +5,11 @@ import { Icon } from "../ui/Icon";
 import { ErrorPanel } from "../ui/states";
 
 /**
- * The Workspace select in the shell's header (docs/features/workspaces.md "The UI", D6): named
- * Workspace, never "View as", its hint saying it changes no right. Its options are the served
- * titles in served order; shown only with two or more workspaces. In the one-line header its label is
- * visually hidden, the value shown with an icon in front; its name stays "Workspace".
+ * The Department select in the shell's header (docs/features/workspaces.md "The UI", D6): a
+ * workspace reads Department in the chrome (`docs/canon/workspaces.md` "The lens"), never "View as",
+ * its hint saying it changes no right. Its options are the served titles in served order; shown only
+ * with two or more workspaces. In the one-line header its label is visually hidden, the value shown
+ * with an icon in front; its name stays the catalog's `workspace.workspaceLabel`.
  */
 export function WorkspaceSwitcher({
   workspaces,

@@ -230,7 +230,7 @@ describe("served text verbatim (LG-5)", () => {
     expect(skeleton.getAttribute("aria-label")).toBe(ru.home.tasks.loading.replace("{{project}}", name));
     switchLanguage("en");
     await settle();
-    expect(screen.getByRole("status", { name: `Loading the tasks of ${name}` })).toBeTruthy();
+    expect(screen.getByRole("status", { name: `Loading the agent tasks of ${name}` })).toBeTruthy();
   });
 
   it("shows an unknown task status raw beside a known one in Russian", async () => {

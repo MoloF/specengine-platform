@@ -127,7 +127,7 @@ describe("the implicit workspace on the screen (WS-1)", () => {
     const implicit: WorkspaceDocument = {
       source: "implicit",
       notes: [],
-      workspaces: [{ name: "all", title: "All sections", landing: "overview", sections: ["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"], flows: null, module: null }],
+      workspaces: [{ name: "all", title: "All sections", landing: "overview", sections: ["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"], flows: null, disciplines: [], module: null }],
       modules: [],
     };
     expect(JSON.stringify(workspacesOf("ledger-api", "normal"))).toBe(JSON.stringify(implicit));
@@ -142,7 +142,7 @@ describe("Tasks is still a route (WS-2)", () => {
     expect(current()).toEqual([]);
     expect(window.location.hash).toBe("#/ledger-api/tasks/T-0031");
     await go("#/ledger-api/tasks/T-0107");
-    expect(await screen.findByRole("heading", { level: 2, name: "No such task" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 2, name: "No such agent task" })).toBeTruthy();
     expect(screen.getByText("no task T-0107 in this repository")).toBeTruthy();
     expect(window.location.hash).toBe("#/ledger-api/tasks/T-0107");
   });
@@ -157,7 +157,7 @@ describe("Tasks is still a route (WS-2)", () => {
     expect(await screen.findByRole("heading", { level: 1, name: /^T-0031/ })).toBeTruthy();
     fireEvent.keyDown(document.body, { key: "k", ctrlKey: true });
     const dialog = await screen.findByRole("dialog", { name: "Jump to" });
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Tasks" } });
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Agent tasks" } });
     const sections = await waitFor(() => {
       const found = within(dialog)
         .getAllByRole("group")
@@ -165,7 +165,7 @@ describe("Tasks is still a route (WS-2)", () => {
       expect(found).toBeDefined();
       return found as HTMLElement;
     });
-    expect(within(sections).getByRole("option", { name: "Tasks" })).toBeTruthy();
+    expect(within(sections).getByRole("option", { name: "Agent tasks" })).toBeTruthy();
   });
 });
 
@@ -329,7 +329,7 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
   it("a root naming nothing is the read's own reason; the bar stays to choose another", async () => {
     const { spies } = renderMock("normal", "#/harbor-sim/tree", (client) => {
       const served = workspacesOf("harbor-sim", "normal");
-      vi.spyOn(client, "getWorkspaces").mockResolvedValue({ ...served, modules: [...served.modules, { name: "reef", title: "Reef", root: "DOM-REEF" }] });
+      vi.spyOn(client, "getWorkspaces").mockResolvedValue({ ...served, modules: [...served.modules, { name: "reef", title: "Reef", root: "DOM-REEF", kinds: null }] });
     });
     await screen.findByRole("tree", { name: "Spec tree" });
     fireEvent.click(within(bar() ?? document.body).getByRole("button", { name: "Reef" }));
@@ -441,16 +441,16 @@ describe("notes and failures on the screen (WS-13)", () => {
 describe("the Board's flows (WS-14)", () => {
   it("galley: no tab and the line; Show all flows gives both tabs and turns; Foundry resets it", async () => {
     renderMock("normal", "#/harbor-sim/board");
-    expect(await screen.findByText("Showing 1 of 2 card flows.")).toBeTruthy();
+    expect(await screen.findByText("Showing 1 of 2 flows.")).toBeTruthy();
     expect(screen.queryAllByRole("tab")).toEqual([]);
     await waitFor(() => {
       expect(document.querySelector('[data-card="C-0001"]')).not.toBeNull();
     });
     expect(document.querySelector('[data-card="C-0008"]')).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show all flows" }));
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["copy", "plates"]);
-    expect(screen.queryByText("Showing 1 of 2 card flows.")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show this workspace's flows" }));
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Copy desk", "plates"]);
+    expect(screen.queryByText("Showing 1 of 2 flows.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show this department's flows" }));
     expect(screen.queryAllByRole("tab")).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Show all flows" }));
     expect(screen.getAllByRole("tab")).toHaveLength(2);
@@ -458,7 +458,7 @@ describe("the Board's flows (WS-14)", () => {
     fireEvent.change(switcher(), { target: { value: "foundry" } });
     await hashIs("#/harbor-sim");
     await go("#/harbor-sim/board");
-    expect(await screen.findByText("Showing 1 of 2 card flows.")).toBeTruthy();
+    expect(await screen.findByText("Showing 1 of 2 flows.")).toBeTruthy();
     expect(screen.queryAllByRole("tab")).toEqual([]);
     await waitFor(() => {
       expect(document.querySelector('[data-card="C-0008"]')).not.toBeNull();
@@ -470,11 +470,11 @@ describe("the Board's flows (WS-14)", () => {
     renderMock("normal", "#/harbor-sim/board/C-0008");
     await waitFor(() => {
       expect(screen.getAllByRole("tab").map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
-        ["copy", "false"],
+        ["Copy desk", "false"],
         ["plates", "true"],
       ]);
     });
-    expect(screen.getByRole("button", { name: "Show this workspace's flows" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show this department's flows" })).toBeTruthy();
   });
 
   it("flows null: every tab and no line", async () => {
@@ -482,9 +482,229 @@ describe("the Board's flows (WS-14)", () => {
       vi.spyOn(client, "getWorkspaces").mockResolvedValue(workspacesOf("ledger-api", "normal"));
     });
     await waitFor(() => {
-      expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["copy", "plates"]);
+      expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Copy desk", "plates"]);
     });
-    expect(screen.queryByText(/card flows\.$/)).toBeNull();
+    expect(screen.queryByText(/flows\.$/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Show all flows" })).toBeNull();
+  });
+});
+
+// docs/features/departments.md "Acceptance criteria" over the real mock: harbor-sim's departments
+// Galley and Foundry, its rooted modules Berths and Harbour waters, its direction Mechanics by the
+// kind `mechanic`, and its flows `copy` titled "Copy desk" and `plates` untitled.
+
+function directionsBar(): HTMLElement | null {
+  return screen.queryByRole("group", { name: en.workspace.directionsLabel });
+}
+
+/** Every pressed choice of the Spec tree's bar, both groups. */
+function pressedAll(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(".module-bar button"))
+    .filter((button) => button.getAttribute("aria-pressed") === "true")
+    .map((button) => button.textContent);
+}
+
+function treeItems(): HTMLElement[] {
+  return within(screen.getByRole("tree", { name: "Spec tree" })).getAllByRole("treeitem");
+}
+
+function treeNames(): string[] {
+  return treeItems().map((item) => item.querySelector(".tree-row-name")?.textContent ?? "");
+}
+
+describe("the department's Board (DP-10 of departments)", () => {
+  it("names the switcher Department; Galley's one flow, its line; every flow shown: tabs by title, Copy desk and plates, the board named by its title", async () => {
+    renderMock("normal", "#/harbor-sim/board");
+    expect(en.workspace.workspaceLabel).toBe("Department");
+    expect(await screen.findByRole("combobox", { name: "Department" })).toBe(switcher());
+    expect(await screen.findByText("Showing 1 of 2 flows.")).toBeTruthy();
+    // One flow shown draws no tab (WS-14): the board is the Board.
+    expect(screen.queryAllByRole("tab")).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Show all flows" }));
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Copy desk", "plates"]);
+    expect(screen.getByRole("group", { name: "Board Copy desk" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "plates" }));
+    expect(await screen.findByRole("group", { name: "Board plates" })).toBeTruthy();
+  });
+
+  it("Foundry's own flow is plates; a routed card of Galley's flow reaches it by Show all flows, every tab by title", async () => {
+    renderMock("normal", "#/harbor-sim/board");
+    await screen.findByText("Showing 1 of 2 flows.");
+    fireEvent.change(switcher(), { target: { value: "foundry" } });
+    await hashIs("#/harbor-sim");
+    await go("#/harbor-sim/board/C-0001");
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
+        ["Copy desk", "true"],
+        ["plates", "false"],
+      ]);
+    });
+    expect(screen.getByRole("button", { name: "Show this department's flows" })).toBeTruthy();
+  });
+
+  it("a Parent lane head and the side Flow row show Copy desk; the Subtasks rows each child's flow title", async () => {
+    window.localStorage.setItem("specengine.board.lanes.harbor-sim", "parent");
+    renderMock("normal", "#/harbor-sim/board");
+    fireEvent.click(await screen.findByRole("button", { name: "Show all flows" }));
+    fireEvent.click(screen.getByRole("tab", { name: "plates" }));
+    await waitFor(() => {
+      expect(document.querySelector('[data-card="C-0013"]')).not.toBeNull();
+    });
+    // C-0013 stands in plates; its parent C-0001 in copy: the head names copy by its title.
+    const head = Array.from(document.querySelectorAll<HTMLElement>(".board-lane-head")).find((candidate) => within(candidate).queryByRole("link", { name: "C-0001" }) !== null);
+    expect(head?.querySelector(".board-lane-status bdi")?.textContent).toBe("Copy desk");
+    expect(head?.textContent).not.toContain("copy/");
+    await go("#/harbor-sim/board/C-0001");
+    const modal = await screen.findByRole("dialog", { name: "Write the tide table foreword" });
+    const flow = Array.from(modal.querySelectorAll("dt")).find((term) => term.textContent === "Flow");
+    expect(flow?.nextElementSibling?.textContent).toBe("Copy desk");
+    const subtasks = within(await within(modal).findByRole("region", { name: "Subtasks" })).getAllByRole("listitem");
+    expect(subtasks.map((item) => item.querySelector(".board-handoff-title + bdi")?.textContent)).toEqual(["Copy desk", "plates", "plates"]);
+  });
+
+  it("the hand-off's polite line and the document view's Tasks block keep the raw <flow>/<column> pair", async () => {
+    window.localStorage.setItem("specengine.board.as", "Ivo Brandt");
+    renderMock("normal", "#/harbor-sim/board/C-0001");
+    const modal = await screen.findByRole("dialog", { name: "Write the tide table foreword" });
+    fireEvent.click(await within(modal).findByRole("button", { name: "Hand off" }));
+    const dialog = await screen.findByRole("dialog", { name: "Hand off C-0001" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Department" }), { target: { value: "galley" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(/^C-\d+ handed off to copy\/draft$/);
+    });
+    await go("#/harbor-sim/board?doc=MEC-TIDE-TABLES");
+    const doc = await screen.findByRole("dialog", { name: /tide/i });
+    const block = await within(doc).findByRole("region", { name: "Tasks" });
+    await waitFor(() => {
+      expect(within(block).getAllByText(/^copy\/[a-z-]+$/).length).toBeGreaterThan(0);
+    });
+    expect(within(block).queryByText(/Copy desk/)).toBeNull();
+  });
+});
+
+describe("directions in the Spec tree (DP-11 of departments)", () => {
+  it("holds group Modules (All modules, Berths, Harbour waters) and group Directions (Mechanics), one pressed across both", async () => {
+    renderMock("normal", "#/harbor-sim/tree");
+    await screen.findByRole("tree", { name: "Spec tree" });
+    expect(within(bar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["All modules", "Berths", "Harbour waters"]);
+    expect(within(directionsBar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["Mechanics"]);
+    expect(pressedAll()).toEqual(["Berths"]);
+  });
+
+  it("Mechanics stores its name and reads getTree by kinds, no root; every row one level, none expandable, in served order; a reload keeps it (M: rows built on the served depths; a direction's null root passed as root)", async () => {
+    let { client, spies } = renderMock("normal", "#/harbor-sim/tree");
+    await screen.findByRole("tree", { name: "Spec tree" });
+    fireEvent.click(within(directionsBar() ?? document.body).getByRole("button", { name: "Mechanics" }));
+    expect(window.localStorage.getItem("specengine.module.harbor-sim")).toBe("mechanics");
+    await waitFor(() => {
+      expect(argsOf(spies.getTree).at(-1)).toEqual(["harbor-sim", { kinds: ["mechanic"] }]);
+    });
+    expect(argsOf(spies.getTree).some((args) => typeof args[1] === "object" && args[1] !== null && "root" in args[1] && args[1].root === null)).toBe(false);
+    const served = (await client.getTree("harbor-sim", { kinds: ["mechanic"] })).nodes;
+    // The kinds read keeps the whole tree's depths: some served row is deeper than the first level.
+    expect(served.some((node) => node.depth > 0)).toBe(true);
+    await waitFor(() => {
+      expect(treeNames()).toEqual(served.map((node) => node.id ?? node.path));
+    });
+    expect(treeItems().map((item) => item.getAttribute("aria-level"))).toEqual(served.map(() => "1"));
+    expect(treeItems().filter((item) => item.hasAttribute("aria-expanded"))).toEqual([]);
+    expect(pressedAll()).toEqual(["Mechanics"]);
+
+    ({ client, spies } = reload("normal", "#/harbor-sim/tree"));
+    await screen.findByRole("tree", { name: "Spec tree" });
+    expect(argsOf(spies.getTree)[0]).toEqual(["harbor-sim", { kinds: ["mechanic"] }]);
+    expect(pressedAll()).toEqual(["Mechanics"]);
+  });
+
+  it("Show as root on a row reads from it; Whole tree goes back to the list; All modules reads the whole tree", async () => {
+    window.localStorage.setItem("specengine.module.harbor-sim", "mechanics");
+    const { spies } = renderMock("normal", "#/harbor-sim/tree", (client) => {
+      // A cut list, so the footer offers Show as root on its first row.
+      vi.spyOn(client, "getTree").mockImplementation(async (project, options) => {
+        const answer = await MockClient.prototype.getTree.call(client, project, options);
+        return options?.kinds === undefined ? answer : { ...answer, truncated: true };
+      });
+    });
+    await waitFor(() => {
+      expect(treeItems().length).toBeGreaterThan(1);
+    });
+    const first = treeNames()[0] ?? "";
+    fireEvent.click(screen.getByRole("button", { name: `Show ${first} as root` }));
+    await waitFor(() => {
+      expect(argsOf(spies.getTree).at(-1)).toEqual(["harbor-sim", { root: first }]);
+    });
+    expect((await screen.findByText("Rooted at")).textContent).toBe(`Rooted at ${first}`);
+    fireEvent.click(screen.getByRole("button", { name: "Whole tree" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Rooted at")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(treeItems().every((item) => item.getAttribute("aria-level") === "1")).toBe(true);
+    });
+    expect(pressedAll()).toEqual(["Mechanics"]);
+    fireEvent.click(within(bar() ?? document.body).getByRole("button", { name: "All modules" }));
+    await waitFor(() => {
+      expect(argsOf(spies.getTree).at(-1)).toEqual(["harbor-sim"]);
+    });
+    expect(window.localStorage.getItem("specengine.module.harbor-sim")).toBe("");
+  });
+
+  it("with directions only, Modules holds All modules alone; with rooted modules only, no Directions group", async () => {
+    renderMock("normal", "#/harbor-sim/tree", (client) => {
+      const served = workspacesOf("harbor-sim", "normal");
+      vi.spyOn(client, "getWorkspaces").mockResolvedValue({ ...served, workspaces: served.workspaces.map((workspace) => ({ ...workspace, module: null })), modules: served.modules.filter((module) => module.root === null) });
+    });
+    await screen.findByRole("tree", { name: "Spec tree" });
+    await waitFor(() => {
+      expect(within(bar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["All modules"]);
+    });
+    expect(within(directionsBar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["Mechanics"]);
+    cleanup();
+    renderMock("normal", "#/harbor-sim/tree", (client) => {
+      const served = workspacesOf("harbor-sim", "normal");
+      vi.spyOn(client, "getWorkspaces").mockResolvedValue({ ...served, modules: served.modules.filter((module) => module.root !== null) });
+    });
+    await screen.findByRole("tree", { name: "Spec tree" });
+    await waitFor(() => {
+      expect(within(bar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["All modules", "Berths", "Harbour waters"]);
+    });
+    expect(directionsBar()).toBeNull();
+  });
+});
+
+describe("Flow takes rooted modules only (DP-12 of departments)", () => {
+  it("the places pane lists Berths and Harbour waters, never Mechanics (M: the places pane listing every module)", async () => {
+    renderMock("normal", "#/harbor-sim/flow");
+    await screen.findByRole("heading", { level: 1, name: "Flow" });
+    await waitFor(() => {
+      expect(within(bar() ?? document.body).getAllByRole("link").map((link) => link.textContent)).toEqual(["All modules", "Berths", "Harbour waters"]);
+    });
+    expect(within(bar() ?? document.body).queryByRole("link", { name: "Mechanics" })).toBeNull();
+  });
+
+  it("stored mechanics: #/harbor-sim/flow reads as All modules, its Top, the key unchanged", async () => {
+    window.localStorage.setItem("specengine.module.harbor-sim", "mechanics");
+    const { spies } = renderMock("normal", "#/harbor-sim/flow");
+    await screen.findByRole("heading", { level: 1, name: "Flow" });
+    await waitFor(() => {
+      expect(currentModule()).toEqual(["All modules"]);
+    });
+    await waitFor(() => {
+      expect(topReads(spies.getFlow).at(-1)).toEqual({ depth: 0, in_flow: true, trace: true });
+    });
+    expect(argsOf(spies.getFlow).some((args) => typeof args[1] === "object" && args[1] !== null && "root" in args[1] && args[1].root === null)).toBe(false);
+    expect(window.localStorage.getItem("specengine.module.harbor-sim")).toBe("mechanics");
+  });
+
+  it("module=mechanics in the hash drops by one replace, as an unserved module does: no push, the place written with All modules", async () => {
+    window.localStorage.setItem("specengine.module.harbor-sim", "mechanics");
+    renderMock("normal", "#/harbor-sim/flow?module=mechanics");
+    const before = window.history.length;
+    await screen.findByRole("heading", { level: 1, name: "Flow" });
+    await hashIs("#/harbor-sim/flow?module=");
+    expect(window.history.length).toBe(before);
+    expect(currentModule()).toEqual(["All modules"]);
+    expect(window.localStorage.getItem("specengine.module.harbor-sim")).toBe("mechanics");
   });
 });

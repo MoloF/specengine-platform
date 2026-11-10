@@ -46,7 +46,7 @@ async function notBuilt(count: number): Promise<HTMLElement[]> {
 
 describe("a read the daemon does not serve yet (R-n7)", () => {
   it.each([
-    ["Tasks", "#/alpha/tasks", ["GET /api/projects/alpha/tasks"]],
+    ["Agent tasks", "#/alpha/tasks", ["GET /api/projects/alpha/tasks"]],
     // The list beside the task reads too: each region says it on its own.
     ["a task", "#/alpha/tasks/T-0001", ["GET /api/projects/alpha/tasks", "GET /api/projects/alpha/tasks/T-0001"]],
     ["the home's Tasks region", "#/alpha", ["GET /api/projects/alpha/tasks"]],
@@ -66,7 +66,7 @@ describe("a read the daemon does not serve yet (R-n7)", () => {
     );
     renderApp(client, "#/alpha/tasks");
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe("The tasks could not be loadedGET /api/projects/alpha/tasks: no response from the daemon (Failed to fetch)");
+    expect(alert.textContent).toBe("The agent tasks could not be loadedGET /api/projects/alpha/tasks: no response from the daemon (Failed to fetch)");
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(screen.queryByText(NOT_BUILT)).toBeNull();
   });

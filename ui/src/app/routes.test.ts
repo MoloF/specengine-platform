@@ -38,7 +38,7 @@ describe("hash routes", () => {
     expect(navOf("a b", ALL_SECTIONS, enT).map(({ label, hash }) => [label, hash])).toEqual([
       ["Overview", "#/a%20b"],
       ["Inbox", "#/a%20b/inbox"],
-      ["Tasks", "#/a%20b/tasks"],
+      ["Agent tasks", "#/a%20b/tasks"],
       ["Board", "#/a%20b/board"],
       ["Roadmap", "#/a%20b/roadmap"],
       ["Flow", "#/a%20b/flow"],

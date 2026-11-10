@@ -1,12 +1,12 @@
 import { createContext, use, useEffect, useId, useMemo, useRef, useState, type ReactNode, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useCard, useCardClearGroup, useCards, useCardWrite, type CardWriteRequest } from "../api/queries";
-import type { Card, CardAcceptBody, CardClearBody, CardClearGroupWrite, CardCreateBody, CardEditBody, CardFlow, CardMoveBody, CardRow, CardVerdict, CardWrite } from "../api/types";
+import { useCard, useCardClearGroup, useCards, useCardWrite, useHeldWorkspaces, type CardWriteRequest } from "../api/queries";
+import type { Card, CardAcceptBody, CardClearBody, CardClearGroupWrite, CardCreateBody, CardEditBody, CardFlow, CardMoveBody, CardRow, CardVerdict, CardWrite, Workspace, WorkspaceDocument } from "../api/types";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
-import { actingName, isActingLine, useActing, useHubLogin, useTeamRow } from "./acting";
+import { actingName, handOffReviewer, isActingLine, useActing, useHubLogin, useTeamRow } from "./acting";
 import { assigneeChoices, disciplineChoices } from "./filter";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -149,6 +149,68 @@ function TextArea({
           onChange(event.target.value);
         }}
       />
+      {hint !== undefined && (
+        <p id={hintId} className="card-field-hint">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A choice among served values: `placeholder`, when given, an empty first option that is no choice. */
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  hint,
+  required = false,
+  autoFocus = false,
+  invalid = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** Each option's value, sent or looked up, and its label, the project's words in any script. */
+  options: readonly { value: string; label: string }[];
+  placeholder?: string;
+  hint?: string;
+  required?: boolean;
+  autoFocus?: boolean;
+  invalid?: boolean;
+}) {
+  const id = useId();
+  const hintId = useId();
+  const pending = use(Pending);
+  return (
+    <div className="card-field">
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
+      <select
+        id={id}
+        className="field"
+        value={value}
+        aria-required={required}
+        aria-invalid={invalid}
+        aria-disabled={pending || undefined}
+        aria-describedby={hint === undefined ? undefined : hintId}
+        data-autofocus={autoFocus ? "" : undefined}
+        onChange={(event) => {
+          if (!pending) {
+            onChange(event.target.value);
+          }
+        }}
+      >
+        {placeholder !== undefined && <option value="">{placeholder}</option>}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
       {hint !== undefined && (
         <p id={hintId} className="card-field-hint">
           {hint}
@@ -805,10 +867,12 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
 }
 
 /** What a hand-off is made from: the card as read, or a tile's row, whose goal is read before the form opens. */
-export type HandOffSource = Pick<Card, "id" | "title" | "targets"> & { goal?: string | null };
+export type HandOffSource = Pick<Card, "id" | "title" | "targets" | "reviewer"> & { goal?: string | null };
 
 /** The hand-off dialog's fields as typed. */
 interface HandOffForm {
+  /** The chosen department's name, `""` before a choice; unused with today's Discipline field. */
+  department: string;
   discipline: string;
   title: string;
   goal: string;
@@ -817,12 +881,26 @@ interface HandOffForm {
 }
 
 /**
+ * The departments a hand-off may go to: those whose served `disciplines` is not empty, in served
+ * order; null, today's typed Discipline field, with fewer than two or with the workspaces not read
+ * (docs/features/departments.md "Acceptance criteria", DP-14). The daemon computed each list.
+ */
+export function handOffDepartments(document: WorkspaceDocument | undefined): Workspace[] | null {
+  const offered = (document?.workspaces ?? []).filter((workspace) => workspace.disciplines.length > 0);
+  return offered.length < 2 ? null : offered;
+}
+
+/**
  * Hand off (`docs/canon/card-flows.md` "The rule"): a child card in another trade's flow, which its
- * discipline picks as for any new card; the dialog offers every served flow's disciplines, whatever
- * the workspace shows, from the flows the caller's list read serves. Title, goal and targets come from the card, all editable; criteria, estimate,
- * due date and evidence stay with it, and no assignee is named: the receiving trade takes the card
- * with a move. The reviewer is the asking side, the acting name by default, required; on a hub the
- * login, read-only. Submit is one `POST .../cards`, nothing else: no assign follows.
+ * discipline picks as for any new card. With two or more departments serving a discipline, a
+ * required Department select, then a Discipline select defaulting to its first when it serves
+ * several; the form is chosen once, as the dialog opens, from the workspaces read the Shell holds,
+ * and the write still sends only `discipline`. Otherwise the dialog offers every served flow's
+ * disciplines, whatever the workspace shows, from the flows the caller's list read serves. Title,
+ * goal and targets come from the card, all editable; criteria, estimate, due date and evidence stay
+ * with it, and no assignee is named: the receiving trade takes the card with a move. The reviewer is
+ * the asking side, required: the parent's reviewer by default, else the acting name when it names a
+ * person; on a hub the login, read-only. Submit is one `POST .../cards`, nothing else: no assign follows.
  */
 export function HandOffDialog({ project, card, flows, ...handlers }: { project: string; card: HandOffSource; flows: readonly CardFlow[] } & WriteHandlers) {
   const t = useTranslate();
@@ -831,10 +909,14 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
   const send = useSend(project, handlers);
   const login = useHubLogin();
   const [acting] = useActing();
+  const held = useHeldWorkspaces(project);
+  // Chosen once: a read landing while the dialog is open changes no field under the person's hands.
+  const [departments] = useState(() => handOffDepartments(held.data));
   // A tile's row holds no goal: the card is read, and its goal fills the field once, unless typed in first.
   const read = useCard(project, card.goal === undefined ? card.id : null);
   const readGoal = read.data !== undefined && isCard(read.data) ? read.data.goal : undefined;
-  const [form, setForm] = useState<HandOffForm>({ discipline: "", title: card.title, goal: card.goal ?? "", targets: card.targets.join("\n"), reviewer: acting });
+  // The reviewer the daemon takes: the parent's, else a person's acting name, never `agent` (docs/canon/card-flows.md "Hand-off").
+  const [form, setForm] = useState<HandOffForm>({ department: "", discipline: "", title: card.title, goal: card.goal ?? "", targets: card.targets.join("\n"), reviewer: handOffReviewer(card.reviewer, acting) });
   const [goalFilled, setGoalFilled] = useState(card.goal !== undefined);
   const [goalTyped, setGoalTyped] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -856,6 +938,13 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
   }
 
   const disciplines = useMemo(() => [...new Set(flows.flatMap((flow) => flow.disciplines))], [flows]);
+  const department = departments?.find((candidate) => candidate.name === form.department) ?? null;
+
+  function chooseDepartment(name: string) {
+    const chosen = departments?.find((candidate) => candidate.name === name);
+    // Its first discipline until another is chosen: the second select never starts empty.
+    setForm((current) => ({ ...current, department: name, discipline: chosen?.disciplines[0] ?? "" }));
+  }
 
   function bodyOf(): CardCreateBody {
     return {
@@ -877,6 +966,9 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
       onClose={onClose}
       check={() => {
         setChecked(true);
+        if (departments !== null && department === null) {
+          return t("board.handoff.needsDepartment");
+        }
         if (form.discipline.trim() === "") {
           return t("board.handoff.needsDiscipline");
         }
@@ -894,21 +986,49 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
           <dd className="mono">{card.id}</dd>
         </div>
       </dl>
-      <TextField
-        label={t("board.field.discipline")}
-        value={form.discipline}
-        onChange={field("discipline")}
-        list={disciplinesId}
-        required
-        autoFocus
-        invalid={checked && form.discipline.trim() === ""}
-        hint={t("board.handoff.disciplineHint")}
-      />
-      <datalist id={disciplinesId}>
-        {disciplines.map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
+      {departments === null ? (
+        <>
+          <TextField
+            label={t("board.field.discipline")}
+            value={form.discipline}
+            onChange={field("discipline")}
+            list={disciplinesId}
+            required
+            autoFocus
+            invalid={checked && form.discipline.trim() === ""}
+            hint={t("board.handoff.disciplineHint")}
+          />
+          <datalist id={disciplinesId}>
+            {disciplines.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </>
+      ) : (
+        <>
+          <SelectField
+            label={t("board.field.department")}
+            value={form.department}
+            onChange={chooseDepartment}
+            options={departments.map((offered) => ({ value: offered.name, label: offered.title }))}
+            placeholder={t("board.handoff.chooseDepartment")}
+            required
+            autoFocus
+            invalid={checked && department === null}
+            hint={t("board.handoff.departmentHint")}
+          />
+          {department !== null && department.disciplines.length > 1 && (
+            <SelectField
+              label={t("board.field.discipline")}
+              value={form.discipline}
+              onChange={field("discipline")}
+              options={department.disciplines.map((name) => ({ value: name, label: name }))}
+              required
+              hint={t("board.handoff.disciplineHint")}
+            />
+          )}
+        </>
+      )}
       <TextField label={t("board.field.title")} value={form.title} onChange={field("title")} required invalid={checked && form.title.trim() === ""} />
       <TextArea label={t("board.field.goal")} value={form.goal} onChange={field("goal")} />
       <TextArea label={t("board.field.source")} value={form.targets} onChange={field("targets")} hint={t("board.hint.sourceNew")} />

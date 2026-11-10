@@ -484,13 +484,24 @@ kbd {
 }
 
 /* The module bar over the Spec tree and the Flow (docs/features/workspaces.md "The UI"): its
-   buttons wrap, so 320 px never scrolls sideways; a title of any script wraps inside its button. */
+   buttons wrap, so 320 px never scrolls sideways; a title of any script wraps inside its button.
+   On the Spec tree it holds two groups, Modules and Directions, each wrapping on its own
+   (docs/features/departments.md "Acceptance criteria", DP-11). */
 .module-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-100) var(--space-300);
   margin-bottom: var(--space-4);
+  min-width: 0;
+}
+
+.module-bar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  max-width: 100%;
   min-width: 0;
 }
 

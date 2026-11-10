@@ -75,12 +75,12 @@ describe("Return (BH-15)", () => {
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Return\u2026", "Check", "Down"]);
     fireEvent.click(within(menu).getByRole("menuitem", { name: /^Return/ }));
     const dialog = await screen.findByRole("dialog", { name: "Return C-0001" });
-    expect(dialog.textContent).toContain("The card moves to Doing with this reason. The card that asked for it stays where it is.");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Return card" }));
+    expect(dialog.textContent).toContain("The task moves to Doing with this reason. The task that asked for it stays where it is.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
     expect((await within(dialog).findByRole("alert")).textContent).toBe("Say why it goes back.");
     expect(client.moveCard).not.toHaveBeenCalled();
     fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: " Two endings contradict SCN-LAMP-ROOM " } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Return card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
     await waitFor(() => {
       expect(client.moveCard).toHaveBeenCalledTimes(1);
     });
@@ -93,6 +93,22 @@ describe("Return (BH-15)", () => {
     });
     // Said without echoing the column's title, which a return column's often is.
     expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("C-0001 sent back");
+  });
+
+  it("is not touched by the hand-off's reviewer rule: it has no reviewer and goes out as the acting name, `agent` too (L2 of departments' looks)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "agent");
+    const client = returnClient(ROWS);
+    await board(client);
+    tile("C-0001").focus();
+    fireEvent.keyDown(tile("C-0001"), { key: "r" });
+    const dialog = await screen.findByRole("dialog", { name: "Return C-0001" });
+    expect(within(dialog).queryByLabelText("Reviewer")).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Wrong lamp." } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await waitFor(() => {
+      expect(client.moveCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.moveCard.mock.calls[0]?.[2]).toEqual({ to: "doing", note: "Wrong lamp.", revision: "3", as: "agent" });
   });
 
   it("`r` on a tile opens it, a Russian layout's key too; never in the column itself", async () => {
@@ -126,7 +142,7 @@ describe("Return (BH-15)", () => {
     dropAt(cell("Doing"), 0);
     const again = await screen.findByRole("dialog", { name: "Return C-0002" });
     fireEvent.change(within(again).getByLabelText("Reason"), { target: { value: "Wrong lamp." } });
-    fireEvent.click(within(again).getByRole("button", { name: "Return card" }));
+    fireEvent.click(within(again).getByRole("button", { name: "Return task" }));
     await waitFor(() => {
       expect(client.moveCard).toHaveBeenCalledTimes(1);
     });
@@ -196,7 +212,7 @@ describe("Return (BH-15)", () => {
     expect(within(modal).queryByRole("button", { name: "Return" })).toBeNull();
     window.location.hash = "#/alpha/board/C-0004";
     const gone = await screen.findByRole("dialog", { name: "Long ago" });
-    expect((await within(gone).findByRole("region", { name: "Returned" })).textContent).toContain("is no longer in this card's history");
+    expect((await within(gone).findByRole("region", { name: "Returned" })).textContent).toContain("is no longer in this task's history");
     window.location.hash = "#/alpha/board/C-0001";
     const ready = await screen.findByRole("dialog", { name: "Open one" });
     fireEvent.click(await within(ready).findByRole("button", { name: "Return" }));
@@ -212,7 +228,7 @@ describe("Return (BH-15)", () => {
     fireEvent.keyDown(tile("C-0002"), { key: "r" });
     const dialog = await screen.findByRole("dialog", { name: "Return C-0002" });
     fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Kept" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Return card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
     const said = await within(dialog).findByText(/enters `doing`/);
     expect(said.getAttribute("lang")).toBe("en");
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").value).toBe("Kept");

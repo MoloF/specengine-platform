@@ -301,6 +301,20 @@ export function useWorkspaces(project: string, enabled = true) {
 /** The workspaces read as the shell shares it. */
 export type WorkspacesQuery = ReturnType<typeof useWorkspaces>;
 
+/**
+ * The workspaces read as the Shell holds it, never asked from here: a document's Inside and the Hand
+ * off dialog take its directions and departments when read, and do without while it is out or failed
+ * (docs/features/departments.md "Acceptance criteria", DP-13, DP-14).
+ */
+export function useHeldWorkspaces(project: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.workspaces(project),
+    queryFn: ({ signal }) => client.getWorkspaces(project, signal),
+    enabled: false,
+  });
+}
+
 export function useInbox(project: string) {
   const client = useClient();
   return useQuery({ queryKey: queryKeys.inbox(project), queryFn: ({ signal }) => client.getInbox(project, signal) });

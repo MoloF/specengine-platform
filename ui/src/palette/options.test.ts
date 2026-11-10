@@ -72,7 +72,7 @@ describe("the palette's groups", () => {
     expect(shape("t")).toEqual([
       ["Sections", ["section:tasks", "section:tree", "section:health", "section:questions"]],
       [
-        "Tasks",
+        "Agent tasks",
         ["task:T-0002", "task:T-0003", "task:T-0005", "task:T-0007", "task:T-0004", "task:T-0006", "task:T-0001", "task:T-0008", "task:T-0009"],
       ],
       ["Inbox", ["proposal:PR-1", "proposal:PR-2"]],
@@ -87,40 +87,40 @@ describe("the palette's groups", () => {
 
   it("puts a task whose ID folds equal to the trimmed text first, and its group first", () => {
     expect(shape("  t-0004 ")).toEqual([
-      ["Tasks", ["task:T-0004"]],
+      ["Agent tasks", ["task:T-0004"]],
       ["Spec tree", ["search", "ref"]],
     ]);
-    expect(shape("t-000")[0]?.[0]).toBe("Tasks");
+    expect(shape("t-000")[0]?.[0]).toBe("Agent tasks");
     const exact = shape("T-0002");
-    expect(exact[0]).toEqual(["Tasks", ["task:T-0002"]]);
+    expect(exact[0]).toEqual(["Agent tasks", ["task:T-0002"]]);
     expect(exact[1]).toEqual(["Inbox", ["proposal:PR-2"]]);
     expect(shape("pr-2")[0]).toEqual(["Inbox", ["proposal:PR-2"]]);
   });
 
   it("puts the exact ID first inside its group too, before the earlier matches", () => {
     const entries = [aTaskEntry({ id: "T-10", status: "review" }), aTaskEntry({ id: "T-1", status: "draft" })];
-    expect(shape("t-1", { tasks: ready(entries) })[0]).toEqual(["Tasks", ["task:T-1", "task:T-10"]]);
+    expect(shape("t-1", { tasks: ready(entries) })[0]).toEqual(["Agent tasks", ["task:T-1", "task:T-10"]]);
   });
 
   it("matches a decomposed title with a precomposed query and back (NFC)", () => {
     const composed = "Caf\u00e9 berth";
     const decomposed = "Cafe\u0301 berth";
     const tasks = ready([aTaskEntry({ id: "T-1", title: decomposed }), aTaskEntry({ id: "T-2", title: composed })]);
-    expect(shape("caf\u00e9", { tasks })[0]).toEqual(["Tasks", ["task:T-1", "task:T-2"]]);
-    expect(shape("CAFE\u0301", { tasks })[0]).toEqual(["Tasks", ["task:T-1", "task:T-2"]]);
+    expect(shape("caf\u00e9", { tasks })[0]).toEqual(["Agent tasks", ["task:T-1", "task:T-2"]]);
+    expect(shape("CAFE\u0301", { tasks })[0]).toEqual(["Agent tasks", ["task:T-1", "task:T-2"]]);
   });
 
   it("shows ten options of a larger group and says how many matched", () => {
     const many = Array.from({ length: 23 }, (_, index) => aTaskEntry({ id: `T-${String(100 + index)}`, status: "draft" }));
     const tasks = paletteGroups(input("T-1", { tasks: ready(many) }), enT).find((group) => group.name === "Tasks");
     expect(tasks?.options).toHaveLength(10);
-    expect(tasks === undefined ? "" : groupLabel(tasks, enT)).toBe("Tasks, 10 of 23");
+    expect(tasks === undefined ? "" : groupLabel(tasks, enT)).toBe("Agent tasks, 10 of 23");
   });
 
   it("labels a group whose read is on its way and leaves out a failed one", () => {
     const loading = shape("z", { tasks: { state: "loading" }, inbox: { state: "failed" } });
     expect(loading).toEqual([
-      ["Tasks, loading", []],
+      ["Agent tasks, loading", []],
       ["Spec tree", ["search", "ref"]],
     ]);
   });

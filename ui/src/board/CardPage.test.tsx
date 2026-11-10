@@ -46,10 +46,10 @@ describe("a card's page (BH-6)", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("link", { name: "Open on the board" }).getAttribute("href")).toBe("#/alpha/board/C-0001");
     // The work item's order (DF-6 of design-foundation): the head's acts, Move in the side column's Status.
-    expect(within(screen.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Return", "Edit", "Assign", "Cancel card"]);
+    expect(within(screen.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Return", "Edit", "Assign", "Cancel task"]);
     expect(within(screen.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
     expect(within(await screen.findByRole("region", { name: "Goal" })).getByText("What it is for")).toBeTruthy();
-    const child = within(screen.getByRole("region", { name: "Hand-offs" })).getByRole("link", { name: "C-0002" });
+    const child = within(screen.getByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0002" });
     expect(child.getAttribute("href")).toBe("#/alpha/board/C-0002/page");
     expect(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Board" }).getAttribute("aria-current")).toBe("page");
     expect(client.getCards).toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe("a card's page (BH-6)", () => {
   it("a child's link goes to its page, replacing this one", async () => {
     await page();
     const length = window.history.length;
-    fireEvent.click(within(await screen.findByRole("region", { name: "Hand-offs" })).getByRole("link", { name: "C-0002" }));
+    fireEvent.click(within(await screen.findByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0002" }));
     await screen.findByRole("heading", { level: 1, name: "Its child" });
     expect([window.location.hash, window.history.length]).toEqual(["#/alpha/board/C-0002/page", length]);
   });
@@ -77,7 +77,7 @@ describe("a card's page (BH-6)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Return" }));
     const dialog = await screen.findByRole("dialog", { name: "Return C-0001" });
     fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Two endings." } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Return card" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
     await waitFor(() => {
       expect(client.moveCard).toHaveBeenCalledTimes(1);
     });
@@ -87,11 +87,11 @@ describe("a card's page (BH-6)", () => {
   // Replaced by DF-7 of design-foundation: the part is folded under the side column's Development, expanded first.
   it("shows the card's Tasks part under Development, as the modal does: a card with no link says No task yet and how to make and link one (CT-5 of card-tasks)", async () => {
     await page();
-    const development = await screen.findByRole("button", { name: "Development \u00b7 No agent tasks" });
-    expect(screen.queryByRole("region", { name: "Tasks" })).toBeNull();
+    const development = await screen.findByRole("button", { name: "Agent tasks \u00b7 none linked" });
+    expect(screen.queryByRole("region", { name: "Agent tasks" })).toBeNull();
     fireEvent.click(development);
-    const part = screen.getByRole("region", { name: "Tasks" });
-    expect(within(part).getByRole("heading", { level: 3, name: "No task yet." })).toBeTruthy();
+    const part = screen.getByRole("region", { name: "Agent tasks" });
+    expect(within(part).getByRole("heading", { level: 3, name: "No agent task yet." })).toBeTruthy();
     expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(['spec task new --nodes REF --title "..."', "spec card edit C-0001 --task T-NNNN"]);
     expect(part.closest(".issue-view-side")).not.toBeNull();
   });

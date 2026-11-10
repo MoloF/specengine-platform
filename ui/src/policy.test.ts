@@ -1084,7 +1084,7 @@ describe("source policy", () => {
     }
   });
 
-  it("spells no workspace or module name the mock serves in app code: names are data, shown or sent, never compared (WS-6 (c) of workspaces)", () => {
+  it("spells no workspace or module name, nor a kind a direction lists, the mock serves in app code: names and kinds are data, shown or sent, never compared (WS-6 (c) of workspaces; DP-11 of departments)", () => {
     const workspacesOf = mockWorkspaces["/src/mocks/workspaces.ts"]?.workspacesOf;
     const scenarios = mockScenarios["/src/mocks/scenario.ts"]?.SCENARIOS ?? [];
     expect(workspacesOf).toBeDefined();
@@ -1100,15 +1100,18 @@ describe("source policy", () => {
         for (const named of [...served.workspaces, ...served.modules]) {
           names.add(named.name);
         }
+        for (const kind of served.modules.flatMap((module) => module.kinds ?? [])) {
+          names.add(kind);
+        }
       }
     }
-    expect([...names].sort()).toEqual(["berths", "foundry", "galley", "waters"]);
+    expect([...names].sort()).toEqual(["berths", "foundry", "galley", "mechanic", "mechanics", "waters"]);
     const appCode = (path: string) =>
       path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
     const quoted = new RegExp(`["'\`](${[...names].join("|")})["'\`]`);
     expect(offending(quoted, appCode)).toEqual([]);
     // The detector itself: the slice's M15 and its kin are caught; a name shown or sent is not.
-    for (const line of ['if (workspace.name === "galley") {', "const lens = `foundry`;", "modules.find((module) => module.name === 'berths')"]) {
+    for (const line of ['if (workspace.name === "galley") {', "const lens = `foundry`;", "modules.find((module) => module.name === 'berths')", 'module.kinds?.includes("mechanic")', "if (chosen.name === 'mechanics') {"]) {
       expect([line, quoted.test(line)]).toEqual([line, true]);
     }
     for (const line of ["<option value={workspace.name}>{workspace.title}</option>", "moduleOf(document, workspace, stored)", 'const label = "Galley";']) {

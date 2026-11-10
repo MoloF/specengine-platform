@@ -250,7 +250,7 @@ describe("a drift item in the inbox (UI-1 of drift-queue)", () => {
       fireEvent.keyDown(selectedOption(list), { key });
       await waitFor(() => {
         expect(politeRegion().textContent).toBe(
-          "PR-0012 is a drift item, decided on a terminal only; nothing is staged here. Its card lists the commands.",
+          "PR-0012 is a drift item, decided on a terminal only; nothing is staged here. Its details list the commands.",
         );
       });
       await act(async () => {

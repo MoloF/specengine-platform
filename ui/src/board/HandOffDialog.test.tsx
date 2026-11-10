@@ -1,6 +1,6 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { Card, CardRow } from "../api/types";
+import type { Card, CardRow, WorkspaceDocument } from "../api/types";
 import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aWorkspace, aWorkspaces } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
@@ -65,7 +65,7 @@ describe("Hand off (BH-11)", () => {
     expect([reviewer.value, reviewer.readOnly]).toEqual(["Ann", false]);
   });
 
-  it("submit is exactly one POST .../cards with title, goal, discipline, target, parent, reviewer and as, and no other write (M13); the child shows under Hand-offs after the re-read", async () => {
+  it("submit is exactly one POST .../cards with title, goal, discipline, target, parent, reviewer and as, and no other write (M13); the child shows under Subtasks after the re-read", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ann");
     const client = handOffClient();
     const dialog = await fromModal(client);
@@ -84,7 +84,7 @@ describe("Hand off (BH-11)", () => {
     }
     const modal = screen.getByRole("dialog", { name: "Lamp room dialogue" });
     await waitFor(() => {
-      expect(within(within(modal).getByRole("region", { name: "Hand-offs" })).getByRole("link", { name: "C-0002" })).toBeTruthy();
+      expect(within(within(modal).getByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0002" })).toBeTruthy();
     });
     expect(screen.getAllByRole("dialog")).toEqual([modal]);
     await waitFor(() => {
@@ -195,5 +195,190 @@ describe("Hand off (BH-11)", () => {
     window.location.hash = "#/alpha/board/C-0009/page";
     await screen.findByRole("heading", { level: 1, name: "Closed one" });
     expect(screen.queryByRole("button", { name: "Hand off" })).toBeNull();
+  });
+});
+
+// DP-14 of docs/features/departments.md: with two or more departments serving a discipline, a
+// required Department select, then a Discipline select defaulting to the department's first when it
+// serves several; the write still sends `discipline` alone. Galley serves copy, Foundry plates and
+// proofs, Yard nothing (not offered). The form is chosen once, as the dialog opens.
+
+const DEPARTMENTS = aWorkspaces([
+  aWorkspace({ name: "galley", title: "Galley", flows: ["copy"], disciplines: ["copy"] }),
+  aWorkspace({ name: "foundry", title: "Foundry", flows: ["plates"], disciplines: ["plates", "proofs"] }),
+  aWorkspace({ name: "yard", title: "Yard", flows: [], disciplines: [] }),
+]);
+
+function departmentClient(workspaces: Promise<WorkspaceDocument> = Promise.resolve(DEPARTMENTS)): StubClient {
+  const client = handOffClient();
+  client.getCards.mockImplementation(() =>
+    Promise.resolve(
+      aCardList([aCardRow({ id: "C-0001", flow: "copy", title: "Lamp room dialogue", targets: ["SCN-LAMP", "SCN-ROOM"], revision: "4" })], {
+        flows: [aCardFlow({ name: "copy", title: "Copy desk", disciplines: ["copy"] }), aCardFlow({ name: "plates", disciplines: ["plates", "proofs"] })],
+      }),
+    ),
+  );
+  client.getWorkspaces.mockImplementation(() => workspaces);
+  return client;
+}
+
+/** The modal's Hand off once the Shell holds the workspaces read: the header's Department switcher stands. */
+async function fromModalRead(client: StubClient): Promise<HTMLElement> {
+  renderApp(client, "#/alpha/board/C-0001");
+  await screen.findByRole("combobox", { name: "Department" });
+  const modal = await screen.findByRole("dialog", { name: "Lamp room dialogue" });
+  fireEvent.click(await within(modal).findByRole("button", { name: "Hand off" }));
+  return screen.findByRole("dialog", { name: "Hand off C-0001" });
+}
+
+function choose(dialog: HTMLElement, label: string, value: string) {
+  fireEvent.change(within(dialog).getByRole("combobox", { name: label }), { target: { value } });
+}
+
+describe("Hand off by department (DP-14 of departments)", () => {
+  it("one required Department select: Galley, Foundry, in served order, no Yard, no default; Submit without a choice sends nothing and says why", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = departmentClient();
+    const dialog = await fromModalRead(client);
+    const department = within(dialog).getByRole<HTMLSelectElement>("combobox", { name: "Department" });
+    expect(Array.from(department.options).map((option) => [option.value, option.textContent])).toEqual([
+      ["", "Choose a department"],
+      ["galley", "Galley"],
+      ["foundry", "Foundry"],
+    ]);
+    expect([department.value, department.getAttribute("aria-required")]).toEqual(["", "true"]);
+    expect(within(dialog).getByText("The department that takes the subtask.")).toBeTruthy();
+    expect(within(dialog).queryByLabelText("Discipline")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("A hand-off needs a department: choose who takes the subtask.");
+    expect(department.getAttribute("aria-invalid")).toBe("true");
+    expect(client.createCard).not.toHaveBeenCalled();
+  });
+
+  it("Galley: no Discipline select; Submit posts its one discipline with parent, reviewer and as, and no new key (M: the department's name sent as discipline)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = departmentClient();
+    const dialog = await fromModalRead(client);
+    choose(dialog, "Department", "galley");
+    expect(within(dialog).queryByLabelText("Discipline")).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.createCard.mock.calls[0]).toEqual([
+      "alpha",
+      { title: "Lamp room dialogue", goal: "Two endings, one lamp.", discipline: "copy", target: ["SCN-LAMP", "SCN-ROOM"], parent: "C-0001", reviewer: "Ann", as: "Ann" },
+    ]);
+  });
+
+  it("Foundry: a Discipline select showing plates, its first; choosing proofs posts it (M: the second select starting empty)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = departmentClient();
+    const dialog = await fromModalRead(client);
+    choose(dialog, "Department", "foundry");
+    const discipline = within(dialog).getByRole<HTMLSelectElement>("combobox", { name: "Discipline" });
+    expect([discipline.value, Array.from(discipline.options).map((option) => option.value)]).toEqual(["plates", ["plates", "proofs"]]);
+    choose(dialog, "Discipline", "proofs");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ discipline: "proofs", parent: "C-0001" });
+    expect(Object.keys(client.createCard.mock.calls[0]?.[1] ?? {})).toEqual(["title", "goal", "discipline", "target", "parent", "reviewer", "as"]);
+  });
+
+  it("Foundry, its first discipline untouched, posts plates", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = departmentClient();
+    const dialog = await fromModalRead(client);
+    choose(dialog, "Department", "foundry");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ discipline: "plates" });
+  });
+
+  it("with Foundry alone serving disciplines: today's Discipline field and its datalist", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = departmentClient(Promise.resolve(aWorkspaces([aWorkspace({ name: "galley", title: "Galley", disciplines: [] }), aWorkspace({ name: "foundry", title: "Foundry", disciplines: ["plates", "proofs"] })])));
+    const dialog = await fromModalRead(client);
+    expect(within(dialog).queryByRole("combobox", { name: "Department" })).toBeNull();
+    const discipline = within(dialog).getByLabelText<HTMLInputElement>("Discipline");
+    expect(discipline.tagName).toBe("INPUT");
+    expect(Array.from(document.getElementById(discipline.getAttribute("list") ?? "")?.querySelectorAll("option") ?? []).map((option) => option.value)).toEqual(["copy", "plates", "proofs"]);
+  });
+
+  it("with the read pending at open: today's field, kept when the read lands", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    let land: (document: WorkspaceDocument) => void = () => undefined;
+    const client = departmentClient(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+    const dialog = await fromModal(client);
+    expect(within(dialog).getByLabelText("Discipline").tagName).toBe("INPUT");
+    act(() => {
+      land(DEPARTMENTS);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Department" })).toBeTruthy();
+    });
+    expect(within(dialog).queryByRole("combobox", { name: "Department" })).toBeNull();
+    expect(within(dialog).getByLabelText("Discipline").tagName).toBe("INPUT");
+    type(dialog, "Discipline", "proofs");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ discipline: "proofs" });
+  });
+});
+
+// The orchestrator's looks for departments (L2): the daemon refuses `agent` as a reviewer, so the
+// form never offers it. The reviewer opens as the parent card's reviewer; else the acting name,
+// unless it names no person (`agent`, `local`) or is empty; else empty, for the person to fill.
+describe("the hand-off's reviewer as the form opens (L2 of departments' looks)", () => {
+  async function reviewerOf(acting: string | null, reviewer: string | null): Promise<{ dialog: HTMLElement; client: StubClient }> {
+    if (acting !== null) {
+      window.localStorage.setItem(ACTING_KEY, acting);
+    }
+    const client = handOffClient(undefined, { "C-0001": { ...SOURCE, reviewer } });
+    const dialog = await fromModal(client);
+    return { dialog, client };
+  }
+
+  it("takes the parent card's reviewer first, whatever the acting name; the write goes out as the acting name", async () => {
+    const { dialog, client } = await reviewerOf("agent", "Ivo Brandt");
+    expect(within(dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("Ivo Brandt");
+    type(dialog, "Discipline", "development");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ reviewer: "Ivo Brandt", as: "agent" });
+  });
+
+  it("else the acting name when it names a person", async () => {
+    const { dialog } = await reviewerOf("Ann", null);
+    expect(within(dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("Ann");
+  });
+
+  it("never agent: with the acting name agent and no parent reviewer the field is empty and a submit stops before the daemon (M: the acting name taken as it is)", async () => {
+    const { dialog, client } = await reviewerOf("agent", null);
+    const reviewer = within(dialog).getByLabelText<HTMLInputElement>("Reviewer");
+    expect(reviewer.value).toBe("");
+    type(dialog, "Discipline", "development");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Name who checks the result: a person on the side that asks.");
+    expect(client.createCard).not.toHaveBeenCalled();
+  });
+
+  it("never local, nor a blank name: the field is empty", async () => {
+    expect(within((await reviewerOf("local", null)).dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("");
+    cleanup();
+    window.localStorage.clear();
+    expect(within((await reviewerOf("   ", "")).dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("");
   });
 });

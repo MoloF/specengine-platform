@@ -32,6 +32,12 @@
 //!   task notes byte for byte as `spec card show --marks --json`; the stdio
 //!   descriptions holding "Data"'s sentences.
 //!
+//! - departments (RM-0096), docs/features/departments.md DP-4, on
+//!   `fixtures/card-press`: `list_cards`' `structuredContent` equals the
+//!   CLI's document and validates against its `outputSchema`, whose flow
+//!   object requires `title`, a string; `copy` titled "Copy desk", untitled
+//!   `plates` by its name.
+//!
 //! Every server has a cleared environment and a scratch `HOME`.
 
 #![cfg(all(unix, not(feature = "probes")))]
@@ -802,6 +808,60 @@ fn a_bad_card_table_stops_the_card_tools_alone() {
     let tree = session.call("get_tree", json!({}));
     assert_eq!(result(&tree)["isError"], json!(false), "{tree}");
     drop(session.finish());
+}
+
+/// docs/features/departments.md (RM-0096) DP-4: on card-press, in both eras,
+/// `list_cards`' flow object requires `title`, a string, after `name`;
+/// `structuredContent` equals the CLI's document (`spec card list --json`
+/// through the library) and validates against the `outputSchema`, empty and
+/// with a card. M: the mirror without `title`.
+#[test]
+fn departments_dp4_list_cards_serves_each_flow_s_title() {
+    for era in ERAS {
+        let repo = Repo::new("mc-titles", "card-press");
+        let mut session = repo.session(era);
+        let list = session.tools();
+        let schemas = output_schemas(&list);
+        let flow = &schemas["list_cards"]["properties"]["flows"]["items"];
+        assert_eq!(
+            flow["properties"]["title"]["type"],
+            json!("string"),
+            "{era:?}: {flow}"
+        );
+        let required: Vec<&str> = flow["required"]
+            .as_array()
+            .expect("required")
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert!(required.contains(&"title"), "{era:?}: {required:?}");
+        let names: Vec<&String> = flow["properties"]
+            .as_object()
+            .expect("properties")
+            .keys()
+            .collect();
+        assert!(names.contains(&&"title".to_owned()), "{era:?}: {names:?}");
+        let env = cli_env(&repo.root, Some(&repo.home));
+        let globals = Globals::default();
+        for step in ["empty", "a card"] {
+            if step == "a card" {
+                session.call("create_card", json!({"title": "One", "discipline": "copy"}));
+            }
+            let read = checked_call(
+                &mut session,
+                &schemas,
+                "list_cards",
+                json!({}),
+                &env,
+                &globals,
+            );
+            let flows = &read["structuredContent"]["flows"];
+            assert_eq!(flows[0]["name"], "copy", "{era:?} {step}");
+            assert_eq!(flows[0]["title"], "Copy desk", "{era:?} {step}");
+            assert_eq!(flows[1]["title"], "plates", "{era:?} {step}: its name");
+        }
+        drop(session.finish());
+    }
 }
 
 /// AC-10, one state, one result: `list_cards` and `get_card` twice give

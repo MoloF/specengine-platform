@@ -89,11 +89,13 @@ export type KnownWorkspaceSource = "config" | "implicit";
 export type WorkspaceSource = KnownWorkspaceSource | Unlisted;
 
 /**
- * One workspace, a trade's lens: `sections` the nav's section IDs in its order (an ID the UI does
- * not know is not drawn), `landing` `overview` or one of them, `flows` the card flows its Board
- * shows in its order (null: every flow), `module` a served module's name or null. Every name and
- * title is the project's data, shown or sent, never compared to a word of the UI's.
- * Source: `docs/features/workspaces.md` "Data".
+ * One workspace, a trade's lens, a Department in the chrome: `sections` the nav's section IDs in its
+ * order (an ID the UI does not know is not drawn), `landing` `overview` or one of them, `flows` the
+ * card flows its Board shows in its order (null: every flow), `disciplines` what a hand-off to it may
+ * carry, the daemon's rule (each once, kept only where the new-card rule places it in one of its
+ * flows; `[]`: none, the department not offered), `module` a served module's name or null. Every
+ * name and title is the project's data, shown or sent, never compared to a word of the UI's.
+ * Source: `docs/features/workspaces.md` "Data"; `disciplines`: `docs/features/departments.md` "Acceptance criteria", DP-3.
  */
 export interface Workspace {
   name: string;
@@ -101,14 +103,21 @@ export interface Workspace {
   landing: string;
   sections: string[];
   flows: string[] | null;
+  disciplines: string[];
   module: string | null;
 }
 
-/** One module: a root document and its subtree; `root` a REF in any `spec show` form, resolved by the read it roots. Source: `docs/features/workspaces.md` "Data". */
+/**
+ * One module: a root document and its subtree, `root` a REF in any `spec show` form resolved by the
+ * read it roots and `kinds` null; or a direction, the nodes of the kinds it lists in written order,
+ * `root` null. Exactly one of the two is served. Source: `docs/features/workspaces.md` "Data";
+ * `kinds`: `docs/canon/workspaces.md` "The lens".
+ */
 export interface WorkspaceModule {
   name: string;
   title: string;
-  root: string;
+  root: string | null;
+  kinds: string[] | null;
 }
 
 /**
@@ -1869,12 +1878,15 @@ export interface CardAcceptRule {
 }
 
 /**
- * One board: a project's flow, every word of it project vocabulary (ADR-0056). `return` the one
- * column whose entry needs a note, null when the flow names none (ADR-0074). Source:
- * `docs/canon/cards.md` "Documents and events", `docs/canon/card-flows.md` "The rule".
+ * One board: a project's flow, every word of it project vocabulary (ADR-0056). `title` its display
+ * name in any script, the name when the config gives none; `return` the one column whose entry needs
+ * a note, null when the flow names none (ADR-0074). Source:
+ * `docs/canon/cards.md` "Documents and events", `docs/canon/card-flows.md` "The rule";
+ * `title`: `docs/canon/workspaces.md` "The lens".
  */
 export interface CardFlow {
   name: string;
+  title: string;
   disciplines: string[];
   columns: CardColumn[];
   moves: CardMove[];

@@ -22,7 +22,7 @@ function renderMock(scenario: Scenario, hash: string, delayMs = 0) {
 }
 
 function listbox(): HTMLElement {
-  return screen.getByRole("listbox", { name: "Tasks, what waits for you first" });
+  return screen.getByRole("listbox", { name: "Agent tasks, what waits for you first" });
 }
 
 function rowIds(): string[] {
@@ -43,7 +43,7 @@ function groups(): [string, string[]][] {
 }
 
 function chip(name: RegExp): HTMLElement {
-  return within(screen.getByRole("group", { name: "Filter the tasks" })).getByRole("button", { name });
+  return within(screen.getByRole("group", { name: "Filter the agent tasks" })).getByRole("button", { name });
 }
 
 async function openTask(id: string, scenario: Scenario = "normal") {
@@ -122,7 +122,7 @@ describe("staleness and spec changes (AC-06)", () => {
 
   it("T-0111's unknown comes with the daemon's note", async () => {
     await openTask("T-0111");
-    expect(screen.getByRole("list", { name: "Notes from the daemon on this task" }).textContent).toBe(
+    expect(screen.getByRole("list", { name: "Notes from the daemon on this agent task" }).textContent).toBe(
       "snapshot place /work/harbor-sim/T-0111 is gone (worktree removed); stale unknown",
     );
     fireEvent.click(screen.getByRole("tab", { name: "Spec changes" }));
@@ -181,7 +181,7 @@ describe("proposals and the Inbox (AC-08)", () => {
   it("splits T-0107's proposals by task_id alone, each linked to its Inbox card", async () => {
     await openTask("T-0107");
     fireEvent.click(screen.getByRole("tab", { name: /^Proposals/ }));
-    expect(listed("Raised by this task")).toEqual(["PR-0041", "PR-0042"]);
+    expect(listed("Raised by this agent task")).toEqual(["PR-0041", "PR-0042"]);
     expect(listed("On its nodes")).toEqual(["PR-0044"]);
     expect(screen.getByRole("link", { name: "PR-0041" }).getAttribute("href")).toBe("#/harbor-sim/inbox/PR-0041");
   });
@@ -197,7 +197,7 @@ describe("proposals and the Inbox (AC-08)", () => {
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     const task = within(card).getByRole("link", { name: "T-0107" });
     expect(task.getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
-    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Task");
+    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Agent task");
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog", { name: "Reject PR-0041" });
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "The window stays." } });
@@ -215,21 +215,21 @@ describe("proposals and the Inbox (AC-08)", () => {
     });
     expect(within(document.querySelector(".task-assumptions") ?? document.body).getByText("PR-0041")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: /^Proposals/ }));
-    expect(listed("Raised by this task")).toEqual(["PR-0041", "PR-0042"]);
+    expect(listed("Raised by this agent task")).toEqual(["PR-0041", "PR-0042"]);
   });
 });
 
 describe("states over the mock (AC-11)", () => {
   it("slow: both regions show a busy skeleton", async () => {
     renderMock("slow", "#/harbor-sim/tasks/T-0107", 40);
-    expect((await screen.findByLabelText("Loading the tasks of harbor-sim")).getAttribute("aria-busy")).toBe("true");
+    expect((await screen.findByLabelText("Loading the agent tasks of harbor-sim")).getAttribute("aria-busy")).toBe("true");
     expect((await screen.findByLabelText("Loading T-0107")).getAttribute("aria-busy")).toBe("true");
     expect(await screen.findByRole("tab", { name: "Overview", selected: true }, { timeout: 2000 })).toBeTruthy();
   });
 
   it("empty: no tasks yet, for both projects", async () => {
     renderMock("empty", "#/ledger-api/tasks");
-    expect((await screen.findByText(/Create one:/)).textContent).toBe("No tasks yet. Create one: spec task new --nodes REF...");
+    expect((await screen.findByText(/Create one:/)).textContent).toBe("No agent tasks yet. Create one: spec task new --nodes REF...");
   });
 
   it("error: the mock's message verbatim and a Retry", async () => {
@@ -245,7 +245,7 @@ describe("states over the mock (AC-11)", () => {
   it("an unknown T: the mock's reason and Back to tasks", async () => {
     renderMock("normal", "#/harbor-sim/tasks/T-0999");
     expect(await screen.findByText("no task T-0999 in this repository")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Back to tasks" }).getAttribute("href")).toBe("#/harbor-sim/tasks");
+    expect(screen.getByRole("link", { name: "Back to agent tasks" }).getAttribute("href")).toBe("#/harbor-sim/tasks");
   });
 });
 
@@ -264,7 +264,7 @@ describe("the large scenario (AC-14)", () => {
 
   it("shows T-0200's 32 diffs as sent and its 96 left out past the total as quiet lines, the daemon's note above", async () => {
     await openTask("T-0200", "large");
-    expect(screen.getByRole("list", { name: "Notes from the daemon on this task" }).textContent).toBe(
+    expect(screen.getByRole("list", { name: "Notes from the daemon on this agent task" }).textContent).toBe(
       "snapshot_diff: 96 diff(s) past 262144 B left out",
     );
     fireEvent.click(screen.getByRole("tab", { name: /^Spec changes/ }));

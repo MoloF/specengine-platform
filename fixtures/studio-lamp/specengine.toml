@@ -20,11 +20,12 @@ ISL = { kind = "island", shape = "name" }
 # project's specengine.toml, add the project's own [[module]] tables and a
 # workspace's `module`, and retitle anything in the project's language.
 # Every name is data: no SpecEngine code reads one (ADR-0008, ADR-0073).
-# Add `return` only after every terminal, plugin and hub serving the project
-# runs this build: an older one refuses the key.
+# A flow's `title` and `return` need a build that reads them on every terminal,
+# plugin and hub serving the project, an older one refusing either key.
 
 [[card.flow]]
 name = "narrative"
+title = "Narrative"
 disciplines = ["narrative"]
 columns = ["backlog", "sent-back", "outline", "draft", "review", "approved", "ready-for-dev", "in-game"]
 titles = { backlog = "Backlog", sent-back = "Returned", outline = "Outline", draft = "Draft", review = "Review", approved = "Approved", ready-for-dev = "Ready for dev", in-game = "In game" }
@@ -33,6 +34,7 @@ return = "sent-back"
 
 [[card.flow]]
 name = "development"
+title = "Programming"
 disciplines = ["development"]
 columns = ["backlog", "sent-back", "ready", "in-progress", "in-review", "verify", "done"]
 titles = { backlog = "Backlog", sent-back = "Returned", ready = "Ready", in-progress = "In progress", in-review = "In review", verify = "Verify", done = "Done" }
@@ -41,6 +43,7 @@ return = "sent-back"
 
 [[card.flow]]
 name = "art"
+title = "Art"
 disciplines = ["art"]
 columns = ["waiting", "sent-back", "ready", "in-progress", "pending-review", "approved", "in-engine"]
 titles = { waiting = "Waiting", sent-back = "Returned", ready = "Ready", in-progress = "In progress", pending-review = "Pending review", approved = "Approved", in-engine = "In engine" }
@@ -49,6 +52,7 @@ return = "sent-back"
 
 [[card.flow]]
 name = "level-design"
+title = "Level design"
 disciplines = ["level-design"]
 columns = ["layout", "sent-back", "blockout", "playtest", "scripting", "lighting", "art-pass", "final"]
 titles = { layout = "Layout", sent-back = "Returned", blockout = "Blockout", playtest = "Playtest", scripting = "Scripting", lighting = "Lighting", art-pass = "Art pass", final = "Final" }
@@ -57,6 +61,7 @@ return = "sent-back"
 
 [[card.flow]]
 name = "production"
+title = "Production"
 disciplines = ["production"]
 columns = ["to-do", "sent-back", "in-progress", "review", "done"]
 titles = { to-do = "To do", sent-back = "Returned", in-progress = "In progress", review = "Review", done = "Done" }
@@ -88,6 +93,15 @@ flows = ["art", "level-design"]
 name = "production"
 title = "Production"
 sections = ["inbox", "roadmap", "board", "flow", "tree", "graph", "health", "questions"]
+
+# A direction: a module chosen by node kind, with no root. The Spec tree lists
+# its kinds' nodes and a document's Inside groups them under its title; Flow,
+# which draws from a root, leaves it out. Use your project's own kinds, and add
+# it only once every terminal, plugin and hub runs a build that reads `kinds`.
+# [[module]]
+# name = "scenes"
+# title = "Scenes"
+# kinds = ["scene"]
 # --- end of the preset ---
 
 [[module]]
@@ -99,3 +113,8 @@ root = "CHP-SHORE"
 name = "island"
 title = "The lamp island"
 root = "ISL-LAMP"
+
+[[module]]
+name = "scenes"
+title = "Scenes"
+kinds = ["scene"]

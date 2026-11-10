@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # Card tasks: the `T-` tasks a card links
@@ -54,7 +54,7 @@ A card that links none reads as before: no git, no task read, any root. Git runs
 
 ## Screen
 
-A **Tasks** part inside the work item's Development, collapsed (`ui-design.md` "The work item"), modal and page alike, rendered from the card read: no read of its own, no write. The UI writes no link and makes no task (Q9 of 2026-11-08); it copies commands of fixed words and checked IDs.
+A **Tasks** part inside the work item's Agent tasks, collapsed (`ui-design.md` "The work item"), modal and page alike, rendered from the card read: no read of its own, no write. The UI writes no link and makes no task (Q9 of 2026-11-08); it copies commands of fixed words and checked IDs.
 
 - **A row per link**: the ID, linked to `#/<p>/tasks/<id>` when `TASK_ID` matches; the title or `tasks.untitled`; the status by `taskStatusLook`, label and icon; `tasks.specChanged` when `stale`. In `review` alone (`awaitsOwner`, `src/tasks/actions.ts`, so `src/board/` names no status): "Awaiting you" and `spec task approve <id>` with Copy. Status `null`: the ID as text, "State not read here".
 - **Notes**: a task's notes (`<id>: `) show only on its row, verbatim under `lang="en"`; the card's notes list shows the rest.

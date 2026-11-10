@@ -68,17 +68,24 @@ describe("the normal scenario", () => {
     expect((await rejection(new MockClient("normal", { now: clock }).getTeam())).status).toBe(404);
   });
 
-  it("serves harbor-sim's two workspaces and two modules, ledger-api the implicit one; config-notes their notes (docs/features/workspaces.md \"The UI\")", async () => {
+  it("serves harbor-sim's two workspaces, two rooted modules and a direction, ledger-api the implicit one; config-notes their notes (docs/features/workspaces.md \"The UI\"; DP-11, DP-14 of departments)", async () => {
     const client = new MockClient("normal", { now: clock });
     const harbor = await client.getWorkspaces("harbor-sim");
     expect(harbor.source).toBe("config");
-    expect(harbor.workspaces.map(({ name, landing, sections, flows, module }) => [name, landing, sections, flows, module])).toEqual([
-      ["galley", "flow", ["board", "flow", "tree", "inbox"], ["copy"], "berths"],
-      ["foundry", "overview", ["board", "health", "graph", "tree"], ["plates"], null],
+    expect(harbor.workspaces.map(({ name, landing, sections, flows, disciplines, module }) => [name, landing, sections, flows, disciplines, module])).toEqual([
+      ["galley", "flow", ["board", "flow", "tree", "inbox"], ["copy"], ["copy"], "berths"],
+      ["foundry", "overview", ["board", "health", "graph", "tree"], ["plates"], ["plates"], null],
     ]);
-    expect(harbor.modules.map(({ name, root }) => [name, root])).toEqual([
-      ["berths", "DOM-BERTHS"],
-      ["waters", "DOM-WATER"],
+    expect(harbor.modules.map(({ name, title, root, kinds }) => [name, title, root, kinds])).toEqual([
+      ["berths", "Berths", "DOM-BERTHS", null],
+      ["waters", "Harbour waters", "DOM-WATER", null],
+      ["mechanics", "Mechanics", null, ["mechanic"]],
+    ]);
+    // Each department's disciplines are what the daemon's rule gives over the mock's flows: each flow's own.
+    const flows = (await client.getCards("harbor-sim")).flows;
+    expect(flows.map((flow) => [flow.name, flow.title, flow.disciplines])).toEqual([
+      ["copy", "Copy desk", ["copy"]],
+      ["plates", "plates", ["plates"]],
     ]);
     expect(harbor.notes).toEqual([]);
     const ledger = await client.getWorkspaces("ledger-api");
@@ -89,8 +96,9 @@ describe("the normal scenario", () => {
     expect((await noted.getWorkspaces("ledger-api")).source).toBe("implicit");
     // Every key of the document present, in the spec's order.
     expect(Object.keys(harbor)).toEqual(["source", "notes", "workspaces", "modules"]);
-    expect(Object.keys(harbor.workspaces[0] ?? {})).toEqual(["name", "title", "landing", "sections", "flows", "module"]);
-    expect(Object.keys(harbor.modules[0] ?? {})).toEqual(["name", "title", "root"]);
+    expect(Object.keys(harbor.workspaces[0] ?? {})).toEqual(["name", "title", "landing", "sections", "flows", "disciplines", "module"]);
+    expect(harbor.modules.map((module) => Object.keys(module))).toEqual([0, 1, 2].map(() => ["name", "title", "root", "kinds"]));
+    expect(Object.keys((await client.getCards("harbor-sim")).flows[0] ?? {})).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
     expect((await rejection(client.getWorkspaces("nowhere"))).status).toBe(404);
   });
 

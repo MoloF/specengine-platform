@@ -37,7 +37,7 @@ describe("plural forms (LG-4)", () => {
       expect(enT("workspace.flowsShown", { shown: 1, count })).toBe(filled(en.workspace.flowsShown_other, 1, count));
     }
     // English stays as the module it replaced said it.
-    expect(enT("workspace.flowsShown", { shown: 1, count: 2 })).toBe("Showing 1 of 2 card flows.");
+    expect(enT("workspace.flowsShown", { shown: 1, count: 2 })).toBe("Showing 1 of 2 flows.");
   });
 
   it("prints a number ungrouped in both languages", () => {
@@ -109,7 +109,7 @@ describe("every plural group (LS-5 of ui-languages-sweep)", () => {
 describe("English at one (DM-17 of doc-modal, RM-0091)", () => {
   /** Each key, its options, the fixed form at 1 and the form at 2, unchanged. */
   const FIXED: readonly (readonly [string, Record<string, unknown>, string, string])[] = [
-    ["board.view.omitted", {}, "1 card not shown.", "2 cards not shown."],
+    ["board.view.omitted", {}, "1 task not shown.", "2 tasks not shown."],
     ["tree.links.omitted", {}, "1 link not shown", "2 links not shown"],
     ["tree.binding.tokens", {}, "1 token", "2 tokens"],
     ["graph.holders", {}, "1 holder", "2 holders"],
@@ -120,7 +120,7 @@ describe("English at one (DM-17 of doc-modal, RM-0091)", () => {
     ["graph.limit", { last: 4, shown: 1 }, "The canvas shows distance 0-4: 1 of 1 node; see the List.", "The canvas shows distance 0-4: 1 of 2 nodes; see the List."],
     ["flow.notDrawn", { hidden: 1 }, "1 of 1 box not drawn: choose a stage, enter a group, or read the List", "1 of 2 boxes not drawn: choose a stage, enter a group, or read the List"],
     ["roadmap.notDrawn", { hidden: 1 }, "1 of 1 item not drawn", "1 of 2 items not drawn"],
-    ["workspace.flowsShown", { shown: 1 }, "Showing 1 of 1 card flow.", "Showing 1 of 2 card flows."],
+    ["workspace.flowsShown", { shown: 1 }, "Showing 1 of 1 flow.", "Showing 1 of 2 flows."],
     ["health.findings.totalShown", { shown: 1 }, "1 of 1 finding shown, by code, errors first", "1 of 2 findings shown, by code, errors first"],
   ];
   const enAny = enT as unknown as (key: string, options: Record<string, unknown>) => string;

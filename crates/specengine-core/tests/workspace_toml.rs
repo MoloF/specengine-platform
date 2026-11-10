@@ -109,13 +109,20 @@ fn rows(config: &WorkspaceConfig) -> Vec<String> {
     config.workspaces.iter().map(row).collect()
 }
 
-/// One module as `name | title | root`.
+/// One module as `name | title | root`, a direction as `name | title |
+/// kinds a, b` (docs/features/departments.md DP-2: `root` null for a
+/// direction, `kinds` null for a rooted module).
 fn module_rows(config: &WorkspaceConfig) -> Vec<String> {
     config
         .modules
         .iter()
         .map(|module: &WorkspaceModule| {
-            format!("{} | {} | {}", module.name, module.title, module.root)
+            let start = match (&module.root, &module.kinds) {
+                (Some(root), None) => root.clone(),
+                (None, Some(kinds)) => format!("kinds {}", kinds.join(", ")),
+                other => panic!("{}: one of `root` or `kinds`: {other:?}", module.name),
+            };
+            format!("{} | {} | {start}", module.name, module.title)
         })
         .collect()
 }
@@ -313,7 +320,9 @@ fn ws4a_an_unknown_section_is_left_out_with_its_note() {
     assert_eq!(rows(&config), press_rows(), "newsroom keeps the rest");
     assert_eq!(module_rows(&config), press_modules());
     let line = line_holding(&text, "\"stage\"");
-    assert_eq!(line, 39, "the sections line of card-press");
+    // docs/features/departments.md DP-1: card-press's `copy` gains its
+    // `title` line, so every line below it moves one down.
+    assert_eq!(line, 40, "the sections line of card-press");
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
@@ -321,7 +330,7 @@ fn ws4a_an_unknown_section_is_left_out_with_its_note() {
             &format!("workspace `newsroom`: `stage` is no section {SECTION_LIST}: left out")
         )]
     );
-    assert_eq!(config.notes[0].line.to_string(), "39");
+    assert_eq!(config.notes[0].line.to_string(), "40");
     assert_eq!(
         config.notes[0].message,
         format!("workspace `newsroom`: `stage` is no section {SECTION_LIST}: left out")
@@ -347,7 +356,7 @@ fn a_repeated_section_keeps_the_first_and_none_left_is_none() {
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
-            39,
+            40,
             "workspace `newsroom`: section `tree` is listed twice: the second left out"
         )]
     );
@@ -408,7 +417,7 @@ fn a_repeated_flow_keeps_the_first_and_none_left_is_null() {
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
-            41,
+            42,
             "workspace `newsroom`: flow `copy` is listed twice: the second left out"
         )]
     );
@@ -419,7 +428,7 @@ fn a_repeated_flow_keeps_the_first_and_none_left_is_null() {
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
-            41,
+            42,
             "workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"
         )]
     );
@@ -555,7 +564,7 @@ fn ws4e_a_bad_name_serves_the_implicit_workspace_and_keeps_the_modules() {
     let problem = name_problem("News room").expect("a space is no name character");
     assert_eq!(
         config.notes_at(CONFIG),
-        [note(37, &format!("{problem}{IMPLICIT_SERVED}"))]
+        [note(38, &format!("{problem}{IMPLICIT_SERVED}"))]
     );
     assert_eq!(
         problem,
@@ -566,7 +575,8 @@ fn ws4e_a_bad_name_serves_the_implicit_workspace_and_keeps_the_modules() {
 /// WS-4 (f): a module without `root` makes `[[module]]` malformed: no
 /// module, its note at the table's header, and newsroom's module note before
 /// it (sorted by line, though modules are judged first); `source` stays
-/// `config`.
+/// `config`. Since docs/features/departments.md (D4) the note asks for `root`
+/// or `kinds`.
 #[test]
 fn ws4f_a_module_without_root_serves_no_module() {
     let text = variant("(f)");
@@ -579,17 +589,17 @@ fn ws4f_a_module_without_root_serves_no_module() {
          (none)"
     );
     let header = nth_line_holding(&text, "[[module]]", 2);
-    assert_eq!(header, 55, "rulings' header");
+    assert_eq!(header, 56, "rulings' header");
     assert_eq!(
         config.notes_at(CONFIG),
         [
             note(
-                42,
+                43,
                 "workspace `newsroom`: no `[[module]]` is named `weekly`: no default module"
             ),
             note(
                 header,
-                &format!("`[[module]]` is required to hold `root`{NO_MODULE_SERVED}")
+                &format!("`[[module]]` is required to hold `root` or `kinds`{NO_MODULE_SERVED}")
             ),
         ]
     );
@@ -812,8 +822,11 @@ fn a_malformed_workspace_table_serves_the_implicit_workspace_with_one_note() {
 }
 
 /// W1: each malformed `[[module]]` serves no module with one note ending
-/// `; no module is served`, and leaves `[[workspace]]` as it was. A module
-/// selector (D4's left-out kind key) is an unknown key.
+/// `; no module is served`, and leaves `[[workspace]]` as it was. Since
+/// docs/features/departments.md (D4, DP-5): `kinds` beside `root` is the
+/// both-keys message at `kinds`' line (at 47ca1e0 it was an unknown key, what
+/// an older binary still says), and a module with neither asks for `root` or
+/// `kinds`; `colour` stays an unknown key before and after.
 #[test]
 fn a_malformed_module_table_serves_no_module_with_one_note() {
     let long_root = "R".repeat(MAX_ROOT_BYTES + 1);
@@ -837,11 +850,14 @@ fn a_malformed_module_table_serves_no_module_with_one_note() {
             None,
         ),
         (
-            "a kind selector (D4)",
+            "a kind selector beside a root (departments D4)",
             "[[module]]\nname = \"front\"\nroot = \"SHT-FRONT\"\nkinds = [\"broadsheet\"]\n"
                 .to_owned(),
             ("kinds", 1),
-            None,
+            Some(format!(
+                "`[[module]]` `front` holds both `root` and `kinds`: a module holds \
+                 one{NO_MODULE_SERVED}"
+            )),
         ),
         (
             "a root of the wrong type",
@@ -858,11 +874,11 @@ fn a_malformed_module_table_serves_no_module_with_one_note() {
             )),
         ),
         (
-            "no root",
+            "no root and no kinds",
             "[[module]]\nname = \"front\"\n".to_owned(),
             ("[[module]]", 1),
             Some(format!(
-                "`[[module]]` is required to hold `root`{NO_MODULE_SERVED}"
+                "`[[module]]` is required to hold `root` or `kinds`{NO_MODULE_SERVED}"
             )),
         ),
         (
@@ -946,9 +962,13 @@ fn a_malformed_module_table_serves_no_module_with_one_note() {
         if let Some(message) = whole {
             assert_eq!(all[0], note(line, &message), "{label}");
         }
-        if label == "a kind selector (D4)" {
+        if label == "an unknown key" {
+            // docs/features/departments.md DP-5: what an older binary says of
+            // `kinds`, and every build of `colour`.
             assert!(
-                all[0].starts_with(&format!("{opening}unknown field `kinds`")),
+                all[0].starts_with(&format!(
+                    "{opening}unknown field `colour`, expected one of `name`, `title`, `root`"
+                )),
                 "{label}: the TOML reader's message: {all:?}"
             );
         }
@@ -1081,9 +1101,11 @@ fn notes_at_names_the_file_as_given() {
     let config = read(&text);
     assert_eq!(
         config.notes_at("conf/press.toml"),
-        ["conf/press.toml:41: workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"]
+        // docs/features/departments.md DP-1: `copy`'s `title` line
+        // moves the flows line from 41 to 42.
+        ["conf/press.toml:42: workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"]
     );
-    assert_eq!(config.notes[0].line.to_string(), "41");
+    assert_eq!(config.notes[0].line.to_string(), "42");
     assert_eq!(
         config.notes[0].message,
         "workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"
@@ -1142,12 +1164,23 @@ const PRESET_ROWS: [&str; 4] = [
 /// The five flows of "The gamedev preset": name, disciplines, `(id, title)`
 /// columns, accept. Since board-handoff (docs/canon/workspaces.md "Preset"):
 /// each flow's return column `sent-back`, titled "Returned", second in
-/// `columns`.
+/// `columns`. Since departments (docs/features/departments.md DP-7) each flow
+/// is titled: [`PRESET_TITLES`].
 type PresetFlow = (
     &'static str,
     &'static [(&'static str, &'static str)],
     (&'static str, &'static str),
 );
+
+/// docs/features/departments.md DP-7: each preset flow's `title`, in order
+/// (W8: `development` is "Programming").
+const PRESET_TITLES: [&str; 5] = [
+    "Narrative",
+    "Programming",
+    "Art",
+    "Level design",
+    "Production",
+];
 
 const PRESET_FLOWS: [PresetFlow; 5] = [
     (
@@ -1247,6 +1280,8 @@ fn ws7_the_preset_reads_whole_with_no_note() {
         CardConfig::from_toml(&text).unwrap_or_else(|error| panic!("{}", error.at("preset")));
     let names: Vec<&str> = cards.flows.iter().map(|flow| flow.name.as_str()).collect();
     assert_eq!(names, PRESET_FLOWS.map(|(name, _, _)| name));
+    let titles: Vec<&str> = cards.flows.iter().map(|flow| flow.title.as_str()).collect();
+    assert_eq!(titles, PRESET_TITLES, "departments DP-7");
     for (flow, (name, columns, (from, to))) in cards.flows.iter().zip(PRESET_FLOWS) {
         assert_eq!(flow.disciplines, [name], "{name}");
         let read: Vec<(&str, &str)> = flow
@@ -1281,9 +1316,10 @@ const PRESET_OPENS: &str = "# --- scripts/presets/gamedev.toml ---\n";
 const PRESET_ENDS: &str = "# --- end of the preset ---\n";
 
 /// WS-7: `fixtures/studio-lamp/specengine.toml` holds the preset's bytes
-/// verbatim between its markers, and reads as the preset plus its own two
+/// verbatim between its markers, and reads as the preset plus its own
 /// modules, with no note; its prefixes and kinds are its `expected.json`'s.
-/// M16: a title changed in the fixture's copy alone.
+/// Since docs/features/departments.md (DP-3) its third module is the
+/// direction `scenes`. M16: a title changed in the fixture's copy alone.
 #[test]
 fn ws7_studio_lamp_holds_the_preset_verbatim() {
     let text = workspaces_common::fixture_config("studio-lamp");
@@ -1305,7 +1341,8 @@ fn ws7_studio_lamp_holds_the_preset_verbatim() {
         module_rows(&config),
         [
             "shore | The shore | CHP-SHORE",
-            "island | The lamp island | ISL-LAMP"
+            "island | The lamp island | ISL-LAMP",
+            "scenes | Scenes | kinds scene",
         ]
     );
     assert!(config.notes.is_empty(), "{:?}", config.notes_at(CONFIG));

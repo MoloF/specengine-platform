@@ -196,6 +196,12 @@
 //!   `titles`. A `PINS` entry 0.34.0, the tree with the version set back
 //!   0.33.0's (no skill or role text changes); a `SCHEMA_PINS` entry 0.34.0,
 //!   0.33.0's schemas today's without the three keys ([`as_of_0_33_0`]).
+//! - departments (RM-0096, DP-4, D12): 0.34.0 -> 0.35.0, MINOR: a key a tool
+//!   returns, `list_cards`' flow `title`. A `PINS` entry 0.35.0, the tree
+//!   with the version and `read-spec`'s three edits (two trims, the
+//!   vocabulary sentence) set back 0.34.0's; a `SCHEMA_PINS` entry 0.35.0,
+//!   0.34.0's schemas today's without the flow's `title`
+//!   ([`as_of_0_34_0`]).
 //!
 //! The repository is only read.
 
@@ -540,7 +546,39 @@ const PINS: &[(&str, &str)] = &[
         "0.34.0",
         "87e770c2c5da0dfcfc8f425f18d0f5ce8a416de488c45d22666946202014edec",
     ),
+    // departments (RM-0096, DP-4, D12: 0.34.0 -> 0.35.0, MINOR: a key a
+    // tool returns, `list_cards`' flow `title`): plugin.json's version and
+    // `read-spec`'s three edits, the deterministic line
+    // ([`READ_SPEC_DETERMINISTIC_0_35_0`]) and the no-project line
+    // ([`READ_SPEC_NO_PROJECT_0_35_0`]) trimmed, the cards bullet gaining
+    // [`READ_SPEC_WORDS_0_35_0`]; all set back, the tree hashes as 0.34.0's
+    // pin.
+    (
+        "0.35.0",
+        "6f31285eb386147c305098088562c05760af5f67845c4909c30b6438a28e07bf",
+    ),
 ];
+
+/// departments (RM-0096): `read-spec`'s deterministic bullet as 0.34.0
+/// shipped it, and as 0.35.0 ships it.
+const READ_SPEC_DETERMINISTIC_0_34_0: &str = "- The answers are deterministic: the same files and \
+     the same request give the same answer, so reading an unchanged node again only spends \
+     context.";
+const READ_SPEC_DETERMINISTIC_0_35_0: &str =
+    "- The answers are deterministic: reading an unchanged node again only spends context.";
+
+/// departments (RM-0096): the end of `read-spec`'s no-project bullet as
+/// 0.34.0 shipped it, and as 0.35.0 ships it.
+const READ_SPEC_NO_PROJECT_0_34_0: &str = " here or above), the working directory is not a \
+     SpecEngine project: stop using these tools for this session, do not set one up yourself, \
+     and say so instead of guessing what the spec holds.";
+const READ_SPEC_NO_PROJECT_0_35_0: &str = " here or above), stop using these tools, do not set \
+     one up, and say so rather than guess what the spec holds.";
+
+/// departments (RM-0096, D12): the sentence 0.35.0 appends to `read-spec`'s
+/// cards bullet, its space before it.
+const READ_SPEC_WORDS_0_35_0: &str = " People use the web UI's words: a card is a task, a child \
+     card a subtask, a task of `get_task` an agent task, a workspace a department.";
 
 /// flow-scenario (RM-0094): `read-spec`'s step 2 node bullet as 0.33.0
 /// ships it, naming `ancestors` (0.32.0's: [`READ_SPEC_BULLET_0_13_0`]).
@@ -851,6 +889,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.34.0",
         "fd816ac668d71ceb7b9e4ff127bee58bcb78e596ff98314e95244e1867562cd0",
+    ),
+    // departments (RM-0096, DP-4): `list_cards`' flow `title`
+    // ([`as_of_0_34_0`] takes it out; no other tool's schema changed).
+    (
+        "0.35.0",
+        "51c839c049a655c2a7d3e4bdc2fba072a7a74e10567ec001811e90cb4501b73e",
     ),
 ];
 
@@ -1859,8 +1903,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// docs/features/hub-confirm.md, 0.29.1 since docs/features/spec-ids.md,
 /// 0.30.0 since docs/features/flow-scope.md (FS-6), 0.31.0 since
 /// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092), 0.33.0
-/// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095). No
-/// room is left, so the next byte is over.
+/// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095), 0.35.0
+/// since departments (RM-0096). No room is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -1882,7 +1926,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.34.0")
+        json!("0.35.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2033,10 +2077,51 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // departments (RM-0096, DP-4, D12: 0.34.0 -> 0.35.0): plugin.json's
+    // version and `read-spec`'s three edits; all set back, the tree is
+    // 0.34.0's pinned content, every other skill and role byte-equal. M: the
+    // version kept; the vocabulary sentence dropped; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.35.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.35.0"),
+        "plugin.json's version"
+    );
+    let at_0_34_0 = edited(
+        &edited(
+            &edited(
+                &edited(
+                    &tree,
+                    PLUGIN_JSON,
+                    "\"version\": \"0.35.0\"",
+                    "\"version\": \"0.34.0\"",
+                ),
+                READ_SPEC,
+                READ_SPEC_WORDS_0_35_0,
+                "",
+            ),
+            READ_SPEC,
+            READ_SPEC_DETERMINISTIC_0_35_0,
+            READ_SPEC_DETERMINISTIC_0_34_0,
+        ),
+        READ_SPEC,
+        READ_SPEC_NO_PROJECT_0_35_0,
+        READ_SPEC_NO_PROJECT_0_34_0,
+    );
+    assert_eq!(
+        content_hash(&at_0_34_0),
+        PINS[PINS.len() - 2].1,
+        "0.35.0 changes plugin.json's version and read-spec's three edits only"
+    );
+    let tree = at_0_34_0;
+    let pins_0_34_0 = &PINS[..PINS.len() - 1];
     // doc-modal (RM-0095, DM-2: 0.33.0 -> 0.34.0): plugin.json's version
     // alone; set back, the tree is 0.33.0's pinned content, every skill and
     // role byte-equal. M: the version kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.34.0"));
+    assert_eq!(
+        pins_0_34_0.last().map(|(version, _)| *version),
+        Some("0.34.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.34.0"),
@@ -2050,11 +2135,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_33_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_34_0[pins_0_34_0.len() - 2].1,
         "0.34.0 changes plugin.json's version only"
     );
     let tree = at_0_33_0;
-    let pins_0_33_0 = &PINS[..PINS.len() - 1];
+    let pins_0_33_0 = &pins_0_34_0[..pins_0_34_0.len() - 1];
     // flow-scenario (RM-0094, FS-11: 0.32.0 -> 0.33.0): plugin.json's
     // version and `read-spec`'s two lines, each whole; all set back, the
     // tree is 0.32.0's pinned content. M: the version kept; another file
@@ -3055,6 +3140,51 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// departments (RM-0096, DP-4): `schemas` as 0.34.0 listed them: each flow
+/// of `list_cards`' document without `title` (a column's `title` stays). No
+/// other tool's schema changed.
+fn as_of_0_34_0(schemas: &mut Value) {
+    assert_eq!(
+        without_flow_title(&mut schemas["list_cards"]["outputSchema"]),
+        1,
+        "the one flow shape"
+    );
+}
+
+/// `schema` with `title` dropped (its property and its `required` entry)
+/// from every object schema whose properties hold `accept`, `moves` and
+/// `title` (a card flow, never a column): how many.
+fn without_flow_title(schema: &mut Value) -> usize {
+    let mut stripped = 0;
+    if let Some(object) = schema.as_object_mut() {
+        let target = object
+            .get("properties")
+            .and_then(Value::as_object)
+            .is_some_and(|properties| {
+                ["accept", "moves", "title"]
+                    .iter()
+                    .all(|key| properties.contains_key(*key))
+            });
+        if target {
+            if let Some(properties) = object.get_mut("properties").and_then(Value::as_object_mut) {
+                properties.remove("title");
+            }
+            if let Some(required) = object.get_mut("required").and_then(Value::as_array_mut) {
+                required.retain(|name| name != "title");
+            }
+            stripped += 1;
+        }
+        for value in object.values_mut() {
+            stripped += without_flow_title(value);
+        }
+    } else if let Some(items) = schema.as_array_mut() {
+        for item in items {
+            stripped += without_flow_title(item);
+        }
+    }
+    stripped
+}
+
 /// doc-modal (RM-0095, DM-2): `schemas` as 0.33.0 listed them: `get_node`'s
 /// link object (outgoing and incoming alike) without `title` and
 /// `end_kind`, `get_flow`'s gap row without `titles`. No other tool's
@@ -3585,7 +3715,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[23].0, "0.32.0", "an entry for 0.32.0");
     assert_eq!(SCHEMA_PINS[24].0, "0.33.0", "an entry for 0.33.0");
     assert_eq!(SCHEMA_PINS[25].0, "0.34.0", "an entry for 0.34.0");
-    assert_eq!(SCHEMA_PINS.len(), 26, "0.34.0 the last entry");
+    assert_eq!(SCHEMA_PINS[26].0, "0.35.0", "an entry for 0.35.0");
+    assert_eq!(SCHEMA_PINS.len(), 27, "0.35.0 the last entry");
+    // departments (RM-0096, DP-4): 0.34.0's schemas are today's without a
+    // card flow's `title`.
+    let mut at_0_34_0 = schemas.clone();
+    as_of_0_34_0(&mut at_0_34_0);
+    let at_0_34_0_hash = schema_hash(&at_0_34_0);
+    assert_eq!(
+        at_0_34_0_hash, SCHEMA_PINS[25].1,
+        "0.34.0's schemas are today's without a flow's `title`"
+    );
+    assert_ne!(at_0_34_0_hash, current, "departments changed the schemas");
+    let (schemas, current) = (at_0_34_0, at_0_34_0_hash);
     // doc-modal (RM-0095, DM-2): 0.33.0's schemas are today's without a
     // shown link's `title` and `end_kind` and a gap row's `titles`.
     let mut at_0_33_0 = schemas.clone();

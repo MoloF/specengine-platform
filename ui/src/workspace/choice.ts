@@ -23,6 +23,21 @@ export function moduleKey(project: string): string {
 /** The stored value of All modules. */
 export const ALL_MODULES = "";
 
+/** A rooted module: a root document and its subtree, read from that root (the Tree's and Flow's). */
+export function isRooted(module: WorkspaceModule): module is WorkspaceModule & { root: string } {
+  return module.root !== null;
+}
+
+/**
+ * A direction: the nodes of the kinds a module lists, with no root
+ * (`docs/canon/workspaces.md` "The lens"). The Tree lists it flat; Flow, which draws from a root,
+ * takes rooted modules only. The kinds are the project's words, passed to the read as served,
+ * never compared with the UI's.
+ */
+export function isDirection(module: WorkspaceModule): module is WorkspaceModule & { root: null; kinds: string[] } {
+  return module.root === null && module.kinds !== null;
+}
+
 function recall(key: string): string | null {
   try {
     return window.localStorage.getItem(key);

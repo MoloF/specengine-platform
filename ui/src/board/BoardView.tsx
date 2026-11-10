@@ -36,6 +36,7 @@ import {
   COLUMN_SHOWN,
   disciplineChoices,
   dropMove,
+  flowTitleOf,
   matchesFilters,
   NO_FILTERS,
   openRows,
@@ -225,7 +226,7 @@ function LaneHead({
             </a>
             {head.card !== undefined && (
               <span className="board-lane-status">
-                <bdi className="muted">{shownSlot(head.card.flow)}</bdi>
+                <bdi className="muted">{shownSlot(flowTitleOf(flowOf(head.card.flow), head.card.flow))}</bdi>
                 <Lozenge {...statusLook(flowOf(head.card.flow), head.card.column)} />
               </span>
             )}
@@ -995,7 +996,7 @@ export function BoardView({
         ref={board}
         className={lanes.length === 1 && lanes[0]?.head.cut === "all" ? "board-grid board-grid-single" : "board-grid"}
         role="group"
-        aria-label={tabs.length > 1 ? t("board.view.boardOf", { name: tab.name }) : t("board.view.title")}
+        aria-label={tabs.length > 1 ? t("board.view.boardOf", { name: flowTitleOf(tab.flow, tab.name) }) : t("board.view.title")}
         style={{ "--board-columns": String(heads.length) } as CSSProperties}
         onKeyDown={onBoardKeyDown}
       >
@@ -1166,7 +1167,7 @@ export function BoardView({
               base={tabsBase}
               selected={tab.name}
               onSelect={setChosenFlow}
-              tabs={tabs.map((candidate) => ({ id: candidate.name, label: <bdi>{candidate.name}</bdi> }))}
+              tabs={tabs.map((candidate) => ({ id: candidate.name, label: <bdi>{flowTitleOf(candidate.flow, candidate.name)}</bdi> }))}
             />
             {tabs.map((candidate) => (
               <TabPanel key={candidate.name} base={tabsBase} id={candidate.name} selected={candidate.name === tab.name}>

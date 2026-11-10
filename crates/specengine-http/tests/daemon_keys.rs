@@ -270,6 +270,11 @@
 //! docs/features/doc-modal.md (RM-0095) DM-2: `ShownLink` gains `title` and
 //! `end_kind` after `name` (11 keys), `FlowGap` `titles` after `items` (6);
 //! still 115 sets.
+//!
+//! docs/features/departments.md (RM-0096) DP-4: `CardFlow` (set 88) gains
+//! `title` after `name` (7 keys), `Workspace` (112) `disciplines` after
+//! `flows` (7), `WorkspaceModule` (113) `kinds` after `root`, `root` now
+//! nullable (4); still 115 sets. M: a key missing from the fixture.
 
 mod common;
 mod task_state;
@@ -570,15 +575,19 @@ fn hub_syncs() -> Vec<String> {
 
 /// `GET .../workspaces` on a local daemon over git copies of
 /// `fixtures/card-press` and `fixtures/spec-a` (docs/features/workspaces.md
-/// "Data"): the configured document and the implicit one, each a 200.
+/// "Data"): the configured document and the implicit one, each a 200. Since
+/// docs/features/departments.md (DP-4) `fixtures/studio-lamp` too: its
+/// direction's `root` null and `kinds` a list, so a direction holds the same
+/// keys as a rooted module.
 fn workspace_documents() -> Vec<String> {
     let scratch = Scratch::new("daemon-keys-workspaces");
     let press = scratch.repo("card-press", "press", "main");
     let a = scratch.repo("spec-a", "a", "main");
+    let lamp = scratch.repo("studio-lamp", "lamp", "main");
     let home = scratch.home("h");
     let cwd = scratch.dir("cwd");
-    let server = Server::serve(&home, &cwd, &[&press, &a]);
-    ["card-press", "lantern-keep"]
+    let server = Server::serve(&home, &cwd, &[&press, &a, &lamp]);
+    ["card-press", "lantern-keep", "studio-lamp"]
         .map(|slug| {
             server
                 .get(&format!("/api/projects/{slug}/workspaces"))
@@ -2608,9 +2617,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         (
             "CardFlow",
             // docs/canon/cards.md "Documents and events": `return` after
-            // `accept`, `null` on card-press, whose flows name none.
+            // `accept`, `null` on card-press, whose flows name none;
+            // docs/features/departments.md DP-4: `title` after `name`.
             &[
                 "name",
+                "title",
                 "disciplines",
                 "columns",
                 "moves",
@@ -2772,12 +2783,22 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(sets[110].0, "WorkspaceDocument");
     assert_eq!(sets[110].1, ["source", "notes", "workspaces", "modules"]);
     assert_eq!(sets[111].0, "Workspace");
+    // docs/features/departments.md DP-4: `disciplines` after `flows`.
     assert_eq!(
         sets[111].1,
-        ["name", "title", "landing", "sections", "flows", "module"]
+        [
+            "name",
+            "title",
+            "landing",
+            "sections",
+            "flows",
+            "disciplines",
+            "module"
+        ]
     );
     assert_eq!(sets[112].0, "WorkspaceModule");
-    assert_eq!(sets[112].1, ["name", "title", "root"]);
+    // docs/features/departments.md DP-4: `kinds` after `root`.
+    assert_eq!(sets[112].1, ["name", "title", "root", "kinds"]);
     // card-tasks' one: docs/canon/cards.md "Documents and events".
     assert_eq!(sets[113].0, "CardTask");
     assert_eq!(sets[113].1, ["id", "status", "title", "stale"]);

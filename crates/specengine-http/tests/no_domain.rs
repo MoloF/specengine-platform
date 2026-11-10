@@ -40,6 +40,12 @@
 //! flow's `return` column (`sent-back`), read from `scripts/presets/*.toml`
 //! when the test runs: the daemon looks a return column up, never names one.
 //! A planted `"sent-back"` in a probe source is red.
+//!
+//! docs/features/departments.md (RM-0096) DP-6: the words gain every `kinds`
+//! entry of every `[[module]]` (a direction) of the same configs and presets,
+//! lowercased, read with the TOML reader ([`module_kinds`]): on the
+//! repository exactly `{"scene"}`, studio-lamp's direction. M: the reader
+//! taking `root` instead of `kinds`.
 
 mod common;
 
@@ -342,6 +348,37 @@ fn workspace_names() -> (BTreeSet<String>, Vec<PathBuf>) {
     (names, files)
 }
 
+/// docs/features/departments.md (RM-0096) DP-6: every `kinds` entry of every
+/// `[[module]]` of the repository's config, every config under `fixtures/` and
+/// every preset under `scripts/presets/`, lowercased. A file the TOML reader
+/// refuses holds none.
+fn module_kinds() -> BTreeSet<String> {
+    let root = repository_root();
+    let mut files = vec![root.join("specengine.toml")];
+    configs(&root.join("fixtures"), &mut files);
+    files.extend(toml_files(&root.join("scripts/presets")));
+    files.sort();
+    let mut kinds = BTreeSet::new();
+    for file in &files {
+        let text = fs::read_to_string(file).expect("a config");
+        let Ok(table) = text.parse::<toml::Table>() else {
+            continue;
+        };
+        let Some(modules) = table.get("module").and_then(toml::Value::as_array) else {
+            continue;
+        };
+        for module in modules {
+            let Some(listed) = module.get("kinds").and_then(toml::Value::as_array) else {
+                continue;
+            };
+            for kind in listed.iter().filter_map(toml::Value::as_str) {
+                kinds.insert(kind.to_lowercase());
+            }
+        }
+    }
+    kinds
+}
+
 /// docs/features/board-handoff.md (RM-0085) BH-13: the `return` column of
 /// every `[[card.flow]]` of every preset under `scripts/presets/`, lowercased:
 /// a return column is a project's data, looked up from `flows[]`, never
@@ -496,7 +533,7 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
         .to_vec();
     assert_eq!(states, library, "task.rs's `ALL` is the library's");
     assert_eq!(states.len(), 10, "{states:?}");
-    let (kinds, configs) = kinds();
+    let (mut kinds, configs) = kinds();
     assert!(configs.len() >= 3, "{configs:?}");
     for kind in ["mechanic", "rule", "decision", "edge-case", "requirement"] {
         assert!(kinds.contains(kind), "spec-a's `{kind}` is read: {kinds:?}");
@@ -530,6 +567,15 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
     ] {
         assert!(names.contains(name), "`{name}` is read: {names:?}");
     }
+    // docs/features/departments.md DP-6: a direction's kinds join the words;
+    // on the repository, studio-lamp's `scenes` alone.
+    let directions = module_kinds();
+    assert_eq!(
+        directions,
+        BTreeSet::from(["scene".to_owned()]),
+        "the `kinds` of every `[[module]]` (M: `root` read instead)"
+    );
+    kinds.extend(directions);
     // docs/features/board-handoff.md BH-13: the preset's return column.
     let returns = preset_return_columns();
     assert!(returns.contains("sent-back"), "{returns:?}");

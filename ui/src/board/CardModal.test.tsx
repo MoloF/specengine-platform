@@ -12,7 +12,7 @@ import { recallLaneMode } from "./swimlanes";
 // BH-3, BH-4, BH-7 and BH-16 of board-handoff: a card opens as a modal dialog over a board that holds
 // still, one history entry pushed; it closes by Esc, Close, the scrim or Back, replacing when it was
 // opened by URL, focus back on its tile; a write dialog stacks over it; a link inside it replaces and
-// switches no tab; it lists the card's hand-offs.
+// switches no tab; it lists the card's subtasks.
 
 function boardClient(list: CardList, cards: Record<string, Card> = {}): StubClient {
   const client = stubClient();
@@ -289,7 +289,7 @@ describe("links inside the modal (BH-7)", () => {
     clickTitle("C-0001");
     const parent = await screen.findByRole("dialog", { name: "The parent" });
     const length = window.history.length;
-    const child = within(await within(parent).findByRole("region", { name: "Hand-offs" })).getByRole("link", { name: "C-0003" });
+    const child = within(await within(parent).findByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0003" });
     expect(child.getAttribute("href")).toBe("#/alpha/board/C-0003");
     fireEvent.click(child);
     const plate = await screen.findByRole("dialog", { name: "A plate" });
@@ -309,13 +309,13 @@ describe("links inside the modal (BH-7)", () => {
   });
 });
 
-describe("the parent's hand-offs (BH-16)", () => {
+describe("the parent's subtasks (BH-16)", () => {
   // Replaced by DF-5 of design-foundation: the raw `<flow>/<column>` leaves the row for the flow's name
   // and the child's status lozenge, the look `statusLook` gives; an unserved flow's child is stranded.
   it("lists each child with ID, title, its flow's name and status lozenge, assignee and word; a cancelled one left out, an unserved flow's stranded with no word", async () => {
     await board(boardClient(LIST, CARDS), "#/alpha/board/C-0001");
     const dialog = await screen.findByRole("dialog", { name: "The parent" });
-    const items = within(await within(dialog).findByRole("region", { name: "Hand-offs" })).getAllByRole("listitem");
+    const items = within(await within(dialog).findByRole("region", { name: "Subtasks" })).getAllByRole("listitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "C-0003A plateplatesTo doUnassignedHanded off",
       "C-0004Sent backplatesDoingNoor AinsleyReturned",
@@ -363,12 +363,12 @@ describe("the card's tasks (CT-5 of card-tasks)", () => {
     expect(heads.length).toBeGreaterThan(0);
     clickTitle("C-0001");
     const dialog = await screen.findByRole("dialog", { name: "The parent" });
-    const development = await within(dialog).findByRole("button", { name: "Development \u00b7 3 agent tasks" });
+    const development = await within(dialog).findByRole("button", { name: "Agent tasks \u00b7 3 linked" });
     expect(development.getAttribute("aria-expanded")).toBe("false");
-    expect(within(dialog).queryByRole("region", { name: "Tasks" })).toBeNull();
+    expect(within(dialog).queryByRole("region", { name: "Agent tasks" })).toBeNull();
     fireEvent.click(development);
     expect(development.getAttribute("aria-expanded")).toBe("true");
-    const part = within(dialog).getByRole("region", { name: "Tasks" });
+    const part = within(dialog).getByRole("region", { name: "Agent tasks" });
     expect(development.getAttribute("aria-controls")).toBe(part.id);
     expect(part.closest(".issue-view-side")).not.toBeNull();
     expect(part.closest(".issue-view-body")).not.toBeNull();
@@ -425,7 +425,7 @@ describe("the modal's own state", () => {
       expect(document.activeElement).toBe(tile("C-0002"));
     });
     fireEvent.keyDown(tile("C-0002"), { key: "n" });
-    expect(await screen.findByRole("dialog", { name: "New card" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "New task" })).toBeTruthy();
   });
 
   it("Back with the modal's Move menu open closes both; the menu comes back with no next modal; ? lists the keys again", async () => {

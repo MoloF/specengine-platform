@@ -1,14 +1,25 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import type { WorkspaceModule } from "../api/types";
 import { useTranslate } from "../i18n";
-import { ALL_MODULES } from "./choice";
+import { ALL_MODULES, isDirection, isRooted } from "./choice";
+
+/** One choice of the bar: a module's name, or ALL_MODULES. */
+function ModuleOption({ pressed, onPress, children }: { pressed: boolean; onPress: () => void; children: ReactNode }) {
+  return (
+    <button type="button" className="module-option" aria-pressed={pressed} onClick={onPress}>
+      {children}
+    </button>
+  );
+}
 
 /**
- * The module bar (docs/features/workspaces.md "The UI"): on the Spec tree alone, and only when the
- * project serves a module; none is made up from the tree (D10). All modules, then each module's
- * title in served order, the chosen one pressed. A choice roots the tree there and is Flow's default
- * too; the bar stays whatever the rooted read answers, so another module can be chosen. Flow's own
- * bar, of links, is in its places pane (docs/features/writer-studio.md D4).
+ * The module bar (`docs/canon/workspaces.md` "Screen"): on the Spec tree alone, and only when the
+ * project serves a module; none is made up from the tree. Group Modules: All modules, then each
+ * rooted module's title in served order; group Directions, each direction's title in served order,
+ * only when one is served (docs/features/departments.md "Acceptance criteria", DP-11). One choice
+ * across both, pressed. A choice roots the tree there, or lists a direction's kinds, and is Flow's
+ * default too where Flow takes it; the bar stays whatever the read answers, so another module can be
+ * chosen. Flow's own bar, of links, is in its places pane and lists rooted modules only.
  */
 export function ModuleBar({
   modules,
@@ -22,38 +33,48 @@ export function ModuleBar({
   onChoose: (name: string) => void;
 }) {
   const t = useTranslate();
-  const labelId = useId();
+  const modulesId = useId();
+  const directionsId = useId();
   if (modules.length === 0) {
     return null;
   }
+  const rooted = modules.filter(isRooted);
+  const directions = modules.filter(isDirection);
+  const option = (module: WorkspaceModule) => (
+    <ModuleOption
+      key={module.name}
+      pressed={chosen?.name === module.name}
+      onPress={() => {
+        onChoose(module.name);
+      }}
+    >
+      <bdi>{module.title}</bdi>
+    </ModuleOption>
+  );
   return (
-    <div role="group" aria-labelledby={labelId} className="module-bar">
-      <span id={labelId} className="module-bar-label">
-        {t("workspace.modulesLabel")}
-      </span>
-      <button
-        type="button"
-        className="module-option"
-        aria-pressed={chosen === null}
-        onClick={() => {
-          onChoose(ALL_MODULES);
-        }}
-      >
-        {t("workspace.allModules")}
-      </button>
-      {modules.map((module) => (
-        <button
-          key={module.name}
-          type="button"
-          className="module-option"
-          aria-pressed={chosen?.name === module.name}
-          onClick={() => {
-            onChoose(module.name);
+    <div className="module-bar">
+      <div role="group" aria-labelledby={modulesId} className="module-bar-group">
+        <span id={modulesId} className="module-bar-label">
+          {t("workspace.modulesLabel")}
+        </span>
+        <ModuleOption
+          pressed={chosen === null}
+          onPress={() => {
+            onChoose(ALL_MODULES);
           }}
         >
-          <bdi>{module.title}</bdi>
-        </button>
-      ))}
+          {t("workspace.allModules")}
+        </ModuleOption>
+        {rooted.map(option)}
+      </div>
+      {directions.length > 0 && (
+        <div role="group" aria-labelledby={directionsId} className="module-bar-group">
+          <span id={directionsId} className="module-bar-label">
+            {t("workspace.directionsLabel")}
+          </span>
+          {directions.map(option)}
+        </div>
+      )}
     </div>
   );
 }

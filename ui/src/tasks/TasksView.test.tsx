@@ -19,7 +19,7 @@ import { argsOf } from "../test/stubClient";
 const HOSTILE = "<img src=x onerror=\u0061lert(1)>";
 
 function listbox(): HTMLElement {
-  return screen.getByRole("listbox", { name: "Tasks, what waits for you first" });
+  return screen.getByRole("listbox", { name: "Agent tasks, what waits for you first" });
 }
 
 function rows(): HTMLElement[] {
@@ -45,7 +45,7 @@ function groupTitles(): string[] {
 }
 
 function chip(name: RegExp): HTMLElement {
-  return within(screen.getByRole("group", { name: "Filter the tasks" })).getByRole("button", { name });
+  return within(screen.getByRole("group", { name: "Filter the agent tasks" })).getByRole("button", { name });
 }
 
 function heading(): HTMLElement {
@@ -66,7 +66,7 @@ function politeRegion(): HTMLElement {
 
 async function openList(client = taskClient(SOME_TASKS), hash = "#/alpha/tasks") {
   renderApp(client, hash);
-  await screen.findByRole("listbox", { name: "Tasks, what waits for you first" });
+  await screen.findByRole("listbox", { name: "Agent tasks, what waits for you first" });
   return client;
 }
 
@@ -150,7 +150,7 @@ describe("what a route reads (AC-01)", () => {
     expect(client.getTasks).toHaveBeenCalledTimes(1);
     expect(argsOf(client.getTasks)).toContainEqual(["alpha"]);
     expect(client.getTask).not.toHaveBeenCalled();
-    expect(heading().textContent).toBe("Tasks");
+    expect(heading().textContent).toBe("Agent tasks");
     expect(rows().filter((item) => item.getAttribute("aria-selected") === "true")).toEqual([]);
   });
 
@@ -193,7 +193,7 @@ describe("the list (AC-03, AC-04)", () => {
     const note = "T-0010: unreadable row (bad JSON in criteria); skipped";
     await openList(taskClient(SOME_TASKS, [], [note]));
     expect(screen.getByRole("list", { name: "Notes from the daemon on the list" }).textContent).toBe(note);
-    expect(screen.getByText(/waiting for you, 9 tasks in all/).textContent).toBe("2 waiting for you, 9 tasks in all");
+    expect(screen.getByText(/waiting for you, 9 agent tasks in all/).textContent).toBe("2 waiting for you, 9 agent tasks in all");
   });
 });
 
@@ -227,7 +227,7 @@ describe("filters (AC-05)", () => {
     await openList();
     fireEvent.click(chip(/^Closed/));
     fireEvent.change(screen.getByLabelText("Filter by ID, title or target"), { target: { value: "nothing like it" } });
-    expect(screen.getByText("No task matches the filters.")).toBeTruthy();
+    expect(screen.getByText("No agent task matches the filters.")).toBeTruthy();
     const clear = screen.getByRole("button", { name: "Clear filters" });
     clear.focus();
     fireEvent.click(clear);
@@ -512,7 +512,7 @@ describe("states (AC-11)", () => {
     client.getTasks.mockImplementation(() => new Promise(() => undefined));
     client.getTask.mockImplementation(() => new Promise(() => undefined));
     renderApp(client, "#/alpha/tasks/T-0002");
-    const list = await screen.findByLabelText("Loading the tasks of alpha");
+    const list = await screen.findByLabelText("Loading the agent tasks of alpha");
     expect(list.getAttribute("aria-busy")).toBe("true");
     expect(list.closest(".tasks-region")?.getAttribute("aria-busy")).toBe("true");
     expect((await screen.findByLabelText("Loading T-0002")).getAttribute("aria-busy")).toBe("true");
@@ -539,7 +539,7 @@ describe("states (AC-11)", () => {
   it("empty: no tasks yet and the command to create one", async () => {
     renderApp(taskClient([]), "#/alpha/tasks");
     const empty = await screen.findByText(/Create one:/);
-    expect(empty.textContent).toBe("No tasks yet. Create one: spec task new --nodes REF...");
+    expect(empty.textContent).toBe("No agent tasks yet. Create one: spec task new --nodes REF...");
     expect(empty.querySelector("code")?.textContent).toBe("spec task new --nodes REF...");
   });
 
@@ -549,7 +549,7 @@ describe("states (AC-11)", () => {
     client.getTasks.mockRejectedValueOnce(new ClientError({ status: 503, message }));
     renderApp(client, "#/alpha/tasks");
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe(`The tasks could not be loaded${message}`);
+    expect(alert.textContent).toBe(`The agent tasks could not be loaded${message}`);
     const retry = screen.getByRole("button", { name: "Retry" });
     retry.focus();
     fireEvent.click(retry);
@@ -562,7 +562,7 @@ describe("states (AC-11)", () => {
     const client = await openList(taskClient(SOME_TASKS), "#/alpha/tasks/T-0999");
     expect(await screen.findByText("no task T-0999 in this repository")).toBeTruthy();
     expect(heading().textContent).toBe("T-0999");
-    const back = screen.getByRole("link", { name: "Back to tasks" });
+    const back = screen.getByRole("link", { name: "Back to agent tasks" });
     expect(back.getAttribute("href")).toBe("#/alpha/tasks");
     back.focus();
     fireEvent.click(back);
@@ -575,7 +575,7 @@ describe("states (AC-11)", () => {
 
   it("Back to tasks opened elsewhere (Cmd-, Ctrl-, Shift- or Alt-click) leaves focus on the link", async () => {
     await openList(taskClient(SOME_TASKS), "#/alpha/tasks/T-0999");
-    const back = await screen.findByRole("link", { name: "Back to tasks" });
+    const back = await screen.findByRole("link", { name: "Back to agent tasks" });
     for (const modifier of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }]) {
       back.focus();
       fireEvent.click(back, modifier);
@@ -590,7 +590,7 @@ describe("states (AC-11)", () => {
     const client = taskClient(SOME_TASKS, [broken]);
     window.history.replaceState(null, "", "/#/alpha/tasks/T-0002");
     render(<App client={client} scenario={null} />, { onCaughtError: () => undefined });
-    expect(await screen.findByText(/The task could not be shown/)).toBeTruthy();
+    expect(await screen.findByText(/The agent task could not be shown/)).toBeTruthy();
     expect(heading().textContent).toBe("T-0002");
     expect(rowIds()).toContain("T-0004");
     fireEvent.click(row("T-0004"));
@@ -762,9 +762,9 @@ describe("keyboard (AC-12)", () => {
     row("T-0002").focus();
     fireEvent.keyDown(row("T-0002"), { key: "?" });
     const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(dialog).getByText("Task list: next task")).toBeTruthy();
-    expect(within(dialog).getByText("In a task: back to its row in the list; a dialog: close it")).toBeTruthy();
-    expect(within(dialog).getByText(/No key changes a task/)).toBeTruthy();
+    expect(within(dialog).getByText("Agent task list: next agent task")).toBeTruthy();
+    expect(within(dialog).getByText("In an agent task: back to its row in the list; a dialog: close it")).toBeTruthy();
+    expect(within(dialog).getByText(/No key changes an agent task/)).toBeTruthy();
   });
 
   // Amended by ui-home (ui/README.md "Screen rules", Keyboard): exactly the shell's one listener, the chord's.

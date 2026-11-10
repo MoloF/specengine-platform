@@ -14,7 +14,7 @@ Where Flow stands, held in the URL, so a reload, a shared link, Back and Forward
 
 ```text
 #/<p>/flow[/<name>][?<key>=<value>[&<key>=<value>]...]
-module=<m>                         a served module's name; empty: All modules
+module=<m>                         a served rooted module's name; empty: All modules
 scope=<ref>                        the read's root: a group's name, a module's root
 stage=<s>                          a served lane's stage; `-`: No stage
 edge=<from>,<to>,<type>[,<kind>]   no fourth part: kind null
@@ -25,7 +25,7 @@ edge=<from>,<to>,<type>[,<kind>]   no fourth part: kind null
 - **Splitting.** `parseHash` splits off the first raw `?` on every route, so a raw `?` ends a Tree id; the `doc` pairs, the document modal's (`doc-view.md` "The hash"), leave first and Flow reads the rest.
 - **Writing.** `flowHash(project, place)`: keys in the order module, scope, stage, edge, each only when non-null; each value and each edge part through `encodeURIComponent`, the parts joined by a raw `,`.
 - **Reading.** `parseFlowPlace(route)` decodes with `decodeURIComponent`, never `URLSearchParams` (`+` is no space). A key drops when its value fails to decode, when it is unknown, when `scope` or `stage` is empty, or when `edge` has fewer than three parts or an empty one. The first of a repeated key wins; a name wins over an `edge`.
-- **Written hashes** name the effective module whenever `[[module]]` serves one (`module=` for All), never otherwise. A literal stage `-` cannot be asked, as in `spec trace`.
+- **Written hashes** name the effective module whenever `[[module]]` serves a rooted one (`module=` for All), never otherwise. A literal stage `-` cannot be asked, as in `spec trace`.
 - Every place link is an `<a>` whose `href` is a `flowHash` (`policy.test.ts`).
 
 Examples: `#/harbor-sim/flow/MEC-MOORING?module=&scope=DOM-BERTHS&stage=quayside`; `#/harbor-sim/flow?module=&edge=MEC-FAIRWAY,DOM-BERTHS,follows,alternative`, a lifted edge; `#/harbor-sim/flow/MEC-MOORING`, an old link, which seeks.
@@ -36,7 +36,7 @@ A scope, stage or module change pushes: a place link, Space, a double-click, Ope
 
 ## The module
 
-The hash's `module` wins; with none, `specengine.module.<p>` (`workspaces.md`) is the default, written only by the module links of the places pane, which push. A module no `[[module]]` serves, or a stage at an unrooted Top, drops by a replace. With a module, its `root` is the lens root and Top is not read.
+The hash's `module` wins; with none, `specengine.module.<p>` (`workspaces.md`) is the default, written only by the module links of the places pane, which push. Flow takes rooted modules only (`directions.md` "Flow"): a stored direction reads as All modules, its key untouched. A hash's module that is no served rooted one, a direction too, or a stage at an unrooted Top, drops by a replace, which names the module in force. With a module, its `root` is the lens root and Top is not read.
 
 ## The seek
 
@@ -50,7 +50,7 @@ A selected name the drawing read lacks seeks once per place: `getTree({})` (`use
 
 The left pane (`FlowPlaces.tsx`), a `<nav>` "Flow places" apart from the app's; every item an `<a>`, so a click pushes. Nothing in it reads: the view hands it what its reads hold.
 
-- **Modules**, when `[[module]]` serves one: All modules, then titles, the one in force `aria-current`.
+- **Modules**, when `[[module]]` serves a rooted one: All modules, then their titles, the one in force `aria-current`.
 - **Path**: an `ol` labelled `flow.path`, from the scope view's `getNode(R)` first node's served `ancestors`, top first, then the scope: no other read and no held-read guess (`spec-read-subset.md` "The subset"). Each entry a `flowHash` link by title (else ID, else path), indented one step per level (`calc(var(--space-150) * n)`, 12 to 72 px), at most six; long titles wrap; the last `aria-current="location"`. Entries above the lens root are left out (with a module, its root; else Top's one node, once Top is read); a scope outside the module shows the whole chain. An entry equal to a known lens root writes `scope` null, any other `scope=<id>`. At the lens root, one entry: its title, or `flow.topTitle` at an unrooted Top. While the read is pending the ancestors are a skeleton line; failed, the current entry alone, `flow.pathFailed` and Retry; the canvas stands.
 - **Under the current entry**, one level deeper: for All stages, the drawing read's groups (`holds > 0`) but the scope; for a stage, the distinct `group`s its nodes name, first seen, the scope left out. A group row keeps its chevron on the title's first line: `flex-wrap: nowrap`, `align-items: flex-start`, the words `flex: 1 1 0` with `min-width: 0`, the icon `flex: none`.
 - **Stages**, from the summary: All stages, the lanes in served order, each `<c> of <n> confirmed` and a bar from served `counts`, No stage last. At an unrooted Top: `flow.stagesAtTop`, no read. A failed summary: `flow.stagesFailed` and Retry; the canvas stands.

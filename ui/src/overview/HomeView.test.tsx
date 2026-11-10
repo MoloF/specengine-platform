@@ -22,7 +22,7 @@ const QUEUE: Proposal[] = [
   aProposal({ id: "PR-3", severity: "normal", kind: "update", status: "open", summary: null, rationale: "First line\nsecond", created_at: "2026-10-02T10:00:00Z" }),
 ];
 
-function region(name: "Tasks" | "Inbox"): HTMLElement {
+function region(name: "Agent tasks" | "Inbox"): HTMLElement {
   return screen.getByRole("region", { name });
 }
 
@@ -30,7 +30,7 @@ async function openHome(client = homeClient(SOME_TASKS, QUEUE), hash = "#/alpha"
   renderApp(client, hash);
   await screen.findByRole("heading", { level: 1, name: "Overview" });
   await waitFor(() => {
-    expect(region("Tasks").getAttribute("aria-busy")).toBe("false");
+    expect(region("Agent tasks").getAttribute("aria-busy")).toBe("false");
     expect(region("Inbox").getAttribute("aria-busy")).toBe("false");
   });
   return client;
@@ -94,7 +94,7 @@ describe("the Tasks region (AC-03)", () => {
   it("lists what waits for you, the other open groups but Closed, the notes verbatim", async () => {
     const note = "T-0010: unreadable row (bad JSON in criteria); skipped";
     await openHome(homeClient(SOME_TASKS, QUEUE, { taskNotes: [note, "  spaced  note "] }));
-    const tasks = region("Tasks");
+    const tasks = region("Agent tasks");
     expect(within(tasks).getByRole("heading", { level: 3, name: "Waiting for you: 2" })).toBeTruthy();
     expect(within(tasks).getByRole("heading", { level: 3, name: "Waiting for you: 2" }).parentElement?.className).toBe(
       "home-block home-block-waiting",
@@ -106,30 +106,30 @@ describe("the Tasks region (AC-03)", () => {
       ["State: Plan review"],
       ["State: Ready", "Spec changed"],
     ]);
-    expect(tally(tasks, "Other open tasks")).toEqual(["Draft: 1", "Changes requested: 1", "Ready: 1", "In progress: 1", "Other states: 1"]);
+    expect(tally(tasks, "Other open agent tasks")).toEqual(["Draft: 1", "Changes requested: 1", "Ready: 1", "In progress: 1", "Other states: 1"]);
     expect(tasks.textContent).not.toMatch(/Closed/);
-    const notes = within(tasks).getByRole("list", { name: "Notes from the daemon on the task list" });
+    const notes = within(tasks).getByRole("list", { name: "Notes from the daemon on the agent task list" });
     expect(Array.from(notes.querySelectorAll("li"), (item) => item.textContent)).toEqual([note, "  spaced  note "]);
-    expect(within(tasks).getByRole("link", { name: "Open Tasks" }).getAttribute("href")).toBe("#/alpha/tasks");
+    expect(within(tasks).getByRole("link", { name: "Open Agent tasks" }).getAttribute("href")).toBe("#/alpha/tasks");
   });
 
   it("shows the first five of seven waiting and says so", async () => {
     const waiting = Array.from({ length: 7 }, (_, index) => aTaskEntry({ id: `T-${String(index + 1).padStart(4, "0")}`, status: "review" }));
     await openHome(homeClient(waiting));
-    const tasks = region("Tasks");
+    const tasks = region("Agent tasks");
     expect(tasks.querySelectorAll(".home-block-waiting .home-row")).toHaveLength(5);
     expect(within(tasks).getByText("5 of 7 shown")).toBeTruthy();
-    expect(within(tasks).getByText("No other open task.")).toBeTruthy();
+    expect(within(tasks).getByText("No other open agent task.")).toBeTruthy();
   });
 
   it("says nothing waits when no plan is in review and no approved spec changed", async () => {
     await openHome(homeClient([aTaskEntry({ id: "T-1", status: "ready", stale: false })]));
-    expect(within(region("Tasks")).getByText("Nothing waits for you: no plan to review, no approved spec changed.")).toBeTruthy();
-    expect(tally(region("Tasks"), "Other open tasks")).toEqual(["Ready: 1"]);
+    expect(within(region("Agent tasks")).getByText("Nothing waits for you: no plan to review, no approved spec changed.")).toBeTruthy();
+    expect(tally(region("Agent tasks"), "Other open agent tasks")).toEqual(["Ready: 1"]);
     // The block is emphasised only while something waits.
-    const block = within(region("Tasks")).getByRole("heading", { level: 3, name: "Waiting for you: 0" }).parentElement;
+    const block = within(region("Agent tasks")).getByRole("heading", { level: 3, name: "Waiting for you: 0" }).parentElement;
     expect(block?.className).toBe("home-block");
-    expect(region("Tasks").querySelector(".home-block-waiting")).toBeNull();
+    expect(region("Agent tasks").querySelector(".home-block-waiting")).toBeNull();
   });
 
   it("marks Spec changed only where stale is true, not on null or false", async () => {
@@ -140,7 +140,7 @@ describe("the Tasks region (AC-03)", () => {
         aTaskEntry({ id: "T-3", status: "ready", stale: true }),
       ]),
     );
-    const rows = Array.from(region("Tasks").querySelectorAll(".home-row"));
+    const rows = Array.from(region("Agent tasks").querySelectorAll(".home-row"));
     expect(rows.map((row) => row.textContent.includes("Spec changed"))).toEqual([false, false, true]);
   });
 });
@@ -230,7 +230,7 @@ describe("each region's states (AC-06)", () => {
     await waitFor(() => {
       expect(client.getInbox).toHaveBeenCalledTimes(1);
     });
-    for (const name of ["Tasks", "Inbox"] as const) {
+    for (const name of ["Agent tasks", "Inbox"] as const) {
       expect(region(name).getAttribute("aria-busy")).toBe("true");
       expect(within(region(name)).getByRole("status").getAttribute("aria-busy")).toBe("true");
     }
@@ -240,19 +240,19 @@ describe("each region's states (AC-06)", () => {
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(region("Tasks").getAttribute("aria-busy")).toBe("false");
+      expect(region("Agent tasks").getAttribute("aria-busy")).toBe("false");
     });
   });
 
   it("says what an empty project means and the next step in each region", async () => {
     await openHome(homeClient([], []));
-    const tasks = region("Tasks");
-    expect(within(tasks).getByText("No tasks yet.")).toBeTruthy();
+    const tasks = region("Agent tasks");
+    expect(within(tasks).getByText("No agent tasks yet.")).toBeTruthy();
     expect(within(tasks).getByText("spec task new --nodes REF...").tagName).toBe("CODE");
     const inbox = region("Inbox");
     expect(within(inbox).getByText("The queue is clear: no proposal waits for your decision.")).toBeTruthy();
-    const next = within(inbox).getByRole("link", { name: "approve the tasks that are ready for development" });
-    expect(next.closest("p")?.textContent).toBe("Next: approve the tasks that are ready for development.");
+    const next = within(inbox).getByRole("link", { name: "approve the agent tasks that are ready for development" });
+    expect(next.closest("p")?.textContent).toBe("Next: approve the agent tasks that are ready for development.");
     expect(next.getAttribute("href")).toBe("#/alpha/tasks");
   });
 
@@ -260,9 +260,9 @@ describe("each region's states (AC-06)", () => {
     const client = homeClient(SOME_TASKS, QUEUE);
     client.getTasks.mockRejectedValueOnce(new ClientError({ status: 503, message: "x" }));
     renderApp(client, "#/alpha");
-    const tasks = await screen.findByRole("region", { name: "Tasks" });
+    const tasks = await screen.findByRole("region", { name: "Agent tasks" });
     expect(await within(tasks).findByText("x")).toBeTruthy();
-    expect(within(tasks).getByRole("alert").textContent).toBe("The tasks could not be loadedx");
+    expect(within(tasks).getByRole("alert").textContent).toBe("The agent tasks could not be loadedx");
     await within(region("Inbox")).findByRole("link", { name: "PR-2: High" });
     const retry = within(tasks).getByRole("button", { name: "Retry" });
     retry.focus();
@@ -270,7 +270,7 @@ describe("each region's states (AC-06)", () => {
     await within(tasks).findByRole("link", { name: "T-0002: Plan to read" });
     expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 1, getTasks: 2 });
     await waitFor(() => {
-      expect(document.activeElement).toBe(within(tasks).getByRole("heading", { level: 2, name: "Tasks" }));
+      expect(document.activeElement).toBe(within(tasks).getByRole("heading", { level: 2, name: "Agent tasks" }));
     });
   });
 
@@ -280,7 +280,7 @@ describe("each region's states (AC-06)", () => {
     renderApp(client, "#/alpha");
     const inbox = await screen.findByRole("region", { name: "Inbox" });
     expect(await within(inbox).findByText("y")).toBeTruthy();
-    await within(region("Tasks")).findByRole("link", { name: "T-0002: Plan to read" });
+    await within(region("Agent tasks")).findByRole("link", { name: "T-0002: Plan to read" });
     fireEvent.click(within(inbox).getByRole("button", { name: "Retry" }));
     await within(inbox).findByRole("link", { name: "PR-2: High" });
     expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 2, getTasks: 1 });
@@ -298,7 +298,7 @@ describe("each region's states (AC-06)", () => {
     });
     const inbox = await screen.findByRole("region", { name: "Inbox" });
     expect(await within(inbox).findByText("The inbox overview could not be shown; the rest of the page still works.")).toBeTruthy();
-    expect(await within(region("Tasks")).findByRole("link", { name: "T-0002: Plan to read" })).toBeTruthy();
+    expect(await within(region("Agent tasks")).findByRole("link", { name: "T-0002: Plan to read" })).toBeTruthy();
     expect(caught.length).toBeGreaterThan(0);
   });
 });
@@ -314,7 +314,7 @@ describe("text as data (AC-07)", () => {
       ),
     );
     expect(document.querySelector("img")).toBeNull();
-    expect(within(region("Tasks")).getByRole("link", { name: `T-1: ${HOSTILE}` })).toBeTruthy();
+    expect(within(region("Agent tasks")).getByRole("link", { name: `T-1: ${HOSTILE}` })).toBeTruthy();
     expect(within(region("Inbox")).getByRole("link", { name: `PR-1: ${HOSTILE}` })).toBeTruthy();
     const times = Array.from(document.querySelectorAll(".home-view time"), (time) => [time.textContent, time.getAttribute("datetime")]);
     expect(times).toEqual([
@@ -369,12 +369,12 @@ describe("nav, switcher and keys (AC-08)", () => {
 
   it("lists the chord, ? and Esc on ? pressed on a home link, never the Inbox's keys", async () => {
     await openHome();
-    const link = within(region("Tasks")).getByRole("link", { name: "T-0002: Plan to read" });
+    const link = within(region("Agent tasks")).getByRole("link", { name: "T-0002: Plan to read" });
     link.focus();
     fireEvent.keyDown(link, { key: "?" });
     const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(Array.from(dialog.querySelectorAll(".shortcut"), (row) => row.textContent)).toEqual([
-      "Cmd-K or Ctrl-KJump to a section, task, proposal, node or project",
+      "Cmd-K or Ctrl-KJump to a section, agent task, proposal, node or project",
       "?Show this list",
       "EscClose a dialog",
     ]);
@@ -383,7 +383,7 @@ describe("nav, switcher and keys (AC-08)", () => {
 
   it("opens nothing for ? with Ctrl, Alt or Cmd held", async () => {
     await openHome();
-    const link = within(region("Tasks")).getByRole("link", { name: "Open Tasks" });
+    const link = within(region("Agent tasks")).getByRole("link", { name: "Open Agent tasks" });
     expect(fireEvent.keyDown(link, { key: "?", ctrlKey: true })).toBe(true);
     expect(fireEvent.keyDown(link, { key: "?", altKey: true })).toBe(true);
     expect(fireEvent.keyDown(link, { key: "?", metaKey: true })).toBe(true);
@@ -409,7 +409,7 @@ describe("nav, switcher and keys (AC-08)", () => {
     target.focus();
     fireEvent.keyDown(target, { key: "?" });
     const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(dialog).getByText("Jump to a section, task, proposal, node or project")).toBeTruthy();
+    expect(within(dialog).getByText("Jump to a section, agent task, proposal, node or project")).toBeTruthy();
     // The intro's "without Ctrl, Alt or Cmd" names the chord as its exception.
     expect(dialog.querySelector(".dialog-text")?.textContent).toContain(
       "without Ctrl, Alt or Cmd; Cmd-K or Ctrl-K excepted: it opens Jump to from anywhere, a text field included.",

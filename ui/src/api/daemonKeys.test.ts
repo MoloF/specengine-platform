@@ -742,7 +742,7 @@ const KEYS = {
   // docs/canon/cards.md "Documents and events", "Commands" (the write document, no such card), "Store" (an evidence entry, the two closures).
   CardList: { flows: true, cards: true, notes: true, truncated: true, omitted: true } satisfies Record<keyof CardList, true>,
   // docs/canon/card-flows.md "The rule": a flow's `return` after `accept` (board-handoff, RM-0085).
-  CardFlow: { name: true, disciplines: true, columns: true, moves: true, accept: true, return: true } satisfies Record<keyof CardFlow, true>,
+  CardFlow: { name: true, title: true, disciplines: true, columns: true, moves: true, accept: true, return: true } satisfies Record<keyof CardFlow, true>,
   CardColumn: { id: true, title: true } satisfies Record<keyof CardColumn, true>,
   CardMove: { from: true, to: true, by: true } satisfies Record<keyof CardMove, true>,
   CardRow: {
@@ -828,8 +828,8 @@ const KEYS = {
   HubSync: { ahead: true, behind: true, state: true, error: true, at: true } satisfies Record<keyof HubSync, true>,
   // docs/features/workspaces.md "Data": the workspaces read's answer, a workspace, a module; every key present.
   WorkspaceDocument: { source: true, notes: true, workspaces: true, modules: true } satisfies Record<keyof WorkspaceDocument, true>,
-  Workspace: { name: true, title: true, landing: true, sections: true, flows: true, module: true } satisfies Record<keyof Workspace, true>,
-  WorkspaceModule: { name: true, title: true, root: true } satisfies Record<keyof WorkspaceModule, true>,
+  Workspace: { name: true, title: true, landing: true, sections: true, flows: true, disciplines: true, module: true } satisfies Record<keyof Workspace, true>,
+  WorkspaceModule: { name: true, title: true, root: true, kinds: true } satisfies Record<keyof WorkspaceModule, true>,
   // docs/features/card-tasks.md "Documents": one linked task, read when the card is; every key present.
   CardTask: { id: true, status: true, title: true, stale: true } satisfies Record<keyof CardTask, true>,
   // crates/specengine-cli/README.md "Output and the cap": one entry of a shown node's `ancestors` (RM-0094); every key present.
@@ -939,7 +939,7 @@ const CITED: Record<Named, string> = {
   FlowEdge: "from, to, type, kind, when, count, path, line",
   FlowInner: "type, count",
   CardList: "flows, cards, notes, truncated, omitted",
-  CardFlow: "name, disciplines, columns, moves, accept, return",
+  CardFlow: "name, title, disciplines, columns, moves, accept, return",
   CardColumn: "id, title",
   CardMove: "from, to, by",
   CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
@@ -963,8 +963,8 @@ const CITED: Record<Named, string> = {
   ConfirmRead: "id, question, updated_at",
   HubSync: "ahead, behind, state, error, at",
   WorkspaceDocument: "source, notes, workspaces, modules",
-  Workspace: "name, title, landing, sections, flows, module",
-  WorkspaceModule: "name, title, root",
+  Workspace: "name, title, landing, sections, flows, disciplines, module",
+  WorkspaceModule: "name, title, root, kinds",
   CardTask: "id, status, title, stale",
   ShownAncestor: "id, kind, title, path",
 };
@@ -1203,8 +1203,10 @@ function served(name: Named): string[] {
  * (docs/features/workspaces.md "Data"), since board-handoff's wrote a flow's `return`, since
  * card-tasks' wrote a card's `tasks` and set 114 `CardTask` (docs/features/card-tasks.md
  * "Documents"), since flow-scenario's (RM-0094) wrote its four keys and set 115 `ShownAncestor`,
- * and again since doc-modal's wrote a link's `title` and `end_kind` and a gap row's `titles`
- * (docs/features/doc-modal.md "Acceptance criteria", DM-2).
+ * since doc-modal's wrote a link's `title` and `end_kind` and a gap row's `titles`
+ * (docs/features/doc-modal.md "Acceptance criteria", DM-2), and again since departments' wrote a
+ * flow's `title`, a workspace's `disciplines` and a module's `kinds`
+ * (docs/features/departments.md "Acceptance criteria", DP-4).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1295,20 +1297,21 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since doc-modal's test wrote its three keys into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since departments' test wrote its three keys into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
-    expect(served("CardFlow")).toEqual(["name", "disciplines", "columns", "moves", "accept", "return"]);
+    // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
+    expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
   });
 
-  it('types the workspaces read\'s three as the spec writes them: 4, 6 and 3 keys, every one present, `flows` and `module` nullable, a source kept whatever its word, each citing `docs/features/workspaces.md` "Data"', () => {
+  it('types the workspaces read\'s three as the spec writes them: 4, 7 and 4 keys, every one present, `flows`, `module`, a module\'s `root` and `kinds` nullable, a source kept whatever its word, each citing `docs/features/workspaces.md` "Data" (DP-3, DP-4 of departments: `disciplines` after `flows`, `kinds` after `root`)', () => {
     expect(WORKSPACES.map((name) => served(name))).toEqual([
       ["source", "notes", "workspaces", "modules"],
-      ["name", "title", "landing", "sections", "flows", "module"],
-      ["name", "title", "root"],
+      ["name", "title", "landing", "sections", "flows", "disciplines", "module"],
+      ["name", "title", "root", "kinds"],
     ]);
     for (const name of WORKSPACES) {
       expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
@@ -1316,8 +1319,9 @@ describe("the daemon's document types (AC-09)", () => {
       expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/workspaces.md` "Data"');
     }
     expect(source).toMatch(/^export interface WorkspaceDocument \{\n {2}source: WorkspaceSource;\n {2}notes: string\[\];\n {2}workspaces: Workspace\[\];\n {2}modules: WorkspaceModule\[\];\n\}$/m);
-    expect(source).toMatch(/^export interface Workspace \{\n {2}name: string;\n {2}title: string;\n {2}landing: string;\n {2}sections: string\[\];\n {2}flows: string\[\] \| null;\n {2}module: string \| null;\n\}$/m);
-    expect(source).toMatch(/^export interface WorkspaceModule \{\n {2}name: string;\n {2}title: string;\n {2}root: string;\n\}$/m);
+    expect(source).toMatch(/^export interface Workspace \{\n {2}name: string;\n {2}title: string;\n {2}landing: string;\n {2}sections: string\[\];\n {2}flows: string\[\] \| null;\n {2}disciplines: string\[\];\n {2}module: string \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface WorkspaceModule \{\n {2}name: string;\n {2}title: string;\n {2}root: string \| null;\n {2}kinds: string\[\] \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface CardFlow \{\n {2}name: string;\n {2}title: string;\n {2}disciplines: string\[\];\n/m);
     expect(source).toMatch(/^export type KnownWorkspaceSource = "config" \| "implicit";$/m);
     expect(source).toMatch(/^export type WorkspaceSource = KnownWorkspaceSource \| Unlisted;$/m);
     expect(ALL.slice(BEFORE_WORKSPACES.length, BEFORE_CARD_TASKS.length)).toEqual([...WORKSPACES]);
@@ -1784,12 +1788,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(card).toHaveLength(31);
   });
 
-  it('names workspaces\' three after HubSync, before card-tasks\' one, sets 111 to 113, each with its keys in the types\' order: 4, 6, 3 (docs/features/workspaces.md "Data")', () => {
+  it('names workspaces\' three after HubSync, before card-tasks\' one, sets 111 to 113, each with its keys in the types\' order: 4, 7, 4 (docs/features/workspaces.md "Data"; DP-4 of departments)', () => {
     expect(Object.keys(sets).slice(BEFORE_WORKSPACES.length, BEFORE_CARD_TASKS.length)).toEqual([...WORKSPACES]);
     expect(Object.keys(sets).at(BEFORE_CARD_TASKS.length - 1)).toBe("WorkspaceModule");
     expect(Object.keys(sets).indexOf("WorkspaceDocument")).toBe(110);
     expect(WORKSPACES.map((name) => sets[name])).toEqual(WORKSPACES.map((name) => served(name)));
-    expect(WORKSPACES.map((name) => sets[name]?.length)).toEqual([4, 6, 3]);
+    expect(WORKSPACES.map((name) => sets[name]?.length)).toEqual([4, 7, 4]);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1934,14 +1938,15 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(CARD_TRACE.map((name) => declaredKeys(name))).toEqual(CARD_TRACE.map((name) => served(name)));
   });
 
-  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 6, 2, 3, 21, 31, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\", docs/features/card-tasks.md \"Documents\")", () => {
+  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 7, 2, 3, 21, 31, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\", docs/features/card-tasks.md \"Documents\")", () => {
     expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length, BEFORE_CARD_TRACE.length)).toEqual([...BOARD_UI]);
     expect(Object.keys(sets).indexOf("CardList")).toBe(86);
     expect(Object.keys(sets).at(BEFORE_CARD_TRACE.length - 1)).toBe("CardNotFound");
     expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
     // A flow's `return` after `accept` (board-handoff, docs/canon/card-flows.md "The rule"); a
-    // card's `tasks` after `evidence` (card-tasks, docs/features/card-tasks.md "Documents").
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 6, 2, 3, 21, 31, 4, 6, 3, 4, 7, 2]);
+    // card's `tasks` after `evidence` (card-tasks, docs/features/card-tasks.md "Documents"); a
+    // flow's `title` after `name` (docs/features/departments.md "Acceptance criteria", DP-4).
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 21, 31, 4, 6, 3, 4, 7, 2]);
     expect(sets.CardFlow?.at(-1)).toBe("return");
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });

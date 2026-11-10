@@ -18,20 +18,61 @@ pub const CONFIG: &str = "specengine.toml";
 /// The first line of the appended tables, its line end before it.
 pub const TABLES_START: &str = "\n[[workspace]]\n";
 
-/// The implicit document of the spec's "Data", on `fixtures/spec-a`.
+/// The implicit document of the spec's "Data", on `fixtures/spec-a`. Since
+/// docs/features/departments.md (DP-3): `disciplines` after `flows`, every
+/// flow's, `[]` on spec-a, whose default flow lists none.
 pub const IMPLICIT_JSON: &str = "{\"source\":\"implicit\",\"notes\":[],\"workspaces\":[{\"name\":\
      \"all\",\"title\":\"All sections\",\"landing\":\"overview\",\"sections\":[\"inbox\",\"board\",\
-     \"roadmap\",\"flow\",\"tree\",\"graph\",\"health\",\"questions\"],\"flows\":null,\"module\":\
-     null}],\"modules\":[]}";
+     \"roadmap\",\"flow\",\"tree\",\"graph\",\"health\",\"questions\"],\"flows\":null,\
+     \"disciplines\":[],\"module\":null}],\"modules\":[]}";
 
-/// card-press's document of the spec's "Data", compact.
+/// card-press's document of the spec's "Data", compact. Since
+/// docs/features/departments.md (DP-3): each workspace's `disciplines` after
+/// `flows`, each module's `kinds` (`null`: a rooted module) after `root`.
 pub const PRESS_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\":[{\"name\":\
      \"newsroom\",\"title\":\"Newsroom\",\"landing\":\"board\",\"sections\":[\"board\",\"tree\",\
-     \"inbox\"],\"flows\":[\"copy\"],\"module\":\"weekly\"},{\"name\":\"pressroom\",\"title\":\
-     \"Pressroom\",\"landing\":\"overview\",\"sections\":[\"board\",\"flow\",\"tree\",\"health\"],\
-     \"flows\":[\"plates\"],\"module\":null}],\"modules\":[{\"name\":\"weekly\",\"title\":\"The \
-     weekly run\",\"root\":\"PRN-WEEKLY\"},{\"name\":\"rulings\",\"title\":\"Style rulings\",\
-     \"root\":\"STY-0001\"}]}";
+     \"inbox\"],\"flows\":[\"copy\"],\"disciplines\":[\"copy\"],\"module\":\"weekly\"},{\"name\":\
+     \"pressroom\",\"title\":\"Pressroom\",\"landing\":\"overview\",\"sections\":[\"board\",\
+     \"flow\",\"tree\",\"health\"],\"flows\":[\"plates\"],\"disciplines\":[\"plates\"],\"module\":\
+     null}],\"modules\":[{\"name\":\"weekly\",\"title\":\"The weekly run\",\"root\":\"PRN-WEEKLY\",\
+     \"kinds\":null},{\"name\":\"rulings\",\"title\":\"Style rulings\",\"root\":\"STY-0001\",\
+     \"kinds\":null}]}";
+
+/// docs/features/departments.md DP-3: studio-lamp's `spec workspace`
+/// text, the preset's four workspaces, two rooted modules and the direction
+/// `scenes`.
+pub const LAMP_TEXT: &str = "workspaces config | workspaces 4, modules 3\n\
+     workspace writing | Writing | landing flow | sections flow, tree, board, questions, inbox | \
+     flows narrative | module (none)\n\
+     workspace development | Development | landing board | sections board, inbox, tree, flow, \
+     graph, health, roadmap, questions | flows development | module (none)\n\
+     workspace art | Art and levels | landing board | sections board, flow, tree, questions, \
+     inbox | flows art, level-design | module (none)\n\
+     workspace production | Production | landing overview | sections inbox, roadmap, board, \
+     flow, tree, graph, health, questions | flows (all) | module (none)\n\
+     module shore | The shore | root CHP-SHORE\n\
+     module island | The lamp island | root ISL-LAMP\n\
+     module scenes | Scenes | kinds scene\n";
+
+/// docs/features/departments.md DP-3: studio-lamp's `spec workspace
+/// --json`, compact, every key in order: each workspace's `disciplines` by
+/// the rule of D8 (`production`'s `flows` null: every flow's, in config
+/// order), the direction's `root` null and its `kinds`.
+pub const LAMP_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\":[{\"name\":\
+     \"writing\",\"title\":\"Writing\",\"landing\":\"flow\",\"sections\":[\"flow\",\"tree\",\
+     \"board\",\"questions\",\"inbox\"],\"flows\":[\"narrative\"],\"disciplines\":[\"narrative\"],\
+     \"module\":null},{\"name\":\"development\",\"title\":\"Development\",\"landing\":\"board\",\
+     \"sections\":[\"board\",\"inbox\",\"tree\",\"flow\",\"graph\",\"health\",\"roadmap\",\
+     \"questions\"],\"flows\":[\"development\"],\"disciplines\":[\"development\"],\"module\":null},\
+     {\"name\":\"art\",\"title\":\"Art and levels\",\"landing\":\"board\",\"sections\":[\"board\",\
+     \"flow\",\"tree\",\"questions\",\"inbox\"],\"flows\":[\"art\",\"level-design\"],\
+     \"disciplines\":[\"art\",\"level-design\"],\"module\":null},{\"name\":\"production\",\"title\":\
+     \"Production\",\"landing\":\"overview\",\"sections\":[\"inbox\",\"roadmap\",\"board\",\"flow\",\
+     \"tree\",\"graph\",\"health\",\"questions\"],\"flows\":null,\"disciplines\":[\"narrative\",\
+     \"development\",\"art\",\"level-design\",\"production\"],\"module\":null}],\"modules\":[{\"name\":\
+     \"shore\",\"title\":\"The shore\",\"root\":\"CHP-SHORE\",\"kinds\":null},{\"name\":\"island\",\
+     \"title\":\"The lamp island\",\"root\":\"ISL-LAMP\",\"kinds\":null},{\"name\":\"scenes\",\
+     \"title\":\"Scenes\",\"root\":null,\"kinds\":[\"scene\"]}]}";
 
 /// card-press's `spec workspace` text of the spec's "Data".
 pub const PRESS_TEXT: &str = "workspaces config | workspaces 2, modules 2\n\

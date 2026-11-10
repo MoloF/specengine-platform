@@ -191,7 +191,7 @@ describe("the canvas is the Lanes tab's twin (UI-4)", () => {
     expect(box("RM-0021").getAttribute("aria-label")).toBe("RM-0021, Ferry ticket booth, in a cycle, waits on RM-0020");
     expect(box("RM-0041").getAttribute("aria-label")).toBe("RM-0041, no title");
     expect(box("RM-0017").getAttribute("aria-label")).toBe(
-      "RM-0017, Save and load, task T-0001 Draft, task T-0002 Analysis, task T-0003 Plan review, task T-0004 Changes requested, task T-0005 Ready",
+      "RM-0017, Save and load, agent task T-0001 Draft, agent task T-0002 Analysis, agent task T-0003 Plan review, agent task T-0004 Changes requested, agent task T-0005 Ready",
     );
   });
 });

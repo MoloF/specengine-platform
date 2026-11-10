@@ -30,6 +30,7 @@ import { FlowRecords } from "./FlowRecords";
 import { askedStageWords, boxWords, edgeKeyOf, edgeKeyText, emptyStageWords, gapsLook, handTitle, leftOutWords, namedByRows, namesDocuments, notDrawnLine, stageWords, statesHiddenWords, typesOf } from "./labels";
 import { isGroup, layoutFlow, type FlowBox, type LaidEdge } from "./layout";
 import { stageAsked, stageKey, withoutStates } from "./timeline";
+import { isRooted } from "../workspace/choice";
 
 /** The canvas and its drawing library load with the first answer drawn, not with the app. */
 const FlowCanvas = lazy(() => import("./FlowCanvas").then((module) => ({ default: module.FlowCanvas })));
@@ -238,10 +239,14 @@ export function FlowView({
   }, [entry, project]);
 
   // The module: the hash's; none named, the viewer's stored one; one not served is dropped (R2).
-  const served = useMemo(() => modules ?? [], [modules]);
+  // Flow draws from a root, so it takes rooted modules only: a direction named in the hash drops as an
+  // unserved one does, and a stored direction reads as All modules, its key left as it is
+  // (docs/features/departments.md "Acceptance criteria", DP-12).
+  const served = useMemo(() => (modules ?? []).filter(isRooted), [modules]);
+  const storedRooted = storedModule !== null && isRooted(storedModule) ? storedModule : null;
   const namedModule = place.module === null || place.module === "" ? null : (served.find((candidate) => candidate.name === place.module) ?? null);
   const unserved = moduleKnown && place.module !== null && place.module !== "" && namedModule === null;
-  const module = place.module === null || unserved ? storedModule : namedModule;
+  const module = place.module === null || unserved ? storedRooted : namedModule;
   const writtenModule = served.length > 0 ? (module?.name ?? "") : null;
   /** A place as the screen writes it: naming the module in force whenever one is served (D4). */
   const placeAt = useCallback((next: Omit<FlowPlace, "module">): FlowPlace => ({ ...next, module: writtenModule }), [writtenModule]);

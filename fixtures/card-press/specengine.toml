@@ -19,6 +19,7 @@ STY = { kind = "style-ruling", width = 4 }
 
 [[card.flow]]
 name = "copy"
+title = "Copy desk"
 disciplines = ["copy"]
 columns = ["draft", "edit", "proof", "filed"]
 accept = { from = "proof", to = "filed" }

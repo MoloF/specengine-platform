@@ -28,9 +28,9 @@ Use this before you read or change behaviour the spec describes, and whenever yo
 
 - Cite the IDs you relied on: in your answer, your plan and your report.
 - A node's `tested`, in `get_node` with its bindings, in `get_task`, in `get_impact` and as lines under a bundle's headers, says whether the owner's own passing test run still vouches for that node, judged now: evidence to read, never yours to claim, and nothing waits on it.
-- The answers are deterministic: the same files and the same request give the same answer, so reading an unchanged node again only spends context.
+- The answers are deterministic: reading an unchanged node again only spends context.
 - An answer cut for size says how to narrow the request: follow it instead of asking for everything again.
 - A reference that names nothing is an error with the reason: check the ID, or `search` for it. A look-alike or mixed-script ID is refused with its Latin fix: use the fix.
-- If a tool answers that there is no project (no `specengine.toml` here or above), the working directory is not a SpecEngine project: stop using these tools for this session, do not set one up yourself, and say so instead of guessing what the spec holds.
+- If a tool answers that there is no project (no `specengine.toml` here or above), stop using these tools, do not set one up, and say so rather than guess what the spec holds.
 - When the spec is silent or ambiguous, or the code disagrees with it, do not fill the gap silently: raise it with the ask-owner skill.
-- Work of any trade stands on cards, queue rows beside the tasks, not in the spec: `list_cards` and `get_card` read them, `create_card`, `edit_card` and `move_card` file and change one, and no tool accepts a card. A hand-off is a child card (`parent`) in the other trade's flow, its `reviewer` the side that asked; a move into a flow's `return` column needs a `note`, why it goes back.
+- Work of any trade stands on cards, queue rows beside the tasks, not in the spec: `list_cards` and `get_card` read them, `create_card`, `edit_card` and `move_card` file and change one, and no tool accepts a card. A hand-off is a child card (`parent`) in the other trade's flow, its `reviewer` the side that asked; a move into a flow's `return` column needs a `note`, why it goes back. People use the web UI's words: a card is a task, a child card a subtask, a task of `get_task` an agent task, a workspace a department.

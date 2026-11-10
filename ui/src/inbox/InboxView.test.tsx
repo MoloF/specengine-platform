@@ -380,10 +380,10 @@ describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks
     const { client } = await openInbox([BOUND, UNBOUND], "#/alpha/inbox/PR-0041");
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
-    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Gap type", "Severity", "Task", "Status"]);
+    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Gap type", "Severity", "Agent task", "Status"]);
     const task = within(card).getByRole("link", { name: "T-0107" });
     expect(task.getAttribute("href")).toBe("#/alpha/tasks/T-0107");
-    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Task");
+    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Agent task");
     expect(within(card).queryByRole("link", { name: "T-0999" })).toBeNull();
     // InboxEntry stays the daemon's 12 keys: the task comes only from the review document.
     const inbox = await client.getInbox("alpha");
@@ -397,7 +397,7 @@ describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks
     await openInbox([BOUND, UNBOUND], "#/alpha/inbox/PR-0044");
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
-    expect(facts(card)).toContainEqual(["Task", "No task"]);
+    expect(facts(card)).toContainEqual(["Agent task", "No agent task"]);
     expect(within(card).queryByRole("link", { name: /^T-/ })).toBeNull();
   });
 
@@ -427,7 +427,7 @@ describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks
     fireEvent.click(within(screen.getByRole("listbox")).getByText("Unbound"));
     const gone = await screen.findByRole("article");
     expect(await within(gone).findByText("PR-0044 has no review document in this repository")).toBeTruthy();
-    expect(facts(gone).map(([name]) => name)).not.toContain("Task");
+    expect(facts(gone).map(([name]) => name)).not.toContain("Agent task");
   });
 });
 
@@ -445,7 +445,7 @@ describe("loading, empty and error states (AC-12)", () => {
     renderApp(stubClient([]), "#/alpha/inbox");
     expect(await screen.findByRole("heading", { name: "The queue is clear" })).toBeTruthy();
     expect(screen.getByText(/waits for your decision/)).toBeTruthy();
-    const next = screen.getByRole("link", { name: /approve the tasks/ });
+    const next = screen.getByRole("link", { name: /approve the agent tasks/ });
     expect(next.getAttribute("href")).toBe("#/alpha/tasks");
   });
 
@@ -984,7 +984,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
   /** From Tasks into the Inbox (a history entry), a reject staged on PR-1, then browser Back to Tasks. */
   async function leaveWhileSending(client: StubClient) {
     renderApp(client, "#/alpha/tasks");
-    await screen.findByRole("heading", { level: 1, name: "Tasks" });
+    await screen.findByRole("heading", { level: 1, name: "Agent tasks" });
     const inboxLink = await within(screen.getByRole("navigation", { name: "Sections" })).findByRole("link", { name: "Inbox" });
     fireEvent.click(inboxLink);
     const card = await screen.findByRole("article");
@@ -999,7 +999,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
     });
     expect(window.location.hash).toBe("#/alpha/inbox");
     await goBack();
-    const tasks = await screen.findByRole("heading", { level: 1, name: "Tasks" });
+    const tasks = await screen.findByRole("heading", { level: 1, name: "Agent tasks" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(window.location.hash).toBe("#/alpha/tasks");
     await waitFor(() => {
@@ -1020,7 +1020,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
       expect(politeRegion().textContent).toMatch(/^Staged Reject on PR-1 /);
     });
     expect(window.location.hash).toBe("#/alpha/tasks");
-    expect(screen.getByRole("heading", { level: 1, name: "Tasks" })).toBe(tasks);
+    expect(screen.getByRole("heading", { level: 1, name: "Agent tasks" })).toBe(tasks);
     expect(document.activeElement).toBe(tasks);
     expect(client.stageDecision).toHaveBeenCalledTimes(1);
   });

@@ -202,7 +202,7 @@ describe("the Interpretation section (AC-U2 of kind-interpretation)", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-7" });
     expect(within(dialog).getByText(/^It interprets decision/).textContent).toBe(
-      "It interprets decision DEC-0023; the card's Interpretation section says how and why.",
+      "It interprets decision DEC-0023; the proposal's Interpretation section says how and why.",
     );
   });
 

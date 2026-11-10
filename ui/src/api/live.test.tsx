@@ -884,7 +884,7 @@ describe("the Tasks screen on the live tail (AC-10 of ui-live-tasks)", () => {
     tasksDaemon(board);
     window.history.replaceState(null, "", "/#/alpha/tasks");
     render(<App client={new HttpClient()} scenario={null} />);
-    const list = await screen.findByRole("listbox", { name: "Tasks, what waits for you first" });
+    const list = await screen.findByRole("listbox", { name: "Agent tasks, what waits for you first" });
     const row = () => within(list).getByRole("option", { name: /T-0107/ });
     expect(row().textContent).toContain("Plan review");
     await waitFor(() => {

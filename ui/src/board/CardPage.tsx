@@ -21,7 +21,7 @@ import { columnTitle, rowMark } from "./labels";
 import { MoveMenu } from "./MoveMenu";
 import { rollupsOf, type Rollup } from "./rollup";
 
-/** No child: nothing listed under Hand-offs. */
+/** No child: nothing listed under Subtasks. */
 const NO_ROLLUP: Rollup = { children: [], returned: 0 };
 
 /** A refused move: the daemon's reason; `count` a new alert for each. */

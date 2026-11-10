@@ -1226,8 +1226,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`); 0.33.0 since
     // flow-scenario (RM-0094, `get_flow`'s `in_flow`); 0.34.0 since doc-modal
     // (RM-0095, `get_node`'s link `title`, `end_kind`, `get_flow`'s gap
-    // `titles`).
-    assert_eq!(manifest["version"], "0.34.0");
+    // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
+    // `title`).
+    assert_eq!(manifest["version"], "0.35.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1332,8 +1333,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`); 0.33.0 since
     // flow-scenario (RM-0094, `get_flow`'s `in_flow`); 0.34.0 since doc-modal
     // (RM-0095, `get_node`'s link `title`, `end_kind`, `get_flow`'s gap
-    // `titles`).
-    assert_eq!(manifest["version"], "0.34.0");
+    // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
+    // `title`).
+    assert_eq!(manifest["version"], "0.35.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1436,7 +1438,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.34.0",
+        manifest["version"], "0.35.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1446,7 +1448,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          spec-ids: 0.29.1; flow-scope (FS-6, `get_flow`'s `stage`): 0.30.0; board-handoff \
          (`reviewer`, `note`, `parent`): 0.31.0; card-tasks (`edit_card`'s `task`): 0.32.0; \
          flow-scenario (`get_flow`'s `in_flow`): 0.33.0; doc-modal (link `title`, `end_kind`, \
-         gap `titles`): 0.34.0"
+         gap `titles`): 0.34.0; departments (`list_cards`' flow `title`): 0.35.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2070,12 +2072,13 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        4_415,
+        4_410,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
          154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
          docs/features/card-store.md (the cards bullet), 172 more since \
          docs/features/board-handoff.md (the hand-off sentence), 15 more since \
-         docs/features/flow-scenario.md (`ancestors` and `in_flow`, two lines reworded)"
+         docs/features/flow-scenario.md (`ancestors` and `in_flow`, two lines reworded), 5 \
+         fewer since docs/features/departments.md (two trims and the vocabulary sentence)"
     );
     let reworded = edited(
         &skills,
@@ -2179,8 +2182,10 @@ fn tested_reads_skills_name_tested() {
         (body(read_spec), read_spec.len()),
         // docs/features/board-handoff.md: 172 bytes more, the hand-off
         // sentence, the body still within 4 096; flow-scenario (RM-0094):
-        // 15 more, `ancestors` and `in_flow` in two reworded lines.
-        (4_094, 4_415),
+        // 15 more, `ancestors` and `in_flow` in two reworded lines;
+        // departments (RM-0096, DP-4): 5 fewer, two trims and the
+        // vocabulary sentence.
+        (4_089, 4_410),
         "read-spec's bytes"
     );
     assert_eq!(
@@ -2527,6 +2532,77 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // since docs/features/board-handoff.md (the card tools' keys); 0.32.0
     // since card-tasks (RM-0092, `edit_card`'s `task`); 0.33.0 since
     // flow-scenario (RM-0094, `get_flow`'s `in_flow`); 0.34.0 since doc-modal
-    // (RM-0095, keys `get_node` and `get_flow` return).
-    assert_eq!(manifest["version"], "0.34.0");
+    // (RM-0095, keys `get_node` and `get_flow` return); 0.35.0 since
+    // departments (RM-0096, `list_cards`' flow `title`).
+    assert_eq!(manifest["version"], "0.35.0");
+}
+
+/// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
+/// last bullet ends with, its space before it.
+const READ_SPEC_WORDS: &str = " People use the web UI's words: a card is a task, a child card a \
+                               subtask, a task of `get_task` an agent task, a workspace a \
+                               department.";
+
+/// docs/features/departments.md (RM-0096) DP-4, D12: `read-spec`'s body is
+/// 4 089 bytes (at most 4 096), the file 4 410; its last bullet, the cards
+/// bullet, ends with the vocabulary sentence, once in the skill and in no
+/// other; the two trims of "Data" stand; every content rule passes
+/// (`get_task` a tool name, no digit, no enum value, no stack word). M: the
+/// vocabulary sentence dropped.
+#[test]
+fn departments_dp4_read_spec_gives_the_web_ui_s_words() {
+    let skills = committed();
+    let read_spec = &skills["read-spec"];
+    let body = |text: &str| -> usize {
+        text.splitn(3, "---\n")
+            .nth(2)
+            .expect("a front-matter and a body")
+            .len()
+    };
+    assert_eq!((body(read_spec), read_spec.len()), (4_089, 4_410));
+    assert!(body(read_spec) <= 4096);
+    let last = bullets(read_spec).last().cloned().expect("a bullet");
+    assert!(
+        last.starts_with("- Work of any trade stands on cards"),
+        "the cards bullet is last: {last:?}"
+    );
+    assert!(
+        last.ends_with(&format!(
+            "needs a `note`, why it goes back.{READ_SPEC_WORDS}"
+        )),
+        "the vocabulary sentence ends it, one space after: {last:?}"
+    );
+    for (skill, text) in &skills {
+        let want = usize::from(skill == "read-spec");
+        assert_eq!(
+            text.matches(READ_SPEC_WORDS.trim_start()).count(),
+            want,
+            "{skill}"
+        );
+    }
+    for line in [
+        "- The answers are deterministic: reading an unchanged node again only spends context.",
+        "- If a tool answers that there is no project (no `specengine.toml` here or above), stop \
+         using these tools, do not set one up, and say so rather than guess what the spec holds.",
+    ] {
+        assert_eq!(
+            read_spec.lines().filter(|written| *written == line).count(),
+            1,
+            "{line}"
+        );
+    }
+    let listed = listed();
+    assert!(listed.tools.contains("get_task"));
+    assert_eq!(ac06_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(skill_text_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    assert_eq!(word_problems(&plugin_files()), Vec::<String>::new());
+    // M: the sentence dropped: the bullet no longer ends with it.
+    let dropped = edited(&skills, "read-spec", READ_SPEC_WORDS, "");
+    assert!(
+        !bullets(&dropped["read-spec"])
+            .last()
+            .is_some_and(|bullet| bullet.ends_with(READ_SPEC_WORDS)),
+        "the mutation is seen"
+    );
 }

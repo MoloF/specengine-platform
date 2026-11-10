@@ -34,6 +34,10 @@
 //!   into `sent-back` is a 409 without the note, a 200 with it, `card.moved`
 //!   holding it; each byte for byte the CLI's.
 //!
+//! - docs/features/departments.md (RM-0096) DP-4: `GET .../cards` serves
+//!   each flow's `title` right after `name` ("Copy desk", `plates` by its
+//!   name), byte-equal to `spec card list --json`, a card or none.
+//!
 //! The byte-for-byte reads (AC-01) are `parity.rs`; methods, query, fence and
 //! keys their own files. Every expected value below is worked out from
 //! docs/canon/cards.md, never read back from a run.
@@ -1458,6 +1462,40 @@ fn a_bad_card_table_is_a_503_on_the_card_routes_alone() {
         assert_eq!(reply.status, 200, "{read}: {}", reply.text());
     }
     assert_eq!(press.events(), before, "nothing stored");
+}
+
+/// docs/features/departments.md (RM-0096) DP-4: `GET .../cards` on
+/// card-press is byte-equal to `spec card list --json`, empty and with a
+/// card; each flow's `title` follows its `name`, `copy` titled "Copy desk",
+/// untitled `plates` by its name. M: the mirror without `title` (MCP
+/// `mcp_cards.rs`); `title` serialized after `disciplines`.
+#[test]
+fn departments_dp4_the_board_serves_each_flow_s_title_as_the_cli() {
+    let press = Press::new("cards-titles");
+    for step in ["empty", "a card"] {
+        if step == "a card" {
+            press.done(
+                "cards",
+                &json!({"title": "Lead story", "discipline": "copy"}),
+            );
+        }
+        let reply = press.get("cards");
+        reply.status(200);
+        let run = press.cli(&["card", "list"]);
+        run.code(0);
+        assert_eq!(reply.text(), run.document(), "{step}: the CLI's bytes");
+        let flows = reply.json()["flows"].clone();
+        assert_eq!(flows[0]["name"], "copy", "{step}");
+        assert_eq!(flows[0]["title"], "Copy desk", "{step}");
+        assert_eq!(flows[1]["title"], "plates", "{step}: untitled, its name");
+        assert!(
+            reply
+                .text()
+                .contains("{\"name\":\"copy\",\"title\":\"Copy desk\",\"disciplines\":"),
+            "{step}: `title` right after `name`: {}",
+            reply.text()
+        );
+    }
 }
 
 // ------------------------------------------------------------- the door

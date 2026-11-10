@@ -308,7 +308,7 @@ export function asideClient({ times = 1, module = null }: { times?: number; modu
   client.getTrace.mockImplementation((_project, options) => Promise.resolve(aTrace([], { ref: options?.ref ?? null, stages: asideLanes(options?.ref ?? "") })));
   client.getTree.mockImplementation((_project, options) => Promise.resolve(options?.root === "WBAY-KILN" ? aTreeView(asideKilnTree(), { ref: "WBAY-KILN", depth: 2 }) : aTreeView(asideTree())));
   if (module !== null) {
-    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "all", title: "All sections" })], [{ name: "kiln", title: "Kiln bay", root: module }]));
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "all", title: "All sections" })], [{ name: "kiln", title: "Kiln bay", root: module, kinds: null }]));
   }
   return client;
 }

@@ -41,9 +41,9 @@ function cardClient(card: Card, login: string | null = null): StubClient {
 
 /** The work item's Development, folded until clicked (DF-7 of design-foundation). */
 async function expandDevelopment(scope: HTMLElement = document.body): Promise<HTMLElement> {
-  const development = await within(scope).findByRole("button", { name: /^Development \u00b7 / });
+  const development = await within(scope).findByRole("button", { name: /^Agent tasks \u00b7 / });
   fireEvent.click(development);
-  return within(scope).getByRole("region", { name: "Tasks" });
+  return within(scope).getByRole("region", { name: "Agent tasks" });
 }
 
 /** The card's page, its Tasks part once read, under Development expanded. */
@@ -96,11 +96,11 @@ describe("the Tasks part stands in the modal and on the page (CT-5)", () => {
   it("in the modal, under the side column's Development, a row per link in link order once it is expanded", async () => {
     renderApp(cardClient(LINKED), "#/alpha/board/C-0001");
     const dialog = await screen.findByRole("dialog", { name: "Light the harbour" });
-    await within(dialog).findByRole("region", { name: "Hand-offs" });
-    expect(within(dialog).queryByRole("region", { name: "Tasks" })).toBeNull();
+    await within(dialog).findByRole("region", { name: "Subtasks" });
+    expect(within(dialog).queryByRole("region", { name: "Agent tasks" })).toBeNull();
     const part = await expandDevelopment(dialog);
     expect(part.closest(".issue-view-side")).not.toBeNull();
-    expect(within(part).getByRole("list", { name: "Tasks linked to C-0001" })).toBeTruthy();
+    expect(within(part).getByRole("list", { name: "Agent tasks linked to C-0001" })).toBeTruthy();
     expect(Array.from(part.querySelectorAll("li[data-task]"), (row) => row.getAttribute("data-task"))).toEqual(["T-0001", "T-0002", "T-0003", "T-0004"]);
   });
 
@@ -166,7 +166,7 @@ describe("a row per link (CT-5)", () => {
     const fourth = within(rowOf(part, "T-0004")).getByRole("list", { name: "Notes from the daemon on T-0004" });
     expect(Array.from(fourth.querySelectorAll("li"), (item) => [item.getAttribute("lang"), item.textContent])).toEqual([["en", NO_SNAPSHOT]]);
     expect(within(rowOf(part, "T-0001")).queryByRole("list", { name: "Notes from the daemon on T-0001" })).toBeNull();
-    const own = screen.getByRole("list", { name: "Notes from the daemon on the card" });
+    const own = screen.getByRole("list", { name: "Notes from the daemon on the task" });
     expect(Array.from(own.querySelectorAll("li"), (item) => item.textContent)).toEqual([OWN_NOTE]);
     for (const note of [OWN_NOTE, ELSEWHERE, NO_SNAPSHOT]) {
       expect([note, screen.getAllByText(note).length]).toEqual([note, 1]);
@@ -218,7 +218,7 @@ describe("a row per link (CT-5)", () => {
 describe("no link (CT-5)", () => {
   it("locally: No task yet, then the commands that make a task on the card's target and link it, each with Copy", async () => {
     const { part } = await page(aCard({ id: "C-0001", title: "Bare", targets: ["QS-0001"] }));
-    expect(within(part).getByText("No task yet.")).toBeTruthy();
+    expect(within(part).getByText("No agent task yet.")).toBeTruthy();
     expect(within(part).queryByRole("list", { name: /Tasks linked/ })).toBeNull();
     expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(['spec task new --nodes QS-0001 --title "..."', "spec card edit C-0001 --task T-NNNN"]);
     expect(within(part).getAllByRole("button").map((button) => button.textContent)).toEqual([
@@ -237,7 +237,7 @@ describe("no link (CT-5)", () => {
   it("with a hub login: No task yet and the sentence, no command and no Copy", async () => {
     const { part } = await page(aCard({ id: "C-0001", title: "Bare", targets: ["QS-0001"] }), "mira");
     await within(part).findByText(en.board.tasks.onHub);
-    expect(within(part).getByText("No task yet.")).toBeTruthy();
+    expect(within(part).getByText("No agent task yet.")).toBeTruthy();
     expect(part.querySelector("code")).toBeNull();
     expect(within(part).queryByRole("button")).toBeNull();
     expect(within(part).queryByText(en.board.tasks.howTo)).toBeNull();

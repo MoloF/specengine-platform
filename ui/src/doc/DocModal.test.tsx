@@ -112,8 +112,8 @@ describe("the document modal (DM-9 of doc-modal)", () => {
     expect(window.location.hash).toBe("#/alpha/inbox/PR-0001");
     fireEvent.click(opener);
     const dialog = await ferry();
-    fireEvent.click(within(dialog).getByRole("button", { name: "New card" }));
-    expect(await screen.findByRole("dialog", { name: "New card" })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "New task" }));
+    expect(await screen.findByRole("dialog", { name: "New task" })).toBeTruthy();
     act(() => {
       window.history.back();
     });
@@ -152,7 +152,7 @@ describe("the document modal (DM-9 of doc-modal)", () => {
     expect(reason.getAttribute("lang")).toBe("en");
     expect(within(dialog).getByRole("button", { name: /^Close/ })).toBeTruthy();
     expect(within(dialog).getByRole("link", { name: "Open in Spec tree" }).getAttribute("href")).toBe("#/alpha/tree/GONE");
-    for (const act of ["New card", "Open in Flow"]) {
+    for (const act of ["New task", "Open in Flow"]) {
       expect([act, within(dialog).queryByRole("button", { name: act }), within(dialog).queryByRole("link", { name: act })]).toEqual([act, null, null]);
     }
   });

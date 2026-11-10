@@ -68,7 +68,7 @@ describe("a row's mark", () => {
   });
 
   it("says each mark in a whole sentence, a gone target by its name as any other", () => {
-    expect(markLine({ ...plain, mark: "suspect", on: "R-1" }, enT)).toBe("The brief changed at R-1 after this card last read it.");
+    expect(markLine({ ...plain, mark: "suspect", on: "R-1" }, enT)).toBe("The brief changed at R-1 after this task last read it.");
     expect(markLine({ ...plain, mark: "departed", on: "R-1", discrepancy: "PR-1" }, enT)).toBe("Accepted as departing from R-1; PR-1 is not settled yet.");
     expect(markLine({ ...plain, mark: "correcting", on: "R-1", correction: "C-2" }, enT)).toBe("The brief changed at R-1; C-2 is putting it right.");
   });

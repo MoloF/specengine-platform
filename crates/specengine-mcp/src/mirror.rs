@@ -1354,6 +1354,8 @@ pub(crate) struct CardListDocument {
 #[derive(JsonSchema)]
 pub(crate) struct CardFlowShape {
     pub name: String,
+    /// How a person sees the flow; untitled, its name.
+    pub title: String,
     pub disciplines: Vec<String>,
     pub columns: Vec<CardColumnShape>,
     /// Every move, expanded.

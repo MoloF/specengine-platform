@@ -22,6 +22,7 @@ import { actingName, useActing, useAllowed } from "./acting";
 import { ActOff } from "./ActOff";
 import { statusLook } from "./category";
 import { isOverdue } from "./due";
+import { flowTitleOf } from "./filter";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import {
@@ -49,7 +50,7 @@ import { CardTasks, ownNotes } from "./CardTasks";
 // title, and the acts (Accept, primary, in `accept.from` alone; Hand off; Return…; Edit; Assign; Cancel
 // card, subtle and last). The main column holds the card's blocks (its mark and Clear, why it came
 // back, Accept's verdict, the cancellation), Goal and Criteria at the document's size, Source,
-// Hand-offs, Evidence and History, each as before. The side column holds the status (its column's
+// Subtasks (once Hand-offs), Evidence and History, each as before. The side column holds the status (its column's
 // lozenge and the Move menu), the people's fields with the empty ones folded, and Development, the
 // linked `T-` tasks (`docs/canon/card-tasks.md` "The rule"), folded. Nothing here judges a column: the
 // return column and the accept column are the flow's, looked up (`docs/canon/card-flows.md` "The rule").
@@ -339,7 +340,7 @@ function ReturnReason({ card, column }: { card: Card; column: string }) {
   );
 }
 
-/** The card's children: ID (a link), title, the flow's name, its status lozenge, assignee and word; a child of a flow not served is stranded and has no word. */
+/** The card's children, its Subtasks: ID (a link), title, the flow's title, its status lozenge, assignee and word; a child of a flow not served is stranded and has no word. */
 function HandOffs({ rollup, links, flowOf }: { rollup: Rollup; links: CardLinks; flowOf: (name: string) => CardFlow | undefined }) {
   const t = useTranslate();
   return (
@@ -352,7 +353,7 @@ function HandOffs({ rollup, links, flowOf }: { rollup: Rollup; links: CardLinks;
             <li key={row.id} className="board-handoff">
               <CardLink id={row.id} links={links} />
               <bdi className="board-handoff-title">{shownSlot(row.title)}</bdi>
-              <bdi className="muted">{shownSlot(row.flow)}</bdi>
+              <bdi className="muted">{shownSlot(flowTitleOf(flowOf(row.flow), row.flow))}</bdi>
               <Lozenge {...statusLook(flowOf(row.flow), row.column)} />
               <span className={row.assignee === null ? "muted" : undefined}>
                 <bdi>{row.assignee === null ? unassigned(t) : shownSlot(row.assignee)}</bdi>
@@ -366,7 +367,7 @@ function HandOffs({ rollup, links, flowOf }: { rollup: Rollup; links: CardLinks;
   );
 }
 
-/** The main column of a card read: its blocks, then Goal, Criteria, Source, Hand-offs, Evidence and History. */
+/** The main column of a card read: its blocks, then Goal, Criteria, Source, Subtasks, Evidence and History. */
 function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, stateFailure, links, flowOf, onAct }: Omit<CardViewProps, "id" | "query" | "today"> & { card: Card; flow: CardFlow | undefined }) {
   const t = useTranslate();
   const allows = useAllowed(project);
@@ -521,7 +522,7 @@ function CardMain(props: CardViewProps) {
   );
 }
 
-/** "Development · 2 agent tasks", or "No agent tasks": every link counted, read here or not. */
+/** "Agent tasks · 2 linked", or "Agent tasks · none linked": named by its content, every link counted, read here or not. */
 function developmentSummary(card: Card, t: Translate): string {
   const tasks = card.tasks.length === 0 ? t("board.item.noAgentTasks") : t("board.item.agentTasks", { count: card.tasks.length });
   return `${t("board.item.development")} · ${tasks}`;
@@ -541,7 +542,7 @@ function CardSide({ project, card, flow, today, links, onAct }: { project: strin
   const details: Property[] = [
     { key: "assignee", label: t("board.panel.assignee"), value: text(card.assignee) },
     { key: "reviewer", label: t("board.panel.reviewer"), value: text(card.reviewer) },
-    { key: "flow", label: t("board.item.flow"), value: <Value text={card.flow} /> },
+    { key: "flow", label: t("board.item.flow"), value: <Value text={flowTitleOf(flow, card.flow)} /> },
     { key: "due", label: t("board.panel.due"), value: text(card.due) },
     { key: "estimate", label: t("board.panel.estimate"), value: text(card.estimate) },
     { key: "discipline", label: t("board.panel.discipline"), value: text(card.discipline) },

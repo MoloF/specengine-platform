@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-11
 ---
 
 # Card flows: config, hand-off and return
 
-ADR-0056, ADR-0074; `[card]` built by `card-store`, the hand-off and the return by `board-handoff` (RM-0085). The commands, the record and the store: `cards.md`; the routes: `board-ui.md`; the screen: `board-screen.md`. Code: core `card_toml.rs` (the config), `card.rs` (the rules); store `queue/cards.rs`; CLI `card.rs`; MCP `cards.rs`, `hub.rs`; http `app.rs`.
+ADR-0056, ADR-0074, ADR-0076; `[card]` built by `card-store`, the hand-off and the return by `board-handoff` (RM-0085), a flow's `title` and the hand-off by department by `departments` (RM-0096). The commands, the record and the store: `cards.md`; the routes: `board-ui.md`; the screen: `board-screen.md`. Code: core `card_toml.rs` (the config), `card.rs` (the rules); store `queue/cards.rs`; CLI `card.rs`; MCP `cards.rs`, `hub.rs`; http `app.rs`.
 
 ## Config
 
@@ -17,6 +17,7 @@ Core `CardConfig::from_toml` (`flow_toml.rs`' family), the first error by line; 
 ```toml
 [[card.flow]]
 name = "copy"
+title = "Copy desk"
 disciplines = ["copy"]
 columns = ["draft", "edit", "proof", "filed"]
 accept = { from = "proof", to = "filed" }
@@ -26,11 +27,20 @@ moves = [
 ]
 ```
 
-- `[card]` holds `flow` alone, at most 32. A flow's keys (`FLOW_KEYS`, 7): `name`, `disciplines`, `columns`, `titles`, `accept`, `return`, `moves`. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
+- `[card]` holds `flow` alone, at most 32. A flow's keys (`FLOW_KEYS`, 8): `name`, `title`, `disciplines`, `columns`, `titles`, `accept`, `return`, `moves`. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
+- **`title`**, optional, a flow's display name: any script, 1-64 UTF-8 bytes, no control character (`title_problem`, shared with `workspace_toml.rs`); absent, the name; served after `name` in `list`'s `flows[]` (`cards.md` "Documents and events"), the text output unchanged. Each error at the value's line; `titles` of another type keeps `` `titles` is a table, not <type> ``, an unknown key's message lists the eight:
+
+  ```text
+  `title` is a string, not a table: column titles go in `titles`
+  `title` is a string, not <an integer | a float | a boolean | a datetime | an array>
+  `title` is <N> bytes long; a title has 1 to 64
+  `title` holds a control character
+  `titles` is a table, not a string: a flow's own title is `title`
+  ```
 - `accept` required, two columns; `to` is reached only by an accept, `spec card accept` or `POST .../accept`, so it may not be the first column, and a move at it, either end, is a config error.
 - `moves` `{from, to, by?}` of two columns, each pair once. No `by`, or `by: []` as served: anyone. No `moves`: every ordered pair of the other columns, expanded by the reader, so moves are looked up, never judged.
 - **A new card** takes the first column of the first flow listing its discipline, else of the one flow listing none, else exit 1 naming why.
-- **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so pasting it changes nothing: `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, no `return`, `--discipline` free.
+- **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so pasting it changes nothing: `plain`, titled `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, no `return`, `--discipline` free.
 
 ### `return`
 
@@ -67,6 +77,7 @@ No card write moves, creates or refuses another card. A parent waits on no child
 
 - **`--reviewer N`**: `assign`'s checks and texts. Off the person grammar (`cards.md` "Who acts"): exit 1, the daemon's 400. Then core `reviewer_problem`: ``reviewer: `agent` can be no reviewer: a person accepts a result``, `local` alike, exit 1, a 409; the store asks it again under its lock. `--reviewer -` is refused on `new`, exit 1, as `--assignee -` is: ``reviewer: `-` clears a name: a new card has none``. Nothing is written on a refusal.
 - **Accept**: the child in its `accept.from`, `--as` its reviewer, never its assignee (`cards.md` "Rules").
+- **The dialog** (`CardDialogs.tsx` `HandOffDialog`; an open card, the modal, the page, `h` on a tile), its form chosen on open from the Shell's held workspaces read (`useHeldWorkspaces`, never fetching). Two or more departments whose served `disciplines` (`workspaces.md` "Read") is not empty: a required Department select, served order, no default, "Choose a department", one with none not offered; one with several disciplines adds a Discipline select, its first chosen. Fewer, or the read pending or failed on open: Discipline, a datalist of every served flow's disciplines, a hidden flow's too, for the dialog's life. Title, Goal, Targets prefilled; no assignee, criteria, estimate, due or evidence; Reviewer prefilled with the parent's reviewer, else the acting name unless `agent` or `local` (refused above), else empty (`acting.ts` `handOffReviewer`), editable and required locally, the read-only login on a hub; the parent fixed. Submit: one `POST .../cards` with `title`, `goal`, `discipline`, `target`, `parent`, `reviewer`, `as`, nothing new; a polite line names the child and its raw `<flow>/<column>`.
 
 ## Return
 
@@ -90,17 +101,17 @@ No card write moves, creates or refuses another card. A parent waits on no child
 
 ## MCP and hub
 
-Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `create_card`'s and `move_card`'s descriptions name `reviewer` and `note`, `list_cards`' names `parent` and `return`; each hub text ASCII and at most 2 048 B, 17 hub tools. `move_card`'s `note` is free text or null, never a staged choice: `mcp_stage.rs` exempts it from decision-staging's walk, as `edit_card`'s `reason`. Plugin 0.31.0 (`plugin-files.md`); `read-spec` says a hand-off is a child card and a return needs a note.
+Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `create_card`'s and `move_card`'s descriptions name `reviewer` and `note`, `list_cards`' names `parent` and `return`, its flows `title` (0.35.0); each hub text ASCII and at most 2 048 B, 17 hub tools. `move_card`'s `note` is free text or null, never a staged choice: `mcp_stage.rs` exempts it from decision-staging's walk, as `edit_card`'s `reason`. Plugin 0.31.0 (`plugin-files.md`); `read-spec` says a hand-off is a child card and a return needs a note.
 
 **On a hub** both acts are plain writes for any login, `as` bound to it (`hub-team.md` "Acts"). Naming a reviewer at creation is what `assign` already allows (ADR-0060 "Cost"). Accepting the child takes a `[team]` login that is its reviewer. Every login reads every reason (ADR-0065 "Cost").
 
 ## Known limits
 
-- **Older binaries refuse `return`**: an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools. Add the key only after every terminal, plugin and hub serving the project runs this build (ADR-0073's rule); the preset's header says so.
+- **Older binaries refuse `return` and `title`** (before `board-handoff`, `departments`): an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools (pinned on today's code by an unknown key: CLI `cards.rs` `dp5_an_unknown_flow_key_exits_2_at_its_line`, `ac05`, MCP `a_bad_card_table_stops_the_card_tools_alone`). Add a key only after every terminal, plugin and hub serving the project runs a build that reads it (ADR-0073's rule); the preset's header says so.
 - **History keeps 64 events**: a returned card changed 64 times since has lost its reason; the screen says so.
 - **Hub accepts**: a writer must be a `[team]` login to accept a hand-off's result.
 - No `return_column` on the card row: the reason lives only in the event (ADR-0074 "Cost").
 
 ## Tests
 
-core `workspace_toml.rs` (the key, the five errors, the preset); CLI `card_handoff.rs` on `fixtures/studio-lamp` (hand-off, return, `--parent`, nothing waits on another card); store `queue_cards.rs`; mcp `mcp_cards.rs`, `mcp_stage.rs`, `plugin_files.rs`; http `cards.rs`, `query.rs`, `door.rs`, `hub_team.rs`, `hub.rs`, `daemon_keys.rs`, `no_domain.rs`; eval `workspace_names.rs`; `fixtures/card-press` byte-equal, `return` null. Core `card_move` is reached through the store, CLI, daemon and MCP, with no unit test of its own; the store's `board_handoff_by_and_the_flows_moves_come_before_the_return_note` pins the order: `by` and the flow's moves refuse before the return note.
+core `workspace_toml.rs` (the key, the five errors, the preset), `departments.rs` (`title`, its five messages); CLI `departments.rs` (`flows[0]` keys, the text byte-equal to 5bec07e's); CLI `card_handoff.rs` on `fixtures/studio-lamp` (hand-off, return, `--parent`, nothing waits on another card); store `queue_cards.rs`; mcp `mcp_cards.rs`, `mcp_stage.rs`, `plugin_files.rs`; http `cards.rs`, `query.rs`, `door.rs`, `hub_team.rs`, `hub.rs`, `daemon_keys.rs`, `no_domain.rs`; eval `workspace_names.rs`; `fixtures/card-press` byte-equal, `return` null. Core `card_move` is reached through the store, CLI, daemon and MCP, with no unit test of its own; the store's `board_handoff_by_and_the_flows_moves_come_before_the_return_note` pins the order: `by` and the flow's moves refuse before the return note.

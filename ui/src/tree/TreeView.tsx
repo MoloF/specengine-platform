@@ -191,18 +191,24 @@ function SearchField({
  * the node the route names on the right; stacked on narrow screens. Every region reads, fails
  * and retries on its own. Read-only: nothing here writes the spec. The tree starts at the chosen
  * module's root and goes back to it when the choice changes; Whole tree and Show as root change
- * this view's root alone (docs/features/workspaces.md "The UI").
+ * this view's root alone (docs/features/workspaces.md "The UI"). A direction starts it at a flat
+ * list of its kinds' nodes, in served order, one level: the read's depths and parents are the whole
+ * tree's, so no row hangs under another (docs/features/departments.md "Acceptance criteria", DP-11).
+ * Show as root leaves the list for a rooted read; Whole tree goes back to the list.
  */
 export function TreeView({
   project,
   nodeRef,
   moduleRoot = null,
+  moduleKinds = null,
   moduleKnown = true,
 }: {
   project: string;
   nodeRef: string | null;
-  /** The chosen module's root, null for the whole project. */
+  /** The chosen module's root, null for the whole project or a direction. */
   moduleRoot?: string | null;
+  /** The chosen direction's kinds, as served; null with no direction chosen. */
+  moduleKinds?: readonly string[] | null;
   /** False while the workspaces are read: the tree waits for its root (docs/features/workspaces.md WS-9). */
   moduleKnown?: boolean;
 }) {
@@ -219,17 +225,20 @@ export function TreeView({
   // Rendered or Source, kept from node to node (docs/features/ui-markdown.md AC-09).
   const [textMode, setTextMode] = useState<TextMode>(DEFAULT_TEXT_MODE);
   const [root, setRoot] = useState<string | null>(moduleRoot);
-  /** The module root `root` last started from: a new choice starts the tree there again. */
-  const [rootFrom, setRootFrom] = useState(moduleRoot);
+  /** The module `root` last started from, a root or a direction's kinds: a new choice starts the tree there again. */
+  const start = JSON.stringify([moduleRoot, moduleKinds]);
+  const [rootFrom, setRootFrom] = useState(start);
   const [submitted, setSubmitted] = useState<string | null>(null);
   const [showHits, setShowHits] = useState(false);
-  if (rootFrom !== moduleRoot) {
+  if (rootFrom !== start) {
     // Storing information from previous renders (react.dev, useState).
-    setRootFrom(moduleRoot);
+    setRootFrom(start);
     setRoot(moduleRoot);
   }
+  /** At a direction's start: its kinds' nodes, listed flat. */
+  const listing = root === null && moduleKinds !== null ? moduleKinds : null;
 
-  const tree = useTree(project, root === null ? { archive } : { root, archive }, moduleKnown);
+  const tree = useTree(project, listing !== null ? { kinds: [...listing], archive } : root === null ? { archive } : { root, archive }, moduleKnown);
   const treeFailure = useRetainedFailure(tree.error, tree.isFetching);
   const node = useNode(project, nodeRef ?? "", {}, nodeRef !== null);
   const inbox = useInbox(project);
@@ -255,7 +264,15 @@ export function TreeView({
   /** The search answer last spoken: each answer is spoken once. */
   const spoken = useRef(0);
 
-  const rows = useMemo(() => buildRows(tree.data?.nodes ?? []), [tree.data]);
+  // A direction's list is one level: each row's depth as 0, so none is a parent and every row is
+  // aria-level 1. Flatness is the answer's own, a kinds read with no root, never the request's: while a
+  // new read is out the last answer stays up (`keepPreviousData`) and is drawn as it was read.
+  const rows = useMemo(() => {
+    const answer = tree.data;
+    const nodes = answer?.nodes ?? [];
+    const flat = answer !== undefined && answer.ref === null && answer.kinds.length > 0;
+    return buildRows(flat ? nodes.map((node) => ({ ...node, depth: 0 })) : nodes);
+  }, [tree.data]);
   // The holders of the route's node once read; a previous node's answer kept up meanwhile is not it.
   const holders = nodeRef === null || node.data === undefined || node.isPlaceholderData ? null : node.data.nodes;
   const currentRows = useMemo(() => (nodeRef === null ? [] : rowsForRef(rows, nodeRef, holders)), [rows, nodeRef, holders]);

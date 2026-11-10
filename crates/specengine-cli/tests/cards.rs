@@ -1681,6 +1681,37 @@ fn ac05_a_bad_card_table_stops_spec_card_alone() {
     }
 }
 
+/// docs/features/departments.md DP-5: an older binary reads a flow's
+/// `title` as an unknown key, so what an unknown key does is the rollout's
+/// proof. `colour`, unknown before and after that slice, in a
+/// `[[card.flow]]` four lines below its header: `spec card list` exits 2,
+/// stdout empty, stderr starting `specengine.toml:<the colour line>: unknown
+/// field `colour`, expected one of ` (the prefix only: the list grows by
+/// `title`). M: the line taken from the flow's `[[card.flow]]` header.
+#[test]
+fn dp5_an_unknown_flow_key_exits_2_at_its_line() {
+    let pair = Pair::new("cd-dp5", "spec-a");
+    let base = read_text(&pair.main, "specengine.toml");
+    let text = format!("{base}{}", flow_toml("f", "colour = \"red\"\n"));
+    let header = 1 + text
+        .lines()
+        .position(|line| line == "[[card.flow]]")
+        .expect("the flow's header");
+    let colour = 1 + text
+        .lines()
+        .position(|line| line == "colour = \"red\"")
+        .expect("the colour line");
+    assert!(colour > header + 1, "the key is not the header's neighbour");
+    write(&pair.main, "specengine.toml", text);
+    let stderr = cannot(&pair, &["card", "list"]);
+    let prefix = format!("specengine.toml:{colour}: unknown field `colour`, expected one of ");
+    assert!(
+        stderr.starts_with(&prefix),
+        "want the prefix {prefix:?}, got {stderr:?}"
+    );
+    assert_eq!(stderr.lines().count(), 1, "one line: {stderr:?}");
+}
+
 /// "Data": the bounds themselves are taken: a 64-byte name and title, 2
 /// and 32 columns, 32 flows, a title in another script; `titles` default to
 /// the ID.

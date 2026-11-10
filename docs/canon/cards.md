@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # Cards: commands, record, store
@@ -89,7 +89,7 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 - `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card, or one whose flow is gone: empty. `accept` is never in it: the board finds it through `accept.from`.
 - `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`; a payload that does not parse is passed over.
 
-`list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` when nothing is cut. `flows` `[{name, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}, return}]`, `moves` expanded, `return` a column or `null`, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction}`, 21 keys; the last four `--marks`' (`spec-trace.md` "The read"), else `null`.
+`list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` when nothing is cut. `flows` `[{name, title, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}, return}]`, `moves` expanded, `return` a column or `null`, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction}`, 21 keys; the last four `--marks`' (`spec-trace.md` "The read"), else `null`.
 
 Events, the `as` the acting name: `card.created {id, flow, column, position, assignee, reviewer, as}`; `card.moved {id, from, to, position, as, note}`, a reorder `from` = `to`, `reviewer` and `note` `null` when none; `card.accepted` the same and `verdict`, `discrepancy`; `card.edited {id, fields, as}`, the changed keys; `card.assigned {id, assignee, reviewer, as}`; `card.cancelled {id, column, as}`; `card.cleared`, `card.reestimated`, `card.refreshed`: `spec-trace-record.md` "Events".
 

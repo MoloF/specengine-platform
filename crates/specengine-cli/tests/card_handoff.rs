@@ -69,12 +69,13 @@ const REASON: &str = "Two endings contradict";
 /// their IDs, `copy`'s moves as written, `plates`' every ordered pair, and
 /// `"return":null` after each `accept` (docs/canon/cards.md
 /// "Documents and events"): no other byte moves.
-const PRESS_LIST_JSON: &str = "{\"flows\":[{\"name\":\"copy\",\"disciplines\":[\"copy\"],\
+const PRESS_LIST_JSON: &str = "{\"flows\":[{\"name\":\"copy\",\"title\":\"Copy desk\",\
+     \"disciplines\":[\"copy\"],\
      \"columns\":[{\"id\":\"draft\",\"title\":\"draft\"},{\"id\":\"edit\",\"title\":\"edit\"},\
      {\"id\":\"proof\",\"title\":\"proof\"},{\"id\":\"filed\",\"title\":\"filed\"}],\"moves\":\
      [{\"from\":\"draft\",\"to\":\"edit\",\"by\":[\"desk\"]},{\"from\":\"edit\",\"to\":\"proof\",\
      \"by\":[]}],\"accept\":{\"from\":\"proof\",\"to\":\"filed\"},\"return\":null},{\"name\":\
-     \"plates\",\"disciplines\":[\"plates\"],\"columns\":[{\"id\":\"queued\",\"title\":\"queued\"},\
+     \"plates\",\"title\":\"plates\",\"disciplines\":[\"plates\"],\"columns\":[{\"id\":\"queued\",\"title\":\"queued\"},\
      {\"id\":\"blocked\",\"title\":\"blocked\"},{\"id\":\"checked\",\"title\":\"checked\"},{\"id\":\
      \"struck\",\"title\":\"struck\"}],\"moves\":[{\"from\":\"queued\",\"to\":\"blocked\",\"by\":[]},\
      {\"from\":\"queued\",\"to\":\"checked\",\"by\":[]},{\"from\":\"blocked\",\"to\":\"queued\",\
@@ -598,7 +599,9 @@ fn bh12_the_child_is_accepted_by_its_reviewer_and_refused_to_its_assignee() {
 /// BH-13: `spec card list --json` serves each flow `{name, disciplines,
 /// columns, moves, accept, return}`, in that order: on studio-lamp
 /// `"return":"sent-back"` in all five, `sent-back` titled "Returned", second;
-/// on card-press `"return":null` with every other byte as before.
+/// on card-press `"return":null` with every other byte as before. Since
+/// docs/features/departments.md (D3, DP-1) `title` follows `name`: the
+/// preset's titles on studio-lamp, "Copy desk" and `plates` on card-press.
 #[test]
 fn bh13_flows_serve_return_after_accept() {
     let pair = Pair::new("ho-bh13-lamp", LAMP);
@@ -613,6 +616,7 @@ fn bh13_flows_serve_return_after_accept() {
             ordered.get("flows").at(index).keys(),
             [
                 "name",
+                "title",
                 "disciplines",
                 "columns",
                 "moves",

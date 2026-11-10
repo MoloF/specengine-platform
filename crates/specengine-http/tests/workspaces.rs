@@ -20,6 +20,13 @@
 //!   every other method a 405 `Allow: GET`; a slug `ProjectConfig` refuses a
 //!   503 with the CLI's line, answered again once mended.
 //!
+//! - docs/features/departments.md (RM-0096) DP-3: over a git copy of
+//!   `fixtures/studio-lamp` (a lighthouse game: the preset, two rooted
+//!   modules, the direction `scenes`) the route is "Data"'s document, each
+//!   workspace's `disciplines` and each module's `root` and `kinds`,
+//!   byte-equal to the CLI's; the fresh `HOME` holds nothing past the
+//!   daemon's own files: no project turn, no index.
+//!
 //! The turn is `tests/turn.rs`'s, the hub's `tests/hub.rs`'s (WS-10), the key
 //! sets `tests/daemon_keys.rs`'s.
 
@@ -34,7 +41,7 @@ use common::{
     Reply, Run, Scratch, Server, beyond_daemon, read_text, root_args, spec, spec_json, write,
 };
 use workspaces_common::{
-    CONFIG, IMPLICIT_JSON, PRESS_JSON, line_holding, misspelt, variants, without_tables,
+    CONFIG, IMPLICIT_JSON, LAMP_JSON, PRESS_JSON, line_holding, misspelt, variants, without_tables,
 };
 
 /// card-press's route.
@@ -250,4 +257,30 @@ fn ws12_a_refused_config_is_a_503_with_the_cli_s_line() {
 
     write(&press, CONFIG, &good);
     assert_eq!(answered(&server, PRESS).text(), PRESS_JSON);
+}
+
+/// docs/features/departments.md (RM-0096) DP-3: `GET
+/// /api/projects/studio-lamp/workspaces` is "Data"'s document, the
+/// direction's `root` null and its `kinds`, each workspace's `disciplines`,
+/// byte-equal to `spec workspace --json` of the same copy; a repeat the same
+/// bytes. The route reads the config alone: no project turn is taken, the
+/// fresh `HOME` holds nothing past the daemon's own files. M: a discipline
+/// kept when any of a department's flows lists it (core's
+/// `tests/departments.rs`).
+#[test]
+fn departments_dp3_the_route_serves_disciplines_and_a_direction_as_the_cli() {
+    let scratch = Scratch::new("workspaces-lamp");
+    let lamp = scratch.repo("studio-lamp", "lamp", "main");
+    let home = scratch.home("fresh");
+    let cli_home = scratch.home("cli");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&lamp]);
+    let reply = answered(&server, "/api/projects/studio-lamp/workspaces");
+    assert_eq!(reply.text(), LAMP_JSON);
+    assert_eq!(reply.text(), cli(&cli_home, &cwd, &lamp).document());
+    assert!(
+        beyond_daemon(&home).is_empty(),
+        "the route takes no project turn: the fresh HOME holds {:?}",
+        beyond_daemon(&home)
+    );
 }

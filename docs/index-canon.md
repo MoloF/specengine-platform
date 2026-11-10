@@ -30,6 +30,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a deciding item approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
 - [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
+- [docs/canon/directions.md](canon/directions.md) Directions: a module chosen by node kind · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/doc-view.md](canon/doc-view.md) The document view: one modal and page everywhere · ui · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
 - [docs/canon/drift-screens.md](canon/drift-screens.md) Drift screens in the web UI · ui · tier 2

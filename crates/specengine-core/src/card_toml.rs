@@ -10,6 +10,12 @@
 //!   [`MAX_NAME_BYTES`] bytes; each once in its list. [`MIN_COLUMNS`] to
 //!   [`MAX_COLUMNS`] columns. `titles = { id = "text" }`, any script, at most
 //!   [`MAX_TITLE_BYTES`] bytes, default the ID.
+//! - **`title`** (`docs/features/departments.md` "Acceptance criteria",
+//!   DP-1), optional: the flow's own display name, any script, 1 to
+//!   [`MAX_TITLE_BYTES`] UTF-8 bytes, no control character
+//!   (`title_problem`, shared with the workspaces' reader); absent, the
+//!   `name`. One letter from `titles`, so a table under `title`, or a string
+//!   under `titles`, is refused with a hint naming the other key.
 //! - **`accept`** required, `{from, to}`, two columns: a person reaches `to`
 //!   by accepting, on a terminal or the local page, and no agent tool does,
 //!   so a move ending there, or a new card starting there, is an error.
@@ -44,8 +50,9 @@ const TABLE: &str = "card";
 /// `[card]`'s keys.
 const CARD_KEYS: [&str; 1] = ["flow"];
 /// A flow's keys, in the order a message lists them.
-const FLOW_KEYS: [&str; 7] = [
+const FLOW_KEYS: [&str; 8] = [
     "name",
+    "title",
     "disciplines",
     "columns",
     "titles",
@@ -106,6 +113,10 @@ pub struct CardMove {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct CardFlow {
     pub name: String,
+    /// How a person sees the flow: its `title`, else its `name`. Served
+    /// right after `name`, as `docs/features/departments.md`
+    /// "Acceptance criteria", DP-1, pins.
+    pub title: String,
     pub disciplines: Vec<String>,
     /// In the order written: a new card takes the first.
     pub columns: Vec<CardColumn>,
@@ -206,6 +217,22 @@ pub fn name_problem(name: &str) -> Option<String> {
     None
 }
 
+/// Why `title` is none: 1 to [`MAX_TITLE_BYTES`] UTF-8 bytes, any script,
+/// no control character. A flow's `title` and a workspace's or module's
+/// take the same checks and messages.
+pub(crate) fn title_problem(title: &str) -> Option<String> {
+    if title.is_empty() || title.len() > MAX_TITLE_BYTES {
+        return Some(format!(
+            "`title` is {} bytes long; a title has 1 to {MAX_TITLE_BYTES}",
+            title.len()
+        ));
+    }
+    title
+        .chars()
+        .any(char::is_control)
+        .then(|| "`title` holds a control character".to_owned())
+}
+
 /// [`CardConfig::from_toml`] as a function.
 pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
     let root = DeTable::parse(text).map_err(|error| ProjectError {
@@ -286,6 +313,7 @@ fn read_card(entries: &DeTable<'_>, flows: &mut Vec<CardFlow>, errors: &mut Erro
 #[derive(Default)]
 struct Written<'v, 'i> {
     name: Option<String>,
+    title: Option<String>,
     disciplines: Vec<String>,
     columns: Option<&'v Spanned<DeValue<'i>>>,
     titles: Option<&'v Spanned<DeValue<'i>>>,
@@ -308,6 +336,7 @@ fn read_flow(span: Range<usize>, entry: &DeTable<'_>, errors: &mut Errors<'_>) -
                     written.name = Some(name.to_owned());
                 }
             }
+            "title" => written.title = read_title(value, errors),
             "disciplines" => {
                 written.disciplines = names("disciplines", value, errors)
                     .into_iter()
@@ -347,6 +376,7 @@ fn read_flow(span: Range<usize>, entry: &DeTable<'_>, errors: &mut Errors<'_>) -
         })
         .collect();
     Some(CardFlow {
+        title: written.title.unwrap_or_else(|| name.clone()),
         name,
         disciplines: written.disciplines,
         columns,
@@ -372,6 +402,28 @@ fn text<'v>(
             None
         }
     }
+}
+
+/// `title`, when written: a string [`title_problem`] passes, else its
+/// error at the value. A table is what `titles` holds, so its error names
+/// that key (`docs/features/departments.md` "Acceptance criteria", DP-1).
+fn read_title(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<String> {
+    if let DeValue::Table(_) = value.get_ref() {
+        errors.push(
+            value.span(),
+            format!(
+                "`title` is a string, not {}: column titles go in `titles`",
+                type_name(value.get_ref())
+            ),
+        );
+        return None;
+    }
+    let title = text("title", value, errors)?;
+    if let Some(problem) = title_problem(title) {
+        errors.push(value.span(), problem);
+        return None;
+    }
+    Some(title.to_owned())
 }
 
 /// The list of strings `value`, each with its span, else its error (none).
@@ -559,9 +611,18 @@ fn read_titles(
         return Vec::new();
     };
     let DeValue::Table(entry) = value.get_ref() else {
+        // A string is what a flow's own `title` holds: the hint names it
+        // (`docs/features/departments.md` "Acceptance criteria", DP-1).
+        let hint = match value.get_ref() {
+            DeValue::String(_) => ": a flow's own title is `title`",
+            _ => "",
+        };
         errors.push(
             value.span(),
-            format!("`titles` is a table, not {}", type_name(value.get_ref())),
+            format!(
+                "`titles` is a table, not {}{hint}",
+                type_name(value.get_ref())
+            ),
         );
         return Vec::new();
     };

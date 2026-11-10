@@ -86,7 +86,7 @@
   "FlowEdge": ["from", "to", "type", "kind", "when", "count", "path", "line"],
   "FlowInner": ["type", "count"],
   "CardList": ["flows", "cards", "notes", "truncated", "omitted"],
-  "CardFlow": ["name", "disciplines", "columns", "moves", "accept", "return"],
+  "CardFlow": ["name", "title", "disciplines", "columns", "moves", "accept", "return"],
   "CardColumn": ["id", "title"],
   "CardMove": ["from", "to", "by"],
   "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled", "mark", "on", "discrepancy", "correction"],
@@ -110,8 +110,8 @@
   "ConfirmRead": ["id", "question", "updated_at"],
   "HubSync": ["ahead", "behind", "state", "error", "at"],
   "WorkspaceDocument": ["source", "notes", "workspaces", "modules"],
-  "Workspace": ["name", "title", "landing", "sections", "flows", "module"],
-  "WorkspaceModule": ["name", "title", "root"],
+  "Workspace": ["name", "title", "landing", "sections", "flows", "disciplines", "module"],
+  "WorkspaceModule": ["name", "title", "root", "kinds"],
   "CardTask": ["id", "status", "title", "stale"],
   "ShownAncestor": ["id", "kind", "title", "path"]
 }

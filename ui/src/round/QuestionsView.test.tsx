@@ -471,7 +471,7 @@ describe("drafts by ID (U-05)", () => {
     act(() => {
       window.location.hash = "#/alpha/tasks";
     });
-    await screen.findByRole("heading", { level: 1, name: "Tasks" });
+    await screen.findByRole("heading", { level: 1, name: "Agent tasks" });
     act(() => {
       window.location.hash = "#/alpha/questions";
     });
@@ -720,7 +720,7 @@ describe("a POST on its way while the owner leaves and comes back (review minor 
     await waitFor(() => {
       expect(client.stageRoundAnswers).toHaveBeenCalledTimes(1);
     });
-    await goTo("#/alpha/tasks", "Tasks");
+    await goTo("#/alpha/tasks", "Agent tasks");
     await goTo("#/alpha/questions", "Questions");
     await screen.findByRole("article", { name: "PR-0003" });
     expect(checkedIn("PR-0003")).toEqual(["Take the working answer"]);
@@ -735,7 +735,7 @@ describe("a POST on its way while the owner leaves and comes back (review minor 
     expect(checkedIn("PR-0003")).toEqual(["Leave open"]);
     expect(stageButton().textContent).toBe("Stage 0 answers");
     // Away and back once more: nothing written back over the cleared drafts.
-    await goTo("#/alpha/tasks", "Tasks");
+    await goTo("#/alpha/tasks", "Agent tasks");
     await goTo("#/alpha/questions", "Questions");
     await screen.findByRole("article", { name: "PR-0003" });
     expect(checkedIn("PR-0003")).toEqual(["Leave open"]);
@@ -751,7 +751,7 @@ describe("a POST on its way while the owner leaves and comes back (review minor 
     await waitFor(() => {
       expect(client.stageRoundAnswers).toHaveBeenCalledTimes(1);
     });
-    await goTo("#/alpha/tasks", "Tasks");
+    await goTo("#/alpha/tasks", "Agent tasks");
     held.release();
     // Said with no Questions screen on view: the words name the project.
     await waitFor(() => {
@@ -947,7 +947,7 @@ describe("what a POST that settles after its screen left says (review iteration 
     await waitFor(() => {
       expect(client.stageRoundAnswers).toHaveBeenCalledTimes(1);
     });
-    await goTo("#/alpha/tasks", "Tasks");
+    await goTo("#/alpha/tasks", "Agent tasks");
     act(() => {
       fail();
     });
@@ -976,7 +976,7 @@ describe("what a POST that settles after its screen left says (review iteration 
     await waitFor(() => {
       expect(client.stageRoundAnswers).toHaveBeenCalledTimes(1);
     });
-    await goTo("#/alpha/tasks", "Tasks");
+    await goTo("#/alpha/tasks", "Agent tasks");
     await goTo("#/alpha/questions", "Questions");
     await screen.findByRole("article", { name: "PR-0003" });
     act(() => {
