@@ -229,7 +229,7 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - **Proof** is a decision record that the card links back to.
 - **Folded in the UI.** These are local technical details: the UI folds them and never moves them. They are IDs, paths, raw kinds, revisions and hashes, tokens, distance, gap codes, Bindings, Bundle, the lock diff and drift. `T-` tasks show as a Development summary.
 
-The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6 come to 65-97 pipeline hours (step 3 took RM-0101 in; steps 4 to 6 re-estimated by their analyses, step 6 with the owner's fixes of 2026-11-11) and steps 7-13 to 27-46.
+The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6b come to 67-100 pipeline hours (step 3 took RM-0101 in; steps 4 to 6 re-estimated by their analyses, step 6 with the owner's fixes of 2026-11-11, step 6b his next four of that day) and steps 7-13 to 27-46.
 
 | Step | Slice | Item | Result | ADR issued | Hours | After |
 |---|---|---|---|---|---|---|
@@ -239,7 +239,8 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 4 | `departments` | RM-0096 | Shipped 2026-11-11: the owner's words (Department, Task, Subtask, Agent task); `[[card.flow]] title` on the Board; `[[module]] kinds` directions, the Tree's flat list and Inside's groups, Flow rooted only (RM-0102 in the pool); Hand off by department, its `disciplines` served; preset flow titles; plugin 0.35.0; first-load JS 827.62 kB of 845 (`docs/canon/directions.md`, `workspaces.md`) | ADR-0076 `departments` (amends ADR-0073) | 10-14 | 1 |
 | 5 | `card-questions` | RM-0097 | Shipped 2026-11-11: intake items name `card_id` (queue schema 11, backup format 5); a decision's `why` and its `{{why}}` slot; the card's `items` and Activity; "Ask a question" in Return; ask, record and answer (a stage) from the task; the route a hub's sixth plain write; plugin 0.36.0; first-load JS 840.79 kB of 845 (`docs/canon/card-questions.md`) | ADR-0077 `card-questions` (supplements ADR-0056, ADR-0057, ADR-0074, ADR-0075) | 13-19 | 1 |
 | 6 | `handoff-progress` | RM-0098 | Shipped 2026-11-11: the work item reads its own children, cancelled ones too, and each cancelled one's reason; a segmented bar with its words, Ready to accept beside Accept (never a gate), Relies on, cancelled subtasks with reasons; `RoadmapView` and `GraphView` lazy first; the owner's fixes: Flow left to right again (Q14 closed), a press moving up to 5 px a click, the minimap and dividers taking no pointer, work-item and document modals 1200 px with a 360 px side; arrows named from source to target; UI only, no ADR; first-load JS 815.11 kB of 845; about 2.5 Flow columns in view at 1440 with both panes, more the owner's call; its follow-up RM-0103 `canvas-clicks` in the pool (`docs/canon/card-progress.md`, `spec-flow-layout.md`) | - | 9-14 | 1 |
-| gate | the pipeline trial | - | No code: the bar below | - | - | 1-6 |
+| 6b | `room-and-scroll` | - | The owner's four requests of 2026-11-11 on `v0.36.0`, no item: room on Flow (a 96 px column gap, 88 px edge words, 48 px between a column's boxes, 104 px boxes); a selected box's or arrow's lines in the accent, set inline, the rest faded, Flow only; start and end boxes rounded 16 px, so no corner cuts their text; a modal whose Main and side scroll apart; UI only (`docs/features/room-and-scroll.md`) | - | 2-3 | 6 |
+| gate | the pipeline trial | - | No code: the bar below | - | - | 1-6b |
 | 7 | `design-sweep` | RM-0099 | (a) Inbox, Questions, Spec tree, Overview; (b) Health, Graph, Roadmap, Tasks, on the foundation; the legacy tokens and step 1's exceptions gone | - | 8-14 | 1, gate |
 | 8 | `intake-similar` | RM-0059 | `similar` and `distinct_from` on create | - | 2-4 | - |
 | 9 | `collision-pass` | RM-0060 | Candidates, a pair ledger, a skill | - | 3-5 | 8 |
@@ -251,11 +252,11 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 
 **Lanes.** Two lanes run side by side.
 - **The Rust lane** holds the cores of steps 2-5 (`in_flow` and `ancestors`, link ends' and gap members' titles, the department keys, the card's intake link), then steps 8 and 9.
-- **The UI lane** starts with step 1, then takes the UIs of steps 2-5, then steps 6 and 7.
+- **The UI lane** starts with step 1, then takes the UIs of steps 2-5, then steps 6, 6b and 7.
 
 A slice's UI waits for its core and for step 1; no core waits for the UI lane. Steps 10-13 follow both lanes.
 
-**The pipeline trial** is the gate after step 6. It needs no code and replaces the studio trial (Q13). A person who did not write the project gets only the URL and one-line tasks, on a local daemon over a copy of a real corpus, with two departments configured (writers and developers). Unaided, they:
+**The pipeline trial** is the gate after steps 6 and 6b. It needs no code and replaces the studio trial (Q13). A person who did not write the project gets only the URL and one-line tasks, on a local daemon over a copy of a real corpus, with two departments configured (writers and developers). Unaided, they:
 1. find a named document by its path and read it in the modal;
 2. make a task on it and hand one subtask to each department;
 3. as the developer, send one subtask back with a question to the writers;
