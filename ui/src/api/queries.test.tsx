@@ -783,22 +783,26 @@ describe("a card's linked tasks on the live tail (CT-5 of docs/features/card-tas
     expect(card?.tasks.map((task) => task.stale)).toEqual([true]);
   });
 
-  it.each(["proposal.created", "proposal.approved", "proposal.rejected", "proposal.apply_failed"])("%s reads no card: no file changed, so no linked task's state moved", async (type) => {
+  // Since card-questions (M1 of its review; docs/canon/card-questions.md "The rule"): a card serves the
+  // items naming it and their events read now, and no event says which card names an item, so every
+  // proposal event reads the open card once, the one not on screen marked stale.
+  it.each(["proposal.created", "proposal.approved", "proposal.rejected", "proposal.apply_failed", "proposal.staged", "proposal.unstaged"])("%s reads the open card once: a card serves its items as read now", async (type) => {
     const { client, queryClient, tail } = await onScreen();
     act(() => {
       tail({ seq: 76, type, payload: { id: "PR-0001" } });
     });
     await quiet(queryClient);
-    expect(client.getCard).not.toHaveBeenCalled();
+    expect(argsOf(client.getCard)).toEqual([["alpha", "C-0001"]]);
+    expect(queryClient.getQueryState(queryKeys.card("alpha", "C-0002"))?.isInvalidated).toBe(true);
   });
 
-  it("a proposal event reads no card: only a task's own events move what a card shows of it", async () => {
+  it("a raise reads the open card and never the list: the list shows no item", async () => {
     const { client, queryClient, tail } = await onScreen();
     act(() => {
       tail({ seq: 74, type: "proposal.created", payload: { id: "PR-0001" } });
     });
     await quiet(queryClient);
-    expect(client.getCard).not.toHaveBeenCalled();
+    expect(argsOf(client.getCard)).toEqual([["alpha", "C-0001"]]);
     expect(client.getCards).not.toHaveBeenCalled();
   });
 });

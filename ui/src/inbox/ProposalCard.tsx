@@ -260,6 +260,13 @@ function ReviewBody({
         </Section>
       )}
 
+      {/* A decision's why, as its author wrote it (docs/features/card-questions.md "Acceptance criteria", U5). */}
+      {review.why !== null && (
+        <Section title={t("inbox.proposal.why")}>
+          <Prose className="prose" source={review.why} links={null} project={project} baseLevel={3} frontMatter={false} />
+        </Section>
+      )}
+
       {review.rationale !== null && review.rationale !== review.summary && (
         <Section title={t("inbox.card.rationale")}>
           <Prose className="prose" source={review.rationale} links={null} project={project} baseLevel={3} frontMatter={false} />
@@ -595,6 +602,12 @@ export function ProposalCard({
             </dd>
           </div>
         </dl>
+        {/* The task it was raised for, its card on the board (docs/canon/card-questions.md "The rule"); only the review document names it. */}
+        {reviewed !== undefined && reviewed.card_id !== null && (
+          <p className="card-task-link">
+            <a href={sectionHash(project, "board", reviewed.card_id)}>{fill(t("inbox.proposal.task", { id: slot("id") }), { id: <span className="mono">{shownSlot(reviewed.card_id)}</span> })}</a>
+          </p>
+        )}
         {reviewed !== undefined && reviewed.drift !== null ? (
           <TerminalDecision id={id} worktree={reviewed.worktree} />
         ) : (
@@ -629,7 +642,7 @@ export function ProposalCard({
             fallback={
               <p className="staged-pending" aria-busy="true">
                 {fill(t(onConfirm === undefined ? "inbox.card.stagedTerminal" : "inbox.card.stagedHere", { at: slot("at") }), {
-                  at: <time dateTime={reviewed.staged_at}>{reviewed.staged_at}</time>,
+                  at: <time dateTime={reviewed.staged_at}>{formatUtc(reviewed.staged_at, t)}</time>,
                 })}
               </p>
             }

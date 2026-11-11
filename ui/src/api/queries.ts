@@ -26,10 +26,12 @@ import type {
   CardCreateBody,
   CardEditBody,
   CardMoveBody,
+  CardRaiseBody,
   CardWrite,
   ConfirmBody,
   FlowView,
   Inbox,
+  IntakeDocument,
   Proposal,
   RoundAnswerBody,
   RoundAnswersOutcome,
@@ -426,8 +428,8 @@ const CARD_EVENT = "card.";
  * `.apply_failed` also that project's health read, which row 4 shows (`docs/canon/health.md` "UI").
  * A health read in flight when one of these, an apply or a gap lands is kept, never aborted, and
  * exactly one more is read when it settles, answered or failed, however many landed. A stage
- * event, `proposal.staged` or `.unstaged`, reads only that project's inbox and that proposal
- * again: a stage touches no task and no spec file (`docs/canon/decision-staging.md` "Queue"); one
+ * event, `proposal.staged` or `.unstaged`, reads only that project's inbox, that proposal and its
+ * cards again: a stage touches no task and no spec file (`docs/canon/decision-staging.md` "Queue"); one
  * no write of this tab accounts for is returned as the outside change to show, until `dismiss` or
  * the next one. A `task.*` event reads that project's task list and that task again (no string
  * `id`: every task of it), never the inbox, a proposal or a spec read
@@ -438,7 +440,8 @@ const CARD_EVENT = "card.";
  * `.created`, `.approved`, `.rejected` or `.apply_failed` (`docs/features/roadmap-screen.md`). A
  * `task.*` event also reads the project's cards again (the open one; a card serves each task it
  * links as read now, `docs/canon/card-tasks.md` "The rule"), never the card list, which shows no
- * task; `proposal.applied` reads them too, an apply moving a linked task's staleness. A `card.*`
+ * task; so does every `proposal.*` event, since a card serves the items naming it and their events
+ * read now (`docs/canon/card-questions.md` "The rule"), an apply moving a linked task's staleness too. A `card.*`
  * event reads that project's card lists, that card (no string `id`: every card of it) and
  * its trace again, never anything else and with no outside-change alert: a card is no decision
  * (`docs/features/board-ui.md` "Rules and edge cases"); it reads the project's flows too, whose boxes
@@ -561,6 +564,10 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         if (id !== null) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true });
         }
+        // A card serves its items and their events read now, whichever card names this one (no event
+        // says): the card on screen is read again, as after a task event; the list shows no item and stays
+        // (docs/canon/card-questions.md "The rule").
+        void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
         if (event.type === STAGED || event.type === UNSTAGED) {
           const unstaged = event.type === UNSTAGED;
           if (id !== null && !isOwnStageEvent(queryClient, project, id, unstaged, stagedOf(event.payload))) {
@@ -570,10 +577,8 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         }
         readTasksAgain();
         if (event.type === APPLIED) {
+          // An apply may move a linked task's `stale` too, which the card read above serves as read now.
           readSpecAgain();
-          // An apply may move a linked task's `stale`, which a card serves as read now: the card on
-          // screen is read again. The list is a spec read above, for its marks, and shows no task.
-          void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
         }
         if (HEALTH_EVENTS.has(event.type)) {
           readHealthAgain();
@@ -964,13 +969,24 @@ export interface ShownStage {
  * or, `stage` null, an unstage (`docs/canon/decision-staging.md` "UI"); `shown` the stage the
  * screen showed when it was not the review document's.
  */
-export type StageChange = { id: string; stage: StageChoice; updatedAt: string } | { id: string; stage: null; shown?: ShownStage };
+export type StageChange = { id: string; stage: StageChoice; updatedAt: string; as?: string | null } | { id: string; stage: null; shown?: ShownStage };
 
 /**
- * One stageDecision (or unstageDecision) call per submit; the stage is not a decision, so the
- * proposal stays in the inbox. On success the cached review document is the returned one and the
- * inbox entry keeps its place with the returned state and `staged_at`; after a success, a 409 (not
- * open, changed since read) or a 404, only that project's inbox, that proposal and its round sheets
+ * A stage under the acting name when one is known, L4 of
+ * docs/features/card-questions.md "Acceptance criteria": the card's Answer… and the Inbox's dialog
+ * send it; with none, no `as` at all, the body and the event as before.
+ */
+export function withActing(change: { id: string; stage: StageChoice; updatedAt: string }, as: string | null): StageChange {
+  return as === null ? change : { ...change, as };
+}
+
+/**
+ * One stageDecision (or unstageDecision) call per submit, with the acting name when the change
+ * carries one (`withActing`: the card's Answer… and the Inbox's dialog); the stage is not a decision,
+ * so the proposal stays in the inbox. On success the cached review document is the returned one and
+ * the inbox entry keeps its place with the returned state and `staged_at`; after a success, a 409
+ * (not open, changed since read) or a 404, only that project's inbox, that proposal, its round
+ * sheets and its cards (a card serves its items' stages, docs/canon/card-questions.md "The rule")
  * are read again: a stage changes no task, no spec file and no check. Each write is noted as this
  * tab's own, so its event on the live tail is never shown as a change made outside this tab
  * (useLiveQueue); an unstage only when the stage the screen shows (`shown`, else the cached review
@@ -983,6 +999,8 @@ export function useStageDecision(project: string) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
     void queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true });
     void queryClient.invalidateQueries({ queryKey: roundsOf(project) });
+    // A card serves its items' stages, read now (docs/features/card-questions.md "Acceptance criteria", U1): the card on screen, if any.
+    void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
   }
   /**
    * The screen's read of the proposal shows a stage, and no outside change was heard since it was
@@ -997,7 +1015,11 @@ export function useStageDecision(project: string) {
   }
   return useMutation({
     mutationFn: (change: StageChange) =>
-      change.stage === null ? client.unstageDecision(project, change.id) : client.stageDecision(project, change.id, change.stage, change.updatedAt),
+      change.stage === null
+        ? client.unstageDecision(project, change.id)
+        : change.as === undefined
+          ? client.stageDecision(project, change.id, change.stage, change.updatedAt)
+          : client.stageDecision(project, change.id, change.stage, change.updatedAt, change.as),
     // A stage always logs its event; an unstage only when something is staged, which this tab
     // knows only from a current read (none: nothing awaited, see outsideSince).
     onMutate: (change) =>
@@ -1065,6 +1087,8 @@ export function useConfirmProposal(project: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true }),
       queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true }),
       queryClient.invalidateQueries({ queryKey: roundsOf(project) }),
+      // A card serves its items read now (docs/canon/card-questions.md "The rule"): the card on screen, if any.
+      queryClient.invalidateQueries({ queryKey: cardsOf(project) }),
     ]);
   }
   return useMutation({
@@ -1200,6 +1224,40 @@ export function useCardWrite(project: string) {
       const { status } = apiErrorOf(error);
       if (status === CARD_REFUSED || status === NO_SUCH_CARD || status === 0) {
         await readAgain(request.write === "create" ? null : request.id);
+      }
+    },
+  });
+}
+
+/**
+ * A question or a decision raised on a card (docs/canon/card-questions.md "The rule";
+ * docs/features/card-questions.md "Acceptance criteria", L3, U2, U3): one POST per call, under the
+ * card writes' mutation key, so nothing opens or closes while it is out (`useCardWriting`). After an
+ * answer, stored or not, a refusal, no such card or no answer at all, the project's card lists, that
+ * card (its `items` and their events), its trace and its flows are read again, as after a card write,
+ * and the inbox and round sheets, which list a stored item; the call settles once they have.
+ */
+export function useCardRaise(project: string) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  async function readAgain(id: string) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: cardListsOf(project) }),
+      queryClient.invalidateQueries({ queryKey: tracesOf(project) }),
+      queryClient.invalidateQueries({ queryKey: flowsOf(project) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.card(project, id), exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true }),
+      queryClient.invalidateQueries({ queryKey: roundsOf(project) }),
+    ]);
+  }
+  return useMutation({
+    mutationKey: cardWritesKey(project),
+    mutationFn: ({ id, body }: { id: string; body: CardRaiseBody }): Promise<IntakeDocument> => client.raiseOnCard(project, id, body),
+    onSuccess: (_answer, { id }) => readAgain(id),
+    onError: async (error, { id }) => {
+      const { status } = apiErrorOf(error);
+      if (status === CARD_REFUSED || status === NO_SUCH_CARD || status === 0) {
+        await readAgain(id);
       }
     },
   });

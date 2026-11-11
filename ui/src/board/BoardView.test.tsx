@@ -803,9 +803,10 @@ describe("the card's modal", () => {
     expect(part.getByText("2026-10-30 09:10 UTC")).toBeTruthy();
   });
 
+  // History is Activity since card-questions (docs/features/card-questions.md "Acceptance criteria", U1): a card's own events as before.
   it("history by seq: time, the event's words, who, from and to in titles; an unknown type raw", async () => {
     const panel = within(await panelOf(FULL));
-    const lines = within(panel.getByRole("region", { name: "History" })).getAllByRole("listitem");
+    const lines = within(panel.getByRole("region", { name: "Activity" })).getAllByRole("listitem");
     expect(lines.map((line) => line.textContent)).toEqual([
       "2026-10-29 09:00 UTCCreated by Lena Fisk in To do",
       "2026-10-30 09:00 UTCMoved by Mira Holt from To do to Check",
@@ -814,30 +815,40 @@ describe("the card's modal", () => {
   });
 
   // The work item's order (DF-6 of design-foundation): Accept first and primary in accept.from, Cancel
-  // card last; Move stands in the side column's Status.
-  it("offers Accept first and primary, in accept.from alone, then Hand off, Edit, Assign and Cancel card, with Move in the side column's Status; no Return in a flow that names none", async () => {
+  // card last; Move stands in the side column's Status. A card with a target asks and records after
+  // Return's place (docs/features/card-questions.md "Acceptance criteria", U3).
+  it("offers Accept first and primary, in accept.from alone, then Hand off, Ask a question…, Record a decision…, Edit, Assign and Cancel card, with Move in the side column's Status; no Return in a flow that names none", async () => {
     const panel = within(await panelOf(FULL));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Accept", "Hand off", "Edit", "Assign", "Cancel task"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Accept",
+      "Hand off",
+      "Ask a question…",
+      "Record a decision…",
+      "Edit",
+      "Assign",
+      "Cancel task",
+    ]);
     expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
   });
 
   it("has no Accept outside accept.from", async () => {
     const panel = within(await panelOf({ ...FULL, column: "todo" }));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Edit", "Assign", "Cancel task"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Ask a question…", "Record a decision…", "Edit", "Assign", "Cancel task"]);
     expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
   });
 
-  it("an accepted card has no actions and shows who accepted it", async () => {
+  // A closed card with a target still asks and records (U3 of docs/features/card-questions.md "Acceptance criteria"): no other act.
+  it("an accepted card has no actions but the two that raise an item, and shows who accepted it", async () => {
     const panel = within(await panelOf({ ...FULL, column: "closed", acceptance: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: "Good.", verdict: "briefed", departs: [], discrepancy: null } }));
-    expect(panel.queryByRole("group", { name: "Actions" })).toBeNull();
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Ask a question…", "Record a decision…"]);
     const part = panel.getByRole("region", { name: "Acceptance" });
     expect(part.textContent).toContain("Ivo Brandt");
     expect(part.textContent).toContain("Good.");
   });
 
-  it("a cancelled card has no actions and shows why", async () => {
+  it("a cancelled card has no actions but the two that raise an item, and shows why; with no target, none", async () => {
     const panel = within(await panelOf({ ...FULL, cancellation: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", reason: "Dropped." } }));
-    expect(panel.queryByRole("group", { name: "Actions" })).toBeNull();
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Ask a question…", "Record a decision…"]);
     expect(panel.getByRole("region", { name: "Cancellation" }).textContent).toContain("Dropped.");
   });
 
@@ -1841,7 +1852,7 @@ describe("the card against its brief", () => {
     });
     await open(boardClient(aCardList([aCardRow({ id: "C-0001" })]), { "C-0001": document_ }), "#/alpha/board/C-0001");
     const panel = await modal("The card");
-    expect(within(within(panel).getByRole("region", { name: "History" })).getAllByRole("listitem").map((line) => line.querySelector("strong")?.textContent)).toEqual(["Cleared", "Re-estimated", "Refreshed"]);
+    expect(within(within(panel).getByRole("region", { name: "Activity" })).getAllByRole("listitem").map((line) => line.querySelector("strong")?.textContent)).toEqual(["Cleared", "Re-estimated", "Refreshed"]);
   });
 });
 

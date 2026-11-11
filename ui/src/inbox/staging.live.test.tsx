@@ -16,6 +16,9 @@ import { renderApp } from "../test/render";
 const READ_AT = "2026-10-01T10:00:00Z";
 const STAGED_AT = "2026-10-06T09:14:02Z";
 
+/** STAGED_AT as the English page shows a stored time (`formatUtc`). */
+const STAGED_SHOWN = "2026-10-06 09:14 UTC";
+
 /** The queue as the stubbed daemon holds it now: a test or a write changes it. */
 interface Queue {
   proposal: Proposal;
@@ -127,7 +130,7 @@ describe("staging over the daemon (AC-14 of decision-staging)", () => {
     expect(posts[0]?.[1] !== undefined && "signal" in posts[0][1]).toBe(false);
     expect(queue.proposal.staged).toEqual({ decision: "approve", option: 2, answer: null, canon: null, editorial: null, note: "keep the cap", span_hash: null });
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
-    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec approve PR-0004`);
+    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_SHOWN}. Confirm on a terminal: spec approve PR-0004`);
     expect(within(screen.getByRole("listbox")).getAllByRole("option").map((option) => option.dataset.proposal)).toEqual(["PR-0004"]);
     await waitFor(() => {
       expect(requests(fetchStub, before).sort()).toEqual([

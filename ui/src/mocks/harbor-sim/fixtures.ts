@@ -42,6 +42,11 @@ import { nodeKinds, specStatuses } from "./kinds";
 //
 // hub-mcp (docs/features/hub-mcp.md "Identity"): PR-0043 raised over a hub's `/mcp`, its author
 // carrying the asking person's `login`, which the card shows in a Login row.
+//
+// card-questions (docs/features/card-questions.md "Acceptance criteria", U1): the task C-0008 names
+// two items raised from the page: PR-0055, a question Noor Ainsley asked as she sent it back, open;
+// PR-0056, a decision Tomas Oakes recorded with why he took it, applied as DEC-0013. Their events
+// stand in the task's history (src/mocks/cards.ts); `spec inbox` lists PR-0055, never the applied one.
 
 const SLUG = "harbor-sim";
 
@@ -80,6 +85,9 @@ export const DEEP_BERTH_FILE = "docs/features/deep-berth.md";
 /** The accepted decision PR-0049 interprets: a document of its own, its `id:` the decision's ID. */
 export const WEATHER_DECISION = "DEC-0012";
 const WEATHER_DECISION_FILE = "docs/spec/records/DEC-0012-simulated-weather.md";
+
+/** PR-0056's record, written by its approve into the corpus records' directory (card-questions). */
+const CRANE_RECORD_FILE = "docs/spec/records/DEC-0013-crane-reach.md";
 
 const CLOCK_TEXT = [
   // A section named by a heading attribute (docs/features/ui-markdown.md "Implementation").
@@ -143,6 +151,24 @@ export const CRANES_DECISION = {
   text: "Do both cranes work the same ship at once?",
   working_answer: "Yes: both cranes work the moored ship together, each lifting one box per 90 simulated seconds.",
   price_of_other: "One crane per ship doubles the unloading time, and every berth stays taken twice as long.",
+};
+
+/** The page's author: a person, no role, no model, no run (docs/canon/card-questions.md "The rule"). */
+const PERSON = { type: "human", role: null, model: null, run: null };
+
+/** PR-0055's texts, asked with C-0008's return. */
+export const CRANE_QUESTION = {
+  text: "Which reach does the crane diagram show: the survey's new numbers or the maker's sheet?",
+  working_answer: "The maker's sheet until the survey is filed; the plate is redrawn then.",
+  price_of_other: "Waiting for the survey holds the plate two more weeks.",
+};
+
+/** PR-0056's texts and why, recorded on C-0008 and applied as DEC-0013. */
+export const CRANE_DECISION = {
+  text: "Draw the reach at full boom only?",
+  working_answer: "Yes: the diagram shows the reach at full boom; partial booms are left out.",
+  price_of_other: "Every boom angle needs a second plate.",
+  why: "Pilots read the diagram for the worst case, and full boom is it.",
 };
 
 /** PR-0052's new file: a feature document with no `id:`, so the queue names it by its path. */
@@ -566,6 +592,22 @@ function harborCorpus(): MockCorpus {
         "",
         "Wind and visibility come from the scenario's weather file and change every simulated hour.",
         "Ships and pilot boats react to them.",
+      ],
+    }),
+    // PR-0056's record (card-questions): the accepted decision its approve wrote, the why in its body.
+    specFile({
+      path: CRANE_RECORD_FILE,
+      id: "DEC-0013",
+      kind: null,
+      title: "Crane reach at full boom",
+      status: "accepted",
+      lines: [
+        ...frontMatter({ id: "DEC-0013", class: "decision", status: "accepted", date: "2026-11-11" }),
+        "",
+        "# DEC-0013: Crane reach at full boom",
+        "",
+        "The crane reach diagram shows the reach at full boom; partial booms are left out.",
+        "Why: pilots read the diagram for the worst case, and full boom is it.",
       ],
     }),
     specFile({
@@ -1205,6 +1247,46 @@ export function harborSim(now: number): MockProject {
         preview: "applies",
         author: agent("spec-writer", "R-2275"),
         created_at: at(15),
+      }),
+      // A question asked from the page with C-0008's return (card-questions): open, its card named.
+      proposal({
+        id: "PR-0055",
+        project: SLUG,
+        kind: "question",
+        severity: null,
+        target_id: "MEC-CARGO-CRANES",
+        target_ids: ["MEC-CARGO-CRANES"],
+        summary: CRANE_QUESTION.text,
+        working_answer: CRANE_QUESTION.working_answer,
+        price_of_other: CRANE_QUESTION.price_of_other,
+        author: PERSON,
+        card_id: "C-0008",
+        created_at: at(600.5),
+      }),
+      // A decision recorded on C-0008 with its why, confirmed on a terminal: applied, its record DEC-0013.
+      proposal({
+        id: "PR-0056",
+        project: SLUG,
+        kind: "decision",
+        status: "applied",
+        severity: null,
+        target_id: "MEC-CARGO-CRANES",
+        target_ids: ["MEC-CARGO-CRANES"],
+        summary: CRANE_DECISION.text,
+        working_answer: CRANE_DECISION.working_answer,
+        price_of_other: CRANE_DECISION.price_of_other,
+        why: CRANE_DECISION.why,
+        author: PERSON,
+        card_id: "C-0008",
+        decided_by: "Mira Holt <mira@harbor.example.invalid>",
+        decided_at: at(540),
+        applied_commit: "b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5",
+        record_id: "DEC-0013",
+        record_path: CRANE_RECORD_FILE,
+        record_title: "Crane reach at full boom",
+        choice: { working_answer: true },
+        created_at: at(570),
+        updated_at: at(540),
       }),
     ],
   };

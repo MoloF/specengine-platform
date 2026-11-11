@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 44 open, 58 done; current mvp; to mvp 2-3 days; total 13-21 days, 11 unestimated
+roadmap: 43 open, 59 done; current mvp; to mvp 2-3 days; total 13-21 days, 10 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,18 +29,17 @@ roadmap: 44 open, 58 done; current mvp; to mvp 2-3 days; total 13-21 days, 11 un
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 10 open, 6 done | 0 days, 10 unestimated
+## release v5 | 9 open, 7 done | 0 days, 9 unestimated
 
-1. [RM-0097](../roadmap/RM-0097.md) | card-questions (Phase 7, v5 step 5): a task asks the writers, and the answer is a recorded decision | draft | must | -
-2. [RM-0098](../roadmap/RM-0098.md) | handoff-progress (Phase 7, v5 step 6): a parent shows Ready to accept and a progress bar | draft | must | -
-3. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | - | waits on RM-0098
-4. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
-5. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
-6. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0059, RM-0060, RM-0097
-7. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a config proposal | draft | could | -
-8. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | - | waits on RM-0097, RM-0098
-9. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
-10. [RM-0100](../roadmap/RM-0100.md) | journeys (Phase 7, v5, optional): one act hands a task to several departments | draft | could | - | waits on RM-0098
+1. [RM-0098](../roadmap/RM-0098.md) | handoff-progress (Phase 7, v5 step 6): a parent shows Ready to accept and a progress bar | draft | must | -
+2. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | - | waits on RM-0098
+3. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
+4. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
+5. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0059, RM-0060
+6. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a config proposal | draft | could | -
+7. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | - | waits on RM-0098
+8. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+9. [RM-0100](../roadmap/RM-0100.md) | journeys (Phase 7, v5, optional): one act hands a task to several departments | draft | could | - | waits on RM-0098
 
 ## pool | 27 open, 1 done | 7-12 days, 23 unestimated
 

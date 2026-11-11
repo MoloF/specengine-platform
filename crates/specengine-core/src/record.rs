@@ -102,10 +102,14 @@ pub enum Slot {
     Note,
     /// The owner's git identity.
     DecidedBy,
+    /// Why a decision was taken: a `decision`'s own `why` when the record
+    /// takes its working answer; else empty
+    /// (`docs/canon/card-questions.md` "The rule").
+    Why,
 }
 
 impl Slot {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::Id,
         Self::Date,
         Self::Status,
@@ -121,6 +125,7 @@ impl Slot {
         Self::Evidence,
         Self::Note,
         Self::DecidedBy,
+        Self::Why,
     ];
 
     /// The name written between `{{` and `}}`.
@@ -141,6 +146,7 @@ impl Slot {
             Self::Evidence => "evidence",
             Self::Note => "note",
             Self::DecidedBy => "decided_by",
+            Self::Why => "why",
         }
     }
 
@@ -177,6 +183,7 @@ pub struct SlotValues {
     pub evidence: Vec<String>,
     pub note: String,
     pub decided_by: String,
+    pub why: String,
 }
 
 /// A template's defect: its 1-based line and what is wrong.
@@ -346,6 +353,7 @@ fn push_value(out: &mut String, slot: Slot, in_front: bool, values: &SlotValues)
         Slot::Summary => &values.summary,
         Slot::Note => &values.note,
         Slot::DecidedBy => &values.decided_by,
+        Slot::Why => &values.why,
         Slot::Targets => {
             out.push('[');
             out.push_str(&values.targets.join(", "));

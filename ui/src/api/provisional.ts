@@ -344,13 +344,14 @@ export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
  * discrepancy fills the eleven keys after `updated_at` instead of an update's texts, `diff` and
  * `preview`; a decided one its record's five after `linked`; `task_id`, after `choice`, the task it
  * was raised for; `staged`, `staged_at` after it, the owner's staged choice; `interpretation` after
- * them, an interpretation's decision and texts; `drift`, after `revisions`, a drift item's evidence
- * (48 keys).
+ * them, an interpretation's decision and texts; `drift`, after `revisions`, a drift item's evidence;
+ * `card_id` and `why` after `interpretation`, the card it was raised for and a decision's why (50 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
  * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents";
  * `docs/features/kind-interpretation.md` "Data"; `docs/features/rev-discipline.md` "Review document, stage, queue";
- * `docs/features/drift-queue.md` "Review, inbox, round, stage".
+ * `docs/features/drift-queue.md` "Review, inbox, round, stage";
+ * `docs/features/card-questions.md` "Acceptance criteria" (L1, U5); `docs/canon/card-questions.md` "The rule".
  */
 export interface Proposal {
   id: string | null;
@@ -428,6 +429,10 @@ export interface Proposal {
   staged_at: string | null;
   /** The accepted decision a change carries and how it was read; null on any proposal that carries none. */
   interpretation: Interpretation | null;
+  /** The card a question, discrepancy or decision was raised for, set when raised and never changed; null on every other row. */
+  card_id: string | null;
+  /** Why a decision was taken, as its author wrote it; null on a question, a discrepancy and a decision without one. */
+  why: string | null;
   /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
   notes: string[];
 }
@@ -615,9 +620,12 @@ export interface RoundSheet {
 
 /**
  * The decision route's body: the stage less `span_hash`, then `updated_at` as read
- * (`StageBody`). Sources: `docs/canon/decision-staging.md` "Daemon"; `docs/features/ui-round.md` "Data".
+ * (`StageBody`), then `as`, the acting name, which the card's Answer… and the Inbox's decision
+ * dialog send and the Questions screen does not; absent or null, the event is as before. Sources:
+ * `docs/canon/decision-staging.md` "Daemon"; `docs/features/ui-round.md` "Data";
+ * `docs/features/card-questions.md` "Acceptance criteria" (L4, U4).
  */
-export type StageBody = StageChoice & { updated_at: string };
+export type StageBody = StageChoice & { updated_at: string; as?: string | null };
 
 /** One answer of the round POST: the item and its stage body. Source: `docs/features/ui-round.md` "Data". */
 export interface RoundAnswerBody {
@@ -1993,7 +2001,32 @@ export interface CardTask {
   stale: boolean | null;
 }
 
-/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule". */
+/**
+ * One question, discrepancy or decision naming a card, as the card's read serves it, by ID number, read
+ * now: 16 keys, each the row's, `author` its object (`login` when it has one); `kind` and `status` shown
+ * as sent, told apart in `src/board/labels.ts` alone. Sources: `docs/canon/card-questions.md` "The rule";
+ * `docs/features/card-questions.md` "Acceptance criteria" (K1, U1).
+ */
+export interface CardItem {
+  id: string;
+  kind: string;
+  status: ProposalStatus;
+  summary: string | null;
+  working_answer: string | null;
+  why: string | null;
+  author: Author;
+  created_at: string;
+  updated_at: string;
+  staged_at: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  record_id: string | null;
+  record_path: string | null;
+  record_title: string | null;
+}
+
+/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`; `items` the questions, discrepancies and decisions naming it, after `tasks`, and `history` their last 64 `proposal.*` events merged with its own by `seq`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule", `docs/features/card-questions.md` "Acceptance criteria" (K1). */
 export interface Card {
   id: string;
   flow: string;
@@ -2017,6 +2050,7 @@ export interface Card {
   corrects: string | null;
   evidence: CardEvidence[];
   tasks: CardTask[];
+  items: CardItem[];
   acceptance: CardAcceptance | null;
   cancellation: CardCancellation | null;
   created_by: string;
@@ -2145,6 +2179,59 @@ export interface CardClearGroupWrite {
   group: string;
   cleared: string[];
   notes: string[];
+}
+
+/**
+ * A hit or a related item of an intake: `id` the decision's `id:` (null for one without) or the
+ * queue's `PR-…`; `source` the corpus or the queue, shown as sent; `status` the decision's status or
+ * the item's state; `path` a corpus decision's, a queue item's null; `answer` the decision's title or
+ * a rejected item's reason; `record` an applied item's record. Named in `distinct_from` by its `id`,
+ * else its `path`. Sources: `docs/canon/agent-intake-documents.md` "Intake document";
+ * `docs/features/card-questions.md` "Acceptance criteria" (U2, U3).
+ */
+export interface IntakeMatch {
+  id: string | null;
+  source: string;
+  status: string;
+  path: string | null;
+  answer: string | null;
+  record: string | null;
+}
+
+/**
+ * What a raise answers, stored or not: `id` the new `PR-…` or null, `created` whether it was stored;
+ * `hits` the first ten in full (the rest by name in a note), `related` likewise; `linked` a patch's
+ * update; `diagnostics` its findings; `notes` the daemon's, a refusal's reason last. A hit is no
+ * refusal: a 200 with `created` false. Sources: `docs/canon/agent-intake-documents.md` "Intake document";
+ * `docs/canon/agent-intake.md` "Dedup"; `docs/features/card-questions.md` "Acceptance criteria" (L3).
+ */
+export interface IntakeDocument {
+  id: string | null;
+  created: boolean;
+  hits: IntakeMatch[];
+  related: IntakeMatch[];
+  linked: string | null;
+  diagnostics: Finding[];
+  notes: string[];
+}
+
+/**
+ * POST `.../cards/:id/items`: a question or a decision raised on the card, every key the daemon
+ * takes and no other; `kind` `question` or `decision`, sent as the daemon's word; `why` a decision's
+ * alone, null when none is given; `distinct_from` the hits named to store it anyway; `as` the acting
+ * name, null reads `local`. Sources: `docs/canon/card-questions.md` "The rule";
+ * `docs/features/card-questions.md` "Acceptance criteria" (L3, U2, U3).
+ */
+export interface CardRaiseBody {
+  kind: string;
+  node_ids: string[];
+  text: string;
+  working_answer: string;
+  price_of_other: string;
+  why?: string | null;
+  severity?: Severity | null;
+  distinct_from?: string[] | null;
+  as: string | null;
 }
 
 /** How many nodes stand in each state. Source: `docs/features/card-trace.md` "Data". */

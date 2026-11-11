@@ -84,10 +84,10 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 
 ## Documents and events
 
-`show`, `get_card`, every key present, absent `null`; `mark` to `correction` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, tasks, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes}`; `tasks` `[{id, status, title, stale}]`, read now: `card-tasks.md` "Read".
+`show`, `get_card`, every key present, absent `null`; `mark` to `correction` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, tasks, items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes}`; `tasks` `[{id, status, title, stale}]`, read now: `card-tasks.md` "Read"; `items`: `card-questions.md` "Read".
 
 - `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card, or one whose flow is gone: empty. `accept` is never in it: the board finds it through `accept.from`.
-- `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`; a payload that does not parse is passed over.
+- `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`, its items' last 64 `proposal.*` merged by `seq`; a payload that does not parse is passed over.
 
 `list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` when nothing is cut. `flows` `[{name, title, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}, return}]`, `moves` expanded, `return` a column or `null`, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction}`, 21 keys; the last four `--marks`' (`spec-trace.md` "The read"), else `null`.
 
@@ -95,7 +95,7 @@ Events, the `as` the acting name: `card.created {id, flow, column, position, ass
 
 ## Backup
 
-Format 4 (3 imports): `queue-backup.md`, `tasks.md` "Backup".
+Format 5 (3, 4 import): `queue-backup.md`, `tasks.md` "Backup".
 
 ## Rules
 
@@ -109,4 +109,4 @@ Each exit 1, nothing changed; core's, pure, asked twice.
 - **Accept**: the card in `accept.from`; `--as` its `reviewer` (none set: naming `spec card assign`), never its `assignee`.
 - **Dropped from config**: a column no longer listed is served last in its flow with a note, `allowed` the flow's first column, anyone's. A flow no longer listed: a note, `allowed` empty, `edit` and `assign` still work.
 
-No rule reads a lock or a task, a linked one included (`card-tasks.md` "The rule", ADR-0075), and a proposal only for a departure's state, so a rejected brief stops no card (ADR-0012).
+No rule reads a lock, a task or an item, linked ones included (ADR-0075, ADR-0077), and a proposal only for a departure's state, so a rejected brief stops no card (ADR-0012).

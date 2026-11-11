@@ -157,12 +157,12 @@ describe("the normal scenario", () => {
     expect(missing.notes.at(-1)).toBe("no proposal `PR-9999` in this project's queue");
   });
 
-  it("serves each review document's task_id after choice, null unbound, as the task canon's Task-bound proposals; the interpretation after the stage", async () => {
+  it("serves each review document's task_id after choice, null unbound, as the task canon's Task-bound proposals; the interpretation after the stage, the card and why after it (L1 of card-questions)", async () => {
     const client = new MockClient("normal", { now: clock });
     const { proposals } = await client.getInbox("harbor-sim");
     const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));
     for (const review of reviews) {
-      expect([review.id, Object.keys(review).slice(-6)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "notes"]]);
+      expect([review.id, Object.keys(review).slice(-8)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "notes"]]);
       expect([review.staged, review.staged_at]).toEqual([null, null]);
     }
     expect(Object.keys(proposals[0] ?? {}).slice(-2)).toEqual(["record_id", "staged_at"]);
@@ -306,5 +306,98 @@ describe("the other scenarios", () => {
     expect(ids((await client.getInbox("harbor-sim")).proposals)).toContain("PR-0041");
     const staged = await client.stageDecision("harbor-sim", "PR-0041", { decision: "reject", reason: "No" }, now.updated_at ?? "");
     expect(staged.staged).toEqual({ decision: "reject", reason: "No" });
+  });
+});
+
+// docs/features/card-questions.md "Acceptance criteria", U1 and U2, over the mock: harbor-sim's
+// C-0008 names an open question and an applied decision, their events in its
+// history; the card door stores a question or a decision into the queue; `conflict` meets one corpus
+// hit on a project's first raise, stored once named.
+describe("a card's items over the mock (card-questions)", () => {
+  const SLUG = "harbor-sim";
+
+  async function cardOf(client: MockClient, id: string) {
+    const read = await client.getCard(SLUG, id);
+    if (!("items" in read)) {
+      throw new Error(`no card ${id}`);
+    }
+    return read;
+  }
+
+  const question = { kind: "question", node_ids: ["MEC-FAIRWAY"], text: "Is the fairway lit at night?", working_answer: "Yes, every buoy.", price_of_other: "The night chart is redrawn.", as: "Ivo Brandt" };
+
+  it("serves C-0008's two items by ID, their events merged with its own by seq, two of them out of time order; the inbox lists the open one alone", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const card = await cardOf(client, "C-0008");
+    expect(card.items.map((item) => [item.id, item.kind, item.status, item.why, item.record_id])).toEqual([
+      ["PR-0055", "question", "open", null, null],
+      ["PR-0056", "decision", "applied", "Pilots read the diagram for the worst case, and full boom is it.", "DEC-0013"],
+    ]);
+    expect(Object.keys(card.items[0] ?? {})).toHaveLength(16);
+    const history = card.history ?? [];
+    expect(history.map((event) => event.type)).toEqual(["card.created", "card.moved", "proposal.created", "proposal.created", "proposal.approved", "proposal.applied"]);
+    expect(history.map((event) => event.seq)).toEqual([...history.map((event) => event.seq)].sort((a, b) => a - b));
+    const [moved, asked] = [history[1], history[2]];
+    expect((asked?.at ?? "") < (moved?.at ?? "")).toBe(true);
+    expect(asked?.payload).toEqual({ id: "PR-0055", as: "Noor Ainsley" });
+    const listed = ids((await client.getInbox(SLUG)).proposals);
+    expect([listed.includes("PR-0055"), listed.includes("PR-0056")]).toEqual([true, false]);
+    expect((await client.getProposal(SLUG, "PR-0055")).card_id).toBe("C-0008");
+    // Another card names none.
+    expect((await cardOf(client, "C-0007")).items).toEqual([]);
+  });
+
+  it("stores a raised question into the queue: the next ID, the card named, a person its author, its event under the acting name; the card reads it", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const raised = await client.raiseOnCard(SLUG, "C-0007", question);
+    expect(raised).toEqual({ id: "PR-0057", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] });
+    expect(ids((await client.getInbox(SLUG)).proposals)).toContain("PR-0057");
+    const review = await client.getProposal(SLUG, "PR-0057");
+    expect([review.kind, review.card_id, review.why, review.author, review.target_ids]).toEqual(["question", "C-0007", null, { type: "human", role: null, model: null, run: null }, ["MEC-FAIRWAY"]]);
+    const card = await cardOf(client, "C-0007");
+    expect(card.items.map((item) => item.id)).toEqual(["PR-0057"]);
+    expect(card.history?.at(-1)).toMatchObject({ type: "proposal.created", payload: { id: "PR-0057", as: "Ivo Brandt" } });
+    // The same text again is the first's hit: nothing stored, until it is named.
+    const again = await client.raiseOnCard(SLUG, "C-0007", question);
+    expect([again.id, again.created, again.hits.map((hit) => hit.id)]).toEqual([null, false, ["PR-0057"]]);
+    const named = await client.raiseOnCard(SLUG, "C-0007", { ...question, distinct_from: ["PR-0057"] });
+    expect([named.id, named.created]).toEqual(["PR-0058", true]);
+  });
+
+  it("stores a decision with its why; refuses an unknown card (404), another kind and a question's why (400), a blank text (409), nothing stored", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const decision = await client.raiseOnCard(SLUG, "C-0002", { ...question, kind: "decision", node_ids: ["DOM-BERTHS"], text: "Caption in the local name?", why: "The owner's notes use it.", as: null });
+    expect((await client.getProposal(SLUG, decision.id ?? "")).why).toBe("The owner's notes use it.");
+    expect((await cardOf(client, "C-0002")).history?.at(-1)?.payload).toEqual({ id: decision.id, as: "local" });
+    const missing = await rejection(client.raiseOnCard(SLUG, "C-0099", question));
+    expect([missing.status, missing.message]).toEqual([404, "no card C-0099"]);
+    const update = await rejection(client.raiseOnCard(SLUG, "C-0007", { ...question, kind: "update" }));
+    expect([update.status, update.message]).toEqual([400, "`kind`: a card raises a `question` or a `decision`"]);
+    const why = await rejection(client.raiseOnCard(SLUG, "C-0007", { ...question, why: "Because." }));
+    expect([why.status, why.message]).toEqual([400, "`why` goes with a `decision`"]);
+    const blank = await rejection(client.raiseOnCard(SLUG, "C-0007", { ...question, working_answer: "  " }));
+    expect([blank.status, blank.message]).toEqual([409, "working_answer: blank: give a value"]);
+    expect((await cardOf(client, "C-0007")).items).toEqual([]);
+  });
+
+  it("conflict: a project's first raise meets one corpus hit and is not stored; naming it stores it", async () => {
+    const client = new MockClient("conflict", { now: clock });
+    const first = await client.raiseOnCard(SLUG, "C-0007", question);
+    expect([first.id, first.created, first.hits.map((hit) => [hit.id, hit.source, hit.status])]).toEqual([null, false, [["DEC-0012", "corpus", "accepted"]]]);
+    const again = await client.raiseOnCard(SLUG, "C-0007", question);
+    expect(again.created).toBe(false);
+    const named = await client.raiseOnCard(SLUG, "C-0007", { ...question, distinct_from: ["DEC-0012"] });
+    expect([named.id, named.created]).toEqual(["PR-0057", true]);
+    const next = await client.raiseOnCard(SLUG, "C-0007", { ...question, text: "Another question?" });
+    expect(next.hits).toEqual([]);
+  });
+
+  it("logs a stage on an item, its acting name trailing when sent, so the card's history reads it", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const read = (await client.getProposal(SLUG, "PR-0055")).updated_at ?? "";
+    await client.stageDecision(SLUG, "PR-0055", { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null }, read, "Mira Holt");
+    const card = await cardOf(client, "C-0008");
+    expect(card.history?.at(-1)).toMatchObject({ type: "proposal.staged", payload: { id: "PR-0055", as: "Mira Holt" } });
+    expect(card.items[0]?.staged_at).toBe("2026-10-05T12:00:00Z");
   });
 });

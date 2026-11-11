@@ -79,6 +79,7 @@ fn question(pair: &Pair, cwd: &Path, node_ids: &[&str], text: &str) -> QuestionR
         login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
+        card: None,
     }
 }
 
@@ -131,6 +132,7 @@ fn report(pair: &Pair, cwd: &Path, input: DiscrepancyInput) -> Result<IntakeOutc
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(cwd),
+            card: None,
         },
     )
 }
@@ -1155,7 +1157,7 @@ fn ac10_path_targets_round_trip_through_a_backup() {
     let text = String::from_utf8(bytes.clone()).expect("a UTF-8 dump");
     assert!(
         text.starts_with(
-            "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{text}"

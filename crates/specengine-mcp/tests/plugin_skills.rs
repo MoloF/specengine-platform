@@ -1227,8 +1227,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // flow-scenario (RM-0094, `get_flow`'s `in_flow`); 0.34.0 since doc-modal
     // (RM-0095, `get_node`'s link `title`, `end_kind`, `get_flow`'s gap
     // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
-    // `title`).
-    assert_eq!(manifest["version"], "0.35.0");
+    // `title`); 0.36.0 since card-questions (RM-0097, `card_id`, `why`,
+    // `items`).
+    assert_eq!(manifest["version"], "0.36.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1334,8 +1335,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // flow-scenario (RM-0094, `get_flow`'s `in_flow`); 0.34.0 since doc-modal
     // (RM-0095, `get_node`'s link `title`, `end_kind`, `get_flow`'s gap
     // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
-    // `title`).
-    assert_eq!(manifest["version"], "0.35.0");
+    // `title`); 0.36.0 since card-questions (RM-0097, `card_id`, `why`,
+    // `items`).
+    assert_eq!(manifest["version"], "0.36.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1438,7 +1440,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.35.0",
+        manifest["version"], "0.36.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1448,7 +1450,8 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          spec-ids: 0.29.1; flow-scope (FS-6, `get_flow`'s `stage`): 0.30.0; board-handoff \
          (`reviewer`, `note`, `parent`): 0.31.0; card-tasks (`edit_card`'s `task`): 0.32.0; \
          flow-scenario (`get_flow`'s `in_flow`): 0.33.0; doc-modal (link `title`, `end_kind`, \
-         gap `titles`): 0.34.0; departments (`list_cards`' flow `title`): 0.35.0"
+         gap `titles`): 0.34.0; departments (`list_cards`' flow `title`): 0.35.0; \
+         card-questions (`card_id`, `why`, `items`): 0.36.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2533,8 +2536,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // since card-tasks (RM-0092, `edit_card`'s `task`); 0.33.0 since
     // flow-scenario (RM-0094, `get_flow`'s `in_flow`); 0.34.0 since doc-modal
     // (RM-0095, keys `get_node` and `get_flow` return); 0.35.0 since
-    // departments (RM-0096, `list_cards`' flow `title`).
-    assert_eq!(manifest["version"], "0.35.0");
+    // departments (RM-0096, `list_cards`' flow `title`); 0.36.0 since
+    // card-questions (RM-0097, `card_id`, `why`, `items`).
+    assert_eq!(manifest["version"], "0.36.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -2603,6 +2607,84 @@ fn departments_dp4_read_spec_gives_the_web_ui_s_words() {
         !bullets(&dropped["read-spec"])
             .last()
             .is_some_and(|bullet| bullet.ends_with(READ_SPEC_WORDS)),
+        "the mutation is seen"
+    );
+}
+
+// ---------------------------------------------- card-questions (RM-0097)
+
+/// docs/features/card-questions.md P1: the
+/// decision bullet's new words and the card sentence.
+const ASK_OWNER_WHY: &str =
+    "your decision as the `working_answer`, `price_of_other`, and why in `why`;";
+const ASK_OWNER_CARD: &str = "On a task, pass its `task_id`; for a card, its `card_id`.";
+
+/// docs/features/card-questions.md P1: `ask-owner`'s body within 4 096 bytes
+/// (4 095), its file 4 374, holding "Data"'s two sentences once each (and no other skill
+/// holding the card sentence), the old two gone, every content rule
+/// passing: the skill names `card_id` and `why` as the server's tools take
+/// them. M: the `card_id` sentence dropped.
+#[test]
+fn card_questions_p1_ask_owner_names_card_id_and_why() {
+    let skills = committed();
+    let ask_owner = &skills["ask-owner"];
+    let body = ask_owner
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body")
+        .len();
+    // The body after the closing `---` line, as docs/canon/plugin-files.md
+    // measures it ("`ask-owner` 4 095 at 0.19.0"): the two edits are net zero
+    // bytes, the body 4 095 within the cap of 4 096, the file 4 374.
+    assert_eq!((body, ask_owner.len()), (4_095, 4_374));
+    assert!(body <= 4096);
+    for (sentence, gone) in [
+        (
+            ASK_OWNER_WHY,
+            "your decision as the `working_answer`, and `price_of_other`;",
+        ),
+        (
+            ASK_OWNER_CARD,
+            "On a task, pass its `task_id` too; `get_proposal`'s `task_id` names it.",
+        ),
+    ] {
+        assert_eq!(ask_owner.matches(sentence).count(), 1, "{sentence}");
+        assert!(!ask_owner.contains(gone), "{gone}");
+    }
+    for (skill, text) in &skills {
+        assert_eq!(
+            text.matches(ASK_OWNER_CARD).count(),
+            usize::from(skill == "ask-owner"),
+            "{skill}"
+        );
+    }
+    let listed = listed();
+    assert_eq!(ac06_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(skill_text_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    assert_eq!(word_problems(&plugin_files()), Vec::<String>::new());
+    // The server takes what the skill names: `card_id` on the three raises,
+    // `why` on a decision.
+    let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
+    let list = session.tools();
+    for name in ["ask_question", "report_discrepancy", "report_decision"] {
+        assert!(
+            tool(&list, name)["inputSchema"]["properties"]
+                .get("card_id")
+                .is_some(),
+            "{name}"
+        );
+    }
+    assert!(
+        tool(&list, "report_decision")["inputSchema"]["properties"]
+            .get("why")
+            .is_some()
+    );
+    drop(session.finish());
+    // M: the card sentence dropped.
+    let dropped = edited(&skills, "ask-owner", ASK_OWNER_CARD, "");
+    assert!(
+        !dropped["ask-owner"].contains("`card_id`"),
         "the mutation is seen"
     );
 }

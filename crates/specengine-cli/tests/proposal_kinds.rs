@@ -1468,20 +1468,20 @@ fn ac14_review_inbox_and_backup_carry_a_create() {
         .collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{}",
         lines[0]
     );
-    // The queue's schema as docs/features/drift-queue.md leaves it: 46
-    // columns, schema 8; a create adds none.
+    // The queue's schema as docs/features/card-questions.md leaves it: 48
+    // columns, schema 11; a create adds none.
     let columns = specengine_store::PROPOSAL_COLUMNS;
-    assert_eq!(columns.len(), 46);
+    assert_eq!(columns.len(), 48);
     for line in &lines[1..3] {
         let row: Value = serde_json::from_str(line).expect("a row");
         let row = row["proposals"].as_object().expect("a proposals row");
-        assert_eq!(row.len(), 46, "{line}");
+        assert_eq!(row.len(), 48, "{line}");
         assert_eq!(row["kind"], json!("create"), "{line}");
     }
     let first: Value = serde_json::from_str(&lines[1]).unwrap();
@@ -1501,10 +1501,10 @@ fn ac14_review_inbox_and_backup_carry_a_create() {
     assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
     assert_eq!(dump_at(&pair, &fresh), dump_at(&pair, &pair.home));
     assert_eq!(export(&pair, &fresh, &dumps.join("again.jsonl")), bytes);
-    assert_eq!(pair.sql("PRAGMA user_version;"), "10\n");
+    assert_eq!(pair.sql("PRAGMA user_version;"), "11\n");
     assert_eq!(
         pair.sql("SELECT count(*) FROM pragma_table_info('proposals');"),
-        "46\n"
+        "48\n"
     );
     let restored = specengine_store::SqliteQueue::open(
         common::data_dir(&fresh).join("lantern-keep.db"),

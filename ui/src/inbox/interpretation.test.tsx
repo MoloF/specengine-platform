@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
 import type { Interpretation, NodeView, Proposal } from "../api/types";
 import { aNode, aProposal } from "../test/builders";
@@ -15,6 +15,12 @@ import appCss from "../styles/app.css?raw";
 // turns red on a kind comparison (src/policy.test.ts, "compares no role, profile or kind").
 
 const RLO = "\u202e";
+
+// The section's chunk loaded once for the file: under a full run's load its first transform can
+// outlast a wait, and the card is then read before the section arrives.
+beforeAll(async () => {
+  await import("./InterpretationSection");
+});
 
 const INTERPRETATION: Interpretation = {
   decision: "DEC-0023",

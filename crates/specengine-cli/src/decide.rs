@@ -970,6 +970,10 @@ struct Sources {
     answer: Option<usize>,
     /// What another answer costs (`--answer`).
     cost: Option<usize>,
+    /// A decision's `why`, when its working answer is the record's: under
+    /// `--answer` the choice is the owner's, so the slot stays empty (task
+    /// spec `card-questions` S3).
+    why: Option<usize>,
     note: Option<usize>,
     decided_by: Option<usize>,
 }
@@ -993,6 +997,7 @@ impl Sources {
             chosen: None,
             answer: None,
             cost: None,
+            why: None,
             note: None,
             decided_by: None,
         };
@@ -1022,6 +1027,9 @@ impl Sources {
             Choice::WorkingAnswer => {
                 let answer = intake.working_answer.as_deref().unwrap_or_default();
                 sources.answer = Some(sources.push("working_answer", answer));
+                if let Some(why) = &intake.why {
+                    sources.why = Some(sources.push("why", why));
+                }
             }
             Choice::Answer(answer) => {
                 sources.answer = Some(sources.push("--answer", answer));
@@ -1114,6 +1122,7 @@ impl Sources {
             evidence,
             note: self.note.map_or("", text).to_owned(),
             decided_by: self.decided_by.map_or("", text).to_owned(),
+            why: self.why.map_or("", text).to_owned(),
         }
     }
 

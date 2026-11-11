@@ -4,7 +4,7 @@ import { ClientError } from "../api/client";
 import type { Proposal, QueueEvent } from "../api/types";
 import { aProposal, entryOf, noReview } from "../test/builders";
 import { renderApp } from "../test/render";
-import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
+import { argsOf, STAGED_AT, STAGED_SHOWN, stubClient, type StubClient } from "../test/stubClient";
 
 // AC-05, AC-07, AC-12, AC-13, AC-14 of docs/features/ui-shell.md, on a stub client; AC-14 of
 // docs/features/decision-staging.md (its UI part): Accept and Reject stage the owner's choice, one
@@ -833,7 +833,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(politeRegion().textContent).toBe(`Staged Reject on PR-1 at ${STAGED_AT}; nothing is applied yet. Confirm it on a terminal.`);
+    expect(politeRegion().textContent).toBe(`Staged Reject on PR-1 at ${STAGED_SHOWN}; nothing is applied yet. Confirm it on a terminal.`);
     expect(client.stageDecision).toHaveBeenCalledTimes(1);
   });
 
@@ -1200,9 +1200,9 @@ describe("a staged choice on the card (AC-14 of decision-staging)", () => {
       expect(client.stageDecision.mock.calls).toEqual([
         ["alpha", "PR-0004", { decision: "approve", option: 2, answer: null, canon: null, editorial: null, note: "keep the cap" }, "2026-10-01T10:00:00Z"],
       ]);
-      expect(politeRegion().textContent).toBe(`Staged Accept on PR-0004 at ${STAGED_AT}; nothing is applied yet. Confirm it on a terminal: spec approve PR-0004.`);
+      expect(politeRegion().textContent).toBe(`Staged Accept on PR-0004 at ${STAGED_SHOWN}; nothing is applied yet. Confirm it on a terminal: spec approve PR-0004.`);
       const staged = await stagedRegion();
-      expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec approve PR-0004`);
+      expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_SHOWN}. Confirm on a terminal: spec approve PR-0004`);
       expect(staged.querySelector("time")?.getAttribute("datetime")).toBe(STAGED_AT);
       expect(within(staged).getByText("[2]").closest("dd")?.textContent).toBe("[2] Keep the cap");
       expect(within(staged).getByText("keep the cap")).toBeTruthy();
@@ -1241,7 +1241,7 @@ describe("a staged choice on the card (AC-14 of decision-staging)", () => {
     expect(optionIds(list)).toEqual(["PR-0004", "PR-0005"]);
     expect(client.getInbox).toHaveBeenCalledTimes(2);
     const staged = await stagedRegion();
-    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec reject PR-0004`);
+    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_SHOWN}. Confirm on a terminal: spec reject PR-0004`);
     expect(within(staged).getByText("duplicate of PR-0003")).toBeTruthy();
   });
 
@@ -1285,7 +1285,7 @@ describe("a staged choice on the card (AC-14 of decision-staging)", () => {
     const odd = aProposal({ id: "PR-1; rm -rf ~", summary: "Odd", staged: { decision: "reject", reason: "spec approve PR-0004" }, staged_at: STAGED_AT });
     await openInbox([odd], "#/alpha/inbox/PR-1%3B%20rm%20-rf%20~");
     const staged = await stagedRegion();
-    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: no command is offered for this ID.`);
+    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_SHOWN}. Confirm on a terminal: no command is offered for this ID.`);
     expect(within(staged).queryByRole("button", { name: /^Copy/ })).toBeNull();
     expect(staged.querySelector("code")).toBeNull();
     expect(within(staged).getByRole("button", { name: /^Unstage/ })).toBeTruthy();

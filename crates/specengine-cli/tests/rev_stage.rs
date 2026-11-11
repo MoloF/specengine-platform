@@ -68,6 +68,7 @@ fn stage_editorial(
                 editorial,
                 note: note.map(str::to_owned),
                 updated_at: pair.proposal(id).updated_at,
+                actor: None,
             },
             now: STAGED.to_owned(),
             git: pair.git_env(&pair.main),

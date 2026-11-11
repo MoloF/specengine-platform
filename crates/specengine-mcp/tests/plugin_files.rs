@@ -202,6 +202,13 @@
 //!   vocabulary sentence) set back 0.34.0's; a `SCHEMA_PINS` entry 0.35.0,
 //!   0.34.0's schemas today's without the flow's `title`
 //!   ([`as_of_0_34_0`]).
+//! - card-questions (RM-0097, P1, D15): 0.35.0 -> 0.36.0, MINOR: keys tools
+//!   take, `card_id` of `ask_question`, `report_discrepancy` and
+//!   `report_decision` and the decision's `why`, and keys tools return,
+//!   `get_proposal`'s `card_id` and `why`, `get_card`'s `items`. A `PINS`
+//!   entry 0.36.0, the tree with the version and `ask-owner`'s two edits set
+//!   back 0.35.0's; a `SCHEMA_PINS` entry 0.36.0, 0.35.0's schemas today's
+//!   without the six keys ([`as_of_0_35_0`]).
 //!
 //! The repository is only read.
 
@@ -557,6 +564,28 @@ const PINS: &[(&str, &str)] = &[
         "0.35.0",
         "6f31285eb386147c305098088562c05760af5f67845c4909c30b6438a28e07bf",
     ),
+    // card-questions (RM-0097, P1, D15: 0.35.0 -> 0.36.0, MINOR: keys tools
+    // take, `card_id` and a decision's `why`, and keys tools return,
+    // `get_proposal`'s two and `get_card`'s `items`): plugin.json's version
+    // and `ask-owner`'s two edits ([`ASK_OWNER_0_36_0`]); all set back, the
+    // tree hashes as 0.35.0's pin.
+    (
+        "0.36.0",
+        "1ee268cdd97fd90f4b84dc6f9b505e6a240ee77cb5ef68cb104ab6887e36f923",
+    ),
+];
+
+/// card-questions (RM-0097, "Data", "Key sets and the plugin"): `ask-owner`'s
+/// two edits, `(0.35.0's words, 0.36.0's)`.
+const ASK_OWNER_0_36_0: [(&str, &str); 2] = [
+    (
+        "your decision as the `working_answer`, and `price_of_other`;",
+        "your decision as the `working_answer`, `price_of_other`, and why in `why`;",
+    ),
+    (
+        "On a task, pass its `task_id` too; `get_proposal`'s `task_id` names it.",
+        "On a task, pass its `task_id`; for a card, its `card_id`.",
+    ),
 ];
 
 /// departments (RM-0096): `read-spec`'s deterministic bullet as 0.34.0
@@ -895,6 +924,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.35.0",
         "51c839c049a655c2a7d3e4bdc2fba072a7a74e10567ec001811e90cb4501b73e",
+    ),
+    // card-questions (RM-0097, P1): `card_id` in the three raises' input,
+    // `report_decision`'s `why`, `get_proposal`'s `card_id` and `why`,
+    // `get_card`'s `items` ([`as_of_0_35_0`] takes them out; no other
+    // tool's schema changed).
+    (
+        "0.36.0",
+        "1c47d37cc279e4d0cdc60cddcb0ff68a53b9d8b5fd97d0b5b5d38ddd71a50df9",
     ),
 ];
 
@@ -1904,7 +1941,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// 0.30.0 since docs/features/flow-scope.md (FS-6), 0.31.0 since
 /// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092), 0.33.0
 /// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095), 0.35.0
-/// since departments (RM-0096). No room is left, so the next byte is over.
+/// since departments (RM-0096), 0.36.0 since card-questions (RM-0097). No
+/// room is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -1926,7 +1964,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.35.0")
+        json!("0.36.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2077,11 +2115,40 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // card-questions (RM-0097, P1: 0.35.0 -> 0.36.0): plugin.json's version
+    // and `ask-owner`'s two edits; all set back, the tree is 0.35.0's pinned
+    // content, every other skill and role byte-equal. M: plugin.json left at
+    // 0.35.0; the `card_id` sentence dropped; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.36.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.36.0"),
+        "plugin.json's version"
+    );
+    let mut at_0_35_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.36.0\"",
+        "\"version\": \"0.35.0\"",
+    );
+    for (was, is) in ASK_OWNER_0_36_0 {
+        at_0_35_0 = edited(&at_0_35_0, ASK_OWNER, is, was);
+    }
+    assert_eq!(
+        content_hash(&at_0_35_0),
+        PINS[PINS.len() - 2].1,
+        "0.36.0 changes plugin.json's version and ask-owner's two edits only"
+    );
+    let tree = at_0_35_0;
+    let pins_0_35_0 = &PINS[..PINS.len() - 1];
     // departments (RM-0096, DP-4, D12: 0.34.0 -> 0.35.0): plugin.json's
     // version and `read-spec`'s three edits; all set back, the tree is
     // 0.34.0's pinned content, every other skill and role byte-equal. M: the
     // version kept; the vocabulary sentence dropped; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.35.0"));
+    assert_eq!(
+        pins_0_35_0.last().map(|(version, _)| *version),
+        Some("0.35.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.35.0"),
@@ -2110,11 +2177,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_34_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_35_0[pins_0_35_0.len() - 2].1,
         "0.35.0 changes plugin.json's version and read-spec's three edits only"
     );
     let tree = at_0_34_0;
-    let pins_0_34_0 = &PINS[..PINS.len() - 1];
+    let pins_0_34_0 = &pins_0_35_0[..pins_0_35_0.len() - 1];
     // doc-modal (RM-0095, DM-2: 0.33.0 -> 0.34.0): plugin.json's version
     // alone; set back, the tree is 0.33.0's pinned content, every skill and
     // role byte-equal. M: the version kept; another file changed.
@@ -3140,6 +3207,80 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// card-questions (RM-0097, P1): `schemas` as 0.35.0 listed them: no
+/// `card_id` in `ask_question`'s, `report_discrepancy`'s and
+/// `report_decision`'s input, no `why` in `report_decision`'s; no `card_id`
+/// and `why` in the review document (`get_proposal`'s, `propose_change`'s,
+/// `review_proposal`'s), no `items` in `get_card`'s, its `history` described
+/// as the card's events alone, and the author's description as 0.35.0 gave
+/// it. No other tool's schema changed.
+fn as_of_0_35_0(schemas: &mut Value) {
+    for tool in ["ask_question", "report_discrepancy", "report_decision"] {
+        assert!(
+            without_property(&mut schemas[tool]["inputSchema"], "card_id"),
+            "{tool} takes card_id"
+        );
+    }
+    assert!(without_property(
+        &mut schemas["report_decision"]["inputSchema"],
+        "why"
+    ));
+    // The review document: `get_proposal`'s, and `propose_change`'s and
+    // `review_proposal`'s, which return it too.
+    for tool in ["get_proposal", "propose_change", "review_proposal"] {
+        for key in ["card_id", "why"] {
+            assert!(
+                without_property(&mut schemas[tool]["outputSchema"], key),
+                "{tool} returns {key}"
+            );
+        }
+    }
+    assert!(without_property(
+        &mut schemas["get_card"]["outputSchema"],
+        "items"
+    ));
+    // The history's doc comment, a schema description (its line break
+    // kept), named the card's events alone.
+    let history = &mut schemas["get_card"]["outputSchema"]["properties"]["history"];
+    assert_eq!(
+        history["description"],
+        json!(
+            "Its last `card.*` events and its items' last `proposal.*` events,\nmerged by \
+             `seq`, oldest first; `null` without `history`."
+        )
+    );
+    history["description"] =
+        json!("Its last `card.*` events, oldest first; `null` without `history`.");
+    // `ProposalAuthor`'s doc, a schema description wherever an author is
+    // served (the review document's tools and `get_task`'s package): a hub's
+    // raises hold `login` too since card-questions.
+    assert_eq!(
+        rephrased(
+            schemas,
+            "a hub's raises and departing accepts hold it",
+            "a hub's departing accept alone holds it",
+        ),
+        4,
+        "the author's description in get_proposal, propose_change, review_proposal, get_task"
+    );
+}
+
+/// Every string in `value` with `from` replaced by `to`: how many held it.
+fn rephrased(value: &mut Value, from: &str, to: &str) -> usize {
+    match value {
+        Value::String(text) if text.contains(from) => {
+            *text = text.replace(from, to);
+            1
+        }
+        Value::Array(items) => items.iter_mut().map(|item| rephrased(item, from, to)).sum(),
+        Value::Object(object) => object
+            .values_mut()
+            .map(|item| rephrased(item, from, to))
+            .sum(),
+        _ => 0,
+    }
+}
+
 /// departments (RM-0096, DP-4): `schemas` as 0.34.0 listed them: each flow
 /// of `list_cards`' document without `title` (a column's `title` stays). No
 /// other tool's schema changed.
@@ -3716,7 +3857,23 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[24].0, "0.33.0", "an entry for 0.33.0");
     assert_eq!(SCHEMA_PINS[25].0, "0.34.0", "an entry for 0.34.0");
     assert_eq!(SCHEMA_PINS[26].0, "0.35.0", "an entry for 0.35.0");
-    assert_eq!(SCHEMA_PINS.len(), 27, "0.35.0 the last entry");
+    assert_eq!(SCHEMA_PINS[27].0, "0.36.0", "an entry for 0.36.0");
+    assert_eq!(SCHEMA_PINS.len(), 28, "0.36.0 the last entry");
+    // card-questions (RM-0097, P1): 0.35.0's schemas are today's without the
+    // three raises' `card_id`, the decision's `why`, `get_proposal`'s two
+    // keys and `get_card`'s `items`.
+    let mut at_0_35_0 = schemas.clone();
+    as_of_0_35_0(&mut at_0_35_0);
+    let at_0_35_0_hash = schema_hash(&at_0_35_0);
+    assert_eq!(
+        at_0_35_0_hash, SCHEMA_PINS[26].1,
+        "0.35.0's schemas are today's without card-questions' six keys"
+    );
+    assert_ne!(
+        at_0_35_0_hash, current,
+        "card-questions changed the schemas"
+    );
+    let (schemas, current) = (at_0_35_0, at_0_35_0_hash);
     // departments (RM-0096, DP-4): 0.34.0's schemas are today's without a
     // card flow's `title`.
     let mut at_0_34_0 = schemas.clone();

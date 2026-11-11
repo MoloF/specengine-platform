@@ -51,8 +51,10 @@
 //! no file).
 //!
 //! AC-02 of docs/features/board-ui.md ("The fence stays"): the door changes
-//! for cards alone. `CARD_CALLS`, beside `TASK_READS`, lists the ten
-//! `card_` calls (eight, and docs/features/card-trace.md's two clears) and any other `card_` name is forbidden, each caught in a
+//! for cards alone. `CARD_CALLS`, beside `TASK_READS`, lists the eleven
+//! `card_` calls (eight, docs/features/card-trace.md's two clears and
+//! docs/features/card-questions.md's `card_raise`) and any other `card_`
+//! name is forbidden, each caught in a
 //! probe by path and bare; `approve`, `reject`, every `propose*`,
 //! `round_answer`, `import_state`, `export_*`, `init`, `index` and every
 //! `task_` writer stay forbidden. The two card GETs join the endpoints that
@@ -79,6 +81,13 @@
 //! docs/features/board-handoff.md (RM-0085) BH-20: on `fixtures/studio-lamp`
 //! a hand-off and a return each add one `card.*` event and leave git and an
 //! open question alone; `CARD_CALLS` stays ten.
+//!
+//! docs/features/card-questions.md (RM-0097) L3, the door: `CARD_CALLS` is
+//! eleven with `card_raise`, the second exception to "a card's write stores
+//! no proposal"; an unlisted `card_ask` is caught and every `propose*` stays
+//! forbidden; `card_writes_touch_only_the_queue` admits a raise's one
+//! `proposal.created`, git, the files and the open question unchanged. M: the
+//! handler calling `propose_question`.
 
 mod common;
 
@@ -500,7 +509,7 @@ const TASK_READS: [&str; 2] = ["task_list", "task_show"];
 /// The CLI library's card calls a handler may make, reads and writes: a
 /// card is the one record the daemon writes beyond a stage (ADR-0056,
 /// docs/features/board-ui.md "The fence stays").
-const CARD_CALLS: [&str; 10] = [
+const CARD_CALLS: [&str; 11] = [
     "card_list",
     "card_show",
     "card_new",
@@ -511,6 +520,8 @@ const CARD_CALLS: [&str; 10] = [
     "card_accept",
     "card_clear",
     "card_clear_group",
+    // docs/features/card-questions.md D6: a card's raise, the eleventh.
+    "card_raise",
 ];
 
 /// The names no handler may call: the CLI's deciding, storing, exporting,
@@ -1019,7 +1030,7 @@ fn ui_round_t02_the_scan_catches_a_round_walk_and_its_terminal_but_not_the_stagi
 // ------------------------------------------------------- board-ui, AC-02
 
 #[test]
-fn board_ui_ac02_the_scan_admits_the_ten_card_calls_and_no_other_card_name() {
+fn board_ui_ac02_the_scan_admits_the_card_calls_and_no_other_card_name() {
     // Positive controls: a `card_` name outside the list, by path and bare;
     // a name the library may add later too.
     for name in [
@@ -1075,7 +1086,14 @@ fn board_ui_ac02_the_scan_admits_the_ten_card_calls_and_no_other_card_name() {
                    specengine_cli::card_reopen(env, globals, &reopen)\n\
                    }).await }";
     assert_eq!(caught(handler), ["task_claim", "card_reopen"], "{handler}");
-    // Negative controls: the ten, by path and bare; the handler of the
+    // card-questions L3: an unlisted `card_ask` is caught, by path and bare.
+    let by_path = "fn f() { let _ = specengine_cli::card_ask(&env, &globals, &r); }";
+    assert_eq!(caught(by_path), ["card_ask"], "{by_path}");
+    assert_eq!(
+        caught("fn f() { card_ask(&env, &globals, &r)?; }"),
+        ["card_ask"]
+    );
+    // Negative controls: the eleven, by path and bare; the handler of the
     // slice with its yes; the types, the outcome's variant, the body's cap;
     // a method of something else; a name in a string or a comment.
     for name in CARD_CALLS {
@@ -1271,7 +1289,32 @@ fn card_writes_touch_only_the_queue() {
         .map(|(_, kind, _)| kind.as_str())
         .collect();
     assert_eq!(added, ["proposal.created", "card.accepted"]);
-    let stored = after;
+
+    // docs/features/card-questions.md L3: a card's raise, the second
+    // exception: one `proposal.created`, on an open card and an accepted one;
+    // git, the files and the open question as they were.
+    let mut seen = after;
+    for card in ["C-0003", "C-0004"] {
+        let reply = post(
+            &format!("cards/{card}/items"),
+            &json!({"kind": "question", "node_ids": ["SHT-INNER"],
+                "text": format!("Is the inner page short for {card}?"),
+                "working_answer": "Yes.", "price_of_other": "A page reset.",
+                "why": null, "severity": null, "distinct_from": null, "as": "desk"}),
+        );
+        assert_eq!(reply.status, 200, "{card}: {}", reply.text());
+        assert_eq!(reply.json()["created"], json!(true), "{card}");
+        let after = round_state(&scratch, &home, &cwd, &a, &ids);
+        assert_eq!(after.0, before.0, "{card}: git, the refs, every file");
+        assert_eq!(after.1, before.1, "{card}: the question as it was");
+        let added: Vec<&str> = after.2[seen.2.len()..]
+            .iter()
+            .map(|(_, kind, _)| kind.as_str())
+            .collect();
+        assert_eq!(added, ["proposal.created"], "{card}: one event");
+        seen = after;
+    }
+    let stored = seen;
 
     // Refused at the door.
     let path = format!("{p}/cards/C-0003/edit");
@@ -1305,7 +1348,7 @@ fn card_writes_touch_only_the_queue() {
 /// (`POST .../cards/:id/move` into `sent-back` with a `note`) each add exactly
 /// one `card.*` event and leave git, the refs, every file and an open
 /// question as they were; a return refused for want of a note adds none.
-/// The library's card calls stay the ten: a `card_return` or `card_hand_off`
+/// The library's card calls stay as listed: a `card_return` or `card_hand_off`
 /// a handler named would be caught. M23's door half.
 #[test]
 fn board_handoff_bh20_a_hand_off_and_a_return_touch_only_the_queue() {
@@ -1401,7 +1444,8 @@ fn board_handoff_bh20_a_hand_off_and_a_return_touch_only_the_queue() {
             "{path} {body}: nothing changed"
         );
     }
-    assert_eq!(CARD_CALLS.len(), 10, "the ten card calls");
+    // card-questions D6 added the eleventh, `card_raise`; no hand-off call.
+    assert_eq!(CARD_CALLS.len(), 11, "the eleven card calls");
     for name in ["card_return", "card_hand_off", "card_handoff"] {
         let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
         assert_eq!(caught(&by_path), [name], "{by_path}");

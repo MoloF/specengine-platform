@@ -1,7 +1,7 @@
-import { useId, type MouseEvent, type ReactNode } from "react";
+import { lazy, Suspense, useId, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import { useProjects, type CardQuery } from "../api/queries";
-import type { Card, CardEvent, CardFlow, CardNotFound } from "../api/types";
+import type { Card, CardEvent, CardFlow, CardItem, CardNotFound } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { DocLink } from "../doc/DocLink";
 import { cardPageHash, homeHash, sectionHash } from "../app/routes";
@@ -33,10 +33,14 @@ import {
   columnTitle,
   eventWords,
   handOffLook,
+  isItemEvent,
+  itemEventWords,
+  knowsEvent,
   markLine,
   markLook,
   needsLine,
   overdueLook,
+  raisesItem,
   returnedLook,
   unassigned,
   type CardMark,
@@ -50,13 +54,19 @@ import { CardTasks, ownNotes } from "./CardTasks";
 // title, and the acts (Accept, primary, in `accept.from` alone; Hand off; Return…; Edit; Assign; Cancel
 // card, subtle and last). The main column holds the card's blocks (its mark and Clear, why it came
 // back, Accept's verdict, the cancellation), Goal and Criteria at the document's size, Source,
-// Subtasks (once Hand-offs), Evidence and History, each as before. The side column holds the status (its column's
+// Subtasks (once Hand-offs), Evidence and Activity, the card's events and its items' in one list (docs/canon/card-questions.md "The rule"). The side column holds the status (its column's
 // lozenge and the Move menu), the people's fields with the empty ones folded, and Development, the
 // linked `T-` tasks (`docs/canon/card-tasks.md` "The rule"), folded. Nothing here judges a column: the
 // return column and the accept column are the flow's, looked up (`docs/canon/card-flows.md` "The rule").
 
-/** The card's acts, each a dialog but Move, which opens the Move menu. */
-export type CardAction = "move" | "handoff" | "return" | "edit" | "assign" | "cancel" | "accept" | "clear";
+/**
+ * An item's block, in a chunk of its own with the dialogs that raise and answer items
+ * (docs/features/card-questions.md "Acceptance criteria", U1, U7): until it arrives, the item's ID.
+ */
+const ItemBlock = lazy(() => import("./CardItems").then((module) => ({ default: module.ItemBlock })));
+
+/** The card's acts, each a dialog but Move, which opens the Move menu; `ask` and `decide` raise an item on it. */
+export type CardAction = "move" | "handoff" | "return" | "edit" | "assign" | "cancel" | "accept" | "clear" | "ask" | "decide";
 
 /** Whether a card's read found one, rather than `{id, reason}`. */
 export function isCard(answer: Card | CardNotFound): answer is Card {
@@ -170,12 +180,88 @@ function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undef
     <li className="board-history-line">
       <At at={event.at} />
       <span>
-        <strong>{eventWords(event.type, t)}</strong>
+        {/* A type this build has no words for, raw: the daemon's word, under lang="en". */}
+        <strong lang={knowsEvent(event.type) ? undefined : "en"}>{eventWords(event.type, t)}</strong>
         {by !== null && fill(t("board.history.by", { by: slot("by") }), { by: <bdi>{shownSlot(by)}</bdi> })}
         {detail !== "" && <span className="muted"> {shownSlot(detail)}</span>}
       </span>
       {note !== null && <span className="board-text">{fill(t("board.history.why", { note: slot("note") }), { note: <bdi>{shownText(note)}</bdi> })}</span>}
     </li>
+  );
+}
+
+/** Who an item's event names: its `as`, else the item's author's login, else its role; none when it has none. */
+function itemBy(event: CardEvent, item: CardItem | undefined): string | null {
+  return payloadWord(event.payload, "as") ?? item?.author.login ?? item?.author.role ?? null;
+}
+
+/** An item's block, the chunk's, its ID standing in until it arrives. */
+function Item({ project, item }: { project: string; item: CardItem }) {
+  return (
+    <Suspense fallback={<p className="mono muted">{shownSlot(item.id)}</p>}>
+      <ItemBlock project={project} item={item} />
+    </Suspense>
+  );
+}
+
+/**
+ * An item's event in the Activity (docs/features/card-questions.md "Acceptance criteria", U1): time,
+ * its word (labels.ts; an unknown type raw), the item's ID and who; the event that raised it opens
+ * the item's block under it.
+ */
+function ItemLine({ project, event, items }: { project: string; event: CardEvent; items: readonly CardItem[] }) {
+  const t = useTranslate();
+  const id = payloadWord(event.payload, "id");
+  const item = items.find((candidate) => candidate.id === id);
+  const by = itemBy(event, item);
+  return (
+    <li className="board-history-line board-activity-item">
+      <At at={event.at} />
+      <span>
+        <strong lang={knowsEvent(event.type) ? undefined : "en"}>{itemEventWords(event.type, t)}</strong>
+        {id !== null && <span className="mono"> {shownSlot(id)}</span>}
+        {by !== null && fill(t("board.history.by", { by: slot("by") }), { by: <bdi>{shownSlot(by)}</bdi> })}
+      </span>
+      {raisesItem(event.type) && item !== undefined && <Item project={project} item={item} />}
+    </li>
+  );
+}
+
+/**
+ * Activity, where History stood (docs/canon/card-questions.md "The rule"; U1 of
+ * docs/features/card-questions.md "Acceptance criteria"): the items raised before the history's last
+ * events first, by ID, under Earlier items; then every event by `seq`, the card's as History drew
+ * them, its items' by their words, each item's block at the event that raised it. Nothing is
+ * reordered by time.
+ */
+function Activity({ project, card, flow }: { project: string; card: Card; flow: CardFlow | undefined }) {
+  const t = useTranslate();
+  const history = [...(card.history ?? [])].sort((a, b) => a.seq - b.seq);
+  const raised = new Set(history.filter((event) => raisesItem(event.type)).map((event) => payloadWord(event.payload, "id")));
+  const earlier = card.items.filter((item) => !raised.has(item.id));
+  return (
+    <Part title={t("board.panel.activity")}>
+      {history.length === 0 && earlier.length === 0 && <p className="muted">{t("board.panel.noneYet")}</p>}
+      {earlier.length > 0 && (
+        <>
+          <h4 className="board-activity-earlier">{t("board.activity.earlier")}</h4>
+          <ul className="board-panel-list" aria-label={t("board.activity.earlier")}>
+            {earlier.map((item) => (
+              <li key={item.id}>
+                <Item project={project} item={item} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {history.length > 0 && (
+        <ol className="board-panel-list board-activity">
+          {history.map((event) =>
+            isItemEvent(event.type) ? <ItemLine key={event.seq} project={project} event={event} items={card.items} /> : <HistoryLine key={event.seq} event={event} flow={flow} />,
+          )}
+        </ol>
+      )}
+    </Part>
   );
 }
 
@@ -299,6 +385,7 @@ function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow |
             <span>{t("board.return.action")}</span>
           </Button>
         )}
+        <ItemActs card={card} onAct={onAct} />
         <Button onClick={act("edit")}>{t("board.panel.edit")}</Button>
         <Button onClick={act("assign")}>{t("board.panel.assign")}</Button>
         <Button appearance="subtle" onClick={act("cancel")}>
@@ -313,6 +400,46 @@ function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow |
       )}
       {inAcceptColumn && !accepts && <ActOff act="accept" />}
     </>
+  );
+}
+
+/**
+ * The two acts that raise an item on a card with a target, open or closed (docs/canon/card-questions.md
+ * "The rule"; docs/features/card-questions.md "Acceptance criteria", U3): Ask a question… and Record a
+ * decision…; a card with no target has none.
+ */
+function ItemActs({ card, onAct }: { card: Card; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+  const t = useTranslate();
+  if (card.targets.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <Button
+        onClick={(event) => {
+          onAct("ask", card, event.currentTarget);
+        }}
+      >
+        {t("board.ask.action")}
+      </Button>
+      <Button
+        onClick={(event) => {
+          onAct("decide", card, event.currentTarget);
+        }}
+      >
+        {t("board.decide.action")}
+      </Button>
+    </>
+  );
+}
+
+/** A closed card's acts: only those that raise an item, when it has a target (U3 of docs/features/card-questions.md "Acceptance criteria"). */
+function ClosedActs({ card, onAct }: { card: Card; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+  const t = useTranslate();
+  return (
+    <div className="board-panel-actions" role="group" aria-label={t("board.panel.actions")}>
+      <ItemActs card={card} onAct={onAct} />
+    </div>
   );
 }
 
@@ -367,13 +494,12 @@ function HandOffs({ rollup, links, flowOf }: { rollup: Rollup; links: CardLinks;
   );
 }
 
-/** The main column of a card read: its blocks, then Goal, Criteria, Source, Subtasks, Evidence and History. */
+/** The main column of a card read: its blocks, then Goal, Criteria, Source, Subtasks, Evidence and Activity. */
 function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, stateFailure, links, flowOf, onAct }: Omit<CardViewProps, "id" | "query" | "today"> & { card: Card; flow: CardFlow | undefined }) {
   const t = useTranslate();
   const allows = useAllowed(project);
   const cancelled = card.cancellation !== null;
   const back = flow?.return ?? null;
-  const history = [...(card.history ?? [])].sort((a, b) => a.seq - b.seq);
   const notes = ownNotes(card);
   return (
     <>
@@ -454,17 +580,7 @@ function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, 
           </ul>
         )}
       </Part>
-      <Part title={t("board.panel.history")}>
-        {history.length === 0 ? (
-          <p className="muted">{t("board.panel.noneYet")}</p>
-        ) : (
-          <ol className="board-panel-list">
-            {history.map((event) => (
-              <HistoryLine key={event.seq} event={event} flow={flow} />
-            ))}
-          </ol>
-        )}
-      </Part>
+      <Activity project={project} card={card} flow={flow} />
     </>
   );
 }
@@ -631,6 +747,10 @@ export function CardView({ heading, tools, notices, ...props }: CardViewProps & 
         open ? (
           <RegionBoundary name={t("board.view.boundaryCard")}>
             <HeadActs card={card} flow={flow} accepts={allows("accept")} onAct={onAct} />
+          </RegionBoundary>
+        ) : card !== undefined && card.targets.length > 0 ? (
+          <RegionBoundary name={t("board.view.boundaryCard")}>
+            <ClosedActs card={card} onAct={onAct} />
           </RegionBoundary>
         ) : null
       }

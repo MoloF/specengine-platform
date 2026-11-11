@@ -97,7 +97,10 @@ fn answered_kind(
             options: Vec::new(),
             recommendation: None,
             distinct_from: distinct_from.iter().map(|id| (*id).to_owned()).collect(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 
@@ -137,7 +140,10 @@ fn discrepancy(targets: &[&str], summary: &str, distinct_from: &[&str]) -> NewIn
             options: vec![option("code"), option("spec")],
             recommendation: Some(1),
             distinct_from: distinct_from.iter().map(|id| (*id).to_owned()).collect(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 

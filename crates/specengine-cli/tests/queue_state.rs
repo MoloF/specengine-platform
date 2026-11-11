@@ -956,8 +956,9 @@ fn every_other_defect_of_step_2_names_its_line() {
 
 // ------------------------------------------------------------------ AC-06
 
-/// AC-06: `format` 5 and `queue_schema` 11 (newer than this build's 4 and
-/// 10, docs/canon/cards.md "Store"): exit 2 with `upgrade
+/// AC-06: `format` 6 and `queue_schema` 12 (newer than this build's 5 and
+/// 11, docs/features/card-questions.md S5; M1's record:
+/// `format-5` and `schema-11`, green at a62c81c): exit 2 with `upgrade
 /// SpecEngine`; a spec-b dump into spec-a: exit 2 naming both slugs; no
 /// prompt, the queue never made. M: either version check removed; the slug
 /// check removed.
@@ -966,8 +967,8 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let pair = Pair::new("qe-ac06", "spec-a");
     let (_, lines) = small_dump(&pair);
     for (name, from, to) in [
-        ("format-5", "\"format\":4,", "\"format\":5,"),
-        ("schema-11", "\"queue_schema\":10,", "\"queue_schema\":11,"),
+        ("format-6", "\"format\":5,", "\"format\":6,"),
+        ("schema-12", "\"queue_schema\":11,", "\"queue_schema\":12,"),
     ] {
         let mut newer = lines.clone();
         newer[0] = newer[0].replacen(from, to, 1);
@@ -985,7 +986,7 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let other_file = other.scratch.dir("dumps").join("zerkalo.jsonl");
     export_ok(&other, &other.home, &other.main, Some(&other_file), NOW);
     let bytes = fs::read(&other_file).unwrap();
-    assert!(bytes.starts_with(b"{\"format\":4,\"queue_schema\":10,\"project\":\"zerkalo\","));
+    assert!(bytes.starts_with(b"{\"format\":5,\"queue_schema\":11,\"project\":\"zerkalo\","));
     let (label, message) = refused_import(&pair, "spec-b", &bytes);
     assert!(message.starts_with(&format!("{label}:1: ")), "{message}");
     assert!(
@@ -1240,7 +1241,7 @@ fn ac08_the_worktree_top_or_the_root_without_git_bounds_the_destination() {
     assert_eq!((outcome.proposals, outcome.events), (0, 0));
     assert_eq!(
         fs::read(&out).unwrap(),
-        b"{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"cards\":0,\"events\":0}\n"
+        b"{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"cards\":0,\"events\":0}\n"
     );
     assert!(
         !data_dir(&pair.home).exists(),
@@ -2513,19 +2514,23 @@ fn card_rows(lines: &[String]) -> Vec<usize> {
 
 /// docs/features/card-tasks.md CT-4, the CLI half: on studio-lamp with
 /// `C-0001` linking `T-0001`, `T-0002` and `C-0002` linking none, `spec
-/// export state` writes the header `{"format":4,"queue_schema":10,…}` and
+/// export state` writes the header `{"format":4,"queue_schema":10,…}` (since
+/// docs/features/card-questions.md `{"format":5,"queue_schema":11,…}`) and
 /// card rows of 25 columns in `CARD_COLUMNS` order, `tasks` the JSON text
 /// stored; export, import into a fresh `HOME` and export again give
 /// byte-identical dumps, links included. A format-3 dump (eight header keys,
 /// schema 9, 24 card columns) imports with `tasks` `NULL`, read as none, and
-/// re-exports as format 4 with `"tasks":null`. Refused, exit 2 at the line,
-/// nothing written: a format-4 header of seven keys, a format-4 card row
-/// without `tasks`, a format-3 card row with `tasks`, `"format":5` ("upgrade
-/// SpecEngine"). M7: format 3 read with 25 card columns.
+/// re-exports as the current format with `"tasks":null`. Refused, exit 2 at
+/// the line, nothing written: a current header of seven keys, a current card
+/// row without `tasks`, a format-3 card row with `tasks`, a format newer than
+/// this build's (`"format":6`, "upgrade SpecEngine"). M7: format 3 read with
+/// 25 card columns.
 #[test]
 fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
-    assert_eq!(STATE_FORMAT, 4);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
+    // Format 5, schema 11 since docs/features/card-questions.md S5: a card
+    // row as format 4 wrote it.
+    assert_eq!(STATE_FORMAT, 5);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
     let pair = Pair::new("qe-ct4", "studio-lamp");
     let main = pair.main.clone();
     let spec_ok = |home: &Path, args: &[&str]| {
@@ -2592,7 +2597,7 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":4,\"queue_schema\":10,\"project\":\"studio-lamp\",\"proposals\":0,\
+            "{{\"format\":5,\"queue_schema\":11,\"project\":\"studio-lamp\",\"proposals\":0,\
              \"tasks\":2,\"runs\":0,\"cards\":2,\"events\":{events}}}"
         )
     );
@@ -2637,10 +2642,10 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
         .collect();
     assert_eq!(ids, [Value::from("T-0001"), Value::from("T-0002")]);
 
-    // A format-3 dump: imported with `tasks` NULL, re-exported as format 4.
+    // A format-3 dump: imported with `tasks` NULL, re-exported as format 5.
     let mut v3 = lines.clone();
     v3[0] = v3[0].replacen(
-        "\"format\":4,\"queue_schema\":10,",
+        "\"format\":5,\"queue_schema\":11,",
         "\"format\":3,\"queue_schema\":9,",
         1,
     );
@@ -2686,7 +2691,7 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     assert_eq!(
         String::from_utf8(fs::read(&re_exported).unwrap()).unwrap(),
         String::from_utf8(dump_of(&want)).unwrap(),
-        "format 4, each card's tasks null"
+        "format 5, each card's tasks null"
     );
 
     // Refused, exit 2 at the line, nothing written.
@@ -2697,18 +2702,18 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     no_tasks[first_card] = without_tasks(&lines[first_card]);
     let mut v3_with_tasks = lines.clone();
     v3_with_tasks[0] = v3[0].clone();
-    let mut format_5 = lines.clone();
-    format_5[0] = format_5[0].replacen("\"format\":4,", "\"format\":5,", 1);
+    let mut format_6 = lines.clone();
+    format_6[0] = format_6[0].replacen("\"format\":5,", "\"format\":6,", 1);
     for (name, defective, line, needle) in [
-        ("format-4-of-seven-keys", seven, 1, ""),
-        ("format-4-card-without-tasks", no_tasks, first_card + 1, ""),
+        ("format-5-of-seven-keys", seven, 1, ""),
+        ("format-5-card-without-tasks", no_tasks, first_card + 1, ""),
         (
             "format-3-card-with-tasks",
             v3_with_tasks,
             first_card + 1,
             "",
         ),
-        ("format-5", format_5, 1, "upgrade SpecEngine"),
+        ("format-6", format_6, 1, "upgrade SpecEngine"),
     ] {
         assert_ne!(defective, lines, "{name}");
         let (label, message) = refused_import(&pair, name, &dump_of(&defective));
@@ -2722,7 +2727,8 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
 
 /// docs/canon/queue-backup.md "Format", as card-tasks (RM-0092) ships it: a
 /// schema-9 database, its cards without `tasks`, exports unmigrated as format
-/// 4, schema 10, each card's `tasks` `null`; nothing stepped.
+/// 4, schema 10 (format 5, schema 11 since docs/features/card-questions.md),
+/// each card's `tasks` `null`; nothing stepped.
 #[test]
 fn card_tasks_a_schema_9_database_exports_as_format_4_unmigrated() {
     let pair = Pair::new("qe-ct4-9", "studio-lamp");
@@ -2765,6 +2771,246 @@ fn card_tasks_a_schema_9_database_exports_as_format_4_unmigrated() {
     assert_eq!(
         pair.sql("PRAGMA user_version;").trim(),
         "9",
+        "nothing stepped"
+    );
+}
+
+// ---------------------------------------- card-questions (RM-0097) S5
+
+/// `line`, a `{"proposals":{…}}` row, without its last two columns
+/// `card_id` and `why`: the row a format-4 dump holds.
+fn without_card_columns(line: &str) -> String {
+    let at = line
+        .rfind(",\"card_id\":")
+        .unwrap_or_else(|| panic!("a card_id column: {line}"));
+    format!("{}}}}}", &line[..at])
+}
+
+/// The indexes of `lines` that are proposal rows.
+fn proposal_rows(lines: &[String]) -> Vec<usize> {
+    (0..lines.len())
+        .filter(|index| lines[*index].starts_with("{\"proposals\":"))
+        .collect()
+}
+
+/// docs/features/card-questions.md S5 on studio-lamp: `C-0001`, a question
+/// raised for it and a decision with a `why`. `spec export state` writes
+/// "Data"'s header of eight keys, `{"format":5,"queue_schema":11,…}`, and
+/// proposal rows of 48 columns in `PROPOSAL_COLUMNS` order, `card_id` and
+/// `why` last; export, import fresh and export again are byte-identical. A
+/// format-4 dump (schema 10, 46 columns) imports both `NULL` and re-exports
+/// as format 5 with `"card_id":null,"why":null`. Refused, exit 2 at the
+/// line, nothing written: a format-5 row without `card_id`, one without
+/// `why`, a format-4 row with `card_id`, format 5 at `queue_schema` 10 (`(it
+/// holds queue schema 11)`), `"format":6` (`upgrade SpecEngine`). M:
+/// `STATE_FORMAT` left 4; a format-4 row accepted with the new columns.
+#[test]
+fn card_questions_s5_format_5_carries_card_id_and_why() {
+    assert_eq!(STATE_FORMAT, 5);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 48);
+    let pair = Pair::new("qe-cq-s5", "studio-lamp");
+    let main = pair.main.clone();
+    let spec_ok = |home: &Path, args: &[&str], input: &[u8]| {
+        let run = spec_in(&pair, home, &main, args, input);
+        run.code(0);
+        run.stdout
+    };
+    spec_ok(
+        &pair.home,
+        &[
+            "card",
+            "new",
+            "--title",
+            "Storm scene",
+            "--discipline",
+            "narrative",
+            "--target",
+            "SCN-STORM",
+        ],
+        b"",
+    );
+    spec_ok(
+        &pair.home,
+        &[
+            "propose",
+            "question",
+            "SCN-STORM",
+            "--text",
+            "Which bell rings at dusk?",
+            "--working-answer",
+            "The harbour bell.",
+            "--price-of-other",
+            "Two scenes rewritten.",
+            "--card",
+            "C-0001",
+        ],
+        b"",
+    );
+    let why = "Two playtests read \"instant\" as a bug.";
+    spec_ok(
+        &pair.home,
+        &["propose", "decision", "--input", "-"],
+        serde_json::json!({"node_ids": ["SCN-ARRIVAL"], "text": "Does the lamp burn oil?",
+            "working_answer": "Yes: whale oil.", "price_of_other": "The lamp room is redrawn.",
+            "why": why})
+        .to_string()
+        .as_bytes(),
+    );
+    let events = pair.events().len();
+    let dumps = pair.scratch.dir("dumps");
+    let file = dumps.join("v5.jsonl");
+    export_ok(&pair, &pair.home, &main, Some(&file), NOW);
+    let bytes = fs::read(&file).unwrap();
+    let lines = lines_of(&bytes);
+    assert_eq!(
+        lines[0],
+        format!(
+            "{{\"format\":5,\"queue_schema\":11,\"project\":\"studio-lamp\",\"proposals\":2,\
+             \"tasks\":0,\"runs\":0,\"cards\":1,\"events\":{events}}}"
+        )
+    );
+    let header: Value = serde_json::from_str(&lines[0]).unwrap();
+    assert_eq!(header.as_object().map(serde_json::Map::len), Some(8));
+    let rows = proposal_rows(&lines);
+    assert_eq!(rows.len(), 2, "{lines:?}");
+    for index in &rows {
+        let line = &lines[*index];
+        assert_column_order(line, &PROPOSAL_COLUMNS);
+        let row: Value = serde_json::from_str(line).unwrap();
+        assert_eq!(
+            row["proposals"].as_object().map(serde_json::Map::len),
+            Some(48),
+            "{line}"
+        );
+    }
+    assert!(
+        lines[rows[0]].ends_with(",\"card_id\":\"C-0001\",\"why\":null}}"),
+        "{}",
+        lines[rows[0]]
+    );
+    assert!(
+        lines[rows[1]].ends_with(&format!(
+            ",\"card_id\":null,\"why\":{}}}}}",
+            serde_json::to_string(why).unwrap()
+        )),
+        "{}",
+        lines[rows[1]]
+    );
+
+    // Export, import fresh, export again: byte-identical.
+    let fresh = pair.scratch.home("fresh");
+    import_ok(&fresh, &main, &file);
+    assert_eq!(
+        queue_dump(&db_of(&fresh, "studio-lamp"), "studio-lamp"),
+        queue_dump(&db_of(&pair.home, "studio-lamp"), "studio-lamp")
+    );
+    let again = dumps.join("again.jsonl");
+    export_ok(&pair, &fresh, &main, Some(&again), NOW);
+    assert_eq!(fs::read(&again).unwrap(), bytes, "byte-identical");
+
+    // A format-4 dump: imported with both NULL, re-exported as format 5.
+    let mut v4 = lines.clone();
+    v4[0] = v4[0].replacen(
+        "\"format\":5,\"queue_schema\":11,",
+        "\"format\":4,\"queue_schema\":10,",
+        1,
+    );
+    for index in &rows {
+        v4[*index] = without_card_columns(&lines[*index]);
+        assert_eq!(
+            serde_json::from_str::<Value>(&v4[*index]).unwrap()["proposals"]
+                .as_object()
+                .map(serde_json::Map::len),
+            Some(46),
+            "{}",
+            v4[*index]
+        );
+    }
+    let v4_file = dumps.join("v4.jsonl");
+    fs::write(&v4_file, dump_of(&v4)).unwrap();
+    let from_4 = pair.scratch.home("from-4");
+    import_ok(&from_4, &main, &v4_file);
+    let re_exported = dumps.join("from-4.jsonl");
+    export_ok(&pair, &from_4, &main, Some(&re_exported), NOW);
+    let mut want = lines.clone();
+    for index in &rows {
+        want[*index] = format!(
+            "{},\"card_id\":null,\"why\":null}}}}",
+            without_card_columns(&lines[*index])
+                .strip_suffix("}}")
+                .expect("a row's end")
+        );
+    }
+    assert_eq!(
+        String::from_utf8(fs::read(&re_exported).unwrap()).unwrap(),
+        String::from_utf8(dump_of(&want)).unwrap(),
+        "format 5, both null"
+    );
+
+    // Refused, exit 2 at the line, nothing written.
+    let first = rows[0];
+    let mut no_card = lines.clone();
+    no_card[first] = no_card[first].replacen(",\"card_id\":\"C-0001\"", "", 1);
+    let mut no_why = lines.clone();
+    no_why[first] = no_why[first].replacen(",\"why\":null", "", 1);
+    let mut v4_with_card = v4.clone();
+    v4_with_card[first] = format!(
+        "{},\"card_id\":\"C-0001\"}}}}",
+        v4[first].strip_suffix("}}").expect("a row's end")
+    );
+    let mut schema_10 = lines.clone();
+    schema_10[0] = schema_10[0].replacen("\"queue_schema\":11,", "\"queue_schema\":10,", 1);
+    let mut format_6 = lines.clone();
+    format_6[0] = format_6[0].replacen("\"format\":5,", "\"format\":6,", 1);
+    for (name, defective, line, needle) in [
+        ("format-5-row-without-card-id", no_card, first + 1, ""),
+        ("format-5-row-without-why", no_why, first + 1, ""),
+        ("format-4-row-with-card-id", v4_with_card, first + 1, ""),
+        (
+            "format-5-at-schema-10",
+            schema_10,
+            1,
+            "(it holds queue schema 11)",
+        ),
+        ("format-6", format_6, 1, "upgrade SpecEngine"),
+    ] {
+        assert_ne!(defective, lines, "{name}");
+        let (label, message) = refused_import(&pair, name, &dump_of(&defective));
+        assert!(
+            message.starts_with(&format!("{label}:{line}: ")),
+            "{name}: {message}"
+        );
+        assert!(message.contains(needle), "{name}: {message}");
+    }
+}
+
+/// docs/features/card-questions.md S5: a schema-10
+/// database (step 11's columns dropped) exports unmigrated as format 5,
+/// schema 11, each proposal's `card_id` and `why` `null`; nothing stepped.
+#[test]
+fn card_questions_s5_a_schema_10_database_exports_as_format_5_unmigrated() {
+    let pair = Pair::new("qe-cq-s5-10", "spec-a");
+    let main = pair.main.clone();
+    pair.propose_edit(&pair.linked, TARGET, FROM, "the sprint ends at once;");
+    let dumps = pair.scratch.dir("dumps");
+    let current = dumps.join("v5.jsonl");
+    export_ok(&pair, &pair.home, &main, Some(&current), NOW);
+    let lines = lines_of(&fs::read(&current).unwrap());
+    assert!(lines[0].starts_with("{\"format\":5,\"queue_schema\":11,"));
+    pair.sql(
+        "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
+         PRAGMA user_version = 10;",
+    );
+    let from_10 = dumps.join("from-10.jsonl");
+    export_ok(&pair, &pair.home, &main, Some(&from_10), NOW);
+    assert_eq!(
+        String::from_utf8(fs::read(&from_10).unwrap()).unwrap(),
+        String::from_utf8(dump_of(&lines)).unwrap()
+    );
+    assert_eq!(
+        pair.sql("PRAGMA user_version;").trim(),
+        "10",
         "nothing stepped"
     );
 }

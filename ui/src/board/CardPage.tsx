@@ -255,6 +255,11 @@ export function CardPage({ project, id }: { project: string; id: string }) {
           onWritten={(answer, said) => {
             written(answer, said);
           }}
+          onRaised={(said) => {
+            setRefusal(null);
+            closeDialog();
+            announce(said);
+          }}
         />
       )}
     </section>

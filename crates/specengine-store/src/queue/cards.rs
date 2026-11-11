@@ -57,8 +57,10 @@ use specengine_model::{
 
 use super::state::{TASK_LINKS_SCHEMA, stored_text};
 use super::{
-    CARD_COLUMNS, EVENT_CREATED, Event, ID_ORDER, IntakeResult, NewIntake, ProposalKind,
-    QueueError, SqliteQueue, check_time, existing, insert_intake, log, queue_matches, to_json,
+    CARD_COLUMNS, CARD_ITEMS_SCHEMA, COLUMNS, EVENT_CREATED, Event, ID_ORDER, IntakeResult,
+    NewIntake, Proposal, ProposalKind, QueueError, RawRow, SqliteQueue, UnreadableRow, check_time,
+    created_payload, existing, index_only, insert_intake, link_problem, log, log_text,
+    queue_matches, to_json, user_version,
 };
 use crate::error::{Db, StoreError};
 use crate::floor::read_floor;
@@ -303,6 +305,15 @@ impl From<UnreadableCard> for QueueError {
     }
 }
 
+/// What [`SqliteQueue::card_items`] gives: the questions, discrepancies and
+/// decisions naming one card, by ID number, and the rows naming it that do
+/// not decode (`docs/canon/card-questions.md` "The rule").
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardItems {
+    pub items: Vec<Proposal>,
+    pub unreadable: Vec<UnreadableRow>,
+}
+
 /// What [`SqliteQueue::list_cards`] gives: the cards by number, and the rows
 /// skipped because they do not decode.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -404,37 +415,51 @@ impl SqliteQueue {
     /// The last `limit` `card.*` events of the card `id`, oldest first. A
     /// payload that is no JSON names no card: it is passed over.
     pub fn card_history(&self, id: &str, limit: usize) -> Result<Vec<Event>, QueueError> {
-        let mut statement = self
-            .conn
-            .prepare(
-                "SELECT seq, project, type, payload, at FROM main.events \
-                 WHERE project = ?1 AND type LIKE 'card.%' ORDER BY seq DESC",
-            )
-            .db()?;
-        let mut rows = statement.query([&self.project]).db()?;
-        let mut events = Vec::new();
-        while events.len() < limit {
-            let Some(row) = rows.next().db()? else {
-                break;
+        events_naming(&self.conn, &self.project, "card.%", &[id], limit)
+    }
+
+    /// The questions, discrepancies and decisions whose `card_id` is the
+    /// card `id`, by ID number, in one snapshot; a row naming it that does
+    /// not decode is listed in [`CardItems::unreadable`]. A queue below
+    /// step 11 (a handle of [`Self::open_existing`]) or an index-only DB
+    /// holds none. A read only: no card rule asks it
+    /// (`docs/canon/card-questions.md` "The rule").
+    pub fn card_items(&self, id: &str) -> Result<CardItems, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let mut found = CardItems::default();
+        if !index_only(&tx)? && user_version(&tx)? >= CARD_ITEMS_SCHEMA {
+            let raws: Vec<RawRow> = {
+                let mut statement = tx
+                    .prepare(&format!(
+                        "SELECT {COLUMNS} FROM main.proposals \
+                         WHERE project = ?1 AND card_id = ?2 {ID_ORDER}"
+                    ))
+                    .db()?;
+                statement
+                    .query_map([self.project.as_str(), id], RawRow::read)
+                    .db()?
+                    .collect::<rusqlite::Result<_>>()
+                    .db()?
             };
-            let text: Option<String> = row.get(3).db()?;
-            let Some(payload) = text.and_then(|text| serde_json::from_str::<Value>(&text).ok())
-            else {
-                continue;
-            };
-            if payload.get("id").and_then(Value::as_str) != Some(id) {
-                continue;
+            for raw in raws {
+                match raw.decode() {
+                    Ok(proposal) => found.items.push(proposal),
+                    Err(row) => found.unreadable.push(row),
+                }
             }
-            events.push(Event {
-                seq: row.get(0).db()?,
-                project: row.get::<_, Option<String>>(1).db()?.unwrap_or_default(),
-                event_type: row.get::<_, Option<String>>(2).db()?.unwrap_or_default(),
-                payload,
-                at: row.get::<_, Option<String>>(4).db()?.unwrap_or_default(),
-            });
         }
-        events.reverse();
-        Ok(events)
+        tx.commit().db()?;
+        Ok(found)
+    }
+
+    /// The last `limit` `proposal.*` events whose payload's `id` is one of
+    /// `ids` (a card's items), oldest first, as [`Self::card_history`]
+    /// reads a card's.
+    pub fn item_history(&self, ids: &[&str], limit: usize) -> Result<Vec<Event>, QueueError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        events_naming(&self.conn, &self.project, "proposal.%", ids, limit)
     }
 
     /// One change of the card `id` made by `actor`, in one transaction with
@@ -515,11 +540,17 @@ impl SqliteQueue {
             .kind
             .intake_shape()
             .and_then(|shape| shape.problem(intake.kind, &intake.intake))
+            .or_else(|| link_problem(intake))
         {
             return Err(QueueError::Invalid(problem));
         }
         let dir = self.dir.clone();
         let (card, (corrected, result)) = self.written(id, seen, actor, now, |row| {
+            // The discrepancy names the card accepted, read under this
+            // lock as any raise's card is.
+            if let Some(card) = &intake.card_id {
+                check_card(row.tx, row.project, card)?;
+            }
             let (hits, related) = queue_matches(row.tx, row.project, intake)?;
             let mut item = intake.clone();
             item.intake.distinct_from = departure
@@ -533,11 +564,11 @@ impl SqliteQueue {
                 .collect();
             let floor = read_floor(&dir)?;
             let made = insert_intake(row.tx, row.project, &item, None, floor, now)?;
-            log(
+            log_text(
                 row.tx,
                 row.project,
                 EVENT_CREATED,
-                &json!({ "id": made }),
+                &created_payload(&made, &item),
                 now,
             )?;
             row.accepted(
@@ -668,6 +699,67 @@ impl SqliteQueue {
     pub fn live_correction(&self, id: &str) -> Result<Option<String>, QueueError> {
         live_correction(&self.conn, &self.project, id)
     }
+}
+
+/// The last `limit` events of `project` whose type is `like` (`card.%`,
+/// `proposal.%`) and whose payload's `id` is one of `ids`, scanned newest
+/// first, then oldest first. A payload that is no JSON names nothing: it is
+/// passed over.
+fn events_naming(
+    conn: &Connection,
+    project: &str,
+    like: &str,
+    ids: &[&str],
+    limit: usize,
+) -> Result<Vec<Event>, QueueError> {
+    let mut statement = conn
+        .prepare(
+            "SELECT seq, project, type, payload, at FROM main.events \
+             WHERE project = ?1 AND type LIKE ?2 ORDER BY seq DESC",
+        )
+        .db()?;
+    let mut rows = statement.query([project, like]).db()?;
+    let mut events = Vec::new();
+    while events.len() < limit {
+        let Some(row) = rows.next().db()? else {
+            break;
+        };
+        let text: Option<String> = row.get(3).db()?;
+        let Some(payload) = text.and_then(|text| serde_json::from_str::<Value>(&text).ok()) else {
+            continue;
+        };
+        if !payload
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|named| ids.contains(&named))
+        {
+            continue;
+        }
+        events.push(Event {
+            seq: row.get(0).db()?,
+            project: row.get::<_, Option<String>>(1).db()?.unwrap_or_default(),
+            event_type: row.get::<_, Option<String>>(2).db()?.unwrap_or_default(),
+            payload,
+            at: row.get::<_, Option<String>>(4).db()?.unwrap_or_default(),
+        });
+    }
+    events.reverse();
+    Ok(events)
+}
+
+/// The card `id` is a row of `project`, in any state, read inside the
+/// caller's write: else [`QueueError::CardRefused`] `no card C-0099`. Its
+/// columns are not decoded: a card names it whatever it holds.
+pub(super) fn check_card(tx: &Transaction<'_>, project: &str, id: &str) -> Result<(), QueueError> {
+    let found: Option<i64> = tx
+        .query_row(
+            "SELECT 1 FROM main.cards WHERE id = ?1 AND project = ?2",
+            [id, project],
+            |row| row.get(0),
+        )
+        .optional()
+        .db()?;
+    found.map(|_| ()).ok_or_else(|| refused(id, no_card(id)))
 }
 
 /// `project`'s cards by number, inside the caller's read; a row that does

@@ -478,20 +478,21 @@ line. ",
 
 const HUB_QUESTION_DESCRIPTION: &str = concat!(
     "Asks a question about nodes: the same as `spec propose question ID... --text T \
---working-answer W --price-of-other P [--severity S] [--distinct-from X]... --author-role \
-ROLE`. Checked first against what is decided and asked; stored (open) only when nothing \
+--working-answer W --price-of-other P [--severity S] [--distinct-from X]... [--card C] \
+--author-role ROLE`. Checked first against what is decided and asked; stored (open) only when nothing \
 answers it. content is the command's output, structuredContent its --json document {id, \
 created, hits, related, linked, diagnostics, notes}.
 
 node_ids: 1 to 16 IDs (or slug/ID) it is about, or root-relative .md paths naming their \
-files' documents (stored by its id, else its path), each node once; an alias is refused \
-naming the ID, a look-alike with its Latin fix.
+files' documents, each node once; an alias is refused naming the ID, a look-alike with its \
+Latin fix.
 text: the question, at most 1024 bytes.
 working_answer: the answer worked on until a person's, at most 2048 bytes: keep working \
 on it.
 price_of_other: what another answer would cost, at most 2048 bytes.
-severity: high, normal (absent) or low; it only orders the queue.
+severity: high, normal (absent) or low.
 distinct_from: at most 64 hits (an id, else a path) it is declared distinct from.
+card_id: the card (C-0001) it is asked for, in any state.
 author_role (required), author_model, run: who asks.
 
 A hit: an accepted decision document linked to a node (its id, path and title as the \
@@ -499,7 +500,7 @@ answer), or a question or decision queued on a shared node with the same text, w
 case aside (a rejected one's reason is its answer). With a hit nothing is stored: id \
 null, created false; read the answer, or name every hit in distinct_from to store it anyway. \
 Past 10 hits, a note names the rest; over 64 it cannot be stored. Related: decision documents \
-only mentioning a node, queued questions or decisions with other text. A person answers it \
+only mentioning a node, queued items with other text. A person answers it \
 with a Confirm on the hub or a terminal: approved, a decision record (a queue hit's record, \
 path, title as the answer); rejected, its reason the answer. A refusal names the field. ",
     hub_queue_tail!()
@@ -523,7 +524,7 @@ working_answer: what is worked on meanwhile, at most 2048 bytes.
 proposed_patch: {target, base, text, rationale} as propose_change takes them, the target one \
 of node_ids: stored as a linked update (linked, its findings in diagnostics), decided on its \
 own.
-distinct_from, author_role (required), author_model, run: as ask_question.
+distinct_from, card_id, author_role (required), author_model, run: as ask_question.
 
 A person decides it with a Confirm on the hub or a terminal: an option approved (a decision \
 record), or rejected with a reason that settles it. A refusal names the field \
@@ -548,7 +549,8 @@ severity: high, normal (absent) or low; it only orders the queue.
 proposed_patch: {target, base, text, rationale} as propose_change takes them, the target one \
 of node_ids: the rule's new text, stored as a linked update (linked, its findings in \
 diagnostics), approved on its own.
-distinct_from, author_role (required), author_model, run: as ask_question.
+distinct_from, card_id, author_role (required), author_model, run: as ask_question.
+why: why you decided so, at most 2048 bytes; null: none.
 
 A person records it with a Confirm on the hub or a terminal (a decision record: its working \
 answer, or another answer) and confirms the linked update apart, its own commit; or rejects \

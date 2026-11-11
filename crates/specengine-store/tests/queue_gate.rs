@@ -417,9 +417,9 @@ fn a_newer_queue_is_schema_too_new() {
         );
     }
     let newer = QUEUE_SCHEMA_VERSION + 1;
-    // docs/features/card-tasks.md CT-4: 11 over this build's 10, the path an
-    // older build meets at 10.
-    assert_eq!(newer, 11);
+    // docs/features/card-questions.md D3, D16: 12 over this build's 11, the
+    // path an older build meets at 11 (M1's record at a62c81c: 11 over 10).
+    assert_eq!(newer, 12);
     sqlite3(&repos.db, &format!("PRAGMA user_version = {newer};"));
     let queue = open_for_gate(&repos.db, PROJECT, later())
         .unwrap()
@@ -612,8 +612,8 @@ fn the_record_is_one_event_with_its_four_keys_in_order() {
 
 #[test]
 fn the_record_goes_only_into_schema_six() {
-    // docs/canon/cards.md "Store": queue schema 10.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 10, "this build's queue schema");
+    // docs/features/card-questions.md S1.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 11, "this build's queue schema");
     let repos = Repos::new("qg-record-4");
     drop(repos.queue(PROJECT));
     // A queue at schema 6 (as a build before rev-discipline left it).

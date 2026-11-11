@@ -9,7 +9,9 @@
 //! read routes, `/` and `/assets/<file>`, are fenced like the API's
 //! (docs/features/ui-embed.md, [`crate::ui`]). A card's routes
 //! (docs/features/board-ui.md "Data"): `…/cards` a read and a write, its 405
-//! `Allow: GET, POST`; `…/cards/<id>` a read; its six writes `Allow: POST`.
+//! `Allow: GET, POST`; `…/cards/<id>` a read; its seven writes `Allow: POST`,
+//! `…/cards/<id>/items` among them
+//! (`docs/canon/card-questions.md` "The rule").
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `…/workspaces` a read of the config
@@ -37,10 +39,14 @@
 //! a choice: no handler here walks a round or decides an item. A card's
 //! writes are the library's `card_new`, `card_move`, `card_edit`,
 //! `card_assign`, `card_cancel`,
-//! `card_accept`, `card_clear` and `card_clear_group`, through the same door
-//! (docs/features/board-ui.md "Data", docs/features/card-trace.md); they
-//! touch the queue alone, a departing accept making its one proposal there
-//! inside the library's accept (ADR-0057), and no agent tool reaches them.
+//! `card_accept`, `card_clear`, `card_clear_group` and `card_raise`, through
+//! the same door (docs/features/board-ui.md "Data",
+//! docs/features/card-trace.md); they touch the queue alone, a departing
+//! accept making its one proposal there inside the library's accept
+//! (ADR-0057), a card's raise its one question or decision through the
+//! library's intake (ADR-0077), and no agent tool reaches them. A stage's
+//! body may name who answers (`as`): a trailing `as` on its event, bound to
+//! the login on a hub.
 //! The other writes are the reads' own, in the data directory.
 //!
 //! On a hub the stage, the round's answers and the three card acts taking a
@@ -65,12 +71,12 @@ use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest,
-    CardMoveBody, CardNewBody, CardOutcome, CardShowRequest, CheckRequest, CliError, FlowRequest,
-    GraphRequest, HealthRequest, InboxRequest, IndexTrust, LockDiffRequest, Outcome, ReviewRequest,
-    RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
-    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest,
-    TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit,
-    team_read, utc_now,
+    CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest, CheckRequest, CliError,
+    FlowRequest, GraphRequest, HealthRequest, InboxRequest, IndexTrust, LockDiffRequest, Outcome,
+    ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
+    SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow,
+    TraceRequest, TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags,
+    round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -236,6 +242,10 @@ pub(crate) fn router(app: Shared) -> Router {
         .route(
             "/api/projects/{p}/cards/{id}/clear",
             post(clear_card).fallback(only_post),
+        )
+        .route(
+            "/api/projects/{p}/cards/{id}/items",
+            post(raise_on_card).fallback(only_post),
         )
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
@@ -947,24 +957,29 @@ fn stage_target(
 /// otherwise; at most [`STAGE_BODY_MAX`] bytes: 413; a body that does not
 /// decode: 400 with the CLI's line); 200 the review document, 400 a usage
 /// defect, 404 unknown, 409 refused (the refused review document), 503
-/// cannot run (`answer.rs`). On a hub a `[team]` login alone, past the
-/// page's origin and again past the body ([`hub::member`]), named `as` in the
-/// event.
+/// cannot run (`answer.rs`). The body's `as` names who answers, a trailing
+/// `as` on the event; absent, the event is as before. On a hub a `[team]`
+/// login alone, past the page's origin and again past the body
+/// ([`hub::member`]), named `as` in the event: a body's `as` naming another
+/// is a 403 ([`hub::acting`]).
 async fn stage(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = stage_target(&app, request.uri(), request.headers())?;
     let login = login_of(&request);
     hub::member(&project, login.as_ref()).await?;
     json_typed(request.headers())?;
     let bytes = body(request, STAGE_BODY_MAX).await?;
-    let body = StageBody::from_json(&bytes).map_err(|error| Refusal::bad_request(error.message))?;
+    let mut body =
+        StageBody::from_json(&bytes).map_err(|error| Refusal::bad_request(error.message))?;
     hub::member(&project, login.as_ref()).await?;
+    hub::acting(login.as_ref(), body.actor_mut())?;
     Ok(run(project, move |env, globals| {
+        let actor = body.actor().map(str::to_owned);
         let request = StageRequest {
             id,
             body,
             now: utc_now(),
             git: process_git(env),
-            actor: login.map(|Login(login)| login),
+            actor,
         };
         specengine_cli::stage(env, globals, &request)
             .map(|outcome| Outcome::Stage(Box::new(outcome)))
@@ -1000,7 +1015,8 @@ async fn unstage(State(app): State<Shared>, request: Request) -> Result<Response
 /// most 200 answers; else a 400 with its line). Then one call in the
 /// project's turn, one clock reading: 200 with the answers document
 /// whatever became of each answer (`answer.rs`), 503 cannot run. An answer
-/// only stages; nothing is decided here. On a hub as [`stage`].
+/// only stages; nothing is decided here. Each stage's `as` as the stage
+/// route's; on a hub as [`stage`], every stage's `as` bound to the login.
 async fn round_answers(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(request.uri())?;
     same_origin(request.headers())?;
@@ -1008,9 +1024,12 @@ async fn round_answers(State(app): State<Shared>, request: Request) -> Result<Re
     hub::member(&project, login.as_ref()).await?;
     json_typed(request.headers())?;
     let bytes = body(request, ROUND_BODY_MAX).await?;
-    let answers = RoundAnswersBody::from_json(&bytes, &project.slug)
+    let mut answers = RoundAnswersBody::from_json(&bytes, &project.slug)
         .map_err(|error| Refusal::bad_request(error.message))?;
     hub::member(&project, login.as_ref()).await?;
+    for answer in &mut answers.answers {
+        hub::acting(login.as_ref(), answer.stage.actor_mut())?;
+    }
     Ok(run(project, move |env, globals| {
         let request = RoundAnswersRequest {
             body: answers,
@@ -1174,6 +1193,35 @@ async fn new_card(State(app): State<Shared>, request: Request) -> Result<Respons
     hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_new(env, globals, &body.request(utc_now())).map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/<id>/items`: `card_raise`, past [`new_card`]'s door
+/// (`docs/canon/card-questions.md` "The rule"): a question or a decision
+/// raised on the card, its body the CLI's `CardRaiseBody` (no
+/// `proposed_patch`, `task_id` or author: a person raises it). Then one call
+/// in the project's turn, one clock reading, its place the served root's: 200
+/// the intake document (stored or not, `created`), 400 a body or a person
+/// refused, 404 `{id, reason}` no such card (read before any intake rule),
+/// 409 an intake rule's refusal (the intake document, its reason the last
+/// note), 503 cannot run (`answer.rs`). On a hub a plain write: any login, `as`
+/// its login ([`hub::acting`]), the author's `login` too; `[team]` is not
+/// read.
+async fn raise_on_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = written_target(&app, request.uri(), request.headers(), "/items")?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CardRaiseBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    Ok(run(project, move |env, globals| {
+        let request = body.request(
+            id,
+            utc_now(),
+            process_git(env),
+            login.map(|Login(login)| login),
+        )?;
+        specengine_cli::card_raise(env, globals, &request)
+            .map(|outcome| Outcome::CardRaise(Box::new(outcome)))
     })
     .await)
 }

@@ -489,6 +489,7 @@ fn body_of(submitted: Submitted, updated_at: String) -> Option<StageBody> {
         editorial,
         note: note.clone(),
         updated_at: updated_at.clone(),
+        actor: None,
     };
     match submitted.choice.as_str() {
         APPROVE | WORKING_ANSWER => Some(approve(None, None)),
@@ -496,6 +497,7 @@ fn body_of(submitted: Submitted, updated_at: String) -> Option<StageBody> {
         REJECT => Some(StageBody::Reject {
             reason: note.clone().unwrap_or_default(),
             updated_at: updated_at.clone(),
+            actor: None,
         }),
         choice => {
             let index = choice.strip_prefix(OPTION_PREFIX)?;

@@ -675,8 +675,9 @@ fn review_document_every_key_present() {
         .map(String::as_str)
         .collect();
     // 48 since docs/features/drift-queue.md added `drift` after
-    // `revisions` (`null` on an update).
-    assert_eq!(keys.len(), 48, "{keys:?}");
+    // `revisions` (`null` on an update); 50 since
+    // docs/features/card-questions.md D14 (`card_id`, `why`).
+    assert_eq!(keys.len(), 50, "{keys:?}");
     assert_eq!(value["drift"], Value::Null);
     let json_text = serde_json::to_string(&value).unwrap();
     let printed = rev_common::printed(
@@ -725,7 +726,8 @@ fn review_document_every_key_present() {
     let at = lines.iter().position(|key| *key == "revisions").unwrap();
     assert_eq!(lines[at - 1], "conflict", "{text}");
     assert_eq!(lines[at + 1], "drift", "{text}");
-    assert_eq!(lines.len(), 48, "{text}");
+    // 50 since docs/features/card-questions.md D14.
+    assert_eq!(lines.len(), 50, "{text}");
     assert!(!json_text.is_empty());
 }
 

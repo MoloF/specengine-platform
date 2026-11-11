@@ -807,6 +807,7 @@ fn question(repo: &LockRepo, text: &str) -> String {
         login: None,
         now: NOW.to_owned(),
         git: repo.git_env(&repo.root),
+        card: None,
     };
     let env = repo.env(&repo.root);
     let ask = |request: &QuestionRequest| {
@@ -1240,6 +1241,7 @@ fn a_staged_item_shows_its_stage() {
                 editorial: None,
                 note: Some("n".to_owned()),
                 updated_at,
+                actor: None,
             },
             now: STAGED.to_owned(),
             git: pair.git_env(&pair.main),
@@ -1287,6 +1289,7 @@ fn a_row_with_a_reject_staged_is_never_asked_and_stands_in_left() {
             body: StageBody::Reject {
                 reason: "Not this one.".to_owned(),
                 updated_at,
+                actor: None,
             },
             now: STAGED.to_owned(),
             git: pair.git_env(&pair.main),
@@ -1345,6 +1348,7 @@ fn a_reject_staged_during_the_walk_is_not_asked_either() {
                     body: StageBody::Reject {
                         reason: "Not this one.".to_owned(),
                         updated_at,
+                        actor: None,
                     },
                     now: STAGED.to_owned(),
                     git: pair.git_env(&pair.main),

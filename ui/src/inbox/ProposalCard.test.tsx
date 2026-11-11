@@ -115,3 +115,47 @@ describe("the proposal card shows a hub's login of who raised it, as text (H15 o
     expect(card.textContent).not.toContain(space);
   });
 });
+
+// U5 of docs/features/card-questions.md "Acceptance criteria": a proposal raised for a task names it
+// on its card, "Task C-0008", a link to the task on the board; a decision's why stands under its
+// working answer; neither shows when null.
+describe("the proposal card's task and why (U5 of card-questions)", () => {
+  /** A decision raised on the card C-0008 with its why. */
+  const DECIDED = aProposal({
+    id: "PR-0056",
+    kind: "decision",
+    target_id: "R-1",
+    target_ids: ["R-1"],
+    summary: "Draw the reach at full boom only?",
+    working_answer: "Yes: the diagram shows the reach at full boom.",
+    price_of_other: "Every boom angle needs a second plate.",
+    why: "Pilots read the diagram for the worst case.",
+    card_id: "C-0008",
+  });
+
+  async function cardOf(proposal: Proposal): Promise<HTMLElement> {
+    renderApp(stubClient([proposal]), `#/alpha/inbox/${proposal.id ?? ""}`);
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    return card;
+  }
+
+  it("names the task as a link to it on the board, and shows the why under the working answer", async () => {
+    const card = await cardOf(DECIDED);
+    const task = within(card).getByRole("link", { name: "Task C-0008" });
+    expect(task.getAttribute("href")).toBe("#/alpha/board/C-0008");
+    const headings = within(card)
+      .getAllByRole("heading", { level: 3 })
+      .map((heading) => heading.textContent);
+    expect(headings.slice(headings.indexOf("Working answer"), headings.indexOf("Working answer") + 2)).toEqual(["Working answer", "Why"]);
+    const why = within(card).getByRole("heading", { level: 3, name: "Why" }).closest("section");
+    expect(why?.textContent).toContain("Pilots read the diagram for the worst case.");
+  });
+
+  it("shows neither when both are null", async () => {
+    const card = await cardOf({ ...DECIDED, id: "PR-0057", why: null, card_id: null });
+    expect(within(card).queryByRole("link", { name: /^Task / })).toBeNull();
+    expect(within(card).queryByRole("heading", { level: 3, name: "Why" })).toBeNull();
+    expect(card.textContent).not.toContain("Pilots read");
+  });
+});

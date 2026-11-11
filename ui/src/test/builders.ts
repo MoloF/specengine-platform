@@ -106,6 +106,8 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     staged: null,
     staged_at: null,
     interpretation: null,
+    card_id: null,
+    why: null,
     notes: [],
     ...fields,
   };
@@ -180,6 +182,8 @@ export function noReview(id: string): Proposal {
     staged: null,
     staged_at: null,
     interpretation: null,
+    card_id: null,
+    why: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }
@@ -921,6 +925,7 @@ export function aCard(fields: Partial<Card> & { id: string }): Card {
     corrects: null,
     evidence: [],
     tasks: [],
+    items: [],
     acceptance: null,
     cancellation: null,
     created_by: "local",

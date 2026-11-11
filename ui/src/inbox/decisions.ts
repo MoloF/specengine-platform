@@ -1,5 +1,6 @@
 import type { Proposal } from "../api/types";
 import type { Translate } from "../i18n";
+import { formatUtc } from "../ui/time";
 
 /**
  * The owner's four decisions on a proposal, as the Inbox offers them (06 §3.3): each a button, a key
@@ -111,4 +112,16 @@ const CONFIRM_WORDS = new Map([
 export function confirmCommand(decision: string, id: string): string | null {
   const words = CONFIRM_WORDS.get(decision);
   return words === undefined || !PROPOSAL_ID.test(id) ? null : `${words} ${id}`;
+}
+
+/**
+ * What a stage says once stored, the Inbox's dialog and a card's Answer… alike: the decision, when it
+ * was staged as every stored time is shown, and the terminal command that confirms it
+ * (`docs/canon/decision-staging.md` "UI"; docs/features/card-questions.md "Acceptance criteria", U4).
+ */
+export function stagedAnnouncement(id: string, decision: "approve" | "reject", review: Pick<Proposal, "staged_at">, t: Translate): string {
+  const verb = verbOf(decision === "approve" ? "accept" : "reject", t);
+  const command = confirmCommand(decision, id);
+  const confirm = command === null ? t("inbox.confirmOnTerminal") : t("inbox.confirmCommand", { command });
+  return review.staged_at === null ? t("inbox.stagedSaid", { verb, id, confirm }) : t("inbox.stagedSaidAt", { verb, id, at: formatUtc(review.staged_at, t), confirm });
 }

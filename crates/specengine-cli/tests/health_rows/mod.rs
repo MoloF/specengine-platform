@@ -498,7 +498,10 @@ fn question(target: &str, summary: &str) -> NewIntake {
             options: Vec::new(),
             recommendation: None,
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 
@@ -533,7 +536,10 @@ fn discrepancy(target: &str, summary: &str) -> NewIntake {
             options: vec![option("1"), option("0")],
             recommendation: Some(0),
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 

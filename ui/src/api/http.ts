@@ -27,6 +27,7 @@ import type {
   CardList,
   CardMoveBody,
   CardNotFound,
+  CardRaiseBody,
   CardWrite,
   CheckReport,
   ConfirmBody,
@@ -37,6 +38,7 @@ import type {
   HubSync,
   Identity,
   Inbox,
+  IntakeDocument,
   LockDiffView,
   NodeView,
   Project,
@@ -64,7 +66,8 @@ import type {
 // the question round `docs/features/ui-round.md` "Data", the unapplied amendments
 // `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
 // the lock diff `docs/features/lock-diff.md` "Route", the flow `docs/features/flow-canvas.md`
-// "Data", the cards `docs/features/board-ui.md` "Routes", the identity `docs/canon/hub.md` "Routes",
+// "Data", the cards `docs/features/board-ui.md` "Routes" (a card's raise `docs/canon/card-questions.md`
+// "The rule"), the identity `docs/canon/hub.md` "Routes",
 // the confirm `docs/features/hub-confirm.md` "Data", the sync `docs/features/hub-git.md` "Data",
 // the workspaces `docs/features/workspaces.md` "Data"):
 // `fetch` and `EventSource`, no package.
@@ -480,11 +483,12 @@ export class HttpClient implements SpecEngineClient {
    * Stages the owner's choice (`docs/canon/decision-staging.md` "Daemon"): a JSON body of exactly
    * the stage's fields, then `updated_at` as this page read it; no AbortSignal (a write's answer is
    * always taken). 200: the review document. A refusal carrying the document (409: not open, an
-   * orphan's approve, changed since read; 404): its last note; an error body (400 a flag's usage,
-   * 403 the fence, 503): its message verbatim.
+   * orphan's approve, changed since read; 404): its last note; an error body (400 a flag's usage or
+   * an `as` off the person grammar, 403 the fence or a hub's other login, 503): its message verbatim.
    */
-  async stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> {
-    const body = JSON.stringify({ ...stage, updated_at: updatedAt });
+  async stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string, as?: string | null): Promise<Proposal> {
+    // `as` last, and only when given: the Questions screen's body stays as it was.
+    const body = JSON.stringify({ ...stage, updated_at: updatedAt, ...(as === undefined ? {} : { as }) });
     return (await request("POST", decisionPath(project, id), { body })) as Proposal;
   }
 
@@ -598,6 +602,16 @@ export class HttpClient implements SpecEngineClient {
 
   async clearCard(project: string, id: string, body: CardClearBody): Promise<CardWrite> {
     return (await request("POST", `${cardPath(project, id)}/clear`, { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  /**
+   * A question or a decision raised on the card, L3 of
+   * docs/features/card-questions.md "Acceptance criteria": 200 the intake document whether stored or
+   * not, `created` saying which; a 409's intake document rejects with its last note, a 404's
+   * `{id, reason}` with its reason.
+   */
+  async raiseOnCard(project: string, id: string, body: CardRaiseBody): Promise<IntakeDocument> {
+    return (await request("POST", `${cardPath(project, id)}/items`, { body: JSON.stringify(body) })) as IntakeDocument;
   }
 
   /** Every suspect card of a node and what it holds, one transaction; a refusal (a 409 or 404 with `{group, cleared, notes}`) its last note. */

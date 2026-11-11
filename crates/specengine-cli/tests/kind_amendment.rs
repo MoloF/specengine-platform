@@ -1643,6 +1643,7 @@ fn stage_of(
                 editorial: None,
                 note: None,
                 updated_at: pair.proposal(id).updated_at,
+                actor: None,
             },
             now: LATER.to_owned(),
             git: pair.git_env(&pair.main),
@@ -1835,8 +1836,9 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let raw = review_raw(&pair, &id);
     let keys = task_common::keys(&raw);
     // 47 since docs/features/rev-discipline.md added `revisions`; 48 since
-    // docs/features/drift-queue.md added `drift` after it.
-    assert_eq!(keys.len(), 48, "{keys:?}");
+    // docs/features/drift-queue.md added `drift` after it; 50 since
+    // docs/features/card-questions.md D14 (`card_id`, `why` before `notes`).
+    assert_eq!(keys.len(), 50, "{keys:?}");
     let revisions = keys.iter().position(|key| key == "revisions");
     assert_eq!(keys[revisions.expect("revisions") + 1], "drift", "{keys:?}");
     let fixture: Value = serde_json::from_str(&read_text(
@@ -1847,7 +1849,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        115,
+        118,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1855,7 +1857,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, \
          trace-views' `TraceStage`, hub-identity's `Identity`, hub-team's `Team`, \
          hub-confirm's `ConfirmRead`, hub-git's `HubSync`, workspaces' three, \
-         card-tasks' `CardTask` and flow-scenario's `ShownAncestor`"
+         card-tasks' `CardTask`, flow-scenario's `ShownAncestor` and card-questions' three"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").
@@ -1975,7 +1977,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1986,7 +1988,8 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     {
         let row: Value = serde_json::from_str(line).expect("a row");
         let row = row["proposals"].as_object().expect("a proposals row");
-        assert_eq!(row.len(), 46);
+        // 48 since docs/features/card-questions.md S1.
+        assert_eq!(row.len(), 48);
         assert_eq!(row["id"], json!(id));
         assert_eq!(row["kind"], json!(AMENDMENT_KIND));
         assert_eq!(row["status"], json!(status));

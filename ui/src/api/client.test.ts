@@ -102,7 +102,8 @@ describe("the tasks' reads (AC-01 of ui-tasks)", () => {
   it("writes no decision: only stageDecision, unstageDecision and the round's stageRoundAnswers touch a proposal, no decide, apply or reject member, none taking an AbortSignal; the other writes are the cards' (AC-14 of decision-staging, ui-round, ADR-0056)", () => {
     const names = members();
     expect(names.filter((name) => /stage|decide|decision|apply|reject/i.test(name))).toEqual(["stageDecision", "unstageDecision", "stageRoundAnswers"]);
-    expect(source).toContain("stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal>;");
+    // The acting name last, optional: the card's Answer… and the Inbox's dialog send it, the Questions screen none (docs/features/card-questions.md "Acceptance criteria", L4).
+    expect(source).toContain("stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string, as?: string | null): Promise<Proposal>;");
     expect(source).toContain("unstageDecision(project: string, id: string): Promise<Proposal>;");
     expect(source).toContain("stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome>;");
     expect(source).toContain("getRound(project: string, options?: RoundOptions, signal?: AbortSignal): Promise<RoundSheet>;");

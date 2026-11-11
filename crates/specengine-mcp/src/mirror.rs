@@ -577,6 +577,12 @@ pub(crate) struct ReviewDocument {
     pub staged_at: Option<String>,
     /// An interpretation's decision, how and why; `null` on any other kind.
     pub interpretation: Option<InterpretationShape>,
+    // `docs/canon/card-questions.md` "The rule".
+    /// The card a question, discrepancy or decision was raised for; `null`
+    /// on any other.
+    pub card_id: Option<String>,
+    /// A decision's why, as stored; `null` on any other kind.
+    pub why: Option<String>,
     pub notes: Vec<String>,
 }
 
@@ -691,7 +697,7 @@ pub(crate) enum ProposalState {
 }
 
 /// Who raised it. `login` is the one key the CLI leaves out rather than writes
-/// `null`: a hub's departing accept alone holds it, so an author has two
+/// `null`: a hub's raises and departing accepts hold it, so an author has two
 /// shapes, each with every key `required`.
 #[derive(JsonSchema)]
 #[schemars(untagged)]
@@ -1455,6 +1461,10 @@ pub(crate) struct CardShowDocument {
     pub evidence: Vec<CardEvidenceShape>,
     /// Each `T-` task it links, in link order, read now.
     pub tasks: Vec<CardTaskShape>,
+    // `docs/canon/card-questions.md` "The rule".
+    /// The questions, discrepancies and decisions naming it, by ID, read
+    /// now.
+    pub items: Vec<CardItemShape>,
     pub acceptance: Option<CardAcceptanceShape>,
     pub cancellation: Option<CardCancellationShape>,
     pub created_by: String,
@@ -1462,9 +1472,38 @@ pub(crate) struct CardShowDocument {
     pub updated_at: String,
     pub revision: String,
     pub allowed: Vec<CardAllowedShape>,
-    /// Its last `card.*` events, oldest first; `null` without `history`.
+    /// Its last `card.*` events and its items' last `proposal.*` events,
+    /// merged by `seq`, oldest first; `null` without `history`.
     pub history: Option<Vec<CardEventShape>>,
     pub notes: Vec<String>,
+}
+
+/// One question, discrepancy or decision a card names: the row's values,
+/// read now.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CardItemShape {
+    pub id: String,
+    /// Free: the queue's deciding kinds.
+    pub kind: String,
+    pub status: ProposalState,
+    /// A question's or a decision's text, a discrepancy's summary.
+    pub summary: String,
+    pub working_answer: Option<String>,
+    /// A decision's why.
+    pub why: Option<String>,
+    pub author: ProposalAuthor,
+    pub created_at: String,
+    pub updated_at: String,
+    /// When its open stage was staged; `null` when none.
+    pub staged_at: Option<String>,
+    pub decided_by: Option<String>,
+    pub decided_at: Option<String>,
+    /// An approval's note, a rejection's reason: its answer.
+    pub decision_note: Option<String>,
+    pub record_id: Option<String>,
+    pub record_path: Option<String>,
+    pub record_title: Option<String>,
 }
 
 /// One direct target as a card last saw it.

@@ -264,6 +264,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
                 login: None,
                 now: NOW.to_owned(),
                 git: repo.git_env(&repo.linked),
+                card: None,
             },
         )
         .expect("asked")
@@ -294,6 +295,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
                 login: None,
                 now: NOW.to_owned(),
                 git: repo.git_env(&repo.linked),
+                card: None,
             },
         )
         .expect("reported")
@@ -320,10 +322,12 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
         editorial: None,
         note: Some("ok".to_owned()),
         updated_at,
+        actor: None,
     });
     repo.stage(&question, |updated_at| StageBody::Reject {
         reason: "asked before".to_owned(),
         updated_at,
+        actor: None,
     });
     repo.stage(&report, |updated_at| StageBody::Approve {
         option: Some(1),
@@ -332,6 +336,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
         editorial: None,
         note: Some("keep the cap".to_owned()),
         updated_at,
+        actor: None,
     });
     let expected = [
         (

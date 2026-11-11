@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { ACTING_KEY } from "../board/acting";
 import { MockClient } from "./MockClient";
@@ -190,7 +190,7 @@ describe("the Board over the mock", () => {
     const panel = await modal("Night passage rules, plain words");
     expect(within(panel).getByRole("link", { name: "MEC-NIGHT-PASSAGE" }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-NIGHT-PASSAGE/page");
     expect(within(within(panel).getByRole("region", { name: "Evidence" })).getByText("Second read done with the pilots' office")).toBeTruthy();
-    expect(within(within(panel).getByRole("region", { name: "History" })).getByText("Created")).toBeTruthy();
+    expect(within(within(panel).getByRole("region", { name: "Activity" })).getByText("Created")).toBeTruthy();
     expect(document.querySelector('[data-card="C-0006"]')).toBeNull();
     await closeModal(panel);
     fireEvent.click(screen.getByLabelText("Show cancelled"));
@@ -291,7 +291,7 @@ describe("the card against its brief, over the mock", () => {
     await waitFor(() => {
       expect(within(card("C-0002")).queryByText("Suspect")).toBeNull();
     });
-    const history = await within(panel).findByRole("region", { name: "History" });
+    const history = await within(panel).findByRole("region", { name: "Activity" });
     await within(history).findByText("Cleared");
     expect(history.textContent).toContain("by Ivo Brandt");
     expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
@@ -460,7 +460,7 @@ describe("hand-offs and returns over the mock", () => {
     expect(card("C-0009").querySelector(".board-card-handoffs")?.textContent).toBe("1 subtask");
   });
 
-  it("the modal: a parent's subtasks with their words across both flows; a returned card's reason, or that its history keeps none", async () => {
+  it("the modal: a parent's subtasks with their words across both flows; a returned card's reason, C-0008's with the question asked with it (card-questions; a reason its history no longer keeps: ReturnDialog.test.tsx)", async () => {
     renderMock("normal", "#/harbor-sim/board/C-0001");
     const parent = await modal("Write the tide table foreword");
     const handOffs = within(await within(parent).findByRole("region", { name: "Subtasks" })).getAllByRole("listitem");
@@ -480,8 +480,10 @@ describe("hand-offs and returns over the mock", () => {
     expect(reason.textContent).toContain("Returned by Tomas Oakes");
     expect(reason.textContent).toContain("The buoy numbers on the plate disagree with MEC-NIGHT-PASSAGE");
     window.location.hash = "#/harbor-sim/board/C-0008";
-    const gone = await modal("Crane reach diagram");
-    expect((await within(gone).findByRole("region", { name: "Returned" })).textContent).toContain("is no longer in this task's history");
+    const asked = await modal("Crane reach diagram");
+    const returned = await within(asked).findByRole("region", { name: "Returned" });
+    expect(returned.textContent).toContain("Returned by Noor Ainsley");
+    expect(returned.textContent).toContain("The survey's crane reach numbers are not in MEC-CARGO-CRANES yet");
   });
 
   it("serves each card's linked tasks read now, in link order, a task not read null with its note; a card with none, none (CT-5 of card-tasks)", async () => {
@@ -527,5 +529,75 @@ describe("hand-offs and returns over the mock", () => {
     expect(within(part).getByRole("link", { name: "T-0107" }).getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
     expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(["spec task approve T-0107"]);
     expect(within(part).getByText("T-0106: its row does not read (`criteria`: bad JSON); no state shown").getAttribute("lang")).toBe("en");
+  });
+});
+
+// docs/features/card-questions.md "Acceptance criteria", U1 to U5, over the mock, as `pnpm dev`
+// shows it: C-0008's Activity holds its return, PR-0055 asked with it and PR-0056 recorded; a question
+// asked from the page lands in it; the Inbox names an item's task as a link to it.
+describe("a card's questions over the mock (card-questions)", () => {
+  // The items' chunk loaded once, so a lazy block or dialog never waits on its first transform.
+  beforeAll(async () => {
+    await import("../board/CardItems");
+  });
+
+  it("C-0008's Activity: the return with its note, PR-0055 by Noor Ainsley, PR-0056 with its why and record", async () => {
+    renderMock("normal", "#/harbor-sim/board/C-0008");
+    const panel = await modal("Crane reach diagram");
+    const activity = await within(panel).findByRole("region", { name: "Activity" });
+    const asked = await within(activity).findByRole("article", { name: "PR-0055" });
+    expect(asked.closest("li")?.textContent).toContain("Raised PR-0055 by Noor Ainsley");
+    expect(activity.textContent).toContain("Why: The survey's crane reach numbers are not in MEC-CARGO-CRANES yet");
+    const recorded = await within(activity).findByRole("article", { name: "PR-0056" });
+    expect(recorded.textContent).toContain("Pilots read the diagram for the worst case, and full boom is it.");
+    expect(within(recorded).getByRole("link", { name: "Crane reach at full boom" }).getAttribute("href")).toBe("#/harbor-sim/tree/DEC-0013/page");
+    expect(within(asked).getByRole("button", { name: "Answer\u2026" })).toBeTruthy();
+  });
+
+  it("Ask a question stores it: the Activity shows it raised under the acting name", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    renderMock("normal", "#/harbor-sim/board/C-0007");
+    const panel = await modal("Fairway chart, sheet 2");
+    fireEvent.click(await within(panel).findByRole("button", { name: "Ask a question\u2026" }));
+    const dialog = await screen.findByRole("dialog", { name: "Ask a question on C-0007" });
+    type(dialog, "Question", "Is the fairway lit at night?");
+    type(dialog, "Working answer", "Yes, every buoy.");
+    type(dialog, "What another answer would cost", "The night chart is redrawn.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ask" }));
+    await closed();
+    const activity = within(panel).getByRole("region", { name: "Activity" });
+    const raised = await within(activity).findByRole("article", { name: "PR-0057" });
+    expect(raised.closest("li")?.textContent).toContain("Raised PR-0057 by Ivo Brandt");
+  });
+
+  it("hub: a reject staged from the card and confirmed there reads back Rejected, no Answer\u2026 left (M1 of card-questions' review)", async () => {
+    await import("../inbox/ConfirmDialog");
+    renderMock("hub", "#/harbor-sim/board/C-0008");
+    const panel = await modal("Crane reach diagram");
+    const asked = await within(panel).findByRole("article", { name: "PR-0055" });
+    fireEvent.click(within(asked).getByRole("button", { name: "Answer\u2026" }));
+    const dialog = await screen.findByRole("dialog", { name: "Answer PR-0055" });
+    fireEvent.click(await within(dialog).findByRole("radio", { name: "Reject with a reason" }));
+    type(dialog, "Reason for rejecting PR-0055", "The survey settles it.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage 1 answer" }));
+    const staged = await within(dialog).findByRole("region", { name: "Staged decision" });
+    fireEvent.click(within(staged).getByRole("button", { name: /^Confirm/ }));
+    const confirming = await screen.findByRole("dialog", { name: "Confirm PR-0055" });
+    const press = await within(confirming).findByRole("button", { name: "Confirm PR-0055" });
+    await waitFor(() => {
+      expect(press.getAttribute("aria-disabled")).toBe("false");
+    });
+    fireEvent.click(press);
+    await waitFor(() => {
+      expect(within(panel).getByRole("article", { name: "PR-0055" }).querySelector(".lozenge-label")?.textContent).toBe("Rejected");
+    });
+    expect(within(within(panel).getByRole("article", { name: "PR-0055" })).queryByRole("button", { name: "Answer\u2026" })).toBeNull();
+  });
+
+  it("the Inbox names PR-0055's task: Task C-0008, a link to it on the board", async () => {
+    renderMock("normal", "#/harbor-sim/inbox/PR-0055");
+    const card = await screen.findByRole("article");
+    const task = await within(card).findByRole("link", { name: "Task C-0008" });
+    expect(task.getAttribute("href")).toBe("#/harbor-sim/board/C-0008");
   });
 });

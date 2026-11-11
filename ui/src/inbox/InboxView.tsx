@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useInbox, useProposal, useStageDecision } from "../api/queries";
+import { useInbox, useProposal, useStageDecision, withActing } from "../api/queries";
 import type { ApiError, Proposal, StageChoice, Team } from "../api/types";
 import { replaceHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
-import { useAllowed, useConfirmer } from "../board/acting";
+import { actingName, useActing, useAllowed, useConfirmer } from "../board/acting";
 import { actOff } from "../board/labels";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -17,7 +17,7 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useNow } from "../ui/useNow";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
-import { confirmCommand, confirmedLine, DECISION_KEYS, isStaged, verbOf, type DecisionKind } from "./decisions";
+import { confirmedLine, DECISION_KEYS, isStaged, stagedAnnouncement, type DecisionKind } from "./decisions";
 import { matchesFilter } from "./filter";
 import { severityRank } from "./labels";
 import { queueOrder } from "./order";
@@ -35,14 +35,6 @@ const DecisionDialog = lazy(() => import("./DecisionDialog").then((module) => ({
 const ConfirmDialog = lazy(() => import("./ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 
 const LETTERS = new Map<string, DecisionKind>(DECISION_KEYS.map(([kind, key]) => [key, kind]));
-
-/** What a stage says once stored: the decision, its time, the terminal command that confirms it. */
-function stagedAnnouncement(id: string, stage: StageChoice, review: Proposal, t: Translate): string {
-  const verb = verbOf(stage.decision === "approve" ? "accept" : "reject", t);
-  const command = confirmCommand(stage.decision, id);
-  const confirm = command === null ? t("inbox.confirmOnTerminal") : t("inbox.confirmCommand", { command });
-  return review.staged_at === null ? t("inbox.stagedSaid", { verb, id, confirm }) : t("inbox.stagedSaidAt", { verb, id, at: review.staged_at, confirm });
-}
 
 /** A line the view shows after a write, worded in the language shown when it renders. */
 type Said = (t: Translate) => string;
@@ -71,6 +63,8 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
   const decide = useStageDecision(project);
+  // The decision dialog stages under the acting name when one is known, the login on a hub (docs/features/card-questions.md "Acceptance criteria", L4).
+  const [acting] = useActing();
   const canStage = useAllowed(project)("stage");
   const confirmer = useConfirmer(project);
   const now = useNow();
@@ -216,13 +210,13 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     deciding.current = true;
     let review: Proposal;
     try {
-      review = await decide.mutateAsync({ id, stage, updatedAt });
+      review = await decide.mutateAsync(withActing({ id, stage, updatedAt }, actingName(acting)));
     } catch (error) {
       deciding.current = false;
       return refused(id, apiErrorOf(error));
     }
     deciding.current = false;
-    const said: Said = (shown) => stagedAnnouncement(id, stage, review, shown);
+    const said: Said = (shown) => stagedAnnouncement(id, stage.decision, review, shown);
     announce(said(t));
     if (!mounted.current) {
       return null;

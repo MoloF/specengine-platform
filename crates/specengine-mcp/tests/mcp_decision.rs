@@ -125,6 +125,7 @@ impl Decided {
                 login: None,
                 now: NOW.to_owned(),
                 git: decided.git_env(&decided.linked),
+                card: None,
             },
         )
         .expect("reported");

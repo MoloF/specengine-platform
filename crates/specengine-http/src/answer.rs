@@ -151,8 +151,9 @@ enum Answered {
 /// 409 (the refused review document); a card write's alike
 /// (docs/features/board-ui.md "Data"): 404 `{id, reason}`, 409 the write
 /// document, a lost compare-and-set too, 403 a hub's group clear outside the
-/// login's `[team]` cover (docs/features/hub-team.md); a confirm's by its
-/// cause too (docs/features/hub-confirm.md "Data").
+/// login's `[team]` cover (docs/features/hub-team.md); a card's raise 404 no
+/// such card, 409 refused, 200 the intake document stored or not; a
+/// confirm's by its cause too (docs/features/hub-confirm.md "Data").
 fn answered(outcome: &Outcome) -> Answered {
     match outcome {
         Outcome::Stage(stage) => {
@@ -167,6 +168,17 @@ fn answered(outcome: &Outcome) -> Answered {
             );
         }
         Outcome::Card(card) => return caused(outcome, write_status(card.cause)),
+        // A card's raise (`docs/canon/card-questions.md` "The rule"): no such
+        // card 404 `{id, reason}`, an intake rule's refusal 409 the intake
+        // document, else 200 whether stored or not.
+        Outcome::CardRaise(raise) => {
+            let status = match (raise.no_card(), raise.exit()) {
+                (true, _) => StatusCode::NOT_FOUND,
+                (false, Exit::NotFound) => StatusCode::CONFLICT,
+                (false, _) => StatusCode::OK,
+            };
+            return caused(outcome, Some(status));
+        }
         Outcome::CardGroup(group) => return caused(outcome, write_status(group.cause)),
         Outcome::Confirm(confirm) => {
             return match confirm.cause {

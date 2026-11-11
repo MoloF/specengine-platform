@@ -219,13 +219,14 @@ fn card(id: &str, column: &str, position: u64) -> (String, String, u64) {
 /// moved or retyped.
 #[test]
 fn schema_10_makes_the_cards_table() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
+    // Schema 11 since docs/features/card-questions.md, `cards` unchanged.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
     assert_eq!(CARD_COLUMNS, COLUMNS);
     assert_eq!(CARD_COLUMNS.last(), Some(&"tasks"));
     let scratch = Scratch::new("qc-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     let want: Vec<String> = COLUMNS
         .iter()
         .map(|column| {
@@ -254,9 +255,9 @@ fn schema_10_makes_the_cards_table() {
 }
 
 /// AC-07, the store half: a schema-8 queue (a proposal's table, a task and
-/// an event in it) opens at 10 in one open (card-tasks CT-4: steps 9 and
-/// 10), every row byte for byte; `cards` empty, its 25 columns, a card made
-/// after. M: the step skipped.
+/// an event in it) opens at 11 in one open (card-tasks CT-4: steps 9 and
+/// 10; card-questions: 11), every row byte for byte; `cards` empty, its 25
+/// columns, a card made after. M: the step skipped.
 #[test]
 fn a_schema_8_queue_opens_at_10_with_its_rows_unchanged() {
     let scratch = Scratch::new("qc-step");
@@ -276,7 +277,12 @@ fn a_schema_8_queue_opens_at_10_with_its_rows_unchanged() {
         .expect("a task");
     let rows = queue.dump().expect("dump");
     drop(queue);
-    sqlite3(&db, "DROP TABLE cards; PRAGMA user_version = 8;");
+    // Schema 8's `proposals` holds no step-11 column either.
+    sqlite3(
+        &db,
+        "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
+         DROP TABLE cards; PRAGMA user_version = 8;",
+    );
     assert_eq!(
         sqlite3(
             &db,
@@ -293,7 +299,7 @@ fn a_schema_8_queue_opens_at_10_with_its_rows_unchanged() {
     };
     let before_step = raw(&db);
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     assert_eq!(
         sqlite3(
             &db,
@@ -301,7 +307,7 @@ fn a_schema_8_queue_opens_at_10_with_its_rows_unchanged() {
              ORDER BY cid);"
         ),
         COLUMNS.join(" "),
-        "steps 9 and 10 in one open"
+        "steps 9, 10 and 11 in one open"
     );
     assert_eq!(raw(&db), before_step, "rows unchanged");
     assert_eq!(queue.dump().expect("dump"), rows);
@@ -1722,7 +1728,7 @@ fn the_gate_reads_tasks_alone() {
 // ------------------------------------------------ card-tasks (RM-0092)
 
 /// CT-4, the store half: a schema-9 queue made with step 9's SQL, holding
-/// one card, opens at 10 in one step: `PRAGMA table_info(cards)` is
+/// one card, opens at 11 in one open (card-questions' step 11 too): `PRAGMA table_info(cards)` is
 /// `CARD_COLUMNS` (25, `tasks` last), the old row's `tasks` `NULL`, read as
 /// none, every other column as it was; once more, no second step. M6:
 /// `STEP_10` left out of `migrate`.
@@ -1731,7 +1737,12 @@ fn card_tasks_a_schema_9_queue_opens_at_10_and_its_card_links_none() {
     let scratch = Scratch::new("qc-step-10");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    sqlite3(&db, "DROP TABLE cards;");
+    // Schema 9's `proposals` holds no step-11 column either.
+    sqlite3(
+        &db,
+        "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
+         DROP TABLE cards;",
+    );
     sqlite3(&db, STEP_9);
     sqlite3(
         &db,
@@ -1761,7 +1772,7 @@ fn card_tasks_a_schema_9_queue_opens_at_10_and_its_card_links_none() {
     let before = row(&db);
 
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     assert_eq!(columns(&db), CARD_COLUMNS.join(" "));
     assert_eq!(CARD_COLUMNS.len(), 25);
     assert_eq!(
@@ -1789,7 +1800,7 @@ fn card_tasks_a_schema_9_queue_opens_at_10_and_its_card_links_none() {
     );
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "stepped once");
     assert_eq!(columns(&db), CARD_COLUMNS.join(" "), "no second column");
 }
 

@@ -130,6 +130,39 @@ const OLD_WORKSPACE = new RegExp("\u0440\u0430\u0431\u043e\u0447\\S*\\s+\u043e\u
 /** The owner's Russian word for Department. */
 const DEPARTMENT = "\u041e\u0442\u0434\u0435\u043b";
 
+// U5 of docs/features/card-questions.md "Acceptance criteria": the chrome asks a question, never of a
+// trade: no word names writers, the people a question may go to (ADR-0008). The Russian stems, a
+// writer and a screenwriter, are escapes here.
+
+/** A writer, or writers, as a word. */
+const WRITER = /\bwriters?\b/i;
+
+/** The Russian stems of a writer and of a screenwriter. */
+const RUSSIAN_WRITERS = ["\u043f\u0438\u0441\u0430\u0442\u0435\u043b", "\u0441\u0446\u0435\u043d\u0430\u0440\u0438\u0441\u0442"];
+
+describe("no trade in the chrome (U5 of card-questions)", () => {
+  it("holds no writer in any English leaf, case-folded, the ask's words among them", () => {
+    const all = leaves(en);
+    expect(all.filter(([, value]) => WRITER.test(wordsOf(value)))).toEqual([]);
+    expect(en.board.ask.action).toBe("Ask a question…");
+    // The detector: a writer is caught, a write and its words are not.
+    for (const said of ["Ask the writers", "Writer", "a writer's note"]) {
+      expect([said, WRITER.test(said)]).toEqual([said, true]);
+    }
+    for (const said of ["Write a reason", "written", "rewrite"]) {
+      expect([said, WRITER.test(said)]).toEqual([said, false]);
+    }
+  });
+
+  it("holds neither Russian stem in any Russian leaf, case-folded", () => {
+    expect(RUSSIAN_WRITERS.map((stem) => stem.length)).toEqual([7, 9]);
+    const all = leaves(ru);
+    expect(all.filter(([, value]) => RUSSIAN_WRITERS.some((stem) => value.toLowerCase().includes(stem)))).toEqual([]);
+    // The detector: the word for writers in a sentence is caught.
+    expect(RUSSIAN_WRITERS.some((stem) => "\u0421\u043f\u0440\u043e\u0441\u0438\u0442\u0435 \u043f\u0438\u0441\u0430\u0442\u0435\u043b\u0435\u0439".toLowerCase().includes(stem))).toBe(true);
+  });
+});
+
 describe("the owner's words in Russian (DP-9 of departments)", () => {
   const all = leaves(ru);
 

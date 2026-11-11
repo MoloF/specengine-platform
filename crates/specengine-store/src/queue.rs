@@ -1,8 +1,8 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9; a higher version
-//! is a newer build's: refused),
+//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11; a
+//! higher version is a newer build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
 //! leaves `user_version` alone).
@@ -111,6 +111,13 @@
 //! - **Cards** (task spec `card-store`, `queue/cards.rs`): step 9 adds
 //!   `cards`, the lighter record of any trade's work; no gate, task,
 //!   proposal or lock read reaches it, nor it them.
+//! - **A card's items** (`docs/canon/card-questions.md` "The rule"): step
+//!   11 adds a proposal's `card_id` and a decision's `why`. A question, a
+//!   discrepancy or a decision names at most one card, set when it is
+//!   stored ([`NewIntake::card_id`], checked inside the inserting
+//!   transaction) and never written again; the card reads them back
+//!   ([`SqliteQueue::card_items`]), and no card write, gate or decision
+//!   reads the link.
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
@@ -129,7 +136,7 @@ use rusqlite::types::ValueRef;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Row, Transaction, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use specengine_core::card::hub_login_problem;
+use specengine_core::card::{card_number, card_person_problem, hub_login_problem};
 use specengine_core::check::Finding;
 use specengine_core::drift::{DriftEvidence, StoredJson, is_drift_hash};
 pub use specengine_core::intake::Interpretation;
@@ -154,7 +161,7 @@ use crate::{b3_hash, schema};
 
 pub use cards::{
     CardAccept, CardAccepted, CardChange, CardClear, CardCleared, CardClearing, CardDeparture,
-    CardEdit, CardList, CardRefresh, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
+    CardEdit, CardItems, CardList, CardRefresh, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
     EVENT_CARD_CANCELLED, EVENT_CARD_CLEARED, EVENT_CARD_CREATED, EVENT_CARD_EDITED,
     EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, NewCard, UnreadableCard,
 };
@@ -174,7 +181,11 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 10;
+pub const QUEUE_SCHEMA_VERSION: i64 = 11;
+
+/// The first queue schema whose `proposals` holds `card_id` and `why`
+/// (step 10 → 11).
+pub(crate) const CARD_ITEMS_SCHEMA: i64 = 11;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -284,6 +295,14 @@ const STEP_10: &str = "
 ALTER TABLE cards ADD COLUMN tasks TEXT;
 ";
 
+/// Step 10 → 11: the card a question, discrepancy or decision is raised
+/// for, and a decision's `why`, appended in this order, `NULL` on every row
+/// stepped (`docs/canon/card-questions.md` "The rule").
+const STEP_11: &str = "
+ALTER TABLE proposals ADD COLUMN card_id TEXT;
+ALTER TABLE proposals ADD COLUMN why TEXT;
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -293,14 +312,26 @@ const RECORD_COLUMNS: [&str; 5] = [
     "choice",
 ];
 
+/// The columns of `proposals` steps 1 to 10 made, in table order.
+macro_rules! step_10_columns {
+    () => {
+        "id, project, kind, status, target_id, target_path, git_common_dir, worktree, root_rel, \
+         branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, \
+         diagnostics, decided_by, decided_at, decision_note, applied_commit, created_at, \
+         updated_at, target_ids, severity, gap_type, summary, working_answer, price_of_other, \
+         evidence, options, recommendation, distinct_from, linked, record_id, record_path, \
+         record_title, record_text, choice, task_id, staged, staged_at, interpretation, drift, \
+         drift_hash"
+    };
+}
+
 /// Every column of `proposals`, in table order.
-const COLUMNS: &str = "id, project, kind, status, target_id, target_path, git_common_dir, \
-     worktree, root_rel, branch, base_commit, base_hash, base_text, new_text, patch_hash, \
-     rationale, author, diagnostics, decided_by, decided_at, decision_note, applied_commit, \
-     created_at, updated_at, target_ids, severity, gap_type, summary, working_answer, \
-     price_of_other, evidence, options, recommendation, distinct_from, linked, record_id, \
-     record_path, record_title, record_text, choice, task_id, staged, staged_at, interpretation, \
-     drift, drift_hash";
+const COLUMNS: &str = concat!(step_10_columns!(), ", card_id, why");
+
+/// [`COLUMNS`] over a queue still at schema 8, 9 or 10, no step run (a
+/// handle of [`SqliteQueue::open_existing`]): `card_id` and `why` read
+/// `NULL`, as on a row step 11 stepped.
+const COLUMNS_10: &str = concat!(step_10_columns!(), ", NULL, NULL");
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -454,6 +485,23 @@ impl ProposalKind {
         }
     }
 
+    /// A kind whose row may hold a `why`, why it was decided so, every kind
+    /// listed (so a new one must be judged here): a `decision` alone; a
+    /// question shares its shape, not its why
+    /// (`docs/canon/card-questions.md` "The rule").
+    pub const fn holds_why(self) -> bool {
+        match self {
+            Self::Decision => true,
+            Self::Update
+            | Self::Question
+            | Self::Discrepancy
+            | Self::Create
+            | Self::Interpretation
+            | Self::Amendment
+            | Self::Drift => false,
+        }
+    }
+
     /// The fields a deciding kind's row holds, every kind listed (so a new
     /// one must be judged here): a question's (a `question`, a `decision`)
     /// or a discrepancy's; `None` for a kind that applies or locks. It is
@@ -496,8 +544,8 @@ impl IntakeShape {
 
     /// Why `intake` is no item of this shape (`kind` as a refusal names
     /// it): a field the shape holds none of given (an empty list is none),
-    /// one it requires absent, a recommendation out of range of the
-    /// options; `None`: it is. The columns as [`IntakeColumns::decode`]
+    /// a `why` on any kind but a decision, one it requires absent, a
+    /// recommendation out of range of the options; `None`: it is. The columns as [`IntakeColumns::decode`]
     /// reads them.
     fn problem(self, kind: ProposalKind, intake: &Intake) -> Option<String> {
         let given = [
@@ -512,6 +560,9 @@ impl IntakeShape {
             .find(|(field, given)| *given && self.null_columns().contains(field))
         {
             return Some(format!("{} holds no `{field}`", kind.with_article()));
+        }
+        if intake.why.is_some() && !kind.holds_why() {
+            return Some(format!("{} holds no `why`", kind.with_article()));
         }
         let required: &[(&str, bool)] = match self {
             Self::Question => &[
@@ -678,6 +729,9 @@ pub struct Intake {
     pub recommendation: Option<u64>,
     /// The hits the author declared this item distinct from.
     pub distinct_from: Vec<String>,
+    /// A decision's own: why it was decided so, stored as given; `None`
+    /// for a question and a discrepancy, which hold none.
+    pub why: Option<String>,
 }
 
 /// What an intake stores ([`ProposalQueue::create_intake`]); the queue adds
@@ -692,6 +746,14 @@ pub struct NewIntake {
     pub place: Place,
     pub author: Author,
     pub intake: Intake,
+    /// The card it is raised for (`C-NNNN`), one of the project's in any
+    /// state, checked inside the inserting transaction
+    /// ([`QueueError::CardRefused`]); never changed later.
+    pub card_id: Option<String>,
+    /// The acting name of a card's raise, a trailing `as` on its
+    /// `proposal.created` (never a column); `None` for every other raise,
+    /// whose event stays `{"id":…}`.
+    pub actor: Option<String>,
 }
 
 /// A `drift` item's own fields (task spec `drift-queue`, "The item"): its
@@ -867,6 +929,9 @@ pub struct Proposal {
     pub new_ids: Vec<String>,
     /// The task it was raised for (`T-NNNN`); never changes.
     pub task_id: Option<String>,
+    /// The card it was raised for (`C-NNNN`), a deciding kind's only;
+    /// never changes. A decision's `why` is its [`Intake::why`].
+    pub card_id: Option<String>,
     /// The owner's staged choice, on an `open` proposal only
     /// (`docs/canon/decision-staging.md`).
     pub staged: Option<StagedChoice>,
@@ -1073,7 +1138,8 @@ pub enum QueueError {
     TaskRefused { id: String, reason: String },
     /// A card change refused (task spec `card-store`, "Rules and edge
     /// cases"): no such card, a move outside its flow, a stale revision, a
-    /// closed card. `reason` is one line; nothing written.
+    /// closed card; or an item raised for a card no row holds
+    /// ([`NewIntake::card_id`]). `reason` is one line; nothing written.
     CardRefused { id: String, reason: String },
 }
 
@@ -1217,7 +1283,12 @@ pub trait ProposalQueue {
     ) -> Result<IntakeResult, QueueError>;
     /// [`Self::create_intake`] bound to the task `task`, checked as
     /// [`Self::create_with_task`] checks it before the dedup; the linked
-    /// update takes the same `task_id` in the same transaction.
+    /// update takes the same `task_id` in the same transaction. The item's
+    /// [`NewIntake::card_id`], after the task and before the dedup: no card
+    /// row of the project (any state) is [`QueueError::CardRefused`]
+    /// (`no card C-0099`), nothing written, no ID taken; the linked update
+    /// names no card. [`NewIntake::actor`] trails the item's
+    /// `proposal.created` as `as`.
     fn create_intake_with_task(
         &mut self,
         intake: &NewIntake,
@@ -1660,9 +1731,10 @@ impl SqliteQueue {
         if index_only(&tx)? {
             return Ok(Vec::new());
         }
+        let columns = columns_of(&tx)?;
         let mut statement = tx
             .prepare(&format!(
-                "SELECT {COLUMNS} FROM main.proposals \
+                "SELECT {columns} FROM main.proposals \
                  WHERE project = ?1 AND (?2 IS NULL OR git_common_dir = ?2) {ID_ORDER}"
             ))
             .db()?;
@@ -2084,10 +2156,12 @@ enum Hold<'a> {
 /// `"editorial":null`, task spec `rev-discipline`), 7 → 8 a drift item's
 /// two columns (task spec `drift-queue`), 8 → 9 the cards (task spec
 /// `card-store`), 9 → 10 a card's linked tasks
-/// (`docs/canon/cards.md` "Store"; 0 → 10 runs all ten; a schema-5 DB opens
-/// as 10, every `interpretation`, `drift`, `drift_hash` `NULL`, no card; a
-/// schema-9 card reads no task); [`QUEUE_SCHEMA_VERSION`] is left alone; a
-/// higher version is refused.
+/// (`docs/canon/cards.md` "Store"), 10 → 11 a proposal's `card_id` and
+/// `why` (`docs/canon/card-questions.md` "The rule"; 0 → 11 runs all
+/// eleven, every due step in this one transaction; a schema-5 DB opens as
+/// 11, every `interpretation`, `drift`, `drift_hash`, `card_id`, `why`
+/// `NULL`, no card; a schema-9 card reads no task); [`QUEUE_SCHEMA_VERSION`]
+/// is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
     if version > QUEUE_SCHEMA_VERSION {
@@ -2144,6 +2218,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 9 {
         tx.execute_batch(STEP_10).db()?;
         version = 10;
+    }
+    if version == 10 {
+        tx.execute_batch(STEP_11).db()?;
+        version = 11;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -2362,10 +2440,33 @@ impl RawRow {
         let staged_columns = [take(), take()];
         let interpretation = decode_interpretation(&id, kind, take())?;
         let drift_columns = [take(), take()];
+        let card_id = take();
+        let why = take();
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
             return Err(corrupt(&id, "task_id", format!("{task:?} is no task ID")));
+        }
+        // A card's items: a deciding kind names a card, a decision alone
+        // holds a why; a blank or long `why` reads as stored.
+        if let Some(card) = &card_id {
+            if kind.family() != KindFamily::Decides {
+                return Err(corrupt(
+                    &id,
+                    "card_id",
+                    format!("it is set on {}, which names no card", kind.with_article()),
+                ));
+            }
+            if card_number(card).is_none() {
+                return Err(corrupt(&id, "card_id", format!("`{card}` is no card ID")));
+            }
+        }
+        if why.is_some() && !kind.holds_why() {
+            return Err(corrupt(
+                &id,
+                "why",
+                format!("it is set on {}, which holds none", kind.with_article()),
+            ));
         }
         let new_file = kind.adds_nodes() && base_hash.is_empty();
         let staged = stage::decode(&id, kind, status, new_file, staged_columns)?;
@@ -2389,7 +2490,10 @@ impl RawRow {
         };
         let intake = match kind.intake_shape() {
             None => None,
-            Some(shape) => Some(columns.decode(&id, kind, shape, &target_id)?),
+            Some(shape) => Some(Intake {
+                why,
+                ..columns.decode(&id, kind, shape, &target_id)?
+            }),
         };
         let record = decode_record(&id, kind, status, intake.as_ref(), record_columns)?;
         if let Some(linked) = &linked
@@ -2427,6 +2531,7 @@ impl RawRow {
             record,
             new_ids,
             task_id,
+            card_id,
             staged,
             interpretation,
             drift,
@@ -3094,14 +3199,27 @@ impl IntakeColumns {
             options,
             recommendation,
             distinct_from,
+            why: None,
         })
     }
 }
 
+/// The select list of `proposals` at `conn`'s queue schema: [`COLUMNS`],
+/// or [`COLUMNS_10`] below step 11 (a handle of
+/// [`SqliteQueue::open_existing`], no step run).
+fn columns_of(conn: &Connection) -> Result<&'static str, QueueError> {
+    Ok(if user_version(conn)? < CARD_ITEMS_SCHEMA {
+        COLUMNS_10
+    } else {
+        COLUMNS
+    })
+}
+
 fn select_one(conn: &Connection, project: &str, id: &str) -> Result<Option<Proposal>, QueueError> {
+    let columns = columns_of(conn)?;
     let raw = conn
         .query_row(
-            &format!("SELECT {COLUMNS} FROM main.proposals WHERE id = ?1 AND project = ?2"),
+            &format!("SELECT {columns} FROM main.proposals WHERE id = ?1 AND project = ?2"),
             [id, project],
             RawRow::read,
         )
@@ -3227,7 +3345,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL)"
+             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -3428,7 +3546,8 @@ fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation
 }
 
 /// Inserts a kind that decides as `open` under the next ID (a decision
-/// writes a question's columns, as given): the
+/// writes a question's columns, and its `why`, as given; `card_id` as
+/// given): the
 /// update's five text columns NULL, `diagnostics` `[]`, JSON lists as
 /// given (an evidence item's absent keys `null`); its ID.
 fn insert_intake(
@@ -3455,7 +3574,7 @@ fn insert_intake(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
-             ?25, NULL, NULL, NULL, NULL, NULL)"
+             ?25, NULL, NULL, NULL, NULL, NULL, ?26, ?27)"
         ),
         rusqlite::params![
             id,
@@ -3483,10 +3602,41 @@ fn insert_intake(
             recommendation,
             distinct_from,
             task,
+            new.card_id,
+            intake.why,
         ],
     )
     .db()?;
     Ok(id)
+}
+
+/// Why `intake`'s card link is none the queue stores: a `card_id` on a
+/// kind that names none (no deciding kind) or not written as a card ID,
+/// an acting name off a card person's grammar; `None`: it is.
+fn link_problem(intake: &NewIntake) -> Option<String> {
+    if let Some(card) = &intake.card_id {
+        if intake.kind.family() != KindFamily::Decides {
+            return Some(format!("{} names no card", intake.kind.with_article()));
+        }
+        if card_number(card).is_none() {
+            return Some(format!("`{card}` is no card ID"));
+        }
+    }
+    intake
+        .actor
+        .as_deref()
+        .and_then(|actor| card_person_problem(actor).map(|problem| format!("`as`: {problem}")))
+}
+
+/// The payload of an item's `proposal.created`: `{"id":…}`, then a card's
+/// raise's acting name as a trailing `as`, keys in this order; every other
+/// raise's byte for byte as before.
+fn created_payload(id: &str, intake: &NewIntake) -> String {
+    format!(
+        "{{\"id\":{}{}}}",
+        stage::json_text(id),
+        stage::as_key(intake.actor.as_deref())
+    )
 }
 
 /// Why `item` is no item [`ProposalQueue::create_drift`] stores: a target
@@ -3587,7 +3737,7 @@ fn insert_drift(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, NULL, ?17, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20)"
+             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -3810,6 +3960,7 @@ impl ProposalQueue for SqliteQueue {
             .kind
             .intake_shape()
             .and_then(|shape| shape.problem(intake.kind, &intake.intake))
+            .or_else(|| link_problem(intake))
         {
             return Err(QueueError::Invalid(problem));
         }
@@ -3825,6 +3976,11 @@ impl ProposalQueue for SqliteQueue {
         let tx = self.write()?;
         if let Some(task) = task {
             tasks::check_binding(&tx, &project, task, &intake.place)?;
+        }
+        // The card, in any state, read under the lock it is stored under:
+        // none, nothing written and no ID taken.
+        if let Some(card) = &intake.card_id {
+            cards::check_card(&tx, &project, card)?;
         }
         // The dedup reads under the write lock it inserts under: a parallel
         // intake of the same item waits, then finds this one.
@@ -3849,7 +4005,13 @@ impl ProposalQueue for SqliteQueue {
         }
         let floor = read_floor(&dir)?;
         let id = insert_intake(&tx, &project, intake, task, floor, now)?;
-        log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
+        log_text(
+            &tx,
+            &project,
+            EVENT_CREATED,
+            &created_payload(&id, intake),
+            now,
+        )?;
         let mut linked = None;
         if let Some(patch) = patch {
             // The linked update takes the item's task, in this transaction.

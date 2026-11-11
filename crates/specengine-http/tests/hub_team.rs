@@ -1519,38 +1519,79 @@ fn four_racing_accepts_give_one_winner() {
     }
 }
 
-/// Reviewed behaviour: `as` is no key of a stage or of a round's answers, the
-/// login's own name included: the login is the `as` a hub logs, so a body never
-/// names one: a 400 from the body's reader, nothing stored. M: `as` taken on a
-/// stage body.
+/// Reviewed behaviour, as docs/features/card-questions.md D8 and H2 amend it:
+/// a stage body takes `as` (`StageBody` wraps it, a round answer's stage
+/// too), bound to the login: naming another person is a 403 with the acting
+/// line, nothing stored; naming the login itself stages under it. A round
+/// body's own top-level `as` stays no key: a 400 from the body's reader,
+/// nothing stored. M: the body's `as` taking precedence over the login.
 #[test]
-fn as_on_a_stage_or_a_round_body_is_a_400() {
+fn as_on_a_stage_names_the_login_and_on_a_round_body_is_a_400() {
     let waiting = Waiting::new("team-stage-body");
     let hub = &waiting.hub;
     let ids = waiting.ids();
     let before = hub.stored(&ids);
     let acts = waiting.acts();
     let (stage, round) = (&acts[0], &acts[2]);
-    for named in ["tomas", "mira"] {
-        let mut in_answer = round.body_value();
-        in_answer["answers"][0]["stage"]["as"] = json!(named);
-        let in_answer = Act {
-            body: in_answer.to_string(),
+    let in_answer = |named: &str| {
+        let mut body = round.body_value();
+        body["answers"][0]["stage"]["as"] = json!(named);
+        Act {
+            body: body.to_string(),
             ..round.clone()
-        };
-        for act in [
-            stage.with("as", json!(named)),
-            round.with("as", json!(named)),
-            in_answer,
-        ] {
-            let reply = act.by(hub, "tomas");
-            let context = format!("{} naming {named}: {}", act.name, act.body);
-            assert_eq!(reply.status, 400, "{context}: {}", reply.text());
-            let message = reply.error_message();
-            assert!(!message.starts_with("refused: "), "{context}: {message}");
-            assert!(message.contains("`as`"), "{context}: {message}");
-            assert_eq!(hub.stored(&ids), before, "{context}: nothing stored");
         }
+    };
+    // A round body's top-level `as`: no key of it, a 400.
+    for named in ["tomas", "mira"] {
+        let act = round.with("as", json!(named));
+        let reply = act.by(hub, "tomas");
+        let context = format!("{} naming {named}: {}", act.name, act.body);
+        assert_eq!(reply.status, 400, "{context}: {}", reply.text());
+        let message = reply.error_message();
+        assert!(!message.starts_with("refused: "), "{context}: {message}");
+        assert!(message.contains("`as`"), "{context}: {message}");
+        assert_eq!(hub.stored(&ids), before, "{context}: nothing stored");
+    }
+    // A stage's `as` naming another: the acting line, a 403.
+    for act in [stage.with("as", json!("mira")), in_answer("mira")] {
+        let reply = act.by(hub, "tomas");
+        let context = format!("{} naming mira: {}", act.name, act.body);
+        assert_refused(
+            &reply,
+            "refused: `as` names mira; this request's login is tomas",
+            &context,
+        );
+        assert_eq!(hub.stored(&ids), before, "{context}: nothing stored");
+    }
+    // Naming the login itself: staged under it.
+    for act in [stage.with("as", json!("tomas")), in_answer("tomas")] {
+        let context = format!("{} naming tomas: {}", act.name, act.body);
+        let mut body = act.body_value();
+        let fresh = |stage: &mut Value, id: &str| {
+            stage["updated_at"] = hub.proposal(id)["updated_at"].clone();
+        };
+        if body.get("answers").is_some() {
+            let id = body["answers"][0]["id"].as_str().expect("an ID").to_owned();
+            fresh(&mut body["answers"][0]["stage"], &id);
+        } else {
+            let id = act
+                .path
+                .split('/')
+                .rev()
+                .nth(1)
+                .expect("a proposal's ID")
+                .to_owned();
+            fresh(&mut body, &id);
+        }
+        let act = Act {
+            body: body.to_string(),
+            ..act.clone()
+        };
+        let reply = act.by(hub, "tomas");
+        assert_eq!(reply.status, 200, "{context}: {}", reply.text());
+        let (kind, payload) = last_event(hub);
+        assert_eq!(kind, "proposal.staged", "{context}: {payload}");
+        assert_eq!(payload["as"], json!("tomas"), "{context}: {payload}");
     }
 }
 
@@ -2513,4 +2554,155 @@ fn board_handoff_bh20_a_hub_hands_off_and_returns_for_any_login() {
             .json()["acceptance"]["by"],
         json!("ann")
     );
+}
+
+// ---------------------------------------------- card-questions (RM-0097)
+
+/// A card's question body (docs/features/card-questions.md L3) on `SHT-BACK`, its `as` given.
+fn card_question(text: &str, actor: Value) -> Value {
+    json!({"kind": "question", "node_ids": ["SHT-BACK"], "text": text,
+        "working_answer": "The tide table stays.", "price_of_other": "Two pages reset.",
+        "why": null, "severity": null, "distinct_from": null, "as": actor})
+}
+
+/// docs/features/card-questions.md H1: a card's raise is the sixth plain
+/// write: `eve`, outside `[team]`, raises on `C-0001` (200, stored); its
+/// author holds `"login":"eve"`, `proposal.created` ends `"as":"eve"`; a
+/// `null` `as` is the login too; `as: "ben"` is a 403 with the acting line,
+/// nothing stored; a `[team]` login raises alike. `.../items/x` and an
+/// encoded `items` are no route a hub serves. M: `items` classed Team;
+/// `acting` skipped.
+#[test]
+fn card_questions_h1_a_raise_is_a_plain_write_under_the_login() {
+    let setup = teamed("team-cq-raise", "card-press");
+    let hub = setup.start();
+    let card = card_on(&hub, "Lead story", &["SHT-BACK"]);
+    assert_eq!(card, "C-0001");
+    let path = format!("cards/{card}/items");
+
+    let reply = hub.post(
+        "eve",
+        &path,
+        &card_question("Does the tide table keep its rule?", json!("eve")),
+    );
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    assert_plain(&reply, "a raise");
+    let raised = reply.json();
+    assert_eq!(raised["created"], json!(true), "{raised}");
+    let id = raised["id"].as_str().expect("an ID").to_owned();
+    let review = spec_json(
+        &hub.setup.home,
+        &hub.setup.cwd,
+        &hub.setup.root,
+        &["review", &id],
+    )
+    .json();
+    assert_eq!(review["card_id"], json!(card), "{review}");
+    assert_eq!(review["author"]["type"], json!("human"), "{review}");
+    assert_eq!(review["author"]["login"], json!("eve"), "{review}");
+    let raw = raw_payloads(&hub.setup.home, &hub.setup.root, "proposal.created");
+    assert_eq!(
+        raw.last().map(String::as_str),
+        Some(format!("{{\"id\":\"{id}\",\"as\":\"eve\"}}").as_str())
+    );
+
+    let reply = hub.post(
+        "eve",
+        &path,
+        &card_question("Does the back page keep its moon?", Value::Null),
+    );
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let second = reply.json()["id"].as_str().expect("an ID").to_owned();
+    let raw = raw_payloads(&hub.setup.home, &hub.setup.root, "proposal.created");
+    assert_eq!(
+        raw.last().map(String::as_str),
+        Some(format!("{{\"id\":\"{second}\",\"as\":\"eve\"}}").as_str()),
+        "a null `as` is the login"
+    );
+
+    let before = hub.events();
+    let reply = hub.post(
+        "eve",
+        &path,
+        &card_question("Is the inner page short?", json!("ben")),
+    );
+    assert_refused(
+        &reply,
+        "refused: `as` names ben; this request's login is eve",
+        "another name",
+    );
+    assert_eq!(hub.events(), before, "nothing stored");
+
+    // A `[team]` login raises alike, under its login.
+    let reply = hub.post(
+        "tomas",
+        &path,
+        &card_question("Is the inner page short?", json!("tomas")),
+    );
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let third = reply.json()["id"].as_str().expect("an ID").to_owned();
+    let raw = raw_payloads(&hub.setup.home, &hub.setup.root, "proposal.created");
+    assert_eq!(
+        raw.last().map(String::as_str),
+        Some(format!("{{\"id\":\"{third}\",\"as\":\"tomas\"}}").as_str())
+    );
+
+    // No other path is the plain class: refused off the list, nothing stored.
+    let before = hub.events();
+    for other in [
+        format!("cards/{card}/items/x"),
+        format!("cards/{card}/it%65ms"),
+    ] {
+        let reply = hub.post(
+            "eve",
+            &other,
+            &card_question("Is the cove page blank?", json!("eve")),
+        );
+        assert_ne!(reply.status, 200, "{other}: {}", reply.text());
+        assert_eq!(hub.events(), before, "{other}: nothing stored");
+    }
+}
+
+/// docs/features/card-questions.md H2: a `member` stages on a carded
+/// question under its login (`proposal.staged` ends `"as":"tomas"`), a body
+/// `as` naming the login itself is taken; one naming another is a 403; a
+/// login outside `[team]` is a 403 with its line; nothing staged by either.
+/// M: the body's `as` taking precedence over the login.
+#[test]
+fn card_questions_h2_a_stage_is_under_the_login() {
+    let setup = teamed("team-cq-stage", "card-press");
+    let hub = setup.start();
+    let card = card_on(&hub, "Lead story", &["SHT-BACK"]);
+    let raised = hub.done(
+        "eve",
+        &format!("cards/{card}/items"),
+        &card_question("Does the tide table keep its rule?", json!("eve")),
+    );
+    let id = raised["id"].as_str().expect("an ID").to_owned();
+    let decision = format!("proposals/{id}/decision");
+
+    let mut stage = stage_body(&hub, &id);
+    stage["as"] = json!("tomas");
+    hub.done("tomas", &decision, &stage);
+    let raw = raw_payloads(&hub.setup.home, &hub.setup.root, "proposal.staged");
+    assert!(
+        raw.last()
+            .is_some_and(|payload| payload.ends_with(",\"as\":\"tomas\"}")),
+        "{raw:?}"
+    );
+
+    let before = hub.events();
+    let mut other = stage_body(&hub, &id);
+    other["as"] = json!("mira");
+    let reply = hub.post("tomas", &decision, &other);
+    assert_refused(
+        &reply,
+        "refused: `as` names mira; this request's login is tomas",
+        "another name",
+    );
+    assert_eq!(hub.events(), before, "nothing staged");
+
+    let reply = hub.post("eve", &decision, &stage_body(&hub, &id));
+    assert_refused(&reply, &outside_line("eve"), "outside `[team]`");
+    assert_eq!(hub.events(), before, "nothing staged");
 }

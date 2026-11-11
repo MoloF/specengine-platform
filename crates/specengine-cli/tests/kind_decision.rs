@@ -102,6 +102,7 @@ fn input(
         proposed_patch: patch,
         distinct_from: (!distinct_from.is_empty())
             .then(|| distinct_from.iter().map(|id| (*id).to_owned()).collect()),
+        why: None,
     }
 }
 
@@ -131,6 +132,7 @@ fn request(pair: &Pair, cwd: &Path, input: DecisionInput) -> DecisionRequest {
         login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
+        card: None,
     }
 }
 
@@ -261,6 +263,7 @@ fn stage_of(
                 editorial: None,
                 note: None,
                 updated_at: pair.proposal(id).updated_at,
+                actor: None,
             },
             now: now.to_owned(),
             git: pair.git_env(cwd),
@@ -649,6 +652,7 @@ fn ac_r3_a_question_and_a_decision_hit_each_other_a_discrepancy_neither() {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&cwd),
+            card: None,
         },
     )
     .expect("ask");

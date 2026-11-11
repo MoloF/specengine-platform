@@ -81,8 +81,9 @@ const WRITE_KEYS: [&str; 7] = [
 /// `show`'s document: the columns in order, less `project`, `col` as
 /// `column`, `--marks`' four keys after `targets`, `tasks` after `evidence`
 /// (docs/canon/cards.md "Documents and events": each linked task as read now),
-/// then `allowed`, `history`, `notes`.
-const SHOW_KEYS: [&str; 31] = [
+/// `items` after `tasks` (docs/features/card-questions.md D4), then
+/// `allowed`, `history`, `notes`.
+const SHOW_KEYS: [&str; 32] = [
     "id",
     "flow",
     "column",
@@ -105,6 +106,7 @@ const SHOW_KEYS: [&str; 31] = [
     "corrects",
     "evidence",
     "tasks",
+    "items",
     "acceptance",
     "cancellation",
     "created_by",
@@ -2190,7 +2192,7 @@ fn ac07_cards_round_trip_through_a_format_3_dump() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":4,\"queue_schema\":10,\"project\":\"card-press\",\"proposals\":0,\
+            "{{\"format\":5,\"queue_schema\":11,\"project\":\"card-press\",\"proposals\":0,\
              \"tasks\":1,\"runs\":0,\"cards\":4,\"events\":{event_rows}}}"
         )
     );
@@ -2306,9 +2308,10 @@ fn ac07_a_card_alone_occupies_a_queue() {
 }
 
 /// AC-07: a format-2 dump (seven header keys, no cards) restores into a
-/// fresh queue and re-exports as format 4; a schema-8 database exports as
-/// format 4 unmigrated, and steps to 10 when a command opens it (format 3,
-/// schema 9 until docs/canon/cards.md "Store"), rows
+/// fresh queue and re-exports as format 5; a schema-8 database exports as
+/// format 5 unmigrated, and steps to 11 when a command opens it (format 3,
+/// schema 9 until docs/canon/cards.md "Store"; format 5, schema 11 since
+/// docs/features/card-questions.md), rows
 /// unchanged. Refused, exit 2 naming the file and the line, nothing made:
 /// the refusals of "Backup".
 #[test]
@@ -2325,7 +2328,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let v3_lines: Vec<String> = v3.lines().map(str::to_owned).collect();
     assert_eq!(
         v3_lines[0],
-        "{\"format\":4,\"queue_schema\":10,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
+        "{\"format\":5,\"queue_schema\":11,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
          \"runs\":0,\"cards\":0,\"events\":1}"
     );
     let old_header = "{\"format\":2,\"queue_schema\":8,\"project\":\"card-press\",\"proposals\":0,\
@@ -2343,11 +2346,15 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     assert_eq!(
         fs::read_to_string(&again).unwrap(),
         v3,
-        "re-exported as format 4"
+        "re-exported as format 5"
     );
 
-    // A schema-8 database: exported unmigrated, then stepped by a card.
-    pair.sql("DROP TABLE cards; PRAGMA user_version = 8;");
+    // A schema-8 database (no step-11 column either): exported unmigrated,
+    // then stepped by a card.
+    pair.sql(
+        "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
+         DROP TABLE cards; PRAGMA user_version = 8;",
+    );
     let from_8 = dumps.join("from-8.jsonl");
     export(&pair, &pair.home, &from_8);
     assert_eq!(fs::read_to_string(&from_8).unwrap(), v3);
@@ -2358,7 +2365,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     );
     let rows = pair.sql("SELECT * FROM tasks; SELECT * FROM events;");
     assert_eq!(ok(&pair, &["card", "list"]), PRESS_BOARD);
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "10", "stepped");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "11", "stepped");
     assert_eq!(pair.sql("SELECT * FROM tasks; SELECT * FROM events;"), rows);
 
     // The refusals, on a dump holding one card.
@@ -2385,7 +2392,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut format_2_with_a_card = lines.clone();
     format_2_with_a_card[0] = format_2_with_a_card[0]
         .replacen(
-            "\"format\":4,\"queue_schema\":10,",
+            "\"format\":5,\"queue_schema\":11,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
@@ -2395,25 +2402,26 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut extra_column = lines.clone();
     extra_column[1] = card_row.replacen("\"goal\":null,", "\"goal\":null,\"bogus\":null,", 1);
     let cases: Vec<(&str, Vec<String>, usize)> = vec![
-        ("format-4-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
+        // docs/features/card-questions.md: format 5, schema 11 the current.
+        ("format-5-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
         (
-            "format-4-of-schema-9",
-            change(0, "\"queue_schema\":10,", "\"queue_schema\":9,"),
+            "format-5-of-schema-10",
+            change(0, "\"queue_schema\":11,", "\"queue_schema\":10,"),
             1,
         ),
         (
             "format-2-of-eight-keys",
             change(
                 0,
-                "\"format\":4,\"queue_schema\":10,",
+                "\"format\":5,\"queue_schema\":11,",
                 "\"format\":2,\"queue_schema\":8,",
             ),
             1,
         ),
-        ("format-5", change(0, "\"format\":4,", "\"format\":5,"), 1),
+        ("format-6", change(0, "\"format\":5,", "\"format\":6,"), 1),
         (
-            "schema-11",
-            change(0, "\"queue_schema\":10,", "\"queue_schema\":11,"),
+            "schema-12",
+            change(0, "\"queue_schema\":11,", "\"queue_schema\":12,"),
             1,
         ),
         ("a-card-in-format-2", format_2_with_a_card, 2),
@@ -3997,4 +4005,578 @@ fn allowed_names_the_columns_and_who_moves() {
         json!([{"to": "queued", "by": []}, {"to": "blocked", "by": []}]),
         "the write's document too"
     );
+}
+
+// --------------------------------------------- card-questions (RM-0097), K1
+
+/// docs/features/card-questions.md K1: an item of `show`'s `items`, its
+/// keys in order (key set 116).
+const ITEM_KEYS: [&str; 16] = [
+    "id",
+    "kind",
+    "status",
+    "summary",
+    "working_answer",
+    "why",
+    "author",
+    "created_at",
+    "updated_at",
+    "staged_at",
+    "decided_by",
+    "decided_at",
+    "decision_note",
+    "record_id",
+    "record_path",
+    "record_title",
+];
+
+/// spec-a's decision of kind-decision.md "Data", on `RULE-STAM-REGEN`.
+const CQ_TEXT: &str = "Does regeneration wait for rest?";
+const CQ_WORKING: &str = "Yes: it starts 1.5 s after the last stamina use.";
+const CQ_WHY: &str = "Two playtests read instant regeneration as a bug.";
+
+/// A JSON object's keys, in the order written.
+struct OrderedKeys(Vec<String>);
+
+impl<'de> serde::Deserialize<'de> for OrderedKeys {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Seen;
+        impl<'de> serde::de::Visitor<'de> for Seen {
+            type Value = OrderedKeys;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a JSON object")
+            }
+            fn visit_map<M: serde::de::MapAccess<'de>>(
+                self,
+                mut map: M,
+            ) -> Result<OrderedKeys, M::Error> {
+                let mut keys = Vec::new();
+                while let Some((key, serde::de::IgnoredAny)) =
+                    map.next_entry::<String, serde::de::IgnoredAny>()?
+                {
+                    keys.push(key);
+                }
+                Ok(OrderedKeys(keys))
+            }
+        }
+        deserializer.deserialize_map(Seen)
+    }
+}
+
+/// The top-level keys of the JSON object `text`, in order.
+fn top_keys(text: &str) -> Vec<String> {
+    serde_json::from_str::<OrderedKeys>(text)
+        .unwrap_or_else(|error| panic!("{error}: {text}"))
+        .0
+}
+
+/// The raw text of the array under the top-level `key` of `text` (strings
+/// and escapes skipped while matching brackets).
+fn raw_array<'t>(text: &'t str, key: &str) -> &'t str {
+    let start = text
+        .find(&format!("\"{key}\":["))
+        .unwrap_or_else(|| panic!("no `{key}` array: {text}"))
+        + key.len()
+        + 3;
+    let bytes = text.as_bytes();
+    let (mut depth, mut inside, mut escaped) = (0_i32, false, false);
+    for (at, byte) in bytes.iter().enumerate().skip(start) {
+        if inside {
+            match (escaped, byte) {
+                (true, _) => escaped = false,
+                (false, b'\\') => escaped = true,
+                (false, b'"') => inside = false,
+                _ => {}
+            }
+            continue;
+        }
+        match byte {
+            b'"' => inside = true,
+            b'[' | b'{' => depth += 1,
+            b']' | b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &text[start..=at];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("an unclosed `{key}`: {text}")
+}
+
+/// `spec --json propose question <targets> …` in `cwd`, a developer's,
+/// `extra` last; stored: its ID.
+fn cq_ask(pair: &Pair, cwd: &Path, targets: &[&str], text: &str, extra: &[&str]) -> String {
+    let mut args = vec!["--json", "propose", "question"];
+    args.extend_from_slice(targets);
+    args.extend_from_slice(&[
+        "--text",
+        text,
+        "--working-answer",
+        "The harbour bell, as in chapter one.",
+        "--price-of-other",
+        "Two scenes rewritten.",
+        "--author-role",
+        "developer",
+    ]);
+    args.extend_from_slice(extra);
+    let done = pair.spec_piped(cwd, &args, b"");
+    done.code(0);
+    let document = done.json();
+    assert_eq!(document["created"], json!(true), "not stored: {document}");
+    document["id"].as_str().expect("an ID").to_owned()
+}
+
+/// `spec --json propose decision --input -` of `document` in `cwd`,
+/// `extra` last; stored: its ID.
+fn cq_decide(pair: &Pair, cwd: &Path, document: &Value, extra: &[&str]) -> String {
+    let mut args = vec![
+        "--json",
+        "propose",
+        "decision",
+        "--input",
+        "-",
+        "--author-role",
+        "developer",
+    ];
+    args.extend_from_slice(extra);
+    let done = pair.spec_piped(cwd, &args, document.to_string().as_bytes());
+    done.code(0);
+    let answer = done.json();
+    assert_eq!(answer["created"], json!(true), "not stored: {answer}");
+    answer["id"].as_str().expect("an ID").to_owned()
+}
+
+/// The library's stage (`fields`, `null` actor) or unstage of `id`.
+fn cq_stage(pair: &Pair, id: &str, fields: Option<&str>) {
+    let env = pair.env(&pair.main);
+    let git = pair.git_env(&pair.main);
+    let outcome = match fields {
+        Some(fields) => {
+            let updated_at = pair.proposal(id).updated_at;
+            let body = format!("{{{fields},\"updated_at\":\"{updated_at}\"}}");
+            specengine_cli::stage(
+                &env,
+                &Globals::default(),
+                &specengine_cli::StageRequest {
+                    id: id.to_owned(),
+                    body: specengine_cli::StageBody::from_json(body.as_bytes())
+                        .unwrap_or_else(|error| panic!("{body}: {error}")),
+                    now: CLOCK.to_owned(),
+                    git,
+                    actor: None,
+                },
+            )
+        }
+        None => specengine_cli::unstage(
+            &env,
+            &Globals::default(),
+            &specengine_cli::UnstageRequest {
+                id: id.to_owned(),
+                now: CLOCK.to_owned(),
+                git,
+                actor: None,
+            },
+        ),
+    }
+    .unwrap_or_else(|error| panic!("stage {id}: {error}"));
+    assert_eq!(
+        outcome.exit(),
+        specengine_cli::Exit::Answered,
+        "{outcome:?}"
+    );
+}
+
+/// K1 on spec-a: `show --json` serves `items` right after `tasks`, each
+/// item set 116's keys in order, by ID number: an applied decision with its
+/// `why` and `record_*`, a rejected question with its `decision_note`, an
+/// open question; another card's `items` is `[]`; from a root in no git
+/// worktree it reads the same; the text's `items:` lines ("Data").
+#[test]
+fn card_questions_k1_show_serves_items_after_tasks() {
+    let pair = Pair::new("cards-cq-items", "spec-a");
+    let cwd = pair.linked.clone();
+    assert_eq!(
+        make(&pair, "Rest regeneration", &["--target", "RULE-STAM-REGEN"]),
+        "C-0001"
+    );
+    assert_eq!(make(&pair, "No items", &[]), "C-0002");
+    let decision = cq_decide(
+        &pair,
+        &cwd,
+        &json!({"node_ids": ["RULE-STAM-REGEN"], "text": CQ_TEXT, "working_answer": CQ_WORKING,
+            "price_of_other": "Without the wait R-28 is rebalanced.", "why": CQ_WHY,
+            "distinct_from": ["DEC-0023"]}),
+        &["--card", "C-0001"],
+    );
+    let rejected = cq_ask(
+        &pair,
+        &cwd,
+        &["MEC-SPRINT"],
+        "Does a sprint end at zero?",
+        &["--card", "C-0001"],
+    );
+    let open = cq_ask(
+        &pair,
+        &cwd,
+        &["EDGE-STAM-ZERO"],
+        "Is zero stamina a stop?",
+        &["--card", "C-0001"],
+    );
+    assert_eq!(
+        [decision.as_str(), rejected.as_str(), open.as_str()],
+        ["PR-0001", "PR-0002", "PR-0003"]
+    );
+    pair.decide_ok(
+        &pair.main,
+        &decision,
+        &common::decision::flags(None, None, None),
+        None,
+    );
+    let (outcome, _) = pair.reject_answer(&pair.main, &rejected, "No: it slows to a walk.", true);
+    outcome.expect("rejected");
+
+    let shown = json_run(&pair, &["card", "show", "C-0001"]);
+    shown.code(0);
+    let keys = top_keys(&shown.stdout);
+    let tasks = keys.iter().position(|key| key == "tasks").expect("tasks");
+    assert_eq!(keys[tasks + 1], "items", "{keys:?}");
+    assert_eq!(keys.len(), 32, "{keys:?}");
+    let items = raw_array(&shown.stdout, "items");
+    for item_keys in serde_json::from_str::<Vec<OrderedKeys>>(items).expect("items") {
+        assert_eq!(item_keys.0, ITEM_KEYS, "{items}");
+    }
+    let card = shown.json();
+    let listed: Vec<&str> = card["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|item| item["id"].as_str().expect("an ID"))
+        .collect();
+    assert_eq!(listed, ["PR-0001", "PR-0002", "PR-0003"]);
+    let applied = &card["items"][0];
+    let review = doc(&pair, &["review", &decision]);
+    for key in [
+        "kind",
+        "status",
+        "summary",
+        "working_answer",
+        "why",
+        "author",
+        "created_at",
+        "updated_at",
+        "staged_at",
+        "decided_by",
+        "decided_at",
+        "decision_note",
+        "record_id",
+        "record_path",
+        "record_title",
+    ] {
+        assert_eq!(applied[key], review[key], "{key}: {applied}");
+    }
+    assert_eq!(applied["kind"], json!("decision"));
+    assert_eq!(applied["status"], json!("applied"));
+    assert_eq!(applied["why"], json!(CQ_WHY));
+    assert_eq!(applied["record_id"], json!("DEC-0024"));
+    assert_eq!(
+        applied["record_path"],
+        json!("docs/records/DEC/DEC-0024.md")
+    );
+    assert!(applied["record_title"].is_string(), "{applied}");
+    let refused = &card["items"][1];
+    assert_eq!(refused["status"], json!("rejected"));
+    assert_eq!(refused["decision_note"], json!("No: it slows to a walk."));
+    assert_eq!(refused["record_id"], Value::Null);
+    assert_eq!(refused["why"], Value::Null);
+    let waiting = &card["items"][2];
+    assert_eq!(waiting["status"], json!("open"));
+    assert_eq!(waiting["decided_by"], Value::Null);
+    assert_eq!(show(&pair, "C-0002")["items"], json!([]));
+
+    // The text: one line per item after `tasks:`; `items: -` with none.
+    let text = ok(&pair, &["card", "show", "C-0001"]);
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|line| line.starts_with("items: "))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            format!("items: PR-0001 | decision | applied | {CQ_TEXT} | record DEC-0024"),
+            "items: PR-0002 | question | rejected | Does a sprint end at zero?".to_owned(),
+            "items: PR-0003 | question | open | Is zero stamina a stop?".to_owned(),
+        ],
+        "{text}"
+    );
+    let at = |prefix: &str| {
+        text.lines()
+            .position(|line| line.starts_with(prefix))
+            .unwrap_or_else(|| panic!("no {prefix}: {text}"))
+    };
+    assert!(at("tasks:") < at("items:"), "{text}");
+    let none = ok(&pair, &["card", "show", "C-0002"]);
+    assert!(none.lines().any(|line| line == "items: -"), "{none}");
+
+    // From a root in no git worktree: the same document.
+    let bare = pair.scratch.dir("bare");
+    common::copy_dir(&pair.main.join("docs"), &bare.join("docs"));
+    common::copy_file(
+        pair.main.join("specengine.toml"),
+        bare.join("specengine.toml"),
+    );
+    let outside = pair.spec_piped(&bare, &["--json", "card", "show", "C-0001"], b"");
+    outside.code(0);
+    assert_eq!(outside.json()["items"], card["items"]);
+}
+
+/// K1: `--history` on spec-a: 70 moves of `C-0001` and 70 stage or unstage
+/// events of its decision, interleaved, give 128 entries: the card's newest
+/// 64 `card.*` events and the item's newest 64 `proposal.*`, merged by
+/// `seq`, oldest first, `[{seq, type, at, payload}]`; the decision's linked
+/// update's events absent. Without `--history`, `null`. M: the two lists
+/// capped together at 64.
+#[test]
+fn card_questions_k1_history_merges_each_lists_newest_64() {
+    let pair = Pair::new("cards-cq-history", "spec-a");
+    let cwd = pair.linked.clone();
+    make(&pair, "Rest regeneration", &["--target", "RULE-STAM-REGEN"]);
+    let (base, span) = pair.span(&cwd, "RULE-STAM-REGEN");
+    let regen = span.replacen("Base rate 10 units/s,", "Base rate 10 units/s at rest,", 1);
+    assert_ne!(regen, span);
+    let decision = cq_decide(
+        &pair,
+        &cwd,
+        &json!({"node_ids": ["RULE-STAM-REGEN"], "text": CQ_TEXT, "working_answer": CQ_WORKING,
+            "price_of_other": "Without the wait R-28 is rebalanced.",
+            "distinct_from": ["DEC-0023"],
+            "proposed_patch": {"target": "RULE-STAM-REGEN", "base": base, "text": regen,
+                "rationale": "Rest only."}}),
+        &["--card", "C-0001"],
+    );
+    assert_eq!(decision, "PR-0001");
+    assert_eq!(
+        pair.sql("SELECT linked FROM proposals WHERE id = 'PR-0001';")
+            .trim(),
+        "PR-0002"
+    );
+    for round in 0..70 {
+        let to = if round % 2 == 0 { "ready" } else { "backlog" };
+        ok(&pair, &["card", "move", "C-0001", "--to", to]);
+        if round % 2 == 0 {
+            cq_stage(&pair, &decision, Some("\"decision\":\"approve\""));
+        } else {
+            cq_stage(&pair, &decision, None);
+        }
+    }
+    // The linked update's own event, after every other.
+    cq_stage(&pair, "PR-0002", Some("\"decision\":\"approve\""));
+
+    let all = pair.events();
+    let newest = |kind: &str, id: &str| -> Vec<i64> {
+        let mut seqs: Vec<i64> = all
+            .iter()
+            .filter(|event| event.event_type.starts_with(kind) && event.payload["id"] == id)
+            .map(|event| event.seq)
+            .collect();
+        let cut = seqs.len().saturating_sub(64);
+        seqs.drain(..cut);
+        seqs
+    };
+    let cards = newest("card.", "C-0001");
+    let items = newest("proposal.", "PR-0001");
+    assert_eq!((cards.len(), items.len()), (64, 64), "premise: 71 of each");
+    let mut want: Vec<i64> = cards.iter().chain(&items).copied().collect();
+    want.sort_unstable();
+
+    let card = show(&pair, "C-0001");
+    assert_eq!(card["history"], Value::Null, "no --history");
+    let card = doc(&pair, &["card", "show", "C-0001", "--history"]);
+    let history = card["history"].as_array().expect("history");
+    assert_eq!(history.len(), 128);
+    let seqs: Vec<i64> = history
+        .iter()
+        .map(|entry| entry["seq"].as_i64().expect("seq"))
+        .collect();
+    assert_eq!(seqs, want);
+    for entry in history {
+        let mut keys: Vec<&String> = entry.as_object().expect("an entry").keys().collect();
+        keys.sort();
+        assert_eq!(keys, ["at", "payload", "seq", "type"], "{entry}");
+        assert_ne!(entry["payload"]["id"], json!("PR-0002"), "{entry}");
+    }
+}
+
+/// K1: a carded question whose row does not read (a `why` set by SQL) is
+/// left out of `items`, its note after the card's own notes, exit 0; the
+/// other item still listed.
+#[test]
+fn card_questions_k1_a_corrupt_item_is_left_out_with_its_note() {
+    let pair = Pair::new("cards-cq-corrupt", "studio-lamp");
+    make(
+        &pair,
+        "The storm scene",
+        &["--target", "SCN-STORM", "--discipline", "narrative"],
+    );
+    let first = cq_ask(
+        &pair,
+        &pair.main,
+        &["SCN-STORM"],
+        "Which bell rings at dusk?",
+        &["--card", "C-0001"],
+    );
+    let second = cq_ask(
+        &pair,
+        &pair.main,
+        &["SCN-ARRIVAL"],
+        "Who meets the keeper at the pier?",
+        &["--card", "C-0001"],
+    );
+    pair.sql(&format!(
+        "UPDATE proposals SET why = 'Because.' WHERE id = '{first}';"
+    ));
+    let card = doc(&pair, &["card", "show", "C-0001"]);
+    let listed: Vec<&str> = card["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|item| item["id"].as_str().expect("an ID"))
+        .collect();
+    assert_eq!(listed, [second.as_str()]);
+    assert_eq!(
+        card["notes"].as_array().and_then(|notes| notes.last()),
+        Some(&json!(format!(
+            "{first}: its row does not read (why: it is set on a question, which holds none); \
+             not listed"
+        ))),
+        "{card}"
+    );
+}
+
+/// K1: `spec card list --json` byte-equal before and after the card's items
+/// are raised; and ADR-0012: twin projects, one card each, the first beside
+/// an open question and an open decision: a move into the return column and
+/// out, an assign, the move to `ready-for-dev`, the accept, and on a second
+/// pair of cards a cancel, give documents and event payloads equal; `spec
+/// gate --path` gives the same verdict before and after. M: `card_move`
+/// refusing while an item is open.
+#[test]
+fn card_questions_k1_no_card_rule_reads_an_item() {
+    let with = Pair::new("cards-cq-twin-a", "studio-lamp");
+    let without = Pair::new("cards-cq-twin-b", "studio-lamp");
+    for pair in [&with, &without] {
+        for title in ["The storm scene", "The cove"] {
+            make(
+                pair,
+                title,
+                &[
+                    "--target",
+                    "SCN-STORM",
+                    "--discipline",
+                    "narrative",
+                    "--reviewer",
+                    "Ann",
+                ],
+            );
+        }
+    }
+    let list = |pair: &Pair| json_run(pair, &["card", "list", "--with-cancelled"]).stdout;
+    let gate = |pair: &Pair| {
+        let done = run(
+            pair,
+            &[
+                "gate",
+                "--worktree",
+                pair.main.to_str().expect("UTF-8"),
+                "--path",
+                "docs/spec/scn-storm.md",
+            ],
+        );
+        (done.code, done.stdout, done.stderr)
+    };
+    let listed = list(&with);
+    let verdict = gate(&with);
+    for card in ["C-0001", "C-0002"] {
+        cq_ask(
+            &with,
+            &with.main,
+            &["SCN-STORM"],
+            &format!("Which bell rings at dusk for {card}?"),
+            &["--card", card],
+        );
+        cq_decide(
+            &with,
+            &with.main,
+            &json!({"node_ids": ["SCN-STORM"], "text": format!("Does the lamp burn oil for {card}?"),
+                "working_answer": "Yes.", "price_of_other": "The lamp room is redrawn."}),
+            &["--card", card],
+        );
+    }
+    assert_eq!(list(&with), listed, "the board's list unchanged");
+    assert_eq!(gate(&with), verdict, "the gate unchanged");
+
+    let writes: [&[&str]; 5] = [
+        &[
+            "card",
+            "move",
+            "C-0001",
+            "--to",
+            "sent-back",
+            "--note",
+            "Two endings contradict",
+        ],
+        &["card", "move", "C-0001", "--to", "outline"],
+        &["card", "assign", "C-0001", "--assignee", "Rob"],
+        &["card", "move", "C-0001", "--to", "ready-for-dev"],
+        &["card", "cancel", "C-0002", "--reason", "Cut."],
+    ];
+    for args in writes {
+        let a = json_run(&with, args);
+        let b = json_run(&without, args);
+        assert_eq!((a.code, &a.stdout), (b.code, &b.stdout), "{args:?}");
+        a.code(0);
+    }
+    for pair in [&with, &without] {
+        let done = pair.spec_pty(
+            &pair.main,
+            &["card", "accept", "C-0001", "--as", "Ann", "--briefed"],
+            Some("y"),
+        );
+        assert_eq!(done.code, 0, "{}", done.output);
+    }
+    let payloads = |pair: &Pair| -> Vec<(String, Value)> {
+        events(pair)
+            .into_iter()
+            .map(|(kind, mut payload)| {
+                if let Some(object) = payload.as_object_mut() {
+                    object.retain(|key, _| !key.ends_with("at"));
+                }
+                (kind, payload)
+            })
+            .collect()
+    };
+    assert_eq!(payloads(&with), payloads(&without));
+    let strip = |mut card: Value| {
+        let object = card.as_object_mut().expect("a card");
+        for key in [
+            "items",
+            "created_at",
+            "updated_at",
+            "acceptance",
+            "cancellation",
+        ] {
+            object.remove(key);
+        }
+        card
+    };
+    for id in ["C-0001", "C-0002"] {
+        assert_eq!(strip(show(&with, id)), strip(show(&without, id)), "{id}");
+        assert_eq!(
+            show(&with, id)["items"].as_array().map(Vec::len),
+            Some(2),
+            "{id}"
+        );
+    }
+    assert_eq!(gate(&with), verdict, "the gate after");
 }

@@ -376,13 +376,14 @@ pub(super) fn upgrade_stages(conn: &rusqlite::Connection) -> Result<(), QueueErr
 }
 
 /// `value` as one JSON string.
-fn json_text(value: &str) -> String {
+pub(super) fn json_text(value: &str) -> String {
     Value::String(value.to_owned()).to_string()
 }
 
-/// The event's trailing `as`, a hub's login; nothing locally, so a local
-/// event stays byte for byte.
-fn as_key(actor: Option<&str>) -> String {
+/// The event's trailing `as`: a hub's login, or the name a local page sent
+/// (a stage's, a card's raise); nothing when none, so such an event stays
+/// byte for byte.
+pub(super) fn as_key(actor: Option<&str>) -> String {
     actor.map_or_else(String::new, |actor| format!(",\"as\":{}", json_text(actor)))
 }
 

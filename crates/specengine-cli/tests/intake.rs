@@ -57,6 +57,7 @@ fn question(pair: &Pair, cwd: &Path, node_ids: &[&str], text: &str) -> QuestionR
         login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
+        card: None,
     }
 }
 
@@ -116,6 +117,7 @@ fn report(pair: &Pair, cwd: &Path, input: DiscrepancyInput) -> Result<IntakeOutc
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(cwd),
+            card: None,
         },
     )
 }

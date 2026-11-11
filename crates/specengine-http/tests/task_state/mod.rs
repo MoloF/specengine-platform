@@ -248,6 +248,7 @@ impl Calls {
             login: None,
             now: CLOCK.to_owned(),
             git: self.git_env(),
+            card: None,
         };
         let ask = |request: &QuestionRequest| {
             propose_question_with_task(&self.env(), &self.globals(), request, task)

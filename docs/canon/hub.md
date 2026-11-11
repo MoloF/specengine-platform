@@ -50,13 +50,13 @@ Judged on every request, `/` and assets too. None or a bad one: 403, never a 401
 
 The login door's duty, not judged here: Latin look-alikes, NFC against NFD, and invisible marks outside Cf (U+034F, variation selectors, U+3164). `hub-admin` refuses them at account creation by an ASCII grammar (`hub-deploy.md#accounts`).
 
-The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the five writes and the confirm class set the `actor` of their `Card*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person for the first time, if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). A confirm's `Decided-by` and a departing accept's `Author` take the login: `hub-confirm.md`.
+The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the six writes and the confirm class set the `actor` of their `Card*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person for the first time, if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). A confirm's `Decided-by` and a departing accept's `Author` take the login: `hub-confirm.md`.
 
 ## Routes
 
 A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode. `GET .../team`, a hub's alone: `hub-team.md`; `.../sync`: `hub-git.md`. A hub's streams, the events tail and `/mcp`'s GET, end 300 s after they open (`serve.md` "Live tail", `hub-mcp.md` "Sessions"), so one outlives a disable or an expired door session by at most that.
 
-Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the five plain writes, POST on `.../cards` or `.../cards/:id/{move,edit,assign,cancel}`, and the team and confirm classes of `hub-team.md` "Classes". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
+Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the six plain writes, POST on `.../cards` or `.../cards/:id/{move,edit,assign,cancel,items}`, and the team and confirm classes of `hub-team.md` "Classes". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
 
 `.../proposals/:id/confirm`, a hub's alone, is the one approve route: `hub-confirm.md`. A move cannot reach `accept.to` (`cards.md` "Config"), so accept has no back door. ADR-0057 stands locally.
 
@@ -77,7 +77,7 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
 **The daemon cannot defend:**
 
 - **A forged header.** It cannot tell the proxy's header from any process reaching its socket: a raw client sending `Remote-User: anyone` gets a 200 and `anyone` recorded, a `[team]` login's name accepts and confirms, and `hub_trusts_the_header_on_its_socket` pins that. A shared secret would be the token ADR-0034 forbids.
-- **What a login may do.** Any login reads everything served and makes the five writes. `by` alone stops a person. `GET /api/projects` shows the absolute `root` to every login: accepted; in a container it is the mount path.
+- **What a login may do.** Any login reads everything served and makes the six writes. `by` alone stops a person. `GET /api/projects` shows the absolute `root` to every login: accepted; in a container it is the mount path.
 - **A forgotten proxy.** A forgotten flag fails closed: a local daemon refuses the public `Host`. A forgotten proxy fails open to whatever reaches the socket.
 
 **The deployment guarantees** (`hub-deploy.md#door`), a test pinning each file:

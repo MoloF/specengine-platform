@@ -275,6 +275,14 @@
 //! `title` after `name` (7 keys), `Workspace` (112) `disciplines` after
 //! `flows` (7), `WorkspaceModule` (113) `kinds` after `root`, `root` now
 //! nullable (4); still 115 sets. M: a key missing from the fixture.
+//!
+//! docs/features/card-questions.md (RM-0097) K1:
+//! `Proposal` (3) gains `card_id`, `why` after `interpretation` (50 keys),
+//! `Card` (92) `items` after `tasks` (32), and three sets more, 118 in all,
+//! last: `CardItem` (116, 16 keys), `IntakeDocument` (117) and `IntakeMatch`
+//! (118), from the same copy of `fixtures/card-press`, whose `C-0001` takes a
+//! question and a decision through `POST .../cards/C-0001/items` and the
+//! question again (a hit). M: a key missing from the fixture.
 
 mod common;
 mod task_state;
@@ -966,6 +974,29 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .text()
             .to_owned(),
     );
+    // docs/features/card-questions.md: `C-0001` takes a question and a
+    // decision through its route; the question again is a hit, not stored.
+    let raise = |body: serde_json::Value| {
+        server
+            .stage(&format!("{cards}/C-0001/items"), &body.to_string())
+            .status(200)
+            .text()
+            .to_owned()
+    };
+    let card_question = serde_json::json!({"kind": "question", "node_ids": ["SHT-BACK"],
+        "text": "Does the tide table keep its rule?", "working_answer": "Yes.",
+        "price_of_other": "A page reset.", "why": null, "severity": null,
+        "distinct_from": null, "as": "desk"});
+    let intake_documents = vec![
+        raise(card_question.clone()),
+        raise(
+            serde_json::json!({"kind": "decision", "node_ids": ["SHT-BACK"],
+            "text": "Does the back page print the moon?", "working_answer": "No.",
+            "price_of_other": "A plate redone.", "why": "The tide table is enough.",
+            "severity": null, "distinct_from": null, "as": "desk"}),
+        ),
+        raise(card_question),
+    ];
     let card_lists = vec![
         server
             .get(&format!("{cards}?with_cancelled=true"))
@@ -1282,6 +1313,14 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let card_events = items(&card_shows, "history");
     let card_tasks = items(&card_shows, "tasks");
     assert_eq!(card_tasks.len(), 1, "C-0001's T-0001: {card_shows:?}");
+    let card_items = items(&card_shows, "items");
+    assert_eq!(card_items.len(), 2, "C-0001's question and decision");
+    let intake_matches = items(&intake_documents, "hits");
+    assert_eq!(
+        intake_matches.len(),
+        1,
+        "the question again: {intake_documents:?}"
+    );
     assert_eq!(card_flows.len(), 2, "copy, plates: {card_lists:?}");
     assert_eq!(card_rows.len(), 2, "both endings: {card_lists:?}");
     card_rows.extend(items(&card_marked, "cards"));
@@ -1810,6 +1849,15 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "ShownAncestor",
             one_key_set("ShownAncestor", &shown_ancestors, keys_of),
         ),
+        ("CardItem", one_key_set("CardItem", &card_items, keys_of)),
+        (
+            "IntakeDocument",
+            one_key_set("IntakeDocument", &intake_documents, keys_of),
+        ),
+        (
+            "IntakeMatch",
+            one_key_set("IntakeMatch", &intake_matches, keys_of),
+        ),
     ]
 }
 
@@ -2111,8 +2159,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // `interpretation` after `staged_at`: 46 keys; docs/features/rev-discipline.md
     // `revisions` after `conflict`: 47; docs/features/drift-queue.md `drift`
     // after `revisions`: 48.
+    // docs/features/card-questions.md: `card_id`, `why` after
+    // `interpretation`: 50.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 48, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 50, "{:?}", sets[2].1);
     let conflict = sets[2].1.iter().position(|key| key == "conflict");
     assert_eq!(
         sets[2].1[conflict.expect("conflict") + 1..conflict.expect("conflict") + 3],
@@ -2128,6 +2178,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "staged",
             "staged_at",
             "interpretation",
+            "card_id",
+            "why",
             "notes"
         ]
     );
@@ -2136,13 +2188,13 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        115,
+        118,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
          board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108; \
          hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114; \
-         flow-scenario: 115)"
+         flow-scenario: 115; card-questions: 118)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2683,6 +2735,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "evidence",
                 // docs/canon/cards.md "Documents and events".
                 "tasks",
+                // docs/features/card-questions.md D4: after `tasks`.
+                "items",
                 "acceptance",
                 "cancellation",
                 "created_by",
@@ -2806,6 +2860,48 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // `ancestors` entry.
     assert_eq!(sets[114].0, "ShownAncestor");
     assert_eq!(sets[114].1, ["id", "kind", "title", "path"]);
+    // docs/features/card-questions.md K1, sets 116 to
+    // 118, last.
+    assert_eq!(sets[115].0, "CardItem");
+    assert_eq!(
+        sets[115].1,
+        [
+            "id",
+            "kind",
+            "status",
+            "summary",
+            "working_answer",
+            "why",
+            "author",
+            "created_at",
+            "updated_at",
+            "staged_at",
+            "decided_by",
+            "decided_at",
+            "decision_note",
+            "record_id",
+            "record_path",
+            "record_title"
+        ]
+    );
+    assert_eq!(sets[116].0, "IntakeDocument");
+    assert_eq!(
+        sets[116].1,
+        [
+            "id",
+            "created",
+            "hits",
+            "related",
+            "linked",
+            "diagnostics",
+            "notes"
+        ]
+    );
+    assert_eq!(sets[117].0, "IntakeMatch");
+    assert_eq!(
+        sets[117].1,
+        ["id", "source", "status", "path", "answer", "record"]
+    );
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -2826,7 +2922,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 115 sets (41 until
+/// unchanged, no new key): the fixture holds 118 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2847,7 +2943,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/hub-git.md its `HubSync`, and
 /// docs/features/workspaces.md its three, and
 /// docs/features/card-tasks.md its `CardTask`, and
-/// docs/features/flow-scenario.md its `ShownAncestor`); a decision
+/// docs/features/flow-scenario.md its `ShownAncestor`, and
+/// docs/features/card-questions.md its three); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -2861,8 +2958,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        115,
-        "115 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        118,
+        "118 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -2870,8 +2967,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
-         workspaces' three (WS-12), card-tasks' `CardTask` and flow-scenario's \
-         `ShownAncestor` (FS-11)"
+         workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
+         `ShownAncestor` (FS-11) and card-questions' three"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -2881,8 +2978,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
             .map(|key| key.as_str().expect("a key").to_owned())
             .collect()
     };
-    // 48 since docs/features/drift-queue.md added `drift`.
-    assert_eq!(set("Proposal").len(), 48);
+    // 48 since docs/features/drift-queue.md added `drift`; 50 since
+    // docs/features/card-questions.md L1 (`card_id`, `why`).
+    assert_eq!(set("Proposal").len(), 50);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -2985,7 +3083,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 115 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 118 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3004,7 +3102,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/hub-git.md its `HubSync`, and
 /// docs/features/workspaces.md its three, and
 /// docs/features/card-tasks.md its `CardTask`, and
-/// docs/features/flow-scenario.md its `ShownAncestor`); the amendment of
+/// docs/features/flow-scenario.md its `ShownAncestor`, and
+/// docs/features/card-questions.md its three); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -3021,8 +3120,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        115,
-        "115 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        118,
+        "118 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3030,8 +3129,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
-         workspaces' three (WS-12), card-tasks' `CardTask` and flow-scenario's \
-         `ShownAncestor` (FS-11)"
+         workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
+         `ShownAncestor` (FS-11) and card-questions' three"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -3041,8 +3140,9 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
             .map(|key| key.as_str().expect("a key").to_owned())
             .collect()
     };
-    // 48 since docs/features/drift-queue.md added `drift`.
-    assert_eq!(set("Proposal").len(), 48);
+    // 48 since docs/features/drift-queue.md added `drift`; 50 since
+    // docs/features/card-questions.md L1 (`card_id`, `why`).
+    assert_eq!(set("Proposal").len(), 50);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

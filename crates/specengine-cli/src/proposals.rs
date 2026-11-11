@@ -27,7 +27,9 @@
 //!   `preview`; their decision record (canon `decision-record`, "Queue and
 //!   documents") the five after `linked`: `record_id`, `record_path`, `record_title`,
 //!   `record_text`, `choice` (an object); then `task_id`, the task it was
-//!   raised for (canon `tasks`, "Task-bound proposals"). A create (task spec
+//!   raised for (canon `tasks`, "Task-bound proposals"); after
+//!   `interpretation`, `card_id`, the card a deciding kind was raised for,
+//!   and a decision's `why` (canon `card-questions`, "The rule"). A create (task spec
 //!   `proposal-kinds`) is an update's document, `target_ids` as stored; a
 //!   new file's base `null`, its diff from an empty base. An interpretation
 //!   (task spec `kind-interpretation`) is an update's document, its
@@ -209,6 +211,11 @@ pub struct ProposalDocument {
     /// An interpretation's `{decision, how, why}`; `null` on any other
     /// kind. Kept by a brief answer.
     pub interpretation: Option<Interpretation>,
+    /// The card a question, discrepancy or decision was raised for; `null`
+    /// on any other (task spec `card-questions` L1).
+    pub card_id: Option<String>,
+    /// A decision's why, as stored; `null` on any other kind.
+    pub why: Option<String>,
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
@@ -289,6 +296,8 @@ impl ProposalDocument {
             staged: proposal.staged.as_ref().map(|staged| staged.stage.clone()),
             staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
             interpretation: proposal.interpretation.clone(),
+            card_id: proposal.card_id.clone(),
+            why: intake.and_then(|intake| intake.why.clone()),
             notes: Vec::new(),
         }
     }
@@ -425,6 +434,7 @@ pub(crate) fn rehearsed(
         record: None,
         new_ids: new.new_ids.clone(),
         task_id: task.map(str::to_owned),
+        card_id: None,
         staged: None,
         interpretation: None,
         drift: None,
@@ -954,6 +964,8 @@ fn review_text(document: &ProposalDocument) -> String {
     line(&mut out, "staged", staged.as_deref());
     line(&mut out, "staged_at", document.staged_at.as_deref());
     interpretation_text(&mut out, document.interpretation.as_ref());
+    line(&mut out, "card_id", document.card_id.as_deref());
+    line(&mut out, "why", document.why.as_deref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
 }

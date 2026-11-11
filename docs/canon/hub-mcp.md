@@ -66,7 +66,7 @@ Seventeen tools and both resources, each its stdio twin's CLI call:
 - **queue**, without `task_id`: `propose_change` (four kinds, `dry_run`), `ask_question`, `report_discrepancy`, `report_decision`;
 - **cards:** `list_cards`, `get_card`, `create_card`, `edit_card`, `move_card`.
 
-None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 17 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it, never only on a typed `CallToolRequest`. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would otherwise grow on invented names.
+None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 17 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it, never only on a typed `CallToolRequest`. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
 
 Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub).
 
@@ -89,7 +89,7 @@ No hub schema holds `login`, `as`, `actor` or `task_id`. A hub write that finds 
 <a id="trust"></a>
 ## Trust
 
-As in `hub.md#trust`, there is no authentication inside SpecEngine (ADR-0034). The daemon trusts one header (ADR-0059) and holds no account, token, key or login session. A protocol session binds a login in memory and identifies no one. Raising proposals is the daemon's for `/mcp` alone, on ADR-0057's precedent of a proposing daemon.
+As in `hub.md#trust`: no authentication inside SpecEngine (ADR-0034); the daemon trusts one header (ADR-0059), holding no account, token, key or login session. A protocol session binds a login in memory and identifies no one. Raising proposals is the daemon's for `/mcp` and a card's `items`, on ADR-0057's precedent of a proposing daemon.
 
 **The daemon can defend:**
 - another login's session id, or a second id in one request (404);

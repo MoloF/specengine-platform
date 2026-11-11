@@ -289,7 +289,8 @@ describe("the Inbox card and the decision dialog take the decision by structure 
     expect(link.getAttribute("href")).toBe(`#/${SLUG}/inbox/${UPDATE}`);
     // Information only: the question on the same page and the decision's own update.
     const others = sectionOf(card, "Also open on these nodes");
-    expect(within(others).getAllByRole("button").map((button) => button.textContent)).toEqual(["PR-0048", UPDATE]);
+    // PR-0055, C-0008's question, is open on the cranes too (docs/features/card-questions.md "Acceptance criteria", U1).
+    expect(within(others).getAllByRole("button").map((button) => button.textContent)).toEqual(["PR-0048", "PR-0055", UPDATE]);
 
     fireEvent.click(link);
     // jsdom follows a clicked hash link only a task later; the browser at once.

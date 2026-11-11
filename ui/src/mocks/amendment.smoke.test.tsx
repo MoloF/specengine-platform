@@ -131,8 +131,8 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     // Kinds are raw strings: spelled only in mocks and tests (ADR-0031).
     expect(reviews.filter((review) => review.kind === "amendment").map((review) => review.id)).toEqual([AMENDMENT]);
     const review = await client.getProposal(SLUG, AMENDMENT);
-    // A new file's review document: the 48 keys of any review.
-    expect(Object.keys(review)).toHaveLength(48);
+    // A new file's review document: the 50 keys of any review, the card and why since card-questions (L1).
+    expect(Object.keys(review)).toHaveLength(50);
     expect(review).toMatchObject({
       id: AMENDMENT,
       project: SLUG,

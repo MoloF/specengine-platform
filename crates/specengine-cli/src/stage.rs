@@ -27,6 +27,7 @@
 //!   Typed flags win whole: the stage is left unused, named in a note.
 
 use serde::{Deserialize, Serialize};
+use specengine_core::card::{card_person, card_person_problem};
 use specengine_core::proposal::EDITORIAL;
 use specengine_core::record::refused_char;
 use specengine_store::{
@@ -59,12 +60,14 @@ pub(crate) fn over_cap(flag: &str, text: &str) -> Option<String> {
 }
 
 /// A stage as the daemon's decision route receives it: the stage's fields
-/// without `span_hash`, and the `updated_at` of the document the caller
-/// read. `{"decision":"approve","option":1,"answer":null,"canon":null,
-/// "editorial":null,"note":"…","updated_at":"…"}` (an approve's flags
-/// absent = `null`; `editorial` `true`, else `null` or `false`, task spec
-/// `rev-discipline`) or `{"decision":"reject","reason":"…",
-/// "updated_at":"…"}`; any other key, or one missing, is refused.
+/// without `span_hash`, the `updated_at` of the document the caller read,
+/// and the acting name `as`. `{"decision":"approve","option":1,
+/// "answer":null,"canon":null,"editorial":null,"note":"…",
+/// "updated_at":"…","as":"ana"}` (an approve's flags absent = `null`;
+/// `editorial` `true`, else `null` or `false`, task spec `rev-discipline`)
+/// or `{"decision":"reject","reason":"…","updated_at":"…","as":"ana"}`;
+/// `as` absent or `null`: none, the event as before (task spec
+/// `card-questions` L4). Any other key, or one missing, is refused.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "decision", rename_all = "lowercase", deny_unknown_fields)]
 pub enum StageBody {
@@ -82,28 +85,73 @@ pub enum StageBody {
         #[serde(default)]
         note: Option<String>,
         updated_at: String,
+        /// The acting name, a card person's: a trailing `as` on
+        /// `proposal.staged`, never a column.
+        #[serde(default, rename = "as")]
+        actor: Option<String>,
     },
     /// `spec reject PR --reason T`.
-    Reject { reason: String, updated_at: String },
+    Reject {
+        reason: String,
+        updated_at: String,
+        /// As [`StageBody::Approve`]'s.
+        #[serde(default, rename = "as")]
+        actor: Option<String>,
+    },
 }
 
 impl StageBody {
-    /// The body `bytes` decoded (JSON of one of the two shapes), or exit 2
-    /// naming the defect.
+    /// The body `bytes` decoded (JSON of one of the two shapes), its `as` a
+    /// card person's (trimmed), or exit 2 naming the defect.
     pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
-        serde_json::from_slice(bytes).map_err(|error| {
+        let mut body: Self = serde_json::from_slice(bytes).map_err(|error| {
             CliError::spec(format!(
                 "the stage is not `{{\"decision\":\"approve\",\"option\",\"answer\",\"canon\",\
-                 \"editorial\",\"note\",\"updated_at\"}}` or `{{\"decision\":\"reject\",\
-                 \"reason\",\"updated_at\"}}` as JSON: {error}; nothing changed"
+                 \"editorial\",\"note\",\"updated_at\",\"as\"}}` or `{{\"decision\":\"reject\",\
+                 \"reason\",\"updated_at\",\"as\"}}` as JSON: {error}; nothing changed"
             ))
-        })
+        })?;
+        if let Some(problem) = body.judge_actor() {
+            return Err(escaped_error(CliError::spec(format!(
+                "as: {problem}; nothing changed"
+            ))));
+        }
+        Ok(body)
+    }
+
+    /// Its `as` judged by a card person's grammar and trimmed: why it is no
+    /// person's name, else `None` (a round's answers judge each stage's so,
+    /// naming the answer).
+    pub(crate) fn judge_actor(&mut self) -> Option<String> {
+        let actor = match self {
+            Self::Approve { actor, .. } | Self::Reject { actor, .. } => actor,
+        };
+        let name = actor.as_mut()?;
+        if let Some(problem) = card_person_problem(name) {
+            return Some(problem);
+        }
+        *name = card_person(name).to_owned();
+        None
     }
 
     /// The `updated_at` the caller read.
     pub fn updated_at(&self) -> &str {
         match self {
             Self::Approve { updated_at, .. } | Self::Reject { updated_at, .. } => updated_at,
+        }
+    }
+
+    /// The acting name it carries; `None`: none.
+    pub fn actor(&self) -> Option<&str> {
+        match self {
+            Self::Approve { actor, .. } | Self::Reject { actor, .. } => actor.as_deref(),
+        }
+    }
+
+    /// The acting name, for a hub to bind to its login.
+    pub fn actor_mut(&mut self) -> &mut Option<String> {
+        match self {
+            Self::Approve { actor, .. } | Self::Reject { actor, .. } => actor,
         }
     }
 
@@ -124,7 +172,8 @@ pub struct StageRequest {
     /// The caller's environment; git runs without its local `GIT_*`
     /// variables.
     pub git: GitEnv,
-    /// A hub's login, `proposal.staged`'s `as`. `None` everywhere else.
+    /// `proposal.staged`'s `as`: a hub's login, or the name a local page
+    /// sent (its body's `as`). `None`: no `as`, the event as before.
     pub actor: Option<String>,
 }
 

@@ -68,7 +68,10 @@ use specengine_core::card::{
 };
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
 use specengine_core::check::{NodeAt, SpecGraph};
-use specengine_core::intake::{AuthorInput, GapType, discrepancy_problem};
+use specengine_core::intake::{
+    AuthorInput, DECISION_KIND, DecisionInput, GapType, IntakeSeverity, QUESTION_KIND,
+    discrepancy_problem,
+};
 use specengine_core::proposal::{Author, prefix_clash};
 use specengine_core::task::{
     CRITERIA_MAX, CRITERION_MAX, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX, over_bytes, over_items,
@@ -83,13 +86,16 @@ use specengine_model::{
 };
 use specengine_store::{
     CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, Event, GitEnv,
-    IntakeResult, NewCard, NewIntake, Place, QueueError, SqliteQueue, WorktreeGit,
+    IntakeResult, NewCard, NewIntake, Place, Proposal, QueueError, SqliteQueue, WorktreeGit,
 };
 
 use crate::apply::Consent;
 use crate::cap::{View, lines_within};
 use crate::corpus::{indexed_in, locate};
-use crate::intake::{IntakeTarget, departing_hits, departure_intake, prefixed};
+use crate::intake::{
+    DecisionRequest, IntakeOutcome, IntakeTarget, QuestionRequest, departing_hits,
+    departure_intake, prefixed, propose_decision_as, propose_question_as,
+};
 use crate::location::{open_index, prepared_data_dir};
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::proposals::{checked_now, escaped_error, queue_cannot, require_root_config};
@@ -697,6 +703,176 @@ impl CardClearGroupBody {
     }
 }
 
+/// What a card raises from the page: a question, or a decision taken
+/// (task spec `card-questions` L3); no other kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardRaiseKind {
+    Question,
+    Decision,
+}
+
+/// The body of `POST …/cards/<id>/items`: a question's or a decision's
+/// fields, its optional `why`, and `as`; no `proposed_patch`, `task_id` or
+/// author field, since a person raises it. Any other key, or a required one
+/// missing, is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardRaiseBody {
+    /// `question` or `decision`.
+    pub kind: String,
+    pub node_ids: Vec<String>,
+    /// The question, or what had to be decided.
+    pub text: String,
+    /// The answer worked on, or the decision taken.
+    pub working_answer: String,
+    pub price_of_other: String,
+    /// A decision's why; `null`: none.
+    pub why: Option<String>,
+    /// Absent or `null`: `normal`.
+    pub severity: Option<IntakeSeverity>,
+    pub distinct_from: Option<Vec<String>>,
+    /// The acting name; `null`: `local`.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardRaiseBody {
+    /// `bytes` decoded, its kind one a card raises and `as` a card person
+    /// (trimmed); else exit 2 naming the defect, nothing read or changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(
+            bytes,
+            "\"kind\",\"node_ids\",\"text\",\"working_answer\",\"price_of_other\",\"why\",\
+             \"severity\",\"distinct_from\",\"as\"",
+        )?;
+        let kind = body.raise_kind()?;
+        if kind == CardRaiseKind::Question && body.why.is_some() {
+            return Err(CliError::spec("`why` goes with a `decision`"));
+        }
+        persons_named(body.actor.as_deref(), &[])?;
+        // Trimmed as a stage's `as` is, before a hub binds it to its login.
+        let body = Self {
+            actor: body.actor.map(|actor| card_person(&actor).to_owned()),
+            ..body
+        };
+        Ok(body)
+    }
+
+    /// Its `kind`, one a card raises; else exit 2.
+    fn raise_kind(&self) -> Result<CardRaiseKind, CliError> {
+        match self.kind.as_str() {
+            QUESTION_KIND => Ok(CardRaiseKind::Question),
+            DECISION_KIND => Ok(CardRaiseKind::Decision),
+            _ => Err(escaped_error(CliError::spec(
+                "`kind`: a card raises a `question` or a `decision`",
+            ))),
+        }
+    }
+
+    /// The request for the card `id` (the path's, as written) at `now`;
+    /// `login` a hub's, `None` locally.
+    pub fn request(
+        self,
+        id: String,
+        now: String,
+        git: GitEnv,
+        login: Option<String>,
+    ) -> Result<CardRaiseRequest, CliError> {
+        Ok(CardRaiseRequest {
+            id,
+            kind: self.raise_kind()?,
+            node_ids: self.node_ids,
+            text: self.text,
+            working_answer: self.working_answer,
+            price_of_other: self.price_of_other,
+            why: self.why,
+            severity: self.severity,
+            distinct_from: self.distinct_from.unwrap_or_default(),
+            actor: self.actor,
+            login,
+            now,
+            git,
+        })
+    }
+}
+
+/// [`card_raise`]'s options: a question or a decision raised on the card
+/// `id` by a person.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardRaiseRequest {
+    /// The card as written.
+    pub id: String,
+    pub kind: CardRaiseKind,
+    pub node_ids: Vec<String>,
+    pub text: String,
+    pub working_answer: String,
+    pub price_of_other: String,
+    /// A decision's why.
+    pub why: Option<String>,
+    pub severity: Option<IntakeSeverity>,
+    pub distinct_from: Vec<String>,
+    /// The acting name; `None`: `local`. Its `proposal.created`'s `as`.
+    pub actor: Option<String>,
+    /// A hub's login: the stored author's `login`. `None` locally.
+    pub login: Option<String>,
+    /// The injected clock: `YYYY-MM-DDTHH:MM:SSZ`.
+    pub now: String,
+    pub git: GitEnv,
+}
+
+/// What [`card_raise`] answered: the intake's document, stored or not; or,
+/// before any intake rule, why there is no such card (exit 1, `{id,
+/// reason}`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardRaiseOutcome {
+    /// The intake's answer; `None` when there is no such card.
+    pub intake: Option<Box<IntakeOutcome>>,
+    /// The card asked for, when there is none (`null` when no card ID was
+    /// written).
+    pub id: Option<String>,
+    /// Why there is none.
+    pub reason: Option<String>,
+    /// The no-card answer's own: none.
+    pub messages: Vec<Message>,
+}
+
+impl CardRaiseOutcome {
+    /// The intake's exit; 1 when there is no such card.
+    pub fn exit(&self) -> Exit {
+        match &self.intake {
+            Some(intake) => intake.exit(),
+            None => Exit::NotFound,
+        }
+    }
+
+    /// No such card: the card's read refused it before any intake rule.
+    pub fn no_card(&self) -> bool {
+        self.intake.is_none()
+    }
+
+    fn missing(id: Option<String>, reason: String) -> Self {
+        Self {
+            intake: None,
+            id,
+            reason: Some(reason),
+            messages: Vec::new(),
+        }
+    }
+}
+
+impl Serialize for CardRaiseOutcome {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match &self.intake {
+            Some(intake) => intake.serialize(serializer),
+            None => NoCardJson {
+                id: self.id.as_deref(),
+                reason: self.reason.as_deref(),
+            }
+            .serialize(serializer),
+        }
+    }
+}
+
 /// What a card-changing command did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CardAction {
@@ -933,6 +1109,61 @@ impl Serialize for CardGroupOutcome {
     }
 }
 
+/// One question, discrepancy or decision a card names, as its read serves
+/// it (task spec `card-questions` K1): the row's values, `author` its
+/// object, read now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CardItem {
+    pub id: String,
+    pub kind: &'static str,
+    pub status: &'static str,
+    /// A question's or a decision's text, a discrepancy's summary.
+    pub summary: String,
+    pub working_answer: Option<String>,
+    /// A decision's why.
+    pub why: Option<String>,
+    pub author: Author,
+    pub created_at: String,
+    pub updated_at: String,
+    /// When its open stage was staged; `null` when none.
+    pub staged_at: Option<String>,
+    pub decided_by: Option<String>,
+    pub decided_at: Option<String>,
+    /// An approval's note, a rejection's reason.
+    pub decision_note: Option<String>,
+    pub record_id: Option<String>,
+    pub record_path: Option<String>,
+    pub record_title: Option<String>,
+}
+
+impl CardItem {
+    /// `proposal`'s keys.
+    fn of(proposal: &Proposal) -> Self {
+        let intake = proposal.intake.as_ref();
+        let record = proposal.record.as_ref();
+        Self {
+            id: proposal.id.clone(),
+            kind: proposal.kind.as_str(),
+            status: proposal.status.as_str(),
+            summary: intake
+                .map(|intake| intake.summary.clone())
+                .unwrap_or_default(),
+            working_answer: intake.and_then(|intake| intake.working_answer.clone()),
+            why: intake.and_then(|intake| intake.why.clone()),
+            author: proposal.author.clone(),
+            created_at: proposal.created_at.clone(),
+            updated_at: proposal.updated_at.clone(),
+            staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
+            decided_by: proposal.decided_by.clone(),
+            decided_at: proposal.decided_at.clone(),
+            decision_note: proposal.decision_note.clone(),
+            record_id: record.map(|record| record.id.clone()),
+            record_path: record.map(|record| record.path.clone()),
+            record_title: record.map(|record| record.title.clone()),
+        }
+    }
+}
+
 /// What `spec card show` answered: the card, or why there is none.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CardShowOutcome {
@@ -946,6 +1177,10 @@ pub struct CardShowOutcome {
     /// Each task the card links, in link order, read now; a task's notes,
     /// each starting with its ID, follow the card's own in `notes`.
     pub tasks: Vec<LinkedTask>,
+    /// The questions, discrepancies and decisions naming it, by ID number,
+    /// read now; a row that does not read is left out, its note after the
+    /// tasks' (task spec `card-questions` K1).
+    pub items: Vec<CardItem>,
     pub notes: Vec<String>,
     /// The card asked for, when there is none.
     pub id: Option<String>,
@@ -1001,6 +1236,7 @@ struct CardJson<'a> {
     corrects: Option<&'a str>,
     evidence: &'a [CardEvidence],
     tasks: &'a [LinkedTask],
+    items: &'a [CardItem],
     acceptance: Option<&'a CardAcceptance>,
     cancellation: Option<&'a CardCancellation>,
     created_by: &'a str,
@@ -1045,6 +1281,7 @@ impl Serialize for CardShowOutcome {
             corrects: card.corrects.as_deref(),
             evidence: &card.evidence,
             tasks: &self.tasks,
+            items: &self.items,
             acceptance: card.acceptance.as_ref(),
             cancellation: card.cancellation.as_ref(),
             created_by: &card.created_by,
@@ -1242,7 +1479,7 @@ fn no_card(id: &str) -> String {
 /// The line for what is no card ID: exit 1 where a command names its card
 /// or a linked one (`--parent`, `--corrects`, `--before`), exit 2 for `list
 /// --parent`.
-fn not_a_card(written: &str) -> String {
+pub(crate) fn not_a_card(written: &str) -> String {
     format!(
         "no card `{}`: a card ID is `C-` and 4 or more digits, as `spec card list` lists it",
         written.trim()
@@ -1574,6 +1811,7 @@ fn run_show(
         history: None,
         mark: None,
         tasks: Vec::new(),
+        items: Vec::new(),
         notes: Vec::new(),
         id,
         reason: Some(reason),
@@ -1587,13 +1825,36 @@ fn run_show(
     let Some(card) = context.queue.get_card(&id).map_err(queue_cannot)? else {
         return Ok(missing(Some(id.clone()), no_card(&id)));
     };
+    // Its items, read now; no card rule reads them
+    // (canon `card-questions`, "The rule").
+    let read = context.queue.card_items(&id).map_err(queue_cannot)?;
+    let items: Vec<CardItem> = read.items.iter().map(CardItem::of).collect();
+    let item_notes: Vec<String> = read
+        .unreadable
+        .iter()
+        .map(|row| {
+            one_line(&format!(
+                "{}: its row does not read ({}: {}); not listed",
+                row.id, row.column, row.reason
+            ))
+        })
+        .collect();
+    // The card's last events and its items' last, each list capped on its
+    // own, merged by `seq`.
     let history = if request.history {
-        Some(
+        let mut events = context
+            .queue
+            .card_history(&id, HISTORY_MAX)
+            .map_err(queue_cannot)?;
+        let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
+        events.extend(
             context
                 .queue
-                .card_history(&id, HISTORY_MAX)
+                .item_history(&ids, HISTORY_MAX)
                 .map_err(queue_cannot)?,
-        )
+        );
+        events.sort_by_key(|event| event.seq);
+        Some(events)
     } else {
         None
     };
@@ -1623,6 +1884,7 @@ fn run_show(
         notes.extend(task_notes);
         tasks
     };
+    notes.extend(item_notes);
     messages.extend(notes.iter().cloned().map(Message::Note));
     Ok(CardShowOutcome {
         allowed,
@@ -1630,10 +1892,99 @@ fn run_show(
         history,
         mark,
         tasks,
+        items,
         messages,
         notes,
         id: None,
         reason: None,
+    })
+}
+
+// ------------------------------------------------------------- raises
+
+/// The card door's raise (task spec `card-questions` L3): the card read
+/// first, before any intake rule (no such card: exit 1 `{id, reason}`, no
+/// intake run); then the question's or the decision's intake, its rules
+/// all, with `card_id` the card and the acting name (`local` when absent)
+/// trailing its `proposal.created` as `as`, never a column. The author is a
+/// human, with a hub's login. Only the queue is written; the card is not:
+/// no card rule reads the item (canon `card-questions`, "The rule").
+pub fn card_raise(
+    env: &Env,
+    globals: &Globals,
+    request: &CardRaiseRequest,
+) -> Result<CardRaiseOutcome, CliError> {
+    run_raise(env, globals, request).map_err(escaped_error)
+}
+
+fn run_raise(
+    env: &Env,
+    globals: &Globals,
+    request: &CardRaiseRequest,
+) -> Result<CardRaiseOutcome, CliError> {
+    checked_now(&request.now)?;
+    let actor = actor_of(request.actor.as_deref())?;
+    let id = written_card(&request.id)?;
+    let context = open_cards(env, globals)?;
+    let Some(id) = id else {
+        return Ok(CardRaiseOutcome::missing(None, not_a_card(&request.id)));
+    };
+    if context.queue.get_card(&id).map_err(queue_cannot)?.is_none() {
+        return Ok(CardRaiseOutcome::missing(Some(id.clone()), no_card(&id)));
+    }
+    // The queue is opened again by the intake, under its own lock.
+    drop(context);
+    let intake = match request.kind {
+        CardRaiseKind::Question => propose_question_as(
+            env,
+            globals,
+            &QuestionRequest {
+                node_ids: request.node_ids.clone(),
+                text: request.text.clone(),
+                working_answer: request.working_answer.clone(),
+                price_of_other: request.price_of_other.clone(),
+                severity: request.severity,
+                distinct_from: request.distinct_from.clone(),
+                card: Some(id),
+                author_role: None,
+                author_model: None,
+                run: None,
+                login: request.login.clone(),
+                now: request.now.clone(),
+                git: request.git.clone(),
+            },
+            &actor,
+        )?,
+        CardRaiseKind::Decision => propose_decision_as(
+            env,
+            globals,
+            &DecisionRequest {
+                input: DecisionInput {
+                    node_ids: request.node_ids.clone(),
+                    text: request.text.clone(),
+                    working_answer: request.working_answer.clone(),
+                    price_of_other: request.price_of_other.clone(),
+                    why: request.why.clone(),
+                    severity: request.severity,
+                    proposed_patch: None,
+                    distinct_from: Some(request.distinct_from.clone()),
+                },
+                card: Some(id),
+                author_role: None,
+                author_model: None,
+                run: None,
+                login: request.login.clone(),
+                now: request.now.clone(),
+                git: request.git.clone(),
+            },
+            &actor,
+        )?,
+    };
+    Ok(CardRaiseOutcome {
+        intake: Some(Box::new(intake)),
+        id: None,
+        reason: None,
+        messages: Vec::new(),
     })
 }
 
@@ -2479,7 +2830,7 @@ fn departing(
     let corpus_hits = departing_hits(&graph, &nodes);
     let norms = norms_read(&open.index, &graph, targets.iter().copied())?;
     let departs: Vec<String> = nodes.iter().map(|node| node.id.clone()).collect();
-    let intake = departure_intake(&input, &nodes, place, author);
+    let intake = departure_intake(&input, &nodes, place, author, &card.id);
     Ok(Ok(Departing {
         intake,
         corpus_hits,
@@ -3223,6 +3574,27 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
                     task.id,
                     task.status.map_or(ABSENT, TaskStatus::as_str),
                     held(task.title.as_deref())
+                )
+            })
+            .collect(),
+    );
+    list(
+        &mut lines,
+        "items",
+        outcome
+            .items
+            .iter()
+            .map(|item| {
+                let record = item
+                    .record_id
+                    .as_deref()
+                    .map_or_else(String::new, |record| format!(" | record {record}"));
+                format!(
+                    "{} | {} | {} | {}{record}",
+                    item.id,
+                    item.kind,
+                    item.status,
+                    one_line(&item.summary)
                 )
             })
             .collect(),

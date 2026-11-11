@@ -503,10 +503,10 @@ describe("the terminal step (U-07)", () => {
       expect(writeText.mock.calls).toEqual([["spec round answer --staged"]]);
     });
     const first = await within(card("PR-0003")).findByRole("region", { name: "Staged decision" });
-    expect(first.querySelector(".staged-line")?.textContent).toBe("Staged 2026-10-07T17:49:50Z. Confirm on a terminal: spec approve PR-0003");
+    expect(first.querySelector(".staged-line")?.textContent).toBe("Staged 2026-10-07 17:49 UTC. Confirm on a terminal: spec approve PR-0003");
     expect(within(card("PR-0003")).getByText("Staged", { selector: ".staged-mark" })).toBeTruthy();
     const odd = await within(card("PR-12")).findByRole("region", { name: "Staged decision" });
-    expect(odd.querySelector(".staged-line")?.textContent).toBe("Staged 2026-10-07T17:50:00Z. Confirm on a terminal: no command is offered for this ID.");
+    expect(odd.querySelector(".staged-line")?.textContent).toBe("Staged 2026-10-07 17:50 UTC. Confirm on a terminal: no command is offered for this ID.");
     expect(within(odd).queryByRole("button", { name: /^Copy/ })).toBeNull();
     expect(within(card("PR-0004")).queryByRole("region", { name: "Staged decision" })).toBeNull();
   });

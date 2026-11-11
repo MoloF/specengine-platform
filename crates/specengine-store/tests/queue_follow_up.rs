@@ -421,7 +421,10 @@ fn reject_with_task_takes_only_a_drift_item() {
             options: Vec::new(),
             recommendation: None,
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     };
     let id = queue
         .create_intake(&question, &[], None, T0)

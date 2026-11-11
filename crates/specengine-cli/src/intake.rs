@@ -1,7 +1,8 @@
 //! `spec propose question ID… --text T --working-answer W --price-of-other
-//! P [--severity S] [--distinct-from X]…`, `spec propose discrepancy
-//! --input F|-` and `spec propose decision --input F|-` (canon
-//! `agent-intake`, "Tools", "Rules"; task spec `kind-decision`): an agent's
+//! P [--severity S] [--distinct-from X]… [--card C]`, `spec propose
+//! discrepancy --input F|- [--card C]` and `spec propose decision --input
+//! F|- [--card C]` (canon `agent-intake`, "Tools", "Rules"; task spec
+//! `kind-decision`; the card: canon `card-questions`, "The rule"): an agent's
 //! question, reported discrepancy or decision taken during work stored as a
 //! queue record that never applies, checked first against what is already
 //! decided and asked (a decision holds a question's fields, its decision
@@ -11,8 +12,11 @@
 //! `<field>: <problem>`, nothing stored, no ID taken):
 //!
 //! 1. form: clap, `--input` not UTF-8 JSON of the shape (exit 2);
-//! 2. caps, enums, the author's grammar (core [`specengine_core::intake`]);
-//! 3. `node_ids` resolved as `propose update` step 1 resolves its target
+//! 2. caps, enums (core [`specengine_core::intake`]); then `--card` as
+//!    written, a card ID (a look-alike exit 2 naming its Latin form); then
+//!    the author's grammar;
+//! 3. with `--card`, the project's `[ids]` taking no `C` (exit 2); then
+//!    `node_ids` resolved as `propose update` step 1 resolves its target
 //!    (a `.md` path: its file's document, by its `id:`, else by its path),
 //!    generated and `immutable_text` holders allowed, each node once
 //!    canonical; stored canonical, in the order given;
@@ -32,9 +36,10 @@
 //!    knows no subject domain;
 //! 7. the queue's hits and the insert in one `Immediate` transaction
 //!    ([`specengine_store::ProposalQueue::create_intake`]; a question and
-//!    a decision one family): stored only when every hit is named in
-//!    `distinct_from`; a patch becomes a linked `update`, decided on its
-//!    own, bound to the item's task.
+//!    a decision one family): the card a row of this queue, in any state
+//!    (else `card_id: no card C-0099`); stored only when every hit is named
+//!    in `distinct_from`; a patch becomes a linked `update`, decided on its
+//!    own, bound to the item's task, naming no card.
 //!
 //! The answer is the intake document (exit 0 whether stored or not):
 //! `{id, created, hits, related, linked, diagnostics, notes}`; past 10 hits
@@ -48,10 +53,13 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use specengine_core::card::{
+    CardIdError, card_look_alike_message, card_prefix_clash, parse_card_id,
+};
 use specengine_core::check::{DocClass, Endpoint, NodeAt, SpecGraph, Standing};
 use specengine_core::intake::{
     AuthorInput, DISTINCT_MAX, DecisionInput, DiscrepancyInput, Evidence, FieldProblem, GapType,
-    IntakeOption, IntakeSeverity, ProposedPatch, QuestionInput, decision_problem,
+    IntakeOption, IntakeSeverity, ProposedPatch, QuestionInput, author_problem, decision_problem,
     discrepancy_problem, question_problem,
 };
 use specengine_core::proposal::Author;
@@ -62,6 +70,7 @@ use specengine_store::{
 };
 
 use crate::cap::SHOW_TAIL_NAMES;
+use crate::card::not_a_card;
 use crate::corpus::{Admission, indexed};
 use crate::create::unheld_findings;
 use crate::proposals::{
@@ -104,6 +113,9 @@ pub struct QuestionRequest {
     /// `--distinct-from X…`: the hits this question is declared distinct
     /// from.
     pub distinct_from: Vec<String>,
+    /// `--card C` as written: the card it is asked for, one of this
+    /// queue's in any state.
+    pub card: Option<String>,
     /// `--author-role`, `--author-model`, `--run`: any given → an agent.
     pub author_role: Option<String>,
     pub author_model: Option<String>,
@@ -123,6 +135,8 @@ pub struct QuestionRequest {
 pub struct DiscrepancyRequest {
     /// The `--input` document ([`read_discrepancy_input`]).
     pub input: DiscrepancyInput,
+    /// `--card C` as written, outside the document as `--task` is.
+    pub card: Option<String>,
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
@@ -140,6 +154,8 @@ pub struct DiscrepancyRequest {
 pub struct DecisionRequest {
     /// The `--input` document ([`read_decision_input`]).
     pub input: DecisionInput,
+    /// `--card C` as written, outside the document as `--task` is.
+    pub card: Option<String>,
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
@@ -297,7 +313,18 @@ pub fn propose_question_with_task(
     request: &QuestionRequest,
     task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    run_question(env, globals, request, task).map_err(escaped_error)
+    run_question(env, globals, request, task, None).map_err(escaped_error)
+}
+
+/// [`propose_question`] raised on a card by a person (the card door,
+/// [`crate::card_raise`]): `actor` trails its `proposal.created` as `as`.
+pub(crate) fn propose_question_as(
+    env: &Env,
+    globals: &Globals,
+    request: &QuestionRequest,
+    actor: &str,
+) -> Result<IntakeOutcome, CliError> {
+    run_question(env, globals, request, None, Some(actor)).map_err(escaped_error)
 }
 
 /// `spec propose discrepancy`: one discrepancy (and its proposed patch as a
@@ -341,7 +368,18 @@ pub fn propose_decision_with_task(
     request: &DecisionRequest,
     task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    run_decision(env, globals, request, task).map_err(escaped_error)
+    run_decision(env, globals, request, task, None).map_err(escaped_error)
+}
+
+/// [`propose_decision`] raised on a card by a person, as
+/// [`propose_question_as`].
+pub(crate) fn propose_decision_as(
+    env: &Env,
+    globals: &Globals,
+    request: &DecisionRequest,
+    actor: &str,
+) -> Result<IntakeOutcome, CliError> {
+    run_decision(env, globals, request, None, Some(actor)).map_err(escaped_error)
 }
 
 /// `--input F|-`: UTF-8 JSON of a discrepancy's arguments (the author's
@@ -371,7 +409,7 @@ pub fn read_decision_input(env: &Env, source: &IntakeSource) -> Result<DecisionI
         env,
         source,
         "a decision's arguments (`node_ids`, `text`, `working_answer`, `price_of_other`, \
-         optional `severity`, `proposed_patch`, `distinct_from`)",
+         optional `why`, `severity`, `proposed_patch`, `distinct_from`)",
     )
     .map_err(escaped_error)
 }
@@ -414,17 +452,21 @@ fn read_input<T: DeserializeOwned>(
         .map_err(|error| CliError::spec(format!("--input {label}: not {shape}: {error}")))
 }
 
+/// The author's fields judged apart: the card as written goes between the
+/// item's caps and them (task spec `card-questions` S2).
+const NO_AUTHOR: AuthorInput<'static> = AuthorInput {
+    role: None,
+    model: None,
+    run: None,
+};
+
 fn run_question(
     env: &Env,
     globals: &Globals,
     request: &QuestionRequest,
     task: Option<&str>,
+    actor: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    let author = AuthorInput {
-        role: request.author_role.as_deref(),
-        model: request.author_model.as_deref(),
-        run: request.run.as_deref(),
-    };
     let problem = question_problem(
         &QuestionInput {
             node_ids: &request.node_ids,
@@ -433,7 +475,7 @@ fn run_question(
             price_of_other: &request.price_of_other,
             distinct_from: &request.distinct_from,
         },
-        author,
+        NO_AUTHOR,
     );
     run_intake(
         env,
@@ -451,8 +493,11 @@ fn run_question(
             recommendation: None,
             patch: None,
             distinct_from: &request.distinct_from,
+            why: None,
+            card: request.card.as_deref(),
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
+            actor,
             now: &request.now,
             git: &request.git,
             task,
@@ -468,12 +513,7 @@ fn run_discrepancy(
     task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
     let input = &request.input;
-    let author = AuthorInput {
-        role: request.author_role.as_deref(),
-        model: request.author_model.as_deref(),
-        run: request.run.as_deref(),
-    };
-    let problem = discrepancy_problem(input, author);
+    let problem = discrepancy_problem(input, NO_AUTHOR);
     run_intake(
         env,
         globals,
@@ -490,8 +530,11 @@ fn run_discrepancy(
             recommendation: Some(input.recommendation),
             patch: input.proposed_patch.as_ref(),
             distinct_from: input.distinct_from.as_deref().unwrap_or_default(),
+            why: None,
+            card: request.card.as_deref(),
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
+            actor: None,
             now: &request.now,
             git: &request.git,
             task,
@@ -500,21 +543,17 @@ fn run_discrepancy(
     )
 }
 
-/// A decision: a question's fields (its decision the working answer) and a
-/// discrepancy's optional patch.
+/// A decision: a question's fields (its decision the working answer), its
+/// optional why and a discrepancy's optional patch.
 fn run_decision(
     env: &Env,
     globals: &Globals,
     request: &DecisionRequest,
     task: Option<&str>,
+    actor: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
     let input = &request.input;
-    let author = AuthorInput {
-        role: request.author_role.as_deref(),
-        model: request.author_model.as_deref(),
-        run: request.run.as_deref(),
-    };
-    let problem = decision_problem(input, author);
+    let problem = decision_problem(input, NO_AUTHOR);
     run_intake(
         env,
         globals,
@@ -531,8 +570,11 @@ fn run_decision(
             recommendation: None,
             patch: input.proposed_patch.as_ref(),
             distinct_from: input.distinct_from.as_deref().unwrap_or_default(),
+            why: input.why.as_deref(),
+            card: request.card.as_deref(),
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
+            actor,
             now: &request.now,
             git: &request.git,
             task,
@@ -555,10 +597,16 @@ struct Item<'a> {
     recommendation: Option<u64>,
     patch: Option<&'a ProposedPatch>,
     distinct_from: &'a [String],
+    /// A decision's why.
+    why: Option<&'a str>,
+    /// `--card C` as written.
+    card: Option<&'a str>,
     /// Role, model, run.
     author: (&'a Option<String>, &'a Option<String>, &'a Option<String>),
     /// A hub's login: `Author.login`, the linked update's too.
     login: &'a Option<String>,
+    /// A card's raise's acting name: its `proposal.created`'s `as`.
+    actor: Option<&'a str>,
     now: &'a str,
     git: &'a GitEnv,
     /// `--task T` as written.
@@ -584,12 +632,14 @@ pub(crate) fn departing_hits(graph: &SpecGraph<'_>, targets: &[IntakeTarget]) ->
 }
 
 /// The discrepancy a departing accept stores, `input` over `targets` at
-/// `place`; its `distinct_from` is the store's to write, under its lock.
+/// `place`, naming the card accepted, `card`; its `distinct_from` is the
+/// store's to write, under its lock.
 pub(crate) fn departure_intake(
     input: &DiscrepancyInput,
     targets: &[IntakeTarget],
     place: Place,
     author: Author,
+    card: &str,
 ) -> NewIntake {
     NewIntake {
         kind: ProposalKind::Discrepancy,
@@ -609,7 +659,10 @@ pub(crate) fn departure_intake(
             options: input.options.clone(),
             recommendation: Some(input.recommendation),
             distinct_from: Vec::new(),
+            why: None,
         },
+        card_id: Some(card.to_owned()),
+        actor: None,
     }
 }
 
@@ -620,15 +673,48 @@ fn run_intake(
     problem: Option<FieldProblem>,
 ) -> Result<IntakeOutcome, CliError> {
     let now = checked_now(item.now)?;
-    // 2. Caps, enums, the author's grammar.
+    // 2. Caps, enums; the card as written; the author's grammar.
     if let Some(problem) = problem {
         return Ok(IntakeOutcome::refused(&problem.to_string(), Vec::new()));
     }
+    let card = match item.card.map(|written| (written, parse_card_id(written))) {
+        None => None,
+        Some((_, Ok(id))) => Some(id),
+        Some((written, Err(CardIdError::LookAlike { fix }))) => {
+            return Err(CliError::spec(format!(
+                "card_id: {}",
+                card_look_alike_message(written.trim(), &fix)
+            )));
+        }
+        Some((written, Err(CardIdError::NotAnId))) => {
+            return Ok(IntakeOutcome::refused(
+                &format!("card_id: {}", not_a_card(written)),
+                Vec::new(),
+            ));
+        }
+    };
     let (role, model, run) = item.author;
+    let written_author = AuthorInput {
+        role: role.as_deref(),
+        model: model.as_deref(),
+        run: run.as_deref(),
+    };
+    if let Some(problem) = author_problem(written_author) {
+        return Ok(IntakeOutcome::refused(&problem.to_string(), Vec::new()));
+    }
     let mut author =
         Author::new(role.clone(), model.clone(), run.clone()).map_err(CliError::spec)?;
     author.login.clone_from(item.login);
     let mut context = open_context(env, globals, item.git)?;
+    // 3. With a card, the project's `[ids]` takes no `C`.
+    if card.is_some()
+        && let Some(clash) = card_prefix_clash(&context.project.config.scheme)
+    {
+        return Err(CliError::spec(format!(
+            "{}: {clash}",
+            context.project.config_label
+        )));
+    }
     let mut messages = Vec::new();
     let input = indexed(env, &context.project, &mut messages, false)?;
 
@@ -767,7 +853,10 @@ fn run_intake(
             options: item.options.to_vec(),
             recommendation: item.recommendation,
             distinct_from: item.distinct_from.to_vec(),
+            why: item.why.map(str::to_owned),
         },
+        card_id: card,
+        actor: item.actor.map(str::to_owned),
     };
     let patch: Option<NewProposal> = match (&checked, item.patch) {
         (Some(update), Some(patch)) => Some(update.new_proposal(place, &patch.rationale, author)),
@@ -788,6 +877,13 @@ fn run_intake(
         Err(QueueError::TaskRefused { reason, .. }) => {
             return Ok(IntakeOutcome::refused(
                 &format!("--task: {reason}"),
+                messages,
+            ));
+        }
+        // The card read under the insert's lock: none, nothing stored.
+        Err(QueueError::CardRefused { reason, .. }) => {
+            return Ok(IntakeOutcome::refused(
+                &format!("card_id: {reason}"),
                 messages,
             ));
         }

@@ -228,7 +228,10 @@ fn departure(targets: &[&str], summary: &str) -> NewIntake {
             options: vec![option("change the brief"), option("rework the result")],
             recommendation: Some(0),
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 

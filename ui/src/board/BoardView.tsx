@@ -914,6 +914,15 @@ export function BoardView({
     announce(said(answer.id ?? t("board.said.theCard")));
   }
 
+  /** A question or a decision raised on the card: nothing moved, nothing to follow; said in the live region. */
+  function raised(said: string) {
+    setRefusal(null);
+    setActingLine(null);
+    setModalLine(null);
+    closeDialog();
+    announce(said);
+  }
+
   /** An act of the card's modal: the Move menu at its button, or the act's dialog. */
   function onAct(action: CardAction, card: Card, trigger: HTMLElement) {
     if (writing) {
@@ -965,6 +974,7 @@ export function BoardView({
         onClose={closeDialog}
         onActingLine={dialogPlace === "modal" ? setModalLine : setActingLine}
         onWritten={written}
+        onRaised={raised}
       />
     );
 

@@ -18,8 +18,11 @@
  * `aside`: as `normal` but harbor-sim's spec, the pottery workshop of `fixtures/flow-aside`, so Flow
  * draws only what is in the flow and lists the rest as Records for the AI; `aside40` its records
  * copied 40 times, 5 680 of them (`docs/canon/spec-flow-screen.md` "Mock"; RM-0094; src/mocks/harbor-sim/aside.ts).
+ * `hub`: as `normal` behind a hub's login, `mira`, whose `[team]` row allows every act and Confirm, so
+ * a staged choice is confirmed from the page as a hub does (`docs/canon/hub-confirm.md` "Routes";
+ * the card's Answer..., docs/features/card-questions.md "Acceptance criteria", U4).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

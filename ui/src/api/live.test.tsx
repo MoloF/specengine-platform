@@ -1208,7 +1208,8 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
       tail({ seq: 92, type: "proposal.created", payload: { id: "PR-1" } });
     });
     await quiet(queryClient);
-    expect(client.getCard).not.toHaveBeenCalled();
+    expect(client.getCards).not.toHaveBeenCalled();
+    client.getCard.mockClear();
     act(() => {
       tail({ seq: 93, type: "task.claimed", payload: { id: "T-1" } });
     });
@@ -1223,5 +1224,26 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     await quiet(queryClient);
     expect(client.getCards).toHaveBeenCalledTimes(1);
     expect(client.getCard).toHaveBeenCalledTimes(2);
+  });
+
+  // A card serves the items naming it and their events read now (M1 of card-questions' review;
+  // docs/canon/card-questions.md "The rule"): every `proposal.*` event reads the open cards again,
+  // never the list, a stage made elsewhere too; a terminal's reject or an agent's question shows.
+  it.each(QUEUE_EVENT_TYPES.filter((type) => type.startsWith("proposal.")))("%s reads the open cards again (card-questions)", async (type) => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 96, type, payload: { id: "PR-1" } });
+    });
+    await quiet(queryClient);
+    expect(client.getCard.mock.calls.map((call) => call[1]).sort()).toEqual(["C-0001", "C-0002"]);
+  });
+
+  it.each(["proposal.created", "proposal.staged", "proposal.unstaged"])("%s reads no card list: the list shows no item, and nothing settles a departure (card-questions)", async (type) => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 97, type, payload: { id: "PR-1" } });
+    });
+    await quiet(queryClient);
+    expect(client.getCards).not.toHaveBeenCalled();
   });
 });

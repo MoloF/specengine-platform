@@ -484,7 +484,7 @@ export const en = {
       createdBy: "Created by",
       createdAt: "Created at",
       evidence: "Evidence",
-      history: "History",
+      activity: "Activity",
       noneYet: "None yet.",
       loading: "Loading {{id}}",
       failed: "{{id}} could not be read",
@@ -552,6 +552,67 @@ export const en = {
       effect: "The task moves to {{column}} with this reason. The task that asked for it stays where it is.",
       badge: "Returned",
       latest: "Returned by {{by}}, {{at}}",
+      // Its question part (docs/features/card-questions.md "Acceptance criteria", U2): the move first, the question after it.
+      ask: "Ask a question with it",
+      notAsked: "{{id}} sent back; the question was not asked",
+    },
+    // A task's Activity (CardPanel.tsx, CardItems.tsx): its items' events, one word per type (labels.ts), and the items raised before its history.
+    activity: {
+      created: "Raised",
+      staged: "Answer staged",
+      unstaged: "Staged answer taken back",
+      approved: "Approved",
+      applied: "Recorded",
+      rejected: "Rejected",
+      apply_failed: "Approve refused",
+      earlier: "Earlier items",
+    },
+    // One item's block in the Activity (CardItems.tsx): what it says and how it stands.
+    items: {
+      workingAnswer: "Working answer",
+      why: "Why",
+      answer: "Answer",
+      record: "Record",
+      staged: "Staged {{at}}",
+      decidedBy: "Decided by",
+    },
+    // Ask a question… on a task (CardItems.tsx, the question part of Return in CardDialogs.tsx).
+    ask: {
+      action: "Ask a question…",
+      title: "Ask a question on {{id}}",
+      question: "Question",
+      workingAnswer: "Working answer",
+      price: "What another answer would cost",
+      about: "About",
+      submit: "Ask",
+      sending: "Asking…",
+      asked: "Asked {{id}}",
+      hits: "Already answered or asked:",
+      anyway: "Ask anyway",
+      again: "Ask again",
+      tooMany: "More earlier answers match than this dialog can name: ask on a terminal, naming each in --distinct-from.",
+      needsTexts: "Fill in all three: the question, a working answer and what another answer would cost.",
+      needsTarget: "Choose at least one target it is about.",
+    },
+    // Record a decision… on a task (CardItems.tsx): taken by whoever records it, confirmed by the owner.
+    decide: {
+      action: "Record a decision…",
+      title: "Record a decision on {{id}}",
+      matter: "What had to be decided",
+      decision: "The decision",
+      price: "What another answer would cost",
+      why: "Why (optional)",
+      submit: "Record",
+      sending: "Recording…",
+      anyway: "Record anyway",
+      again: "Record again",
+      raised: "Raised {{id}} for the owner to confirm",
+      needsTexts: "Fill in all three: what had to be decided, the decision and what another answer would cost.",
+    },
+    // Answer… on an open item (CardItems.tsx): the Questions screen's controls stage it.
+    answer: {
+      action: "Answer…",
+      title: "Answer {{id}}",
     },
     // A parent's hand-offs: each child's word, and the counts on its tile (labels.ts, BoardCard.tsx).
     rollup: {
@@ -1427,6 +1488,11 @@ export const en = {
       stagedHere: "Staged {{at}}.",
       targets: "Targets",
       noTargets: "No target node named.",
+    },
+    // A proposal's task and a decision's why on its card (ProposalCard.tsx; docs/features/card-questions.md "Acceptance criteria", U5).
+    proposal: {
+      task: "Task {{id}}",
+      why: "Why",
     },
     // A hub's Confirm dialog (ConfirmDialog.tsx).
     confirm: {

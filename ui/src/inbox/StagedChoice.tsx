@@ -3,6 +3,7 @@ import type { ProposalOption, Stage } from "../api/types";
 import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
+import { formatUtc } from "../ui/time";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { confirmCommand, verbOf } from "./decisions";
@@ -72,7 +73,8 @@ export function StagedChoice({
       </h3>
       <p className="staged-line">
         {fill(t("inbox.staged.line", { at: slot("at"), command: slot("command") }), {
-          at: <time dateTime={at}>{at}</time>,
+          // As every stored time shows (`formatUtc`), the stored value in `dateTime`.
+          at: <time dateTime={at}>{formatUtc(at, t)}</time>,
           command: command === null ? <span>{t("inbox.staged.noCommand")}</span> : <code className="command-text">{command}</code>,
         })}
       </p>

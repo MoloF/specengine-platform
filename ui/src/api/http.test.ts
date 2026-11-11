@@ -1106,3 +1106,41 @@ describe("the cards (docs/features/board-ui.md \"Routes\")", () => {
     expect([error.status, error.message]).toEqual([status, message]);
   });
 });
+
+// docs/features/card-questions.md "Acceptance criteria", L3 and L4, the browser side: a card's raise
+// is one POST of the body as given to `.../cards/:id/items`, no signal; a 200 resolves whether stored
+// or not; a 409's intake document rejects with its last note, a 404 with its reason. The stage's `as`
+// trails the body when sent, and no `as` key goes when none is.
+describe("a card's raise and the stage's acting name (L3, L4 of card-questions)", () => {
+  const notStored = { id: null, created: false, hits: [{ id: "PR-0001", source: "queue", status: "open", path: null, answer: null, record: null }], related: [], linked: null, diagnostics: [], notes: [] };
+  const body = { kind: "question", node_ids: ["SCN-STORM"], text: "Which bell rings at dusk?", working_answer: "The harbour bell.", price_of_other: "Two scenes rewritten.", as: "dev" };
+
+  it("posts the raise as JSON to the card's items, no signal; a hit is a 200 resolved as the document", async () => {
+    const stub = stubFetch(() => jsonAnswer(200, notStored));
+    expect(await new HttpClient().raiseOnCard("alpha", "C/1", body)).toEqual(notStored);
+    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/cards/C%2F1/items"]);
+    expect([stub.mock.calls[0]?.[1]?.method, "signal" in (stub.mock.calls[0]?.[1] ?? {})]).toEqual(["POST", false]);
+    expect(stub.mock.calls[0]?.[1]?.body).toBe(JSON.stringify(body));
+  });
+
+  it.each([
+    [409, { ...notStored, notes: ["text: 1025 bytes; at most 1024"] }, "text: 1025 bytes; at most 1024"],
+    [404, { id: "C-0099", reason: "no card C-0099" }, "no card C-0099"],
+    [400, { status: 400, message: "`why` goes with a `decision`" }, "`why` goes with a `decision`"],
+  ])("rejects a raise's %i in the daemon's words", async (status, answer, message) => {
+    stubFetch(() => jsonAnswer(status, answer));
+    const error = await rejection(new HttpClient().raiseOnCard("alpha", "C-0001", body));
+    expect([error.status, error.message]).toEqual([status, message]);
+  });
+
+  it("stages with `as` last when sent, and with no `as` key when not", async () => {
+    const stub = stubFetch(() => jsonAnswer(200, aProposal({ id: "PR-0004" })));
+    const stage = { decision: "reject", reason: "No" } as const;
+    await new HttpClient().stageDecision("alpha", "PR-0004", stage, "2026-11-11T09:30:00Z", "ana");
+    await new HttpClient().stageDecision("alpha", "PR-0004", stage, "2026-11-11T09:30:00Z");
+    expect(stub.mock.calls.map((call) => call[1]?.body)).toEqual([
+      '{"decision":"reject","reason":"No","updated_at":"2026-11-11T09:30:00Z","as":"ana"}',
+      '{"decision":"reject","reason":"No","updated_at":"2026-11-11T09:30:00Z"}',
+    ]);
+  });
+});

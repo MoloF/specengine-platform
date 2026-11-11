@@ -77,7 +77,10 @@ fn discrepancy(summary: &str) -> NewIntake {
             options: vec![option("code"), option("spec")],
             recommendation: Some(1),
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 

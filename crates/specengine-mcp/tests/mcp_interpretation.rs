@@ -405,10 +405,11 @@ fn ac_r11_propose_change_takes_an_interpretation_as_its_twin() {
     let rendered = specengine_cli::render_json(&Outcome::Proposal(Box::new(brief)));
     let mirrored: Value = serde_json::from_str(&rendered).expect("JSON");
     assert_eq!(document["interpretation"], mirrored["interpretation"]);
-    // 48 since docs/features/drift-queue.md added `drift`.
+    // 48 since docs/features/drift-queue.md added `drift`; 50 since
+    // docs/features/card-questions.md L1.
     assert_eq!(
         document.as_object().map(|object| object.len()),
-        Some(48),
+        Some(50),
         "{document}"
     );
     if let Err(problem) = common::read::conforms(&schemas["get_proposal"], &document, "$") {

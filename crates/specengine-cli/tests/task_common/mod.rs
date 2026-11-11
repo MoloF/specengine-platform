@@ -567,6 +567,7 @@ pub fn ask(
         login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
+        card: None,
     };
     let run = |request: &QuestionRequest| {
         propose_question_with_task(&pair.env(cwd), &Globals::default(), request, task)
@@ -615,6 +616,7 @@ pub fn report_gap(
                 login: None,
                 now: NOW.to_owned(),
                 git: pair.git_env(cwd),
+                card: None,
             },
             task,
         )

@@ -703,13 +703,21 @@ impl RoundAnswersBody {
     /// `bytes` decoded as JSON, the answers for the project `slug`, at most
     /// 200 of them; else exit 2 naming the defect, nothing read or changed.
     pub fn from_json(bytes: &[u8], slug: &str) -> Result<Self, CliError> {
-        let body: Self = serde_json::from_slice(bytes).map_err(|error| {
+        let mut body: Self = serde_json::from_slice(bytes).map_err(|error| {
             escaped_error(CliError::spec(format!(
                 "the answers are not `{{\"project\",\"answers\":[{{\"id\",\"stage\"}}]}}` as \
                  JSON: {error}; nothing changed"
             )))
         })?;
         body.checked(slug).map_err(escaped_error)?;
+        for answer in &mut body.answers {
+            if let Some(problem) = answer.stage.judge_actor() {
+                return Err(escaped_error(CliError::spec(format!(
+                    "as: {problem} ({}); nothing changed",
+                    answer.id
+                ))));
+            }
+        }
         Ok(body)
     }
 
@@ -1715,11 +1723,13 @@ fn token_stage(
         editorial: None,
         note: None,
         updated_at: updated_at.clone(),
+        actor: None,
     };
     Ok(match (token, count) {
         (Token::Reject(reason), _) => StageBody::Reject {
             reason: reason.clone(),
             updated_at: updated_at.clone(),
+            actor: None,
         },
         (Token::Ok, 0) => approve(None, None),
         (Token::Text(text), 0) => approve(None, Some(text.clone())),
@@ -1756,8 +1766,9 @@ struct Planned {
 /// Each of `planned` staged in round order as the decision route stages
 /// ([`stage_with`]: checked again, a compare-and-set on its own read, one
 /// `proposal.staged` each), all at the one clock reading `now` and under the
-/// one `actor`: in round order, its position, the proposal as checked, and
-/// the stage stored or why not (a lost one is refused).
+/// one `actor` (a hub's login), else each stage's own `as`: in round order,
+/// its position, the proposal as checked, and the stage stored or why not
+/// (a lost one is refused).
 fn stage_planned(
     env: &Env,
     context: &mut QueueContext,
@@ -1772,12 +1783,13 @@ fn stage_planned(
         at, proposal, body, ..
     } in planned
     {
+        let actor = actor.or(body.actor()).map(str::to_owned);
         let request = StageRequest {
             id: proposal.id.clone(),
             body,
             now: now.to_owned(),
             git: git.clone(),
-            actor: actor.map(str::to_owned),
+            actor,
         };
         let choice = match stage_with(env, context, &request) {
             Ok(outcome) => stored_choice(outcome),

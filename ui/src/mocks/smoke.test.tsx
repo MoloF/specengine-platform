@@ -21,7 +21,8 @@ describe("the UI over the mock", () => {
     const ids = within(list)
       .getAllByRole("option")
       .map((option) => option.dataset.proposal);
-    expect(ids).toEqual(["PR-0041", "PR-0042", "PR-0048", "PR-0050", "PR-0046", "PR-0043", "PR-0047", "PR-0045", "PR-0044", "PR-0049", "PR-0051", "PR-0052"]);
+    // PR-0055, C-0008's open question, among them; the applied PR-0056 is not listed (card-questions, U1).
+    expect(ids).toEqual(["PR-0041", "PR-0042", "PR-0048", "PR-0050", "PR-0046", "PR-0043", "PR-0047", "PR-0045", "PR-0055", "PR-0044", "PR-0049", "PR-0051", "PR-0052"]);
     expect(within(list).getByText(new RegExp(BASIN_NAME_DECOMPOSED))).toBeTruthy();
     fireEvent.click(within(list).getByText(/undocumented sample format/));
     expect(await screen.findByText(new RegExp(LONG_TOKEN))).toBeTruthy();
@@ -37,7 +38,7 @@ describe("the UI over the mock", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
       expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(
-        /^Staged Accept on PR-0041 at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z; nothing is applied yet\. Confirm it on a terminal: spec approve PR-0041\.$/,
+        /^Staged Accept on PR-0041 at \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC; nothing is applied yet\. Confirm it on a terminal: spec approve PR-0041\.$/,
       );
     });
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });

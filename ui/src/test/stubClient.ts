@@ -27,6 +27,7 @@ import type {
   CardList,
   CardMoveBody,
   CardNotFound,
+  CardRaiseBody,
   CardWrite,
   CheckReport,
   ConfirmBody,
@@ -37,6 +38,7 @@ import type {
   HubSync,
   Identity,
   Inbox,
+  IntakeDocument,
   LockDiffView,
   NodeView,
   Project,
@@ -81,6 +83,9 @@ import {
 
 /** When the stub stores a stage: one fixed time, so a test can name it. */
 export const STAGED_AT = "2026-10-06T09:14:02Z";
+
+/** STAGED_AT as the English page shows a stored time (`formatUtc`): the staged line and its announcement. */
+export const STAGED_SHOWN = "2026-10-06 09:14 UTC";
 
 /** The stub's live tail: none. */
 const noLiveTail: SpecEngineClient["subscribe"] = () => () => undefined;
@@ -161,7 +166,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getHealth: vi.fn<(project: string) => Promise<HealthReport>>(() => Promise.resolve(aHealthReport())),
     // The daemon's stage on the stub's queue: an open proposal at the `updated_at` read, else 409;
     // stored with STAGED_AT, the proposal kept in the queue.
-    stageDecision: vi.fn((_project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> => {
+    // `as`, the acting name, is taken and not stored: a stage's event is the daemon's (docs/features/card-questions.md "Acceptance criteria", L4); a test reads it from the call.
+    stageDecision: vi.fn<(project: string, id: string, stage: StageChoice, updatedAt: string, as?: string | null) => Promise<Proposal>>((_project, id, stage, updatedAt) => {
       const current = state.proposals.find((proposal) => proposal.id === id);
       if (current === undefined) {
         return Promise.reject(new ClientError({ status: 404, message: `no proposal \`${id}\` in this project's queue` }));
@@ -235,6 +241,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     cancelCard: vi.fn<(project: string, id: string, body: CardCancelBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
     acceptCard: vi.fn<(project: string, id: string, body: CardAcceptBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
     clearCard: vi.fn<(project: string, id: string, body: CardClearBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
+    // A raise on a card (docs/features/card-questions.md "Acceptance criteria", L3): stored as the next ID, no hit; a test overriding what it answers.
+    raiseOnCard: vi.fn<(project: string, id: string, body: CardRaiseBody) => Promise<IntakeDocument>>(() =>
+      Promise.resolve({ id: "PR-0101", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] }),
+    ),
     clearCardGroup: vi.fn<(project: string, body: CardClearGroupBody) => Promise<CardClearGroupWrite>>((_project, body) => Promise.resolve({ group: body.group, cleared: [], notes: [] })),
     // Marks and rollups (docs/features/card-trace.md): none.
     getTrace: vi.fn<(project: string, options?: TraceOptions, signal?: AbortSignal) => Promise<TraceDocument>>(() => Promise.resolve(aTrace([]))),

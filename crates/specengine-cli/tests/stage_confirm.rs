@@ -79,12 +79,17 @@ fn approve_body(
         editorial: None,
         note,
         updated_at,
+        actor: None,
     }
 }
 
 fn reject_body(reason: &str) -> impl FnOnce(String) -> StageBody {
     let reason = reason.to_owned();
-    move |updated_at| StageBody::Reject { reason, updated_at }
+    move |updated_at| StageBody::Reject {
+        reason,
+        updated_at,
+        actor: None,
+    }
 }
 
 /// The library's `stage` of `id` from `cwd` at `now`, against its stored
@@ -1020,20 +1025,20 @@ fn ac02_a_queue_of_a_newer_schema_exits_2_naming_both() {
     let pair = Pair::new("ds-ac02", "spec-a");
     let case = &CASES[0];
     pair.propose_edit(&pair.linked, case.target, case.first.0, case.first.1);
-    // This build's queue schema is 10 (docs/canon/cards.md "Store"):
-    // 11 is newer.
-    pair.sql("PRAGMA user_version = 11;");
+    // This build's queue schema is 11 (docs/features/card-questions.md
+    // S1): 12 is newer. M1's record at a62c81c: 11 over 10.
+    pair.sql("PRAGMA user_version = 12;");
     for args in [vec!["inbox"], vec!["review", "PR-0001"]] {
         let run = pair.spec_piped(&pair.main, &args, b"");
         run.code(2);
         assert!(
             run.stderr
-                .contains("schema version 11, this build knows 10"),
+                .contains("schema version 12, this build knows 11"),
             "{args:?}: {}",
             run.show()
         );
     }
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "11", "left alone");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "12", "left alone");
 }
 
 // ------------------------------------------------------------------ AC-12
@@ -1126,7 +1131,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
     assert!(
         json.contains(&format!(
             "\"staged\":{{\"decision\":\"reject\",\"reason\":\"asked before\"}},\"staged_at\":\
-             \"{STAGED}\",\"interpretation\":null,\"notes\":"
+             \"{STAGED}\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"notes\":"
         )),
         "{json}"
     );
@@ -1150,7 +1155,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
     let bytes = export(&pair, &pair.home, &dumps.join("q.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":4,\"queue_schema\":10,"),
+        rows[0].starts_with("{\"format\":5,\"queue_schema\":11,"),
         "{}",
         rows[0]
     );
@@ -1159,7 +1164,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
         .filter(|row| {
             row.contains(&format!(
                 "\"staged_at\":\"{STAGED}\",\"interpretation\":null,\"drift\":null,\
-                 \"drift_hash\":null}}}}"
+                 \"drift_hash\":null,\"card_id\":null,\"why\":null}}}}"
             ))
         })
         .count();
@@ -1198,11 +1203,11 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let v6 = lines(&current);
     assert_eq!(
         v6[0],
-        "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":1}"
     );
     let tail = ",\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"drift\":null,\
-                \"drift_hash\":null}}";
+                \"drift_hash\":null,\"card_id\":null,\"why\":null}}";
     assert!(v6[1].ends_with(tail), "{}", v6[1]);
     let write = |name: &str, rows: &[String]| {
         let file = dumps.join(name);
@@ -1213,12 +1218,13 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // "Queue schema 8": import takes schemas 4-8): their 44 columns;
     // restore, `drift` and `drift_hash` NULL, and re-export as the current
     // dump.
-    let drift = ",\"drift\":null,\"drift_hash\":null}}";
+    // docs/features/card-questions.md: `card_id`, `why` after them.
+    let drift = ",\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null}}";
     for schema in [6, 7] {
         let mut older = v6.clone();
         older[0] = older[0]
             .replacen(
-                "\"format\":4,\"queue_schema\":10,",
+                "\"format\":5,\"queue_schema\":11,",
                 &format!("\"format\":2,\"queue_schema\":{schema},"),
                 1,
             )
@@ -1241,11 +1247,11 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // Format 2, schema 5 (docs/features/kind-interpretation.md "Data"): its
     // 43 columns; restores, `interpretation` NULL, and re-exports as the
     // current dump.
-    let interpretation = ",\"interpretation\":null,\"drift\":null,\"drift_hash\":null}}";
+    let interpretation = ",\"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null}}";
     let mut v5 = v6.clone();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":4,\"queue_schema\":10,",
+            "\"format\":5,\"queue_schema\":11,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )
@@ -1261,7 +1267,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let mut v4 = v6.clone();
     v4[0] = v4[0]
         .replacen(
-            "\"format\":4,\"queue_schema\":10,",
+            "\"format\":5,\"queue_schema\":11,",
             "\"format\":2,\"queue_schema\":4,",
             1,
         )
@@ -1327,7 +1333,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let bytes = export(&pair, &pair.home, &dumps.join("from-4.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
+        rows[0].starts_with("{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
         "{}",
         rows[0]
     );
@@ -1363,6 +1369,7 @@ fn a_question_staged_with_an_answer_and_canon_is_recorded_with_them() {
         editorial: None,
         note: None,
         updated_at,
+        actor: None,
     };
     stage(&pair, &pair.main, &id, body, STAGED);
     let mut questions = Vec::new();

@@ -2839,3 +2839,113 @@ fn card_tasks_ct7_the_hub_tools_keep_the_ids_and_read_no_task() {
     assert!(description.is_ascii());
     assert!(description.len() <= TEXT_LIMIT, "{}", description.len());
 }
+
+// ---------------------------------------------- card-questions (RM-0097)
+
+/// docs/features/card-questions.md H3, the daemon's half: over a hub's
+/// `/mcp`, `ask_question` with `card_id` stores it under the login (its
+/// author's `login` the request's); `report_decision` takes `card_id` and
+/// `why`; `report_discrepancy` takes `card_id`; the three hub schemas name
+/// `card_id`, `report_decision` `why`, none `task_id`; a missing card is an
+/// error result, nothing stored. M: `HubQuestionArgs` without `card_id`.
+#[test]
+fn card_questions_h3_the_hub_tools_take_card_id_and_why() {
+    let world = World::new("mcp-cq-h3");
+    let made = world.page_post(
+        "mira",
+        &format!("/api/projects/{KEEP}/cards"),
+        &json!({"title": "Rest regeneration", "discipline": "sketch",
+            "target": ["RULE-STAM-REGEN"]}),
+    );
+    assert_eq!(made.status, 200, "{}", made.text());
+    assert_eq!(made.json()["id"], json!("C-0001"));
+    let mut client = Client::open(Era::Legacy, world.port(), KEEP, "mira");
+    let card = json!({"card_id": "C-0001"});
+
+    let asked = raised(
+        &mut client,
+        "ask_question",
+        with(
+            with(
+                question("EDGE-SPRINT-EMPTY", "Does the sprint end at once?"),
+                &agent(),
+            ),
+            &card,
+        ),
+    );
+    let review = world.review(&asked);
+    assert_eq!(review["card_id"], json!("C-0001"), "{review}");
+    assert_eq!(review["author"]["login"], json!("mira"), "{review}");
+    assert_eq!(review["why"], Value::Null);
+
+    let why = "Two playtests read instant regeneration as a bug.";
+    let decided = raised(
+        &mut client,
+        "report_decision",
+        with(
+            with(
+                decision("EDGE-STAM-ZERO", "Is zero stamina a stop?"),
+                &agent(),
+            ),
+            &json!({"card_id": "C-0001", "why": why}),
+        ),
+    );
+    let review = world.review(&decided);
+    assert_eq!(review["card_id"], json!("C-0001"), "{review}");
+    assert_eq!(review["why"], json!(why), "{review}");
+    assert_eq!(review["author"]["login"], json!("mira"));
+
+    let reported = raised(
+        &mut client,
+        "report_discrepancy",
+        with(
+            with(
+                discrepancy("MEC-SPRINT", "Sprinting drains while walking."),
+                &agent(),
+            ),
+            &card,
+        ),
+    );
+    assert_eq!(world.review(&reported)["card_id"], json!("C-0001"));
+
+    let before = world.events();
+    let result = client.call(
+        "ask_question",
+        with(
+            with(question("MEC-STAMINA", "Is stamina one bar?"), &agent()),
+            &json!({"card_id": "C-0099"}),
+        ),
+    );
+    assert!(is_error(&result), "{result}");
+    assert!(
+        content_text(&result).contains("card_id: no card C-0099"),
+        "{result}"
+    );
+    assert_eq!(world.events(), before, "nothing stored");
+
+    let list = client.tools();
+    for name in ["ask_question", "report_discrepancy", "report_decision"] {
+        let schema = &tool(&list, name)["inputSchema"];
+        let properties = schema["properties"].as_object().expect("properties");
+        assert_eq!(
+            properties["card_id"]["type"],
+            json!(["string", "null"]),
+            "{name}"
+        );
+        assert!(!properties.contains_key("task_id"), "{name}: {schema}");
+        assert_eq!(schema["additionalProperties"], json!(false), "{name}");
+        let description = tool(&list, name)["description"]
+            .as_str()
+            .expect("a description");
+        assert!(description.is_ascii(), "{name}");
+        assert!(description.contains("card_id"), "{name}: {description}");
+    }
+    let decision_schema = &tool(&list, "report_decision")["inputSchema"]["properties"];
+    assert_eq!(decision_schema["why"]["type"], json!(["string", "null"]));
+    assert!(
+        tool(&list, "ask_question")["inputSchema"]["properties"]
+            .get("why")
+            .is_none(),
+        "a question takes no why"
+    );
+}

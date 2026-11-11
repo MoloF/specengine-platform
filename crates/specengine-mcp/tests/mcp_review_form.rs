@@ -191,6 +191,7 @@ impl Repo {
                 login: None,
                 now: NOW.to_owned(),
                 git: self.git_env(&self.linked),
+                card: None,
             },
         )
         .unwrap_or_else(|error| panic!("report: {error}"));
@@ -222,6 +223,7 @@ impl Repo {
                     login: None,
                     now: NOW.to_owned(),
                     git: self.git_env(&self.linked),
+                    card: None,
                 },
             )
             .expect("asked")
@@ -263,6 +265,7 @@ impl Repo {
                 login: None,
                 now: NOW.to_owned(),
                 git: self.git_env(&self.linked),
+                card: None,
             },
         )
         .expect("asked");
@@ -549,12 +552,17 @@ fn approve_body(option: Option<u64>, note: Option<&str>) -> impl FnOnce(String) 
         editorial: None,
         note,
         updated_at,
+        actor: None,
     }
 }
 
 fn reject_body(reason: &str) -> impl FnOnce(String) -> StageBody {
     let reason = reason.to_owned();
-    move |updated_at| StageBody::Reject { reason, updated_at }
+    move |updated_at| StageBody::Reject {
+        reason,
+        updated_at,
+        actor: None,
+    }
 }
 
 // ------------------------------------------------------------ the client
@@ -1013,6 +1021,7 @@ fn d2_refusals_answer_before_any_form_and_stage_nothing() {
                 login: None,
                 now: NOW.to_owned(),
                 git: GitEnv::new(&other_main, other_git.vars()),
+                card: None,
             },
         )
         .expect("asked elsewhere");
@@ -1046,6 +1055,7 @@ fn d2_refusals_answer_before_any_form_and_stage_nothing() {
                 login: None,
                 now: NOW.to_owned(),
                 git: GitEnv::new(&gone_main, gone_git.vars()),
+                card: None,
             },
         )
         .expect("asked in the gone clone");
@@ -1594,6 +1604,7 @@ fn d3_an_answer_the_terminal_would_refuse_stages_nothing() {
                     editorial: Some(true),
                     note: None,
                     updated_at,
+                    actor: None,
                 }),
                 "--editorial",
                 None,

@@ -73,8 +73,9 @@ const NO_SNAPSHOT: &str =
     "stale unknown: no snapshot (the owner's `spec task approve` freezes one)";
 
 /// `show --json`'s keys in order: docs/canon/cards.md
-/// "Documents and events" with `tasks` after `evidence` (card-tasks CT-2).
-const CARD_KEYS: [&str; 31] = [
+/// "Documents and events" with `tasks` after `evidence` (card-tasks CT-2) and
+/// `items` after `tasks` (docs/features/card-questions.md D4).
+const CARD_KEYS: [&str; 32] = [
     "id",
     "flow",
     "column",
@@ -97,6 +98,7 @@ const CARD_KEYS: [&str; 31] = [
     "corrects",
     "evidence",
     "tasks",
+    "items",
     "acceptance",
     "cancellation",
     "created_by",
@@ -254,18 +256,20 @@ fn edited(fields: &[&str], actor: &str) -> (String, Value) {
 }
 
 /// The `tasks:` lines of `show`'s text: every line after the last
-/// `evidence:` line and before `acceptance:`.
+/// `evidence:` line and before the first `items:` (before `acceptance:`
+/// until card-questions K1).
 fn tasks_lines(text: &str) -> Vec<String> {
     let lines: Vec<&str> = text.lines().collect();
     let evidence = lines
         .iter()
         .rposition(|line| line.starts_with("evidence: "))
         .unwrap_or_else(|| panic!("an evidence line: {text}"));
-    let acceptance = lines
+    // docs/features/card-questions.md K1: `items:` lines follow the tasks'.
+    let items = lines
         .iter()
-        .position(|line| line.starts_with("acceptance: "))
-        .unwrap_or_else(|| panic!("an acceptance line: {text}"));
-    lines[evidence + 1..acceptance]
+        .position(|line| line.starts_with("items: "))
+        .unwrap_or_else(|| panic!("an items line: {text}"));
+    lines[evidence + 1..items]
         .iter()
         .map(|line| (*line).to_owned())
         .collect()
@@ -1021,14 +1025,16 @@ fn ct6_the_link_decides_nothing_on_twin_projects() {
 /// CT-4, the path an older build meets at 10: a queue at `user_version` 11
 /// makes `spec card show` (and `edit --task`) exit 2 with the `SchemaTooNew`
 /// line naming 11 and this build's 10, the queue's rows and version left
-/// alone. The gate's no verdict at 11 is `gate.rs`' AC-06.
+/// alone (the name kept, cited by docs/features/card-tasks.md: since
+/// docs/features/card-questions.md the probe is 12 over this build's 11).
+/// The gate's no verdict is `gate.rs`' AC-06.
 #[test]
 fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     let pair = Pair::new("ct4-newer", LAMP);
     assert_eq!(task(&pair, Some(NORTH), &["ISL-LAMP"]), "T-0001");
     make(&pair, "Light the lamp", &["--discipline", "development"]);
     link(&pair, "C-0001", &["T-0001"]);
-    pair.sql("PRAGMA user_version = 11;");
+    pair.sql("PRAGMA user_version = 12;");
     let rows = pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;");
     for args in [
         &["card", "show", "C-0001"][..],
@@ -1037,10 +1043,10 @@ fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     ] {
         let message = cannot(&pair, args);
         assert!(
-            message.contains("schema version 11, this build knows 10"),
+            message.contains("schema version 12, this build knows 11"),
             "{args:?}: {message}"
         );
-        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "11", "{args:?}");
+        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "12", "{args:?}");
         assert_eq!(
             pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;"),
             rows,

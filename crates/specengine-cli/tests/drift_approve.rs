@@ -921,8 +921,11 @@ fn drift_review_has_no_preview() {
     let stored = proposal(&repo, SLUG, &id);
     let item = stored.drift.clone().expect("drift");
     let (text, json_text, document) = review_of(&repo, &id);
-    assert_eq!(document.as_object().unwrap().len(), 48);
+    // 50 since docs/features/card-questions.md D14 (`card_id`, `why`).
+    assert_eq!(document.as_object().unwrap().len(), 50);
     assert_eq!(document["kind"], json!("drift"));
+    assert_eq!(document["card_id"], Value::Null);
+    assert_eq!(document["why"], Value::Null);
     assert_eq!(document["preview"], Value::Null);
     for key in ["diff", "conflict", "base_text", "new_text", "revisions"] {
         assert_eq!(document[key], Value::Null, "{key}");
@@ -1028,6 +1031,7 @@ fn drift_item_cannot_be_staged() {
             editorial: None,
             note: None,
             updated_at: updated_at.clone(),
+            actor: None,
         },
         StageBody::Approve {
             option: None,
@@ -1036,10 +1040,12 @@ fn drift_item_cannot_be_staged() {
             editorial: Some(true),
             note: Some("typo".to_owned()),
             updated_at: updated_at.clone(),
+            actor: None,
         },
         StageBody::Reject {
             reason: "not now".to_owned(),
             updated_at: updated_at.clone(),
+            actor: None,
         },
     ] {
         let outcome = stage(

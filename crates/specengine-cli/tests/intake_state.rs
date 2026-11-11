@@ -40,14 +40,15 @@ use specengine_store::{PROPOSAL_COLUMNS, ProposalQueue as _, ProposalStatus, Sql
 
 /// The eleven columns of queue schema 2, the five of schema 3, the
 /// `task_id` of schema 4, the stage of schema 5, the `interpretation` of
-/// schema 6 and the `drift`, `drift_hash` of schema 8 (drift-queue), as the
-/// dump writes an unbound update's.
+/// schema 6, the `drift`, `drift_hash` of schema 8 (drift-queue) and the
+/// `card_id`, `why` of schema 11 (card-questions), as the dump writes an
+/// unbound update's.
 const NULL_TAIL: &str = ",\"target_ids\":null,\"severity\":null,\"gap_type\":null,\
 \"summary\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":null,\
 \"options\":null,\"recommendation\":null,\"distinct_from\":null,\"linked\":null,\
 \"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\
 \"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\
-\"drift\":null,\"drift_hash\":null}}";
+\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null}}";
 
 fn env_at(home: &Path, cwd: &Path) -> Env {
     Env {
@@ -145,6 +146,7 @@ fn ask(pair: &Pair, ids: &[&str], text: &str) -> String {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(cwd),
+            card: None,
         },
     )
     .expect("ask");
@@ -208,6 +210,7 @@ fn every_kind(pair: &Pair) {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&pair.linked),
+            card: None,
         },
     )
     .expect("report");
@@ -251,11 +254,12 @@ fn ac10_every_kind_round_trips_at_schema_4() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":5,\
+        "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":5,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":6}"
     );
-    // 46 since docs/features/drift-queue.md "Queue schema 8".
-    assert_eq!(PROPOSAL_COLUMNS.len(), 46);
+    // 46 since docs/features/drift-queue.md "Queue schema 8", 48 since
+    // docs/features/card-questions.md S1.
+    assert_eq!(PROPOSAL_COLUMNS.len(), 48);
     for row in &rows[1..6] {
         assert_columns(row, &PROPOSAL_COLUMNS);
         let value: Value = serde_json::from_str(row).unwrap();
@@ -335,7 +339,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let v3_lines = lines(&v3);
     assert!(
-        v3_lines[0].starts_with("{\"format\":4,\"queue_schema\":10,")
+        v3_lines[0].starts_with("{\"format\":5,\"queue_schema\":11,")
             && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,\"cards\":0,"),
         "{}",
         v3_lines[0]
@@ -343,7 +347,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let mut v1_lines = v3_lines.clone();
     v1_lines[0] = v1_lines[0]
         .replacen(
-            "\"format\":4,\"queue_schema\":10,",
+            "\"format\":5,\"queue_schema\":11,",
             "\"format\":1,\"queue_schema\":1,",
             1,
         )
@@ -362,7 +366,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     assert_eq!((outcome.proposals, outcome.events), (2, 3));
     assert_eq!(dump_of(&fresh), dump_of(&pair.home), "the twenty NULL");
     let again = export_ok(&pair, &fresh, &dumps.join("again.jsonl"));
-    assert_eq!(again, v3, "re-exported as format 4, queue_schema 10");
+    assert_eq!(again, v3, "re-exported as format 5, queue_schema 11");
 
     // A schema-1 row with the later columns; a schema-6 row without them.
     let mut mixed = v1_lines.clone();
@@ -423,7 +427,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     let exported = export_ok(&pair, &pair.home, &dumps.join("from-v1.jsonl"));
     assert_eq!(
         exported, v3,
-        "a version-1 DB exports as format 4, queue_schema 10"
+        "a version-1 DB exports as format 5, queue_schema 11"
     );
     assert_eq!(
         sql(&db, "PRAGMA user_version;"),
@@ -433,12 +437,12 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
 
     let inbox = pair.inbox(&pair.main, false).expect("inbox");
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "11");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),
         PROPOSAL_COLUMNS,
-        "steps 2 to 8 append the twenty-two in order, step 9 none"
+        "steps 2 to 8 append the twenty-two in order, step 9 none, step 11 the last two"
     );
     assert_eq!(
         sql(

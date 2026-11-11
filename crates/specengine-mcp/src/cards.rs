@@ -70,7 +70,10 @@ notes, every key present, absent null.
 card_id: C- and 4 or more digits, as spec card list writes it. history: true: its last 64 card.* \
 events, oldest first; else null. tasks: each linked task {id, status, title, stale}, read now as \
 spec task list reads it; status null, with a note that starts with its ID, for a task this server \
-cannot read: a corrupt row, another repository, a hub.
+cannot read: a corrupt row, another repository, a hub. items: the questions, discrepancies and \
+decisions that name it {id, kind, status, summary, working_answer, why, author, created_at, \
+updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, \
+record_title}, by ID, read now; with history, their last 64 proposal.* events join it by seq.
 
 Reads only: no state changes, nothing under the project root is written. No such card: an error \
 result with the reason. A look-alike ID, a corrupt row or an index that cannot be read: an error \

@@ -17,6 +17,7 @@ import type {
   CardEvidence,
   CardFlow,
   CardFrozen,
+  CardItem,
   CardList,
   CardMove,
   CardNotFound,
@@ -52,6 +53,8 @@ import type {
   HubSync,
   Identity,
   InboxEntry,
+  IntakeDocument,
+  IntakeMatch,
   Interpretation,
   LockDiffCodeSide,
   LockDiffNode,
@@ -172,12 +175,15 @@ import type {
 // answer of `GET .../workspaces`, a workspace, a module, sets 111 to 113, `WorkspaceModule`); and
 // card-tasks' one (docs/features/card-tasks.md "Documents": a card's linked task, set 114 `CardTask`),
 // with a card's `tasks` after `evidence` (31 keys); and flow-scenario's one (RM-0094: a shown
-// node's ancestor, set 115 `ShownAncestor`, the last), with a shown node's
+// node's ancestor, set 115 `ShownAncestor`), with a shown node's
 // `ancestors` after `omitted` (20 keys), the flow document's `not_in_flow` and `types` after
-// `omitted_edges` (13) and a flow node's `in_flow` after `end` (16). A key the types carry ahead of the
-// file is listed in AHEAD_OF_FIXTURE, empty again since flow-scenario's test wrote set 115 and its
-// four keys; a listed key the file already names fails. While that file is absent the comparison is
-// skipped, saying so; once it exists it names all one hundred and fifteen, in the slices' order.
+// `omitted_edges` (13) and a flow node's `in_flow` after `end` (16); and card-questions' three
+// (docs/features/card-questions.md "Acceptance criteria", K1, L3: a card's item, the intake
+// document, a match, sets 116 to 118, the last), with the review document's `card_id` and `why`
+// after `interpretation` (50 keys) and a card's `items` after `tasks` (32). A key the types carry
+// ahead of the file is listed in AHEAD_OF_FIXTURE, empty again since card-questions' test wrote its
+// three sets and three keys; a listed key the file already names fails. While that file is absent the comparison is
+// skipped, saying so; once it exists it names all one hundred and eighteen, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -204,7 +210,8 @@ const KEYS = {
   // docs/canon/decision-staging.md "Documents" `staged`, `staged_at` between `task_id` and `notes`,
   // docs/features/kind-interpretation.md "Data" `interpretation` after `staged_at`,
   // docs/features/rev-discipline.md "Review document, stage, queue" `revisions` after `conflict`,
-  // docs/features/drift-queue.md "Review, inbox, round, stage" `drift` after `revisions`.
+  // docs/features/drift-queue.md "Review, inbox, round, stage" `drift` after `revisions`,
+  // docs/features/card-questions.md "Acceptance criteria" (L1) `card_id`, `why` after `interpretation`.
   Proposal: {
     id: true,
     project: true,
@@ -253,6 +260,8 @@ const KEYS = {
     staged: true,
     staged_at: true,
     interpretation: true,
+    card_id: true,
+    why: true,
     notes: true,
   } satisfies Record<keyof Proposal, true>,
   // docs/features/kind-interpretation.md "Data": the row's JSON, keys in its order.
@@ -792,6 +801,7 @@ const KEYS = {
     evidence: true,
     // docs/features/card-tasks.md "Documents": the linked tasks after `evidence` (card-tasks, RM-0092).
     tasks: true,
+    items: true,
     acceptance: true,
     cancellation: true,
     created_by: true,
@@ -834,6 +844,27 @@ const KEYS = {
   CardTask: { id: true, status: true, title: true, stale: true } satisfies Record<keyof CardTask, true>,
   // crates/specengine-cli/README.md "Output and the cap": one entry of a shown node's `ancestors` (RM-0094); every key present.
   ShownAncestor: { id: true, kind: true, title: true, path: true } satisfies Record<keyof ShownAncestor, true>,
+  // docs/features/card-questions.md "Acceptance criteria" (K1, L3): a card's item (set 116), the intake document (117) and a match (118); every key present.
+  CardItem: {
+    id: true,
+    kind: true,
+    status: true,
+    summary: true,
+    working_answer: true,
+    why: true,
+    author: true,
+    created_at: true,
+    updated_at: true,
+    staged_at: true,
+    decided_by: true,
+    decided_at: true,
+    decision_note: true,
+    record_id: true,
+    record_path: true,
+    record_title: true,
+  } satisfies Record<keyof CardItem, true>,
+  IntakeDocument: { id: true, created: true, hits: true, related: true, linked: true, diagnostics: true, notes: true } satisfies Record<keyof IntakeDocument, true>,
+  IntakeMatch: { id: true, source: true, status: true, path: true, answer: true, record: true } satisfies Record<keyof IntakeMatch, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -852,6 +883,7 @@ const CITED: Record<Named, string> = {
     "task_id, " +
     "staged, staged_at, " +
     "interpretation, " +
+    "card_id, why, " +
     "notes",
   Interpretation: "decision, how, why",
   StagedApprove: "decision, option, answer, canon, editorial, note, span_hash",
@@ -943,7 +975,7 @@ const CITED: Record<Named, string> = {
   CardColumn: "id, title",
   CardMove: "from, to, by",
   CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
-  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, tasks, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
+  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, tasks, items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
   CardEvidence: "kind, value, by, at",
   CardAcceptance: "by, at, note, verdict, departs, discrepancy",
   CardCancellation: "by, at, reason",
@@ -967,6 +999,9 @@ const CITED: Record<Named, string> = {
   WorkspaceModule: "name, title, root, kinds",
   CardTask: "id, status, title, stale",
   ShownAncestor: "id, kind, title, path",
+  CardItem: "id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
+  IntakeDocument: "id, created, hits, related, linked, diagnostics, notes",
+  IntakeMatch: "id, source, status, path, answer, record",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1171,8 +1206,14 @@ const BEFORE_FLOW_SCENARIO: readonly Named[] = [...BEFORE_CARD_TASKS, ...CARD_TA
 /** flow-scenario's one: a shown node's ancestor, set 115 (RM-0094; fixtures/daemon-keys.json). */
 const FLOW_SCENARIO: readonly Named[] = ["ShownAncestor"];
 
+/** The hundred and fifteen types the fixture named before card-questions. */
+const BEFORE_CARD_QUESTIONS: readonly Named[] = [...BEFORE_FLOW_SCENARIO, ...FLOW_SCENARIO];
+
+/** card-questions' three: a card's item, the intake document, a match, sets 116 to 118 (docs/features/card-questions.md "Acceptance criteria", K1, L3). */
+const CARD_QUESTIONS: readonly Named[] = ["CardItem", "IntakeDocument", "IntakeMatch"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_FLOW_SCENARIO, ...FLOW_SCENARIO];
+const ALL: readonly Named[] = [...BEFORE_CARD_QUESTIONS, ...CARD_QUESTIONS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1204,9 +1245,11 @@ function served(name: Named): string[] {
  * card-tasks' wrote a card's `tasks` and set 114 `CardTask` (docs/features/card-tasks.md
  * "Documents"), since flow-scenario's (RM-0094) wrote its four keys and set 115 `ShownAncestor`,
  * since doc-modal's wrote a link's `title` and `end_kind` and a gap row's `titles`
- * (docs/features/doc-modal.md "Acceptance criteria", DM-2), and again since departments' wrote a
+ * (docs/features/doc-modal.md "Acceptance criteria", DM-2), and since departments' wrote a
  * flow's `title`, a workspace's `disciplines` and a module's `kinds`
- * (docs/features/departments.md "Acceptance criteria", DP-4).
+ * (docs/features/departments.md "Acceptance criteria", DP-4), and again since card-questions'
+ * wrote the review document's `card_id` and `why`, a card's `items` and sets 116 to 118
+ * (docs/features/card-questions.md "Acceptance criteria", K1, L1, L3).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1230,8 +1273,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 12 inbox-entry keys, 48 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue)", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 48]);
+  it("counts 4 project keys, 12 inbox-entry keys, 50 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue, L1 of card-questions)", () => {
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 50]);
   });
 
   it("gives the review document its drift right after revisions, before decided_by, and the DriftEvidence set its 3 keys (UI-1 of drift-queue)", () => {
@@ -1257,7 +1300,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_WORKSPACES.at(-1)).toBe("HubSync");
     expect(BEFORE_CARD_TASKS.at(-1)).toBe("WorkspaceModule");
     expect(BEFORE_FLOW_SCENARIO.at(-1)).toBe("CardTask");
-    expect(ALL.at(-1)).toBe("ShownAncestor");
+    expect(BEFORE_CARD_QUESTIONS.at(-1)).toBe("ShownAncestor");
+    expect(ALL.at(-1)).toBe("IntakeMatch");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1286,7 +1330,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(115);
+    expect(ALL).toHaveLength(118);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1297,7 +1341,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since departments' test wrote its three keys into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1327,15 +1371,15 @@ describe("the daemon's document types (AC-09)", () => {
     expect(ALL.slice(BEFORE_WORKSPACES.length, BEFORE_CARD_TASKS.length)).toEqual([...WORKSPACES]);
   });
 
-  it('types a card\'s linked tasks as docs/features/card-tasks.md "Documents" writes them: `tasks` after `evidence` (31 keys), a CardTask\'s four, its state a task state or null, title and stale nullable, citing `docs/canon/cards.md` "Documents and events" (CT-5)', () => {
+  it('types a card\'s linked tasks as docs/features/card-tasks.md "Documents" writes them: `tasks` after `evidence` (32 keys since card-questions\' `items` after it), a CardTask\'s four, its state a task state or null, title and stale nullable, citing `docs/canon/cards.md` "Documents and events" (CT-5)', () => {
     const card = declaredKeys("Card");
-    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 3)).toEqual(["evidence", "tasks", "acceptance"]);
+    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 4)).toEqual(["evidence", "tasks", "items", "acceptance"]);
     expect(card).toEqual(served("Card"));
-    expect(card).toHaveLength(31);
+    expect(card).toHaveLength(32);
     expect(served("CardTask")).toEqual(["id", "status", "title", "stale"]);
     expect(declaredKeys("CardTask")).toEqual(served("CardTask"));
     expect(source).toMatch(/^export interface CardTask \{\n {2}id: string;\n {2}status: TaskStatus \| null;\n {2}title: string \| null;\n {2}stale: boolean \| null;\n\}$/m);
-    expect(source).toMatch(/^ {2}evidence: CardEvidence\[\];\n {2}tasks: CardTask\[\];\n {2}acceptance: CardAcceptance \| null;$/m);
+    expect(source).toMatch(/^ {2}evidence: CardEvidence\[\];\n {2}tasks: CardTask\[\];\n {2}items: CardItem\[\];\n {2}acceptance: CardAcceptance \| null;$/m);
     const at = source.indexOf("export interface CardTask ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/cards.md` "Documents and events"');
     expect(ALL.slice(BEFORE_CARD_TASKS.length, BEFORE_FLOW_SCENARIO.length)).toEqual([...CARD_TASKS]);
@@ -1357,7 +1401,26 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^ {2}end: boolean;\n {2}in_flow: boolean;\n {2}holds: number;$/m);
     const at = source.indexOf("export interface ShownAncestor ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`crates/specengine-cli/README.md` "Output and the cap"');
-    expect(ALL.slice(BEFORE_FLOW_SCENARIO.length)).toEqual([...FLOW_SCENARIO]);
+    expect(ALL.slice(BEFORE_FLOW_SCENARIO.length, BEFORE_CARD_QUESTIONS.length)).toEqual([...FLOW_SCENARIO]);
+  });
+
+  it('types card-questions\' three as the spec writes them: a card\'s item 16 keys, its kind a plain string, its status a proposal\'s, its author an author; the intake document 7, a match 6; the review document\'s `card_id` and `why` after `interpretation`, a card\'s `items` after `tasks`, each citing `docs/features/card-questions.md` "Acceptance criteria" (K1, L1, L3 of card-questions)', () => {
+    expect(CARD_QUESTIONS.map((name) => served(name).length)).toEqual([16, 7, 6]);
+    for (const name of CARD_QUESTIONS) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} `);
+      expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/card-questions.md` "Acceptance criteria"');
+    }
+    expect(source).toMatch(/^export interface CardItem \{\n {2}id: string;\n {2}kind: string;\n {2}status: ProposalStatus;\n/m);
+    expect(source).toMatch(/^ {2}why: string \| null;\n {2}author: Author;\n {2}created_at: string;$/m);
+    expect(source).toMatch(/^export interface IntakeDocument \{\n {2}id: string \| null;\n {2}created: boolean;\n {2}hits: IntakeMatch\[\];\n {2}related: IntakeMatch\[\];\n/m);
+    const review = declaredKeys("Proposal");
+    expect(review.slice(-4)).toEqual(["interpretation", "card_id", "why", "notes"]);
+    expect(source).toMatch(/^ {2}card_id: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}why: string \| null;$/m);
+    expect(ALL.slice(BEFORE_CARD_QUESTIONS.length)).toEqual([...CARD_QUESTIONS]);
+    // The body of the card's raise and the stage's `as`: requests, no set.
+    expect(declaredKeys("CardRaiseBody")).toEqual(["kind", "node_ids", "text", "working_answer", "price_of_other", "why", "severity", "distinct_from", "as"]);
+    expect(source).toMatch(/^export type StageBody = StageChoice & \{ updated_at: string; as\?: string \| null \};$/m);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -1459,8 +1522,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/rev-discipline.md` "Review document, stage, queue"');
   });
 
-  it("gives the review document an interpretation after staged_at, before notes, and its three keys (AC-U1 of kind-interpretation)", () => {
-    expect(Object.keys(KEYS.Proposal).slice(-3)).toEqual(["staged_at", "interpretation", "notes"]);
+  it("gives the review document an interpretation after staged_at, before card-questions' two and notes, and its three keys (AC-U1 of kind-interpretation)", () => {
+    expect(Object.keys(KEYS.Proposal).slice(-5)).toEqual(["staged_at", "interpretation", "card_id", "why", "notes"]);
     expect(KIND_INTERPRETATION.map((name) => served(name))).toEqual([["decision", "how", "why"]]);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("interpretation");
   });
@@ -1509,8 +1572,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_WORKSPACES).toHaveLength(110);
     expect(BEFORE_CARD_TASKS).toHaveLength(113);
     expect(BEFORE_FLOW_SCENARIO).toHaveLength(114);
-    expect(ALL).toHaveLength(115);
-    expect(new Set(ALL).size).toBe(115);
+    expect(BEFORE_CARD_QUESTIONS).toHaveLength(115);
+    expect(ALL).toHaveLength(118);
+    expect(new Set(ALL).size).toBe(118);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1681,9 +1745,10 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("names no task in an inbox entry; the review document's task_id sits after choice, then the stage's two, the interpretation, notes", () => {
+  it("names no task in an inbox entry; the review document's task_id sits after choice, then the stage's two, the interpretation, the card and why, notes", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("task_id");
-    expect(Object.keys(KEYS.Proposal).slice(-6)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "notes"]);
+    expect(Object.keys(KEYS.InboxEntry)).not.toContain("card_id");
+    expect(Object.keys(KEYS.Proposal).slice(-8)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "notes"]);
   });
 
   it("gives an inbox entry the stage's time alone, after record_id: the stage itself is the review document's", () => {
@@ -1754,17 +1819,26 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and fifteen types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one", () => {
+  it("names exactly the one hundred and eighteen types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and fifteen, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and eighteen, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(115);
+    expect(Object.keys(sets)).toHaveLength(118);
   });
 
-  it('names flow-scenario\'s one last, after CardTask, set 115 `ShownAncestor` with its four keys in the types\' order; a shown node\'s `ancestors` after `omitted` (20), the flow document\'s 13 keys and a flow node\'s 16 (RM-0094, FS-11)', () => {
-    expect(Object.keys(sets).slice(BEFORE_FLOW_SCENARIO.length)).toEqual([...FLOW_SCENARIO]);
-    expect(Object.keys(sets).at(-1)).toBe("ShownAncestor");
+  it("names card-questions' three last, after ShownAncestor, sets 116 to 118 with their keys in the types' order: 16, 7, 6 (K1, L3 of card-questions)", () => {
+    expect(Object.keys(sets).slice(BEFORE_CARD_QUESTIONS.length)).toEqual([...CARD_QUESTIONS]);
+    expect(Object.keys(sets).indexOf("CardItem")).toBe(115);
+    expect(Object.keys(sets).at(-1)).toBe("IntakeMatch");
+    expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => served(name)));
+    expect(CARD_QUESTIONS.map((name) => sets[name]?.length)).toEqual([16, 7, 6]);
+    expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => declaredKeys(name)));
+  });
+
+  it('names flow-scenario\'s one after CardTask, before card-questions\' three, set 115 `ShownAncestor` with its four keys in the types\' order; a shown node\'s `ancestors` after `omitted` (20), the flow document\'s 13 keys and a flow node\'s 16 (RM-0094, FS-11)', () => {
+    expect(Object.keys(sets).slice(BEFORE_FLOW_SCENARIO.length, BEFORE_CARD_QUESTIONS.length)).toEqual([...FLOW_SCENARIO]);
+    expect(Object.keys(sets).at(BEFORE_CARD_QUESTIONS.length - 1)).toBe("ShownAncestor");
     expect(Object.keys(sets).indexOf("ShownAncestor")).toBe(114);
     expect(sets.ShownAncestor).toEqual(["id", "kind", "title", "path"]);
     expect(sets.ShownAncestor).toEqual(declaredKeys("ShownAncestor"));
@@ -1782,10 +1856,11 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(Object.keys(sets).indexOf("CardTask")).toBe(113);
     expect(sets.CardTask).toEqual(["id", "status", "title", "stale"]);
     expect(sets.CardTask).toEqual(declaredKeys("CardTask"));
+    // A card's `items` right after `tasks` since card-questions (docs/features/card-questions.md "Acceptance criteria", K1).
     const card = sets.Card ?? [];
-    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 3)).toEqual(["evidence", "tasks", "acceptance"]);
+    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 4)).toEqual(["evidence", "tasks", "items", "acceptance"]);
     expect(card).toEqual(declaredKeys("Card"));
-    expect(card).toHaveLength(31);
+    expect(card).toHaveLength(32);
   });
 
   it('names workspaces\' three after HubSync, before card-tasks\' one, sets 111 to 113, each with its keys in the types\' order: 4, 7, 4 (docs/features/workspaces.md "Data"; DP-4 of departments)', () => {
@@ -1815,9 +1890,10 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names drift-queue's keys where the types put them: the review's 48, drift after revisions, before decided_by; DriftEvidence's three in order, the forty-sixth set, before health-code's (UI-1, TE-11)", () => {
+    // 50 since card-questions' `card_id` and `why` (L1 of card-questions).
     const review = sets.Proposal ?? [];
     expect(review).toEqual(served("Proposal"));
-    expect(review).toHaveLength(48);
+    expect(review).toHaveLength(50);
     expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(BEFORE_DRIFT_QUEUE.length);
@@ -1945,8 +2021,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
     // A flow's `return` after `accept` (board-handoff, docs/canon/card-flows.md "The rule"); a
     // card's `tasks` after `evidence` (card-tasks, docs/features/card-tasks.md "Documents"); a
-    // flow's `title` after `name` (docs/features/departments.md "Acceptance criteria", DP-4).
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 21, 31, 4, 6, 3, 4, 7, 2]);
+    // flow's `title` after `name` (docs/features/departments.md "Acceptance criteria", DP-4); a
+    // card's `items` after `tasks` (K1 of card-questions).
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 21, 32, 4, 6, 3, 4, 7, 2]);
     expect(sets.CardFlow?.at(-1)).toBe("return");
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
@@ -1962,7 +2039,7 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {
-    expect(sets.Proposal?.slice(-3)).toEqual(["staged_at", "interpretation", "notes"]);
+    expect(sets.Proposal?.slice(-5)).toEqual(["staged_at", "interpretation", "card_id", "why", "notes"]);
     expect(sets.Interpretation).toEqual(["decision", "how", "why"]);
   });
 });

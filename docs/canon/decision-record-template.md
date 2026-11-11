@@ -38,8 +38,11 @@ Slots are replaced in **one left-to-right pass**; a value is never scanned again
 | `effect`, `cost` * | the option's effect and price; `--answer`: empty, `price_of_other`; the working answer: both empty |
 | `summary`, `options`, `evidence` * | the item's; `- <label> \| <effect> \| <price>`; `- <file>[:<lines>][ <qpath>] \| <observed> \| <documented>`; a question, a decision: empty |
 | `note`, `decided_by` * | `--note`; the committer identity |
+| `why` * | a decision's `why` when the record takes its working answer (no flag); else empty: `--answer`, a question, a discrepancy, a decision without one (`card-questions.md` "Record") |
 
 \* Free text: body only, else a template error; `title` excepted, which the template writes unquoted (`title: {{title}}`) and the engine writes as `"..."`, `\` and `"` backslashed.
+
+**A new slot fails older builds**: one reading `{{why}}` exits 2 at step 3, `` <template>:<line>: `{{why}}` is no slot: … ``, so a slot enters a template only once every terminal and hub approving records runs a build that knows it.
 
 ## Flags
 

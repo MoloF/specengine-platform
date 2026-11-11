@@ -40,7 +40,7 @@ Read per request, no cache in `App`, through `answer::read`, before the turn, fr
 
 | Act | Route on a hub | Who | Class |
 |---|---|---|---|
-| Five plain writes | POST `.../cards`, `.../cards/:id/{move,edit,assign,cancel}` | any login | plain |
+| Six plain writes | POST `.../cards`, `.../cards/:id/{move,edit,assign,cancel,items}` | any login | plain |
 | Stage, unstage | POST, DELETE `.../proposals/:id/decision` | any `[team]` login | team |
 | Round answers | POST `.../round/answers` | any `[team]` login | team |
 | Accept | POST `.../cards/:id/accept` | a `[team]` login, the card's reviewer, never its assignee | confirm |
@@ -62,7 +62,7 @@ Default deny, in `Hub::fenced`, by exact raw segments and exact methods (`class`
 
 `member` runs before a body is read, so an outsider costs no body, and again once it is in, in `stage`, `round_answers`, `accept_card`, `clear_card`, `clear_group`, `confirm::write`, so a login taken out of `[team]` during a slow body keeps no power; `unstage` reads no body. `acting` runs before `.request()`, since `CardAcceptBody` defaults to `local`. Accept's and clear's always-yes consents are reached past these judges alone: the dialog is the consent, as locally (ADR-0057). A confirm has none.
 
-A local daemon has no `Login`: `member` and `needs` read nothing, `[team]` changes nothing for a typed `as` or `spec card accept --as`, and `GET .../team` is the unknown-route 404. `tests/fence.rs`, `methods.rs` and the local `fn fenced` are as they were.
+A local daemon has no `Login`: `member` and `needs` read nothing, `[team]` changes nothing for a typed `as` or `spec card accept --as`, and `GET .../team` is the unknown-route 404.
 
 The confirm class is the acts a person confirms; a stage is none. RM-0064 adds the proxy's step-up on its four routes (`hub.md` "Trust"), which the daemon cannot see: a marker header is a second one to scrub (ADR-0059). The fence gives the proxy one byte form: it passes the path alone, so without the refusal `.../accept?x=1` would reach the handler while a `$`-anchored rule missed it. `Origin` is byte for byte, with `Sec-Fetch-Site: same-origin`, JSON, no CORS.
 
@@ -97,7 +97,7 @@ The cover: `CardClearGroupRequest.entry`, the daemon's last `member`, must cover
 
 ## Stages
 
-`StageRequest`, `UnstageRequest`, `RoundAnswersRequest` take `actor`, `None` everywhere but a hub. Store `stage_as`, `unstage_as` add it to `proposal.staged`, `.unstaged` as a trailing `as`, never a column, so a local event stays byte for byte; `stage_from`, `unstage_from` call them with `None`. No queue, index, `spec.lock`, `export state`, `daemon.json` or event type bump.
+`StageRequest`, `UnstageRequest`, `RoundAnswersRequest` take `actor`: on a hub the login, a stage body's `as` naming another a 403; locally a stage body's `as` (`card-questions.md` "Stage"). Store `stage_as`, `unstage_as` add it to `proposal.staged`, `.unstaged` as a trailing `as`, never a column, so an event with none stays byte for byte; `stage_from`, `unstage_from` call them with `None`.
 
 The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): many logins can race a stage, last wins, each event names its `as`. A confirm takes the staged value into its compare.
 

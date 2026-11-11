@@ -1364,3 +1364,97 @@ fn card_tasks_the_stdio_descriptions_name_task() {
     );
     drop(session.finish());
 }
+
+// ---------------------------------------------- card-questions (RM-0097)
+
+/// docs/features/card-questions.md L2, `get_card` over stdio on
+/// `fixtures/studio-lamp`, both eras: a card with a question and a decision
+/// raised for it serves `items`, by ID, each of `CardItemShape`'s 16 keys,
+/// `author` an agent's; the result equals `spec card show --json` and is
+/// valid against the tool's `outputSchema`, an item's `why` and the
+/// question's `decision_note` included. M: `CardItemShape` without
+/// `decision_note`.
+#[test]
+fn card_questions_get_card_serves_items_valid_against_its_schema() {
+    for era in ERAS {
+        let repo = Repo::new("mc-cq-items", "studio-lamp");
+        let mut session = repo.session(era);
+        let list = session.tools();
+        let schemas = output_schemas(&list);
+        let item = &schemas["get_card"]["properties"]["items"]["items"];
+        let mut keys: Vec<&String> = item["properties"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{era:?}: an item's properties: {item}"))
+            .keys()
+            .collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            [
+                "author",
+                "created_at",
+                "decided_at",
+                "decided_by",
+                "decision_note",
+                "id",
+                "kind",
+                "record_id",
+                "record_path",
+                "record_title",
+                "staged_at",
+                "status",
+                "summary",
+                "updated_at",
+                "why",
+                "working_answer"
+            ],
+            "{era:?}"
+        );
+        let made = session.call(
+            "create_card",
+            json!({"title": "The storm scene", "discipline": "narrative",
+                "target": ["SCN-STORM"]}),
+        );
+        assert_eq!(result(&made)["structuredContent"]["id"], json!("C-0001"));
+        let asked = session.call(
+            "ask_question",
+            json!({"node_ids": ["SCN-STORM"], "text": "Which bell rings at dusk?",
+                "working_answer": "The harbour bell.", "price_of_other": "Two scenes.",
+                "card_id": "C-0001", "author_role": "writer"}),
+        );
+        assert_eq!(result(&asked)["structuredContent"]["id"], json!("PR-0001"));
+        let decided = session.call(
+            "report_decision",
+            json!({"node_ids": ["SCN-STORM"], "text": "Does the lamp burn oil?",
+                "working_answer": "Yes.", "price_of_other": "The lamp room redrawn.",
+                "why": "The keeper's log says so.", "card_id": "C-0001",
+                "author_role": "developer"}),
+        );
+        assert_eq!(
+            result(&decided)["structuredContent"]["id"],
+            json!("PR-0002")
+        );
+        let env = cli_env(&repo.root, Some(&repo.home));
+        let read = checked_call(
+            &mut session,
+            &schemas,
+            "get_card",
+            json!({"card_id": "C-0001"}),
+            &env,
+            &Globals::default(),
+        );
+        let items = &read["structuredContent"]["items"];
+        let ids: Vec<&str> = items
+            .as_array()
+            .expect("items")
+            .iter()
+            .map(|entry| entry["id"].as_str().expect("an ID"))
+            .collect();
+        assert_eq!(ids, ["PR-0001", "PR-0002"], "{era:?}");
+        assert_eq!(items[1]["why"], json!("The keeper's log says so."));
+        assert_eq!(items[0]["author"]["type"], json!("agent"));
+        assert_eq!(items[0]["author"]["role"], json!("writer"));
+        assert_eq!(items[0]["decision_note"], Value::Null);
+        drop(session.finish());
+    }
+}

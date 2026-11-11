@@ -56,7 +56,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, never below a hub's floor (`queue-backup.md`), in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON (core `Author`); `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 10; higher -> exit 2, nothing changed; a migrated queue refuses older builds, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 46). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 11; higher -> exit 2, nothing changed; older builds refuse it, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 48). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -66,10 +66,10 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 4 | `tasks`, `runs`; `task_id` | 41 | `tasks.md` "Store" |
 | 5 | `staged`, `staged_at` | 43 | `decision-staging.md` "Queue" |
 | 6 | `interpretation` | 44 | `proposal-interpretation.md` "Row and review" |
-| 7 | no column: open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
+| 7 | open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
 | 8 | `drift`, `drift_hash` | 46 | `proposal-drift-item.md` "The item" |
-| 9 | `cards` | 46 | `cards.md` "Store" |
-| 10 | `cards.tasks` | 46 | `cards.md` "Store" |
+| 9, 10 | `cards`; `cards.tasks` | 46 | `cards.md` "Store" |
+| 11 | `card_id`, `why` | 48 | `card-questions.md` "Store" |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).
@@ -90,7 +90,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | `reject_orphan` | `reject_from`, for an orphan |
 | `reject_with_task(id, seen, decision, task, now)` | a drift item's `reject_from` and a `draft` task, one transaction (`proposal-completion.md` "Reject") |
 
-Also `events()`, `dump()`, `reserved()`; unconditional ops for store tests. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.
+Also `events()`, `dump()`, `reserved()`; unconditional ops for tests. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.
 
 **Checked when read**: a `base_commit` no object ID, a `branch` git refuses as a branch name or starting with `-`, an author field off its grammar: a corrupt row, never handed to git (`get`, `list` fail naming row and column, review, approve, reject exit 2; `inbox` skips it, a note).
 

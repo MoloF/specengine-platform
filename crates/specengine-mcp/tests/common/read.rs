@@ -426,6 +426,9 @@ pub fn queue_library(
                 login: None,
                 now: now.to_owned(),
                 git: git.clone(),
+                // docs/features/card-questions.md D5: the tool's `card_id`
+                // is the twin's `--card`.
+                card: optional_text(args, "card_id"),
             },
             task,
         )
@@ -433,7 +436,7 @@ pub fn queue_library(
         "report_discrepancy" => {
             let mut input = args.clone();
             let object = input.as_object_mut().expect("arguments object");
-            for key in ["author_role", "author_model", "run", "task_id"] {
+            for key in ["author_role", "author_model", "run", "task_id", "card_id"] {
                 object.remove(key);
             }
             let input: DiscrepancyInput =
@@ -449,6 +452,7 @@ pub fn queue_library(
                     login: None,
                     now: now.to_owned(),
                     git: git.clone(),
+                    card: optional_text(args, "card_id"),
                 },
                 task,
             )
@@ -474,7 +478,7 @@ pub fn queue_library(
         "report_decision" => {
             let mut input = args.clone();
             let object = input.as_object_mut().expect("arguments object");
-            for key in ["author_role", "author_model", "run", "task_id"] {
+            for key in ["author_role", "author_model", "run", "task_id", "card_id"] {
                 object.remove(key);
             }
             let input: DecisionInput =
@@ -490,6 +494,7 @@ pub fn queue_library(
                     login: None,
                     now: now.to_owned(),
                     git: git.clone(),
+                    card: optional_text(args, "card_id"),
                 },
                 task,
             )

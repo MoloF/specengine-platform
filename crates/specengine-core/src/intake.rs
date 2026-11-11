@@ -263,6 +263,10 @@ pub struct DecisionInput {
     /// The decision taken, worked on until the owner confirms it.
     pub working_answer: String,
     pub price_of_other: String,
+    /// Why it was decided so, optional; at most [`ANSWER_MAX`] bytes, not
+    /// blank when given (`docs/canon/card-questions.md` "The rule").
+    #[serde(default)]
+    pub why: Option<String>,
     /// Absent or `null`: `normal`.
     #[serde(default)]
     pub severity: Option<IntakeSeverity>,
@@ -353,13 +357,14 @@ pub fn discrepancy_problem(
 }
 
 /// The first problem of a decision's fields, in input order: `node_ids`,
-/// `text`, `working_answer`, `price_of_other`, `proposed_patch`,
+/// `text`, `working_answer`, `price_of_other`, `why`, `proposed_patch`,
 /// `distinct_from`, then the author's.
 pub fn decision_problem(input: &DecisionInput, author: AuthorInput<'_>) -> Option<FieldProblem> {
     node_ids_problem(&input.node_ids)
         .or_else(|| required("text", &input.text, SUMMARY_MAX))
         .or_else(|| required("working_answer", &input.working_answer, ANSWER_MAX))
         .or_else(|| required("price_of_other", &input.price_of_other, ANSWER_MAX))
+        .or_else(|| optional("why", input.why.as_deref(), ANSWER_MAX))
         .or_else(|| input.proposed_patch.as_ref().and_then(patch_problem))
         .or_else(|| distinct_problem(input.distinct_from.as_deref().unwrap_or_default()))
         .or_else(|| author_problem(author))

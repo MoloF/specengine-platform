@@ -165,6 +165,7 @@ fn asked(home: &Path, root: &Path, targets: &[&str], question: &str) -> String {
         login: None,
         now: utc_now(),
         git,
+        card: None,
     };
     let ask = |request: &QuestionRequest| {
         propose_question(&env, &globals, request)
@@ -872,7 +873,8 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
 /// since flow-scenario (RM-0094, `get_flow`'s `in_flow`) 0.33.0; since
 /// doc-modal (RM-0095, DM-2: `get_node`'s link `title` and `end_kind`,
 /// `get_flow`'s gap `titles`) 0.34.0; since departments (RM-0096, DP-4:
-/// `list_cards`' flow `title`) 0.35.0.
+/// `list_cards`' flow `title`) 0.35.0; since card-questions (RM-0097, P1:
+/// `card_id`, `why`, `items`) 0.36.0.
 #[test]
 fn ac8d_the_release_tag_is_the_plugin_version() {
     let scratch = common::Scratch::new("si-tag");
@@ -884,7 +886,7 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
     ];
     let output = alarmed(
         Path::new("/bin/sh"),
-        &[script.as_os_str(), OsStr::new("v0.35.0")],
+        &[script.as_os_str(), OsStr::new("v0.36.0")],
         &env,
     )
     .current_dir(&elsewhere)
@@ -896,13 +898,13 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.35.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.36.0\n");
     let example = read_text(&repository_root(), "scripts/deploy/.env.example");
     assert_eq!(
         example
             .lines()
             .filter(|line| line.starts_with("SPECENGINE_VERSION="))
             .collect::<Vec<_>>(),
-        ["SPECENGINE_VERSION=0.35.0"]
+        ["SPECENGINE_VERSION=0.36.0"]
     );
 }

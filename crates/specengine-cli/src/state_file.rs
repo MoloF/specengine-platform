@@ -1,16 +1,20 @@
-//! The queue's dump, format 4
+//! The queue's dump, format 5
 //! (canon `queue-backup`, "Format", "Import";
-//! cards: canon `cards`, "Backup"; tasks: canon `tasks`, "Backup"): UTF-8
+//! cards: canon `cards`, "Backup"; tasks: canon `tasks`, "Backup"; a
+//! proposal's card and why: canon `card-questions`, "The rule"): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":4,"queue_schema":10,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
+//! `{"format":5,"queue_schema":11,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `cards` row by ID number, every
 //! `events` row by `seq`, each `{"<table>":{…}}` with every column in table
 //! order: `TEXT` a string, `NULL` `null`, `run`, `position` and `seq`
 //! numbers; JSON columns stay the strings stored. No export time and no host
-//! inside: equal queues give equal bytes. Format 4 holds queue schema 10,
-//! its cards' 25 columns, `tasks` last. A format-3 dump (eight header keys)
+//! inside: equal queues give equal bytes. Format 5 holds queue schema 11,
+//! its proposals' 48 columns, `card_id` and `why` last. A format-4 dump
+//! holds queue schema 10 and still restores, its proposals' 46 columns,
+//! `card_id` and `why` restored `NULL`; its cards' 25 columns, `tasks`
+//! last. A format-3 dump (eight header keys)
 //! holds queue schema 9 and still restores, its cards' 24 columns, `tasks`
 //! restored `NULL`. A format-1 dump (five header keys, queue schema 1, 2 or 3,
 //! `proposals` and `events` rows only) still restores: its rows hold that
@@ -45,7 +49,7 @@ use specengine_store::{
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 4;
+pub const STATE_FORMAT: u64 = 5;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
@@ -56,6 +60,9 @@ const NO_CARDS_FORMAT: u64 = 2;
 /// The format of cards without their linked tasks: queue schema 9 alone.
 const NO_TASK_LINKS_FORMAT: u64 = 3;
 
+/// The format of proposals naming no card: queue schema 10 alone.
+const NO_CARD_ITEMS_FORMAT: u64 = 4;
+
 /// The first queue schema with tasks and runs: format 1 holds the schemas
 /// before it, format 2 it and those after, to [`CARDS_SCHEMA`].
 const TASKS_SCHEMA: i64 = 4;
@@ -63,9 +70,12 @@ const TASKS_SCHEMA: i64 = 4;
 /// The first queue schema with cards: format 3 holds it alone.
 const CARDS_SCHEMA: i64 = 9;
 
-/// The first queue schema whose cards link tasks: format 4 holds it, to
-/// this build's.
+/// The first queue schema whose cards link tasks: format 4 holds it alone.
 const TASK_LINKS_SCHEMA: i64 = 10;
+
+/// The first queue schema whose proposals hold `card_id` and `why`: format
+/// 5 holds it, to this build's.
+const CARD_ITEMS_SCHEMA: i64 = 11;
 
 /// The header's keys, in the order written.
 const HEADER_KEYS: [&str; 8] = [
@@ -361,8 +371,8 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 
 /// The header line: `format` first (a newer build's header may differ in
 /// all else), then exactly the format's keys (format 1: five; 2: seven; 3,
-/// 4: eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9; 4: 10 to
-/// this build's), `project` the root's slug, the counts.
+/// 4, 5: eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9; 4: 10;
+/// 5: 11 to this build's), `project` the root's slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
         entries
@@ -422,20 +432,25 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         ));
     }
     // Format 1 holds the schemas before the tasks, format 2 those to the
-    // cards, format 3 the one before a card's tasks, format 4 the rest.
+    // cards, format 3 the one before a card's tasks, format 4 the one before
+    // a proposal's card, format 5 the rest.
     let held = match format {
         PROPOSALS_ONLY_FORMAT => 1..TASKS_SCHEMA,
         NO_CARDS_FORMAT => TASKS_SCHEMA..CARDS_SCHEMA,
         NO_TASK_LINKS_FORMAT => CARDS_SCHEMA..TASK_LINKS_SCHEMA,
-        _ => TASK_LINKS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
+        NO_CARD_ITEMS_FORMAT => TASK_LINKS_SCHEMA..CARD_ITEMS_SCHEMA,
+        _ => CARD_ITEMS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
     };
     let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {
+        let holds = if held.end - held.start == 1 {
+            format!("queue schema {}", held.start)
+        } else {
+            format!("queue schemas {} to {}", held.start, held.end - 1)
+        };
         return Err(format!(
             "the dump's queue schema is {schema}, which a format-{format} dump does not hold (it \
-             holds queue schemas {} to {})",
-            held.start,
-            held.end - 1
+             holds {holds})"
         ));
     };
     let Some(Json::String(project)) = named("project") else {

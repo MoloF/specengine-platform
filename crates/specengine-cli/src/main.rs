@@ -949,6 +949,9 @@ enum Propose {
         /// A hit (its ID, else its path) this question is distinct from; name every hit to store it anyway.
         #[arg(long = "distinct-from", value_name = "X")]
         distinct_from: Vec<String>,
+        /// The card (C-0001) this is raised for: one of this queue's, in any state.
+        #[arg(long, value_name = "C")]
+        card: Option<String>,
         /// The asking agent's role (any of the three: an agent's question).
         #[arg(long = "author-role", value_name = "R")]
         author_role: Option<String>,
@@ -967,6 +970,9 @@ enum Propose {
         /// A JSON document of the report (`node_ids`, `summary`, `gap_type`, `severity`, `evidence`, `options`, `recommendation`, optional `working_answer`, `proposed_patch`, `distinct_from`), or `-` for stdin; at most 8 MiB.
         #[arg(long, value_name = "F")]
         input: PathBuf,
+        /// The card (C-0001) this is raised for: one of this queue's, in any state.
+        #[arg(long, value_name = "C")]
+        card: Option<String>,
         /// The reporting agent's role (any of the three: an agent's report).
         #[arg(long = "author-role", value_name = "R")]
         author_role: Option<String>,
@@ -982,9 +988,12 @@ enum Propose {
     },
     /// Raise a decision taken during work for the owner to confirm and record, with what another answer would cost and, optionally, the rule's new text as a linked update; stored in the queue unless an accepted decision or a queued question or decision already covers it.
     Decision {
-        /// A JSON document of the decision (`node_ids`, `text`: what had to be decided, `working_answer`: the decision, `price_of_other`, optional `severity`, `proposed_patch`, `distinct_from`), or `-` for stdin; at most 8 MiB.
+        /// A JSON document of the decision (`node_ids`, `text`: what had to be decided, `working_answer`: the decision, `price_of_other`, optional `why`: why you decided so, `severity`, `proposed_patch`, `distinct_from`), or `-` for stdin; at most 8 MiB.
         #[arg(long, value_name = "F")]
         input: PathBuf,
+        /// The card (C-0001) this is raised for: one of this queue's, in any state.
+        #[arg(long, value_name = "C")]
+        card: Option<String>,
         /// The deciding agent's role (any of the three: an agent's decision).
         #[arg(long = "author-role", value_name = "R")]
         author_role: Option<String>,
@@ -1579,6 +1588,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     price_of_other,
                     severity,
                     distinct_from,
+                    card,
                     author_role,
                     author_model,
                     run,
@@ -1595,6 +1605,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 // clap took only a listed value.
                 severity: severity.as_deref().and_then(IntakeSeverity::parse),
                 distinct_from,
+                card,
                 author_role,
                 author_model,
                 run,
@@ -1608,6 +1619,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             kind:
                 Propose::Discrepancy {
                     input,
+                    card,
                     author_role,
                     author_model,
                     run,
@@ -1625,6 +1637,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 globals,
                 &DiscrepancyRequest {
                     input,
+                    card,
                     author_role,
                     author_model,
                     run,
@@ -1639,6 +1652,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             kind:
                 Propose::Decision {
                     input,
+                    card,
                     author_role,
                     author_model,
                     run,
@@ -1656,6 +1670,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 globals,
                 &DecisionRequest {
                     input,
+                    card,
                     author_role,
                     author_model,
                     run,

@@ -32,7 +32,7 @@
 //!   missing, another decision): refused, nothing stored, no event, no
 //!   `Access-Control-*`; `application/json` with a parameter, in any case,
 //!   taken. M: the content-type check removed.
-//! - AC-02, the daemon's half: a queue at schema 6 -> POST and DELETE 503.
+//! - AC-02, the daemon's half: a queue of a newer schema -> POST and DELETE 503.
 
 mod common;
 
@@ -336,8 +336,9 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         );
         assert!(reply.cors_headers().is_empty(), "{reply:?}");
         let document = reply.json();
-        // 48 keys since docs/features/drift-queue.md added `drift`.
-        assert_eq!(document.as_object().unwrap().len(), 48, "{document}");
+        // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
+        // docs/features/card-questions.md L1.
+        assert_eq!(document.as_object().unwrap().len(), 50, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -349,7 +350,8 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         assert_eq!(document["updated_at"], json!(at), "updated_at = now");
         assert!(
             reply.text().contains(&format!(
-                "\"staged\":{staged},\"staged_at\":\"{at}\",\"interpretation\":null,\"notes\":"
+                "\"staged\":{staged},\"staged_at\":\"{at}\",\"interpretation\":null,\
+                 \"card_id\":null,\"why\":null,\"notes\":"
             )),
             "the stage's bytes, keys in the canon's order: {}",
             reply.text()
@@ -1111,9 +1113,9 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    // This build's queue schema is 10 (docs/canon/cards.md "Store"):
-    // 11 is newer.
-    sqlite3(&db(&s.home), "PRAGMA user_version = 11;");
+    // This build's queue schema is 11 (docs/features/card-questions.md
+    // S1): 12 is newer. M1's record at a62c81c: 11 over 10.
+    sqlite3(&db(&s.home), "PRAGMA user_version = 12;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
@@ -1121,14 +1123,14 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
     assert!(
-        message.contains("11") && message.contains("10"),
+        message.contains("12") && message.contains("11"),
         "{message}"
     );
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "11",
+        "12",
         "left alone"
     );
     assert_eq!(
@@ -1265,8 +1267,9 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     let reply = stage_now(&server, &id, "\"decision\":\"approve\"");
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
-    // 48 keys since docs/features/drift-queue.md added `drift`.
-    assert_eq!(document.as_object().unwrap().len(), 48, "{document}");
+    // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
+    // docs/features/card-questions.md L1.
+    assert_eq!(document.as_object().unwrap().len(), 50, "{document}");
     assert_eq!(document["kind"], json!("interpretation"));
     assert_eq!(
         document["staged"],
@@ -1379,8 +1382,9 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     let reply = stage_now(&server, &id, "\"decision\":\"approve\",\"note\":\"keep\"");
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
-    // 48 keys since docs/features/drift-queue.md added `drift`.
-    assert_eq!(document.as_object().unwrap().len(), 48, "{document}");
+    // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
+    // docs/features/card-questions.md L1.
+    assert_eq!(document.as_object().unwrap().len(), 50, "{document}");
     assert_eq!(document["kind"], json!("decision"));
     assert_eq!(document["linked"], json!("PR-0005"));
     assert_eq!(document["options"], json!([]));

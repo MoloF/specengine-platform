@@ -567,6 +567,7 @@ fn ac05_eight_parallel_asks_and_the_twin_store_one_row() {
                 login: None,
                 now: NOW.to_owned(),
                 git: repo.git_env(&repo.main),
+                card: None,
             };
             std::thread::spawn(move || {
                 barrier.wait();
@@ -1145,4 +1146,99 @@ fn ac13_each_queue_tool_answers_as_its_twin() {
     // export names only X's rows.
     let lines = repo.dump(&repo.home, "x");
     assert_eq!(lines.len(), 1 + 4 + 4, "{lines:#?}");
+}
+
+// ---------------------------------------------- card-questions (RM-0097)
+
+/// docs/features/card-questions.md L2, schemas and texts over stdio, both
+/// eras: `ask_question`, `report_discrepancy`, `report_decision` take
+/// `card_id` (a string or null), `report_decision` `why` (a string or null),
+/// root `additionalProperties: false` (a parsed reply keeps no key order, so
+/// "after `distinct_from`" is the source's alone); the descriptions are "Data"'s bytes
+/// (`ask_question` 2 033, `report_decision` 1 810, `report_discrepancy`
+/// 1 736, `get_card` 1 411, `get_proposal` 1 150), ASCII, each raise's
+/// naming `card_id`, holding "Data"'s new sentences and not the dropped
+/// ones. M: the question text left untrimmed (over 2 048).
+#[test]
+fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
+    for era in ERAS {
+        let mut session = Session::open(era, &[], None, Home::Fresh);
+        let list = session.tools();
+        for name in ["ask_question", "report_discrepancy", "report_decision"] {
+            let schema = &tool(&list, name)["inputSchema"];
+            assert_eq!(
+                schema["properties"]["card_id"]["type"],
+                json!(["string", "null"]),
+                "{era:?} {name}: {schema}"
+            );
+            assert_eq!(schema["additionalProperties"], json!(false), "{name}");
+        }
+        let decision = &tool(&list, "report_decision")["inputSchema"]["properties"];
+        assert_eq!(decision["why"]["type"], json!(["string", "null"]));
+        for name in ["ask_question", "report_discrepancy"] {
+            assert!(
+                tool(&list, name)["inputSchema"]["properties"]
+                    .get("why")
+                    .is_none(),
+                "{name} takes no why"
+            );
+        }
+
+        for (name, bytes, holds, lacks) in [
+            (
+                "ask_question",
+                2033,
+                vec![
+                    "card_id: the card (C-0001) it is asked for, in any state.",
+                    "severity: high, normal (absent) or low.",
+                    "queued items with other text.",
+                ],
+                vec![
+                    "it only orders the queue",
+                    "(stored by its id, else its path)",
+                ],
+            ),
+            (
+                "report_decision",
+                1810,
+                vec![
+                    "distinct_from, card_id, author_role (required)",
+                    "why: why you decided so, at most 2048 bytes; null: none.",
+                ],
+                vec![],
+            ),
+            ("report_discrepancy", 1736, vec!["card_id"], vec![]),
+            (
+                "get_card",
+                1411,
+                vec![
+                    "items: the questions, discrepancies and decisions that name it {id, kind, \
+                     status, summary, working_answer, why, author, created_at, updated_at, \
+                     staged_at, decided_by, decided_at, decision_note, record_id, record_path, \
+                     record_title}, by ID, read now; with history, their last 64 proposal.* \
+                     events join it by seq.",
+                ],
+                vec![],
+            ),
+            (
+                "get_proposal",
+                1150,
+                vec!["fields (its card_id; a decision's why),"],
+                vec![],
+            ),
+        ] {
+            let description = tool(&list, name)["description"]
+                .as_str()
+                .expect("a description");
+            assert_eq!(description.len(), bytes, "{era:?} {name}: {description}");
+            assert!(description.is_ascii(), "{name}");
+            for sentence in holds {
+                assert!(description.contains(sentence), "{name} lacks {sentence:?}");
+            }
+            for sentence in lacks {
+                assert!(!description.contains(sentence), "{name} holds {sentence:?}");
+            }
+        }
+        drop(session.finish());
+    }
 }

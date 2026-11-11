@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import decisionsSource from "./decisions.ts?raw";
 import inboxSource from "./InboxView.tsx?raw";
 import stagedSource from "./StagedChoice.tsx?raw";
 import { enT } from "../test/text";
@@ -55,10 +56,13 @@ describe("the editorial approve's command stays bare (UI-2, Q14 of rev-disciplin
     expect(confirmCommand("approve", "PR-0004")).toBe("spec approve PR-0004");
   });
 
+  // The announcement is one helper since card-questions (the card's Answer… says it too): decisions.ts
+  // builds its command from the decision staged and the ID, and the Inbox calls it with its stage's.
   it("gives the card and the announcement that command, nothing added", () => {
     expect([...stagedSource.matchAll(/confirmCommand\(([^)]*)\)/g)].map((match) => match[1])).toEqual(["staged.decision, id"]);
-    expect([...inboxSource.matchAll(/confirmCommand\(([^)]*)\)/g)].map((match) => match[1])).toEqual(["stage.decision, id"]);
-    expect(inboxSource).toContain("const command = confirmCommand(stage.decision, id);");
+    expect([...inboxSource.matchAll(/confirmCommand\(([^)]*)\)/g)].map((match) => match[1])).toEqual([]);
+    expect(decisionsSource).toContain("const command = confirmCommand(decision, id);");
+    expect(inboxSource).toContain("stagedAnnouncement(id, stage.decision, review, shown)");
   });
 });
 

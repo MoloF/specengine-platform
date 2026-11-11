@@ -28,8 +28,10 @@ import type {
   CardList,
   CardMoveBody,
   CardNotFound,
+  CardRaiseBody,
   CardWrite,
   CheckReport,
+  ConfirmBody,
   ConfirmRead,
   FlowView,
   GraphView,
@@ -37,6 +39,8 @@ import type {
   HubSync,
   Identity,
   Inbox,
+  IntakeDocument,
+  IntakeMatch,
   LockDiffView,
   NodeView,
   Project,
@@ -57,7 +61,7 @@ import type {
   WorkspaceDocument,
 } from "../api/types";
 import { mockCode } from "./bindings";
-import { inboxEntryOf, noReview, proposal, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
+import { fakeHex, inboxEntryOf, noReview, proposal, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { checkReportOf } from "./check";
 import {
   acceptCardIn,
@@ -70,8 +74,10 @@ import {
   clearCardIn,
   createCardIn,
   editCardIn,
+  logItemEvent,
   mockBoard,
   moveCardIn,
+  raiseOnCardIn,
   type MockBoard,
   type Settled,
   type StoredCard,
@@ -112,6 +118,28 @@ const NO_CONFIRM_ROUTE = "no route /api/projects/<slug>/proposals/<id>/confirm: 
 
 const NO_SYNC_ROUTE = "no route /api/projects/<slug>/sync: the routes are /api/projects and the web UI (mock)";
 
+/** The `hub` scenario's login and its `[team]` row: every act and Confirm (`docs/canon/hub-confirm.md` "Routes"). */
+const HUB_TEAM: Team = { login: "mira", name: "Mira Holt", allowed: ["stage", "accept", "clear", "group_clear", "confirm"] };
+
+/** Who a hub's confirm records, its login and `[team]` email (`docs/canon/hub-confirm.md` "Rules", Identity). */
+const HUB_DECIDER = "mira <mira@harbor.example.invalid>";
+
+/** The states `spec inbox` leaves out without `--all` (`docs/canon/proposal-review.md`): decided ones. */
+const DECIDED = new Set(["applied", "rejected"]);
+
+/**
+ * The `conflict` scenario's corpus hit: the accepted decision a page's first raise on a project meets,
+ * not stored until named (docs/features/card-questions.md "Acceptance criteria", U2).
+ */
+const CORPUS_HIT: IntakeMatch = {
+  id: "DEC-0012",
+  source: "corpus",
+  status: "accepted",
+  path: "docs/spec/records/DEC-0012-simulated-weather.md",
+  answer: "Weather is simulated",
+  record: "DEC-0012",
+};
+
 /** The mock's question round, in a chunk of its own: only the Questions screen reads it. */
 function loadRound() {
   return import("./round");
@@ -145,6 +173,8 @@ export class MockClient implements SpecEngineClient {
   private readonly stagedElsewhere = new Set<string>();
   /** `conflict`: the projects whose first round POST has met a stage made elsewhere. */
   private readonly roundConflicted = new Set<string>();
+  /** `conflict`: the projects whose first raise on a card has met its corpus hit. */
+  private readonly raiseConflicted = new Set<string>();
 
   constructor(scenario: Scenario, options: MockOptions = {}) {
     this.scenario = scenario;
@@ -195,15 +225,19 @@ export class MockClient implements SpecEngineClient {
     return this.projects.map((entry) => structuredClone(entry.project));
   }
 
-  /** No hub behind the mock: the answer of a local daemon (`docs/canon/hub.md` "Routes"). */
+  /** No hub behind the mock but in `hub`: the answer of a local daemon (`docs/canon/hub.md` "Routes"), else `mira`. */
   async getIdentity(): Promise<Identity> {
     await this.read();
-    return { login: null };
+    return { login: this.scenario === "hub" ? HUB_TEAM.login : null };
   }
 
-  /** No hub behind the mock: a local daemon has no such route (`docs/features/hub-team.md` A7), and the page never asks it. */
-  async getTeam(): Promise<Team> {
+  /** No hub behind the mock but in `hub`: a local daemon has no such route (`docs/features/hub-team.md` A7), and the page never asks it; `hub`, mira's row. */
+  async getTeam(project?: string): Promise<Team> {
     await this.read();
+    if (this.scenario === "hub") {
+      this.project(project ?? "");
+      return structuredClone(HUB_TEAM);
+    }
     throw new ClientError({ status: 404, message: "no route /api/projects/<slug>/team: the routes are /api/projects and the web UI (mock)" });
   }
 
@@ -214,10 +248,12 @@ export class MockClient implements SpecEngineClient {
     return structuredClone(workspacesOf(project, this.scenario));
   }
 
+  /** The queue as `spec inbox` lists it: every state but the decided ones, which only `--all` lists. */
   async getInbox(project: string): Promise<Inbox> {
     await this.read();
     const entry = this.project(project);
-    return structuredClone({ proposals: entry.proposals.map(({ review }) => inboxEntryOf(review)), notes: entry.notes });
+    const listed = entry.proposals.filter(({ review }) => !DECIDED.has(review.status));
+    return structuredClone({ proposals: listed.map(({ review }) => inboxEntryOf(review)), notes: entry.notes });
   }
 
   /** The review document; an unknown ID answers the exit-1 document, as data. */
@@ -364,7 +400,7 @@ export class MockClient implements SpecEngineClient {
    * with the current document's reason, and the next one, on the new `updated_at`, is taken; a
    * drift item holds no stage, so none is found on it.
    */
-  async stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal> {
+  async stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string, as?: string | null): Promise<Proposal> {
     await this.wait();
     const { stored, index, entry } = this.openProposal(project, id);
     let current = stored.review;
@@ -387,19 +423,71 @@ export class MockClient implements SpecEngineClient {
     }
     const staged: Stage = stage.decision === "approve" ? { ...stage, span_hash: current.base_hash } : stage;
     const at = this.stamp();
+    // Its event, a trailing `as` when one is sent: a card naming it reads it (docs/features/card-questions.md "Acceptance criteria", L4).
+    logItemEvent(this.board(project), id, "proposal.staged", { staged, staged_at: at, ...(as === undefined || as === null ? {} : { as }) }, at);
     return structuredClone(this.store(entry, index, stored, { ...current, staged, staged_at: at, updated_at: at }));
   }
 
-  /** No hub behind the mock: a local daemon has no such route (`docs/features/hub-confirm.md` B8), and the page never asks it. */
-  async getConfirm(): Promise<ConfirmRead> {
+  /**
+   * No hub behind the mock but in `hub`: a local daemon has no such route (`docs/features/hub-confirm.md`
+   * B8), and the page never asks it. `hub`: an open proposal with a staged choice reads its question,
+   * what a terminal would ask; nothing staged, a 409 in the daemon's words.
+   */
+  async getConfirm(project?: string, id?: string): Promise<ConfirmRead> {
     await this.read();
-    throw new ClientError({ status: NO_SUCH_PROPOSAL, message: NO_CONFIRM_ROUTE });
+    if (this.scenario !== "hub") {
+      throw new ClientError({ status: NO_SUCH_PROPOSAL, message: NO_CONFIRM_ROUTE });
+    }
+    const { stored } = this.openProposal(project ?? "", id ?? "");
+    return { id: stored.review.id, question: this.confirmQuestion(stored.review), updated_at: stored.review.updated_at };
   }
 
-  /** As `getConfirm`: nothing is confirmed in a browser without a hub. */
-  async confirmProposal(): Promise<Proposal> {
+  /**
+   * As `getConfirm`: nothing is confirmed in a browser without a hub. `hub`: the read's question and
+   * `updated_at` sent back confirm the staged choice under the login, as `spec approve|reject` would:
+   * applied or rejected, the stage gone, its events logged; any other text, a 409, nothing changed.
+   */
+  async confirmProposal(project?: string, id?: string, body?: ConfirmBody): Promise<Proposal> {
     await this.wait();
-    throw new ClientError({ status: NO_SUCH_PROPOSAL, message: NO_CONFIRM_ROUTE });
+    if (this.scenario !== "hub") {
+      throw new ClientError({ status: NO_SUCH_PROPOSAL, message: NO_CONFIRM_ROUTE });
+    }
+    const { stored, index, entry } = this.openProposal(project ?? "", id ?? "");
+    const review = stored.review;
+    const staged = review.staged;
+    if (staged === null || body?.updated_at !== review.updated_at || body.question !== this.confirmQuestion(review)) {
+      throw this.refusal(`\`${review.id}\` changed since this dialog read it: read it again; nothing changed`);
+    }
+    const at = this.stamp();
+    const approve = staged.decision === "approve";
+    const board = this.board(project ?? "");
+    logItemEvent(board, review.id, approve ? "proposal.approved" : "proposal.rejected", { as: HUB_TEAM.login }, at);
+    const commit = approve ? fakeHex(`${review.id}\n${at}`, 40) : null;
+    if (approve) {
+      logItemEvent(board, review.id, "proposal.applied", { commit }, at);
+    }
+    const decided: StoredReview = {
+      ...review,
+      status: approve ? "applied" : "rejected",
+      decided_by: HUB_DECIDER,
+      decided_at: at,
+      decision_note: approve ? staged.note : staged.reason,
+      applied_commit: commit,
+      staged: null,
+      staged_at: null,
+      updated_at: at,
+    };
+    return structuredClone(this.store(entry, index, stored, decided));
+  }
+
+  /** What a terminal would ask of a staged choice, its stage line first (`docs/canon/hub-confirm.md` "Routes"). */
+  private confirmQuestion(review: StoredReview): string {
+    const staged = review.staged;
+    if (staged === null) {
+      throw this.refusal(`\`${review.id}\` has no staged choice to confirm; nothing changed`);
+    }
+    const verb = staged.decision === "approve" ? "approve" : "reject";
+    return `staged ${review.staged_at ?? ""}: spec ${verb} ${review.id}\n${verb} ${review.id} (${review.kind}, staged)? [y/N]`;
   }
 
   /** No hub with `--push` behind the mock: a local daemon has no such route (`docs/features/hub-git.md` "Status and the screen"), and the page never asks it. */
@@ -415,6 +503,7 @@ export class MockClient implements SpecEngineClient {
     if (stored.review.staged === null) {
       return structuredClone(stored.review);
     }
+    logItemEvent(this.board(project), id, "proposal.unstaged", {}, this.stamp());
     return structuredClone(this.store(entry, index, stored, { ...stored.review, staged: null, staged_at: null, updated_at: this.stamp() }));
   }
 
@@ -511,10 +600,30 @@ export class MockClient implements SpecEngineClient {
     return structuredClone(cardListOf(this.board(project), options, this.settled(project)));
   }
 
-  /** One card with its history; an unknown C answers the exit-1 document, as data. */
+  /** One card with its history and its items, read from this mock's queue now; an unknown C answers the exit-1 document, as data. */
   async getCard(project: string, id: string): Promise<Card | CardNotFound> {
     await this.read();
-    return cardShowOf(this.board(project), id, this.taskStore(project));
+    return cardShowOf(this.board(project), id, this.taskStore(project), this.project(project).proposals);
+  }
+
+  /**
+   * A question or a decision raised on a card into this mock's queue (src/mocks/cards.ts
+   * `raiseOnCardIn`). The `conflict` scenario: a project's first raise meets one corpus hit, the
+   * accepted DEC-0012, and is not stored until it names it.
+   */
+  async raiseOnCard(project: string, id: string, body: CardRaiseBody): Promise<IntakeDocument> {
+    await this.wait();
+    const entry = this.project(project);
+    const corpus = this.scenario === "conflict" && !this.raiseConflicted.has(project) ? CORPUS_HIT : null;
+    const answer = raiseOnCardIn(this.board(project), entry.proposals, project, id, body, this.stamp(), corpus);
+    if (corpus !== null) {
+      this.raiseConflicted.add(project);
+      // The hit stays the daemon's answer to every raise until one names it.
+      if (!answer.created) {
+        this.raiseConflicted.delete(project);
+      }
+    }
+    return structuredClone(answer);
   }
 
   async createCard(project: string, body: CardCreateBody): Promise<CardWrite> {
@@ -575,8 +684,12 @@ export class MockClient implements SpecEngineClient {
           { label: "Rework the result", effect: "A new card brings the result back to the brief.", price: "not priced at acceptance" },
         ],
         recommendation: 0,
+        // A departing accept's discrepancy names the card accepted (docs/canon/card-questions.md "The rule").
+        card_id: card.id,
       }),
     );
+    // Raised by the accept, not the card door: its event names no acting name.
+    logItemEvent(this.board(project), id, "proposal.created", {}, this.stamp());
     return id;
   }
 

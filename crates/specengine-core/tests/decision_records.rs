@@ -70,6 +70,7 @@ fn values() -> SlotValues {
         evidence: vec!["- src/a.rs:1 | x | y".to_owned()],
         note: "A note.".to_owned(),
         decided_by: "Owner <owner@example.invalid>".to_owned(),
+        why: String::new(),
     }
 }
 
@@ -112,8 +113,15 @@ fn the_fixtures_name_their_records_and_a_template_outside_the_walk() {
         );
         let template_text = template_of(name);
         let template = Template::parse(&template_text).unwrap_or_else(|e| panic!("{name}: {e}"));
+        // docs/features/card-questions.md D2: `{{why}}` is opt-in, held by no
+        // fixture's template until its owner adds it; every other slot is.
         for slot in Slot::ALL {
-            assert!(template.holds(slot), "{name}: {}", slot.name());
+            assert_eq!(
+                template.holds(slot),
+                slot != Slot::Why,
+                "{name}: {}",
+                slot.name()
+            );
         }
         let front: Vec<&str> = template_text
             .lines()

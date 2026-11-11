@@ -13,6 +13,7 @@ import type {
   CardList,
   CardMoveBody,
   CardNotFound,
+  CardRaiseBody,
   CardWrite,
   CheckReport,
   ConfirmBody,
@@ -23,6 +24,7 @@ import type {
   HubSync,
   Identity,
   Inbox,
+  IntakeDocument,
   LockDiffView,
   NodeView,
   Project,
@@ -214,9 +216,11 @@ export interface SpecEngineClient {
   /** GET /api/projects/:p/lock-diff (docs/features/lock-diff.md "Route"; = spec lock diff REF --json, uncut; 404 the exit-1 document) */
   getLockDiff(project: string, ref: string, signal?: AbortSignal): Promise<LockDiffView>;
   // The stage's two writes: `stage` replaces any staged choice, the body exactly `stage` plus
-  // `updated_at` as this page read it (changed since: 409); both answer the review document.
+  // `updated_at` as this page read it (changed since: 409), then `as` when given, the acting name the
+  // card's Answer… and the Inbox's dialog send (docs/features/card-questions.md "Acceptance criteria",
+  // L4, U4; the Questions screen sends none); both answer the review document.
   /** POST /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; stages, nothing applied) */
-  stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal>;
+  stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string, as?: string | null): Promise<Proposal>;
   /** DELETE /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; nothing staged: no event) */
   unstageDecision(project: string, id: string): Promise<Proposal>;
   /**
@@ -264,6 +268,14 @@ export interface SpecEngineClient {
   acceptCard(project: string, id: string, body: CardAcceptBody): Promise<CardWrite>;
   /** POST /api/projects/:p/cards/:id/clear (docs/features/card-trace.md "Clearing"; the page's dialog is the consent) */
   clearCard(project: string, id: string, body: CardClearBody): Promise<CardWrite>;
+  /**
+   * POST /api/projects/:p/cards/:id/items (docs/canon/card-questions.md "The rule";
+   * docs/features/card-questions.md "Acceptance criteria", L3): a question or a decision raised on
+   * the card, one write under the acting name. 200 the intake document, stored or not (`created`); a
+   * refusal by an intake rule (409) its last note, no such card (404) its `reason`, an error body
+   * (400, 403, 413, 415, 503) its message.
+   */
+  raiseOnCard(project: string, id: string, body: CardRaiseBody): Promise<IntakeDocument>;
   /** POST /api/projects/:p/trace/clear (docs/features/card-trace.md "Clearing"; no effect only, one event per card) */
   clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite>;
   /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] [--stage S] [--summary] --json, the browser view; 404 the exit-1 document) */

@@ -811,8 +811,9 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         let value = json_of(&raw);
         let keys = task_common::keys(&raw);
         // 47 since docs/features/rev-discipline.md added `revisions`; 48
-        // since docs/features/drift-queue.md added `drift` after it.
-        assert_eq!(keys.len(), 48, "{keys:?}");
+        // since docs/features/drift-queue.md added `drift` after it; 50
+        // since docs/features/card-questions.md L1 (`card_id`, `why`).
+        assert_eq!(keys.len(), 50, "{keys:?}");
         assert_eq!(
             keys[42..],
             [
@@ -821,6 +822,8 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
                 "staged",
                 "staged_at",
                 "interpretation",
+                "card_id",
+                "why",
                 "notes"
             ],
             "{keys:?}"
@@ -992,7 +995,7 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":5,\"runs\":2,\"cards\":0,\"events\":{events}}}"
         )
     );
@@ -1123,13 +1126,13 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":1}"
     );
     // Format 1, schema 3: the header's five keys, rows without `task_id`,
     // the stage's two, `interpretation`, `drift` and `drift_hash`.
     let later = ",\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\
-                 \"drift\":null,\"drift_hash\":null}}";
+                 \"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null}}";
     let mut v3_lines = v4_lines.clone();
     v3_lines[0] = "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":1,\
                    \"events\":1}"
@@ -1152,13 +1155,13 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     assert_eq!(
         std::fs::read_to_string(&again).unwrap(),
         v4,
-        "re-exported as format 4"
+        "re-exported as format 5"
     );
 
     // Refused headers and rows: line 1 (the header) or 2 (the row).
     let two = |line: &str| {
         line.replacen(
-            "\"format\":4,\"queue_schema\":10,",
+            "\"format\":5,\"queue_schema\":11,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
@@ -1705,6 +1708,7 @@ fn n2_paths_compare_as_directories() {
             login: None,
             now: common::proposal::NOW.to_owned(),
             git: pair.git_env(&pair.linked),
+            card: None,
         },
         Some(&id),
     )

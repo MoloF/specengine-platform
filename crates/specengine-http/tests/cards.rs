@@ -2993,3 +2993,90 @@ fn card_tasks_ct2_the_read_serves_tasks_as_the_cli_document() {
     assert_eq!(row.len(), 21, "{board}");
     assert!(!row.contains_key("tasks"), "{board}");
 }
+
+// ------------------------------------------ card-questions (RM-0097), K1
+
+/// docs/features/card-questions.md K1, the daemon's half on studio-lamp:
+/// `GET .../cards` byte-equal before and after `C-0001`'s items are raised
+/// (a question through the card's route, a decision through the CLI), and
+/// to `spec card list --json`; `GET .../cards/C-0001` byte-equal to `spec
+/// card show C-0001 --history --json`, its `items` after `tasks`, the
+/// history holding the items' `proposal.created`. M: the two event lists
+/// capped together at 64.
+#[test]
+fn card_questions_k1_the_card_read_serves_items_and_the_board_stays() {
+    let press = Press::lamp("cards-cq-read");
+    press.lamp_done(
+        "cards",
+        &json!({"title": "The storm scene", "discipline": "narrative",
+            "target": ["SCN-STORM"]}),
+    );
+    let board = |press: &Press| {
+        press
+            .server
+            .get(&format!("{LAMP}/cards"))
+            .status(200)
+            .text()
+            .to_owned()
+    };
+    let before = board(&press);
+    assert_eq!(before, press.cli(&["card", "list"]).document());
+
+    let raised = press.lamp_done(
+        "cards/C-0001/items",
+        &json!({"kind": "question", "node_ids": ["SCN-STORM"],
+            "text": "Which bell rings at dusk?",
+            "working_answer": "The harbour bell, as in chapter one.",
+            "price_of_other": "Two scenes rewritten.", "why": null, "severity": null,
+            "distinct_from": null, "as": "dev"}),
+    );
+    assert_eq!(raised["id"], json!("PR-0001"), "{raised}");
+    let root = press.root.to_str().expect("UTF-8 root").to_owned();
+    let decided = common::run_product(
+        &common::spec_bin(),
+        &press.home,
+        &press.cwd,
+        &[
+            "--root", &root, "--json", "propose", "decision", "--input", "-", "--card", "C-0001",
+        ],
+        json!({"node_ids": ["SCN-STORM"], "text": "Does the lamp burn oil?",
+            "working_answer": "Yes: whale oil.", "price_of_other": "The lamp room is redrawn."})
+        .to_string()
+        .as_bytes(),
+    );
+    decided.code(0);
+    assert_eq!(decided.json()["id"], json!("PR-0002"));
+
+    assert_eq!(board(&press), before, "the board's read unchanged");
+    assert_eq!(board(&press), press.cli(&["card", "list"]).document());
+
+    let shown = press
+        .server
+        .get(&format!("{LAMP}/cards/C-0001"))
+        .status(200)
+        .text()
+        .to_owned();
+    let cli = press.cli(&["card", "show", "C-0001", "--history"]);
+    cli.code(0);
+    assert_eq!(shown, cli.document(), "byte for byte the CLI's");
+    let card: Value = serde_json::from_str(&shown).expect("JSON");
+    let ids: Vec<&str> = card["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|item| item["id"].as_str().expect("an ID"))
+        .collect();
+    assert_eq!(ids, ["PR-0001", "PR-0002"]);
+    let tasks = shown.find("\"tasks\":").expect("tasks");
+    let items = shown.find("\"items\":").expect("items");
+    let acceptance = shown.find("\"acceptance\":").expect("acceptance");
+    assert!(tasks < items && items < acceptance, "{shown}");
+    let created: Vec<&str> = card["history"]
+        .as_array()
+        .expect("history")
+        .iter()
+        .filter(|entry| entry["type"] == "proposal.created")
+        .map(|entry| entry["payload"]["id"].as_str().expect("an ID"))
+        .collect();
+    assert_eq!(created, ["PR-0001", "PR-0002"]);
+}

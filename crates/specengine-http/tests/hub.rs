@@ -2192,8 +2192,9 @@ fn every_route_in(source: &str) -> Vec<String> {
 }
 
 /// The card routes of docs/canon/board-ui.md "Routes", the two reads and the
-/// six writes: a hand-off is `POST .../cards`, a return `POST .../move`.
-const CARD_ROUTES: [&str; 8] = [
+/// six writes: a hand-off is `POST .../cards`, a return `POST .../move`; and
+/// since docs/features/card-questions.md L3 a card's raise, `POST .../items`.
+const CARD_ROUTES: [&str; 9] = [
     "/api/projects/{p}/cards",
     "/api/projects/{p}/cards/{id}",
     "/api/projects/{p}/cards/{id}/accept",
@@ -2201,11 +2202,12 @@ const CARD_ROUTES: [&str; 8] = [
     "/api/projects/{p}/cards/{id}/cancel",
     "/api/projects/{p}/cards/{id}/clear",
     "/api/projects/{p}/cards/{id}/edit",
+    "/api/projects/{p}/cards/{id}/items",
     "/api/projects/{p}/cards/{id}/move",
 ];
 
 /// board-handoff BH-20: no route is added. The router's card routes, read
-/// from `app.rs` when the test runs, are the eight of docs/canon/board-ui.md
+/// from `app.rs` when the test runs, are the nine of docs/canon/board-ui.md
 /// "Routes" (the 28 GET routes are [`GET_ROUTES`]); on a hub `POST
 /// .../cards/:id/return` is off the list, refused by the fence before any
 /// handler, nothing stored; on a local daemon no route answers it. A hand-off

@@ -245,9 +245,11 @@ fn ac_r10_report_decision_is_listed_as_data_says() {
         assert_eq!(schema["type"], json!("object"));
         assert_eq!(
             keys(&schema["properties"]),
+            // docs/features/card-questions.md D5: `card_id` and `why`.
             [
                 "author_model",
                 "author_role",
+                "card_id",
                 "distinct_from",
                 "node_ids",
                 "price_of_other",
@@ -256,6 +258,7 @@ fn ac_r10_report_decision_is_listed_as_data_says() {
                 "severity",
                 "task_id",
                 "text",
+                "why",
                 "working_answer"
             ],
             "{era:?}: {schema}"
@@ -331,8 +334,10 @@ fn ac_r10_report_decision_is_listed_as_data_says() {
                 "{field}: {description}"
             );
         }
+        // docs/features/card-questions.md L2: `card_id` after `distinct_from`.
         assert!(
-            description.contains("\ndistinct_from, author_role (required), author_model, run: "),
+            description
+                .contains("\ndistinct_from, card_id, author_role (required), author_model, run: "),
             "{description}"
         );
         assert!(
@@ -558,8 +563,8 @@ fn ac_r10_a_patch_outside_node_ids_is_an_error_result() {
 
 /// Iteration 2: `ask_question`'s description names a decision among the
 /// queue's hits and related items ("a question or decision queued on a
-/// shared node with the same text", "queued questions or decisions with
-/// other text"), still ASCII within 2 048 bytes with the determinism line;
+/// shared node with the same text", "queued items with other text" since
+/// card-questions' trim), still ASCII within 2 048 bytes with the determinism line;
 /// on the wire, a question with other text on a decision's node lists the
 /// decision as related and is stored. M: the old text.
 #[test]
@@ -567,8 +572,10 @@ fn iteration2_ask_question_names_decisions_among_hits_and_related() {
     let hit = "A hit: an accepted decision document linked to a node (its id, path and title as \
                the answer), or a question or decision queued on a shared node with the same \
                text, whitespace and case aside (a rejected one's reason is the owner's answer).";
-    let related = "Related: decision documents only mentioning a node, queued questions or \
-                   decisions with other text.";
+    // docs/features/card-questions.md L2: "queued questions or
+    // decisions with other text." trimmed to "queued items with other text."
+    let related = "Related: decision documents only mentioning a node, queued items with other \
+                   text.";
     let repo = Repo::new("mrd-ask");
     let mut session = Session::open(
         Era::Stateless,
@@ -617,4 +624,148 @@ fn iteration2_ask_question_names_decisions_among_hits_and_related() {
     );
     drop(session.finish());
     assert_eq!(repo.statuses(), (String::new(), String::new()));
+}
+
+/// docs/features/card-questions.md M1: `report_decision` with an argument
+/// no build knows (`colour`), both eras: an error result, the text
+/// starting "failed to deserialize parameters: unknown field `colour`",
+/// no `structuredContent`, nothing stored, both worktrees clean. Green
+/// before and after the slice: what a 0.35 server does with its `card_id`
+/// and `why`.
+#[test]
+fn m1_an_unknown_argument_fails_report_decision() {
+    let repo = Repo::new("mrd-m1-colour");
+    let call = json!({
+        "node_ids": ["RULE-STAM-REGEN"], "text": TEXT, "working_answer": WORKING,
+        "price_of_other": PRICE, "distinct_from": ["DEC-0023"],
+        "author_role": "developer", "colour": 1
+    });
+    for era in ERAS {
+        let mut session = Session::open(era, &[], Some(&repo.linked), Home::At(&repo.home));
+        let reply = session.call("report_decision", call.clone());
+        assert_bad_arguments(&reply, "unknown field `colour`", "colour");
+        let text = common::read::content_text(result(&reply));
+        assert!(
+            text.starts_with("failed to deserialize parameters: unknown field `colour`"),
+            "{era:?}: {text}"
+        );
+        drop(session.finish());
+        assert!(
+            repo.stored(&repo.home).is_empty(),
+            "{era:?}: nothing stored"
+        );
+        assert_eq!(repo.statuses(), (String::new(), String::new()), "{era:?}");
+    }
+}
+
+/// docs/features/card-questions.md L2, the twins over stdio: on a card
+/// `C-0001` made in both queues, `ask_question` with `card_id`,
+/// `report_decision` with `card_id` and `why` and `report_discrepancy` with
+/// `card_id` each answer as `spec propose … --card C-0001` on the twin queue
+/// (content and `structuredContent` equal, the schema kept); `get_proposal`
+/// serves `card_id` and `why` as the twin's review; a decision's `why`
+/// over 2 048 bytes is an error result, nothing stored. M: the tool dropping
+/// `card_id` on its way to the library.
+#[test]
+fn card_questions_l2_the_raises_take_card_id_and_why_as_their_twins() {
+    let repo = Repo::new("mrd-cq-l2");
+    let twin_home = repo.scratch.home("twin");
+    let cwd = repo.linked.clone();
+    let mut session = Session::open(Era::Stateless, &[], Some(&cwd), Home::At(&repo.home));
+    let schemas = output_schemas(&session.tools());
+    let twin_env = cli_env(&cwd, Some(&twin_home));
+    let twin_git = GitEnv::new(cwd.clone(), [("HOME", twin_home.as_os_str())]);
+    let globals = Globals::default();
+    let card = json!({"title": "Rest regeneration", "target": ["RULE-STAM-REGEN"]});
+    let made = session.call("create_card", card.clone());
+    assert_eq!(result(&made)["structuredContent"]["id"], json!("C-0001"));
+    let twin_card = common::read::card_library(
+        "create_card",
+        &card,
+        &twin_env,
+        &globals,
+        "2026-10-05T21:14:03Z",
+    );
+    assert_eq!(
+        twin_card.document.expect("the twin's card")["id"],
+        json!("C-0001")
+    );
+
+    let why = "Two playtests read instant regeneration as a bug.";
+    let calls = [
+        (
+            "ask_question",
+            json!({"node_ids": ["EDGE-STAM-ZERO"], "text": "Is zero stamina a stop?",
+                "working_answer": "Yes.", "price_of_other": "A rule case.",
+                "card_id": "C-0001", "author_role": "developer"}),
+        ),
+        (
+            "report_decision",
+            json!({"node_ids": ["RULE-STAM-REGEN"], "text": TEXT, "working_answer": WORKING,
+                "price_of_other": PRICE, "why": why, "distinct_from": ["DEC-0023"],
+                "card_id": "C-0001", "author_role": "developer"}),
+        ),
+        (
+            "report_discrepancy",
+            json!({"node_ids": ["MEC-SPRINT"], "summary": "Walking drains stamina.",
+                "gap_type": "contradicts", "severity": "high",
+                "evidence": [{"file": "src/stamina.rs", "lines": "3-9",
+                    "observed": "drains while walking", "documented": "only while sprinting"}],
+                "options": [{"label": "code", "effect": "fix the code", "price": "1 item"},
+                    {"label": "spec", "effect": "allow walking", "price": "a rebalance"}],
+                "recommendation": 0, "card_id": "C-0001", "author_role": "developer"}),
+        ),
+    ];
+    for (index, (tool, args)) in calls.iter().enumerate() {
+        let reply = session.call(tool, args.clone());
+        let id = format!("PR-{:04}", index + 1);
+        assert_eq!(
+            result(&reply)["structuredContent"]["id"],
+            json!(id),
+            "{tool}: {reply}"
+        );
+        let want = queue_library(
+            tool,
+            args,
+            &twin_env,
+            &globals,
+            "2026-10-05T21:14:03Z",
+            &twin_git,
+        );
+        assert_parity(&reply, &want, &schemas[*tool], tool);
+        let read = session.call("get_proposal", json!({"proposal_id": id}));
+        let document = &result(&read)["structuredContent"];
+        assert_eq!(document["card_id"], json!("C-0001"), "{tool}: {document}");
+        let twin = queue_library(
+            "get_proposal",
+            &json!({"proposal_id": id}),
+            &twin_env,
+            &globals,
+            "2026-10-05T21:14:03Z",
+            &twin_git,
+        )
+        .document
+        .expect("the twin's review");
+        assert_eq!(document["card_id"], twin["card_id"], "{tool}");
+        assert_eq!(document["why"], twin["why"], "{tool}");
+    }
+    let decided = session.call("get_proposal", json!({"proposal_id": "PR-0002"}));
+    assert_eq!(result(&decided)["structuredContent"]["why"], json!(why));
+    let asked = session.call("get_proposal", json!({"proposal_id": "PR-0001"}));
+    assert_eq!(result(&asked)["structuredContent"]["why"], Value::Null);
+
+    let before = repo.stored(&repo.home);
+    let long = session.call(
+        "report_decision",
+        json!({"node_ids": ["EDGE-SPRINT-EMPTY"], "text": "Does an empty sprint end?",
+            "working_answer": "Yes.", "price_of_other": "A rule case.",
+            "why": "a".repeat(2049), "author_role": "developer"}),
+    );
+    assert_eq!(result(&long)["isError"], json!(true), "{long}");
+    assert!(
+        common::read::content_text(result(&long)).contains("why: 2049 bytes; at most 2048"),
+        "{long}"
+    );
+    assert_eq!(repo.stored(&repo.home), before, "nothing stored");
+    drop(session.finish());
 }

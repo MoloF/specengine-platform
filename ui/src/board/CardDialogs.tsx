@@ -1,8 +1,26 @@
 import { createContext, use, useEffect, useId, useMemo, useRef, useState, type ReactNode, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useCard, useCardClearGroup, useCards, useCardWrite, useHeldWorkspaces, type CardWriteRequest } from "../api/queries";
-import type { Card, CardAcceptBody, CardClearBody, CardClearGroupWrite, CardCreateBody, CardEditBody, CardFlow, CardMoveBody, CardRow, CardVerdict, CardWrite, Workspace, WorkspaceDocument } from "../api/types";
+import { useCard, useCardClearGroup, useCardRaise, useCards, useCardWrite, useHeldWorkspaces, type CardWriteRequest } from "../api/queries";
+import type {
+  Card,
+  CardAcceptBody,
+  CardClearBody,
+  CardClearGroupWrite,
+  CardCreateBody,
+  CardEditBody,
+  CardFlow,
+  CardMoveBody,
+  CardRaiseBody,
+  CardRow,
+  CardVerdict,
+  CardWrite,
+  IntakeDocument,
+  IntakeMatch,
+  Workspace,
+  WorkspaceDocument,
+} from "../api/types";
 import { Dialog } from "../ui/Dialog";
+import { Disclosure } from "../ui/Disclosure";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
@@ -11,7 +29,7 @@ import { assigneeChoices, disciplineChoices } from "./filter";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { isCard } from "./CardPanel";
-import { evidenceKinds, gapTypes, nameIsLogin, nameIsTyped } from "./labels";
+import { evidenceKinds, gapTypes, nameIsLogin, nameIsTyped, RAISED_KINDS } from "./labels";
 
 /** How `spec card edit` and `assign` write a cleared value (`docs/canon/cards.md` "Commands"). */
 const CLEAR = "-";
@@ -52,7 +70,7 @@ function useSend(project: string, { onDone, onActingLine }: WriteHandlers): (req
 }
 
 /** A one-line field. */
-function TextField({
+export function TextField({
   label,
   value,
   onChange,
@@ -109,8 +127,8 @@ function TextField({
   );
 }
 
-/** A text field of several lines. */
-function TextArea({
+/** A text field of several lines; `readOnly` holds it still past a write that already took it (Return's reason once moved). */
+export function TextArea({
   label,
   value,
   onChange,
@@ -118,6 +136,7 @@ function TextArea({
   required = false,
   autoFocus = false,
   invalid = false,
+  readOnly = false,
 }: {
   label: string;
   value: string;
@@ -126,6 +145,7 @@ function TextArea({
   required?: boolean;
   autoFocus?: boolean;
   invalid?: boolean;
+  readOnly?: boolean;
 }) {
   const id = useId();
   const hintId = useId();
@@ -140,7 +160,7 @@ function TextArea({
         className="field"
         rows={3}
         value={value}
-        readOnly={pending}
+        readOnly={pending || readOnly}
         aria-required={required}
         aria-invalid={invalid}
         aria-describedby={hint === undefined ? undefined : hintId}
@@ -251,10 +271,23 @@ function ActingField({
 }
 
 /** What a dialog says of the name it goes out under: typed locally, the login on a hub. */
-function ActingNote() {
+export function ActingNote() {
   const t = useTranslate();
   const login = useHubLogin();
   return <p className="dialog-text dialog-effect">{login === null ? nameIsTyped(t) : nameIsLogin(t)}</p>;
+}
+
+/**
+ * The field a dialog's focus goes back to: the first marked invalid, else the first autofocus field
+ * that takes text, else the first that does; never one held read-only, nor one folded away.
+ */
+function firstFieldOf(root: HTMLFormElement | null): HTMLElement | null {
+  if (root === null) {
+    return null;
+  }
+  const takes = (field: HTMLElement) => field.closest("[hidden]") === null && !((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) && field.readOnly);
+  const fields = Array.from(root.querySelectorAll<HTMLElement>("input, textarea, select")).filter(takes);
+  return fields.find((field) => field.getAttribute("aria-invalid") === "true") ?? Array.from(root.querySelectorAll<HTMLElement>("[data-autofocus]")).find(takes) ?? fields[0] ?? null;
 }
 
 /**
@@ -263,14 +296,20 @@ function ActingNote() {
  * focus. `check` stops a submit that cannot be right, sending nothing. A refusal keeps the dialog and
  * the typed text, says the daemon's words in an alert and puts focus back in the first field. A card
  * revised while it is open (`revision`, a refusal's read among them) says so; the next submit goes
- * on the new revision, its fields kept.
+ * on the new revision, its fields kept. A submit answering `false` keeps the dialog with no refusal:
+ * what it says stands among the children (a raise not stored, its hits); `action` null offers no
+ * submit at all, only the dismiss, which then takes the focus the submit had. Focus after a stop or a
+ * refusal goes to the first field marked invalid, else the first autofocus field that takes text,
+ * else the first that does: never a field held read-only, nor one folded away. `primary` false
+ * draws the submit as a plain button, where another act of the dialog is its one primary.
  */
-function WriteDialog({
+export function WriteDialog({
   title,
   action,
   sending,
   dismiss,
   danger = false,
+  primary = true,
   revision = null,
   canSubmit = true,
   check,
@@ -279,16 +318,18 @@ function WriteDialog({
   children,
 }: {
   title: ReactNode;
-  action: string;
+  action: string | null;
   sending: string;
   dismiss?: string;
   danger?: boolean;
+  primary?: boolean;
   revision?: string | null;
   canSubmit?: boolean;
   /** Why this submit cannot be sent, else null. */
   check?: () => string | null;
   onClose: () => void;
-  onSubmit: () => Promise<string | null>;
+  /** Null: done, the caller closes; a string: the daemon's refusal; false: kept open, nothing refused. */
+  onSubmit: () => Promise<string | null | false>;
   children: ReactNode;
 }) {
   const t = useTranslate();
@@ -299,6 +340,9 @@ function WriteDialog({
   const [problem, setProblem] = useState<string | null>(null);
   const [shown, setShown] = useState(revision);
   const [changed, setChanged] = useState(false);
+  // Each stop or refusal asks for the first field once the form shows it: its invalid marks set, the held fields read-only again.
+  const [refocus, setRefocus] = useState(0);
+  const dismissButton = useRef<HTMLButtonElement>(null);
 
   if (!pending && revision !== shown) {
     // Storing information from previous renders (react.dev, useState). A submit out went on the
@@ -310,13 +354,23 @@ function WriteDialog({
   // A changed card can take away what had focus: the first field takes it, never the body.
   useEffect(() => {
     if (changed && focusIsLost()) {
-      firstField()?.focus();
+      firstFieldOf(form.current)?.focus();
     }
   }, [changed]);
 
-  function firstField(): HTMLElement | null {
-    return form.current?.querySelector<HTMLElement>("[data-autofocus], input, textarea, select") ?? null;
-  }
+  useEffect(() => {
+    if (refocus > 0) {
+      firstFieldOf(form.current)?.focus();
+    }
+  }, [refocus]);
+
+  // No submit left to press (every hit named): focus would fall to the body; the dismiss takes it.
+  useEffect(() => {
+    if (action === null && focusIsLost()) {
+      dismissButton.current?.focus();
+    }
+  }, [action]);
+
 
   function cancel() {
     if (!inFlight.current) {
@@ -332,18 +386,21 @@ function WriteDialog({
     const stopped = check?.() ?? null;
     setProblem(stopped);
     if (stopped !== null) {
-      firstField()?.focus();
+      setRefocus((count) => count + 1);
       return;
     }
     inFlight.current = true;
     setPending(true);
     setRefusal(null);
     const outcome = await onSubmit();
-    if (outcome !== null) {
+    if (outcome === false) {
+      inFlight.current = false;
+      setPending(false);
+    } else if (outcome !== null) {
       inFlight.current = false;
       setPending(false);
       setRefusal(outcome);
-      firstField()?.focus();
+      setRefocus((count) => count + 1);
     }
   }
 
@@ -386,10 +443,12 @@ function WriteDialog({
           </div>
         )}
         <div className="dialog-actions">
-          <button type="submit" className={danger ? "button button-danger" : "button button-primary"} aria-disabled={pending} disabled={!canSubmit}>
-            {pending ? sending : action}
-          </button>
-          <button type="button" className="button" aria-disabled={pending} onClick={cancel}>
+          {action !== null && (
+            <button type="submit" className={danger ? "button button-danger" : primary ? "button button-primary" : "button"} aria-disabled={pending} disabled={!canSubmit}>
+              {pending ? sending : action}
+            </button>
+          )}
+          <button ref={dismissButton} type="button" className="button" aria-disabled={pending} onClick={cancel}>
             {dismiss ?? t("board.dialog.cancel")}
           </button>
         </div>
@@ -1041,14 +1100,237 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
   );
 }
 
-/** What a return moves: the card as the list or its read has it now, so a submit goes on its current revision. */
-export type ReturnTarget = Pick<CardRow, "id" | "title" | "revision">;
+// A question or a decision raised on a card (docs/canon/card-questions.md "The rule";
+// docs/features/card-questions.md "Acceptance criteria", U2, U3): the page sends what was typed and the
+// targets chosen, and shows what the daemon answered. A hit is no refusal: nothing is stored, the dialog
+// lists the hits, and Ask anyway sends the raise again naming each listed one; with every listed hit
+// named and still nothing stored, it says so and offers no Ask anyway. No answer, or a refusal, offers
+// Ask again, which resends the raise alone. Nothing here judges a hit, a cap or a state.
+
+/** A question's or a decision's texts as typed, `why` a decision's, and the card's targets it is about. */
+export interface RaiseForm {
+  text: string;
+  working: string;
+  price: string;
+  why: string;
+  chosen: readonly string[];
+}
+
+/** A new form over the card's targets, each chosen. */
+export function raiseFormOf(targets: readonly string[]): RaiseForm {
+  return { text: "", working: "", price: "", why: "", chosen: [...targets] };
+}
+
+/** What the last raise left: nothing yet; not stored, with what it named; failed or unanswered, with what it named. */
+export type RaiseOutcome = { state: "none" } | { state: "kept"; answer: IntakeDocument; sent: readonly string[] } | { state: "failed"; sent: readonly string[] };
+
+export const NOTHING_RAISED: RaiseOutcome = { state: "none" };
+
+/** How a hit is named in `distinct_from`: its ID, else its path (`docs/canon/agent-intake.md` "Dedup"). */
+function hitName(hit: IntakeMatch): string {
+  return hit.id ?? hit.path ?? "";
+}
+
+/** Whether every hit listed was named already: Ask anyway would send nothing new (U2 of docs/features/card-questions.md "Acceptance criteria"). */
+export function allNamed(outcome: RaiseOutcome): boolean {
+  return outcome.state === "kept" && outcome.answer.hits.every((hit) => outcome.sent.includes(hitName(hit)));
+}
+
+/** What the next raise names: none at first; after hits, those named before and each listed; after a failure, what it named. */
+function nextNamed(outcome: RaiseOutcome): string[] {
+  if (outcome.state === "none") {
+    return [];
+  }
+  if (outcome.state === "failed") {
+    return [...outcome.sent];
+  }
+  return [...new Set([...outcome.sent, ...outcome.answer.hits.map(hitName)])];
+}
+
+/** The submit's words after an outcome: the first ones, Ask anyway past hits, Ask again past a failure, none when every hit is named. */
+export function raiseAction(outcome: RaiseOutcome, first: string, anyway: string, again: string): string | null {
+  if (outcome.state === "none") {
+    return first;
+  }
+  if (outcome.state === "failed") {
+    return again;
+  }
+  return allNamed(outcome) ? null : anyway;
+}
+
+/** A raise's body less what each act adds: the targets and the three texts. */
+type RaiseTexts = Omit<CardRaiseBody, "kind" | "why" | "severity" | "distinct_from" | "as">;
+
+/** What every raise sends of a form, trimmed: the targets chosen, in the card's order, and the three texts. */
+export function raiseTextsOf(form: RaiseForm, targets: readonly string[]): RaiseTexts {
+  return {
+    node_ids: targets.filter((target) => form.chosen.includes(target)),
+    text: form.text.trim(),
+    working_answer: form.working.trim(),
+    price_of_other: form.price.trim(),
+  };
+}
+
+/** A question's body: its texts and targets and the acting name; no `why`, which a question never holds. */
+export function questionBodyOf(form: RaiseForm, targets: readonly string[], as: string | null): CardRaiseBody {
+  return { kind: RAISED_KINDS.question, ...raiseTextsOf(form, targets), as };
+}
+
+/** What one raise came to: stored, with its ID; not stored, its hits listed; refused or unanswered, the daemon's words. */
+export type Raised = { stored: string } | { kept: true } | { refusal: string };
+
+/**
+ * The raise of one card and its last outcome. `send` posts the body, naming the hits the outcome
+ * says, and keeps what came back; a refusal naming `--as` goes to the acting name's field too.
+ */
+export function useRaise(project: string, id: string, onActingLine?: (line: string) => void): { outcome: RaiseOutcome; send: (body: CardRaiseBody) => Promise<Raised> } {
+  const raise = useCardRaise(project);
+  const [outcome, setOutcome] = useState<RaiseOutcome>(NOTHING_RAISED);
+  async function send(body: CardRaiseBody): Promise<Raised> {
+    const named = nextNamed(outcome);
+    try {
+      const answer = await raise.mutateAsync({ id, body: named.length === 0 ? body : { ...body, distinct_from: named } });
+      if (answer.created && answer.id !== null) {
+        return { stored: answer.id };
+      }
+      setOutcome({ state: "kept", answer, sent: named });
+      return { kept: true };
+    } catch (error) {
+      const failure = apiErrorOf(error);
+      if (isActingLine(failure)) {
+        onActingLine?.(failure.message);
+      }
+      setOutcome({ state: "failed", sent: named });
+      return { refusal: failure.message };
+    }
+  }
+  return { outcome, send };
+}
+
+/** Why a form cannot be sent: a text left blank, or no target chosen; null when it can. */
+export function raiseProblem(form: RaiseForm, texts: string, target: string): string | null {
+  if ([form.text, form.working, form.price].some((text) => text.trim() === "")) {
+    return texts;
+  }
+  return form.chosen.length === 0 ? target : null;
+}
+
+/** The card's targets a raise is about, each a checkbox, every one checked at first. */
+export function TargetChoice({ targets, chosen, onChange }: { targets: readonly string[]; chosen: readonly string[]; onChange: (chosen: string[]) => void }) {
+  const t = useTranslate();
+  const pending = use(Pending);
+  return (
+    <fieldset className="card-evidence-field raise-targets">
+      <legend>{t("board.ask.about")}</legend>
+      {targets.map((target) => (
+        <label key={target} className="raise-target">
+          <input
+            type="checkbox"
+            checked={chosen.includes(target)}
+            aria-disabled={pending || undefined}
+            onChange={(event) => {
+              if (!pending) {
+                onChange(event.target.checked ? targets.filter((one) => one === target || chosen.includes(one)) : chosen.filter((one) => one !== target));
+              }
+            }}
+          />{" "}
+          <bdi className="mono">{shownSlot(target)}</bdi>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/** A question's three required texts, each its own field; once a submit was tried, a blank one says so. */
+export function QuestionFields({
+  form,
+  labels,
+  checked,
+  autoFocus = false,
+  onChange,
+}: {
+  form: RaiseForm;
+  labels: { text: string; working: string; price: string };
+  checked: boolean;
+  autoFocus?: boolean;
+  onChange: (form: RaiseForm) => void;
+}) {
+  const field = (key: "text" | "working" | "price") => (value: string) => {
+    onChange({ ...form, [key]: value });
+  };
+  return (
+    <>
+      <TextArea label={labels.text} value={form.text} onChange={field("text")} required autoFocus={autoFocus} invalid={checked && form.text.trim() === ""} />
+      <TextArea label={labels.working} value={form.working} onChange={field("working")} required invalid={checked && form.working.trim() === ""} />
+      <TextArea label={labels.price} value={form.price} onChange={field("price")} required invalid={checked && form.price.trim() === ""} />
+    </>
+  );
+}
+
+/**
+ * What a raise not stored leaves in its dialog, a polite region that is always there: the move's
+ * line once a return went and its question did not; the hits as the daemon listed them, ID or path,
+ * state and answer, its notes verbatim; and, with every listed hit named, that this dialog can name
+ * no more.
+ */
+export function RaiseNotice({ outcome, sentBack = null }: { outcome: RaiseOutcome; sentBack?: string | null }) {
+  const t = useTranslate();
+  return (
+    <div className="raise-notice" role="status">
+      {sentBack !== null && outcome.state !== "none" && (
+        <p className="note">
+          <Icon name="cardReturned" />
+          <span>{t("board.return.notAsked", { id: sentBack })}</span>
+        </p>
+      )}
+      {outcome.state === "kept" && (
+        <>
+          <p className="raise-hits-title">{t("board.ask.hits")}</p>
+          <ul className="raise-hits">
+            {outcome.answer.hits.map((hit, index) => (
+              <li key={`${String(index)}-${hitName(hit)}`} className="raise-hit">
+                <bdi className="mono">{shownSlot(hitName(hit))}</bdi>
+                <span className="muted" lang="en">
+                  {shownSlot(hit.status)}
+                </span>
+                {hit.answer !== null && <bdi className="board-text">{shownSlot(hit.answer)}</bdi>}
+              </li>
+            ))}
+          </ul>
+          {outcome.answer.notes.length > 0 && (
+            <ul className="note-list" aria-label={t("board.view.writeNotes")}>
+              {outcome.answer.notes.map((note, index) => (
+                <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
+                  {note}
+                </li>
+              ))}
+            </ul>
+          )}
+          {allNamed(outcome) && (
+            <p className="note">
+              <Icon name="info" />
+              <span>{t("board.ask.tooMany")}</span>
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** What a return moves: the card as the list or its read has it now, so a submit goes on its current revision; its targets, which a question may be about. */
+export type ReturnTarget = Pick<CardRow, "id" | "title" | "revision" | "targets">;
 
 /**
  * Return (`docs/canon/card-flows.md` "The rule"): a move into the flow's `return` column with a
  * reason, which the move's event keeps. One required field; submit is one `POST .../move` with the
  * column, the note and, from a drop between two cards, its place. Cancel moves nothing: the card
- * stays where it stood. The daemon judges the move as any other and words a refusal.
+ * stays where it stood. The daemon judges the move as any other and words a refusal. A card with a
+ * target may ask a question with it (docs/features/card-questions.md "Acceptance criteria", U2): its
+ * part, closed at first, takes the three texts and the targets; submit then sends the move, and only
+ * once it is taken the question, `POST .../items`. A refused move asks nothing. A question not stored
+ * or refused leaves the card sent back and the dialog open on its fields, the reason held; Ask anyway
+ * or Ask again then resends the question alone, and closing it reports the move.
  */
 export function ReturnDialog({
   project,
@@ -1057,37 +1339,116 @@ export function ReturnDialog({
   toTitle,
   before = null,
   ...handlers
-}: { project: string; card: ReturnTarget; to: string; toTitle: string; before?: string | null } & WriteHandlers) {
+}: { project: string; card: ReturnTarget; to: string; toTitle: string; before?: string | null } & Omit<WriteHandlers, "onDone"> & {
+  /** The move went; `asked` the question stored with it, else null. */
+  onDone: (answer: CardWrite, asked: string | null) => void;
+}) {
   const t = useTranslate();
-  const { onClose } = handlers;
-  const send = useSend(project, handlers);
+  const { onClose, onDone, onActingLine } = handlers;
+  const write = useCardWrite(project);
   const [acting] = useActing();
   const [reason, setReason] = useState("");
   const [missing, setMissing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [form, setForm] = useState<RaiseForm>(() => raiseFormOf(card.targets));
+  const [checked, setChecked] = useState(false);
+  // The move once taken, and the revision it went on: the dialog never reads its own move as a change made elsewhere.
+  const [moved, setMoved] = useState<{ answer: CardWrite; on: string } | null>(null);
+  const raise = useRaise(project, card.id, onActingLine);
 
   function bodyOf(): CardMoveBody {
     return { to, ...(before === null ? {} : { before }), note: reason.trim(), revision: card.revision, as: actingName(acting) };
   }
 
+  async function ask(answer: CardWrite): Promise<string | null | false> {
+    const raised = await raise.send(questionBodyOf(form, card.targets, actingName(acting)));
+    if ("stored" in raised) {
+      onDone(answer, raised.stored);
+      return null;
+    }
+    return "kept" in raised ? false : raised.refusal;
+  }
+
+  async function submit(): Promise<string | null | false> {
+    if (moved !== null) {
+      return ask(moved.answer);
+    }
+    let answer: CardWrite;
+    try {
+      answer = await write.mutateAsync({ write: "move", id: card.id, body: bodyOf() });
+    } catch (error) {
+      const refusal = apiErrorOf(error);
+      if (isActingLine(refusal)) {
+        onActingLine?.(refusal.message);
+      }
+      return refusal.message;
+    }
+    if (!asking) {
+      onDone(answer, null);
+      return null;
+    }
+    setMoved({ answer, on: card.revision });
+    return ask(answer);
+  }
+
+  const action = moved === null ? t("board.return.submit") : raiseAction(raise.outcome, t("board.ask.submit"), t("board.ask.anyway"), t("board.ask.again"));
   return (
     <WriteDialog
       title={t("board.return.title", { id: card.id })}
-      action={t("board.return.submit")}
-      sending={t("board.return.sending")}
-      revision={card.revision}
-      onClose={onClose}
+      action={action}
+      sending={moved === null ? t("board.return.sending") : t("board.ask.sending")}
+      dismiss={moved === null ? undefined : t("inbox.dialog.close")}
+      revision={moved === null ? card.revision : moved.on}
+      onClose={() => {
+        // Sent back already: closing reports the move, whatever became of the question.
+        if (moved === null) {
+          onClose();
+        } else {
+          onDone(moved.answer, null);
+        }
+      }}
       check={() => {
         const empty = reason.trim() === "";
         setMissing(empty);
-        return empty ? t("board.return.why") : null;
+        if (empty) {
+          return t("board.return.why");
+        }
+        if (!asking) {
+          return null;
+        }
+        setChecked(true);
+        return raiseProblem(form, t("board.ask.needsTexts"), t("board.ask.needsTarget"));
       }}
-      onSubmit={() => send({ write: "move", id: card.id, body: bodyOf() })}
+      onSubmit={submit}
     >
       <p className="dialog-text">
         <bdi>{shownSlot(card.title)}</bdi>
       </p>
       <p className="dialog-text dialog-effect">{fill(t("board.return.effect", { column: slot("column") }), { column: <bdi>{shownSlot(toTitle)}</bdi> })}</p>
-      <TextArea label={t("board.field.reason")} value={reason} onChange={setReason} required autoFocus invalid={missing && reason.trim() === ""} />
+      <TextArea label={t("board.field.reason")} value={reason} onChange={setReason} required autoFocus invalid={missing && reason.trim() === ""} readOnly={moved !== null} />
+      {card.targets.length > 0 && (
+        <Disclosure
+          summary={t("board.return.ask")}
+          className="raise-part"
+          open={asking}
+          onToggle={(open) => {
+            // Once sent back, the question is what is left to send: its part stays open.
+            if (moved === null) {
+              setAsking(open);
+            }
+          }}
+        >
+          <QuestionFields form={form} labels={{ text: t("board.ask.question"), working: t("board.ask.workingAnswer"), price: t("board.ask.price") }} checked={checked} onChange={setForm} />
+          <TargetChoice
+            targets={card.targets}
+            chosen={form.chosen}
+            onChange={(chosen) => {
+              setForm((current) => ({ ...current, chosen }));
+            }}
+          />
+        </Disclosure>
+      )}
+      <RaiseNotice outcome={raise.outcome} sentBack={moved === null ? null : card.id} />
     </WriteDialog>
   );
 }

@@ -1,8 +1,13 @@
+import { lazy, Suspense } from "react";
 import type { Card, CardAllowed, CardFlow, CardMoveBody, CardRow, CardWrite } from "../api/types";
 import type { Translate } from "../i18n";
 import { AcceptCardDialog, AssignDialog, CancelCardDialog, ClearCardDialog, EditCardDialog, HandOffDialog, NewCardDialog, ReturnDialog, type HandOffSource, type ReturnTarget } from "./CardDialogs";
 import { columnTitle, needsLine } from "./labels";
 import type { MoveChoice } from "./MoveMenu";
+
+/** The two dialogs that raise an item on a card, in the items' chunk (docs/features/card-questions.md "Acceptance criteria", U3, U7). */
+const AskDialog = lazy(() => import("./CardItems").then((module) => ({ default: module.AskDialog })));
+const DecideDialog = lazy(() => import("./CardItems").then((module) => ({ default: module.DecideDialog })));
 
 // What a card's acts open, shared by the Board (a tile, the modal) and the card's page: the dialog
 // of each write, and the lines of the Move menu. Each dialog is one call; what follows a write
@@ -17,14 +22,15 @@ export type OpenDialog =
   | { action: "accept"; card: AcceptTarget; trigger: HTMLElement | null }
   | { action: "handoff"; card: HandOffSource; trigger: HTMLElement | null }
   | { action: "return"; card: ReturnTarget; to: string; before: string | null; trigger: HTMLElement | null }
-  | { action: "edit" | "assign" | "cancel" | "clear"; card: Card; trigger: HTMLElement | null };
+  | { action: "edit" | "assign" | "cancel" | "clear" | "ask" | "decide"; card: Card; trigger: HTMLElement | null };
 
 /** How a write's outcome is said around the card's ID, the answer's place at hand. */
 export type Said = (id: string) => string;
 
 /**
  * The open dialog. `current` gives each write the card as read now, so a submit goes on its current
- * revision; `onWritten` hears the answer, how to say it, and whether focus follows the card.
+ * revision; `onWritten` hears the answer, how to say it, and whether focus follows the card;
+ * `onRaised` what to say once a question or a decision is stored on it, no card having moved.
  */
 export function CardActDialog({
   project,
@@ -37,6 +43,7 @@ export function CardActDialog({
   onClose,
   onActingLine,
   onWritten,
+  onRaised,
 }: {
   project: string;
   dialog: OpenDialog;
@@ -54,6 +61,7 @@ export function CardActDialog({
   onClose: () => void;
   onActingLine: (line: string) => void;
   onWritten: (answer: CardWrite, said: Said, toCard: boolean) => void;
+  onRaised: (said: string) => void;
 }) {
   const place = (answer: CardWrite) => columnTitle(flowOf(answer.flow ?? ""), answer.column ?? "");
   switch (dialog.action) {
@@ -107,8 +115,9 @@ export function CardActDialog({
           before={dialog.before}
           onClose={onClose}
           onActingLine={onActingLine}
-          onDone={(answer) => {
-            onWritten(answer, (id) => t("board.said.returned", { id }), dialog.trigger?.dataset.card !== undefined);
+          onDone={(answer, asked) => {
+            // A question stored with it is said after the move (docs/features/card-questions.md "Acceptance criteria", U2).
+            onWritten(answer, (id) => (asked === null ? t("board.said.returned", { id }) : `${t("board.said.returned", { id })}. ${t("board.ask.asked", { id: asked })}`), dialog.trigger?.dataset.card !== undefined);
           }}
         />
       );
@@ -149,6 +158,18 @@ export function CardActDialog({
             onWritten(answer, (id) => t("board.said.assigned", { id }), false);
           }}
         />
+      );
+    case "ask":
+      return (
+        <Suspense fallback={null}>
+          <AskDialog project={project} card={current.card(dialog.card)} onClose={onClose} onActingLine={onActingLine} onRaised={onRaised} />
+        </Suspense>
+      );
+    case "decide":
+      return (
+        <Suspense fallback={null}>
+          <DecideDialog project={project} card={current.card(dialog.card)} onClose={onClose} onActingLine={onActingLine} onRaised={onRaised} />
+        </Suspense>
       );
     case "cancel":
       return (

@@ -432,6 +432,7 @@ fn asked(setup: &Setup, targets: &[&str], text: &str) -> String {
         login: None,
         now: utc_now(),
         git: terminal_git(setup),
+        card: None,
     };
     let ask = |request: &QuestionRequest| {
         propose_question(&env, &globals, request).unwrap_or_else(|error| panic!("{text}: {error}"))
@@ -494,6 +495,7 @@ fn reported_with(
                 login: None,
                 now: utc_now(),
                 git: terminal_git(setup),
+                card: None,
             },
         )
         .unwrap_or_else(|error| panic!("{summary}: {error}"))
@@ -1194,9 +1196,19 @@ fn b2_a_confirm_fetches_and_merges_nothing() {
     assert_eq!(snapshot(&bare), remote, "the origin's every byte");
 }
 
-/// A card as stored, what a computed mark leaves out: a stored change shows here.
+/// A card as stored, what a computed mark leaves out: a stored change shows
+/// here. Its history's own `card.*` events alone: since
+/// docs/features/card-questions.md K1 the read merges its items' events in,
+/// and a departing accept's discrepancy is one of its items.
 fn card_stored(hub: &Hub, id: &str) -> Value {
     let mut shown = hub.show(id);
+    if let Some(history) = shown["history"].as_array_mut() {
+        history.retain(|entry| {
+            entry["type"]
+                .as_str()
+                .is_some_and(|kind| kind.starts_with("card."))
+        });
+    }
     shown.as_object_mut().expect("a card").retain(|key, _| {
         [
             "id",
@@ -3671,5 +3683,107 @@ fn a_clean_confirms_document_holds_no_notes() {
         document["notes"],
         json!([]),
         "a create with its outputs, no gap: {document}"
+    );
+}
+
+// ---------------------------------------------- card-questions (RM-0097)
+
+/// docs/features/card-questions.md H4: the game's hub, its `[decision_records]`
+/// template gaining "Data"'s `Why:` lines and a `member`, `tomas`, on its team.
+/// `tomas` raises a decision with a `why` on `C-0001` through the card's route,
+/// stages it; `kit`, the lead covering `stamina.md`, confirms it: one commit
+/// adding its record, the body holding the why. `GET .../cards/C-0001` then
+/// lists the item `applied` with `record_id`, and its `history` ends with
+/// `proposal.approved` then `proposal.applied`. M: the confirm's record
+/// rendered without the slot.
+#[test]
+fn card_questions_h4_a_carded_decision_confirmed_on_a_hub_writes_its_why() {
+    let setup = keep("confirm-cq-why");
+    let template = read_text(&setup.root, "templates/decision.md");
+    let block = "Cost:\n\n{{cost}}\n";
+    assert!(template.contains(block), "{template}");
+    write(
+        &setup.root,
+        "templates/decision.md",
+        template.replacen(block, "Cost:\n\n{{cost}}\n\nWhy:\n\n{{why}}\n", 1),
+    );
+    append_config(
+        &setup.root,
+        "\n[team.tomas]\nrole = \"member\"\nemail = \"tomas@example.org\"\n",
+    );
+    committed(&setup, "the why slot and a member");
+    let made = spec_json(
+        &setup.home,
+        &setup.cwd,
+        &setup.root,
+        &[
+            "card",
+            "new",
+            "--title",
+            "Rest regeneration",
+            "--target",
+            "RULE-STAM-REGEN",
+        ],
+    );
+    made.code(0);
+    assert_eq!(made.json()["id"], json!("C-0001"));
+    let desk = Desk::new(setup, KEEP);
+
+    let why = "Two playtests read instant regeneration as a bug.";
+    let body = json!({"kind": "decision", "node_ids": ["RULE-STAM-REGEN"],
+        "text": "Does regeneration wait for rest?",
+        "working_answer": "Yes: it starts 1.5 s after the last stamina use.",
+        "price_of_other": "Without the wait R-28 is rebalanced.",
+        "why": why, "severity": null, "distinct_from": ["DEC-0023"], "as": null});
+    let reply = through(
+        &desk.hub.server,
+        "POST",
+        &format!("{KEEP}/cards/C-0001/items"),
+        &Proxied::write("tomas"),
+        body.to_string().as_bytes(),
+    );
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let raised = reply.json();
+    assert_eq!(raised["created"], json!(true), "{raised}");
+    let id = raised["id"].as_str().expect("an ID").to_owned();
+
+    desk.staged("tomas", &id, &approved_choice());
+    let before = desk.head();
+    let review = desk.confirmed("kit", &id);
+    assert_eq!(review["status"], json!("applied"), "{review}");
+    // A hub issues from its floor (docs/canon/spec-ids.md): the record's ID
+    // and path are the review's.
+    let record_id = review["record_id"].as_str().expect("a record").to_owned();
+    let record_path = format!("docs/records/DEC/{record_id}.md");
+    assert_eq!(review["record_path"], json!(record_path), "{review}");
+    let head = desk.head();
+    assert_eq!(desk.parents(&head), [before]);
+    assert_eq!(desk.paths(&head), std::slice::from_ref(&record_path));
+    let record = read_text(desk.root(), &record_path);
+    assert!(
+        record.contains(&format!("\n\nWhy:\n\n{why}\n\nSummary:\n\n")),
+        "{record}"
+    );
+
+    let card = desk
+        .hub
+        .get("kit", &format!("{KEEP}/cards/C-0001"))
+        .status(200)
+        .json();
+    let item = &card["items"][0];
+    assert_eq!(item["id"], json!(id), "{card}");
+    assert_eq!(item["status"], json!("applied"), "{item}");
+    assert_eq!(item["record_id"], json!(record_id), "{item}");
+    assert_eq!(item["why"], json!(why), "{item}");
+    let history: Vec<&str> = card["history"]
+        .as_array()
+        .expect("history")
+        .iter()
+        .map(|entry| entry["type"].as_str().expect("a type"))
+        .collect();
+    assert_eq!(
+        history[history.len() - 2..],
+        ["proposal.approved", "proposal.applied"],
+        "{history:?}"
     );
 }

@@ -1,12 +1,17 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { Card, CardList, CardRow } from "../api/types";
 import appCss from "../styles/app.css?raw";
 import tokensCss from "../styles/tokens.css?raw";
-import { aCard, aCardFlow, aCardList, aCardRow } from "../test/builders";
+import { aCard, aCardFlow, aCardList, aCardRow, aProposal } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
 import { focusables } from "../ui/Dialog";
+
+// The items' chunk and the Inbox's Confirm dialog loaded once for the file, so a lazy block or dialog never waits on its first transform.
+beforeAll(async () => {
+  await Promise.all([import("./CardItems"), import("../inbox/ConfirmDialog")]);
+});
 
 // DF-4, DF-6, DF-7 and DF-8 of docs/features/design-foundation.md ("The work item: the task modal and
 // page"), over the stub board (the policy keeps the mock's client in src/mocks/): the card modal and
@@ -142,6 +147,9 @@ describe("one primary per area (DF-4)", () => {
     for (const [act, title] of [
       ["Hand off", "Hand off C-0001"],
       ["Return", "Return C-0001"],
+      // card-questions (U3; minor 1 of its review): the two raise dialogs, one primary each.
+      ["Ask a question…", "Ask a question on C-0001"],
+      ["Record a decision…", "Record a decision on C-0001"],
       ["Edit", "Edit C-0001"],
       ["Assign", "Assign C-0001"],
       ["Cancel task", "Cancel C-0001"],
@@ -158,6 +166,52 @@ describe("one primary per area (DF-4)", () => {
     }
   });
 
+  // Minor 1 of card-questions' review: Answer… staged on a hub that lets the login confirm shows
+  // Confirm, the one primary; staging again is a plain button there.
+  it("in Answer…, staged on a hub that confirms: one primary, Confirm", async () => {
+    const asking = aCard({
+      id: "C-0009",
+      title: "A card that asks",
+      targets: ["R-1"],
+      items: [
+        {
+          id: "PR-0001",
+          kind: "question",
+          status: "open",
+          summary: "Which bell?",
+          working_answer: "The harbour bell.",
+          why: null,
+          author: { type: "human", role: null, model: null, run: null },
+          created_at: "2026-11-11T08:00:00Z",
+          updated_at: "2026-11-11T08:00:00Z",
+          staged_at: null,
+          decided_by: null,
+          decided_at: null,
+          decision_note: null,
+          record_id: null,
+          record_path: null,
+          record_title: null,
+        },
+      ],
+    });
+    const stub = client({ ...CARDS, [asking.id]: asking });
+    stub.state.proposals = [aProposal({ id: "PR-0001", kind: "question", summary: "Which bell?", working_answer: "The harbour bell.", updated_at: "2026-11-11T08:00:00Z" })];
+    stub.getIdentity.mockResolvedValue({ login: "mira" });
+    stub.getTeam.mockResolvedValue({ login: "mira", name: null, allowed: ["stage", "confirm"] });
+    renderApp(stub, `#/alpha/board/${asking.id}`);
+    const card = await screen.findByRole("dialog", { name: asking.title });
+    const item = await within(card).findByRole("article", { name: "PR-0001" });
+    fireEvent.click(within(item).getByRole("button", { name: "Answer…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Answer PR-0001" });
+    fireEvent.click(await within(dialog).findByRole("radio", { name: "Take the working answer" }));
+    expect(primaries(dialog)).toBe(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage 1 answer" }));
+    const staged = await within(dialog).findByRole("region", { name: "Staged decision" });
+    expect(within(staged).getByRole("button", { name: /^Confirm/ }).classList.contains("button-primary")).toBe(true);
+    expect(primaries(dialog)).toBe(1);
+    expect(within(dialog).getByRole("button", { name: "Stage 1 answer" }).classList.contains("button-primary")).toBe(false);
+  });
+
   it("on the page alike; outside accept.from no act is primary", async () => {
     const view = await page(FULL);
     expect([primaries(part(view, ".issue-view-actions")), primaries(part(view, ".issue-view-side"))]).toEqual([1, 0]);
@@ -168,11 +222,12 @@ describe("one primary per area (DF-4)", () => {
 });
 
 describe("the work item's order (DF-6)", () => {
-  it("reads the side column Status, then the people's fields in order, every field filled; the main column the card's blocks, Goal, Criteria, Source, Hand-offs, Evidence, History", async () => {
+  // Activity stands where History stood (docs/features/card-questions.md "Acceptance criteria", U1).
+  it("reads the side column Status, then the people's fields in order, every field filled; the main column the card's blocks, Goal, Criteria, Source, Hand-offs, Evidence, Activity", async () => {
     const dialog = await modal(FULL);
     expect(sideLabels(dialog)).toEqual(SIDE_ORDER);
     expect(within(dialog).queryByRole("button", { name: /^More fields/ })).toBeNull();
-    expect(mainSections(dialog)).toEqual(["Against the brief", "Goal", "Criteria", "Source", "Subtasks", "Evidence", "History"]);
+    expect(mainSections(dialog)).toEqual(["Against the brief", "Goal", "Criteria", "Source", "Subtasks", "Evidence", "Activity"]);
     // The status: the column's lozenge, then Move.
     const status = within(dialog).getByRole("region", { name: "Status" });
     expect([status.querySelector(".lozenge")?.getAttribute("data-appearance"), status.querySelector(".lozenge-label")?.textContent]).toEqual(["information", "Check"]);
@@ -181,7 +236,7 @@ describe("the work item's order (DF-6)", () => {
 
   it("puts the latest return reason among the card's blocks, before Goal", async () => {
     const view = await page(RETURNED);
-    expect(mainSections(view)).toEqual(["Against the brief", "Returned", "Goal", "Source", "Subtasks", "Evidence", "History"]);
+    expect(mainSections(view)).toEqual(["Against the brief", "Returned", "Goal", "Source", "Subtasks", "Evidence", "Activity"]);
     const status = within(view).getByRole("region", { name: "Status" });
     expect(status.querySelector(".lozenge")?.getAttribute("data-appearance")).toBe("warning");
   });

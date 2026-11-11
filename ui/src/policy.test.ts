@@ -955,6 +955,8 @@ describe("source policy", () => {
         "/src/board/CardActs.tsx",
         "/src/board/swimlanes.ts",
         "/src/board/rollup.ts",
+        // card-questions (U1, U5): the items' blocks and the dialogs that raise and answer them.
+        "/src/board/CardItems.tsx",
       ]),
     );
     const field = "\\.(column|flow|discipline|type|from|to|name|id|title|key)\\b";
@@ -978,8 +980,16 @@ describe("source policy", () => {
     expect(offending(compared, scanned, withoutEventKey)).toEqual([]);
     expect(compared.test(withoutEventKey("", 'if (event.key === "Escape") {'))).toBe(false);
     expect(compared.test(withoutEventKey("", "switch (event.key) {"))).toBe(false);
-    // An event's type is spelled in labels.ts alone.
-    expect(offending(/["'\`]card\.[a-z]+["'\`]/, scanned)).toEqual([]);
+    // An event's type is spelled in labels.ts alone: a card's and, since card-questions, its items'
+    // (docs/features/card-questions.md "Acceptance criteria", U5).
+    const eventLiteral = /["'\`](card|proposal)\.[a-z_]+["'\`]/;
+    expect(offending(eventLiteral, scanned)).toEqual([]);
+    // The detector itself: a proposal's type spelled is caught, as a card's is; the old scan passed it.
+    expect(eventLiteral.test('const created = "proposal.created";')).toBe(true);
+    expect(/["'\`]card\.[a-z]+["'\`]/.test('const created = "proposal.created";')).toBe(false);
+    expect(eventLiteral.test("if (event.type === 'card.moved') {")).toBe(true);
+    expect(eventLiteral.test("const failed = `proposal.apply_failed`;")).toBe(true);
+    expect(eventLiteral.test("<strong>{itemEventWords(event.type, t)}</strong>")).toBe(false);
     // The detector itself: a branch on a project's word is caught, the look-ups the Board makes are not.
     // A return column spelled, the preset's or the mock's, is caught; the lookup the Board makes is not.
     for (const line of ['if (row.column === "sent-back") {', 'const back = card.column === "blocked";', 'if (lane.column !== "sent-back") {']) {

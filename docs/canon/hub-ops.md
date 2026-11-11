@@ -73,7 +73,7 @@ Without `--push` the hub's commits die with the host: a restored `applied` propo
 ## Upgrade
 
 1. `git diff v<old> v<new> -- scripts/deploy`.
-2. A dump on the old version, each exit 0: `docker compose run --rm dump-queue queue once`, `... dump-door door once`, `... backup upload once`; note both snapshot IDs.
+2. A dump on the old version, each exit 0: `docker compose run --rm dump-queue queue once`, `... dump-door door once`, `... backup upload once`; note both snapshot IDs (no `backup` service: copy the dumps off tmpfs first).
 3. `git fetch --tags origin && git checkout v<new>`, `diff .env.example .env`, `SPECENGINE_VERSION=<new>`.
 4. `docker compose pull`, `up -d`, `ps`: all healthy.
 

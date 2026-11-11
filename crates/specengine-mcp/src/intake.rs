@@ -91,20 +91,21 @@ line. ",
 
 const QUESTION_DESCRIPTION: &str = concat!(
     "Asks the owner a question about nodes: the same as `spec propose question ID... --text T \
---working-answer W --price-of-other P [--severity S] [--distinct-from X]... --author-role \
-ROLE`. Checked first against what is decided and asked; stored (open) only when nothing \
+--working-answer W --price-of-other P [--severity S] [--distinct-from X]... [--card C] \
+--author-role ROLE`. Checked first against what is decided and asked; stored (open) only when nothing \
 answers it. content is the command's output, structuredContent its --json document {id, \
 created, hits, related, linked, diagnostics, notes}.
 
 node_ids: 1 to 16 IDs (or slug/ID) it is about, or root-relative .md paths naming their \
-files' documents (stored by its id, else its path), each node once; an alias is refused \
-naming the ID, a look-alike with its Latin fix.
+files' documents, each node once; an alias is refused naming the ID, a look-alike with its \
+Latin fix.
 text: the question, at most 1024 bytes.
 working_answer: the answer worked on until the owner's, at most 2048 bytes: keep working \
 on it.
 price_of_other: what another answer would cost, at most 2048 bytes.
-severity: high, normal (absent) or low; it only orders the queue.
+severity: high, normal (absent) or low.
 distinct_from: at most 64 hits (an id, else a path) it is declared distinct from.
+card_id: the card (C-0001) it is asked for, in any state.
 author_role (required), author_model, run: who asks.
 task_id: as propose_change.
 
@@ -113,7 +114,7 @@ answer), or a question or decision queued on a shared node with the same text, w
 case aside (a rejected one's reason is the owner's answer). With a hit nothing is stored: id \
 null, created false; read the answer, or name every hit in distinct_from to store it anyway. \
 Past 10 hits, a note names the rest; over 64 it cannot be stored. Related: decision documents \
-only mentioning a node, queued questions or decisions with other text. The owner decides \
+only mentioning a node, queued items with other text. The owner decides \
 with `spec approve PR` (a decision record: a queue hit's record, path, title as the answer) \
 or answers with `spec reject PR --reason <answer>`. A refusal names the field. ",
     queue_tail!()
@@ -137,7 +138,7 @@ working_answer: what is worked on meanwhile, at most 2048 bytes.
 proposed_patch: {target, base, text, rationale} as propose_change takes them, the target one \
 of node_ids: stored as a linked update (linked, its findings in diagnostics), decided on its \
 own.
-distinct_from, author_role (required), author_model, run: as ask_question.
+distinct_from, card_id, author_role (required), author_model, run: as ask_question.
 task_id: as propose_change takes it; the linked update takes it too.
 
 The owner decides it with `spec approve PR --option N` (a decision record) or settles it \
@@ -162,7 +163,8 @@ severity: high, normal (absent) or low; it only orders the queue.
 proposed_patch: {target, base, text, rationale} as propose_change takes them, the target one \
 of node_ids: the rule's new text, stored as a linked update (linked, its findings in \
 diagnostics), approved on its own.
-distinct_from, author_role (required), author_model, run: as ask_question.
+distinct_from, card_id, author_role (required), author_model, run: as ask_question.
+why: why you decided so, at most 2048 bytes; null: none.
 task_id: as propose_change takes it; the linked update takes it too.
 
 The owner records it with `spec approve PR` (a decision record: its working answer, or \
@@ -197,8 +199,8 @@ const PROPOSAL_DESCRIPTION: &str = concat!(
     "One proposal of the current repository's queue: the same as `spec review PR --brief`. \
 content is the command's output (key: value lines), structuredContent its --json document: \
 kind, status, targets, place, author, rationale, the findings an update introduces (at most \
-20, the rest counted in a note), a question's, discrepancy's or decision's fields, the \
-owner's decision and note (a rejected one's reason is its answer; one decided by `spec \
+20, the rest counted in a note), a question's, discrepancy's or decision's fields (its \
+card_id; a decision's why), the owner's decision and note (a rejected one's reason is its answer; one decided by `spec \
 approve` names its record: record_id, record_path, record_title, choice), and for an open \
 update what approving it now would do. The texts, diff and conflict are left out (`spec review PR` prints them); the \
 text is cut at 40000 characters.
@@ -539,6 +541,9 @@ pub(crate) struct QuestionArgs {
     pub severity: Option<IntakeSeverity>,
     /// Hits (an id, else a path) it is declared distinct from.
     pub distinct_from: Option<Vec<String>>,
+    /// The card (`C-0001`) it is raised for, one of this queue's in any
+    /// state.
+    pub card_id: Option<String>,
     /// The asking agent's role.
     pub author_role: String,
     /// The asking agent's model.
@@ -576,6 +581,9 @@ pub(crate) struct DiscrepancyArgs {
     pub proposed_patch: Option<ProposedPatch>,
     /// Hits (an id, else a path) it is declared distinct from.
     pub distinct_from: Option<Vec<String>>,
+    /// The card (`C-0001`) it is raised for, one of this queue's in any
+    /// state.
+    pub card_id: Option<String>,
     /// The reporting agent's role.
     pub author_role: String,
     /// The reporting agent's model.
@@ -602,6 +610,8 @@ pub(crate) struct DecisionArgs {
     pub working_answer: String,
     /// What another answer would cost.
     pub price_of_other: String,
+    /// Why you decided so; absent or `null`: none.
+    pub why: Option<String>,
     /// Absent: `normal`.
     #[schemars(with = "Option<mirror::IntakeSeverity>")]
     pub severity: Option<IntakeSeverity>,
@@ -610,6 +620,9 @@ pub(crate) struct DecisionArgs {
     pub proposed_patch: Option<ProposedPatch>,
     /// Hits (an id, else a path) it is declared distinct from.
     pub distinct_from: Option<Vec<String>>,
+    /// The card (`C-0001`) it is raised for, one of this queue's in any
+    /// state.
+    pub card_id: Option<String>,
     /// The deciding agent's role.
     pub author_role: String,
     /// The deciding agent's model.
@@ -725,6 +738,9 @@ pub(crate) struct HubQuestionArgs {
     pub severity: Option<IntakeSeverity>,
     /// Hits (an id, else a path) it is declared distinct from.
     pub distinct_from: Option<Vec<String>>,
+    /// The card (`C-0001`) it is raised for, one of this queue's in any
+    /// state.
+    pub card_id: Option<String>,
     /// The asking agent's role.
     pub author_role: String,
     /// The asking agent's model.
@@ -742,6 +758,7 @@ impl From<HubQuestionArgs> for QuestionArgs {
             price_of_other: args.price_of_other,
             severity: args.severity,
             distinct_from: args.distinct_from,
+            card_id: args.card_id,
             author_role: args.author_role,
             author_model: args.author_model,
             run: args.run,
@@ -778,6 +795,9 @@ pub(crate) struct HubDiscrepancyArgs {
     pub proposed_patch: Option<ProposedPatch>,
     /// Hits (an id, else a path) it is declared distinct from.
     pub distinct_from: Option<Vec<String>>,
+    /// The card (`C-0001`) it is raised for, one of this queue's in any
+    /// state.
+    pub card_id: Option<String>,
     /// The reporting agent's role.
     pub author_role: String,
     /// The reporting agent's model.
@@ -799,6 +819,7 @@ impl From<HubDiscrepancyArgs> for DiscrepancyArgs {
             working_answer: args.working_answer,
             proposed_patch: args.proposed_patch,
             distinct_from: args.distinct_from,
+            card_id: args.card_id,
             author_role: args.author_role,
             author_model: args.author_model,
             run: args.run,
@@ -821,6 +842,8 @@ pub(crate) struct HubDecisionArgs {
     pub working_answer: String,
     /// What another answer would cost.
     pub price_of_other: String,
+    /// Why you decided so; absent or `null`: none.
+    pub why: Option<String>,
     /// Absent: `normal`.
     #[schemars(with = "Option<mirror::IntakeSeverity>")]
     pub severity: Option<IntakeSeverity>,
@@ -829,6 +852,9 @@ pub(crate) struct HubDecisionArgs {
     pub proposed_patch: Option<ProposedPatch>,
     /// Hits (an id, else a path) it is declared distinct from.
     pub distinct_from: Option<Vec<String>>,
+    /// The card (`C-0001`) it is raised for, one of this queue's in any
+    /// state.
+    pub card_id: Option<String>,
     /// The deciding agent's role.
     pub author_role: String,
     /// The deciding agent's model.
@@ -844,9 +870,11 @@ impl From<HubDecisionArgs> for DecisionArgs {
             text: args.text,
             working_answer: args.working_answer,
             price_of_other: args.price_of_other,
+            why: args.why,
             severity: args.severity,
             proposed_patch: args.proposed_patch,
             distinct_from: args.distinct_from,
+            card_id: args.card_id,
             author_role: args.author_role,
             author_model: args.author_model,
             run: args.run,
@@ -1202,6 +1230,7 @@ impl SpecEngineServer {
                 price_of_other: args.price_of_other,
                 severity: args.severity,
                 distinct_from: args.distinct_from.unwrap_or_default(),
+                card: args.card_id,
                 author_role: Some(args.author_role),
                 author_model: args.author_model,
                 run: args.run,
@@ -1241,6 +1270,7 @@ impl SpecEngineServer {
                     proposed_patch: args.proposed_patch,
                     distinct_from: args.distinct_from,
                 },
+                card: args.card_id,
                 author_role: Some(args.author_role),
                 author_model: args.author_model,
                 run: args.run,
@@ -1273,10 +1303,12 @@ impl SpecEngineServer {
                     text: args.text,
                     working_answer: args.working_answer,
                     price_of_other: args.price_of_other,
+                    why: args.why,
                     severity: args.severity,
                     proposed_patch: args.proposed_patch,
                     distinct_from: args.distinct_from,
                 },
+                card: args.card_id,
                 author_role: Some(args.author_role),
                 author_model: args.author_model,
                 run: args.run,

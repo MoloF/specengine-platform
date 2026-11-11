@@ -1003,17 +1003,25 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let raw = review_json(&pair, &pair.main, &id);
     let keys = task_common::keys(&raw);
     // 47 since docs/features/rev-discipline.md added `revisions`; 48 since
-    // docs/features/drift-queue.md added `drift` after it.
-    assert_eq!(keys.len(), 48, "{keys:?}");
+    // docs/features/drift-queue.md added `drift` after it; 50 since
+    // docs/features/card-questions.md D14.
+    assert_eq!(keys.len(), 50, "{keys:?}");
     assert_eq!(
         keys[44..],
-        ["staged", "staged_at", "interpretation", "notes"],
+        [
+            "staged",
+            "staged_at",
+            "interpretation",
+            "card_id",
+            "why",
+            "notes"
+        ],
         "{keys:?}"
     );
     assert!(
         raw.contains(&format!(
             "\"staged_at\":null,\"interpretation\":{{\"decision\":\"DEC-0023\",\"how\":\"{HOW}\",\
-             \"why\":\"{WHY}\"}},\"notes\":"
+             \"why\":\"{WHY}\"}},\"card_id\":null,\"why\":null,\"notes\":"
         )),
         "{raw}"
     );
@@ -1029,7 +1037,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert_eq!(json_of(&update_raw)["interpretation"], Value::Null);
     let (update_text, _) = printed(&pair.review_ok(&pair.main, &update));
     assert!(
-        update_text.contains("\ninterpretation: -\nnotes:"),
+        update_text.contains("\ninterpretation: -\ncard_id: -\nwhy: -\nnotes:"),
         "{update_text}"
     );
 
@@ -1038,7 +1046,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert!(
         text.contains(&format!(
             "\nstaged_at: -\ninterpretation:\n  decision: DEC-0023\n  how the decision was \
-             applied:\n    {HOW}\n  why interpretation was needed:\n    {WHY}\nnotes:"
+             applied:\n    {HOW}\n  why interpretation was needed:\n    {WHY}\ncard_id: -\nwhy: -\nnotes:"
         )),
         "{text}"
     );
@@ -1057,7 +1065,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let brief_value = json_of(&brief_json);
     assert_eq!(brief_value["interpretation"], value["interpretation"]);
     assert_eq!(brief_value["new_text"], Value::Null);
-    assert_eq!(task_common::keys(&brief_json).len(), 48);
+    // 50 since docs/features/card-questions.md L1.
+    assert_eq!(task_common::keys(&brief_json).len(), 50);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);
@@ -1538,14 +1547,15 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
     );
     let row: Value = serde_json::from_str(lines[1]).expect("a row");
     let row = row["proposals"].as_object().expect("a proposals row");
-    assert_eq!(row.len(), 46);
+    // 48 since docs/features/card-questions.md S1.
+    assert_eq!(row.len(), 48);
     assert_eq!(row["kind"], json!("interpretation"));
     assert_eq!(
         row["interpretation"],
@@ -1573,7 +1583,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":4,\"queue_schema\":10,",
+            "\"format\":5,\"queue_schema\":11,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )

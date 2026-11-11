@@ -92,6 +92,7 @@ No card write moves, creates or refuses another card. A parent waits on no child
 
   A reorder inside it (`from` = `to`) needs none, nor does a move out of it.
 - **Order of a move's checks**: closed card, the note's grammar, a stale `--revision`, then core's `card_move` (the flow's move, its `by`, the return note). So a move outside `by` into the return column with no note says `by`'s line, not the note's.
+- **A return may ask**, on the page alone: the move, then a question on the card, two writes (`card-questions.md` "Screen").
 
 ## Children
 

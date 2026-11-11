@@ -234,6 +234,7 @@ impl Pair {
             author_model: Some("claude-opus-5-5".to_owned()),
             run: None,
             login: None,
+            card: None,
             now: NOW.to_owned(),
             git: self.git_env(cwd),
         };
@@ -264,6 +265,7 @@ impl Pair {
                     author_model: Some("claude-opus-5-5".to_owned()),
                     run: None,
                     login: None,
+                    card: None,
                     now: NOW.to_owned(),
                     git: self.git_env(cwd),
                 },

@@ -321,10 +321,11 @@ pub use card::{
     CardAcceptBody, CardAcceptRequest, CardAction, CardAssignBody, CardAssignRequest,
     CardCancelBody, CardCancelRequest, CardCause, CardClearBody, CardClearGroupBody,
     CardClearGroupRequest, CardClearOutcome, CardClearRequest, CardEditBody, CardEditRequest,
-    CardGroupOutcome, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest, CardNewBody,
-    CardNewRequest, CardOutcome, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept,
-    card_assign, card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move,
-    card_new, card_show,
+    CardGroupOutcome, CardItem, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest,
+    CardNewBody, CardNewRequest, CardOutcome, CardRaiseBody, CardRaiseKind, CardRaiseOutcome,
+    CardRaiseRequest, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept, card_assign,
+    card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move, card_new,
+    card_raise, card_show,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
@@ -710,6 +711,9 @@ pub enum Outcome {
     CardGroup(Box<CardGroupOutcome>),
     /// `card show`: the card.
     CardShow(Box<CardShowOutcome>),
+    /// [`card_raise`] (no command; the daemon's card door): the intake
+    /// document, or why there is no such card.
+    CardRaise(Box<CardRaiseOutcome>),
     /// `card list`: the flows and the cards.
     CardList(Box<CardListOutcome>),
     /// `approve --open`: what the walk applied and left.
@@ -766,6 +770,7 @@ impl Outcome {
             Self::CardGroup(group) => group.exit(),
             Self::Trace(trace) => trace.exit(),
             Self::CardShow(show) => show.exit(),
+            Self::CardRaise(raise) => raise.exit(),
             Self::Round(run) => run.exit(),
             Self::RoundAnswers(answers) => answers.exit(),
             _ => Exit::Answered,
@@ -824,6 +829,10 @@ impl Outcome {
             Self::CardGroup(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Trace(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::CardShow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::CardRaise(outcome) => match &outcome.intake {
+                Some(intake) => (&intake.messages, intake.refusal.as_deref()),
+                None => (&outcome.messages, outcome.reason.as_deref()),
+            },
             Self::CardList(outcome) => (&outcome.messages, None),
             Self::RoundSheet(outcome) => (&outcome.messages, None),
             Self::Round(outcome) => (&outcome.messages, None),
@@ -883,6 +892,7 @@ impl Outcome {
                 | Self::CardGroup(_)
                 | Self::Trace(_)
                 | Self::CardShow(_)
+                | Self::CardRaise(_)
                 | Self::CardList(_)
                 | Self::RoundSheet(_)
                 | Self::Round(_)
@@ -940,6 +950,10 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::CardGroup(outcome) => card::render_group_text(outcome),
         Outcome::Trace(outcome) => trace::render_text(outcome),
         Outcome::CardShow(outcome) => card::render_show_text(outcome),
+        Outcome::CardRaise(outcome) => outcome
+            .intake
+            .as_deref()
+            .map_or_else(String::new, intake::render_text),
         Outcome::CardList(outcome) => card::render_list_text(outcome),
         Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
         Outcome::Round(outcome) => round::render_text(outcome),
@@ -995,6 +1009,7 @@ impl serde::Serialize for Outcome {
             Self::CardGroup(outcome) => outcome.serialize(serializer),
             Self::Trace(outcome) => outcome.serialize(serializer),
             Self::CardShow(outcome) => outcome.serialize(serializer),
+            Self::CardRaise(outcome) => outcome.serialize(serializer),
             Self::CardList(outcome) => outcome.serialize(serializer),
             Self::RoundSheet(outcome) => outcome.serialize(serializer),
             Self::Round(outcome) => outcome.serialize(serializer),

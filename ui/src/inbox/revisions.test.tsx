@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Proposal, QueueEvent, RevisionChange } from "../api/types";
 import { aProposal } from "../test/builders";
 import { renderApp } from "../test/render";
-import { STAGED_AT, stubClient } from "../test/stubClient";
+import { STAGED_SHOWN, stubClient } from "../test/stubClient";
 import { enT } from "../test/text";
 import { isRefused, lockEntriesText, revisionsToKeep, revisionText } from "./revisions";
 
@@ -269,14 +269,14 @@ describe("staging an editorial approve (UI-2 of rev-discipline)", () => {
       span_hash: "b3:base",
     });
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
-    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec approve PR-0004`);
+    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_SHOWN}. Confirm on a terminal: spec approve PR-0004`);
     expect(Array.from(staged.querySelectorAll("dt"), (dt) => [dt.textContent, dt.nextElementSibling?.textContent])).toEqual([
       ["Decision", "Accept"],
       ["Editorial", "Keep the revision"],
       ["Note", "typo"],
     ]);
     expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe(
-      `Staged Accept on PR-0004 at ${STAGED_AT}; nothing is applied yet. Confirm it on a terminal: spec approve PR-0004.`,
+      `Staged Accept on PR-0004 at ${STAGED_SHOWN}; nothing is applied yet. Confirm it on a terminal: spec approve PR-0004.`,
     );
     fireEvent.click(within(staged).getByRole("button", { name: /^Copy/ }));
     await waitFor(() => {
@@ -295,7 +295,7 @@ describe("staging an editorial approve (UI-2 of rev-discipline)", () => {
       ["alpha", "PR-0004", { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null }, "2026-10-01T10:00:00Z"],
     ]);
     const staged = await within(screen.getByRole("article")).findByRole("region", { name: "Staged decision" });
-    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_AT}. Confirm on a terminal: spec approve PR-0004`);
+    expect(staged.querySelector(".staged-line")?.textContent).toBe(`Staged ${STAGED_SHOWN}. Confirm on a terminal: spec approve PR-0004`);
     expect(Array.from(staged.querySelectorAll("dt"), (dt) => dt.textContent)).not.toContain("Editorial");
   });
 

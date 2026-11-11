@@ -96,6 +96,7 @@ fn question(
         login: None,
         now: now.to_owned(),
         git: calls.git_env(),
+        card: None,
     };
     let ask = |request: &QuestionRequest| {
         propose_question_with_task(&calls.env(), &calls.globals(), request, task)
@@ -160,6 +161,7 @@ fn gap(calls: &Calls, targets: &[&str], summary: &str, severity: IntakeSeverity)
                 login: None,
                 now: OLDER.to_owned(),
                 git: calls.git_env(),
+                card: None,
             },
         )
         .unwrap_or_else(|error| panic!("report {summary}: {error}"))
@@ -1397,6 +1399,7 @@ fn r07_an_answer_on_a_staged_item_names_the_stage_it_replaced() {
                 editorial: None,
                 note: None,
                 updated_at: current,
+                actor: None,
             },
             now: EARLIER.to_owned(),
             git: s.calls.git_env(),

@@ -178,6 +178,7 @@ fn question_request(
         login: None,
         now: now.to_owned(),
         git: pair.git_env(cwd),
+        card: None,
     }
 }
 
@@ -266,6 +267,7 @@ fn approve_body(answer: Option<&str>) -> impl FnOnce(String) -> StageBody {
         editorial: None,
         note: None,
         updated_at,
+        actor: None,
     }
 }
 
@@ -1993,6 +1995,7 @@ fn ac13_staged_asks_the_staged_questions_in_round_order_and_notes_an_update() {
         |updated_at| StageBody::Reject {
             reason: "dup".to_owned(),
             updated_at,
+            actor: None,
         },
         AFTER,
     );
@@ -2066,6 +2069,7 @@ fn stage_checks_its_clock_and_id_before_the_queue_is_opened() {
         body: StageBody::Reject {
             reason: "dup".to_owned(),
             updated_at: NOW.to_owned(),
+            actor: None,
         },
         now: now.to_owned(),
         git: pair.git_env(&main),
@@ -2103,6 +2107,7 @@ fn stage_checks_its_clock_and_id_before_the_queue_is_opened() {
             editorial: None,
             note: None,
             updated_at: updated_at.to_owned(),
+            actor: None,
         },
         now: ROUND.to_owned(),
         git: pair.git_env(&main),
@@ -2779,6 +2784,7 @@ fn staged_notes_another_repository_s_and_a_gone_one_s_staged_items_unasked() {
         |updated_at| StageBody::Reject {
             reason: "gone".to_owned(),
             updated_at,
+            actor: None,
         },
         LATER,
     );
@@ -2971,6 +2977,7 @@ fn approve_of(
             editorial: None,
             note: None,
             updated_at: updated_at.to_owned(),
+            actor: None,
         },
     }
 }
@@ -2981,6 +2988,7 @@ fn reject_of(id: &str, reason: &str, updated_at: &str) -> RoundAnswerBody {
         stage: StageBody::Reject {
             reason: reason.to_owned(),
             updated_at: updated_at.to_owned(),
+            actor: None,
         },
     }
 }

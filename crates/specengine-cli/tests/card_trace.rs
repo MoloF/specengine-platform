@@ -962,6 +962,7 @@ fn ac02_a_staged_editorial_refreshes() {
                 editorial: Some(true),
                 note: None,
                 updated_at: pair.proposal(&proposal).updated_at,
+                actor: None,
             },
             now: "2026-10-05T22:00:00Z".to_owned(),
             git: pair.git_env(&pair.main),

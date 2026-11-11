@@ -495,3 +495,52 @@ fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
         "the hub's edit_card takes task: {schema}"
     );
 }
+
+// ---------------------------------------------- card-questions (RM-0097)
+
+/// docs/features/card-questions.md H3 and L2, the hub's texts: after "Data"'s
+/// edits `ask_question` is 2 030 bytes, `report_decision` 1 758,
+/// `report_discrepancy` 1 714, each ASCII and naming `card_id`;
+/// `report_decision` holds the `why` line; each schema takes `card_id` (a
+/// string or null), `report_decision` `why`, none `task_id`, root
+/// `additionalProperties: false`. M: `HubQuestionArgs` without `card_id`.
+#[test]
+fn card_questions_the_hub_raises_take_card_id_and_their_texts_hold() {
+    let server = hub();
+    for (name, bytes) in [
+        ("ask_question", 2030),
+        ("report_decision", 1758),
+        ("report_discrepancy", 1714),
+    ] {
+        let tool = server
+            .get_tool(name)
+            .unwrap_or_else(|| panic!("the hub routes no {name}"));
+        let description = tool.description.as_deref().expect("a description");
+        assert_eq!(description.len(), bytes, "{name}: {description}");
+        assert!(description.is_ascii(), "{name}");
+        assert!(has_word(description, "card_id"), "{name}: {description}");
+        let schema = serde_json::to_value(tool.input_schema.as_ref()).expect("a schema");
+        assert_eq!(
+            schema["properties"]["card_id"]["type"],
+            json!(["string", "null"]),
+            "{name}: {schema}"
+        );
+        assert!(schema["properties"].get("task_id").is_none(), "{name}");
+        assert_eq!(schema["additionalProperties"], json!(false), "{name}");
+        assert_eq!(
+            schema["properties"].get("why").is_some(),
+            name == "report_decision",
+            "{name}: {schema}"
+        );
+    }
+    let decision = server.get_tool("report_decision").expect("report_decision");
+    let description = decision.description.as_deref().expect("a description");
+    assert!(
+        description.contains("why: why you decided so, at most 2048 bytes; null: none."),
+        "{description}"
+    );
+    assert!(
+        description.contains("distinct_from, card_id, author_role (required)"),
+        "{description}"
+    );
+}

@@ -1,8 +1,8 @@
-import type { CardAllowed, CardFlow, CardMove, CardRow, KnownTeamAct, TraceCard } from "../api/types";
+import type { CardAllowed, CardFlow, CardMove, CardRow, KnownProposalStatus, KnownTeamAct, TraceCard } from "../api/types";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
 import type { IconName } from "../ui/Icon";
-import type { LozengeAppearance } from "../ui/Lozenge";
+import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
 import type { StatusCategory } from "./category";
 
 // The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"), each from the
@@ -123,11 +123,86 @@ const EVENT_PREFIX = "card.";
 /** The nine event types, as stored. */
 export const EVENT_TYPES: readonly string[] = Object.keys(EVENT_WORDS).map((word) => `${EVENT_PREFIX}${word}`);
 
+/** Whether this build has words for an event, a card's or an item's: one it has none for is shown raw, under `lang="en"`. */
+export function knowsEvent(type: string): boolean {
+  const word = type.startsWith(EVENT_PREFIX) ? type.slice(EVENT_PREFIX.length) : type.startsWith(ITEM_EVENT_PREFIX) ? type.slice(ITEM_EVENT_PREFIX.length) : null;
+  return word !== null && (type.startsWith(EVENT_PREFIX) ? Object.hasOwn(EVENT_WORDS, word) : Object.hasOwn(ITEM_EVENT_WORDS, word));
+}
+
 /** An event's words; an unknown type raw. */
 export function eventWords(type: string, t: Translate): string {
   const word = type.startsWith(EVENT_PREFIX) ? type.slice(EVENT_PREFIX.length) : null;
   return word !== null && Object.hasOwn(EVENT_WORDS, word) ? t(`board.event.${word as EventWord}`) : type;
 }
+
+/**
+ * A card's items' events (docs/canon/card-questions.md "The rule"; docs/features/card-questions.md
+ * "Acceptance criteria", U1): each stored type is `proposal.` and its word here, the catalog's key,
+ * beside the card's own; the Activity names nothing else of an event.
+ */
+const ITEM_EVENT_WORDS = { created: true, staged: true, unstaged: true, approved: true, applied: true, rejected: true, apply_failed: true };
+
+type ItemEventWord = keyof typeof ITEM_EVENT_WORDS;
+
+const ITEM_EVENT_PREFIX = "proposal.";
+
+/** The event that raised an item: its block stands under it. */
+const ITEM_RAISED: ItemEventWord = "created";
+
+/** Whether an event is one of an item's: the queue's, not the card's. */
+export function isItemEvent(type: string): boolean {
+  return type.startsWith(ITEM_EVENT_PREFIX);
+}
+
+/** Whether an event raised its item, whose block opens at it. */
+export function raisesItem(type: string): boolean {
+  return type === `${ITEM_EVENT_PREFIX}${ITEM_RAISED}`;
+}
+
+/** An item's event's words; an unknown type raw. */
+export function itemEventWords(type: string, t: Translate): string {
+  const word = isItemEvent(type) ? type.slice(ITEM_EVENT_PREFIX.length) : null;
+  return word !== null && Object.hasOwn(ITEM_EVENT_WORDS, word) ? t(`board.activity.${word as ItemEventWord}`) : type;
+}
+
+/** How an item's state looks as a lozenge: a proposal's seven, each with its icon; any other raw and neutral. */
+const ITEM_STATUSES: Readonly<Record<KnownProposalStatus, { appearance: LozengeAppearance; icon: IconName }>> = {
+  open: { appearance: "neutral", icon: "open" },
+  changes_requested: { appearance: "warning", icon: "changes" },
+  approved: { appearance: "information", icon: "approved" },
+  applied: { appearance: "success", icon: "applied" },
+  rejected: { appearance: "danger", icon: "rejected" },
+  deferred: { appearance: "neutral", icon: "deferred" },
+  superseded: { appearance: "neutral", icon: "superseded" },
+};
+
+/** An item's state: its lozenge, labelled as the Inbox labels it; a word this build does not know raw, under `lang="en"`. */
+export function itemStatusLook(status: string, t: Translate): LozengeLook & { lang?: "en" } {
+  if (!Object.hasOwn(ITEM_STATUSES, status)) {
+    return { appearance: "neutral", icon: "unknown", label: status, lang: "en" };
+  }
+  const known = status as KnownProposalStatus;
+  return { ...ITEM_STATUSES[known], label: t(`inbox.status.${known}`) };
+}
+
+/** The state an item is answered in: the one Answer… stages on (`docs/canon/decision-staging.md` "Rule"). */
+const OPEN_ITEM: KnownProposalStatus = "open";
+
+/** Whether an item takes an answer now: an open one alone. */
+export function takesAnswer(status: string): boolean {
+  return status === OPEN_ITEM;
+}
+
+/** The state whose decision note is the item's answer (docs/features/card-questions.md "Acceptance criteria", U1): a reject's reason. */
+const REJECTED_ITEM: KnownProposalStatus = "rejected";
+
+/** Whether an item's decision note is its answer: a rejected item's reason is; an approver's note on any other is not. */
+export function noteAnswers(status: string): boolean {
+  return status === REJECTED_ITEM;
+}
+
+/** The two kinds a card raises, as the card door takes them (docs/features/card-questions.md "Acceptance criteria", L3). */
+export const RAISED_KINDS = { question: "question", decision: "decision" } as const;
 
 /** A mark as a read tells it, `spec trace`'s row and the card list's alike. */
 export type CardMark = Pick<TraceCard, "mark" | "on" | "discrepancy" | "correction">;

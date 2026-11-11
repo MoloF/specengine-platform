@@ -13,11 +13,11 @@ Use this when the spec is silent or ambiguous, or contradicts the code. Raise a 
 
 - **A question**, `ask_question`: the spec does not say, or says it two ways. Give the question in `text`, your `working_answer`, and in `price_of_other` what another answer would cost.
 - **A discrepancy**, `report_discrepancy`: the code and the spec disagree. Give a `summary`, how the code departs (`gap_type`), its `severity`, the `evidence` (file, symbol and lines where known, what is observed and documented), priced `options` to settle it and the index of your `recommendation` among them, and your `working_answer`.
-- **A decision**, `report_decision`: you settled in the work what the spec leaves open. Give in `text` what had to be decided, your decision as the `working_answer`, and `price_of_other`; the section it governs first in `node_ids`, and the rule's new text as a `proposed_patch` when it changes one.
+- **A decision**, `report_decision`: you settled in the work what the spec leaves open. Give in `text` what had to be decided, your decision as the `working_answer`, `price_of_other`, and why in `why`; the section it governs first in `node_ids`, and the rule's new text as a `proposed_patch` when it changes one.
 - Drift between `spec.lock` and the code (`spec verify` findings): `report_drift`, no `node_ids` for every drifting node, a named node also when never locked; it takes no evidence; the owner decides on a terminal.
 
 Each takes the nodes the record is about in `node_ids` (IDs or root-relative `.md` paths) and `author_role`: your role as the project names it.
-On a task, pass its `task_id` too; `get_proposal`'s `task_id` names it.
+On a task, pass its `task_id`; for a card, its `card_id`.
 
 ## Keep working
 

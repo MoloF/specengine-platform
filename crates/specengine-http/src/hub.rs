@@ -66,8 +66,9 @@ pub(crate) fn lived<S: Stream>(stream: S, life: Option<Duration>) -> impl Stream
     }
 }
 
-/// The last segment of a card's plain writes.
-const WRITES: [&str; 4] = ["move", "edit", "assign", "cancel"];
+/// The last segment of a card's plain writes: `items` raises a question or
+/// a decision on it (`docs/canon/card-questions.md` "The rule").
+const WRITES: [&str; 5] = ["move", "edit", "assign", "cancel", "items"];
 
 /// The last segment of a card's confirm routes: each takes a `Consent`.
 const CONFIRMS: [&str; 2] = ["accept", "clear"];
@@ -308,7 +309,7 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
 /// The class of a write, default deny: `None` for a route this hub does not
 /// serve. Exact raw segments, so an encoded or trailing form of a route is
 /// not listed. Plain: POST on `.../cards` or
-/// `.../cards/:id/{move,edit,assign,cancel}`. Team: POST, DELETE on
+/// `.../cards/:id/{move,edit,assign,cancel,items}`. Team: POST, DELETE on
 /// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
 /// `.../cards/:id/{accept,clear}`, `.../trace/clear` and
 /// `.../proposals/:id/confirm`. Mcp: POST, DELETE on `/mcp/<slug>`.
@@ -918,6 +919,8 @@ mod tests {
             "/api/projects/p/cards/C-0001/edit",
             "/api/projects/p/cards/C-0001/assign",
             "/api/projects/p/cards/C-0001/cancel",
+            // docs/features/card-questions.md H1: the sixth plain write.
+            "/api/projects/p/cards/C-0001/items",
         ];
         let team = [
             "/api/projects/p/proposals/PR-0001/decision",
@@ -993,6 +996,9 @@ mod tests {
             "/api/projects/p/cards/C-0001/move/",
             "/api/projects/p/cards/",
             "/api/projects/p/cards/C-0001/move/x",
+            "/api/projects/p/cards/C-0001/items/x",
+            "/api/projects/p/cards/C-0001/%69tems",
+            "/api/projects/p/cards/C-0001/items/",
             "/api/projects/p/cards/C-0001/accept/",
             "/api/projects/p/cards/C-0001/%61ccept",
             "/api/projects/p/cards//accept",
@@ -1036,6 +1042,44 @@ mod tests {
         // A read of any path past the fence: the routes answer it.
         assert!(get("/api/projects/p/inbox", &proxied(&[])).is_ok());
         assert!(get("/api/projects/p/nothing", &proxied(&[])).is_ok());
+    }
+
+    /// docs/features/card-questions.md H1: a card's raise is the sixth plain
+    /// write: `POST .../cards/:id/items` is `Plain`, any method but POST,
+    /// a trailing segment and an encoded `items` are no route. M: `items`
+    /// classed Team.
+    #[test]
+    fn h1_a_raise_is_the_sixth_plain_write() {
+        assert_eq!(
+            class(&Method::POST, "/api/projects/p/cards/C-0001/items"),
+            Some(Class::Plain)
+        );
+        for verb in WRITES {
+            assert_eq!(
+                class(
+                    &Method::POST,
+                    &format!("/api/projects/p/cards/C-0001/{verb}")
+                ),
+                Some(Class::Plain),
+                "{verb}"
+            );
+        }
+        assert_eq!(WRITES.len(), 5);
+        for path in [
+            "/api/projects/p/cards/C-0001/items/x",
+            "/api/projects/p/cards/C-0001/%69tems",
+            "/api/projects/p/cards/C-0001/items/",
+            "/api/projects/p/cards//items",
+        ] {
+            assert_eq!(class(&Method::POST, path), None, "{path}");
+        }
+        for method in [Method::GET, Method::DELETE, Method::PUT] {
+            assert_eq!(
+                class(&method, "/api/projects/p/cards/C-0001/items"),
+                None,
+                "{method}"
+            );
+        }
     }
 
     #[test]

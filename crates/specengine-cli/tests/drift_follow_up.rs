@@ -495,6 +495,7 @@ fn question_on(repo: &LockRepo, node: &str, text: &str) -> String {
         login: None,
         now: RAISED.to_owned(),
         git: repo.git_env(&repo.root),
+        card: None,
     };
     let run = |request: &QuestionRequest| {
         propose_question(&repo.env(&repo.root), &Globals::default(), request)
@@ -839,6 +840,7 @@ fn follow_up_on_a_non_drift_kind_is_a_usage_error() {
             body: StageBody::Reject {
                 reason: "Not now.".to_owned(),
                 updated_at,
+                actor: None,
             },
             now: DECIDED.to_owned(),
             git: repo.git_env(&repo.root),

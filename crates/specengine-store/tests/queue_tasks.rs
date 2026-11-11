@@ -130,7 +130,10 @@ fn discrepancy(target: &str, worktree: &str) -> NewIntake {
             options: vec![option("code"), option("spec")],
             recommendation: Some(0),
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 
@@ -209,18 +212,19 @@ fn task_events(queue: &SqliteQueue) -> Vec<(String, serde_json::Value)> {
 
 /// Schema 4: `tasks` and `runs` as `PRAGMA table_info` gives them (names
 /// in [`TASK_COLUMNS`] and [`RUN_COLUMNS`] order, `run` the one `INTEGER`,
-/// the key `id`, `(task_id, run)`), both `STRICT`; `proposals` 46 columns
-/// (schema 8, docs/features/drift-queue.md), `task_id` the 41st, before
-/// `staged`, `staged_at`, `interpretation`, `drift`, `drift_hash`. M: a
+/// the key `id`, `(task_id, run)`), both `STRICT`; `proposals` 48 columns
+/// (schema 11, docs/features/card-questions.md), `task_id` the 41st, before
+/// `staged`, `staged_at`, `interpretation`, `drift`, `drift_hash`, `card_id`,
+/// `why`. M: a
 /// column moved or retyped.
 #[test]
 fn schema_4_makes_the_tasks_and_runs_tables() {
-    // Schema 9 since docs/features/card-store.md "Store".
-    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
+    // Schema 11 since docs/features/card-questions.md S1.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
     let scratch = Scratch::new("qt-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     let info = |table: &str| {
         sqlite3(
             &db,
@@ -258,7 +262,7 @@ fn schema_4_makes_the_tasks_and_runs_tables() {
     );
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "46"
+        "48"
     );
     assert_eq!(PROPOSAL_COLUMNS[40], "task_id");
     assert_eq!(
@@ -268,7 +272,9 @@ fn schema_4_makes_the_tasks_and_runs_tables() {
             "staged_at",
             "interpretation",
             "drift",
-            "drift_hash"
+            "drift_hash",
+            "card_id",
+            "why"
         ]
     );
     // Iteration 2: the task's compare-and-set key, `revision`, its last
@@ -319,10 +325,10 @@ fn schema_1_to_3_databases_step_to_4() {
             kept.to_string()
         );
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "from {version}");
         assert_eq!(
             sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-            "46"
+            "48"
         );
         let kept_row = queue.get(&made.id).expect("get").expect("kept");
         assert_eq!(kept_row.task_id, None, "from {version}");
@@ -334,7 +340,7 @@ fn schema_1_to_3_databases_step_to_4() {
         assert_eq!(task.id, "T-0001", "from {version}");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     }
 }
 

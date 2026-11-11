@@ -264,7 +264,10 @@ fn only_create_drift_stores_a_drift_item() {
             options: Vec::new(),
             recommendation: None,
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     };
     invalid(
         queue.create_intake(&intake, &[], None, T0),
@@ -675,23 +678,26 @@ fn concurrent_raises_from_two_handles_store_one_item() {
 /// TE-6: genuine schema-6 and schema-7 databases (step 8's two columns
 /// absent, a stored update and question) open as 8: `drift`, `drift_hash`
 /// appended `TEXT`, the rows kept (`NULL` there), `user_version` 8, once;
-/// `proposal_columns` reads 6 and 7 at 44 columns, 8 at 46, 9 none; a read
+/// `proposal_columns` reads 6 and 7 at 44 columns, 8 to 10 at 46, 11 at 48
+/// (docs/features/card-questions.md), 12 none; a read
 /// steps nothing. A drift item goes into the stepped queue. M: step 8
 /// omitted; `proposal_columns` mapping 8 to 44.
 #[test]
 fn schema_6_and_7_step_to_8() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 46);
-    assert_eq!(PROPOSAL_COLUMNS[44..], ["drift", "drift_hash"]);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 48);
+    assert_eq!(PROPOSAL_COLUMNS[44..46], ["drift", "drift_hash"]);
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
     assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
-    assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..46]));
     // `proposals` unchanged at 9 (docs/features/card-store.md "Store").
-    assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..46]));
     // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
     // stays 46).
-    assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(11), None);
+    assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..46]));
+    // 48 at 11 (docs/features/card-questions.md S1).
+    assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(12), None);
     for version in [6, 7] {
         let scratch = Scratch::new(&format!("qdr-schema-{version}"));
         let db = scratch.db("q");
@@ -718,7 +724,9 @@ fn schema_6_and_7_step_to_8() {
         sqlite3(
             &db,
             &format!(
-                "DROP TABLE cards; ALTER TABLE proposals DROP COLUMN drift_hash; \
+                "DROP TABLE cards; ALTER TABLE proposals DROP COLUMN why; \
+                 ALTER TABLE proposals DROP COLUMN card_id; \
+                 ALTER TABLE proposals DROP COLUMN drift_hash; \
                  ALTER TABLE proposals DROP COLUMN drift; PRAGMA user_version = {version};"
             ),
         );
@@ -730,19 +738,19 @@ fn schema_6_and_7_step_to_8() {
         let read = SqliteQueue::open_existing(&db, PROJECT)
             .expect("open_existing")
             .expect("the file");
-        assert_eq!(read.stored_rows().expect("rows"), made, "read at 46");
+        assert_eq!(read.stored_rows().expect("rows"), made, "read at 48");
         drop(read);
         assert_eq!(sqlite3(&db, "PRAGMA user_version;"), version.to_string());
 
-        let mut queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping to 9");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "from {version}");
+        let mut queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping to 11");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "from {version}");
         assert_eq!(
             sqlite3(
                 &db,
                 "SELECT group_concat(name || ' ' || type, ',') FROM pragma_table_info('proposals') \
                  WHERE cid >= 44;"
             ),
-            "drift TEXT,drift_hash TEXT"
+            "drift TEXT,drift_hash TEXT,card_id TEXT,why TEXT"
         );
         assert_eq!(queue.dump().expect("dump"), dump, "rows kept");
         assert_eq!(
@@ -756,7 +764,7 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(id, "PR-0002");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "stepped once");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "stepped once");
     }
 }
 
@@ -1023,8 +1031,10 @@ fn drift_rows_round_trip_byte_identical() {
             (evidence("LAW-BOUND"), hash('2')),
         ])
     {
+        // Step 11's `card_id`, `why` after them, null on a drift item
+        // (docs/features/card-questions.md S1).
         let tail = format!(
-            ",{},{}]",
+            ",{},{},null,null]",
             serde_json::Value::String(evidence),
             serde_json::Value::String(hash)
         );

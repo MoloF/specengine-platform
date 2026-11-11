@@ -59,9 +59,9 @@ In `src/ui/`, each with its test:
 ## The work item
 
 `CardModal` (`view: (frame: {heading, tools}) => ReactNode`, by `Dialog`'s `frame`) and `CardPage` render one `CardView` (`CardPanel.tsx`) in an `IssueView`; a document's, `DocFrame` (`doc-view.md`). Routes, history, focus and writes: `board-screen.md` "The card modal and page".
-- **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Edit, Assign, Cancel task (subtle, last).
-- **Main.** Mark and Clear, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (ID, title, flow title, status lozenge, assignee, rollup word); Evidence; History.
-- **Side**, at most 330 px. Status: the lozenge, then Move, compact, none on a closed card. Details (`board.panel.details`): Assignee, Reviewer, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Agent tasks, collapsed, "Agent tasks · n linked" (or none linked), holds `card-tasks.md` "Screen".
+- **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Ask a question…, Record a decision…, Edit, Assign, Cancel task (subtle, last).
+- **Main.** Mark and Clear, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (ID, title, flow title, status lozenge, assignee, rollup word); Evidence; Activity (`card-questions.md` "Screen").
+- **Side**, at most 330 px. Status: the lozenge, then Move, compact, none on a closed card. Details: Assignee, Reviewer, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Agent tasks, collapsed: `card-tasks.md` "Screen".
 - **Width.** One column, main first, under 42.5rem of its own width (`@container issue-view`); DOM order main then side. The modal: 968 px or the viewport less 2rem, its body the one scroller; under 36rem the screen, scrolling as one.
 
 ## The focus trap

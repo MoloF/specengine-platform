@@ -1,6 +1,7 @@
 import { ClientError, CARD_REFUSED, CARD_USAGE, NO_SUCH_CARD, type CardsOptions } from "../api/client";
 import type {
   Card,
+  CardItem,
   CardAcceptBody,
   CardAssignBody,
   CardCancelBody,
@@ -15,11 +16,14 @@ import type {
   CardList,
   CardMoveBody,
   CardNotFound,
+  CardRaiseBody,
   CardRow,
   CardWrite,
+  IntakeDocument,
+  IntakeMatch,
   TraceCard,
 } from "../api/types";
-import { stamp } from "./build";
+import { proposal, stamp, type MockProposal, type StoredReview } from "./build";
 import type { Scenario } from "./scenario";
 import { linkedTaskOf, type MockTasks } from "./tasks";
 
@@ -33,8 +37,8 @@ import { linkedTaskOf, type MockTasks } from "./tasks";
 // C-0005 (accepted) are suspect; C-0010 was accepted as departing, PR-0041 its open discrepancy;
 // C-0008 stands on MEC-OLD-SLIPWAY, a target gone, which no node of a trace read holds; C-0011 and
 // C-0012 are accepted and stand, so the Flow has something confirmed. The plates' `blocked` is its
-// return column (`docs/canon/card-flows.md` "The rule"), a word of data like any other: C-0008
-// stands in it with no move left in its history, C-0015 was returned with a reason. Hand-offs run
+// return column (`docs/canon/card-flows.md` "The rule"), a word of data like any other: C-0008 and
+// C-0015 were each returned with a reason. Hand-offs run
 // both ways and hold no target, so no trace read changes: C-0001 has a child handed off (C-0013),
 // one taken in its own flow (C-0019), one accepted (C-0016) and one cancelled (C-0017); C-0003's
 // was returned (C-0015), C-0004's taken (C-0014), and the plate C-0009 handed a caption to copy (C-0018).
@@ -43,9 +47,15 @@ import { linkedTaskOf, type MockTasks } from "./tasks";
 // T-0106, whose row does not read; C-0004 links T-0104 (done); the accepted C-0012 keeps T-0111
 // (ready, its staleness unknown, a note); ledger-api's C-0102 links T-0033 (plan review) and C-0104
 // T-0031 (in progress). Every other card links none.
+// A card's items are the queue's questions, discrepancies and decisions naming it, read with the card
+// (docs/canon/card-questions.md "The rule"): C-0008 was sent back with a question, PR-0055, open, and
+// names a decision, PR-0056, applied; their `proposal.*` events stand in the board's log beside the
+// cards' and join the card's history by `seq`. Two of them stand out of time order, as two clocks'
+// writes may (docs/features/card-questions.md "Acceptance criteria", U1): PR-0055 was raised a
+// moment after the return, its `at` thirty seconds before it.
 
 /** A stored card: the document less what a read adds, its links as the task IDs the row keeps. */
-export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "allowed" | "history" | "notes"> & { tasks: string[] };
+export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "items" | "allowed" | "history" | "notes"> & { tasks: string[] };
 
 interface MockEvent extends CardEvent {
   id: string;
@@ -451,7 +461,7 @@ function harborCards(at: number): StoredCard[] {
   ];
 }
 
-/** The moves harbor-sim's cards made before the page opened, each with its note: C-0015's return. */
+/** The moves harbor-sim's cards made before the page opened, each with its note: C-0015's return, then C-0008's. */
 function harborMoves(at: number): { id: string; type: string; at: string; payload: Record<string, unknown> }[] {
   return [
     { id: "C-0015", type: "card.moved", at: stamp(at, 30 * 60), payload: { id: "C-0015", from: "queued", to: "checked", position: 2, as: "Lena Fisk", note: null } },
@@ -461,6 +471,22 @@ function harborMoves(at: number): { id: string; type: string; at: string; payloa
       at: stamp(at, 6 * 60),
       payload: { id: "C-0015", from: "checked", to: "blocked", position: 2, as: "Tomas Oakes", note: "The buoy numbers on the plate disagree with MEC-NIGHT-PASSAGE: the second light is green, not red." },
     },
+    {
+      id: "C-0008",
+      type: "card.moved",
+      at: stamp(at, 600),
+      payload: { id: "C-0008", from: "queued", to: "blocked", position: 1, as: "Noor Ainsley", note: "The survey's crane reach numbers are not in MEC-CARGO-CRANES yet; the diagram waits on them." },
+    },
+  ];
+}
+
+/** The events of C-0008's two items (src/mocks/harbor-sim/fixtures.ts): PR-0055 asked with its return, PR-0056 recorded, confirmed and applied. */
+function harborItemEvents(at: number): { id: string; type: string; at: string; payload: Record<string, unknown> }[] {
+  return [
+    { id: "PR-0055", type: "proposal.created", at: stamp(at, 600.5), payload: { id: "PR-0055", as: "Noor Ainsley" } },
+    { id: "PR-0056", type: "proposal.created", at: stamp(at, 570), payload: { id: "PR-0056", as: "Tomas Oakes" } },
+    { id: "PR-0056", type: "proposal.approved", at: stamp(at, 540), payload: { id: "PR-0056", record: "DEC-0013" } },
+    { id: "PR-0056", type: "proposal.applied", at: stamp(at, 540), payload: { id: "PR-0056", commit: "b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5" } },
   ];
 }
 
@@ -551,7 +577,7 @@ export function mockBoard(slug: string, scenario: Scenario, at: number): MockBoa
     at: card.created_at,
     payload: { id: card.id, flow: card.flow, column: card.column, position: card.position, assignee: card.assignee, reviewer: card.reviewer, as: card.created_by },
   }));
-  const events = [...created, ...(harbor ? harborMoves(at) : [])].map((event, index): MockEvent => ({ ...event, seq: index + 1 }));
+  const events = [...created, ...(harbor ? [...harborMoves(at), ...harborItemEvents(at)] : [])].map((event, index): MockEvent => ({ ...event, seq: index + 1 }));
   return board(cards, events, new Map(harbor ? [["DOM-BERTHS", "b3:dom-berths-2"], ["MEC-MOORING", "b3:mec-mooring-2"]] : []));
 }
 
@@ -627,17 +653,55 @@ export function cardListOf(board: MockBoard, options: CardsOptions, settled: Set
   return { flows: structuredClone(board.flows), cards: rows, notes, truncated: false, omitted: null };
 }
 
+/** The queue's prefix of a proposal's events, as stored. */
+const ITEM_EVENT = "proposal.";
+
+/** An item of a card as its read serves it: the row's 16 keys (docs/features/card-questions.md "Acceptance criteria", K1). */
+function itemOf(review: StoredReview): CardItem {
+  return {
+    id: review.id,
+    kind: review.kind,
+    status: review.status,
+    summary: review.summary,
+    working_answer: review.working_answer,
+    why: review.why,
+    author: review.author ?? { type: "human", role: null, model: null, run: null },
+    created_at: review.created_at,
+    updated_at: review.updated_at,
+    staged_at: review.staged_at,
+    decided_by: review.decided_by,
+    decided_at: review.decided_at,
+    decision_note: review.decision_note,
+    record_id: review.record_id,
+    record_path: review.record_path,
+    record_title: review.record_title,
+  };
+}
+
+/** A proposal's ID number, as the queue orders its rows. */
+function idNumber(id: string): number {
+  return Number(id.slice(id.indexOf("-") + 1));
+}
+
 /**
  * `spec card show C --history --json`, uncut, as `GET cards/:id` serves it: no `--marks`, so its four
  * keys null; each linked task read now from `tasks`, its notes after the card's own, in link order;
- * an unknown C its exit-1 document.
+ * its items, the queue's rows naming it, by ID number, and their `proposal.*` events beside its own
+ * `card.*` ones, by `seq`; an unknown C its exit-1 document.
  */
-export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks): Card | CardNotFound {
+export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks, proposals: readonly MockProposal[] = []): Card | CardNotFound {
   const card = board.cards.find((candidate) => candidate.id === id);
   if (card === undefined) {
     return { id, reason: `no card ${id}` };
   }
-  const history = board.events.filter((event) => event.id === id).map(({ seq, type, at, payload }) => ({ seq, type, at, payload }));
+  const items = proposals
+    .filter(({ review }) => review.card_id === id)
+    .map(({ review }) => itemOf(review))
+    .sort((a, b) => idNumber(a.id) - idNumber(b.id));
+  const named = new Set(items.map((item) => item.id));
+  const history = board.events
+    .filter((event) => (event.id === id && !event.type.startsWith(ITEM_EVENT)) || (event.type.startsWith(ITEM_EVENT) && named.has(event.id)))
+    .map(({ seq, type, at, payload }) => ({ seq, type, at, payload }));
   const linked = card.tasks.map((task) => linkedTaskOf(tasks, task));
   return structuredClone({
     ...card,
@@ -646,10 +710,118 @@ export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks): Card
     discrepancy: null,
     correction: null,
     tasks: linked.map(({ task }) => task),
+    items,
     allowed: allowedOf(board, card),
     history,
     notes: linked.flatMap(({ notes }) => notes),
   });
+}
+
+/** One event of a proposal in the board's log: a card naming it reads it in its history. */
+export function logItemEvent(board: MockBoard, id: string, type: string, payload: Record<string, unknown>, at: string): void {
+  board.seq += 1;
+  board.events.push({ id, seq: board.seq, type, at, payload: { id, ...payload } });
+}
+
+/** At most this many bytes in a question's or decision's text, `TEXT_MAX`; its answer, price and why `ANSWER_MAX`. */
+const TEXT_MAX_BYTES = 1024;
+const ANSWER_MAX_BYTES = 2048;
+
+/** The most targets an item names (`agent-intake.md` "Rules"). */
+const NODES_MAX = 16;
+
+/** What `as` names when none is sent. */
+const NO_NAME = LOCAL;
+
+/** A text as the intake's dedup compares it: white space runs one space, trimmed, lower case. */
+function normalized(text: string | null): string {
+  return (text ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+/** A required or given text off its grammar: blank, or over its cap; the intake's line, else null. */
+function textProblem(key: string, text: string | null | undefined, cap: number, required: boolean): string | null {
+  if (text === null || text === undefined) {
+    return required ? `${key}: missing: give a value` : null;
+  }
+  if (text.trim() === "") {
+    return `${key}: blank: give a value`;
+  }
+  const bytes = new TextEncoder().encode(text).length;
+  return bytes > cap ? `${key}: ${String(bytes)} bytes; at most ${String(cap)}` : null;
+}
+
+/** How a hit is named in `distinct_from`: its ID, else its path. */
+function nameOf(match: IntakeMatch): string {
+  return match.id ?? match.path ?? "";
+}
+
+/**
+ * `card_raise` over the mock's queue (docs/features/card-questions.md "Acceptance criteria", L3): the
+ * card read first (404), the body's kind and `why` (400), the acting name (400), then the intake's
+ * rules in their words (409), then the dedup: `corpus` the page's one corpus hit when the scenario
+ * gives one; the queue's questions and decisions on a shared target with the same text are hits,
+ * with other text related. Stored only when every hit is named in `distinct_from`: the next ID, the
+ * card named, a person its author, `proposal.created` with the acting name; else nothing stored.
+ */
+export function raiseOnCardIn(board: MockBoard, queue: MockProposal[], project: string, id: string, body: CardRaiseBody, at: string, corpus: IntakeMatch | null): IntakeDocument {
+  if (!board.cards.some((card) => card.id === id)) {
+    throw new ClientError({ status: NO_SUCH_CARD, message: `no card ${id}` });
+  }
+  if (body.kind !== "question" && body.kind !== "decision") {
+    throw new ClientError({ status: CARD_USAGE, message: "`kind`: a card raises a `question` or a `decision`" });
+  }
+  const why = body.why ?? null;
+  if (body.kind === "question" && why !== null) {
+    throw new ClientError({ status: CARD_USAGE, message: "`why` goes with a `decision`" });
+  }
+  checkName(body.as);
+  const refusal = [
+    body.node_ids.length === 0 || body.node_ids.length > NODES_MAX ? `node_ids: ${String(body.node_ids.length)} IDs; 1 to ${String(NODES_MAX)}` : null,
+    textProblem("text", body.text, TEXT_MAX_BYTES, true),
+    textProblem("working_answer", body.working_answer, ANSWER_MAX_BYTES, true),
+    textProblem("price_of_other", body.price_of_other, ANSWER_MAX_BYTES, true),
+    textProblem("why", why, ANSWER_MAX_BYTES, false),
+  ].find((problem): problem is string => problem !== null);
+  if (refusal !== undefined) {
+    throw refused(refusal);
+  }
+  const shared = queue.filter(({ review }) => (review.kind === "question" || review.kind === "decision") && review.target_ids.some((target) => body.node_ids.includes(target)));
+  const asQueued = (review: StoredReview): IntakeMatch => ({
+    id: review.id,
+    source: "queue",
+    status: review.status,
+    path: null,
+    answer: review.status === "rejected" ? review.decision_note : null,
+    record: review.record_id,
+  });
+  const hits = [...(corpus === null ? [] : [corpus]), ...shared.filter(({ review }) => normalized(review.summary) === normalized(body.text)).map(({ review }) => asQueued(review))];
+  const related = shared.filter(({ review }) => normalized(review.summary) !== normalized(body.text)).map(({ review }) => ({ ...asQueued(review), answer: null, record: null }));
+  const named = body.distinct_from ?? [];
+  if (hits.some((hit) => !named.includes(nameOf(hit)))) {
+    return { id: null, created: false, hits, related, linked: null, diagnostics: [], notes: [] };
+  }
+  const highest = queue.reduce((most, { review }) => Math.max(most, idNumber(review.id)), 0);
+  const made = `PR-${String(highest + 1).padStart(4, "0")}`;
+  queue.push(
+    proposal({
+      id: made,
+      project,
+      kind: body.kind,
+      created_at: at,
+      target_id: body.node_ids[0] ?? null,
+      target_ids: [...body.node_ids],
+      severity: body.severity ?? null,
+      summary: body.text,
+      working_answer: body.working_answer,
+      price_of_other: body.price_of_other,
+      why,
+      distinct_from: [...named],
+      author: { type: "human", role: null, model: null, run: null },
+      card_id: id,
+    }),
+  );
+  logItemEvent(board, made, "proposal.created", { as: body.as ?? NO_NAME }, at);
+  return { id: made, created: true, hits, related, linked: null, diagnostics: [], notes: [] };
 }
 
 /** What cannot stand in a person's name: a control character, a line or paragraph separator, a bidirectional mark. */

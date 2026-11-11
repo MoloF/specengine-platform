@@ -115,7 +115,10 @@ fn question(target: &str) -> NewIntake {
             options: Vec::new(),
             recommendation: None,
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 
@@ -147,7 +150,10 @@ fn discrepancy(target: &str) -> NewIntake {
             options: vec![option("code"), option("spec")],
             recommendation: Some(1),
             distinct_from: Vec::new(),
+            why: None,
         },
+        actor: None,
+        card_id: None,
     }
 }
 
@@ -252,18 +258,19 @@ fn three(db: &Path) -> SqliteQueue {
 
 // -------------------------------------------------------------- schema
 
-/// AC-02 (now schema 8, its 46 columns: drift-queue): a schema-4 database
-/// read unstepped, then opened as 8 with its rows and all five `NULL`;
-/// schema 11 refused.
+/// AC-02 (now schema 11, its 48 columns: card-questions): a schema-4 database
+/// read unstepped, then opened as 11 with its rows and all seven `NULL`;
+/// schema 12 refused.
 #[test]
 fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
-    // Schema 10 since docs/canon/cards.md "Store"; 46 columns since
-    // docs/features/drift-queue.md
-    // "Queue schema 8".
-    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 46);
+    // Schema 11 and 48 columns since docs/features/card-questions.md S1
+    // (`card_id`, `why` last); 46 since
+    // docs/features/drift-queue.md "Queue schema 8".
+    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 48);
+    assert_eq!(PROPOSAL_COLUMNS[46..], ["card_id", "why"]);
     assert_eq!(
-        PROPOSAL_COLUMNS[40..],
+        PROPOSAL_COLUMNS[40..46],
         [
             "task_id",
             "staged",
@@ -279,13 +286,15 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     // Schema 7 adds no column (docs/features/rev-discipline.md
     // "Review document, stage, queue").
     assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
-    assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..46]));
     // `proposals` unchanged at 9 (docs/features/card-store.md "Store").
-    assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..46]));
     // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
     // stays 46).
-    assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(11), None);
+    assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..46]));
+    // 48 at 11 (docs/features/card-questions.md S1).
+    assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(12), None);
 
     let scratch = Scratch::new("qst-schema");
     let db = scratch.db("q");
@@ -304,7 +313,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
         .expect("a task");
     let made = queue.stored_rows().expect("rows");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     assert_eq!(
         sqlite3(
             &db,
@@ -319,10 +328,11 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     );
 
     // The database as task-package's build left it: schema 4, 41 columns
-    // (step 8's two dropped too).
+    // (step 8's two and step 11's two dropped too).
     sqlite3(
         &db,
-        "ALTER TABLE proposals DROP COLUMN drift_hash; ALTER TABLE proposals DROP COLUMN drift; \
+        "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
+         ALTER TABLE proposals DROP COLUMN drift_hash; ALTER TABLE proposals DROP COLUMN drift; \
          ALTER TABLE proposals DROP COLUMN interpretation; ALTER TABLE proposals DROP COLUMN \
          staged_at; ALTER TABLE proposals DROP COLUMN staged; DROP TABLE cards; PRAGMA \
          user_version = 4;",
@@ -341,12 +351,12 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
         "4",
         "a read steps nothing"
     );
-    assert_eq!(unstepped, made, "read at 46 columns, the five None");
+    assert_eq!(unstepped, made, "read at 48 columns, the seven None");
     assert_eq!(unstepped.tasks.len(), 1, "its task read at schema 4");
     assert_eq!(unstepped.tasks[0].id(), Some(task.id.as_str()));
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     assert_eq!(
         sqlite3(
             &db,
@@ -370,22 +380,22 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "stepped once");
 
-    // Schema 11 (this build's is 10, docs/canon/cards.md "Store"):
+    // Schema 12 (this build's is 11, docs/features/card-questions.md S1):
     // refused by a read and an open, left alone.
-    sqlite3(&db, "PRAGMA user_version = 11;");
+    sqlite3(&db, "PRAGMA user_version = 12;");
     let dumped = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(QueueError::SchemaTooNew { found: 11 }) => {}
-            other => panic!("expected SchemaTooNew 11, got {other:?}"),
+            Err(QueueError::SchemaTooNew { found: 12 }) => {}
+            other => panic!("expected SchemaTooNew 12, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), dumped);
 }
 
@@ -1029,8 +1039,9 @@ fn ac12_dump_restore_dump_keeps_the_stages_byte_for_byte() {
         reject_stage("asked before"),
         approve_stage(Some(1), None, None),
     ]) {
+        // `interpretation`, `drift`, `drift_hash`, `card_id`, `why` null.
         let tail = format!(
-            ",{},\"{T1}\",null,null,null]",
+            ",{},\"{T1}\",null,null,null,null,null]",
             serde_json::Value::String(stage.to_json())
         );
         assert!(line.ends_with(&tail), "{line} ends with {tail}");
@@ -1071,7 +1082,7 @@ fn ac12_stored_rows_reads_the_tasks_of_a_schema_6_queue() {
         )
         .expect("a task");
     let state: StoredQueue = queue.stored_rows().expect("rows");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     assert_eq!(state.tasks.len(), 1, "the schema-6 queue's task: {state:?}");
     assert_eq!(state.tasks[0].id(), Some(task.id.as_str()));
     let mut fresh = SqliteQueue::open(scratch.db("fresh"), PROJECT).expect("open");
@@ -1127,13 +1138,16 @@ fn schema_7_rewrites_open_approve_stages() {
     let corrupt = "{\"decision\":\"approve\",\"option\":null}";
     let quote = |text: &str| text.replace('\'', "''");
     // A genuine schema-6 database: step 8's two columns
-    // (docs/features/drift-queue.md "Queue schema 8") dropped as well.
+    // (docs/features/drift-queue.md "Queue schema 8") and step 11's two
+    // (docs/features/card-questions.md S1) dropped as well.
     sqlite3(
         &db,
         &format!(
             "UPDATE proposals SET staged = '{}' WHERE id = 'PR-0001'; \
              UPDATE proposals SET staged = '{}' WHERE id = 'PR-0002'; \
              UPDATE proposals SET staged = '{}', staged_at = '{T1}' WHERE id = 'PR-0004'; \
+             ALTER TABLE proposals DROP COLUMN why; \
+             ALTER TABLE proposals DROP COLUMN card_id; \
              ALTER TABLE proposals DROP COLUMN drift_hash; \
              ALTER TABLE proposals DROP COLUMN drift; \
              DROP TABLE cards; \
@@ -1149,8 +1163,8 @@ fn schema_7_rewrites_open_approve_stages() {
     let seq = last_seq(&db);
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("a schema-6 queue opens");
-    // Stepped 6 -> 7 -> 8 -> 9: this build's schema.
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    // Stepped 6 -> 7 -> ... -> 11: this build's schema.
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
     let seven_update = "{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
                         \"editorial\":null,\"note\":\"keep \\\"it\\\"\",\"span_hash\":\"b3:aa\"}";
     let seven_question = "{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\

@@ -16,19 +16,20 @@ Phase 2 (2026-10-09, 06 s5.4): a decision taken during work, by an agent or the 
 
 ## Raise
 
-`spec propose decision --input F|- A [--task T]` (`A`, `--task`, exits: `agent-intake.md`); the intake document, `--json` too. `F`: UTF-8 JSON <= 8 MiB (`INTAKE_INPUT_MAX_BYTES`), the MCP arguments but `A` and `task_id`, core `DecisionInput` (`deny_unknown_fields`):
+`spec propose decision --input F|- A [--task T] [--card C]` (`A`, `--task`, exits: `agent-intake.md`; `--card`: `card-questions.md` "Raise"); the intake document, `--json` too. `F`: UTF-8 JSON <= 8 MiB (`INTAKE_INPUT_MAX_BYTES`), the MCP arguments but `A`, `task_id` and `card_id`, core `DecisionInput` (`deny_unknown_fields`):
 
 ```json
 {"node_ids": ["RULE-STAM-REGEN"], "text": "Does regeneration wait for rest?",
  "working_answer": "Yes: it starts 1.5 s after the last stamina use.",
- "price_of_other": "Without the wait R-28 is rebalanced.", "severity": null,
+ "price_of_other": "Without the wait R-28 is rebalanced.",
+ "why": "Two playtests read instant regeneration as a bug.", "severity": null,
  "proposed_patch": {"target": "RULE-STAM-REGEN", "base": "b3:...", "text": "...", "rationale": "..."},
  "distinct_from": null}
 ```
 
-No flag form: the patch's four fields (text <= 1 MiB) have none, and one shape keeps the MCP twin exact. Intake rules 1-7 as a discrepancy's (`agent-intake.md` "Rules"): form (an unknown or missing field: exit 2); caps in order (`decision_problem`): `node_ids` 1-16, `text` <= 1 024 B, `working_answer`, `price_of_other` <= 2 048, required and not blank, `severity` `high|normal|low` (null: `normal`), `proposed_patch` (rule 4: its target among `node_ids`), `distinct_from`, then the author; targets; place; corpus and queue dedup. Stored: the item, then the patch's `update`, `linked` both ways. Only the queue is written.
+No flag form: the patch's four fields (text <= 1 MiB) have none, and one shape keeps the MCP twin exact. Intake rules 1-7 as a discrepancy's (`agent-intake.md` "Rules"): form (an unknown or missing field: exit 2); caps in order (`decision_problem`): `node_ids` 1-16, `text` <= 1 024 B, `working_answer`, `price_of_other` <= 2 048, required and not blank, `why` optional, <= 2 048 and not blank when given (`why: blank: give a value`), `severity` `high|normal|low` (null: `normal`), `proposed_patch` (rule 4: its target among `node_ids`), `distinct_from`, then the author; targets; place; corpus and queue dedup. Stored: the item, then the patch's `update`, `linked` both ways. Only the queue is written.
 
-**MCP** `report_decision {node_ids, text, working_answer, price_of_other, severity?, proposed_patch?: {target, base, text, rationale}, distinct_from?, task_id?, author_role, author_model?, run?}` = `spec propose decision --input - A [--task T]`, answering as its twin (`IntakeDocument`). Its own argument type: `additionalProperties: false` on the root and `proposed_patch`, `severity` the enum; the intake writers' annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` `false`), `_meta` `maxResultSizeChars` 500 000. An unknown field: an error result `failed to deserialize parameters: unknown field ...` (rmcp's, not -32602); a refusal (a patch target outside `node_ids`): an error result with the reason. It never stages, decides or writes under the root. Description 1 744 B of 2 048: a decision you took during work, for the owner to confirm and record; `text` what had to be decided, `working_answer` the decision (keep working on it), `price_of_other`; the governed section first in `node_ids` (the record's `canon:`); `proposed_patch` the rule's new text, approved apart, its own commit.
+**MCP** `report_decision {node_ids, text, working_answer, price_of_other, why?, severity?, proposed_patch?: {target, base, text, rationale}, distinct_from?, card_id?, task_id?, author_role, author_model?, run?}` = `spec propose decision --input - A [--task T] [--card C]`, answering as its twin (`IntakeDocument`). Its own argument type: `additionalProperties: false` on the root and `proposed_patch`, `severity` the enum; the intake writers' annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` `false`), `_meta` `maxResultSizeChars` 500 000. An unknown field: an error result `failed to deserialize parameters: unknown field ...` (rmcp's, not -32602); a refusal (a patch target outside `node_ids`): an error result with the reason. It never stages, decides or writes under the root. Description 1 810 B of 2 048 (a hub's 1 758): a decision you took during work, for the owner to confirm and record; `text` what had to be decided, `working_answer` the decision (keep working on it), `price_of_other`, `why` why so, `card_id` the card; the governed section first in `node_ids` (the record's `canon:`); `proposed_patch` the rule's new text, approved apart, its own commit.
 
 ## Row and dedup
 

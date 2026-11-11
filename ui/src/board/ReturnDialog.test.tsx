@@ -1,7 +1,7 @@
 import { createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import type { Card, CardRow } from "../api/types";
+import type { Card, CardRow, IntakeDocument } from "../api/types";
 import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
@@ -204,7 +204,7 @@ describe("Return (BH-15)", () => {
     const part = await within(modal).findByRole("region", { name: "Returned" });
     expect(part.textContent).toContain("Returned by Lena, 2026-11-03 09:00 UTC");
     expect(part.textContent).toContain("Second reason.");
-    expect(within(within(modal).getByRole("region", { name: "History" })).getAllByRole("listitem").map((line) => line.textContent)).toEqual([
+    expect(within(within(modal).getByRole("region", { name: "Activity" })).getAllByRole("listitem").map((line) => line.textContent)).toEqual([
       "2026-11-01 09:00 UTCMoved by Ivo from To do to DoingWhy: First reason.",
       "2026-11-02 09:00 UTCMoved by Ann from Doing to Check",
       "2026-11-03 09:00 UTCMoved by Lena from Check to DoingWhy: Second reason.",
@@ -234,3 +234,232 @@ describe("Return (BH-15)", () => {
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").value).toBe("Kept");
   });
 });
+
+// U2 of docs/features/card-questions.md "Acceptance criteria": a return may ask a question with it.
+// A card with targets has the part, closed; opened, its three required texts and the targets, each
+// checked. Submit sends the move, then, once it is taken, the question: two writes, the move first. A
+// refused move asks nothing. A question not stored keeps the dialog, says the card went back and
+// lists the hit; Ask anyway sends the question alone, naming it. No answer offers Ask again, the
+// question alone again; with every listed hit named and nothing stored, the too-many line and no Ask
+// anyway. With the part closed, the move is today's, byte for byte.
+
+const TARGETED = [aCardRow({ id: "C-0001", revision: "3", targets: ["SCN-LAMP", "SCN-STORM"] }), aCardRow({ id: "C-0002", position: 2 }), aCardRow({ id: "C-0004", column: "doing", position: 2 })];
+
+const NOT_STORED: IntakeDocument = {
+  id: null,
+  created: false,
+  hits: [{ id: "PR-0009", source: "queue", status: "open", path: null, answer: null, record: null }],
+  related: [],
+  linked: null,
+  diagnostics: [],
+  notes: [],
+};
+
+/** The order the two writes went in, each by its name. */
+function writesOf(client: StubClient): string[] {
+  const order: string[] = [];
+  const move = client.moveCard.getMockImplementation();
+  client.moveCard.mockImplementation((...args) => {
+    order.push("move");
+    return move === undefined ? Promise.reject(new Error("no move")) : move(...args);
+  });
+  client.raiseOnCard.mockImplementation(() => {
+    order.push("raise");
+    return Promise.resolve({ id: "PR-0012", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] });
+  });
+  return order;
+}
+
+async function returning(client: StubClient, id = "C-0001"): Promise<HTMLElement> {
+  await board(client);
+  tile(id).focus();
+  fireEvent.keyDown(tile(id), { key: "r" });
+  return screen.findByRole("dialog", { name: `Return ${id}` });
+}
+
+function asking(dialog: HTMLElement) {
+  fireEvent.click(within(dialog).getByRole("button", { name: "Ask a question with it" }));
+  fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Two endings contradict SCN-LAMP." } });
+  fireEvent.change(within(dialog).getByLabelText("Question"), { target: { value: "Which ending stands?" } });
+  fireEvent.change(within(dialog).getByLabelText("Working answer"), { target: { value: "The storm ending." } });
+  fireEvent.change(within(dialog).getByLabelText("What another answer would cost"), { target: { value: "Chapter three rewritten." } });
+}
+
+describe("Return with a question (U2 of card-questions)", () => {
+  it("a card with targets has the part, closed; opened, the three required texts and the targets, each checked; a card with none has no part", async () => {
+    const client = returnClient(TARGETED);
+    const dialog = await returning(client);
+    const part = within(dialog).getByRole("button", { name: "Ask a question with it" });
+    expect(part.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(part);
+    expect(part.getAttribute("aria-expanded")).toBe("true");
+    for (const label of ["Question", "Working answer", "What another answer would cost"]) {
+      expect([label, within(dialog).getByLabelText(label).getAttribute("aria-required")]).toEqual([label, "true"]);
+    }
+    const about = within(dialog).getByRole("group", { name: "About" });
+    expect(within(about).getAllByRole("checkbox").map((box) => [box.parentElement?.textContent.trim(), (box as HTMLInputElement).checked])).toEqual([
+      ["SCN-LAMP", true],
+      ["SCN-STORM", true],
+    ]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    tile("C-0002").focus();
+    fireEvent.keyDown(tile("C-0002"), { key: "r" });
+    const bare = await screen.findByRole("dialog", { name: "Return C-0002" });
+    expect(within(bare).queryByRole("button", { name: "Ask a question with it" })).toBeNull();
+  });
+
+  it("sends the move, then the question with its texts, targets and acting name (M: the question sent first)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = returnClient(TARGETED);
+    const order = writesOf(client);
+    const dialog = await returning(client);
+    asking(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Return C-0001" })).toBeNull();
+    });
+    expect(order).toEqual(["move", "raise"]);
+    expect(client.moveCard.mock.calls[0]?.[2]).toEqual({ to: "doing", note: "Two endings contradict SCN-LAMP.", revision: "3", as: "Ann" });
+    expect(client.raiseOnCard.mock.calls).toEqual([
+      ["alpha", "C-0001", { kind: "question", node_ids: ["SCN-LAMP", "SCN-STORM"], text: "Which ending stands?", working_answer: "The storm ending.", price_of_other: "Chapter three rewritten.", as: "Ann" }],
+    ]);
+    // The move said, then the question stored with it (U2 of card-questions, minor 6 of its review).
+    expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("C-0001 sent back. Asked PR-0012");
+  });
+
+  it("a refused move asks nothing and shows the refusal", async () => {
+    const client = returnClient(TARGETED);
+    const order = writesOf(client);
+    client.moveCard.mockRejectedValueOnce(new ClientError({ status: 409, message: "C-0001 is in todo: the move to `doing` is `lead`'s, not `local`'s; nothing changed" }));
+    const dialog = await returning(client);
+    asking(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    expect((await within(dialog).findByText(/the move to `doing` is `lead`'s/)).getAttribute("lang")).toBe("en");
+    expect(client.raiseOnCard).not.toHaveBeenCalled();
+    expect(order).toEqual([]);
+  });
+
+  it("not stored: the card is sent back, the dialog says so and lists the hit; Ask anyway sends the question alone, naming it (M: Ask anyway resending the move)", async () => {
+    const client = returnClient(TARGETED);
+    client.raiseOnCard.mockResolvedValueOnce(NOT_STORED).mockResolvedValueOnce({ id: "PR-0012", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] });
+    const dialog = await returning(client);
+    asking(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    const anyway = await within(dialog).findByRole("button", { name: "Ask anyway" });
+    const notice = within(dialog).getByRole("status");
+    expect(notice.textContent).toContain("C-0001 sent back; the question was not asked");
+    expect(notice.textContent).toContain("Already answered or asked:");
+    expect(notice.textContent).toContain("PR-0009");
+    expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").readOnly).toBe(true);
+    expect(within(dialog).queryByText("This task changed since you opened it")).toBeNull();
+    fireEvent.click(anyway);
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Return C-0001" })).toBeNull();
+    });
+    expect(client.moveCard).toHaveBeenCalledTimes(1);
+    expect(client.raiseOnCard.mock.calls.map((call) => call[2].distinct_from)).toEqual([undefined, ["PR-0009"]]);
+  });
+
+  it("no answer: Ask again sends the question alone; every listed hit named and nothing stored: the too-many line, no Ask anyway; closing reports the move", async () => {
+    const client = returnClient(TARGETED);
+    client.raiseOnCard
+      .mockRejectedValueOnce(new ClientError({ status: 0, message: "POST /api/projects/alpha/cards/C-0001/items: no response from the daemon (Failed to fetch)" }))
+      .mockResolvedValueOnce(NOT_STORED)
+      .mockResolvedValueOnce(NOT_STORED);
+    const dialog = await returning(client);
+    asking(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Ask again" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Ask anyway" }));
+    await within(dialog).findByText("More earlier answers match than this dialog can name: ask on a terminal, naming each in --distinct-from.");
+    expect(within(dialog).queryByRole("button", { name: "Ask anyway" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Ask again" })).toBeNull();
+    expect(client.moveCard).toHaveBeenCalledTimes(1);
+    expect(client.raiseOnCard.mock.calls.map((call) => call[2].distinct_from)).toEqual([undefined, undefined, ["PR-0009"]]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Return C-0001" })).toBeNull();
+    });
+    expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("C-0001 sent back");
+  });
+
+  // Minor 2 of card-questions' review: focus after a stop or a refusal goes to a field that takes
+  // text, never to the reason held read-only once the card went back.
+  it("a blank question stops before the move, focus on the question; after the move a refused question puts focus there too, never on the read-only reason", async () => {
+    const client = returnClient(TARGETED);
+    client.raiseOnCard.mockRejectedValueOnce(new ClientError({ status: 409, message: "text: 1025 bytes; at most 1024" }));
+    const dialog = await returning(client);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ask a question with it" }));
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Two endings." } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Fill in all three: the question, a working answer and what another answer would cost.");
+    expect(client.moveCard).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(within(dialog).getByLabelText("Question"));
+    asking(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ask a question with it" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await within(dialog).findByText("text: 1025 bytes; at most 1024");
+    expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").readOnly).toBe(true);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(within(dialog).getByLabelText("Question"));
+    });
+  });
+
+  // Minor 3 of card-questions' review: with no submit left, focus goes to the dismiss, never the body.
+  it("every listed hit named and nothing stored: the submit goes, and focus with it to Close", async () => {
+    const client = returnClient(TARGETED);
+    client.raiseOnCard.mockResolvedValue(NOT_STORED);
+    const dialog = await returning(client);
+    asking(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    const anyway = await within(dialog).findByRole("button", { name: "Ask anyway" });
+    anyway.focus();
+    fireEvent.click(anyway);
+    await within(dialog).findByText("More earlier answers match than this dialog can name: ask on a terminal, naming each in --distinct-from.");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Close" }));
+    });
+  });
+
+  it("a move refused as changed meanwhile, the part open: the fields kept, and the next submit goes on the new revision", async () => {
+    let revision = "3";
+    const client = stubClient();
+    client.getCards.mockImplementation(() => Promise.resolve(aCardList([aCardRow({ id: "C-0001", revision, targets: ["SCN-LAMP"] }), aCardRow({ id: "C-0004", column: "doing" })], { flows: [FLOW] })));
+    client.getCard.mockImplementation((_project, id) => Promise.resolve(aCard({ id, allowed: [{ to: "doing", by: [] }] })));
+    client.moveCard
+      .mockImplementationOnce(() => {
+        revision = "4";
+        return Promise.reject(new ClientError({ status: 409, message: "`C-0001` changed since this run read it: it is in todo since 2026-11-11T09:00:00Z; nothing changed" }));
+      })
+      .mockImplementation((_project, id) => Promise.resolve(aCardWrite(id, { column: "doing" })));
+    const dialog = await returning(client);
+    asking(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await within(dialog).findByText(/changed since this run read it/);
+    await within(dialog).findByText("This task changed since you opened it");
+    expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").value).toBe("Two endings contradict SCN-LAMP.");
+    expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Question").value).toBe("Which ending stands?");
+    expect(client.raiseOnCard).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await waitFor(() => {
+      expect(client.raiseOnCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.moveCard.mock.calls.map((call) => call[2].revision)).toEqual(["3", "4"]);
+  });
+
+  it("with the part closed, the one move is today's, byte for byte, and no question goes", async () => {
+    const client = returnClient(TARGETED);
+    const dialog = await returning(client);
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Wrong lamp." } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await waitFor(() => {
+      expect(client.moveCard).toHaveBeenCalledTimes(1);
+    });
+    expect(JSON.stringify(client.moveCard.mock.calls[0]?.[2])).toBe('{"to":"doing","note":"Wrong lamp.","revision":"3","as":null}');
+    expect(client.raiseOnCard).not.toHaveBeenCalled();
+  });
+});
+

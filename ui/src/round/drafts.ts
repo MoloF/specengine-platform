@@ -30,9 +30,9 @@ export interface Draft {
 /** The drafts of one project's sheet, by item ID. */
 export type Drafts = ReadonlyMap<string, Draft>;
 
-/** A fresh draft of an item as shown. */
-export function draftOf(item: RoundItem): Draft {
-  return { pick: "open", option: null, answer: "", reason: "", updatedAt: item.updated_at };
+/** A fresh draft of an item as shown, a round's or a review document's (a card's Answer…, docs/features/card-questions.md "Acceptance criteria", U4). */
+export function draftOf(item: { updated_at: string | null }): Draft {
+  return { pick: "open", option: null, answer: "", reason: "", updatedAt: item.updated_at ?? "" };
 }
 
 /**

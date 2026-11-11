@@ -6768,6 +6768,114 @@ mark {
   color: var(--text-secondary);
 }
 
+/* A card's Activity (CardPanel.tsx) and its items' blocks (CardItems.tsx; docs/canon/card-questions.md
+   "The rule"): each block under the event that raised it, a sunken panel in the line's flow, its texts
+   wrapping whatever their script; nothing in it is cut. */
+.board-activity-earlier {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.board-item {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  font-size: var(--font-size-s);
+}
+
+.board-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.board-item-summary {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.board-item-facts {
+  margin: 0;
+}
+
+.board-item-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.board-item-staged {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* What a raise not stored leaves in its dialog (CardDialogs.tsx RaiseNotice): the hits as listed. */
+.raise-part .disclosure-region {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.raise-targets .raise-target {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+  overflow-wrap: anywhere;
+}
+
+.raise-notice {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.raise-hits-title {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+}
+
+.raise-hits {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.raise-hit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-050) var(--space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A proposal's task on its card (ProposalCard.tsx), a link at the target's height. */
+.card-task-link {
+  margin: 0;
+}
+
+.card-task-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+}
+
 .card-dialog {
   width: min(var(--modal-width-s), 100%);
 }

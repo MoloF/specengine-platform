@@ -589,7 +589,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 /// The Data keys of `review` in order (docs/canon/decision-record.md
 /// "Queue and documents", Review document: the five of a decision record
 /// after `linked`).
-const REVIEW_KEYS: [&str; 48] = [
+const REVIEW_KEYS: [&str; 50] = [
     "id",
     "project",
     "kind",
@@ -646,6 +646,9 @@ const REVIEW_KEYS: [&str; 48] = [
     // docs/features/kind-interpretation.md "Data": after `staged_at`, 46
     // keys.
     "interpretation",
+    // docs/features/card-questions.md D14: after `interpretation`, 50 keys.
+    "card_id",
+    "why",
     "notes",
 ];
 
@@ -794,6 +797,8 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
         "task_id",
         "staged",
         "staged_at",
+        "card_id",
+        "why",
     ] {
         assert!(value[absent].is_null(), "{absent}: {json}");
         assert!(

@@ -17,8 +17,8 @@ use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
 use specengine_core::intake::{DRIFT_KIND, INTERPRETATION_KIND};
 
 use super::{
-    ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, cards, corrupt, migrate, stage, tasks,
-    user_version,
+    CARD_ITEMS_SCHEMA, ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, cards, corrupt,
+    migrate, stage, tasks, user_version,
 };
 
 use crate::error::{Db, StoreError};
@@ -33,8 +33,9 @@ use crate::schema;
 /// the interpretation step 6 appends (task spec `kind-interpretation`),
 /// named after its kind (core's constant, the kind's one spelling), then
 /// a drift item's evidence and its hash step 8 appends (task spec
-/// `drift-queue`).
-pub const PROPOSAL_COLUMNS: [&str; 46] = [
+/// `drift-queue`), then a deciding kind's card and a decision's `why` step
+/// 11 appends (`docs/canon/card-questions.md` "The rule").
+pub const PROPOSAL_COLUMNS: [&str; 48] = [
     "id",
     "project",
     "kind",
@@ -82,6 +83,8 @@ pub const PROPOSAL_COLUMNS: [&str; 46] = [
     // Bears its kind's name, as `interpretation` does.
     DRIFT_KIND,
     "drift_hash",
+    "card_id",
+    "why",
 ];
 
 /// The first queue schema with `tasks` and `runs` (step 3 → 4).
@@ -114,9 +117,13 @@ const SCHEMA_5_COLUMNS: usize = 43;
 /// column): the first of [`PROPOSAL_COLUMNS`].
 const SCHEMA_6_COLUMNS: usize = 44;
 
+/// The columns of queue schemas 8, 9 and 10's `proposals` (steps 9 and 10
+/// add no proposal column): the first of [`PROPOSAL_COLUMNS`].
+const SCHEMA_8_COLUMNS: usize = 46;
+
 /// The `proposals` columns of queue schema `schema`, in table order: 1, 2,
-/// 3, 4, 5, 6, 7, 8, 9 and 10 (this build's) are known, a dump of any restores;
-/// `None` for any other.
+/// 3, 4, 5, 6, 7, 8, 9, 10 and 11 (this build's) are known, a dump of any
+/// restores; `None` for any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
@@ -125,13 +132,13 @@ pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
         4 => Some(&PROPOSAL_COLUMNS[..SCHEMA_4_COLUMNS]),
         5 => Some(&PROPOSAL_COLUMNS[..SCHEMA_5_COLUMNS]),
         6 | 7 => Some(&PROPOSAL_COLUMNS[..SCHEMA_6_COLUMNS]),
-        DRIFT_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
+        DRIFT_SCHEMA..CARD_ITEMS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_8_COLUMNS]),
+        CARD_ITEMS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
 }
 
-/// The queue schema that added the last columns (step 7 → 8): every later
-/// one has [`PROPOSAL_COLUMNS`].
+/// The queue schema that added a drift item's columns (step 7 → 8).
 const DRIFT_SCHEMA: i64 = 8;
 
 /// Every column of `tasks`, in table order (`docs/canon/tasks.md` "Store"),
@@ -212,9 +219,9 @@ const SCHEMA_9_CARD_COLUMNS: usize = 24;
 pub(super) const TASK_LINKS_SCHEMA: i64 = 10;
 
 /// The `cards` columns of queue schema `schema`, in table order
-/// (`docs/canon/queue-backup.md` "Format"): 9 and 10 (this build's) are
-/// known, a dump of either restores, a schema-9 row's `tasks` `NULL`;
-/// `None` for any other (before 9 there is no card).
+/// (`docs/canon/queue-backup.md` "Format"): 9, 10 and 11 (this build's) are
+/// known, a dump of any restores, a schema-9 row's `tasks` `NULL`; `None`
+/// for any other (before 9 there is no card; step 11 adds no card column).
 pub fn card_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         CARDS_SCHEMA => Some(&CARD_COLUMNS[..SCHEMA_9_CARD_COLUMNS]),
@@ -421,8 +428,9 @@ impl SqliteQueue {
     /// read transaction: `proposals`, `tasks` and `cards` by ID number,
     /// `runs` by task and number, `events` by `seq`. A `TEXT` column that
     /// holds no UTF-8 text fails, naming row and column. A DB still at queue
-    /// schema 1, 2, 3, 4, 5, 6 or 7 (no step runs here) reads its 24, 35, 40,
-    /// 41, 43 or 44 proposal columns, the later ones `None`, its tasks and
+    /// schema 1, 2, 3, 4, 5, 6, 7 or 8 to 10 (no step runs here) reads its
+    /// 24, 35, 40, 41, 43, 44 or 46 proposal columns, the later ones `None`
+    /// (a schema-10 row's `card_id` and `why`), its tasks and
     /// runs from schema 4 on (none before), and its cards from schema 9 on
     /// (a schema-9 card's `tasks` `None`).
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {

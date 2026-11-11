@@ -805,6 +805,7 @@ mod tests {
                 author_model: None,
                 run: None,
                 login: None,
+                card: None,
                 now: NOW.to_owned(),
                 git: git_env.clone(),
             },
@@ -819,6 +820,7 @@ mod tests {
                 body: StageBody::Reject {
                     reason: "Asked before.".to_owned(),
                     updated_at: NOW.to_owned(),
+                    actor: None,
                 },
                 now: LATER.to_owned(),
                 git: git_env.clone(),
