@@ -6,7 +6,10 @@
 //!
 //! - `new --title T … [--reviewer N]` → `created C-0001: plain/backlog`;
 //!   `list [--parent C]` → a line per flow, then per card; `show C
-//!   [--history] [--marks]` → `key: value` lines.
+//!   [--history] [--marks] [--context [--budget N]]` → `key: value` lines,
+//!   with `--context` its parent's goal and one bundle of its targets and
+//!   its own applied records, the body last, in the room the lines leave
+//!   under the ceiling (task spec `card-context` CC1-CC5).
 //! - `move C [--to K] [--before C] [--note T]`, `edit C …`, `assign C …`,
 //!   `cancel C --reason T` → `<verb> C-0001: <flow>/<column>`; JSON `{id,
 //!   flow, column, position, revision, allowed, notes}`, a refusal too; no
@@ -48,6 +51,8 @@
 //! update` does and reads git to do it: reads only, exit 2 outside a
 //! worktree; and `show` of a card that links `T-` tasks (`edit --task T…`),
 //! which reads each now as `spec task list` does, a task it cannot read a
+//! note, never an exit; and `show --context`, whose bundle reads the corpus
+//! and refreshes the index as `spec bundle` does, a bundle it cannot make a
 //! note, never an exit. Nothing else reads a proposal, a lock or a task, no
 //! rule reads a link (canon `card-tasks`, "The rule"), and nothing is
 //! written under the root: the queue is in the data directory.
@@ -68,15 +73,17 @@ use specengine_core::card::{
 };
 use specengine_core::card_split::{ScopeNode, SplitPlan, TargetsFrom, split_plan};
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
-use specengine_core::check::{CheckInput, NodeAt, Resolver, SpecGraph, canonical_id};
+use specengine_core::check::{
+    CheckInput, NodeAt, Resolver, SpecGraph, bundle_task_from_toml, canonical_id,
+};
 use specengine_core::intake::{
     AuthorInput, DECISION_KIND, DecisionInput, GapType, IntakeSeverity, QUESTION_KIND,
     discrepancy_problem,
 };
 use specengine_core::proposal::{Author, prefix_clash};
 use specengine_core::task::{
-    CRITERIA_MAX, CRITERION_MAX, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX, over_bytes, over_items,
-    task_prefix_clash,
+    CRITERIA_MAX, CRITERION_MAX, DEFAULT_TASK_BUDGET, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX,
+    over_bytes, over_items, task_prefix_clash,
 };
 use specengine_core::trace::{
     CardMark, Departure, MarkFacts, TargetNorms, card_mark, clear_refusal, clearer_problem,
@@ -87,12 +94,13 @@ use specengine_model::{
 };
 use specengine_store::{
     CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, Event, GitEnv,
-    IntakeResult, NewCard, NewIntake, NewSplit, NewSplitChild, Place, Proposal, QueueError,
-    SplitParent, SqliteQueue, WorktreeGit,
+    IntakeResult, NewCard, NewIntake, NewSplit, NewSplitChild, Place, Proposal, ProposalStatus,
+    QueueError, SplitParent, SqliteQueue, WorktreeGit,
 };
 
 use crate::apply::Consent;
-use crate::cap::{View, lines_within};
+use crate::bundle::{Bundle, BundleOutcome, BundleRequest, budget_of, bundle_within};
+use crate::cap::{OUTPUT_CAP_CHARS, View, lines_within};
 use crate::corpus::{Admission, LeftOut, indexed_in, locate};
 use crate::intake::{
     DecisionRequest, IntakeOutcome, IntakeTarget, QuestionRequest, departing_hits,
@@ -171,7 +179,7 @@ pub struct CardListRequest {
     pub parent: Option<String>,
 }
 
-/// `spec card show C [--history] [--marks]`.
+/// `spec card show C [--history] [--marks] [--context [--budget N]]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardShowRequest {
     pub id: String,
@@ -179,6 +187,13 @@ pub struct CardShowRequest {
     pub history: bool,
     /// `--marks`: its mark over all its targets, as its `list --marks` row.
     pub marks: bool,
+    /// `--context`: its parent's goal and one bundle of its targets and
+    /// its applied records ([`CardContext`]); `false`: none read.
+    pub context: bool,
+    /// `--budget N`: the context's bundle budget, estimated tokens, 1 to
+    /// `u32::MAX`; `None`: `[budgets] bundle_task`, else
+    /// [`DEFAULT_TASK_BUDGET`]. Needs `context`.
+    pub budget: Option<i64>,
     /// The reading repository's git: where a linked task's state is read
     /// (`TaskListRequest`'s), on a card that links one alone.
     pub git: GitEnv,
@@ -1228,12 +1243,39 @@ pub struct CardShowOutcome {
     /// by ID number, in one read; a row that does not read is left out, its
     /// note after the items'.
     pub subtask_items: Vec<CardSubtaskItem>,
+    /// `--context`'s; `None` without it, and when there is no card.
+    pub context: Option<CardContext>,
     pub notes: Vec<String>,
     /// The card asked for, when there is none.
     pub id: Option<String>,
     /// Why there is none (exit 1).
     pub reason: Option<String>,
     pub messages: Vec<Message>,
+}
+
+/// A card's context (task spec `card-context` CC1, CC5): its direct
+/// parent's goal, and one bundle of its targets then its own applied
+/// records, fitted into the room its lines leave. Every part is present
+/// when asked; a bundle that cannot be made is `None` with a note, never
+/// the read's failure.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CardContext {
+    /// The direct parent, read now; `None` without one, or unread (a note).
+    pub parent: Option<CardContextParent>,
+    /// `spec bundle`'s outcome, made: `bundle` set, `reason` `None`.
+    pub bundle: Option<BundleOutcome>,
+    /// Each printed as `note: context: <note>`.
+    pub notes: Vec<String>,
+}
+
+/// A card's direct parent, as its context reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CardContextParent {
+    pub id: String,
+    pub title: String,
+    /// At most [`GOAL_MAX`] bytes: a longer one (a hand edit) is cut on a
+    /// character boundary, with a note.
+    pub goal: Option<String>,
 }
 
 impl CardShowOutcome {
@@ -1258,7 +1300,7 @@ struct EventJson<'a> {
 
 /// The columns in order, less `project`, the four keys of `--marks` right
 /// after `targets`, so no cut of a long card's text reaches them, then
-/// `allowed`, `history`, `notes`.
+/// `allowed`, `history`, `context`, `notes`.
 #[derive(Serialize)]
 struct CardJson<'a> {
     id: &'a str,
@@ -1294,6 +1336,7 @@ struct CardJson<'a> {
     revision: String,
     allowed: &'a [AllowedMove],
     history: Option<Vec<EventJson<'a>>>,
+    context: Option<&'a CardContext>,
     notes: &'a [String],
 }
 
@@ -1351,6 +1394,7 @@ impl Serialize for CardShowOutcome {
                     })
                     .collect()
             }),
+            context: self.context.as_ref(),
             notes: &self.notes,
         }
         .serialize(serializer)
@@ -1479,18 +1523,21 @@ impl Serialize for CardListOutcome {
 // ------------------------------------------------------------- context
 
 /// Where `spec card` runs: the project, its flows and its queue.
-struct CardContext {
+struct OpenCards {
     project: ProjectRoot,
     slug: String,
     /// The queue's directory.
     data_dir: PathBuf,
     config: CardConfig,
+    /// The root's `specengine.toml` as read: a card's context reads its
+    /// `[budgets] bundle_task` alone, only when asked.
+    config_text: String,
     queue: SqliteQueue,
 }
 
 /// The queue's context for a card command, git never asked: `--config` but
 /// the root's own, `C` taken by `[ids]` and a bad `[card]` exit 2.
-fn open_cards(env: &Env, globals: &Globals) -> Result<CardContext, CliError> {
+fn open_cards(env: &Env, globals: &Globals) -> Result<OpenCards, CliError> {
     let (project, text) = discover_with_text(env, globals)?;
     require_root_config(env, globals, &project)?;
     let slug = project.slug()?.to_owned();
@@ -1502,11 +1549,12 @@ fn open_cards(env: &Env, globals: &Globals) -> Result<CardContext, CliError> {
     let data_dir = prepared_data_dir(env, &project)?;
     let queue =
         SqliteQueue::open(data_dir.join(format!("{slug}.db")), &slug).map_err(queue_cannot)?;
-    Ok(CardContext {
+    Ok(OpenCards {
         project,
         slug,
         data_dir,
         config,
+        config_text: text,
         queue,
     })
 }
@@ -1627,7 +1675,7 @@ fn person_problem(key: &str, name: &str) -> Option<String> {
 
 /// The card a command names: `Ok(Err)` the refused outcome (exit 1).
 fn named_card(
-    context: &CardContext,
+    context: &OpenCards,
     written: &str,
     id: Option<String>,
     action: CardAction,
@@ -1655,7 +1703,7 @@ fn store_refusal(
     error: QueueError,
     action: CardAction,
     read: &Card,
-    context: &CardContext,
+    context: &OpenCards,
 ) -> Result<CardOutcome, CliError> {
     let QueueError::CardRefused { reason, .. } = error else {
         return Err(queue_cannot(error));
@@ -1676,7 +1724,7 @@ fn store_refusal(
 
 /// One change of `card` through the store, under its lock: the answer.
 fn changed(
-    context: &mut CardContext,
+    context: &mut OpenCards,
     action: CardAction,
     card: &Card,
     seen: Option<u64>,
@@ -1827,7 +1875,7 @@ fn run_new(
 /// a manual card reads no index.
 fn resolved_targets(
     env: &Env,
-    context: &CardContext,
+    context: &OpenCards,
     written: &[String],
     messages: &mut Vec<Message>,
 ) -> Result<Result<(Vec<String>, TargetNorms), String>, CliError> {
@@ -2351,7 +2399,7 @@ fn run_split(
 /// the scope is empty and every subtask a manual card.
 fn split_read(
     env: &Env,
-    context: &CardContext,
+    context: &OpenCards,
     request: &CardSplitRequest,
     stored: Option<&Card>,
     messages: &mut Vec<Message>,
@@ -2446,7 +2494,7 @@ fn split_scope(
 
 // -------------------------------------------------------------- reads
 
-/// `spec card show C [--history] [--marks]`.
+/// `spec card show C [--history] [--marks] [--context [--budget N]]`.
 pub fn card_show(
     env: &Env,
     globals: &Globals,
@@ -2460,6 +2508,12 @@ fn run_show(
     globals: &Globals,
     request: &CardShowRequest,
 ) -> Result<CardShowOutcome, CliError> {
+    // `--budget` is judged before anything is read (task spec
+    // `card-context` CC4).
+    if request.budget.is_some() && !request.context {
+        return Err(CliError::spec(BUDGET_NEEDS_CONTEXT));
+    }
+    let flag_budget = budget_of(request.budget)?;
     let missing = |id: Option<String>, reason: String| CardShowOutcome {
         card: None,
         allowed: Vec::new(),
@@ -2468,6 +2522,7 @@ fn run_show(
         tasks: Vec::new(),
         items: Vec::new(),
         subtask_items: Vec::new(),
+        context: None,
         notes: Vec::new(),
         id,
         reason: Some(reason),
@@ -2530,6 +2585,13 @@ fn run_show(
         None
     };
     let allowed = allowed_moves(context.config.flow(&card.flow), &card);
+    // The context's queue and config reads, only when asked, before the
+    // linked tasks' read takes the queue (task spec `card-context` CC2).
+    let asked = request.context.then(|| ContextAsked {
+        parent: context_parent(&context.queue, &card),
+        records: context_refs(&card.targets, &items),
+        budget: context_budget(flag_budget, &context),
+    });
     // A card that links no task reads no task and runs no git.
     let tasks = if card.tasks.is_empty() {
         Vec::new()
@@ -2547,7 +2609,7 @@ fn run_show(
     };
     notes.extend(item_notes);
     messages.extend(notes.iter().cloned().map(Message::Note));
-    Ok(CardShowOutcome {
+    let mut outcome = CardShowOutcome {
         allowed,
         card: Some(Box::new(card)),
         history,
@@ -2555,11 +2617,229 @@ fn run_show(
         tasks,
         items,
         subtask_items,
+        context: None,
         messages,
         notes,
         id: None,
         reason: None,
-    })
+    };
+    if let Some(asked) = asked {
+        add_context(env, globals, &mut outcome, asked, &request.git);
+    }
+    Ok(outcome)
+}
+
+/// `--budget` without `--context` (task spec `card-context` CC4).
+const BUDGET_NEEDS_CONTEXT: &str = "`--budget` needs `--context`";
+
+/// The `context.bundle` line's characters as made, its line end included:
+/// the key, `: `, `b3:` and 64 hex digits (task spec `card-context` CC3).
+const BUNDLE_LINE_CHARS: usize = "context.bundle: ".len() + "b3:".len() + 64 + 1;
+
+/// What a card's context read before its bundle: the parent and its notes,
+/// the REFs and the cap's note, the budget or its config error.
+struct ContextAsked {
+    parent: (Option<CardContextParent>, Vec<String>),
+    records: (Vec<String>, Option<String>),
+    budget: Result<u32, String>,
+}
+
+/// The card's direct parent (task spec `card-context` CC5), read now:
+/// none without one; one that does not read is `None` with a note; a goal
+/// over [`GOAL_MAX`] bytes cut on a character boundary, with a note.
+fn context_parent(queue: &SqliteQueue, card: &Card) -> (Option<CardContextParent>, Vec<String>) {
+    let Some(id) = card.parent.as_deref() else {
+        return (None, Vec::new());
+    };
+    let parent = match queue.get_card(id) {
+        Ok(Some(parent)) => parent,
+        Ok(None) => return (None, vec![format!("parent {id} not read: {}", no_card(id))]),
+        Err(error) => {
+            return (
+                None,
+                vec![one_line(&format!("parent {id} not read: {error}"))],
+            );
+        }
+    };
+    let mut notes = Vec::new();
+    let goal = parent.goal.map(|goal| {
+        if goal.len() <= GOAL_MAX {
+            return goal;
+        }
+        notes.push(format!("parent {id}'s goal cut at {GOAL_MAX} bytes"));
+        let mut end = GOAL_MAX;
+        while !goal.is_char_boundary(end) {
+            end -= 1;
+        }
+        goal[..end].to_owned()
+    });
+    (
+        Some(CardContextParent {
+            id: parent.id,
+            title: parent.title,
+            goal,
+        }),
+        notes,
+    )
+}
+
+/// A card context's REFs (task spec `card-context` CC6): its targets as
+/// stored, then the `record_id` of each of its own items that is `applied`
+/// and holds one, in `items` order, at most [`NODES_MAX`] records; past
+/// them, the note `not bundled: <k> more records, from <ID>`. A subtask's
+/// items are never its own.
+fn context_refs(targets: &[String], items: &[CardItem]) -> (Vec<String>, Option<String>) {
+    let applied = ProposalStatus::Applied.as_str();
+    let records: Vec<&str> = items
+        .iter()
+        .filter(|item| item.status == applied)
+        .filter_map(|item| item.record_id.as_deref())
+        .collect();
+    let note = records.get(NODES_MAX).map(|first| {
+        format!(
+            "not bundled: {} more records, from {first}",
+            records.len() - NODES_MAX
+        )
+    });
+    let refs = targets
+        .iter()
+        .cloned()
+        .chain(
+            records
+                .iter()
+                .take(NODES_MAX)
+                .map(|&record| record.to_owned()),
+        )
+        .collect();
+    (refs, note)
+}
+
+/// The context's budget (task spec `card-context` CC1, CC4): `--budget N`,
+/// else the root's `[budgets] bundle_task`, read alone, else
+/// [`DEFAULT_TASK_BUDGET`]; `bundle_node` is never read. A bad
+/// `bundle_task` is its line, a note's, never an exit.
+fn context_budget(flag: Option<u32>, cards: &OpenCards) -> Result<u32, String> {
+    if let Some(budget) = flag {
+        return Ok(budget);
+    }
+    match bundle_task_from_toml(&cards.config_text) {
+        Ok(Some(found)) => Ok(found.tokens),
+        Ok(None) => Ok(DEFAULT_TASK_BUDGET),
+        Err(error) => Err(error.at(&cards.project.config_label)),
+    }
+}
+
+/// The context onto a read card (task spec `card-context` CC1-CC4): its
+/// parent, its notes in order, and one bundle in the room the card's lines
+/// leave, else `None` and a `no bundle:` note. The notes print after the
+/// read's own messages, then the bundle's own messages.
+fn add_context(
+    env: &Env,
+    globals: &Globals,
+    outcome: &mut CardShowOutcome,
+    asked: ContextAsked,
+    git: &GitEnv,
+) {
+    let ContextAsked {
+        parent: (parent, mut notes),
+        records: (refs, records_note),
+        budget,
+    } = asked;
+    notes.extend(records_note);
+    outcome.context = Some(CardContext {
+        parent,
+        bundle: None,
+        notes: Vec::new(),
+    });
+    let room = context_room(outcome);
+    let (made, bundle_messages) = context_bundle(env, globals, refs, budget, room, git);
+    let bundle = match made {
+        Ok(made) => Some(made),
+        Err(why) => {
+            notes.push(one_line(&format!("no bundle: {why}")));
+            None
+        }
+    };
+    outcome.messages.extend(
+        notes
+            .iter()
+            .map(|note| Message::Note(format!("context: {note}"))),
+    );
+    outcome.messages.extend(bundle_messages);
+    if let Some(context) = outcome.context.as_mut() {
+        context.bundle = bundle;
+        context.notes = notes;
+    }
+}
+
+/// The characters left for the context's bundle (task spec `card-context`
+/// CC3): [`OUTPUT_CAP_CHARS`] less every line the text prints before the
+/// body, each with its line end, the `context.bundle` line at its made
+/// length; `None` when nothing is left, so the card's lines are never cut
+/// under a bundle.
+fn context_room(outcome: &CardShowOutcome) -> Option<usize> {
+    let (Some(card), Some(context)) = (outcome.card.as_deref(), outcome.context.as_ref()) else {
+        return None;
+    };
+    let cost = |line: &String| line.chars().count() + 1;
+    let printed: usize = show_lines(card, outcome).iter().map(cost).sum();
+    let used = printed.saturating_sub(cost(&bundle_line(context))) + BUNDLE_LINE_CHARS;
+    OUTPUT_CAP_CHARS.checked_sub(used).filter(|&room| room > 0)
+}
+
+/// The context's bundle, or why there is none (its `no bundle:` note's
+/// text), and the bundle's own messages, as `spec bundle 2>&1` prints them
+/// but its exit-1 reason and exit-2 line, which are the note.
+fn context_bundle(
+    env: &Env,
+    globals: &Globals,
+    refs: Vec<String>,
+    budget: Result<u32, String>,
+    room: Option<usize>,
+    git: &GitEnv,
+) -> (Result<BundleOutcome, String>, Vec<Message>) {
+    if refs.is_empty() {
+        return (
+            Err("no targets and no recorded decisions".to_owned()),
+            Vec::new(),
+        );
+    }
+    let Some(chars_max) = room else {
+        return (
+            Err(format!(
+                "the card's lines leave no room under the {OUTPUT_CAP_CHARS}-character ceiling"
+            )),
+            Vec::new(),
+        );
+    };
+    let budget = match budget {
+        Ok(budget) => budget,
+        Err(line) => return (Err(line), Vec::new()),
+    };
+    // As a task's bundle: the budget passed as a flag, so `bundle_node`
+    // stays unread and a minimum's line names `--budget N`.
+    let request = BundleRequest {
+        references: refs,
+        budget: Some(i64::from(budget)),
+        git: git.clone(),
+    };
+    match bundle_within(env, globals, &request, chars_max) {
+        Ok(made) => match made.reason.clone() {
+            None => {
+                let messages = made.messages.clone();
+                (Ok(made), messages)
+            }
+            Some(reason) => (Err(reason), made.messages),
+        },
+        Err(error) => {
+            let line = error
+                .message
+                .strip_prefix("spec: ")
+                .unwrap_or(&error.message)
+                .to_owned();
+            (Err(line), Vec::new())
+        }
+    }
 }
 
 // ------------------------------------------------------------- raises
@@ -2656,7 +2936,7 @@ fn run_raise(
 /// error ([`list_marks`]), never a clean card.
 fn show_mark(
     env: &Env,
-    context: &CardContext,
+    context: &OpenCards,
     card: &Card,
     notes: &mut Vec<String>,
     messages: &mut Vec<Message>,
@@ -2824,7 +3104,7 @@ fn run_list(
 /// never draws a clean tile it could not vouch for.
 fn list_marks(
     env: &Env,
-    context: &CardContext,
+    context: &OpenCards,
     cards: &[Card],
     facts: &QueueRead,
     messages: &mut Vec<Message>,
@@ -2967,7 +3247,7 @@ fn run_move(
         Ok(card) => card,
         Err(refused) => return Ok(*refused),
     };
-    let refuse = |reason: &str, context: &CardContext| {
+    let refuse = |reason: &str, context: &OpenCards| {
         Ok(CardOutcome::refused(
             ACTION,
             Some(&card.id),
@@ -3019,7 +3299,7 @@ fn note_problem(note: &str) -> Option<String> {
 /// decision, a `return` column's note among it. The note's grammar, asked
 /// here alone, comes after the closed card, as `cancel`'s reason does.
 fn move_refusal(
-    context: &CardContext,
+    context: &OpenCards,
     card: &Card,
     seen: Option<u64>,
     asked: &MoveAsked<'_>,
@@ -3108,7 +3388,7 @@ fn run_edit(
         Err(refused) => return Ok(*refused),
     };
     let mut messages = Vec::new();
-    let refuse = |reason: &str, context: &CardContext, messages: Vec<Message>| {
+    let refuse = |reason: &str, context: &OpenCards, messages: Vec<Message>| {
         Ok(CardOutcome::refused(
             ACTION,
             Some(&card.id),
@@ -3435,7 +3715,7 @@ struct Departing {
 
 fn departing(
     env: &Env,
-    context: &CardContext,
+    context: &OpenCards,
     card: &Card,
     request: &CardAcceptRequest,
     gap_type: Option<GapType>,
@@ -3551,7 +3831,7 @@ fn run_accept(
         Ok(card) => card,
         Err(refused) => return Ok(*refused),
     };
-    let refuse = |reason: &str, context: &CardContext, messages: Vec<Message>| {
+    let refuse = |reason: &str, context: &OpenCards, messages: Vec<Message>| {
         Ok(CardOutcome::refused(
             ACTION,
             Some(&card.id),
@@ -3788,7 +4068,7 @@ fn run_clear(
         Ok(card) => card,
         Err(refused) => return Ok(*refused),
     };
-    let refuse = |reason: &str, context: &CardContext, messages: Vec<Message>| {
+    let refuse = |reason: &str, context: &OpenCards, messages: Vec<Message>| {
         Ok(CardOutcome::refused(
             ACTION,
             Some(&card.id),
@@ -4203,8 +4483,8 @@ pub(crate) fn render_group_text(outcome: &CardGroupOutcome) -> String {
     escape_controls(&out)
 }
 
-/// The `key: value` lines of a card, cut at [`crate::OUTPUT_CAP_CHARS`];
-/// nothing when there is no card.
+/// The `key: value` lines of a card, cut at [`OUTPUT_CAP_CHARS`], then its
+/// context's bundle body when one was made; nothing when there is no card.
 pub(crate) fn render_show_text(outcome: &CardShowOutcome) -> String {
     let Some(card) = outcome.card.as_deref() else {
         return String::new();
@@ -4223,7 +4503,49 @@ pub(crate) fn render_show_text(outcome: &CardShowOutcome) -> String {
             lines.len()
         ));
     }
+    // The context's body, last, in the room the lines left (task spec
+    // `card-context` CC3).
+    if let Some(bundle) = outcome.context.as_ref().and_then(made_bundle) {
+        out.push_str(&bundle.body);
+    }
     escape_controls(&out)
+}
+
+/// The context's bundle, when one was made.
+fn made_bundle(context: &CardContext) -> Option<&Bundle> {
+    context
+        .bundle
+        .as_ref()
+        .and_then(|outcome| outcome.bundle.as_ref())
+}
+
+/// `context.parent: <id> | <title>` and `context.parent.goal: <goal>`,
+/// each `-` when absent.
+fn parent_lines(context: &CardContext) -> [String; 2] {
+    let parent = context.parent.as_ref();
+    [
+        format!(
+            "context.parent: {}",
+            parent.map_or_else(
+                || ABSENT.to_owned(),
+                |parent| format!("{} | {}", parent.id, one_line(&parent.title))
+            )
+        ),
+        format!(
+            "context.parent.goal: {}",
+            parent
+                .and_then(|parent| parent.goal.as_deref())
+                .map_or_else(|| ABSENT.to_owned(), one_line)
+        ),
+    ]
+}
+
+/// `context.bundle: <bundle_hash>`, `-` when none was made.
+fn bundle_line(context: &CardContext) -> String {
+    format!(
+        "context.bundle: {}",
+        made_bundle(context).map_or(ABSENT, |bundle| bundle.bundle_hash.as_str())
+    )
 }
 
 fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
@@ -4408,6 +4730,15 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
             })
             .collect(),
     );
+    // `context: -`, or its lines, the bundle's line last (task spec
+    // `card-context` CC2, CC3).
+    match outcome.context.as_ref() {
+        None => lines.push(format!("context: {ABSENT}")),
+        Some(context) => {
+            lines.extend(parent_lines(context));
+            lines.push(bundle_line(context));
+        }
+    }
     lines
 }
 
@@ -4430,4 +4761,104 @@ pub(crate) fn render_list_text(outcome: &CardListOutcome) -> String {
         ));
     }
     escape_controls(&out)
+}
+
+#[cfg(test)]
+mod context_tests {
+    //! Task spec `card-context` CC6, the cap: the selection of a context's
+    //! REFs from a card's targets and its own items alone, `context_refs`.
+    //! The items are built here, as `run_show` reads them; the integration
+    //! half is the crate's `card_context` test.
+
+    use specengine_core::proposal::Author;
+
+    use super::{CardItem, NODES_MAX, context_refs};
+
+    /// An item `PR-<n>` of `status`, holding `record` when given.
+    fn item(n: usize, status: &'static str, record: Option<String>) -> CardItem {
+        CardItem {
+            id: format!("PR-{n:04}"),
+            kind: "decision",
+            status,
+            summary: format!("Decision {n}"),
+            working_answer: Some("Yes.".to_owned()),
+            why: None,
+            author: Author::human(),
+            created_at: "2026-11-12T09:00:00Z".to_owned(),
+            updated_at: "2026-11-12T09:00:00Z".to_owned(),
+            staged_at: None,
+            decided_by: None,
+            decided_at: None,
+            decision_note: None,
+            record_path: record.as_ref().map(|id| format!("records/{id}.md")),
+            record_title: record.as_ref().map(|id| format!("Record {id}")),
+            record_id: record,
+        }
+    }
+
+    fn record(n: usize) -> String {
+        format!("REC-{n:04}")
+    }
+
+    fn targets() -> Vec<String> {
+        vec!["NODE-A".to_owned(), "NODE-B".to_owned()]
+    }
+
+    /// 66 applied records give 64 REFs after the targets, the first 64 by
+    /// `items` order, and the note naming the 65th. M: no cap.
+    #[test]
+    fn sixty_six_records_bundle_sixty_four_and_name_the_first_left_out() {
+        // Records numbered against the items' order, so the order kept is
+        // `items`', never the records'.
+        let items: Vec<CardItem> = (1..=66)
+            .map(|n| item(n, "applied", Some(record(200 - n))))
+            .collect();
+        let (refs, note) = context_refs(&targets(), &items);
+        assert_eq!(NODES_MAX, 64);
+        assert_eq!(refs.len(), 2 + 64, "M: no cap");
+        assert_eq!(refs[..2], targets()[..]);
+        let wanted: Vec<String> = (1..=64).map(|n| record(200 - n)).collect();
+        assert_eq!(refs[2..], wanted[..]);
+        assert_eq!(
+            note.as_deref(),
+            Some(format!("not bundled: 2 more records, from {}", record(200 - 65)).as_str())
+        );
+    }
+
+    /// Exactly 64 records: all of them, no note.
+    #[test]
+    fn sixty_four_records_are_all_bundled() {
+        let items: Vec<CardItem> = (1..=64)
+            .map(|n| item(n, "applied", Some(record(n))))
+            .collect();
+        let (refs, note) = context_refs(&targets(), &items);
+        assert_eq!(refs.len(), 66);
+        assert_eq!(note, None);
+    }
+
+    /// Only an applied item holding a record counts: an open one, a staged
+    /// one, an approved one holding its record (a killed run's), a rejected
+    /// one and an applied one with none are left out; the order is `items`'.
+    /// M: open items taken.
+    #[test]
+    fn only_applied_items_holding_a_record() {
+        let items = vec![
+            item(1, "open", None),
+            item(2, "applied", Some(record(30))),
+            item(3, "staged", None),
+            item(4, "approved", Some(record(31))),
+            item(5, "rejected", None),
+            item(6, "applied", None),
+            item(7, "applied", Some(record(24))),
+        ];
+        let (refs, note) = context_refs(&targets(), &items);
+        assert_eq!(
+            refs,
+            ["NODE-A", "NODE-B", "REC-0030", "REC-0024"],
+            "M: open items taken"
+        );
+        assert_eq!(note, None);
+        // A manual card with no records: no REF at all.
+        assert_eq!(context_refs(&[], &items[..1]), (Vec::new(), None));
+    }
 }

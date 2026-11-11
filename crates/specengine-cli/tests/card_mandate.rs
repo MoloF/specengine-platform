@@ -92,9 +92,10 @@ const ROW_KEYS: [&str; 22] = [
     "correction",
 ];
 
-/// The card document's 34 keys, `mandate` after `reviewer`,
-/// `subtask_items` after `items` (set 92).
-const CARD_KEYS: [&str; 34] = [
+/// The card document's 35 keys, `mandate` after `reviewer`,
+/// `subtask_items` after `items` (set 92), `context` after `history`
+/// (docs/features/card-context.md CC2).
+const CARD_KEYS: [&str; 35] = [
     "id",
     "flow",
     "column",
@@ -128,6 +129,8 @@ const CARD_KEYS: [&str; 34] = [
     "revision",
     "allowed",
     "history",
+    // docs/features/card-context.md CC2: `null` unless asked.
+    "context",
     "notes",
 ];
 

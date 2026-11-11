@@ -12,6 +12,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 
 ## Canon
 
+- [docs/canon/card-context.md](canon/card-context.md) Card context: a task read with its context in one call · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin, ui · tier 2
 - [docs/canon/card-flows.md](canon/card-flows.md) Card flows: config, hand-off and return · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/card-mandate.md](canon/card-mandate.md) Card mandate: a subtask is binding, or its department decides · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/card-progress.md](canon/card-progress.md) Card progress: a parent's subtasks, Ready to accept and Relies on · ui · tier 2

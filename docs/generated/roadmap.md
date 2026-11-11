@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 48 open, 62 done; current mvp; to mvp 2-3 days; total 13-21 days, 14 unestimated
+roadmap: 47 open, 63 done; current mvp; to mvp 2-3 days; total 13-21 days, 13 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,7 +29,7 @@ roadmap: 48 open, 62 done; current mvp; to mvp 2-3 days; total 13-21 days, 14 un
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 13 open, 10 done | 0 days, 13 unestimated
+## release v5 | 12 open, 11 done | 0 days, 12 unestimated
 
 1. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | -
 2. [RM-0035](../roadmap/RM-0035.md) | node-history (Phase 7, v5): a node's changes, who made them and when, on the CLI and in the document view | draft | should | -
@@ -39,11 +39,10 @@ roadmap: 48 open, 62 done; current mvp; to mvp 2-3 days; total 13-21 days, 14 un
 6. [RM-0105](../roadmap/RM-0105.md) | upstream-signal (Phase 7, v5): a subtask shows that its parent changed above it | draft | should | -
 7. [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, v5): a direction as a table of its documents | draft | should | - | waits on RM-0035
 8. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | draft | should | -
-9. [RM-0108](../roadmap/RM-0108.md) | card-context (Phase 7, v5): an agent reads a task with its context in one call | draft | should | -
-10. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a non-game preset | draft | could | -
-11. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
-12. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
-13. [RM-0103](../roadmap/RM-0103.md) | canvas-clicks (Phase 7, v5): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy | draft | could | -
+9. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a non-game preset | draft | could | -
+10. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
+11. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+12. [RM-0103](../roadmap/RM-0103.md) | canvas-clicks (Phase 7, v5): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy | draft | could | -
 
 ## pool | 28 open, 1 done | 7-12 days, 24 unestimated
 

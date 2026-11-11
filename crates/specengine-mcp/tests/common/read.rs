@@ -653,6 +653,10 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                         id,
                         history: args["history"] == json!(true),
                         marks: true,
+                        // docs/features/card-context.md CC7: `context: true`
+                        // asks it; absent, `null` or `false` does not.
+                        context: args["context"] == json!(true),
+                        budget: args["budget"].as_i64(),
                         // docs/canon/card-tasks.md "The rule": the stdio
                         // server reads each linked task in its repository.
                         git: server_git(env),

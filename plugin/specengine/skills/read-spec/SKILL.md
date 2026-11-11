@@ -7,7 +7,7 @@ description: Read the project's spec through the SpecEngine tools before reading
 
 The project's CLAUDE.md and its roles take precedence over this skill.
 
-Use this before you read or change behaviour the spec describes, and whenever you need to know what the spec says. The spec is a tree of documents and sections named by IDs; the SpecEngine tools read it as it is on disk now.
+The spec is a tree of documents and sections named by IDs; the SpecEngine tools read it as it is on disk now.
 
 ## Order
 
@@ -16,7 +16,7 @@ Use this before you read or change behaviour the spec describes, and whenever yo
 2. **Then narrow, only where the bundle is not enough:**
    - one node's current text and `ancestors`, its path from the top: `get_node` with its `id`; add `with: ["links"]` for its links both ways, `with: ["bindings"]` for the code bound to it and whether it still matches the spec (each binding's `sync`);
    - a term or a behaviour without a known ID: `search`, then open only the hits you need;
-   - the shape of the spec, or where a new piece belongs: `get_tree`, from a `root` and to a `depth` when the whole tree is too large;
+   - the shape of the spec, or where a new piece belongs: `get_tree`, from a `root`, to a `depth`;
    - the ordered flow, its typed edges and gap rows, which stop nothing: `get_flow`; if too large, from a `root`, to a `depth`, or `in_flow: true` to keep only what is in the flow;
    - the state of a node against the cards answering it, which stops nothing: `get_trace`, with a `ref` to read one node and what it holds;
    - an item at a line or a name, and the spec markers bound to it, before you change code (the project's config needs a `[code]` table): `find_symbols` with exactly one of `at` (a root-relative path, a colon and the line), `query` (a name, the end of a qualified path or a whole one), `node` (an ID: the items bound to it) or `file` (a code file's items);
@@ -33,4 +33,4 @@ Use this before you read or change behaviour the spec describes, and whenever yo
 - A reference that names nothing is an error with the reason: check the ID, or `search` for it. A look-alike or mixed-script ID is refused with its Latin fix: use the fix.
 - If a tool answers that there is no project (no `specengine.toml` here or above), stop using these tools, do not set one up, and say so rather than guess what the spec holds.
 - When the spec is silent or ambiguous, or the code disagrees with it, do not fill the gap silently: raise it with the ask-owner skill.
-- Work of any trade stands on cards, queue rows, not in the spec: `list_cards` and `get_card` read them, `create_card`, `split_card`, `edit_card` and `move_card` file and change one, and no tool accepts a card. A hand-off is a child card (`parent`) in the other trade's flow, its `reviewer` the side that asked; a move into a flow's `return` column needs a `note`, why it goes back. People use the web UI's words: a card is a task, a child card a subtask, a task of `get_task` an agent task, a workspace a department.
+- Work of any trade stands on cards, queue rows, not in the spec: `list_cards` and `get_card` read them, `create_card`, `split_card`, `edit_card` and `move_card` file and change one, and no tool accepts a card. `get_card` with `context: true` adds its targets' bundle, its parent's goal and its decisions; an older server refuses `context`: use `get_context_bundle`. A hand-off is a child card (`parent`) in the other trade's flow, its `reviewer` the side that asked; a move into a flow's `return` column needs a `note`, why it goes back. People use the web UI's words: a card is a task, a child card a subtask, a task of `get_task` an agent task, a workspace a department.

@@ -1,0 +1,119 @@
+{
+  "recorded_with": "spec at 82a7d39 (card-context's spec commit; its code is 3892f03's, before any src change of the slice)",
+  "procedure": "card_context.rs `foreword`: a fresh spec-a copy, its queue made through the library at fixed clocks; each read in the linked worktree, the pair's HOME; scratch paths as <linked>, <main>, <home>, <scratch>",
+  "rows": [
+    {
+      "args": [
+        "card",
+        "show",
+        "C-0001"
+      ],
+      "code": 0,
+      "stdout": "id: C-0001\nflow: plain\ncolumn: backlog\nposition: 1\ntitle: Write the stamina foreword\ngoal: Readers learn stamina before they sprint.\ndiscipline: -\ntargets: MEC-SPRINT\ntargets: MEC-STAMINA\nmark: -\non: -\ndiscrepancy: -\ncorrection: -\nsnapshot: MEC-SPRINT rev 1 b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\nsnapshot: MEC-STAMINA rev 1 b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\ncriteria: One page, read before the first sprint.\nassignee: -\nreviewer: -\nmandate: -\nestimate: -\ndue: -\nparent: -\ncorrects: -\nevidence: -\ntasks: -\nitems: PR-0001 | decision | applied | Does the foreword name the regeneration delay? | record DEC-0024\nitems: PR-0002 | question | open | Does the foreword show an empty tank?\nitems: PR-0003 | decision | rejected | Does the foreword quote the sprint table?\nsubtask_items: -\nacceptance: -\ncancellation: -\ncreated_by: local\ncreated_at: 2026-11-12T09:00:00Z\nupdated_at: 2026-11-12T09:00:00Z\nrevision: 1\nallowed: ready\nallowed: in-progress\nallowed: review\nhistory: -\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "--json",
+        "card",
+        "show",
+        "C-0001"
+      ],
+      "code": 0,
+      "stdout": "{\"id\":\"C-0001\",\"flow\":\"plain\",\"column\":\"backlog\",\"position\":1,\"title\":\"Write the stamina foreword\",\"goal\":\"Readers learn stamina before they sprint.\",\"discipline\":null,\"targets\":[\"MEC-SPRINT\",\"MEC-STAMINA\"],\"mark\":null,\"on\":null,\"discrepancy\":null,\"correction\":null,\"snapshot\":[{\"id\":\"MEC-SPRINT\",\"rev\":1,\"norm_hash\":\"b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\",\"within_hash\":\"b3:d8fca865ae193468e224fce4bb21597330e4a6590857aef693201e8567c3cc4f\",\"also\":[]},{\"id\":\"MEC-STAMINA\",\"rev\":1,\"norm_hash\":\"b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\",\"within_hash\":\"b3:1c0ca4533dfef103d72a5f432a6c681c7bfd062f16bc4814346c0518711be5b7\",\"also\":[]}],\"criteria\":[\"One page, read before the first sprint.\"],\"assignee\":null,\"reviewer\":null,\"mandate\":null,\"estimate\":null,\"due\":null,\"parent\":null,\"corrects\":null,\"evidence\":[],\"tasks\":[],\"items\":[{\"id\":\"PR-0001\",\"kind\":\"decision\",\"status\":\"applied\",\"summary\":\"Does the foreword name the regeneration delay?\",\"working_answer\":\"Yes: Does the foreword name the regeneration delay?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-05T12:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-05T12:00:00Z\",\"decision_note\":null,\"record_id\":\"DEC-0024\",\"record_path\":\"docs/records/DEC/DEC-0024.md\",\"record_title\":\"Yes: Does the foreword name the regeneration delay?\"},{\"id\":\"PR-0002\",\"kind\":\"question\",\"status\":\"open\",\"summary\":\"Does the foreword show an empty tank?\",\"working_answer\":\"Yes, at once.\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-11-12T08:00:00Z\",\"staged_at\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null},{\"id\":\"PR-0003\",\"kind\":\"decision\",\"status\":\"rejected\",\"summary\":\"Does the foreword quote the sprint table?\",\"working_answer\":\"Yes: Does the foreword quote the sprint table?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-06T08:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-06T08:00:00Z\",\"decision_note\":\"Not for this foreword.\",\"record_id\":null,\"record_path\":null,\"record_title\":null}],\"subtask_items\":[],\"acceptance\":null,\"cancellation\":null,\"created_by\":\"local\",\"created_at\":\"2026-11-12T09:00:00Z\",\"updated_at\":\"2026-11-12T09:00:00Z\",\"revision\":\"1\",\"allowed\":[{\"to\":\"ready\",\"by\":[]},{\"to\":\"in-progress\",\"by\":[]},{\"to\":\"review\",\"by\":[]}],\"history\":null,\"notes\":[]}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "card",
+        "show",
+        "C-0001",
+        "--marks"
+      ],
+      "code": 0,
+      "stdout": "id: C-0001\nflow: plain\ncolumn: backlog\nposition: 1\ntitle: Write the stamina foreword\ngoal: Readers learn stamina before they sprint.\ndiscipline: -\ntargets: MEC-SPRINT\ntargets: MEC-STAMINA\nmark: open\non: -\ndiscrepancy: -\ncorrection: -\nsnapshot: MEC-SPRINT rev 1 b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\nsnapshot: MEC-STAMINA rev 1 b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\ncriteria: One page, read before the first sprint.\nassignee: -\nreviewer: -\nmandate: -\nestimate: -\ndue: -\nparent: -\ncorrects: -\nevidence: -\ntasks: -\nitems: PR-0001 | decision | applied | Does the foreword name the regeneration delay? | record DEC-0024\nitems: PR-0002 | question | open | Does the foreword show an empty tank?\nitems: PR-0003 | decision | rejected | Does the foreword quote the sprint table?\nsubtask_items: -\nacceptance: -\ncancellation: -\ncreated_by: local\ncreated_at: 2026-11-12T09:00:00Z\nupdated_at: 2026-11-12T09:00:00Z\nrevision: 1\nallowed: ready\nallowed: in-progress\nallowed: review\nhistory: -\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "--json",
+        "card",
+        "show",
+        "C-0001",
+        "--marks"
+      ],
+      "code": 0,
+      "stdout": "{\"id\":\"C-0001\",\"flow\":\"plain\",\"column\":\"backlog\",\"position\":1,\"title\":\"Write the stamina foreword\",\"goal\":\"Readers learn stamina before they sprint.\",\"discipline\":null,\"targets\":[\"MEC-SPRINT\",\"MEC-STAMINA\"],\"mark\":\"open\",\"on\":null,\"discrepancy\":null,\"correction\":null,\"snapshot\":[{\"id\":\"MEC-SPRINT\",\"rev\":1,\"norm_hash\":\"b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\",\"within_hash\":\"b3:d8fca865ae193468e224fce4bb21597330e4a6590857aef693201e8567c3cc4f\",\"also\":[]},{\"id\":\"MEC-STAMINA\",\"rev\":1,\"norm_hash\":\"b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\",\"within_hash\":\"b3:1c0ca4533dfef103d72a5f432a6c681c7bfd062f16bc4814346c0518711be5b7\",\"also\":[]}],\"criteria\":[\"One page, read before the first sprint.\"],\"assignee\":null,\"reviewer\":null,\"mandate\":null,\"estimate\":null,\"due\":null,\"parent\":null,\"corrects\":null,\"evidence\":[],\"tasks\":[],\"items\":[{\"id\":\"PR-0001\",\"kind\":\"decision\",\"status\":\"applied\",\"summary\":\"Does the foreword name the regeneration delay?\",\"working_answer\":\"Yes: Does the foreword name the regeneration delay?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-05T12:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-05T12:00:00Z\",\"decision_note\":null,\"record_id\":\"DEC-0024\",\"record_path\":\"docs/records/DEC/DEC-0024.md\",\"record_title\":\"Yes: Does the foreword name the regeneration delay?\"},{\"id\":\"PR-0002\",\"kind\":\"question\",\"status\":\"open\",\"summary\":\"Does the foreword show an empty tank?\",\"working_answer\":\"Yes, at once.\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-11-12T08:00:00Z\",\"staged_at\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null},{\"id\":\"PR-0003\",\"kind\":\"decision\",\"status\":\"rejected\",\"summary\":\"Does the foreword quote the sprint table?\",\"working_answer\":\"Yes: Does the foreword quote the sprint table?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-06T08:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-06T08:00:00Z\",\"decision_note\":\"Not for this foreword.\",\"record_id\":null,\"record_path\":null,\"record_title\":null}],\"subtask_items\":[],\"acceptance\":null,\"cancellation\":null,\"created_by\":\"local\",\"created_at\":\"2026-11-12T09:00:00Z\",\"updated_at\":\"2026-11-12T09:00:00Z\",\"revision\":\"1\",\"allowed\":[{\"to\":\"ready\",\"by\":[]},{\"to\":\"in-progress\",\"by\":[]},{\"to\":\"review\",\"by\":[]}],\"history\":null,\"notes\":[]}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "card",
+        "show",
+        "C-0001",
+        "--history"
+      ],
+      "code": 0,
+      "stdout": "id: C-0001\nflow: plain\ncolumn: backlog\nposition: 1\ntitle: Write the stamina foreword\ngoal: Readers learn stamina before they sprint.\ndiscipline: -\ntargets: MEC-SPRINT\ntargets: MEC-STAMINA\nmark: -\non: -\ndiscrepancy: -\ncorrection: -\nsnapshot: MEC-SPRINT rev 1 b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\nsnapshot: MEC-STAMINA rev 1 b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\ncriteria: One page, read before the first sprint.\nassignee: -\nreviewer: -\nmandate: -\nestimate: -\ndue: -\nparent: -\ncorrects: -\nevidence: -\ntasks: -\nitems: PR-0001 | decision | applied | Does the foreword name the regeneration delay? | record DEC-0024\nitems: PR-0002 | question | open | Does the foreword show an empty tank?\nitems: PR-0003 | decision | rejected | Does the foreword quote the sprint table?\nsubtask_items: -\nacceptance: -\ncancellation: -\ncreated_by: local\ncreated_at: 2026-11-12T09:00:00Z\nupdated_at: 2026-11-12T09:00:00Z\nrevision: 1\nallowed: ready\nallowed: in-progress\nallowed: review\nhistory: 1 card.created 2026-11-12T09:00:00Z {\"as\":\"local\",\"assignee\":null,\"column\":\"backlog\",\"flow\":\"plain\",\"id\":\"C-0001\",\"mandate\":null,\"position\":1,\"reviewer\":null}\nhistory: 2 proposal.created 2026-11-12T08:00:00Z {\"id\":\"PR-0001\"}\nhistory: 3 proposal.approved 2026-10-05T12:00:00Z {\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}\nhistory: 4 proposal.applied 2026-10-05T12:00:00Z {\"commit\":\"28e8b71c8054a0e929038303e82124dbf25d6932\",\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}\nhistory: 5 proposal.created 2026-11-12T08:00:00Z {\"id\":\"PR-0002\"}\nhistory: 6 proposal.created 2026-11-12T08:00:00Z {\"id\":\"PR-0003\"}\nhistory: 7 proposal.rejected 2026-10-06T08:00:00Z {\"id\":\"PR-0003\",\"reason\":\"Not for this foreword.\"}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "--json",
+        "card",
+        "show",
+        "C-0001",
+        "--history"
+      ],
+      "code": 0,
+      "stdout": "{\"id\":\"C-0001\",\"flow\":\"plain\",\"column\":\"backlog\",\"position\":1,\"title\":\"Write the stamina foreword\",\"goal\":\"Readers learn stamina before they sprint.\",\"discipline\":null,\"targets\":[\"MEC-SPRINT\",\"MEC-STAMINA\"],\"mark\":null,\"on\":null,\"discrepancy\":null,\"correction\":null,\"snapshot\":[{\"id\":\"MEC-SPRINT\",\"rev\":1,\"norm_hash\":\"b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\",\"within_hash\":\"b3:d8fca865ae193468e224fce4bb21597330e4a6590857aef693201e8567c3cc4f\",\"also\":[]},{\"id\":\"MEC-STAMINA\",\"rev\":1,\"norm_hash\":\"b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\",\"within_hash\":\"b3:1c0ca4533dfef103d72a5f432a6c681c7bfd062f16bc4814346c0518711be5b7\",\"also\":[]}],\"criteria\":[\"One page, read before the first sprint.\"],\"assignee\":null,\"reviewer\":null,\"mandate\":null,\"estimate\":null,\"due\":null,\"parent\":null,\"corrects\":null,\"evidence\":[],\"tasks\":[],\"items\":[{\"id\":\"PR-0001\",\"kind\":\"decision\",\"status\":\"applied\",\"summary\":\"Does the foreword name the regeneration delay?\",\"working_answer\":\"Yes: Does the foreword name the regeneration delay?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-05T12:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-05T12:00:00Z\",\"decision_note\":null,\"record_id\":\"DEC-0024\",\"record_path\":\"docs/records/DEC/DEC-0024.md\",\"record_title\":\"Yes: Does the foreword name the regeneration delay?\"},{\"id\":\"PR-0002\",\"kind\":\"question\",\"status\":\"open\",\"summary\":\"Does the foreword show an empty tank?\",\"working_answer\":\"Yes, at once.\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-11-12T08:00:00Z\",\"staged_at\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null},{\"id\":\"PR-0003\",\"kind\":\"decision\",\"status\":\"rejected\",\"summary\":\"Does the foreword quote the sprint table?\",\"working_answer\":\"Yes: Does the foreword quote the sprint table?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-06T08:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-06T08:00:00Z\",\"decision_note\":\"Not for this foreword.\",\"record_id\":null,\"record_path\":null,\"record_title\":null}],\"subtask_items\":[],\"acceptance\":null,\"cancellation\":null,\"created_by\":\"local\",\"created_at\":\"2026-11-12T09:00:00Z\",\"updated_at\":\"2026-11-12T09:00:00Z\",\"revision\":\"1\",\"allowed\":[{\"to\":\"ready\",\"by\":[]},{\"to\":\"in-progress\",\"by\":[]},{\"to\":\"review\",\"by\":[]}],\"history\":[{\"seq\":1,\"type\":\"card.created\",\"at\":\"2026-11-12T09:00:00Z\",\"payload\":{\"as\":\"local\",\"assignee\":null,\"column\":\"backlog\",\"flow\":\"plain\",\"id\":\"C-0001\",\"mandate\":null,\"position\":1,\"reviewer\":null}},{\"seq\":2,\"type\":\"proposal.created\",\"at\":\"2026-11-12T08:00:00Z\",\"payload\":{\"id\":\"PR-0001\"}},{\"seq\":3,\"type\":\"proposal.approved\",\"at\":\"2026-10-05T12:00:00Z\",\"payload\":{\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}},{\"seq\":4,\"type\":\"proposal.applied\",\"at\":\"2026-10-05T12:00:00Z\",\"payload\":{\"commit\":\"28e8b71c8054a0e929038303e82124dbf25d6932\",\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}},{\"seq\":5,\"type\":\"proposal.created\",\"at\":\"2026-11-12T08:00:00Z\",\"payload\":{\"id\":\"PR-0002\"}},{\"seq\":6,\"type\":\"proposal.created\",\"at\":\"2026-11-12T08:00:00Z\",\"payload\":{\"id\":\"PR-0003\"}},{\"seq\":7,\"type\":\"proposal.rejected\",\"at\":\"2026-10-06T08:00:00Z\",\"payload\":{\"id\":\"PR-0003\",\"reason\":\"Not for this foreword.\"}}],\"notes\":[]}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "card",
+        "show",
+        "C-0001",
+        "--history",
+        "--marks"
+      ],
+      "code": 0,
+      "stdout": "id: C-0001\nflow: plain\ncolumn: backlog\nposition: 1\ntitle: Write the stamina foreword\ngoal: Readers learn stamina before they sprint.\ndiscipline: -\ntargets: MEC-SPRINT\ntargets: MEC-STAMINA\nmark: open\non: -\ndiscrepancy: -\ncorrection: -\nsnapshot: MEC-SPRINT rev 1 b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\nsnapshot: MEC-STAMINA rev 1 b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\ncriteria: One page, read before the first sprint.\nassignee: -\nreviewer: -\nmandate: -\nestimate: -\ndue: -\nparent: -\ncorrects: -\nevidence: -\ntasks: -\nitems: PR-0001 | decision | applied | Does the foreword name the regeneration delay? | record DEC-0024\nitems: PR-0002 | question | open | Does the foreword show an empty tank?\nitems: PR-0003 | decision | rejected | Does the foreword quote the sprint table?\nsubtask_items: -\nacceptance: -\ncancellation: -\ncreated_by: local\ncreated_at: 2026-11-12T09:00:00Z\nupdated_at: 2026-11-12T09:00:00Z\nrevision: 1\nallowed: ready\nallowed: in-progress\nallowed: review\nhistory: 1 card.created 2026-11-12T09:00:00Z {\"as\":\"local\",\"assignee\":null,\"column\":\"backlog\",\"flow\":\"plain\",\"id\":\"C-0001\",\"mandate\":null,\"position\":1,\"reviewer\":null}\nhistory: 2 proposal.created 2026-11-12T08:00:00Z {\"id\":\"PR-0001\"}\nhistory: 3 proposal.approved 2026-10-05T12:00:00Z {\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}\nhistory: 4 proposal.applied 2026-10-05T12:00:00Z {\"commit\":\"28e8b71c8054a0e929038303e82124dbf25d6932\",\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}\nhistory: 5 proposal.created 2026-11-12T08:00:00Z {\"id\":\"PR-0002\"}\nhistory: 6 proposal.created 2026-11-12T08:00:00Z {\"id\":\"PR-0003\"}\nhistory: 7 proposal.rejected 2026-10-06T08:00:00Z {\"id\":\"PR-0003\",\"reason\":\"Not for this foreword.\"}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "--json",
+        "card",
+        "show",
+        "C-0001",
+        "--history",
+        "--marks"
+      ],
+      "code": 0,
+      "stdout": "{\"id\":\"C-0001\",\"flow\":\"plain\",\"column\":\"backlog\",\"position\":1,\"title\":\"Write the stamina foreword\",\"goal\":\"Readers learn stamina before they sprint.\",\"discipline\":null,\"targets\":[\"MEC-SPRINT\",\"MEC-STAMINA\"],\"mark\":\"open\",\"on\":null,\"discrepancy\":null,\"correction\":null,\"snapshot\":[{\"id\":\"MEC-SPRINT\",\"rev\":1,\"norm_hash\":\"b3:1a1fd1318af16cc454a8630747054d51d8a72ba11b33873c0a02f2896f5cdcae\",\"within_hash\":\"b3:d8fca865ae193468e224fce4bb21597330e4a6590857aef693201e8567c3cc4f\",\"also\":[]},{\"id\":\"MEC-STAMINA\",\"rev\":1,\"norm_hash\":\"b3:d28068144ffb79d558aa83cb5da6756bf2e5284b685d7df96671f2091218ce06\",\"within_hash\":\"b3:1c0ca4533dfef103d72a5f432a6c681c7bfd062f16bc4814346c0518711be5b7\",\"also\":[]}],\"criteria\":[\"One page, read before the first sprint.\"],\"assignee\":null,\"reviewer\":null,\"mandate\":null,\"estimate\":null,\"due\":null,\"parent\":null,\"corrects\":null,\"evidence\":[],\"tasks\":[],\"items\":[{\"id\":\"PR-0001\",\"kind\":\"decision\",\"status\":\"applied\",\"summary\":\"Does the foreword name the regeneration delay?\",\"working_answer\":\"Yes: Does the foreword name the regeneration delay?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-05T12:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-05T12:00:00Z\",\"decision_note\":null,\"record_id\":\"DEC-0024\",\"record_path\":\"docs/records/DEC/DEC-0024.md\",\"record_title\":\"Yes: Does the foreword name the regeneration delay?\"},{\"id\":\"PR-0002\",\"kind\":\"question\",\"status\":\"open\",\"summary\":\"Does the foreword show an empty tank?\",\"working_answer\":\"Yes, at once.\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-11-12T08:00:00Z\",\"staged_at\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null},{\"id\":\"PR-0003\",\"kind\":\"decision\",\"status\":\"rejected\",\"summary\":\"Does the foreword quote the sprint table?\",\"working_answer\":\"Yes: Does the foreword quote the sprint table?\",\"why\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"created_at\":\"2026-11-12T08:00:00Z\",\"updated_at\":\"2026-10-06T08:00:00Z\",\"staged_at\":null,\"decided_by\":\"Scratch Committer <committer@example.invalid>\",\"decided_at\":\"2026-10-06T08:00:00Z\",\"decision_note\":\"Not for this foreword.\",\"record_id\":null,\"record_path\":null,\"record_title\":null}],\"subtask_items\":[],\"acceptance\":null,\"cancellation\":null,\"created_by\":\"local\",\"created_at\":\"2026-11-12T09:00:00Z\",\"updated_at\":\"2026-11-12T09:00:00Z\",\"revision\":\"1\",\"allowed\":[{\"to\":\"ready\",\"by\":[]},{\"to\":\"in-progress\",\"by\":[]},{\"to\":\"review\",\"by\":[]}],\"history\":[{\"seq\":1,\"type\":\"card.created\",\"at\":\"2026-11-12T09:00:00Z\",\"payload\":{\"as\":\"local\",\"assignee\":null,\"column\":\"backlog\",\"flow\":\"plain\",\"id\":\"C-0001\",\"mandate\":null,\"position\":1,\"reviewer\":null}},{\"seq\":2,\"type\":\"proposal.created\",\"at\":\"2026-11-12T08:00:00Z\",\"payload\":{\"id\":\"PR-0001\"}},{\"seq\":3,\"type\":\"proposal.approved\",\"at\":\"2026-10-05T12:00:00Z\",\"payload\":{\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}},{\"seq\":4,\"type\":\"proposal.applied\",\"at\":\"2026-10-05T12:00:00Z\",\"payload\":{\"commit\":\"28e8b71c8054a0e929038303e82124dbf25d6932\",\"id\":\"PR-0001\",\"record\":\"DEC-0024\"}},{\"seq\":5,\"type\":\"proposal.created\",\"at\":\"2026-11-12T08:00:00Z\",\"payload\":{\"id\":\"PR-0002\"}},{\"seq\":6,\"type\":\"proposal.created\",\"at\":\"2026-11-12T08:00:00Z\",\"payload\":{\"id\":\"PR-0003\"}},{\"seq\":7,\"type\":\"proposal.rejected\",\"at\":\"2026-10-06T08:00:00Z\",\"payload\":{\"id\":\"PR-0003\",\"reason\":\"Not for this foreword.\"}}],\"notes\":[]}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "card",
+        "show",
+        "C-0009"
+      ],
+      "code": 1,
+      "stdout": "",
+      "stderr": "spec: no card C-0009\n"
+    },
+    {
+      "args": [
+        "--json",
+        "card",
+        "show",
+        "C-0009"
+      ],
+      "code": 1,
+      "stdout": "{\"id\":\"C-0009\",\"reason\":\"no card C-0009\"}\n",
+      "stderr": "spec: no card C-0009\n"
+    }
+  ]
+}

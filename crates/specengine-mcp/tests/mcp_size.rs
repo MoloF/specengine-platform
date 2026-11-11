@@ -72,6 +72,16 @@
 //! (`doc_modal_control_title_residue_is_its_measured_size`), so a later
 //! change shows.
 //!
+//! docs/features/card-context.md (RM-0108) CC11: `get_card {context: true,
+//! history: true}` on CC3 (b)'s subtask (a 4 096 B goal, 32 criteria of
+//! 1 024 B, 64 targets, its parent's goal 4 096 B) and on CC3 (a)'s card
+//! (three long targets, 25 criteria of 1 000 B) holding 64 items, each a
+//! decision with a 1 024 B text, a 2 048 B working answer and a 2 048 B
+//! `why`: each the CLI library's, the text before notes and tail within
+//! 40 000 characters, text plus JSON within `MAX_RESULT_CHARS`; the maximum
+//! pinned ([`CARD_CONTEXT_MAXIMUM`]) and printed for "Implementation"
+//! (`card_context_stays_under_the_declared_cap`).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -909,4 +919,237 @@ fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
     );
     let done = session.finish();
     assert!(done.status.success(), "{}", done.stderr);
+}
+
+// ------------------------------------------------- card-context (RM-0108)
+
+/// docs/features/card-context.md CC11: the largest `get_card {context:
+/// true, history: true}` answer measured, text plus `structuredContent`, in
+/// characters (UTF-16 units alike: the corpus is ASCII).
+const CARD_CONTEXT_MAXIMUM: usize = 424_208;
+
+/// The clock of every write of the card scenes.
+const CARD_CLOCK: &str = "2026-11-12T09:00:00Z";
+
+/// About `chars` characters of prose marked `mark`, no two lines alike.
+fn watch_prose(mark: &str, chars: usize) -> String {
+    let mut out = String::new();
+    let mut n = 0;
+    while out.len() < chars {
+        n += 1;
+        out.push_str(&format!(
+            "The {mark} keeper trims wick number {n} before the tide turns, and the lamp burns \
+             steady through watch {n}.\n"
+        ));
+        if n % 6 == 0 {
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// A distinct ASCII text of exactly `bytes` bytes for item `n`: words drawn
+/// from a small vocabulary by `n`, so no two items read alike.
+fn distinct_text(n: usize, bytes: usize, end: &str) -> String {
+    const WORDS: [&str; 16] = [
+        "amber", "beacon", "cinder", "drift", "ember", "fathom", "gale", "harbour", "inlet",
+        "jetty", "keel", "lantern", "mooring", "nimbus", "oar", "pennant",
+    ];
+    let mut seed = (n as u64)
+        .wrapping_mul(6_364_136_223_846_793_005)
+        .wrapping_add(1_442_695_040_888_963_407);
+    let mut out = format!("Item {n}:");
+    while out.len() + end.len() + 8 < bytes {
+        seed = seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        out.push(' ');
+        out.push_str(WORDS[(seed >> 60) as usize]);
+    }
+    while out.len() + end.len() < bytes {
+        out.push('.');
+    }
+    out.push_str(end);
+    out
+}
+
+/// `n` ASCII criteria of exactly `bytes` bytes each.
+fn long_criteria(n: usize, bytes: usize) -> Vec<String> {
+    (0..n)
+        .map(|i| {
+            let mut line = format!("Criterion {i}: the lamp stays lit");
+            while line.len() < bytes {
+                line.push_str(" and steady");
+            }
+            line.truncate(bytes);
+            line
+        })
+        .collect()
+}
+
+/// A card through the library at [`CARD_CLOCK`]: its ID.
+fn card_at(
+    env: &specengine_cli::Env,
+    title: &str,
+    goal: &str,
+    targets: &[String],
+    criteria: Vec<String>,
+    parent: Option<&str>,
+) -> String {
+    let made = specengine_cli::card_new(
+        env,
+        &Globals::default(),
+        &specengine_cli::CardNewRequest {
+            title: title.to_owned(),
+            goal: Some(goal.to_owned()),
+            discipline: None,
+            targets: targets.to_vec(),
+            criteria,
+            assignee: None,
+            reviewer: parent.map(|_| "Ana Ruiz".to_owned()),
+            mandate: None,
+            estimate: None,
+            due: None,
+            parent: parent.map(str::to_owned),
+            corrects: None,
+            actor: None,
+            now: CARD_CLOCK.to_owned(),
+        },
+    )
+    .unwrap_or_else(|error| panic!("card new {title}: {error}"));
+    made.id
+        .clone()
+        .unwrap_or_else(|| panic!("card new {title}: {made:?}"))
+}
+
+/// CC11: the two cards of "Acceptance criteria" read with `context: true,
+/// history: true`, each within the cut and `MAX_RESULT_CHARS`; their
+/// maximum is [`CARD_CONTEXT_MAXIMUM`]. M: the declared value below the
+/// measurement.
+#[test]
+fn card_context_stays_under_the_declared_cap() {
+    let scratch = Scratch::new("size-card-context");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "a");
+    for name in ["LONG-A", "LONG-B", "LONG-C"] {
+        write(
+            &root,
+            &format!("docs/spec/long/{}.md", name.to_lowercase()),
+            format!(
+                "---\nid: MEC-{name}\nkind: mechanic\nclass: canon\ntier: 2\ntitle: Long \
+                 {name}\nparent: DOM-MOVEMENT\nstatus: accepted\nowner: owner\nreviewed: \
+                 2026-09-20\n---\n\n# Long {name}\n\n{}",
+                watch_prose(name, 16_000)
+            ),
+        );
+    }
+    let mut fill = "---\nid: MEC-FILL\nkind: mechanic\nclass: canon\ntier: 2\ntitle: Fill\n\
+                    parent: DOM-MOVEMENT\nstatus: accepted\nowner: owner\nreviewed: 2026-09-20\n\
+                    ---\n\n# Fill\n\nThe lamp room's rules.\n"
+        .to_owned();
+    let mut rules = Vec::new();
+    for n in 1..=64 {
+        fill.push_str(&format!(
+            "\n## Fill {n} {{#RULE-FILL-{n:02}}}\n\nWick {n} is trimmed at dusk.\n"
+        ));
+        rules.push(format!("RULE-FILL-{n:02}"));
+    }
+    write(&root, "docs/spec/fill.md", fill);
+    let sandbox = git::Sandbox::new(scratch.path());
+    sandbox.init(&root);
+    sandbox.add_all(&root);
+    sandbox.commit(&root, "spec-a with long documents");
+    let env = cli_env(&root, Some(&home));
+    let git = specengine_cli::GitEnv::new(&root, sandbox.vars());
+
+    // CC3 (b): the subtask with 64 targets under a parent with a 4 096 B goal.
+    let parent = card_at(
+        &env,
+        "The lamp room",
+        &"g".repeat(4096),
+        &["MEC-SPRINT".to_owned()],
+        Vec::new(),
+        None,
+    );
+    let subtask = card_at(
+        &env,
+        "Every wick",
+        &"w".repeat(4096),
+        &rules,
+        long_criteria(32, 1024),
+        Some(&parent),
+    );
+    // CC3 (a) with 64 items.
+    let long: Vec<String> = ["MEC-LONG-A", "MEC-LONG-B", "MEC-LONG-C"]
+        .iter()
+        .map(|id| (*id).to_owned())
+        .collect();
+    let watch = card_at(
+        &env,
+        "The long watch",
+        "Every keeper reads the three watches.",
+        &long,
+        long_criteria(25, 1000),
+        None,
+    );
+    for n in 0..64 {
+        let mut request = specengine_cli::DecisionRequest {
+            input: specengine_cli::DecisionInput {
+                node_ids: vec!["MEC-LONG-A".to_owned()],
+                text: distinct_text(n, 1024, "?"),
+                working_answer: distinct_text(n + 1000, 2048, "."),
+                price_of_other: "A watch rewritten.".to_owned(),
+                why: Some(distinct_text(n + 2000, 2048, ".")),
+                severity: None,
+                proposed_patch: None,
+                distinct_from: None,
+            },
+            card: Some(watch.clone()),
+            author_role: Some("developer".to_owned()),
+            author_model: Some("claude-opus-5-5".to_owned()),
+            run: None,
+            login: None,
+            now: CARD_CLOCK.to_owned(),
+            git: git.clone(),
+        };
+        let raise = |request: &specengine_cli::DecisionRequest| {
+            specengine_cli::propose_decision(&env, &Globals::default(), request)
+                .unwrap_or_else(|error| panic!("decision {n}: {error}"))
+        };
+        let first = raise(&request);
+        let done = if first.document.created {
+            first
+        } else {
+            let names: Vec<String> = first
+                .document
+                .hits
+                .iter()
+                .map(|hit| hit.name().to_owned())
+                .collect();
+            request.input.distinct_from = Some(names);
+            raise(&request)
+        };
+        assert!(done.document.created, "decision {n}: {done:?}");
+    }
+    let largest = measure(
+        "card-context CC11",
+        &root,
+        &home,
+        &[
+            (
+                "get_card",
+                json!({"card_id": subtask, "context": true, "history": true}),
+            ),
+            (
+                "get_card",
+                json!({"card_id": watch, "context": true, "history": true}),
+            ),
+        ],
+    );
+    eprintln!("card-context CC11 get_card maximum: {largest}");
+    assert!(largest as u64 <= MAX_RESULT_CHARS);
+    assert_eq!(
+        largest, CARD_CONTEXT_MAXIMUM,
+        "the pinned maximum (\"Implementation\")"
+    );
 }

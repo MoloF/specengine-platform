@@ -1483,7 +1483,32 @@ pub(crate) struct CardShowDocument {
     /// Its last `card.*` events and its items' last `proposal.*` events,
     /// merged by `seq`, oldest first; `null` without `history`.
     pub history: Option<Vec<CardEventShape>>,
+    // `docs/features/card-context.md` "Acceptance criteria", CC7.
+    /// Its parent's goal and one bundle of its targets and records; `null`
+    /// without `context`.
+    pub context: Option<CardContextShape>,
     pub notes: Vec<String>,
+}
+
+/// A card's context: every part present when asked.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CardContextShape {
+    /// Its direct parent; `null` without one, or unread (a note).
+    pub parent: Option<CardContextParentShape>,
+    /// `get_context_bundle`'s document over its targets, then its applied
+    /// items' records; `null` when none was made (a note).
+    pub bundle: Option<BundleDocument>,
+    pub notes: Vec<String>,
+}
+
+/// A card's direct parent, read now.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CardContextParentShape {
+    pub id: String,
+    pub title: String,
+    pub goal: Option<String>,
 }
 
 /// One question, discrepancy or decision a card names: the row's values,

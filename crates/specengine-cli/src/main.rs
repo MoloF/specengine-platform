@@ -671,6 +671,12 @@ enum CardCommand {
         /// Its mark over its targets too.
         #[arg(long)]
         marks: bool,
+        /// Its context too: its parent's goal and one bundle of its targets and its recorded decisions.
+        #[arg(long)]
+        context: bool,
+        /// The context's estimated tokens at most (default: `[budgets] bundle_task`, else 10000); needs --context.
+        #[arg(long, value_name = "N", allow_negative_numbers = true)]
+        budget: Option<i64>,
     },
     /// Move a card within its flow: last in the column, or before a card of it; its own column is a reorder.
     Move {
@@ -2434,19 +2440,25 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 parent,
             },
         )?))),
-        CardCommand::Show { id, history, marks } => {
-            Ok(Outcome::CardShow(Box::new(specengine_cli::card_show(
-                env,
-                globals,
-                &CardShowRequest {
-                    id,
-                    history,
-                    marks,
-                    git: process_git(env),
-                    tasks_here: true,
-                },
-            )?)))
-        }
+        CardCommand::Show {
+            id,
+            history,
+            marks,
+            context,
+            budget,
+        } => Ok(Outcome::CardShow(Box::new(specengine_cli::card_show(
+            env,
+            globals,
+            &CardShowRequest {
+                id,
+                history,
+                marks,
+                context,
+                budget,
+                git: process_git(env),
+                tasks_here: true,
+            },
+        )?))),
         CardCommand::Move {
             id,
             to,

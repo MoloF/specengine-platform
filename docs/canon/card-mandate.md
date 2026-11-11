@@ -78,10 +78,10 @@ spec card split ... [--child D]... [--mandate D=binding|D=open]... [--reviewer N
 
 ## Documents and events
 
-- **The card document**, 34 keys: `mandate` after `reviewer`; `subtask_items` after `items`, `[]` when none, each `card_id` then `items`' 16 keys, an unreadable row left out with `items`' note.
+- **The card document**, 35 keys: `mandate` after `reviewer`; `subtask_items` after `items`, `[]` when none, each `card_id` then `items`' 16 keys, an unreadable row left out with `items`' note.
 - **A `list` row**, 22 keys, `mandate` after `reviewer`; **a split child**, 9 keys, `mandate` last, a dry run's too.
 - **`card.created`** always carries `mandate`, `null` when none: `{id, flow, column, position, assignee, reviewer, mandate, as}`. **`card.edited`** adds it only when `fields` hold it: `{id, fields: ["mandate"], as, mandate}`; any other edit keeps `{id, fields, as}`.
-- **Key sets** (`fixtures/daemon-keys.json`, 122): `CardRow` 22, `Card` 34, `CardSplitChild` 9, `CardSubtaskItem` 17.
+- **Key sets** (`fixtures/daemon-keys.json`, 122): `CardRow` 22, `Card` 35, `CardSplitChild` 9, `CardSubtaskItem` 17.
 
 ## Bodies and tools
 

@@ -241,7 +241,12 @@ fn ac10_the_card_tools_and_their_schemas() {
                 ],
                 vec![],
             ),
-            ("get_card", vec!["card_id", "history"], vec!["card_id"]),
+            (
+                "get_card",
+                // docs/features/card-context.md CC7: `context`, `budget`.
+                vec!["budget", "card_id", "context", "history"],
+                vec!["card_id"],
+            ),
             (
                 "create_card",
                 vec![

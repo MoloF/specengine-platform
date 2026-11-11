@@ -254,7 +254,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | v5 | `node-history` | RM-0035 | `spec show --history` from the apply trailers, a History part in the document view; out of RM-0056 | - | 5-7 | - |
 | v5 | `direction-catalog` | RM-0106 | A direction as a table: title, revision, work state, open items, tasks, last change | - | 6-9 | 4, RM-0035 |
 | v5 | `delivery-analytics` | RM-0107 | Created, taken, accepted against estimate and due; lateness with reasons; by release and department; RM-0087's timeline | - | 8-12 | 6 |
-| v5 | `card-context` | RM-0108 | `get_card` with its targets' bundle, its parent's goal and its items' records, within a budget | - | 4-6 | 5 |
+| v5 | `card-context` | RM-0108 | Shipped 2026-11-12: `get_card {context}`, `spec card show --context [--budget N]`: the parent's goal and one bundle of its targets and its own applied records, fitted into the room its lines leave; a bundle not made is a note (`docs/canon/card-context.md`) | - | 4-6 | 5 |
 | v5 | `canvas-clicks` | RM-0103 | Graph and Roadmap's Chain take a short press as a click, Graph's minimap no pointer, Graph centres only on a keyboard focus; a lazy chunk gone after a redeploy reloads the page once per build; UI only | - | 2-3 | 6 |
 | trigger | `code-languages` | RM-0109 | Markers and AST hashes in a second language, once a real project in it exists | one amending ADR-0010, ADR-0018, ADR-0020 | 6-10 | - |
 | pool | `config-proposal` | RM-0110 | A writer's type change as a reviewed config proposal, out of RM-0061; never widening `[team]`, `[zones]`, `[gate]` on a hub | `config-proposal`, on `architecture.md#apply` | 6-9 | RM-0061 |
@@ -338,7 +338,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 
 | # | Core slice | Item | Fixed now |
 |---|---|---|---|
-| 1 | `card-context` | RM-0108 | plugin 0.39.0 (`docs/features/card-context.md`) |
+| 1 | `card-context` | RM-0108 | plugin 0.39.0; shipped 2026-11-12 (`docs/canon/card-context.md`) |
 | 2 | `node-history` | RM-0035 | plugin 0.40.0 (`docs/features/node-history.md`) |
 | 3 | `upstream-signal` | RM-0105 | plugin 0.41.0 |
 | 4 | `intake-similar` | RM-0059 | plugin 0.42.0; no schema step |

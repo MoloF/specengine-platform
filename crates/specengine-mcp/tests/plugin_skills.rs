@@ -437,8 +437,14 @@ fn ac06_skills_name_only_live_tools_and_properties() {
     let listed = listed();
     assert_eq!(ac06_problems(&skills, &listed), Vec::<String>::new());
 
-    // M: `get_bundle`.
-    let bundle = edited(&skills, "read-spec", "`get_context_bundle`", "`get_bundle`");
+    // M: `get_bundle`. Its first naming, step 1's: read-spec names it twice
+    // since docs/features/card-context.md CC9 (the older server's fallback).
+    let bundle = edited(
+        &skills,
+        "read-spec",
+        "Call `get_context_bundle` with the IDs",
+        "Call `get_bundle` with the IDs",
+    );
     assert_names(
         &ac06_problems(&bundle, &listed),
         "`get_bundle` is no tool",
@@ -1231,8 +1237,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
     // `title`); 0.36.0 since card-questions (RM-0097, `card_id`, `why`,
     // `items`); 0.37.0 since department-split (RM-0100, `split_card`);
-    // 0.38.0 since task-mandate (RM-0104, the mandate's keys).
-    assert_eq!(manifest["version"], "0.38.0");
+    // 0.38.0 since task-mandate (RM-0104, the mandate's keys); 0.39.0 since
+    // card-context (RM-0108, `get_card`'s `context`).
+    assert_eq!(manifest["version"], "0.39.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1340,8 +1347,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
     // `title`); 0.36.0 since card-questions (RM-0097, `card_id`, `why`,
     // `items`); 0.37.0 since department-split (RM-0100, `split_card`);
-    // 0.38.0 since task-mandate (RM-0104, the mandate's keys).
-    assert_eq!(manifest["version"], "0.38.0");
+    // 0.38.0 since task-mandate (RM-0104, the mandate's keys); 0.39.0 since
+    // card-context (RM-0108, `get_card`'s `context`).
+    assert_eq!(manifest["version"], "0.39.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1444,7 +1452,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.38.0",
+        manifest["version"], "0.39.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1456,7 +1464,8 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          flow-scenario (`get_flow`'s `in_flow`): 0.33.0; doc-modal (link `title`, `end_kind`, \
          gap `titles`): 0.34.0; departments (`list_cards`' flow `title`): 0.35.0; \
          card-questions (`card_id`, `why`, `items`): 0.36.0; department-split \
-         (`split_card`): 0.37.0; task-mandate (`mandate`, `subtask_items`): 0.38.0"
+         (`split_card`): 0.37.0; task-mandate (`mandate`, `subtask_items`): 0.38.0; \
+         card-context (`get_card`'s `context`): 0.39.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2082,7 +2091,7 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        4_407,
+        4_412,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
          154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
          docs/features/card-store.md (the cards bullet), 172 more since \
@@ -2090,7 +2099,8 @@ fn read_spec_names_the_bundles_code_and_tests() {
          docs/features/flow-scenario.md (`ancestors` and `in_flow`, two lines reworded), 5 \
          fewer since docs/features/departments.md (two trims and the vocabulary sentence), 3 \
          fewer since docs/features/department-split.md (`split_card` in, \"beside the tasks\" \
-         out)"
+         out), 5 more since docs/features/card-context.md (CC9: two trims and the `context` \
+         sentence)"
     );
     let reworded = edited(
         &skills,
@@ -2197,8 +2207,9 @@ fn tested_reads_skills_name_tested() {
         // 15 more, `ancestors` and `in_flow` in two reworded lines;
         // departments (RM-0096, DP-4): 5 fewer, two trims and the
         // vocabulary sentence; department-split (RM-0100, P1): 3 fewer,
-        // `split_card` named and "beside the tasks" dropped.
-        (4_086, 4_407),
+        // `split_card` named and "beside the tasks" dropped; card-context
+        // (RM-0108, CC9): 5 more, two trims and the `context` sentence.
+        (4_091, 4_412),
         "read-spec's bytes"
     );
     assert_eq!(
@@ -2549,8 +2560,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // departments (RM-0096, `list_cards`' flow `title`); 0.36.0 since
     // card-questions (RM-0097, `card_id`, `why`, `items`); 0.37.0 since
     // department-split (RM-0100, `split_card`); 0.38.0 since task-mandate
-    // (RM-0104, the mandate's keys).
-    assert_eq!(manifest["version"], "0.38.0");
+    // (RM-0104, the mandate's keys); 0.39.0 since card-context (RM-0108,
+    // `get_card`'s `context`).
+    assert_eq!(manifest["version"], "0.39.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -2576,8 +2588,9 @@ fn departments_dp4_read_spec_gives_the_web_ui_s_words() {
             .len()
     };
     // docs/features/department-split.md P1: `split_card` named, "beside the
-    // tasks" dropped, net -3: 4 086 and 4 407.
-    assert_eq!((body(read_spec), read_spec.len()), (4_086, 4_407));
+    // tasks" dropped, net -3: 4 086 and 4 407; docs/features/card-context.md
+    // CC9: three edits, net +5: 4 091 and 4 412.
+    assert_eq!((body(read_spec), read_spec.len()), (4_091, 4_412));
     assert!(body(read_spec) <= 4096);
     let last = bullets(read_spec).last().cloned().expect("a bullet");
     assert!(
@@ -2667,6 +2680,77 @@ fn department_split_p1_read_spec_names_split_card() {
         "the mutation is seen: {:?}",
         ac06_problems(&dropped, &listed)
     );
+}
+
+// ----------------------------------------------- card-context (RM-0108)
+
+/// docs/features/card-context.md CC9: the sentence `read-spec`'s cards
+/// bullet gains after "and no tool accepts a card.", one space before it.
+const READ_SPEC_CONTEXT: &str = " `get_card` with `context: true` adds its targets' bundle, its \
+                                 parent's goal and its decisions; an older server refuses \
+                                 `context`: use `get_context_bundle`.";
+
+/// docs/features/card-context.md (RM-0108) "Acceptance criteria", CC9:
+/// `read-spec`'s body 4 091 bytes (at most 4 096), the file 4 412; the
+/// sentence once, in the cards bullet, right after "and no tool accepts a
+/// card."; the bullet still starts with "- Work of any trade stands on
+/// cards" and ends with the vocabulary sentence; the first edit's sentence
+/// gone, the second's `get_tree` words as "Data" gives them; no digit; the
+/// description 0.38.0's ([`READ_SPEC_DESCRIPTION`], drift-queue's); every
+/// content rule passing. M: the sentence dropped.
+#[test]
+fn card_context_cc9_read_spec_names_the_context_key() {
+    let skills = committed();
+    let read_spec = &skills["read-spec"];
+    let body = read_spec
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert_eq!((body.len(), read_spec.len()), (4_091, 4_412));
+    assert!(body.len() <= 4096);
+    assert_eq!(read_spec.matches(READ_SPEC_CONTEXT.trim_start()).count(), 1);
+    let cards = bullets(read_spec)
+        .into_iter()
+        .find(|bullet| bullet.starts_with("- Work of any trade stands on cards"))
+        .expect("the cards bullet");
+    assert!(
+        cards.contains(&format!(
+            "and no tool accepts a card.{READ_SPEC_CONTEXT} A hand-off"
+        )),
+        "M: the sentence dropped: {cards}"
+    );
+    assert!(cards.ends_with(READ_SPEC_WORDS), "{cards}");
+    assert!(
+        !read_spec.contains("Use this before you read or change behaviour the spec describes"),
+        "the first edit"
+    );
+    assert!(
+        read_spec
+            .contains("or where a new piece belongs: `get_tree`, from a `root`, to a `depth`;\n"),
+        "the second edit"
+    );
+    assert!(
+        !READ_SPEC_CONTEXT.bytes().any(|byte| byte.is_ascii_digit()),
+        "no digit"
+    );
+    let front = read_spec.split("---\n").nth(1).expect("a front-matter");
+    assert_eq!(
+        front
+            .lines()
+            .filter_map(|line| line.strip_prefix("description: "))
+            .collect::<Vec<&str>>(),
+        [READ_SPEC_DESCRIPTION]
+    );
+    for (skill, text) in &skills {
+        if skill != "read-spec" {
+            assert!(!text.contains("context: true"), "{skill}");
+        }
+    }
+    let listed = listed();
+    assert_eq!(ac06_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(skill_text_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    assert_eq!(word_problems(&plugin_files()), Vec::<String>::new());
 }
 
 // ---------------------------------------------- card-questions (RM-0097)

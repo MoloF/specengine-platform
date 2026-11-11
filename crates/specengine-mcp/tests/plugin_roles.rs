@@ -1388,10 +1388,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // `list_cards`' flow `title`): 0.35.0; card-questions (RM-0097, P1,
     // `card_id`, `why`, `items`): 0.36.0; department-split (RM-0100, P1,
     // `split_card`): 0.37.0; task-mandate (RM-0104, P1, the mandate's
-    // keys): 0.38.0.
-    if plugin["version"] != "0.38.0" {
+    // keys): 0.38.0; card-context (RM-0108, CC8, `get_card`'s `context`):
+    // 0.39.0.
+    if plugin["version"] != "0.39.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.38.0",
+            "plugin.json: version {}, not 0.39.0",
             plugin["version"]
         ));
     }
@@ -1461,9 +1462,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.38.0\"", "\"0.37.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.38.0");
-    assert_names(&r2_problems(&older, &market), "not 0.38.0", "0.37.0");
+    let older = plugin.replacen("\"0.39.0\"", "\"0.38.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.39.0");
+    assert_names(&r2_problems(&older, &market), "not 0.39.0", "0.38.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

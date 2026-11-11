@@ -189,7 +189,9 @@ import type {
 // subtask, sets 119 to 121); and task-mandate's one (docs/features/task-mandate.md
 // "Acceptance criteria", M6, M7: a subtask's item, set 122 `CardSubtaskItem`, the last), with a row's `mandate`
 // after `reviewer` (22 keys), a card's `mandate` after `reviewer` and `subtask_items` after `items`
-// (34) and a split's subtask's `mandate` last (9). A key the types carry ahead of the file is listed
+// (34) and a split's subtask's `mandate` last (9); and card-context's one key, no set
+// (docs/features/card-context.md "Acceptance criteria", CC10: a card's `context` after `history`, 35
+// keys, written by its Rust test). A key the types carry ahead of the file is listed
 // in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already names fails.
 // While that file is absent the comparison is skipped, saying so; once it exists it names all one
 // hundred and twenty-two, in the slices' order.
@@ -824,6 +826,8 @@ const KEYS = {
     revision: true,
     allowed: true,
     history: true,
+    // docs/features/card-context.md "Acceptance criteria" (CC10): always null from the daemon, after `history`.
+    context: true,
     notes: true,
   } satisfies Record<keyof Card, true>,
   CardEvidence: { kind: true, value: true, by: true, at: true } satisfies Record<keyof CardEvidence, true>,
@@ -1013,7 +1017,7 @@ const CITED: Record<Named, string> = {
   CardColumn: "id, title",
   CardMove: "from, to, by",
   CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
-  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
+  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, notes",
   CardEvidence: "kind, value, by, at",
   CardAcceptance: "by, at, note, verdict, departs, discrepancy",
   CardCancellation: "by, at, reason",
@@ -1306,7 +1310,9 @@ function served(name: Named): string[] {
  * (docs/features/card-questions.md "Acceptance criteria", K1, L1, L3), and since department-split's
  * wrote sets 119 to 121 (docs/features/department-split.md "Acceptance criteria", S3, U2), and
  * since task-mandate's wrote a row's and a card's `mandate`, a card's `subtask_items`, a split's
- * subtask's `mandate` and set 122 (docs/features/task-mandate.md "Acceptance criteria", M7).
+ * subtask's `mandate` and set 122 (docs/features/task-mandate.md "Acceptance criteria", M7), and
+ * since card-context's wrote a card's `context`
+ * (docs/features/card-context.md "Acceptance criteria", CC10).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1405,7 +1411,7 @@ describe("the daemon's document types (AC-09)", () => {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
-    // Empty again since task-mandate's Rust test wrote its keys and set 122 (docs/features/task-mandate.md "Acceptance criteria", M7).
+    // Empty again since card-context's Rust test wrote a card's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -1435,7 +1441,8 @@ describe("the daemon's document types (AC-09)", () => {
     const card = declaredKeys("Card");
     expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
     expect(card).toEqual(served("Card"));
-    expect(card).toHaveLength(34);
+    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
+    expect(card).toHaveLength(35);
     expect(served("CardTask")).toEqual(["id", "status", "title", "stale"]);
     expect(declaredKeys("CardTask")).toEqual(served("CardTask"));
     expect(source).toMatch(/^export interface CardTask \{\n {2}id: string;\n {2}status: TaskStatus \| null;\n {2}title: string \| null;\n {2}stale: boolean \| null;\n\}$/m);
@@ -1500,9 +1507,19 @@ describe("the daemon's document types (AC-09)", () => {
     expect(declaredKeys("CardSplitBody")).toEqual(["target", "title", "goal", "discipline", "parent", "child", "mandate", "reviewer", "dry_run", "as"]);
   });
 
+  it('types card-context\'s key as the spec writes it: a card\'s `context` always null, after `history`, 35 keys, the type citing `docs/features/card-context.md` "Acceptance criteria" (CC10 of card-context)', () => {
+    const card = declaredKeys("Card");
+    expect(card.slice(card.indexOf("history"))).toEqual(["history", "context", "notes"]);
+    expect(source).toMatch(/^ {2}history: CardEvent\[\] \| null;\n {2}context: null;\n {2}notes: string\[\];\n\}$/m);
+    const at = source.indexOf("export interface Card {");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/card-context.md` "Acceptance criteria", CC10');
+    expect(served("Card")).toHaveLength(35);
+  });
+
   it('types task-mandate\'s keys as the spec writes them: a mandate `binding`, `open` or null, a row\'s after `reviewer` (22 keys), a card\'s after `reviewer` with `subtask_items` after `items` (34), a split\'s subtask\'s last (9); set 122 `CardSubtaskItem`, `card_id` then a card\'s item\'s 16 in their order; each citing `docs/features/task-mandate.md` "Acceptance criteria" (M1, M6, M7 of task-mandate)', () => {
     expect(source).toMatch(/^export type Mandate = "binding" \| "open";$/m);
-    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([22, 34, 9, 17]);
+    // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
+    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([22, 35, 9, 17]);
     const row = declaredKeys("CardRow");
     expect(row.slice(row.indexOf("reviewer"), row.indexOf("reviewer") + 3)).toEqual(["reviewer", "mandate", "estimate"]);
     const card = declaredKeys("Card");
@@ -1919,6 +1936,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     return served(name).filter((key) => file.includes(key) || !isAhead(name, key));
   }
 
+  /** A type's keys as `provisional.ts` declares them, less a key ahead of the file it does not name yet. */
+  function declaredNow(name: Named): string[] {
+    const file = sets[name] ?? [];
+    return declaredKeys(name).filter((key) => file.includes(key) || !isAhead(name, key));
+  }
+
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
@@ -1953,8 +1976,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
       const file = sets[name] ?? [];
       expect([name, key, file[file.indexOf(after) + 1]]).toEqual([name, key, key]);
     }
-    expect([sets.CardRow?.length, sets.Card?.length, sets.CardSplitChild?.at(-1)]).toEqual([22, 34, "mandate"]);
-    expect([sets.CardRow, sets.Card]).toEqual([declaredKeys("CardRow"), declaredKeys("Card")]);
+    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
+    expect([sets.CardRow?.length, sets.Card?.length, sets.CardSplitChild?.at(-1)]).toEqual([22, 35, "mandate"]);
+    expect([sets.CardRow, sets.Card]).toEqual([declaredKeys("CardRow"), declaredNow("Card")]);
   });
 
   it("names card-questions' three after ShownAncestor, before department-split's three, sets 116 to 118 with their keys in the types' order: 16, 7, 6 (K1, L3 of card-questions)", () => {
@@ -1989,8 +2013,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // A card's `items` right after `tasks` since card-questions (docs/features/card-questions.md "Acceptance criteria", K1).
     const card = sets.Card ?? [];
     expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
-    expect(card).toEqual(declaredKeys("Card"));
-    expect(card).toHaveLength(34);
+    expect(card).toEqual(declaredNow("Card"));
+    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
+    expect(card).toHaveLength(35);
   });
 
   it('names workspaces\' three after HubSync, before card-tasks\' one, sets 111 to 113, each with its keys in the types\' order: 4, 7, 4 (docs/features/workspaces.md "Data"; DP-4 of departments)', () => {
@@ -2148,13 +2173,14 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length, BEFORE_CARD_TRACE.length)).toEqual([...BOARD_UI]);
     expect(Object.keys(sets).indexOf("CardList")).toBe(86);
     expect(Object.keys(sets).at(BEFORE_CARD_TRACE.length - 1)).toBe("CardNotFound");
-    expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
+    expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => compared(name)));
     // A flow's `return` after `accept` (board-handoff, docs/canon/card-flows.md "The rule"); a
     // card's `tasks` after `evidence` (card-tasks, docs/features/card-tasks.md "Documents"); a
     // flow's `title` after `name` (docs/features/departments.md "Acceptance criteria", DP-4); a
     // card's `items` after `tasks` (K1 of card-questions); a row's and a card's `mandate`, a card's
     // `subtask_items` (M1, M6 of task-mandate).
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 22, 34, 4, 6, 3, 4, 7, 2]);
+    // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 22, 35, 4, 6, 3, 4, 7, 2]);
     expect(sets.CardFlow?.at(-1)).toBe("return");
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });

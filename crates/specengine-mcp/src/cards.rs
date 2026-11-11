@@ -24,9 +24,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use specengine_cli::{
     CARD_TASKS_MAX, CRITERIA_MAX, CRITERION_MAX, CardEditRequest, CardListRequest, CardMoveRequest,
-    CardNewRequest, CardShowRequest, CardSplitRequest, EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX,
-    GOAL_MAX, HISTORY_MAX, MAX_SPLIT_CHILDREN, Mandate, NODES_MAX, NOTE_MAX, OUTPUT_CAP_CHARS,
-    Outcome, TITLE_MAX, TOOL_ACTOR, process_git, utc_now,
+    CardNewRequest, CardShowRequest, CardSplitRequest, DEFAULT_TASK_BUDGET, EVIDENCE_ENTRIES_MAX,
+    EVIDENCE_VALUE_MAX, GOAL_MAX, HISTORY_MAX, MAX_SPLIT_CHILDREN, Mandate, NODES_MAX, NOTE_MAX,
+    OUTPUT_CAP_CHARS, Outcome, TITLE_MAX, TOOL_ACTOR, process_git, utc_now,
 };
 
 use crate::mirror::{
@@ -69,7 +69,8 @@ Reads only: no state changes, nothing under the project root is written. ",
 );
 
 const GET_DESCRIPTION: &str = concat!(
-    "One card: the same as `spec card show C --marks [--history]`. content is its key: value \
+    "One card: the same as `spec card show C --marks [--history] [--context [--budget N]]`. \
+content is its key: value \
 lines, cut at 40000 characters; structuredContent the --json document: the card's fields, its \
 mark, on, discrepancy and correction as list_cards with marks: true gives them, null on a \
 cancelled card, allowed (the moves open now, each {to, by}, by empty when anyone may), history and \
@@ -83,7 +84,11 @@ decisions that name it {id, kind, status, summary, working_answer, why, author, 
 updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, \
 record_title}, by ID, read now; with history, their last 64 proposal.* events join it by seq. \
 mandate: binding, open or null. subtask_items: the items naming one of its subtasks, each with \
-card_id first, by ID, in one read.
+card_id first, by ID, in one read. context: true: {parent {id, title, goal} or null, bundle, \
+notes}: bundle is get_context_bundle's document over its targets, then the records of its applied \
+items, at budget (else the project's bundle_task, else 10000), fitted into the room its lines leave \
+of the 40000 characters, its body printed after them; a bundle that cannot be made is null with a \
+note, never an error. budget needs context. Without context: null.
 
 Reads only: no state changes, nothing under the project root is written. No such card: an error \
 result with the reason. A look-alike ID, a corrupt row or an index that cannot be read: an error \
@@ -197,6 +202,20 @@ const _: () = assert!(holds_number(
     HISTORY_MAX,
     " card.*"
 ));
+// A card's context: its default budget, a task's, and its ceiling
+// (`docs/features/card-context.md` "Acceptance criteria", CC9).
+const _: () = assert!(holds_number(
+    GET_DESCRIPTION,
+    "else ",
+    DEFAULT_TASK_BUDGET as usize,
+    ")"
+));
+const _: () = assert!(holds_number(
+    GET_DESCRIPTION,
+    "leave of the ",
+    OUTPUT_CAP_CHARS,
+    " characters"
+));
 const _: () = assert!(holds_number(
     CREATE_DESCRIPTION,
     "title: required, at most ",
@@ -290,6 +309,11 @@ pub(crate) struct GetCardArgs {
     pub card_id: String,
     /// The card's last events too.
     pub history: Option<bool>,
+    /// Its context too: the parent's goal and one bundle of its targets and records.
+    pub context: Option<bool>,
+    /// Estimated tokens for context's bundle, 1 to 4294967295; else the project's
+    /// [budgets] bundle_task, else 10000. Needs context: true.
+    pub budget: Option<i64>,
 }
 
 /// A card's mandate as a tool takes it: core's two words, exactly
@@ -448,7 +472,7 @@ impl SpecEngineServer {
             .into_tool_result("list_cards"))
     }
 
-    /// `spec card show C --marks [--history]`.
+    /// `spec card show C --marks [--history] [--context [--budget N]]`.
     #[tool(
         description = GET_DESCRIPTION,
         input_schema = input_schema::<GetCardArgs>(),
@@ -469,6 +493,10 @@ impl SpecEngineServer {
                     id: args.card_id,
                     history: args.history.unwrap_or(false),
                     marks: true,
+                    // Absent, `null` or `false`: none; `budget` without it
+                    // is the library's exit 2.
+                    context: args.context.unwrap_or(false),
+                    budget: args.budget,
                     git: process_git(env),
                     tasks_here,
                 };

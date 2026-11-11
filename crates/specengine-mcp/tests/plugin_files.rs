@@ -221,6 +221,13 @@
 //!   entry 0.38.0, the tree with plugin.json's version set back 0.37.0's
 //!   (`read-spec` byte-equal); a `SCHEMA_PINS` entry 0.38.0, 0.37.0's
 //!   schemas today's without the mandate's keys ([`as_of_0_37_0`]).
+//! - card-context (RM-0108, CC8, D10): 0.38.0 -> 0.39.0, MINOR: a key
+//!   `get_card` takes, `context` and `budget`, and one it returns,
+//!   `context`. A `PINS` entry 0.39.0, the tree with plugin.json's version
+//!   and `read-spec`'s three edits ([`READ_SPEC_0_39_0`]) set back 0.38.0's;
+//!   a `SCHEMA_PINS` entry 0.39.0, 0.38.0's schemas today's without the
+//!   three keys ([`as_of_0_38_0`]). M: the schema changed with no new
+//!   `SCHEMA_PINS` entry.
 //!
 //! The repository is only read.
 
@@ -598,6 +605,34 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.38.0",
         "af7a741936a39b395c7c23fc704107dfeb5f198f4ce250c44fd0a88b2dcb4a49",
+    ),
+    // card-context (RM-0108, CC8: 0.38.0 -> 0.39.0, MINOR: keys `get_card`
+    // takes and returns, `context`'s): plugin.json's version and
+    // `read-spec`'s three edits ([`READ_SPEC_0_39_0`]); all set back, the
+    // tree hashes as 0.38.0's pin.
+    (
+        "0.39.0",
+        "df4a0309cd9e73c87b2205f45477a24b95b453ce2b70065a842c10727f702dd4",
+    ),
+];
+
+/// docs/features/card-context.md CC9: `read-spec`'s three edits, net +5
+/// bytes, each `(0.38.0's words, 0.39.0's)`.
+const READ_SPEC_0_39_0: [(&str, &str); 3] = [
+    (
+        "Use this before you read or change behaviour the spec describes, and whenever you need \
+         to know what the spec says. The spec is",
+        "The spec is",
+    ),
+    (
+        "`get_tree`, from a `root` and to a `depth` when the whole tree is too large;",
+        "`get_tree`, from a `root`, to a `depth`;",
+    ),
+    (
+        "and no tool accepts a card. A hand-off",
+        "and no tool accepts a card. `get_card` with `context: true` adds its targets' bundle, \
+         its parent's goal and its decisions; an older server refuses `context`: use \
+         `get_context_bundle`. A hand-off",
     ),
 ];
 
@@ -981,6 +1016,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.38.0",
         "57a26d3e883478b6769ce9c80c506557c335cf12b84eb5918ce1f492e31dcde2",
+    ),
+    // card-context (RM-0108, CC8): `get_card`'s input `context` and
+    // `budget`, its output `context` ([`as_of_0_38_0`] takes them out; no
+    // other tool's schema changed).
+    (
+        "0.39.0",
+        "7459b8e2b1cef6c84769d8b4bd9a396cc5659e49f52f4dc72a68a5e49ec7b312",
     ),
 ];
 
@@ -1992,7 +2034,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095), 0.35.0
 /// since departments (RM-0096), 0.36.0 since card-questions (RM-0097),
 /// 0.37.0 since department-split (RM-0100), 0.38.0 since task-mandate
-/// (RM-0104). No room is left, so the next byte is over.
+/// (RM-0104), 0.39.0 since card-context (RM-0108). No room is left, so the
+/// next byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2014,7 +2057,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.38.0")
+        json!("0.39.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2165,11 +2208,43 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // card-context (RM-0108, CC8: 0.38.0 -> 0.39.0): plugin.json's version
+    // and `read-spec`'s three edits, net +5 bytes; all set back, the tree
+    // is 0.38.0's pinned content, every other skill and role byte-equal. M:
+    // plugin.json left at 0.38.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.39.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.39.0"),
+        "plugin.json's version"
+    );
+    let mut at_0_38_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.39.0\"",
+        "\"version\": \"0.38.0\"",
+    );
+    let mut net = 0_isize;
+    for (was, is) in READ_SPEC_0_39_0 {
+        net += is.len().cast_signed() - was.len().cast_signed();
+        at_0_38_0 = edited(&at_0_38_0, READ_SPEC, is, was);
+    }
+    assert_eq!(net, 5, "net +5");
+    assert_eq!(
+        content_hash(&at_0_38_0),
+        PINS[PINS.len() - 2].1,
+        "0.39.0 changes plugin.json's version and read-spec's three edits only"
+    );
+    let tree = at_0_38_0;
+    let pins_0_38_0 = &PINS[..PINS.len() - 1];
     // task-mandate (RM-0104, P1, D14: 0.37.0 -> 0.38.0): plugin.json's
     // version alone; set back, the tree is 0.37.0's pinned content,
     // `read-spec`'s body and every other skill and role byte-equal. M:
     // plugin.json left at 0.37.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.38.0"));
+    assert_eq!(
+        pins_0_38_0.last().map(|(version, _)| *version),
+        Some("0.38.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.38.0"),
@@ -2183,11 +2258,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_37_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_38_0[pins_0_38_0.len() - 2].1,
         "0.38.0 changes plugin.json's version only"
     );
     let tree = at_0_37_0;
-    let pins_0_37_0 = &PINS[..PINS.len() - 1];
+    let pins_0_37_0 = &pins_0_38_0[..pins_0_38_0.len() - 1];
     // department-split (RM-0100, P1, D14: 0.36.0 -> 0.37.0): plugin.json's
     // version and `read-spec`'s one edit naming `split_card`, net -3 bytes;
     // both set back, the tree is 0.36.0's pinned content, every other skill
@@ -3317,6 +3392,22 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// card-context (RM-0108, CC8): `schemas` as 0.38.0 listed them: no
+/// `context` and `budget` in `get_card`'s input, no `context` in its output;
+/// no other tool's schema changed.
+fn as_of_0_38_0(schemas: &mut Value) {
+    for key in ["context", "budget"] {
+        assert!(
+            without_property(&mut schemas["get_card"]["inputSchema"], key),
+            "get_card takes {key}"
+        );
+    }
+    assert!(
+        without_property(&mut schemas["get_card"]["outputSchema"], "context"),
+        "get_card returns context"
+    );
+}
+
 /// task-mandate (RM-0104, P1): `schemas` as 0.37.0 listed them: no
 /// `mandate` in `create_card`'s, `edit_card`'s and `split_card`'s input, no
 /// `mandate` and `subtask_items` in `get_card`'s output, no `mandate` in a
@@ -4010,7 +4101,20 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[27].0, "0.36.0", "an entry for 0.36.0");
     assert_eq!(SCHEMA_PINS[28].0, "0.37.0", "an entry for 0.37.0");
     assert_eq!(SCHEMA_PINS[29].0, "0.38.0", "an entry for 0.38.0");
-    assert_eq!(SCHEMA_PINS.len(), 30, "0.38.0 the last entry");
+    assert_eq!(SCHEMA_PINS[30].0, "0.39.0", "an entry for 0.39.0");
+    assert_eq!(SCHEMA_PINS.len(), 31, "0.39.0 the last entry");
+    // card-context (RM-0108, CC8): 0.38.0's schemas are today's without
+    // `get_card`'s `context` and `budget` taken and `context` returned. M:
+    // `SCHEMA_PINS` not appended.
+    let mut at_0_38_0 = schemas.clone();
+    as_of_0_38_0(&mut at_0_38_0);
+    let at_0_38_0_hash = schema_hash(&at_0_38_0);
+    assert_eq!(
+        at_0_38_0_hash, SCHEMA_PINS[29].1,
+        "0.38.0's schemas are today's without card-context's three keys"
+    );
+    assert_ne!(at_0_38_0_hash, current, "card-context changed the schemas");
+    let (schemas, current) = (at_0_38_0, at_0_38_0_hash);
     // task-mandate (RM-0104, P1): 0.37.0's schemas are today's without the
     // mandate's keys. M: `SCHEMA_PINS` not appended.
     let mut at_0_37_0 = schemas.clone();

@@ -1135,6 +1135,10 @@ async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
             id,
             history: true,
             marks: false,
+            // The daemon never asks a card's context: `context: null`
+            // (task spec `card-context` CC10).
+            context: false,
+            budget: None,
             git: process_git(env),
             tasks_here,
         };

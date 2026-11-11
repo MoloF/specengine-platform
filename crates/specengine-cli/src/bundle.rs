@@ -35,7 +35,9 @@
 //! - **Budget**: `--budget N`, else `[budgets] bundle_node` (read alone,
 //!   [`bundle_node_from_toml`]), else [`DEFAULT_BUNDLE_BUDGET`]. The body as
 //!   printed stays within it ([`tokens_est`] of the whole text) and within
-//!   [`OUTPUT_CAP_CHARS`]: the frame (title, target headers marked
+//!   [`OUTPUT_CAP_CHARS`], or within the smaller ceiling [`bundle_within`]
+//!   takes, the room a card's lines leave (task spec `card-context` CC3):
+//!   the frame (title, target headers marked
 //!   ` | outline`, the not-included reserve, its count every candidate and
 //!   row) is the minimum (below it: exit 2); then each item and row, in
 //!   layer order, enters iff the body with it, the frame
@@ -338,7 +340,7 @@ pub fn bundle_walk(
     globals: &Globals,
     request: &BundleRequest,
 ) -> Result<BundleOutcome, CliError> {
-    run_bundle(env, globals, request, None, true)
+    run_bundle(env, globals, request, None, true, OUTPUT_CAP_CHARS)
 }
 
 /// [`bundle`], with `beside`'s rows read by its code read too.
@@ -348,18 +350,33 @@ pub(crate) fn bundle_with(
     request: &BundleRequest,
     beside: Option<&mut Beside<'_>>,
 ) -> Result<BundleOutcome, CliError> {
-    run_bundle(env, globals, request, beside, false)
+    run_bundle(env, globals, request, beside, false, OUTPUT_CAP_CHARS)
+}
+
+/// [`bundle`] fitted within `chars_max` characters instead of
+/// [`OUTPUT_CAP_CHARS`]: a card's context, in the room its lines leave
+/// (task spec `card-context` CC3). The frame over it is the same exit 2,
+/// naming `chars_max`.
+pub(crate) fn bundle_within(
+    env: &Env,
+    globals: &Globals,
+    request: &BundleRequest,
+    chars_max: usize,
+) -> Result<BundleOutcome, CliError> {
+    run_bundle(env, globals, request, None, false, chars_max)
 }
 
 /// Step 1 (every `REF` classified, the budget), then the subset read
 /// (the `store-reads` spec), else the walk: `walk_only`, a code
 /// layer read (D7), or a subset read that could not vouch for its files.
+/// The body fits within `chars_max` characters.
 fn run_bundle(
     env: &Env,
     globals: &Globals,
     request: &BundleRequest,
     beside: Option<&mut Beside<'_>>,
     walk_only: bool,
+    chars_max: usize,
 ) -> Result<BundleOutcome, CliError> {
     let flag = budget_of(request.budget)?;
     if request.references.is_empty() {
@@ -427,6 +444,7 @@ fn run_bundle(
         asked: &asked,
         budget,
         source: &source,
+        chars_max,
     };
     // A code layer (a `[code]` that is present or does not read, D7) keeps
     // the whole read.
@@ -469,6 +487,9 @@ struct Asked<'a> {
     asked: &'a [(&'a str, Target)],
     budget: u32,
     source: &'a BudgetSource,
+    /// The body's character ceiling: [`OUTPUT_CAP_CHARS`], or a card's
+    /// room ([`bundle_within`]).
+    chars_max: usize,
 }
 
 /// The walk (D5): today's whole read. One handle for the spec index and
@@ -534,7 +555,14 @@ fn answer(
     };
     let code = code_rows(&read, index, graph, &layers, beside);
     messages.extend(code.note.clone().map(Message::Note));
-    outcome.bundle = Some(assemble(graph, &layers, &code, asked.budget, asked.source)?);
+    outcome.bundle = Some(assemble(
+        graph,
+        &layers,
+        &code,
+        asked.budget,
+        asked.source,
+        asked.chars_max,
+    )?);
     outcome.messages = messages;
     Ok(outcome)
 }
@@ -762,8 +790,9 @@ pub(crate) fn beside_rows(
     }
 }
 
-/// `--budget N`: a whole number from 1 to `u32::MAX`.
-fn budget_of(budget: Option<i64>) -> Result<Option<u32>, CliError> {
+/// `--budget N`: a whole number from 1 to `u32::MAX`; a card's context
+/// judges its `--budget` with the same line (task spec `card-context` CC4).
+pub(crate) fn budget_of(budget: Option<i64>) -> Result<Option<u32>, CliError> {
     budget
         .map(|budget| {
             u32::try_from(budget)
@@ -844,20 +873,22 @@ impl Measure {
         }
     }
 
-    /// Within [`OUTPUT_CAP_CHARS`] and within `budget` tokens.
-    fn fits(self, budget: u32) -> bool {
-        self.chars <= OUTPUT_CAP_CHARS && tokens_of(self.thousandths) <= budget
+    /// Within `chars_max` characters ([`OUTPUT_CAP_CHARS`] but in a card's
+    /// room) and within `budget` tokens.
+    fn fits(self, budget: u32, chars_max: usize) -> bool {
+        self.chars <= chars_max && tokens_of(self.thousandths) <= budget
     }
 }
 
 /// The frame, the minimum, then the greedy fit (see the module
-/// documentation).
+/// documentation), every fit within `chars_max` characters.
 fn assemble(
     graph: &SpecGraph<'_>,
     layers: &BundleLayers,
     code: &CodeRows,
     budget: u32,
     source: &BudgetSource,
+    chars_max: usize,
 ) -> Result<Bundle, CliError> {
     let targets: Vec<TargetForms> = layers
         .targets
@@ -926,10 +957,10 @@ fn assemble(
     let framed = Measure::of(&frame);
     let minimum = tokens_of(framed.thousandths);
     let frame_chars = framed.chars;
-    if frame_chars > OUTPUT_CAP_CHARS {
+    if frame_chars > chars_max {
         return Err(CliError::spec(format!(
             "this bundle's frame (its title, target headers and not-included line) is \
-             {frame_chars} characters, over the {OUTPUT_CAP_CHARS}-character ceiling, \
+             {frame_chars} characters, over the {chars_max}-character ceiling, \
              whatever the budget ({}); its minimum is {minimum} tokens: name fewer targets",
             source.describe(budget)
         )));
@@ -970,7 +1001,7 @@ fn assemble(
                 let text_measure = Measure::of(text);
                 around
                     .plus(text_measure)
-                    .fits(budget)
+                    .fits(budget, chars_max)
                     .then_some((form, text, text_measure))
             })
             .unwrap_or_else(|| (ItemForm::Header, &header, Measure::of(&header)));
@@ -997,7 +1028,11 @@ fn assemble(
             format!("\n## {}\n", layer_heading(candidate.layer))
         };
         let part = Measure::of(&heading).plus(Measure::of(&candidate.text));
-        if measured.plus(part).plus(reserve_measure).fits(budget) {
+        if measured
+            .plus(part)
+            .plus(reserve_measure)
+            .fits(budget, chars_max)
+        {
             body.push_str(&heading);
             body.push_str(&candidate.text);
             measured = measured.plus(part);
@@ -1042,7 +1077,7 @@ fn assemble(
                 .plus(lines_measure)
                 .plus(line_measure)
                 .plus(more);
-            if !with.fits(budget) {
+            if !with.fits(budget, chars_max) {
                 break;
             }
             lines.push_str(&line);
@@ -1612,7 +1647,7 @@ mod fit_differential {
         parts
             .iter()
             .fold(Measure::default(), |sum, part| sum.plus(Measure::of(part)))
-            .fits(budget)
+            .fits(budget, OUTPUT_CAP_CHARS)
     }
 
     struct Lcg(u64);
@@ -1842,8 +1877,15 @@ mod fit_differential {
         };
 
         MEASURED.with(|measured| measured.set(0));
-        let bundle =
-            assemble(&graph, &layers, &code, 2_000, &BudgetSource::Flag).expect("the frame fits");
+        let bundle = assemble(
+            &graph,
+            &layers,
+            &code,
+            2_000,
+            &BudgetSource::Flag,
+            OUTPUT_CAP_CHARS,
+        )
+        .expect("the frame fits");
         let counted = MEASURED.with(Cell::get);
 
         let placed: usize = bundle.layers.iter().map(|(_, items)| items.len()).sum();

@@ -320,13 +320,13 @@ pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use card::{
     CardAcceptBody, CardAcceptRequest, CardAction, CardAssignBody, CardAssignRequest,
     CardCancelBody, CardCancelRequest, CardCause, CardClearBody, CardClearGroupBody,
-    CardClearGroupRequest, CardClearOutcome, CardClearRequest, CardEditBody, CardEditRequest,
-    CardGroupOutcome, CardItem, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest,
-    CardNewBody, CardNewRequest, CardOutcome, CardRaiseBody, CardRaiseKind, CardRaiseOutcome,
-    CardRaiseRequest, CardShowOutcome, CardShowRequest, CardSplitBody, CardSplitChild,
-    CardSplitOutcome, CardSplitParent, CardSplitRequest, CardSubtaskItem, TOOL_ACTOR, card_accept,
-    card_assign, card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move,
-    card_new, card_raise, card_show, card_split,
+    CardClearGroupRequest, CardClearOutcome, CardClearRequest, CardContext, CardContextParent,
+    CardEditBody, CardEditRequest, CardGroupOutcome, CardItem, CardListOutcome, CardListRequest,
+    CardMoveBody, CardMoveRequest, CardNewBody, CardNewRequest, CardOutcome, CardRaiseBody,
+    CardRaiseKind, CardRaiseOutcome, CardRaiseRequest, CardShowOutcome, CardShowRequest,
+    CardSplitBody, CardSplitChild, CardSplitOutcome, CardSplitParent, CardSplitRequest,
+    CardSubtaskItem, TOOL_ACTOR, card_accept, card_assign, card_cancel, card_clear,
+    card_clear_group, card_edit, card_list, card_move, card_new, card_raise, card_show, card_split,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};

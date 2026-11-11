@@ -299,6 +299,11 @@
 //! `mandate` after `reviewer` and `subtask_items` after `items` (34),
 //! `CardSplitChild` (121) `mandate` last (9). M: a key missing from the
 //! fixture.
+//!
+//! docs/features/card-context.md (RM-0108) "Acceptance criteria", CC10: no
+//! set more, 122 in all; `Card` (92) gains `context` after `history` (35),
+//! `null` from `GET .../cards/C`, which never asks a card's context (the
+//! route's `null` itself is `cards.rs`). M: `context` out of the fixture.
 
 mod common;
 mod task_state;
@@ -2851,6 +2856,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "revision",
                 "allowed",
                 "history",
+                // docs/features/card-context.md CC10: after `history`,
+                // `null` from the daemon, which never asks it.
+                "context",
                 "notes",
             ],
         ),
@@ -3053,7 +3061,16 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(sets[121].1, subtask_item);
     assert_eq!(sets[121].1.len(), 17);
     assert_eq!(sets[91].0, "Card");
-    assert_eq!(sets[91].1.len(), 34);
+    // docs/features/card-context.md CC10: 35, `context` right after
+    // `history`. M: `context` out of the fixture.
+    assert_eq!(sets[91].1.len(), 35);
+    let history = sets[91].1.iter().position(|key| key == "history");
+    assert_eq!(
+        sets[91].1[history.expect("history") + 1],
+        "context",
+        "{:?}",
+        sets[91].1
+    );
     let reviewer = sets[91].1.iter().position(|key| key == "reviewer");
     let items_at = sets[91].1.iter().position(|key| key == "items");
     assert_eq!(

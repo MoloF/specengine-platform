@@ -3082,3 +3082,48 @@ fn card_questions_k1_the_card_read_serves_items_and_the_board_stays() {
         .collect();
     assert_eq!(created, ["PR-0001", "PR-0002"]);
 }
+
+// ------------------------------------------- card-context (RM-0108), CC10
+
+/// docs/features/card-context.md CC10, the daemon's route: `GET
+/// .../cards/C-0001` of a card with a target, a goal and a parent serves
+/// `"context": null` right after `history`, 35 keys, byte-equal to `spec
+/// card show C-0001 --history --json`: the daemon never asks a context, so
+/// no bundle, no parent and no note. M: the route asking `context: true`.
+#[test]
+fn card_context_cc10_the_daemon_serves_context_null() {
+    let press = Press::lamp("cards-cc-null");
+    press.lamp_done(
+        "cards",
+        &json!({"title": "The storm scene", "discipline": "narrative",
+            "goal": "The keeper lights the lamp.", "target": ["SCN-STORM"]}),
+    );
+    press.lamp_done(
+        "cards",
+        &json!({"title": "The storm's sound", "discipline": "narrative",
+            "target": ["SCN-STORM"], "parent": "C-0001"}),
+    );
+    for id in ["C-0001", "C-0002"] {
+        let shown = press
+            .server
+            .get(&format!("{LAMP}/cards/{id}"))
+            .status(200)
+            .text()
+            .to_owned();
+        let cli = press.cli(&["card", "show", id, "--history"]);
+        cli.code(0);
+        assert_eq!(shown, cli.document(), "{id}: byte for byte the CLI's");
+        let card: Value = serde_json::from_str(&shown).expect("JSON");
+        assert_eq!(
+            card["context"],
+            Value::Null,
+            "M: the route asking context: true: {shown}"
+        );
+        assert_eq!(card.as_object().map(serde_json::Map::len), Some(35));
+        let history = shown.find(",\"history\":").expect("history");
+        let context = shown.find(",\"context\":null,").expect("context");
+        let notes = shown.rfind(",\"notes\":").expect("notes");
+        assert!(history < context && context < notes, "{shown}");
+        assert!(!shown.contains("bundle_hash"), "{shown}");
+    }
+}

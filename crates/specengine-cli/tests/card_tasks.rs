@@ -74,8 +74,9 @@ const NO_SNAPSHOT: &str =
 
 /// `show --json`'s keys in order: docs/canon/cards.md
 /// "Documents and events" with `tasks` after `evidence` (card-tasks CT-2) and
-/// `items` after `tasks` (docs/features/card-questions.md D4).
-const CARD_KEYS: [&str; 34] = [
+/// `items` after `tasks` (docs/features/card-questions.md D4), `context`
+/// after `history` (docs/features/card-context.md CC2).
+const CARD_KEYS: [&str; 35] = [
     "id",
     "flow",
     "column",
@@ -111,6 +112,8 @@ const CARD_KEYS: [&str; 34] = [
     "revision",
     "allowed",
     "history",
+    // docs/features/card-context.md CC2: `null` unless asked.
+    "context",
     "notes",
 ];
 

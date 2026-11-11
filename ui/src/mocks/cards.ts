@@ -69,7 +69,7 @@ import { linkedTaskOf, type MockTasks } from "./tasks";
 // departure from a binding brief; C-0001 reads both in its `subtask_items`, by ID.
 
 /** A stored card: the document less what a read adds, its links as the task IDs the row keeps. */
-export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "items" | "subtask_items" | "allowed" | "history" | "notes"> & { tasks: string[] };
+export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "items" | "subtask_items" | "allowed" | "history" | "context" | "notes"> & { tasks: string[] };
 
 interface MockEvent extends CardEvent {
   id: string;
@@ -789,6 +789,7 @@ export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks, propo
     subtask_items: subtaskItems,
     allowed: allowedOf(board, card),
     history,
+    context: null,
     notes: linked.flatMap(({ notes }) => notes),
   });
 }

@@ -937,6 +937,7 @@ export function aCard(fields: Partial<Card> & { id: string }): Card {
     revision: "1",
     allowed: [],
     history: [],
+    context: null,
     notes: [],
     ...fields,
   };

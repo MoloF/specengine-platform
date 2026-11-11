@@ -17,7 +17,7 @@ spec card new --title T [--goal T] [--discipline D] [--target REF]... [--criteri
   [--assignee N] [--reviewer N] [--mandate M] [--estimate E] [--due DATE] [--parent C] [--corrects C] [--as N]
 spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--parent C]
   [--no-target] [--with-cancelled] [--marks]
-spec card show C [--history] [--marks]
+spec card show C [--history] [--marks] [--context [--budget N]]
 spec card move C [--to K] [--before C] [--note T] [--revision R] [--as N]
 spec card edit C [new's flags but --discipline, --assignee] [--task T]... [--evidence KIND=VALUE]...
   [--reason T] [--revision R]
@@ -29,7 +29,7 @@ spec card clear (C | --group REF) ... --reason T --as N
 
 Globals as the queue's. In `edit`, `assign` a value `-` clears, never a mandate; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children"; `--mandate`: `card-mandate.md`. `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `spec card split`, a task and a subtask per department in one act: `card-split.md`. `move`, `edit`, `assign` asking nothing: a library `Usage` outcome `{id, reason}`, exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest`, `CardEditRequest` also `tasks_here`, no `Default`; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
-`open_cards`, never `open_context`: no git, any root; only `accept --departs` and `show` of a card linking a task read git.
+`open_cards`, never `open_context`: no git, any root; only `accept --departs` and `show` with `--context` or a linked task read git.
 
 - **Lines** `created|moved|edited|cancelled|accepted|cleared C-0001: plain/backlog`, `assigned C-0001: <assignee or ->, reviewer <reviewer or ->`. JSON of a write or a refusal `{id, flow, column, position, revision, allowed, notes}`; no such card, exit 1, `{id, reason}`, `no card C-0099`.
 - **`list`**, by flow, column (config order), position; a column `[card]` no longer places last in its flow, such a flow last of all, cancelled cards last in their column:
@@ -84,9 +84,9 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 
 ## Documents and events
 
-`show`, `get_card`, every key present, absent `null`; `mark` to `correction` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes}`; `tasks` `[{id, status, title, stale}]`, read now: `card-tasks.md` "Read"; `items`: `card-questions.md` "Read"; `mandate`, `subtask_items`: `card-mandate.md`.
+`show`, `get_card`, every key present, absent `null`; `mark` to `correction` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, notes}`; `tasks`: `card-tasks.md` "Read"; `items`: `card-questions.md` "Read"; `mandate`, `subtask_items`: `card-mandate.md`; `context`: `card-context.md`.
 
-- `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card, or one whose flow is gone: empty. `accept` is never in it: the board finds it through `accept.from`.
+- `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card: empty. `accept` is never in it (the board uses `accept.from`).
 - `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`, its items' last 64 `proposal.*` merged by `seq`; an unparsable payload skipped.
 
 `list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` uncut. `flows` `[{name, title, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}, return}]`, `moves` expanded, `return` a column or `null`, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction}`, 22 keys; the last four `--marks`' (`spec-trace.md` "The read"), else `null`.

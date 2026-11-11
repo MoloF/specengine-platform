@@ -82,8 +82,8 @@ const WRITE_KEYS: [&str; 7] = [
 /// `column`, `--marks`' four keys after `targets`, `tasks` after `evidence`
 /// (docs/canon/cards.md "Documents and events": each linked task as read now),
 /// `items` after `tasks` (docs/features/card-questions.md D4), then
-/// `allowed`, `history`, `notes`.
-const SHOW_KEYS: [&str; 34] = [
+/// `allowed`, `history`, `context`, `notes`.
+const SHOW_KEYS: [&str; 35] = [
     "id",
     "flow",
     "column",
@@ -119,6 +119,8 @@ const SHOW_KEYS: [&str; 34] = [
     "revision",
     "allowed",
     "history",
+    // docs/features/card-context.md CC2: `null` unless asked.
+    "context",
     "notes",
 ];
 
@@ -4252,9 +4254,10 @@ fn card_questions_k1_show_serves_items_after_tasks() {
     let tasks = keys.iter().position(|key| key == "tasks").expect("tasks");
     assert_eq!(keys[tasks + 1], "items", "{keys:?}");
     // 34 since docs/features/task-mandate.md M6: `subtask_items` after
-    // `items`, `mandate` after `reviewer`.
+    // `items`, `mandate` after `reviewer`; 35 since
+    // docs/features/card-context.md CC2: `context` after `history`.
     assert_eq!(keys[tasks + 2], "subtask_items", "{keys:?}");
-    assert_eq!(keys.len(), 34, "{keys:?}");
+    assert_eq!(keys.len(), 35, "{keys:?}");
     let items = raw_array(&shown.stdout, "items");
     for item_keys in serde_json::from_str::<Vec<OrderedKeys>>(items).expect("items") {
         assert_eq!(item_keys.0, ITEM_KEYS, "{items}");
