@@ -339,7 +339,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | # | Core slice | Item | Fixed now |
 |---|---|---|---|
 | 1 | `card-context` | RM-0108 | plugin 0.39.0 (`docs/features/card-context.md`) |
-| 2 | `node-history` | RM-0035 | plugin 0.40.0 |
+| 2 | `node-history` | RM-0035 | plugin 0.40.0 (`docs/features/node-history.md`) |
 | 3 | `upstream-signal` | RM-0105 | plugin 0.41.0 |
 | 4 | `intake-similar` | RM-0059 | plugin 0.42.0; no schema step |
 | 5 | `pack` | RM-0061 | CLI only; the config proposal split off to RM-0110, which needs its own ADR |
@@ -352,7 +352,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | 12 | `hub-department` | RM-0089 | - |
 | 13 | `delivery-analytics`, part b | RM-0107 | the timeline |
 
-**The UI lane**, beside core slices 1-5, in the same tree: RM-0103 `canvas-clicks` (`docs/features/canvas-clicks.md`), then RM-0099 in two slices, `design-sweep` (a) and `design-sweep-b` (b). It shares only documents with the core lane, so the owner commits each slice on its own.
+**The UI lane**, beside core slices 1-5, in the same tree: RM-0103 `canvas-clicks` (`docs/features/canvas-clicks.md`), then RM-0099 in two slices, `design-sweep` (a, `docs/features/design-sweep.md`) and `design-sweep-b` (b). It shares only documents with the core lane, so the owner commits each slice on its own.
 
 **Not taken:** RM-0109 `code-languages` (its trigger), RM-0087, RM-0070, 10c and RM-0110 `config-proposal`. The taken pool items, RM-0103, RM-0035 and RM-0105 to RM-0108, are `release: v5`; their estimates, and those of steps 7-13, are their analyses' of 2026-11-12.
 
