@@ -65,7 +65,7 @@ return = "sent-back"
 <a id="the-rule"></a>
 ## The rule
 
-A hand-off is how one trade asks another for work: a child card, its `parent` the asking card, in the receiving trade's flow, which its discipline picks as for any new card ("Config"). Its `reviewer`, the asking side, is named when the card is created. A hand-off never moves a card across flows, which stays refused. The receiver takes the card by moving it out of its flow's first column: there is no "take" act. "Accept" stays the asking side's word and act: the child's reviewer accepts its result, never its assignee (ADR-0056).
+A hand-off is how one trade asks another for work: a child card, its `parent` the asking card, in the receiving trade's flow, which its discipline picks as for any new card ("Config"). Its `reviewer`, the asking side, is named when the card is created, and may name its mandate: binding, or its department decides (`card-mandate.md`, ADR-0079). A hand-off never moves a card across flows, which stays refused. The receiver takes the card by moving it out of its flow's first column: there is no "take" act. "Accept" stays the asking side's word and act: the child's reviewer accepts its result, never its assignee (ADR-0056).
 
 A return sends work back. It is a move into the one column a flow names as `return`, and it needs a reason, a note that the move's `card.moved` event keeps. Only the child moves. The asking card stays where it is and shows its children as handed off, taken, returned or accepted.
 
