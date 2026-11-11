@@ -27,7 +27,7 @@ moves = [
 ]
 ```
 
-- `[card]` holds `flow` alone, at most 32. A flow's keys (`FLOW_KEYS`, 8): `name`, `title`, `disciplines`, `columns`, `titles`, `accept`, `return`, `moves`. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
+- `[card]` holds `flow`, at most 32, and `split` (`card-split.md` "Config"). A flow's keys (`FLOW_KEYS`, 8): `name`, `title`, `disciplines`, `columns`, `titles`, `accept`, `return`, `moves`. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
 - **`title`**, optional, a flow's display name: any script, 1-64 UTF-8 bytes, no control character (`title_problem`, shared with `workspace_toml.rs`); absent, the name; served after `name` in `list`'s `flows[]` (`cards.md` "Documents and events"), the text output unchanged. Each error at the value's line; `titles` of another type keeps `` `titles` is a table, not <type> ``, an unknown key's message lists the eight:
 
   ```text
@@ -102,17 +102,17 @@ No card write moves, creates or refuses another card; a split (`card-split.md`, 
 
 ## MCP and hub
 
-Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `create_card`'s and `move_card`'s descriptions name `reviewer` and `note`, `list_cards`' names `parent` and `return`, its flows `title` (0.35.0); each hub text ASCII and at most 2 048 B, 17 hub tools. `move_card`'s `note` is free text or null, never a staged choice: `mcp_stage.rs` exempts it from decision-staging's walk, as `edit_card`'s `reason`. Plugin 0.31.0 (`plugin-files.md`); `read-spec` says a hand-off is a child card and a return needs a note.
+Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `create_card`'s and `move_card`'s descriptions name `reviewer` and `note`, `list_cards`' names `parent` and `return`, its flows `title` (0.35.0); each hub text ASCII and at most 2 048 B, 18 hub tools. `move_card`'s `note` is free text or null, never a staged choice: `mcp_stage.rs` exempts it from decision-staging's walk, as `edit_card`'s `reason`. Plugin 0.31.0 (`plugin-files.md`); `read-spec` says a hand-off is a child card and a return needs a note.
 
 **On a hub** both acts are plain writes for any login, `as` bound to it (`hub-team.md` "Acts"). Naming a reviewer at creation is what `assign` already allows (ADR-0060 "Cost"). Accepting the child takes a `[team]` login that is its reviewer. Every login reads every reason (ADR-0065 "Cost").
 
 ## Known limits
 
-- **Older binaries refuse `return` and `title`** (before `board-handoff`, `departments`): an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools (pinned on today's code by an unknown key: CLI `cards.rs` `dp5_an_unknown_flow_key_exits_2_at_its_line`, `ac05`, MCP `a_bad_card_table_stops_the_card_tools_alone`). Add a key only after every terminal, plugin and hub serving the project runs a build that reads it (ADR-0073's rule); the preset's header says so.
+- **Older binaries refuse `return`, `title` and `split`** (before `board-handoff`, `departments`, `department-split`): an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools (pinned on today's code by an unknown key: CLI `cards.rs` `dp5_an_unknown_flow_key_exits_2_at_its_line`, `ac05`, MCP `a_bad_card_table_stops_the_card_tools_alone`). Add a key only after every terminal, plugin and hub serving the project runs a build that reads it (ADR-0073's rule); the preset's header says so.
 - **History keeps 64 events**: a returned card changed 64 times since has lost its reason; the screen says so.
 - **Hub accepts**: a writer must be a `[team]` login to accept a hand-off's result.
 - No `return_column` on the card row: the reason lives only in the event (ADR-0074 "Cost").
 
 ## Tests
 
-core `workspace_toml.rs` (the key, the five errors, the preset), `departments.rs` (`title`, its five messages); CLI `departments.rs` (`flows[0]` keys, the text byte-equal to 5bec07e's); CLI `card_handoff.rs` on `fixtures/studio-lamp` (hand-off, return, `--parent`, nothing waits on another card); store `queue_cards.rs`; mcp `mcp_cards.rs`, `mcp_stage.rs`, `plugin_files.rs`; http `cards.rs`, `query.rs`, `door.rs`, `hub_team.rs`, `hub.rs`, `daemon_keys.rs`, `no_domain.rs`; eval `workspace_names.rs`; `fixtures/card-press` byte-equal, `return` null. Core `card_move` is reached through the store, CLI, daemon and MCP, with no unit test of its own; the store's `board_handoff_by_and_the_flows_moves_come_before_the_return_note` pins the order: `by` and the flow's moves refuse before the return note.
+core `workspace_toml.rs` (the key, the five errors, the preset), `departments.rs` (`title`, its five messages); CLI `departments.rs` (`flows[0]` keys, the text byte-equal to 5bec07e's); CLI `card_handoff.rs` on `fixtures/studio-lamp` (hand-off, return, `--parent`, nothing waits on another card); store `queue_cards.rs`; mcp `mcp_cards.rs`, `mcp_stage.rs`, `plugin_files.rs`; http `cards.rs`, `query.rs`, `door.rs`, `hub_team.rs`, `hub.rs`, `daemon_keys.rs`, `no_domain.rs`; eval `workspace_names.rs`; `fixtures/card-press` byte-equal, `return` null. Core `card_move` has no unit test of its own; the store's `board_handoff_by_and_the_flows_moves_come_before_the_return_note` pins the order: `by` and the flow's moves refuse before the return note.

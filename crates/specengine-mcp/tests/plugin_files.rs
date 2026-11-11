@@ -209,6 +209,11 @@
 //!   entry 0.36.0, the tree with the version and `ask-owner`'s two edits set
 //!   back 0.35.0's; a `SCHEMA_PINS` entry 0.36.0, 0.35.0's schemas today's
 //!   without the six keys ([`as_of_0_35_0`]).
+//! - department-split (RM-0100, P1, D14): 0.36.0 -> 0.37.0, MINOR: a tool
+//!   added, `split_card`. A `PINS` entry 0.37.0, the tree with the version and
+//!   `read-spec`'s one edit ([`READ_SPEC_0_37_0`]) set back 0.36.0's; a
+//!   `SCHEMA_PINS` entry 0.37.0, 0.36.0's schemas today's without
+//!   `split_card` ([`as_of_0_36_0`]).
 //!
 //! The repository is only read.
 
@@ -573,7 +578,23 @@ const PINS: &[(&str, &str)] = &[
         "0.36.0",
         "1ee268cdd97fd90f4b84dc6f9b505e6a240ee77cb5ef68cb104ab6887e36f923",
     ),
+    // department-split (RM-0100, P1, D14: 0.36.0 -> 0.37.0, MINOR: a tool
+    // added, `split_card`): plugin.json's version and `read-spec`'s one edit
+    // ([`READ_SPEC_0_37_0`]); both set back, the tree hashes as 0.36.0's pin.
+    (
+        "0.37.0",
+        "3eff908635a5392669f7ce8f20f18e89e2692d32cd6f31d096e877675e41dc3e",
+    ),
 ];
+
+/// department-split (RM-0100, D14): `read-spec`'s one edit, net -3 bytes,
+/// `(0.36.0's words, 0.37.0's)`.
+const READ_SPEC_0_37_0: (&str, &str) = (
+    "queue rows beside the tasks, not in the spec: `list_cards` and `get_card` read them, \
+     `create_card`, `edit_card`",
+    "queue rows, not in the spec: `list_cards` and `get_card` read them, `create_card`, \
+     `split_card`, `edit_card`",
+);
 
 /// card-questions (RM-0097, "Data", "Key sets and the plugin"): `ask-owner`'s
 /// two edits, `(0.35.0's words, 0.36.0's)`.
@@ -932,6 +953,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.36.0",
         "1c47d37cc279e4d0cdc60cddcb0ff68a53b9d8b5fd97d0b5b5d38ddd71a50df9",
+    ),
+    // department-split (RM-0100, P1): the tool `split_card`
+    // ([`as_of_0_36_0`] takes it out; no other tool's schema changed).
+    (
+        "0.37.0",
+        "def093f696ccce852f985936a58d49e4c3a48897eda2b5c775c78cb5b21ecee3",
     ),
 ];
 
@@ -1941,8 +1968,9 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// 0.30.0 since docs/features/flow-scope.md (FS-6), 0.31.0 since
 /// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092), 0.33.0
 /// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095), 0.35.0
-/// since departments (RM-0096), 0.36.0 since card-questions (RM-0097). No
-/// room is left, so the next byte is over.
+/// since departments (RM-0096), 0.36.0 since card-questions (RM-0097),
+/// 0.37.0 since department-split (RM-0100). No room is left, so the next
+/// byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -1964,7 +1992,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.36.0")
+        json!("0.37.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2115,11 +2143,45 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // department-split (RM-0100, P1, D14: 0.36.0 -> 0.37.0): plugin.json's
+    // version and `read-spec`'s one edit naming `split_card`, net -3 bytes;
+    // both set back, the tree is 0.36.0's pinned content, every other skill
+    // and role byte-equal. M: plugin.json left at 0.36.0; `split_card`
+    // dropped from read-spec; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.37.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.37.0"),
+        "plugin.json's version"
+    );
+    let (was, is) = READ_SPEC_0_37_0;
+    assert_eq!(was.len() - is.len(), 3, "net -3");
+    let at_0_36_0 = edited(
+        &edited(
+            &tree,
+            PLUGIN_JSON,
+            "\"version\": \"0.37.0\"",
+            "\"version\": \"0.36.0\"",
+        ),
+        READ_SPEC,
+        is,
+        was,
+    );
+    assert_eq!(
+        content_hash(&at_0_36_0),
+        PINS[PINS.len() - 2].1,
+        "0.37.0 changes plugin.json's version and read-spec's one edit only"
+    );
+    let tree = at_0_36_0;
+    let pins_0_36_0 = &PINS[..PINS.len() - 1];
     // card-questions (RM-0097, P1: 0.35.0 -> 0.36.0): plugin.json's version
     // and `ask-owner`'s two edits; all set back, the tree is 0.35.0's pinned
     // content, every other skill and role byte-equal. M: plugin.json left at
     // 0.35.0; the `card_id` sentence dropped; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.36.0"));
+    assert_eq!(
+        pins_0_36_0.last().map(|(version, _)| *version),
+        Some("0.36.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.36.0"),
@@ -2136,11 +2198,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     }
     assert_eq!(
         content_hash(&at_0_35_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_36_0[pins_0_36_0.len() - 2].1,
         "0.36.0 changes plugin.json's version and ask-owner's two edits only"
     );
     let tree = at_0_35_0;
-    let pins_0_35_0 = &PINS[..PINS.len() - 1];
+    let pins_0_35_0 = &pins_0_36_0[..pins_0_36_0.len() - 1];
     // departments (RM-0096, DP-4, D12: 0.34.0 -> 0.35.0): plugin.json's
     // version and `read-spec`'s three edits; all set back, the tree is
     // 0.34.0's pinned content, every other skill and role byte-equal. M: the
@@ -3207,6 +3269,13 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// department-split (RM-0100, P1): `schemas` as 0.36.0 listed them: no
+/// `split_card`; no other tool's schema changed.
+fn as_of_0_36_0(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("schemas by tool");
+    assert!(tools.remove("split_card").is_some(), "split_card listed");
+}
+
 /// card-questions (RM-0097, P1): `schemas` as 0.35.0 listed them: no
 /// `card_id` in `ask_question`'s, `report_discrepancy`'s and
 /// `report_decision`'s input, no `why` in `report_decision`'s; no `card_id`
@@ -3858,7 +3927,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[25].0, "0.34.0", "an entry for 0.34.0");
     assert_eq!(SCHEMA_PINS[26].0, "0.35.0", "an entry for 0.35.0");
     assert_eq!(SCHEMA_PINS[27].0, "0.36.0", "an entry for 0.36.0");
-    assert_eq!(SCHEMA_PINS.len(), 28, "0.36.0 the last entry");
+    assert_eq!(SCHEMA_PINS[28].0, "0.37.0", "an entry for 0.37.0");
+    assert_eq!(SCHEMA_PINS.len(), 29, "0.37.0 the last entry");
+    // department-split (RM-0100, P1): 0.36.0's schemas are today's without
+    // the tool `split_card`.
+    let mut at_0_36_0 = schemas.clone();
+    as_of_0_36_0(&mut at_0_36_0);
+    let at_0_36_0_hash = schema_hash(&at_0_36_0);
+    assert_eq!(
+        at_0_36_0_hash, SCHEMA_PINS[27].1,
+        "0.36.0's schemas are today's without `split_card`"
+    );
+    assert_ne!(
+        at_0_36_0_hash, current,
+        "department-split changed the schemas"
+    );
+    let (schemas, current) = (at_0_36_0, at_0_36_0_hash);
     // card-questions (RM-0097, P1): 0.35.0's schemas are today's without the
     // three raises' `card_id`, the decision's `why`, `get_proposal`'s two
     // keys and `get_card`'s `items`.

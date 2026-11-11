@@ -28,6 +28,8 @@ import type {
   CardMoveBody,
   CardNotFound,
   CardRaiseBody,
+  CardSplit,
+  CardSplitBody,
   CardWrite,
   CheckReport,
   ConfirmBody,
@@ -244,6 +246,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     // A raise on a card (docs/features/card-questions.md "Acceptance criteria", L3): stored as the next ID, no hit; a test overriding what it answers.
     raiseOnCard: vi.fn<(project: string, id: string, body: CardRaiseBody) => Promise<IntakeDocument>>(() =>
       Promise.resolve({ id: "PR-0101", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] }),
+    ),
+    // A split (docs/features/department-split.md "Acceptance criteria", U2): a plan with no subtask, a write making none; a test overriding what it answers.
+    splitCard: vi.fn<(project: string, body: CardSplitBody) => Promise<CardSplit>>((_project, body) =>
+      Promise.resolve({ dry_run: body.dry_run, parent: null, children: [], reviewer: body.reviewer, notes: [] }),
     ),
     clearCardGroup: vi.fn<(project: string, body: CardClearGroupBody) => Promise<CardClearGroupWrite>>((_project, body) => Promise.resolve({ group: body.group, cleared: [], notes: [] })),
     // Marks and rollups (docs/features/card-trace.md): none.

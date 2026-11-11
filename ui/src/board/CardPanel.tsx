@@ -68,7 +68,7 @@ export type { CardLinks } from "./CardLink";
 const ItemBlock = lazy(() => import("./CardItems").then((module) => ({ default: module.ItemBlock })));
 
 /** The card's acts, each a dialog but Move, which opens the Move menu; `ask` and `decide` raise an item on it. */
-export type CardAction = "move" | "handoff" | "return" | "edit" | "assign" | "cancel" | "accept" | "clear" | "ask" | "decide";
+export type CardAction = "move" | "handoff" | "split" | "return" | "edit" | "assign" | "cancel" | "accept" | "clear" | "ask" | "decide";
 
 /** Whether a card's read found one, rather than `{id, reason}`. */
 export function isCard(answer: Card | CardNotFound): answer is Card {
@@ -296,6 +296,7 @@ function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; 
       {canClear(mark) && (
         <div className="board-panel-actions">
           <Button
+            aria-haspopup="dialog"
             aria-disabled={!clears}
             onClick={(event) => {
               if (clears) {
@@ -320,10 +321,11 @@ function TargetState({ rollup }: { rollup: string | undefined }) {
 
 /**
  * An open card's acts, the head's, in this order: Accept, the one primary, in `accept.from` alone and
- * idle where a hub's `allowed` omits it; Hand off; Return when its flow names a return column it is
+ * idle where a hub's `allowed` omits it; Hand off; Split to departments…, the card the parent
+ * (docs/features/department-split.md "Acceptance criteria", U1); Return when its flow names a return column it is
  * not in and `allowed` holds the move there; Edit; Assign; Cancel card, subtle and last. Move stands
- * in the side column's Status. A `by` the acting name lacks reads "needs <names>", as in the Move menu;
- * the daemon judges either way.
+ * in the side column's Status. Each opens a dialog and says so (`aria-haspopup`). A `by` the acting
+ * name lacks reads "needs <names>", as in the Move menu; the daemon judges either way.
  */
 function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | undefined; accepts: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
   const t = useTranslate();
@@ -342,22 +344,25 @@ function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow |
     <>
       <div className="board-panel-actions" role="group" aria-label={t("board.panel.actions")}>
         {inAcceptColumn && (
-          <Button appearance="primary" aria-disabled={!accepts} onClick={accepts ? act("accept") : undefined}>
+          <Button appearance="primary" aria-haspopup="dialog" aria-disabled={!accepts} onClick={accepts ? act("accept") : undefined}>
             {t("board.panel.accept")}
           </Button>
         )}
-        <Button icon="cardHandOff" onClick={act("handoff")}>
+        <Button icon="cardHandOff" aria-haspopup="dialog" onClick={act("handoff")}>
           <span>{t("board.handoff.action")}</span>
         </Button>
+        <Button icon="workspace" aria-haspopup="dialog" onClick={act("split")}>
+          <span>{t("board.split.act")}</span>
+        </Button>
         {returning !== undefined && (
-          <Button icon="cardReturned" onClick={act("return")}>
+          <Button icon="cardReturned" aria-haspopup="dialog" onClick={act("return")}>
             <span>{t("board.return.action")}</span>
           </Button>
         )}
         <ItemActs card={card} onAct={onAct} />
-        <Button onClick={act("edit")}>{t("board.panel.edit")}</Button>
-        <Button onClick={act("assign")}>{t("board.panel.assign")}</Button>
-        <Button appearance="subtle" onClick={act("cancel")}>
+        <Button aria-haspopup="dialog" onClick={act("edit")}>{t("board.panel.edit")}</Button>
+        <Button aria-haspopup="dialog" onClick={act("assign")}>{t("board.panel.assign")}</Button>
+        <Button appearance="subtle" aria-haspopup="dialog" onClick={act("cancel")}>
           {t("board.panel.cancel")}
         </Button>
       </div>
@@ -385,6 +390,7 @@ function ItemActs({ card, onAct }: { card: Card; onAct: (action: CardAction, car
   return (
     <>
       <Button
+        aria-haspopup="dialog"
         onClick={(event) => {
           onAct("ask", card, event.currentTarget);
         }}
@@ -392,6 +398,7 @@ function ItemActs({ card, onAct }: { card: Card; onAct: (action: CardAction, car
         {t("board.ask.action")}
       </Button>
       <Button
+        aria-haspopup="dialog"
         onClick={(event) => {
           onAct("decide", card, event.currentTarget);
         }}

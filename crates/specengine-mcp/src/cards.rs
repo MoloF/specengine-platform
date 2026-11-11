@@ -1,7 +1,11 @@
 //! The card tools (task spec `card-store`, "MCP"): `list_cards` and
-//! `get_card` read, `create_card`, `edit_card` and `move_card` write the
-//! queue as `claim_task` does, each one call into the CLI library with a
-//! `spec card` twin, answering what the CLI answers (`read.rs`'s mapping). A
+//! `get_card` read, `create_card`, `split_card`, `edit_card` and `move_card`
+//! write the queue as `claim_task` does, each one call into the CLI library
+//! with a `spec card` twin, answering what the CLI answers (`read.rs`'s
+//! mapping). `split_card` makes a parent and its subtasks in one
+//! transaction, or plans them with `dry_run`
+//! (`docs/features/department-split.md`
+//! "Acceptance criteria", S8). A
 //! tool acts as `agent`, so a flow's `by` holds against tools until it lists
 //! that name; on a hub's `/mcp` it acts as the request's login instead
 //! (`crate::hub`, docs/features/hub-mcp.md "Identity"), its hub variant's
@@ -17,13 +21,14 @@ use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use specengine_cli::{
     CARD_TASKS_MAX, CRITERIA_MAX, CRITERION_MAX, CardEditRequest, CardListRequest, CardMoveRequest,
-    CardNewRequest, CardShowRequest, EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, GOAL_MAX,
-    HISTORY_MAX, NODES_MAX, NOTE_MAX, OUTPUT_CAP_CHARS, Outcome, TITLE_MAX, TOOL_ACTOR,
-    process_git, utc_now,
+    CardNewRequest, CardShowRequest, CardSplitRequest, EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX,
+    GOAL_MAX, HISTORY_MAX, MAX_SPLIT_CHILDREN, NODES_MAX, NOTE_MAX, OUTPUT_CAP_CHARS, Outcome,
+    TITLE_MAX, TOOL_ACTOR, process_git, utc_now,
 };
 
 use crate::mirror::{
-    CardListDocument, CardShowDocument, CardWriteDocument, input_schema, output_schema,
+    CardListDocument, CardShowDocument, CardSplitDocument, CardWriteDocument, input_schema,
+    output_schema,
 };
 use crate::read::{DESCRIPTION_LIMIT, DETERMINISM, holds, holds_number, result_size_meta};
 use crate::server::SpecEngineServer;
@@ -96,6 +101,23 @@ card with parent the asking card, in the other trade's flow, its reviewer the si
     card_tail!()
 );
 
+const SPLIT_DESCRIPTION: &str = concat!(
+    "Splits work to departments in one act: the same as `spec card split (--target REF... --title \
+T [--goal T] [--discipline D] | --parent C) [--child D]... [--reviewer N] [--dry-run]`. It makes a \
+parent card, or takes the stored card parent, and one child card per child discipline, each in the \
+first column of the flow listing it, its parent the parent, its reviewer the split's. All cards or \
+none. content is the command's lines, structuredContent its --json document {dry_run, parent, \
+children, reviewer, notes}.
+
+target: at most 64 nodes, resolved as a task's. title: required without parent. parent: a stored \
+card; then no target, title, goal or discipline. child: 1 to 32 disciplines, each once; none only \
+with dry_run. reviewer: a person, never agent or local; absent: the parent card's. dry_run: plan \
+only, nothing written; without child it plans every discipline. A child targets the nodes of the \
+kinds a [[card.split]] row names for it, found in the targets or two levels under them, else the \
+parent's targets; suggested marks a row's pick. ",
+    card_tail!()
+);
+
 const EDIT_DESCRIPTION: &str = concat!(
     "Changes a card's fields: the same as `spec card edit C [--title T] [--goal T] [--target \
 REF]... [--criterion C]... [--estimate E] [--due DATE] [--parent C] [--corrects C] [--evidence \
@@ -131,16 +153,19 @@ revision: only if the card still stands at it, the revision a read gave. ",
 const _: () = assert!(LIST_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(GET_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(CREATE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(SPLIT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(EDIT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(MOVE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(LIST_DESCRIPTION.is_ascii());
 const _: () = assert!(GET_DESCRIPTION.is_ascii());
 const _: () = assert!(CREATE_DESCRIPTION.is_ascii());
+const _: () = assert!(SPLIT_DESCRIPTION.is_ascii());
 const _: () = assert!(EDIT_DESCRIPTION.is_ascii());
 const _: () = assert!(MOVE_DESCRIPTION.is_ascii());
 const _: () = assert!(holds(LIST_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(GET_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(CREATE_DESCRIPTION, DETERMINISM));
+const _: () = assert!(holds(SPLIT_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(EDIT_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(MOVE_DESCRIPTION, DETERMINISM));
 // The numbers the descriptions state are the CLI's.
@@ -191,6 +216,18 @@ const _: () = assert!(holds_number(
     "each at most ",
     CRITERION_MAX,
     " bytes"
+));
+const _: () = assert!(holds_number(
+    SPLIT_DESCRIPTION,
+    "target: at most ",
+    NODES_MAX,
+    " nodes"
+));
+const _: () = assert!(holds_number(
+    SPLIT_DESCRIPTION,
+    "child: 1 to ",
+    MAX_SPLIT_CHILDREN,
+    " disciplines"
 ));
 const _: () = assert!(holds_number(
     EDIT_DESCRIPTION,
@@ -262,6 +299,27 @@ pub(crate) struct CreateCardArgs {
     pub due: Option<String>,
     pub parent: Option<String>,
     pub corrects: Option<String>,
+}
+
+/// `split_card` arguments: `spec card split`'s flags, no `as`.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SplitCardArgs {
+    /// A new parent's nodes; none: a manual parent.
+    pub target: Option<Vec<String>>,
+    /// A new parent's title: required without `parent`.
+    pub title: Option<String>,
+    pub goal: Option<String>,
+    /// A new parent's discipline.
+    pub discipline: Option<String>,
+    /// A stored card as the parent: only subtasks are made.
+    pub parent: Option<String>,
+    /// Who accepts each card's result: a person, never `agent` or `local`.
+    pub reviewer: Option<String>,
+    /// Each subtask's discipline, in order; none only with `dry_run`.
+    pub child: Option<Vec<String>>,
+    /// The plan only: nothing written.
+    pub dry_run: Option<bool>,
 }
 
 /// `edit_card` arguments: `spec card edit`'s flags, no `as`.
@@ -396,6 +454,26 @@ impl SpecEngineServer {
         Ok(self.card_new(args, TOOL_ACTOR.to_owned()).await)
     }
 
+    /// `spec card split`.
+    #[tool(
+        description = SPLIT_DESCRIPTION,
+        input_schema = input_schema::<SplitCardArgs>(),
+        output_schema = output_schema::<CardSplitDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn split_card(
+        &self,
+        Parameters(args): Parameters<SplitCardArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self.card_split(args, TOOL_ACTOR.to_owned()).await)
+    }
+
     /// `spec card edit C …`.
     #[tool(
         description = EDIT_DESCRIPTION,
@@ -437,7 +515,7 @@ impl SpecEngineServer {
     }
 }
 
-/// The three card writes' calls, shared by stdio's tools and a hub's
+/// The four card writes' calls, shared by stdio's tools and a hub's
 /// (`crate::hub`): `actor` [`TOOL_ACTOR`] over stdio; on a hub the
 /// request's login, so a flow's `by` holds against the person
 /// (docs/features/hub-mcp.md "Identity").
@@ -465,6 +543,30 @@ impl SpecEngineServer {
         })
         .await
         .into_tool_result("create_card")
+    }
+
+    /// `spec card split`: a usage defect is the CLI's exit-2 line, an error
+    /// result.
+    pub(crate) async fn card_split(&self, args: SplitCardArgs, actor: String) -> CallToolResult {
+        self.call(move |env, globals| {
+            let request = CardSplitRequest {
+                targets: args.target.unwrap_or_default(),
+                title: args.title,
+                goal: args.goal,
+                discipline: args.discipline,
+                parent: args.parent,
+                children: args.child.filter(|children| !children.is_empty()),
+                reviewer: args.reviewer,
+                dry_run: args.dry_run.unwrap_or(false),
+                actor: Some(actor),
+                now: utc_now(),
+            };
+            specengine_cli::card_split(env, globals, &request)?
+                .or_usage_error()
+                .map(|outcome| Outcome::CardSplit(Box::new(outcome)))
+        })
+        .await
+        .into_tool_result("split_card")
     }
 
     /// `spec card edit C …`; on a hub the linked IDs are kept as written,

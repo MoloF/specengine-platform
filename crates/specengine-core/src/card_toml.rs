@@ -3,9 +3,18 @@
 //! and its MCP twins. [`crate::ProjectConfig::from_toml`] only name-checks
 //! `card`, so a bad table fails no other command.
 //!
-//! - `[card]` holds `flow` alone: an array of tables, at most
-//!   [`MAX_FLOWS`]. None (no table, an empty one, `flow = []`): core's
+//! - `[card]` holds `flow` and `split`, each an array of tables. `flow`: at
+//!   most [`MAX_FLOWS`]; none (no table, an empty one, `flow = []`): core's
 //!   [`PLAIN_FLOW`], TOML through this reader.
+//! - **`split`** (`docs/canon/card-split.md` "The rule";
+//!   `docs/features/department-split.md` "Acceptance criteria", S1): at most
+//!   [`MAX_SPLITS`] rows, each a node `kind`, once among the rows, judged as
+//!   a direction's kinds are (`workspace_toml`'s checks, shared), and its
+//!   `disciplines`, 1 to [`MAX_SPLIT_DISCIPLINES`] names of the flows' list
+//!   grammar, each listed by some flow. That listing is judged only once
+//!   every flow reads, so a flow's own error stands alone. A row only
+//!   pre-selects a split's subtasks: no rule here or elsewhere refuses by
+//!   one, and a kind is the project's word, never checked against `[ids]`.
 //! - **Names** (`name`, `columns`, `disciplines`): `[a-z0-9_-]`, 1 to
 //!   [`MAX_NAME_BYTES`] bytes; each once in its list. [`MIN_COLUMNS`] to
 //!   [`MAX_COLUMNS`] columns. `titles = { id = "text" }`, any script, at most
@@ -44,11 +53,16 @@ use toml::de::{DeTable, DeValue};
 use crate::card::{card_person, card_person_problem};
 use crate::health_toml::{Errors, line_of, type_name, unknown_field};
 use crate::project_toml::ProjectError;
+use crate::workspace_toml::kind_problem;
 
 /// The table's name.
 const TABLE: &str = "card";
 /// `[card]`'s keys.
-const CARD_KEYS: [&str; 1] = ["flow"];
+const CARD_KEYS: [&str; 2] = ["flow", "split"];
+/// A split row's keys, in the order a message lists them.
+const SPLIT_KEYS: [&str; 2] = ["kind", "disciplines"];
+/// How a message names a split row.
+const SPLIT: &str = "`[[card.split]]`";
 /// A flow's keys, in the order a message lists them.
 const FLOW_KEYS: [&str; 8] = [
     "name",
@@ -77,6 +91,10 @@ pub const MAX_COLUMNS: usize = 32;
 pub const MAX_NAME_BYTES: usize = 64;
 /// The longest column title, in UTF-8 bytes.
 pub const MAX_TITLE_BYTES: usize = 64;
+/// The most `[[card.split]]` rows.
+pub const MAX_SPLITS: usize = 64;
+/// The most disciplines a `[[card.split]]` row lists.
+pub const MAX_SPLIT_DISCIPLINES: usize = 32;
 
 /// The flow of a project with no `[[card.flow]]`: the default board.
 pub const PLAIN_FLOW: &str = r#"[[card.flow]]
@@ -148,10 +166,22 @@ impl CardFlow {
     }
 }
 
-/// `[card]`, checked: at least one flow.
+/// One `[[card.split]]` row, checked: a node kind and the disciplines its
+/// work usually needs, each listed by a flow. It only pre-selects
+/// (`docs/canon/card-split.md` "The rule").
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct CardSplit {
+    pub kind: String,
+    /// In the order written.
+    pub disciplines: Vec<String>,
+}
+
+/// `[card]`, checked: at least one flow, and the split rows in config order
+/// (none without the key).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CardConfig {
     pub flows: Vec<CardFlow>,
+    pub splits: Vec<CardSplit>,
 }
 
 impl CardConfig {
@@ -241,13 +271,14 @@ pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
     })?;
     let mut errors = Errors::new(text);
     let mut flows: Vec<CardFlow> = Vec::new();
+    let mut splits: Vec<CardSplit> = Vec::new();
     let table = root
         .get_ref()
         .iter()
         .find(|(key, _)| key.get_ref().as_ref() == TABLE);
     if let Some((_, table)) = table {
         match table.get_ref() {
-            DeValue::Table(entries) => read_card(entries, &mut flows, &mut errors),
+            DeValue::Table(entries) => read_card(entries, &mut flows, &mut splits, &mut errors),
             other => errors.push(
                 table.span(),
                 format!("`[{TABLE}]` is a table, not {}", type_name(other)),
@@ -260,49 +291,232 @@ pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
     if flows.is_empty() {
         return card_from_toml(PLAIN_FLOW);
     }
-    Ok(CardConfig { flows })
+    Ok(CardConfig { flows, splits })
 }
 
-/// `[card]`'s keys, each flow pushed or its error.
-fn read_card(entries: &DeTable<'_>, flows: &mut Vec<CardFlow>, errors: &mut Errors<'_>) {
+/// `[card]`'s keys: each flow pushed or its error, then each split row; a
+/// row's disciplines are judged against the flows only once every flow
+/// reads, so a flow's own error is never masked by a listing error.
+fn read_card(
+    entries: &DeTable<'_>,
+    flows: &mut Vec<CardFlow>,
+    splits: &mut Vec<CardSplit>,
+    errors: &mut Errors<'_>,
+) {
+    let mut rows = None;
+    let mut flows_read = true;
     for (key, value) in entries.iter() {
         let name = key.get_ref().as_ref();
-        if name != CARD_KEYS[0] {
-            errors.push(key.span(), unknown_field(name, &CARD_KEYS));
-            continue;
+        match name {
+            "flow" => {
+                let before = errors.len();
+                read_flows(name, value, flows, errors);
+                flows_read &= errors.len() == before;
+            }
+            "split" => rows = Some((name, value)),
+            _ => errors.push(key.span(), unknown_field(name, &CARD_KEYS)),
         }
-        let DeValue::Array(items) = value.get_ref() else {
+    }
+    let Some((name, value)) = rows else {
+        return;
+    };
+    let read = read_splits(name, value, errors);
+    if flows_read {
+        listed_by_flows(&read, flows, errors);
+    }
+    splits.extend(read.into_iter().map(|(split, _)| split));
+}
+
+/// `[card] flow`: each flow pushed, or its error.
+fn read_flows(
+    name: &str,
+    value: &Spanned<DeValue<'_>>,
+    flows: &mut Vec<CardFlow>,
+    errors: &mut Errors<'_>,
+) {
+    let DeValue::Array(items) = value.get_ref() else {
+        errors.push(
+            value.span(),
+            format!(
+                "`[{TABLE}] {name}` is an array of tables ({FLOW}), not {}",
+                type_name(value.get_ref())
+            ),
+        );
+        return;
+    };
+    let mut names = BTreeSet::new();
+    for (at, item) in items.iter().enumerate() {
+        if at == MAX_FLOWS {
+            errors.push(item.span(), format!("at most {MAX_FLOWS} {FLOW} tables"));
+            break;
+        }
+        let DeValue::Table(entry) = item.get_ref() else {
             errors.push(
-                value.span(),
-                format!(
-                    "`[{TABLE}] {name}` is an array of tables ({FLOW}), not {}",
-                    type_name(value.get_ref())
-                ),
+                item.span(),
+                format!("{FLOW} is a table, not {}", type_name(item.get_ref())),
             );
             continue;
         };
-        let mut names = BTreeSet::new();
-        for (at, item) in items.iter().enumerate() {
-            if at == MAX_FLOWS {
-                errors.push(item.span(), format!("at most {MAX_FLOWS} {FLOW} tables"));
-                break;
+        let Some(flow) = read_flow(item.span(), entry, errors) else {
+            continue;
+        };
+        if names.insert(flow.name.clone()) {
+            flows.push(flow);
+        } else {
+            errors.push(
+                item.span(),
+                format!("{FLOW} `{}` is named twice", flow.name),
+            );
+        }
+    }
+}
+
+/// A split row as read, each discipline with its span, for the listing
+/// check.
+type ReadSplit = (CardSplit, Vec<Range<usize>>);
+
+/// `[card] split`: the rows that read, in config order; each other one's
+/// error pushed. A kind is written once among the rows.
+fn read_splits(
+    name: &str,
+    value: &Spanned<DeValue<'_>>,
+    errors: &mut Errors<'_>,
+) -> Vec<ReadSplit> {
+    let DeValue::Array(items) = value.get_ref() else {
+        errors.push(
+            value.span(),
+            format!(
+                "`[{TABLE}] {name}` is an array of tables ({SPLIT}), not {}",
+                type_name(value.get_ref())
+            ),
+        );
+        return Vec::new();
+    };
+    let mut kinds = BTreeSet::new();
+    let mut rows = Vec::new();
+    for (at, item) in items.iter().enumerate() {
+        if at == MAX_SPLITS {
+            errors.push(item.span(), format!("at most {MAX_SPLITS} {SPLIT} tables"));
+            break;
+        }
+        let DeValue::Table(entry) = item.get_ref() else {
+            errors.push(
+                item.span(),
+                format!("{SPLIT} is a table, not {}", type_name(item.get_ref())),
+            );
+            continue;
+        };
+        let Some((row, kind_at)) = read_split(item.span(), entry, errors) else {
+            continue;
+        };
+        if kinds.insert(row.0.kind.clone()) {
+            rows.push(row);
+        } else {
+            errors.push(
+                kind_at,
+                format!("{SPLIT} kind `{}` is written twice", row.0.kind),
+            );
+        }
+    }
+    rows
+}
+
+/// One split row checked, and its `kind`'s span; `None` when it holds an
+/// error (pushed). `disciplines` through the flows' list reader, then at
+/// least one and at most [`MAX_SPLIT_DISCIPLINES`].
+fn read_split(
+    span: Range<usize>,
+    entry: &DeTable<'_>,
+    errors: &mut Errors<'_>,
+) -> Option<(ReadSplit, Range<usize>)> {
+    let before = errors.len();
+    let mut kind_written = false;
+    let mut kind: Option<(String, Range<usize>)> = None;
+    let mut disciplines: Option<Vec<(String, Range<usize>)>> = None;
+    for (key, value) in entry.iter() {
+        match key.get_ref().as_ref() {
+            "kind" => {
+                kind_written = true;
+                if let Some(text) = text("kind", value, errors) {
+                    if let Some(problem) = kind_problem("kind", text) {
+                        errors.push(value.span(), problem);
+                    }
+                    kind = Some((text.to_owned(), value.span()));
+                }
             }
-            let DeValue::Table(entry) = item.get_ref() else {
+            "disciplines" => disciplines = Some(split_disciplines(value, errors)),
+            other => errors.push(key.span(), unknown_field(other, &SPLIT_KEYS)),
+        }
+    }
+    if !kind_written {
+        errors.push(span, format!("{SPLIT} has no `kind`"));
+        return None;
+    }
+    let (kind, kind_at) = kind?;
+    let Some(disciplines) = disciplines else {
+        errors.push(span, format!("{SPLIT} `{kind}` has no `disciplines`"));
+        return None;
+    };
+    if errors.len() != before {
+        return None;
+    }
+    let (names, spans) = disciplines.into_iter().unzip();
+    Some((
+        (
+            CardSplit {
+                kind,
+                disciplines: names,
+            },
+            spans,
+        ),
+        kind_at,
+    ))
+}
+
+/// A row's `disciplines`: the flows' list reader's names, then none an
+/// error at the value and the entry past [`MAX_SPLIT_DISCIPLINES`] one at
+/// itself.
+fn split_disciplines(
+    value: &Spanned<DeValue<'_>>,
+    errors: &mut Errors<'_>,
+) -> Vec<(String, Range<usize>)> {
+    let listed = names("disciplines", value, errors);
+    match value.get_ref() {
+        DeValue::Array(items) if items.is_empty() => errors.push(
+            value.span(),
+            format!("`disciplines` lists none; a row lists 1 to {MAX_SPLIT_DISCIPLINES}"),
+        ),
+        _ => {
+            if let Some((_, past)) = listed.get(MAX_SPLIT_DISCIPLINES) {
                 errors.push(
-                    item.span(),
-                    format!("{FLOW} is a table, not {}", type_name(item.get_ref())),
+                    past.clone(),
+                    format!(
+                        "`disciplines` lists {}; a row lists 1 to {MAX_SPLIT_DISCIPLINES}",
+                        listed.len()
+                    ),
                 );
-                continue;
-            };
-            let Some(flow) = read_flow(item.span(), entry, errors) else {
-                continue;
-            };
-            if names.insert(flow.name.clone()) {
-                flows.push(flow);
-            } else {
+            }
+        }
+    }
+    listed
+}
+
+/// Each row's disciplines against the flows' (`flows` empty: [`PLAIN_FLOW`],
+/// which lists none): one unlisted is an error at its entry.
+fn listed_by_flows(rows: &[ReadSplit], flows: &[CardFlow], errors: &mut Errors<'_>) {
+    let listed: BTreeSet<&str> = flows
+        .iter()
+        .flat_map(|flow| flow.disciplines.iter().map(String::as_str))
+        .collect();
+    for (row, spans) in rows {
+        for (discipline, at) in row.disciplines.iter().zip(spans) {
+            if !listed.contains(discipline.as_str()) {
                 errors.push(
-                    item.span(),
-                    format!("{FLOW} `{}` is named twice", flow.name),
+                    at.clone(),
+                    format!(
+                        "{SPLIT} `{}`: no {FLOW} lists the discipline `{discipline}`",
+                        row.kind
+                    ),
                 );
             }
         }

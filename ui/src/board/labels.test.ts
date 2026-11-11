@@ -70,3 +70,20 @@ describe("the Board's words in Russian (LG-3)", () => {
     expect(board.eventWords("card.reestimated", enT)).toBe("Re-estimated");
   });
 });
+
+// U2 of docs/features/department-split.md "Acceptance criteria": where a subtask's targets come from, each served word's line, in both languages; a word this build does not know raw.
+describe("a split's target lines", () => {
+  it("says by kind with its count, the task's targets, and an unknown word raw and served", () => {
+    expect([board.splitFromWords("kinds", 1, enT), board.splitFromWords("kinds", 3, enT), board.splitFromWords("parent", 2, enT)]).toEqual([
+      { text: "By kind: 1 document", served: false },
+      { text: "By kind: 3 documents", served: false },
+      { text: "The task's targets", served: false },
+    ]);
+    expect([board.splitFromWords("kinds", 3, ruT).text, board.splitFromWords("kinds", 5, ruT).text, board.splitFromWords("parent", 1, ruT).text]).toEqual([
+      ru.board.split.byKind_few.replace("{{count}}", "3"),
+      ru.board.split.byKind_many.replace("{{count}}", "5"),
+      ru.board.split.fromTask,
+    ]);
+    expect(board.splitFromWords("rows", 4, enT)).toEqual({ text: "rows", served: true });
+  });
+});

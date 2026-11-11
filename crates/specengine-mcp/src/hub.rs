@@ -19,12 +19,14 @@
 //! The tools ([`HUB_TOOLS`]): eight reads, `get_proposal` among them, and
 //! `list_cards`, `get_card`, each its stdio twin's route, schema and answer;
 //! the four raising tools without `task_id`, their `Author.login` the login;
-//! `create_card`, `edit_card` and `move_card`, their `actor` the login. Eight
-//! carry their own descriptions: `get_roadmap`, with no task tool and a
-//! Confirm in place of the owner's terminal; the raising and card-writing
-//! seven, with no `task_id:` line, a Confirm on the hub or a terminal in
-//! place of the owner's terminal commands, and the login in place of
-//! `agent`. The twelve left out need code, a terminal or a task. The router
+//! `create_card`, `split_card` (`docs/features/department-split.md`
+//! "Acceptance criteria", S8), `edit_card` and `move_card`, their `actor`
+//! the login. Nine carry their own descriptions: `get_roadmap`, with no task
+//! tool and a Confirm in place of the owner's terminal; the raising and
+//! card-writing eight, with no `task_id:` line, a Confirm on the hub or a
+//! terminal in place of the owner's terminal commands, and the login in
+//! place of `agent`. The twelve left out need code, a terminal or a task.
+//! The router
 //! is built once per process ([`HUB_ROUTER`], a `static`), and every mount's
 //! servers clone it.
 
@@ -42,14 +44,16 @@ use specengine_cli::{
     ANSWER_MAX, AUTHOR_FIELD_MAX, CARD_TASKS_MAX, CRITERIA_MAX, CRITERION_MAX, CliError,
     DISTINCT_MAX, EVIDENCE_ENTRIES_MAX, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, EVIDENCE_VALUE_MAX, Env,
     GOAL_MAX, Globals, HUB_ID_START, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX, LABEL_MAX,
-    LOCATION_MAX, NODE_IDS_MAX, NODES_MAX, NOTE_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN,
-    OUTPUT_CAP_CHARS, RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, TITLE_MAX,
+    LOCATION_MAX, MAX_SPLIT_CHILDREN, NODE_IDS_MAX, NODES_MAX, NOTE_MAX, OPTION_TEXT_MAX,
+    OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX,
+    TEXT_MAX_BYTES, TITLE_MAX,
 };
 
-use crate::cards::{CreateCardArgs, EditCardArgs, MoveCardArgs};
+use crate::cards::{CreateCardArgs, EditCardArgs, MoveCardArgs, SplitCardArgs};
 use crate::intake::{HubChangeArgs, HubDecisionArgs, HubDiscrepancyArgs, HubQuestionArgs};
 use crate::mirror::{
-    CardWriteDocument, IntakeDocument, ReviewDocument, RoadmapDocument, input_schema, output_schema,
+    CardSplitDocument, CardWriteDocument, IntakeDocument, ReviewDocument, RoadmapDocument,
+    input_schema, output_schema,
 };
 use crate::read::{
     DESCRIPTION_LIMIT, DETERMINISM, HUB_BUNDLE_DESCRIPTION, HUB_NODE_DESCRIPTION,
@@ -167,9 +171,9 @@ where
     slot.lock().unwrap_or_else(PoisonError::into_inner).take()
 }
 
-/// A hub's `tools/list`, by name: the nine shared with stdio, then the eight
+/// A hub's `tools/list`, by name: the nine shared with stdio, then the nine
 /// with their own arguments or texts.
-pub const HUB_TOOLS: [&str; 17] = [
+pub const HUB_TOOLS: [&str; 18] = [
     "get_tree",
     "get_node",
     "search",
@@ -185,6 +189,7 @@ pub const HUB_TOOLS: [&str; 17] = [
     "report_discrepancy",
     "report_decision",
     "create_card",
+    "split_card",
     "edit_card",
     "move_card",
 ];
@@ -277,8 +282,8 @@ terminal):"
 /// The `instructions` line of the cards.
 macro_rules! hub_cards_line {
     () => {
-        "- list_cards, get_card, create_card, edit_card, move_card = spec card \
-list|show|new|edit|move; you act as your person's login; no tool accepts."
+        "- list_cards, get_card, create_card, split_card, edit_card, move_card = spec card \
+list|show|new|split|edit|move; you act as your person's login; no tool accepts."
     };
 }
 
@@ -574,6 +579,23 @@ flow, its reviewer the side that asked. ",
     hub_card_tail!()
 );
 
+const HUB_SPLIT_DESCRIPTION: &str = concat!(
+    "Splits work to departments in one act: the same as `spec card split (--target REF... --title \
+T [--goal T] [--discipline D] | --parent C) [--child D]... [--reviewer N] [--dry-run]`. It makes a \
+parent card, or takes the stored card parent, and one child card per child discipline, each in the \
+first column of the flow listing it, its parent the parent, its reviewer the split's. All cards or \
+none. content is the command's lines, structuredContent its --json document {dry_run, parent, \
+children, reviewer, notes}.
+
+target: at most 64 nodes, resolved as a task's. title: required without parent. parent: a stored \
+card; then no target, title, goal or discipline. child: 1 to 32 disciplines, each once; none only \
+with dry_run. reviewer: a person, never agent or local; absent: the parent card's. dry_run: plan \
+only, nothing written; without child it plans every discipline. A child targets the nodes of the \
+kinds a [[card.split]] row names for it, found in the targets or two levels under them, else the \
+parent's targets; suggested marks a row's pick. ",
+    hub_card_tail!()
+);
+
 const HUB_EDIT_DESCRIPTION: &str = concat!(
     "Changes a card's fields: the same as `spec card edit C [--title T] [--goal T] [--target \
 REF]... [--criterion C]... [--estimate E] [--due DATE] [--parent C] [--corrects C] [--evidence \
@@ -605,14 +627,15 @@ revision: only if the card still stands at it, the revision a read gave. ",
     hub_card_tail!()
 );
 
-/// The seven hub descriptions.
-const HUB_DESCRIPTIONS: [&str; 8] = [
+/// The nine hub descriptions.
+const HUB_DESCRIPTIONS: [&str; 9] = [
     HUB_ROADMAP_DESCRIPTION,
     HUB_CHANGE_DESCRIPTION,
     HUB_QUESTION_DESCRIPTION,
     HUB_DISCREPANCY_DESCRIPTION,
     HUB_DECISION_DESCRIPTION,
     HUB_CREATE_DESCRIPTION,
+    HUB_SPLIT_DESCRIPTION,
     HUB_EDIT_DESCRIPTION,
     HUB_MOVE_DESCRIPTION,
 ];
@@ -653,6 +676,7 @@ const _: () = assert!(HUB_QUESTION_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_DISCREPANCY_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_DECISION_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_CREATE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(HUB_SPLIT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_EDIT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_MOVE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_ROADMAP_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
@@ -666,7 +690,7 @@ const _: () = assert!(holds(
     HUB_ROADMAP_DESCRIPTION,
     "a person's Confirm, on this hub or on a terminal"
 ));
-// The shared nine and the eight variants are the seventeen.
+// The shared nine and the nine variants are the eighteen.
 const _: () = assert!(SHARED + HUB_DESCRIPTIONS.len() == HUB_TOOLS.len());
 const _: () = assert!(hub_texts_hold(&HUB_DESCRIPTIONS));
 const _: () = assert!(holds(HUB_CHANGE_DESCRIPTION, hub_queue_tail!()));
@@ -674,6 +698,7 @@ const _: () = assert!(holds(HUB_QUESTION_DESCRIPTION, hub_queue_tail!()));
 const _: () = assert!(holds(HUB_DISCREPANCY_DESCRIPTION, hub_queue_tail!()));
 const _: () = assert!(holds(HUB_DECISION_DESCRIPTION, hub_queue_tail!()));
 const _: () = assert!(holds(HUB_CREATE_DESCRIPTION, hub_card_tail!()));
+const _: () = assert!(holds(HUB_SPLIT_DESCRIPTION, hub_card_tail!()));
 const _: () = assert!(holds(HUB_EDIT_DESCRIPTION, hub_card_tail!()));
 const _: () = assert!(holds(HUB_MOVE_DESCRIPTION, hub_card_tail!()));
 // The numbers the descriptions state are the CLI's.
@@ -872,6 +897,18 @@ const _: () = assert!(holds_number(
     " bytes"
 ));
 const _: () = assert!(holds_number(
+    HUB_SPLIT_DESCRIPTION,
+    "target: at most ",
+    NODES_MAX,
+    " nodes"
+));
+const _: () = assert!(holds_number(
+    HUB_SPLIT_DESCRIPTION,
+    "child: 1 to ",
+    MAX_SPLIT_CHILDREN,
+    " disciplines"
+));
+const _: () = assert!(holds_number(
     HUB_EDIT_DESCRIPTION,
     "at most ",
     EVIDENCE_ENTRIES_MAX,
@@ -916,7 +953,7 @@ impl SpecEngineServer {
     }
 
     /// [`HUB_TOOLS`]: stdio's routes of the first nine, as they are, then the
-    /// eight hub routes. Built once per process, into [`HUB_ROUTER`].
+    /// nine hub routes. Built once per process, into [`HUB_ROUTER`].
     fn hub_tools() -> ToolRouter<Self> {
         let shared = &HUB_TOOLS[..SHARED];
         let mut router = ToolRouter::new();
@@ -1091,6 +1128,31 @@ impl SpecEngineServer {
             return Ok(no_login());
         };
         Ok(self.card_new(args, login).await)
+    }
+
+    /// `spec card split` as the login.
+    #[tool(
+        name = "split_card",
+        description = HUB_SPLIT_DESCRIPTION,
+        input_schema = input_schema::<SplitCardArgs>(),
+        output_schema = output_schema::<CardSplitDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn hub_split_card(
+        &self,
+        Parameters(args): Parameters<SplitCardArgs>,
+        extensions: Extensions,
+    ) -> Result<CallToolResult, ErrorData> {
+        let Some(login) = self.login_of(&extensions) else {
+            return Ok(no_login());
+        };
+        Ok(self.card_split(args, login).await)
     }
 
     /// `spec card edit C …` as the login.

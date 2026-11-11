@@ -48,8 +48,10 @@ use specengine_mcp::{
     Command, HUB_INSTRUCTIONS, HUB_TOOLS, HubSeam, INSTRUCTIONS, SpecEngineServer, TurnFuture,
 };
 
-/// The hub's seventeen tools, sorted (docs/features/hub-mcp.md "Data").
-const SEVENTEEN: [&str; 17] = [
+/// The hub's tools, sorted (docs/features/hub-mcp.md "Data"): seventeen,
+/// eighteen since docs/features/department-split.md "Acceptance criteria",
+/// S8 (`split_card`).
+const EIGHTEEN: [&str; 18] = [
     "ask_question",
     "create_card",
     "edit_card",
@@ -67,6 +69,7 @@ const SEVENTEEN: [&str; 17] = [
     "report_decision",
     "report_discrepancy",
     "search",
+    "split_card",
 ];
 
 /// The twelve the hub leaves out, sorted.
@@ -85,9 +88,9 @@ const TWELVE: [&str; 12] = [
     "unmapped",
 ];
 
-/// The eight whose descriptions are the hub's own (iteration 2: `get_roadmap`
-/// joins the seven writes).
-const VARIANTS: [&str; 8] = [
+/// The nine whose descriptions are the hub's own (iteration 2: `get_roadmap`
+/// joins the seven writes; department-split S8: `split_card`, a card write).
+const VARIANTS: [&str; 9] = [
     "ask_question",
     "create_card",
     "edit_card",
@@ -96,6 +99,7 @@ const VARIANTS: [&str; 8] = [
     "propose_change",
     "report_decision",
     "report_discrepancy",
+    "split_card",
 ];
 
 const TEXT_LIMIT: usize = 2048;
@@ -146,7 +150,7 @@ fn hub_instructions_hold_their_budget_and_name_the_seventeen_alone() {
     let text = HUB_INSTRUCTIONS;
     assert!(text.is_ascii(), "ASCII");
     assert!(text.len() <= TEXT_LIMIT, "{} bytes", text.len());
-    for name in SEVENTEEN {
+    for name in EIGHTEEN {
         assert!(has_word(text, name), "HUB_INSTRUCTIONS omit {name}");
     }
     for name in TWELVE.iter().chain(["task_id"].iter()) {
@@ -190,9 +194,9 @@ fn hub_instructions_hold_their_budget_and_name_the_seventeen_alone() {
 fn hub_tools_are_the_seventeen_and_their_texts_hold() {
     let mut names: Vec<&str> = HUB_TOOLS.to_vec();
     names.sort_unstable();
-    assert_eq!(names, SEVENTEEN, "HUB_TOOLS");
+    assert_eq!(names, EIGHTEEN, "HUB_TOOLS");
     let server = hub();
-    for name in SEVENTEEN {
+    for name in EIGHTEEN {
         let tool = server
             .get_tool(name)
             .unwrap_or_else(|| panic!("the hub routes no {name}"));
@@ -463,7 +467,8 @@ const GET_TASKS_SENTENCE: &str = "tasks: each linked task {id, status, title, st
 /// sentence; each ASCII within 2 048 bytes, still among the seventeen.
 #[test]
 fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
-    assert_eq!(HUB_TOOLS.len(), 17);
+    // department-split S8: eighteen with `split_card`.
+    assert_eq!(HUB_TOOLS.len(), 18);
     let server = hub();
     for (name, word, sentence) in [
         ("edit_card", "task", HUB_EDIT_TASK_SENTENCE),

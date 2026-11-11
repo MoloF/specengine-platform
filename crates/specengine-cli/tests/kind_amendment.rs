@@ -1849,7 +1849,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        118,
+        121,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1857,7 +1857,8 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, \
          trace-views' `TraceStage`, hub-identity's `Identity`, hub-team's `Team`, \
          hub-confirm's `ConfirmRead`, hub-git's `HubSync`, workspaces' three, \
-         card-tasks' `CardTask`, flow-scenario's `ShownAncestor` and card-questions' three"
+         card-tasks' `CardTask`, flow-scenario's `ShownAncestor`, card-questions' three \
+         and department-split's three (docs/features/department-split.md, S7)"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

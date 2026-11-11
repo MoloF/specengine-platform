@@ -1,4 +1,4 @@
-import type { CardAllowed, CardFlow, CardMove, CardRow, KnownProposalStatus, KnownTeamAct, TraceCard } from "../api/types";
+import type { CardAllowed, CardFlow, CardMove, CardRow, KnownProposalStatus, KnownSplitTargetsFrom, KnownTeamAct, TraceCard } from "../api/types";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
 import type { IconName } from "../ui/Icon";
@@ -376,4 +376,19 @@ export function progressWords(word: ProgressWord, count: number, t: Translate): 
  */
 export function readyLook(t: Translate): LozengeLook {
   return { appearance: "success", icon: "taskAccepted", label: t("board.progress.ready") };
+}
+
+/**
+ * Where a subtask's targets come from (docs/features/department-split.md "Acceptance criteria", U2):
+ * each word the daemon serves, its line, looked up and never judged; the dialog draws the served
+ * targets under it.
+ */
+const SPLIT_FROM: Readonly<Record<KnownSplitTargetsFrom, (count: number, t: Translate) => string>> = {
+  kinds: (count, t) => t("board.split.byKind", { count }),
+  parent: (_count, t) => t("board.split.fromTask"),
+};
+
+/** A subtask's targets line over `count` of them; a word this build does not know raw, `served` so it stands under `lang="en"`. */
+export function splitFromWords(from: string, count: number, t: Translate): { text: string; served: boolean } {
+  return Object.hasOwn(SPLIT_FROM, from) ? { text: SPLIT_FROM[from as KnownSplitTargetsFrom](count, t), served: false } : { text: from, served: true };
 }

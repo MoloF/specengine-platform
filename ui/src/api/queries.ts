@@ -134,13 +134,13 @@ function roundAnswersKey(project: string) {
   return ["round-answers", project] as const;
 }
 
-/** A project's card writes in the mutation cache: one key, whichever dialog, menu or drop sent them. */
-function cardWritesKey(project: string) {
+/** A project's card writes in the mutation cache: one key, whichever dialog, menu or drop sent them (the Split dialog's among them: ./splitQueries.ts). */
+export function cardWritesKey(project: string) {
   return ["card-writes", project] as const;
 }
 
 /** Every read of a project's card list, whatever its options. */
-function cardListsOf(project: string) {
+export function cardListsOf(project: string) {
   return ["cards", project] as const;
 }
 
@@ -150,12 +150,12 @@ function cardsOf(project: string) {
 }
 
 /** Every trace read of a project, whatever its REF. */
-function tracesOf(project: string) {
+export function tracesOf(project: string) {
   return ["trace", project] as const;
 }
 
 /** Every flow read of a project: each carries its boxes' badges. */
-function flowsOf(project: string) {
+export function flowsOf(project: string) {
   return ["flow", project] as const;
 }
 

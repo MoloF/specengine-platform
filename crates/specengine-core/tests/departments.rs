@@ -758,13 +758,15 @@ fn preset() -> String {
 }
 
 /// "The preset": each flow's name and title, in order (W8: `development` is
-/// "Programming").
-const PRESET_TITLES: [(&str, &str); 5] = [
+/// "Programming"); docs/features/department-split.md "Acceptance criteria",
+/// S9: `sound` sixth, "Sound".
+const PRESET_TITLES: [(&str, &str); 6] = [
     ("narrative", "Narrative"),
     ("development", "Programming"),
     ("art", "Art"),
     ("level-design", "Level design"),
     ("production", "Production"),
+    ("sound", "Sound"),
 ];
 
 /// The commented direction of "The preset", its eight lines in order: four
@@ -872,6 +874,9 @@ fn dp7_the_preset_titles_its_flows_and_ships_no_direction() {
             ("writing", vec!["narrative"]),
             ("development", vec!["development"]),
             ("art", vec!["art", "level-design"]),
+            // department-split S9: the `sound` workspace before
+            // `production`, which serves every flow's, `sound`'s last.
+            ("sound", vec!["sound"]),
             (
                 "production",
                 vec![
@@ -879,7 +884,8 @@ fn dp7_the_preset_titles_its_flows_and_ships_no_direction() {
                     "development",
                     "art",
                     "level-design",
-                    "production"
+                    "production",
+                    "sound"
                 ]
             ),
         ]
@@ -903,7 +909,9 @@ fn header_sentences(text: &str) -> Vec<String> {
 /// DP-5 (D11, D14): the preset's header holds one sentence naming `title`,
 /// `return` and the rollout rule: every terminal, plugin and hub serving the
 /// project runs a build that reads them, an older one refusing them. M: the
-/// sentence dropped.
+/// sentence dropped. Since docs/features/department-split.md (S9) the
+/// sentence names a `[[card.split]]` row too and writes the keys bare, so
+/// the words are matched without their backticks.
 #[test]
 fn dp5_the_preset_header_names_the_rollout_of_title_and_return() {
     let text = preset();
@@ -911,8 +919,8 @@ fn dp5_the_preset_header_names_the_rollout_of_title_and_return() {
     let rule: Vec<&String> = sentences
         .iter()
         .filter(|sentence| {
-            sentence.contains("`title`")
-                && sentence.contains("`return`")
+            let bare = sentence.replace('`', "");
+            bare.contains("flow's title and return")
                 && sentence.contains("every terminal, plugin and hub")
                 && sentence.contains("older")
         })

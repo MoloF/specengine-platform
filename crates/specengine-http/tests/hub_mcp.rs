@@ -105,8 +105,10 @@ use serde_json::{Value, json};
 const KEEP: &str = "lantern-keep";
 const ZERKALO: &str = "zerkalo";
 
-/// The hub's seventeen tools, sorted (docs/features/hub-mcp.md "Data").
-const HUB_TOOLS: [&str; 17] = [
+/// The hub's tools, sorted (docs/features/hub-mcp.md "Data"): seventeen,
+/// eighteen since docs/features/department-split.md "Acceptance criteria", S8
+/// (`split_card`).
+const HUB_TOOLS: [&str; 18] = [
     "ask_question",
     "create_card",
     "edit_card",
@@ -124,6 +126,7 @@ const HUB_TOOLS: [&str; 17] = [
     "report_decision",
     "report_discrepancy",
     "search",
+    "split_card",
 ];
 
 /// What a hub's `tools/list` names, sorted: [`HUB_TOOLS`], and in the
@@ -186,8 +189,8 @@ const HUB_READ_TAIL: &str = "Reads the hub's index, which each confirm and merge
 
 /// The eight whose descriptions are the hub's variants (docs/features/hub-mcp.md
 /// "Data", iteration 2): `get_roadmap`, the four queue writes and the three card
-/// writes.
-const VARIANTS: [&str; 8] = [
+/// writes; department-split S8: `split_card`, a fourth card write.
+const VARIANTS: [&str; 9] = [
     "ask_question",
     "create_card",
     "edit_card",
@@ -196,16 +199,18 @@ const VARIANTS: [&str; 8] = [
     "propose_change",
     "report_decision",
     "report_discrepancy",
+    "split_card",
 ];
 
-/// The four queue writes and the three card writes.
+/// The four queue writes and the four card writes (`split_card` since
+/// department-split S8).
 const QUEUE_WRITES: [&str; 4] = [
     "ask_question",
     "propose_change",
     "report_decision",
     "report_discrepancy",
 ];
-const CARD_WRITES: [&str; 3] = ["create_card", "edit_card", "move_card"];
+const CARD_WRITES: [&str; 4] = ["create_card", "edit_card", "move_card", "split_card"];
 
 /// Words no hub tool's name may hold (H9).
 const DECIDING: [&str; 11] = [
@@ -1429,6 +1434,15 @@ fn every_tool(client: &mut Client, world: &World, label: &str) -> BTreeSet<Strin
         "move_card",
         json!({"card_id": card, "to": "shaped"}),
     );
+    // docs/features/department-split.md S8: a split under the stored card,
+    // its reviewer the login the chain ends at.
+    both(
+        client,
+        &mut called,
+        label,
+        "split_card",
+        json!({"parent": card, "child": ["sketch"]}),
+    );
 
     for uri in [
         format!("spec://{KEEP}/tree"),
@@ -1539,10 +1553,11 @@ fn h9_nothing_on_a_hub_decides() {
     if !specengine_mcp::HUB_PROBES.is_empty() {
         stdio_names.retain(|name| !name.starts_with("probe_"));
     }
-    assert_eq!(stdio_names.len(), 29, "{stdio_names:?}");
+    // department-split S8: thirty with `split_card`, on both servers.
+    assert_eq!(stdio_names.len(), 30, "{stdio_names:?}");
     let mut union: Vec<&str> = HUB_TOOLS.iter().chain(LEFT_OUT.iter()).copied().collect();
     union.sort_unstable();
-    assert_eq!(stdio_names, union, "the 17 and the 12 are stdio's 29");
+    assert_eq!(stdio_names, union, "the 18 and the 12 are stdio's 30");
 }
 
 // ---------------------------------------------------------------------- H10
@@ -1835,7 +1850,7 @@ fn h11_the_hub_texts_hold_their_budget_and_their_words() {
     shared_and_variants.sort_unstable();
     assert_eq!(
         shared_and_variants, HUB_TOOLS,
-        "nine shared and eight variants"
+        "nine shared and nine variants"
     );
     for name in VARIANTS {
         let description = tool(&hub, name)["description"].as_str().expect("text");
@@ -2690,7 +2705,8 @@ fn board_handoff_the_hub_card_texts_name_the_new_keys() {
         .iter()
         .map(|tool| tool["name"].as_str().expect("a name"))
         .collect();
-    assert_eq!(names.len(), 17, "{names:?}");
+    // department-split S8: eighteen.
+    assert_eq!(names.len(), 18, "{names:?}");
     for (name, key) in [
         ("create_card", "reviewer"),
         ("move_card", "note"),
@@ -2827,7 +2843,8 @@ fn card_tasks_ct7_the_hub_tools_keep_the_ids_and_read_no_task() {
 
     let mut session = world.session(KEEP, "mira");
     let hub = session.tools();
-    assert_eq!(tool_names(&hub).len(), 17);
+    // department-split S8: eighteen.
+    assert_eq!(tool_names(&hub).len(), 18);
     let description = tool(&hub, "edit_card")["description"]
         .as_str()
         .expect("a description");

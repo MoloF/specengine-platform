@@ -61,9 +61,11 @@ use specengine_cli::Globals;
 
 const CLOCK: &str = "2026-10-30T09:00:00Z";
 
-/// "MCP": the cards line, its LF included, 112 bytes.
-const CARDS_LINE: &str = "- list_cards, get_card, create_card, edit_card, move_card = spec card \
-                          list|show|new|edit|move; no tool accepts.\n";
+/// "MCP": the cards line, its LF included, 112 bytes; 130 since
+/// docs/features/department-split.md "Acceptance criteria", S8 (`split_card`
+/// and `split` named, the orchestrator's decision).
+const CARDS_LINE: &str = "- list_cards, get_card, create_card, split_card, edit_card, move_card = \
+                          spec card list|show|new|split|edit|move; no tool accepts.\n";
 
 /// A scratch git repository of `fixture`, committed, and two `HOME`s.
 struct Repo {
@@ -197,11 +199,12 @@ fn required(list: &Value, name: &str) -> Vec<String> {
 /// naming every tool. M: a tool taking `as`; a sixth tool.
 #[test]
 fn ac10_the_card_tools_and_their_schemas() {
-    assert_eq!(TOOLS.len(), 29);
+    // docs/features/department-split.md "Acceptance criteria", S8: thirty.
+    assert_eq!(TOOLS.len(), 30);
     for name in CARD_TOOLS {
         assert!(TOOLS.contains(&name), "{name}");
     }
-    assert_eq!(CARDS_LINE.len(), 112);
+    assert_eq!(CARDS_LINE.len(), 130);
     let instructions = specengine_mcp::INSTRUCTIONS;
     assert_eq!(instructions.len(), 2048);
     assert_eq!(instructions.matches(CARDS_LINE).count(), 1);
@@ -1086,7 +1089,8 @@ fn board_handoff_the_card_tools_take_reviewer_note_and_parent() {
         result(&children)["structuredContent"]["flows"]
             .as_array()
             .map(Vec::len),
-        Some(5),
+        // docs/features/department-split.md S9: the preset's six flows.
+        Some(6),
         "every flow"
     );
     assert_eq!(
@@ -1335,10 +1339,11 @@ fn card_tasks_edit_card_links_and_get_card_reads_each_task() {
 
 /// docs/canon/cards.md "MCP", D15: the stdio `edit_card`
 /// names `task` and holds its sentence, `get_card` holds the `tasks`
-/// sentence; both stay ASCII within 2 048 bytes, 29 tools.
+/// sentence; both stay ASCII within 2 048 bytes, 29 tools (30 since
+/// department-split, S8).
 #[test]
 fn card_tasks_the_stdio_descriptions_name_task() {
-    assert_eq!(TOOLS.len(), 29);
+    assert_eq!(TOOLS.len(), 30);
     let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
     let list = session.tools();
     for (name, word, sentence) in [

@@ -1,8 +1,8 @@
 //! docs/features/workspaces.md (RM-0081, v4 step 1a) "Acceptance criteria",
 //! WS-8, the MCP server's half: on a scratch copy of `fixtures/card-press`, its
 //! `[[workspace]]` and `[[module]]` tables in place, `initialize` and
-//! `tools/list` answer, the list is the 29 tools of before (D5: no tool is
-//! added) and a read and a card tool answer with no error. With the first
+//! `tools/list` answer, the list is the tools of before (D5: no tool is
+//! added; 30 since docs/features/department-split.md, S8) and a read and a card tool answer with no error. With the first
 //! `[[workspace]]` header misspelt `[[workspaces]]`, the session still opens
 //! (neither call reads the config) and every tool that reads the project is an
 //! error result naming `specengine.toml:<line>: ` and the TOML reader's

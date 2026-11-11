@@ -84,10 +84,13 @@ function fillDecision(dialog: HTMLElement, why: string) {
 
 describe("Ask a question… and Record a decision… (U3 of card-questions)", () => {
   it("stand after Return… on an open card with a target, alone on a closed one, and on none without a target", async () => {
-    expect(acts(await modal(OPEN))).toEqual(["Hand off", "Return", "Ask a question…", "Record a decision…", "Edit", "Assign", "Cancel task"]);
+    const open = await modal(OPEN);
+    expect(acts(open)).toEqual(["Hand off", "Split to departments…", "Return", "Ask a question…", "Record a decision…", "Edit", "Assign", "Cancel task"]);
+    // Each act opens a dialog and says so (department-split's review, minor 6).
+    expect(within(within(open).getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.getAttribute("aria-haspopup"))).toEqual(Array<string>(8).fill("dialog"));
     expect(acts(await modal(CLOSED))).toEqual(["Ask a question…", "Record a decision…"]);
     const bare = await modal(NO_TARGET);
-    expect(acts(bare)).toEqual(["Hand off", "Edit", "Assign", "Cancel task"]);
+    expect(acts(bare)).toEqual(["Hand off", "Split to departments…", "Edit", "Assign", "Cancel task"]);
   });
 
   it("Ask posts one raise of kind question with its texts, the targets and the acting name; stored, it closes and says so", async () => {

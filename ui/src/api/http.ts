@@ -28,6 +28,8 @@ import type {
   CardMoveBody,
   CardNotFound,
   CardRaiseBody,
+  CardSplit,
+  CardSplitBody,
   CardWrite,
   CheckReport,
   ConfirmBody,
@@ -612,6 +614,15 @@ export class HttpClient implements SpecEngineClient {
    */
   async raiseOnCard(project: string, id: string, body: CardRaiseBody): Promise<IntakeDocument> {
     return (await request("POST", `${cardPath(project, id)}/items`, { body: JSON.stringify(body) })) as IntakeDocument;
+  }
+
+  /**
+   * A split, written or planned, U2 of docs/features/department-split.md "Acceptance criteria": 200
+   * the split document; a 409's document rejects with its last note, the reason; a 400 or 503 with
+   * the error body's message.
+   */
+  async splitCard(project: string, body: CardSplitBody): Promise<CardSplit> {
+    return (await request("POST", `${cardsPath(project)}/split`, { body: JSON.stringify(body) })) as CardSplit;
   }
 
   /** Every suspect card of a node and what it holds, one transaction; a refusal (a 409 or 404 with `{group, cleared, notes}`) its last note. */

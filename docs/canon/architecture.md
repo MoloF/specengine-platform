@@ -8,21 +8,21 @@ reviewed: 2026-11-11
 
 # SpecEngine architecture rules
 
-The rules all code is written by, each with the ADRs that introduced it and hold its reasons; a rule changes only through a new decision in the same change. Its detail is one step away, in the document its section names (the code layer's: `docs/canon/architecture-code.md`); the design: `docs/specs/specengine-platform/`.
+The rules all code is written by, each with the ADRs that introduced it and hold its reasons; a rule changes only through a new decision in the same change. Its detail is one step away, in the document its section names (the code layer's: `architecture-code.md`); the design: `docs/specs/specengine-platform/`.
 
 <a id="storage"></a>
 ## Storage
 
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
-- The operational database lives outside the repository, in the data directory beside the daemon's files (`docs/canon/serve.md`). Git will receive the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `docs/canon/queue-backup.md`). ADR-0003.
-- A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position is computed per read, never stored, its `depends_on` chain ordering work, never gating it (`docs/canon/spec-roadmap.md`). ADR-0052.
+- The operational database lives outside the repository, in the data directory beside the daemon's files (`serve.md`). Git will receive the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `queue-backup.md`). ADR-0003.
+- A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position is computed per read, never stored, its `depends_on` chain ordering work, never gating it (`spec-roadmap.md`). ADR-0052.
 
 <a id="layout"></a>
 ## Spec layout in a project
 
-A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file, for atomic diffs, conflict-free merges and cheap agent writes; a node document (mechanic, feature) is one file, read whole, its rules `{#ID}` sections hashed one by one, so editing a neighbour gives no false drift. An ID whose prefix has `scope = "feature"` in `[ids]` (criteria) is only a `{#ID}` section of a feature document `<slug>.md` directly under `[paths] features`, cited `<slug>/ID` from other files, bare inside its own (`docs/canon/spec-check-links.md`). ADR-0026.
+A record of a project-scoped prefix (R, A, Q, DEC, TERM) is a separate file, for atomic diffs, conflict-free merges and cheap agent writes; a node document (mechanic, feature) is one file, read whole, its rules `{#ID}` sections hashed one by one, so editing a neighbour gives no false drift. An ID whose prefix has `scope = "feature"` in `[ids]` (criteria) is only a `{#ID}` section of a feature document `<slug>.md` directly under `[paths] features`, cited `<slug>/ID` from other files, bare inside its own (`spec-check-links.md`). ADR-0026.
 
-A node's revision is its own (a document's `rev:`, a section's `rev=N`; none written = 1). ADR-0040. Approving a change of its `norm_hash` raises it, never lowering it; `spec approve --editorial` keeps it (`#apply`); `spec check --staged` and `--changed` flag a locked node changed with neither. How: `docs/canon/node-revision.md`. ADR-0043.
+A node's revision is its own (a document's `rev:`, a section's `rev=N`; none written = 1). ADR-0040. Approving a change of its `norm_hash` raises it, never lowering it; `spec approve --editorial` keeps it (`#apply`); `spec check --staged` and `--changed` flag a locked node changed with neither. How: `node-revision.md`. ADR-0043.
 
 Directories come from `specengine.toml` `[paths]`, so a consumer's existing `docs/` stays intact; each defaults to `docs/<role>` (`crates/specengine-core/README.md` "`[paths]`"): `spec/`, the business-logic tree (canon: a root document, `<domain>/README.md` Tier 1, `<domain>/<mechanic>.md`); `records/<PREFIX>/<ID>.md`; `features/<slug>.md`, change specs (consumable); `generated/`, SpecEngine's output; `archive/`, Tier 3 by front-matter, not by folder. Beside `specengine.toml`, the committed `spec.lock`: verified node ↔ symbol hash pairs, Phase 3, its writers in `#apply`.
 
@@ -39,7 +39,7 @@ A `generated` document is no spec file: only its registered generator writes it 
 ## Control and no blocking
 
 - Discrepancies, questions and proposals block nothing: a node may have several open proposals, rebased on `base_hash` when applied; an agent keeps working on a working answer, marked `// @assumes PR-…`, and a decision unlike it makes a follow-up task. ADR-0012.
-- The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`docs/canon/gate.md`). ADR-0012, ADR-0039.
+- The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`gate.md`). ADR-0012, ADR-0039.
 - `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; a binding it cannot verify is never `ok`. How: `architecture-code.md#verify`. ADR-0042, ADR-0045, ADR-0050.
 - Reads of nodes (bundle, `show --bindings`, tree, task package, impact) show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it. How: `architecture-code.md#sync-in-reads`. ADR-0046.
 - `spec health` lists, read-only, suspect markers, unbound nodes and drift. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them. How: `architecture-code.md#health`. ADR-0047, ADR-0051.
@@ -47,9 +47,9 @@ A `generated` document is no spec file: only its registered generator writes it 
 <a id="tasks"></a>
 ## Tasks and stack skills
 
-Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`docs/canon/tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`docs/canon/task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`architecture-code.md#tests`). ADR-0044.
+Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`architecture-code.md#tests`). ADR-0044.
 
-Any trade's work is a card, `C-NNNN`, a queue row beside `T-`, never read by the gate (`docs/canon/cards.md`); a lead's move to `ready` is a convention until the hub; the requesting side accepts it. ADR-0056.
+Any trade's work is a card, `C-NNNN`, a queue row beside `T-`, never read by the gate (`cards.md`); a lead's move to `ready` is a convention until the hub; the requesting side accepts it. ADR-0056. No card write creates, moves or refuses another; a split makes a task and its subtasks in one act (`card-split.md`). ADR-0074, ADR-0078.
 
 <a id="rules-format"></a>
 ## Rule form
@@ -59,9 +59,9 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `architecture-code.md#health`), what starts and ends a flow (`[flow]`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `architecture-code.md#health`), what starts and ends a flow (`[flow]`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
 
-Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` keeps its meaning and cycle warning (`docs/canon/flow-links.md`). ADR-0055.
+Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` keeps its meaning and cycle warning (`flow-links.md`). ADR-0055.
 
 <a id="ids"></a>
 ## Identifiers

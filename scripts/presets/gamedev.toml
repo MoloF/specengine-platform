@@ -1,10 +1,11 @@
-# The gamedev preset (docs/features/workspaces.md "The gamedev preset"): five
-# card flows and four workspaces for a game studio's trades. Copy it into a
+# The gamedev preset (docs/features/workspaces.md "The gamedev preset"): six
+# card flows and five workspaces for a game studio's trades. Copy it into a
 # project's specengine.toml, add the project's own [[module]] tables and a
 # workspace's `module`, and retitle anything in the project's language.
 # Every name is data: no SpecEngine code reads one (ADR-0008, ADR-0073).
-# A flow's `title` and `return` need a build that reads them on every terminal,
-# plugin and hub serving the project, an older one refusing either key.
+# A flow's title and return, and a [[card.split]] row, need a build that reads
+# them on every terminal, plugin and hub serving the project, an older one
+# refusing the key.
 
 [[card.flow]]
 name = "narrative"
@@ -51,6 +52,15 @@ titles = { to-do = "To do", sent-back = "Returned", in-progress = "In progress",
 accept = { from = "review", to = "done" }
 return = "sent-back"
 
+[[card.flow]]
+name = "sound"
+title = "Sound"
+disciplines = ["sound"]
+columns = ["backlog", "sent-back", "design", "recording", "implementation", "review", "in-game"]
+titles = { backlog = "Backlog", sent-back = "Returned", design = "Sound design", recording = "Recording", implementation = "Implementation", review = "Review", in-game = "In game" }
+accept = { from = "review", to = "in-game" }
+return = "sent-back"
+
 [[workspace]]
 name = "writing"
 title = "Writing"
@@ -73,6 +83,13 @@ landing = "board"
 flows = ["art", "level-design"]
 
 [[workspace]]
+name = "sound"
+title = "Sound"
+sections = ["board", "flow", "tree", "questions", "inbox"]
+landing = "board"
+flows = ["sound"]
+
+[[workspace]]
 name = "production"
 title = "Production"
 sections = ["inbox", "roadmap", "board", "flow", "tree", "graph", "health", "questions"]
@@ -85,3 +102,16 @@ sections = ["inbox", "roadmap", "board", "flow", "tree", "graph", "health", "que
 # name = "scenes"
 # title = "Scenes"
 # kinds = ["scene"]
+
+# A split template: a task on a document of this kind, or holding nodes of
+# it, pre-selects these disciplines in the Split dialog, and each subtask
+# targets the nodes of its kinds. It never refuses a split. Use your project's
+# own kinds, and add it only once every terminal, plugin and hub runs a build
+# that reads `[[card.split]]`.
+# [[card.split]]
+# kind = "character"
+# disciplines = ["narrative", "art", "sound"]
+#
+# [[card.split]]
+# kind = "scene"
+# disciplines = ["narrative", "level-design", "sound", "development"]

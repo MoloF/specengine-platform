@@ -27,7 +27,7 @@ spec card accept C --as N (--briefed | --departs REF...) [--note T] [--revision 
 spec card clear (C | --group REF) ... --reason T --as N
 ```
 
-Globals as the queue's. In `edit`, `assign` a value `-` clears; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children". `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest` and `CardEditRequest` also `tasks_here`, no `Default`: each caller states it; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
+Globals as the queue's. In `edit`, `assign` a value `-` clears; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children". `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `spec card split`, a task and a subtask per department in one act: `card-split.md`. `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest` and `CardEditRequest` also `tasks_here`, no `Default`: each caller states it; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
 `open_cards`, never `open_context`: no git runs, so any root works; `accept --departs` and `show` of a card linking a task alone read git.
 
@@ -55,7 +55,7 @@ A control point exists only where a flow writes `by`; the default writes none.
 
 ## MCP
 
-Five tools, as `mcp-read.md`, acting as `agent`, on a hub as the login (`hub-mcp.md`): reads `list_cards`, `get_card`; writes `create_card`, `edit_card`, `move_card`, annotated as `claim_task`. Arguments: the twin's flags in snake case, `C` as `card_id`, no `as`. No tool for `assign`, `cancel`, `accept` or `clear`. `{id, reason}` drops `structuredContent`, as `get_task`. `read-spec` names the five.
+Six tools, as `mcp-read.md`, acting as `agent`, on a hub as the login (`hub-mcp.md`): reads `list_cards`, `get_card`; writes `create_card`, `split_card`, `edit_card`, `move_card`, annotated as `claim_task`. Arguments: the twin's flags in snake case, `C` as `card_id`, no `as`. No tool for `assign`, `cancel`, `accept` or `clear`. `{id, reason}` drops `structuredContent`, as `get_task`. `read-spec` names the six.
 
 ## Config
 
@@ -76,7 +76,7 @@ cards(id PRIMARY KEY, project, flow, col, position INTEGER, title, goal, discipl
 API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), `card_history`, `change_card(id, seen, change, actor, now)`, `accept_card`, `list_existing_cards`, each write one `Immediate` transaction, one event; refusals `QueueError::CardRefused`.
 
 - **Fields.** Caps as tasks'; title required, a control character stored, printed escaped; `estimate` `parse_estimate`'s, no unit, no sum; `due` `is_calendar_date`; `parent`, `corrects` existing cards, no `parent` cycle, a card never correcting itself.
-- **Evidence.** `--evidence KIND=VALUE`: `url` (`http://`, `https://`), `path` (`<clean relative path>@<blob>`, lower-case hex of any length), `build`, `note`; one line, at most 1024 bytes, 32 entries. Nothing is fetched: a reference, never a binary.
+- **Evidence.** `--evidence KIND=VALUE`: `url` (`http://`, `https://`), `path` (`<clean relative path>@<blob>`, lower-case hex of any length), `build`, `note`; one line, at most 1024 bytes, 32 entries. Nothing is fetched.
 - **Order.** `position` dense from 1 per (flow, `col`). A move leaves its column at `position` 0, closes it up, then opens the target or goes last. `new` goes last; `--before C`, another card of that column, takes its place. Neighbours take `position` alone, no `revision`, `updated_at` or event, so a card passed by loses no compare-and-set. `--to` its own column is a reorder: no flow rule, no `by`. Ties by ID.
 - **IDs.** `C-` and 4 or more digits, highest + 1 in the transaction, never deleted or reused. `card_prefix_clash` as `task_prefix_clash`, for `spec card` alone. Unique per `<slug>.db`: a hub must be the one minter, filled by `spec import-state`, never merged.
 - **`revision`**: decimal text from `1`, raised by every change.
@@ -101,7 +101,7 @@ Format 5 (3, 4 import): `queue-backup.md`, `tasks.md` "Backup".
 
 Each exit 1, nothing changed; core's, pure, asked twice.
 
-- **Outside the flow**: ``C-0001 is in review: no move to `ready`; allowed: `in-progress`, `spec card accept`; nothing changed``. `accept.to` is never allowed, so this covers it.
+- **Outside the flow**: ``C-0001 is in review: no move to `ready`; allowed: `in-progress`, `spec card accept`; nothing changed``. `accept.to` is never allowed.
 - **`as` outside `by`**: ``C-0001 is in ready: the move to `review` is `lead` or `owner`'s, not `local`'s; nothing changed``.
 - **Closed**: ``C-0001 is accepted: it takes no write; a correction is a new card, `spec card new --corrects C-0001`; nothing changed``, `cancelled` likewise; `accept` too. `clear` still reaches an accepted card.
 - **Stale**: `` `C-0001` changed since this run read it: it is in <column> since <updated_at>; nothing changed ``, whether `--revision` or the run's own read lost.

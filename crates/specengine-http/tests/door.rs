@@ -88,6 +88,13 @@
 //! forbidden; `card_writes_touch_only_the_queue` admits a raise's one
 //! `proposal.created`, git, the files and the open question unchanged. M: the
 //! handler calling `propose_question`.
+//!
+//! docs/features/department-split.md (RM-0100) "Acceptance criteria", S7, the
+//! door: `CARD_CALLS` is twelve with `card_split`, the third exception to "one
+//! write, one event": `card_writes_touch_only_the_queue` meets a split adding
+//! exactly its three `card.created` and nothing else, git, the files and the
+//! open question unchanged, and a dry run adding none. M: an unlisted
+//! `card_split_all` caught.
 
 mod common;
 
@@ -509,7 +516,7 @@ const TASK_READS: [&str; 2] = ["task_list", "task_show"];
 /// The CLI library's card calls a handler may make, reads and writes: a
 /// card is the one record the daemon writes beyond a stage (ADR-0056,
 /// docs/features/board-ui.md "The fence stays").
-const CARD_CALLS: [&str; 11] = [
+const CARD_CALLS: [&str; 12] = [
     "card_list",
     "card_show",
     "card_new",
@@ -522,6 +529,9 @@ const CARD_CALLS: [&str; 11] = [
     "card_clear_group",
     // docs/features/card-questions.md D6: a card's raise, the eleventh.
     "card_raise",
+    // docs/features/department-split.md "Acceptance criteria", S7: a split,
+    // the twelfth.
+    "card_split",
 ];
 
 /// The names no handler may call: the CLI's deciding, storing, exporting,
@@ -1086,6 +1096,9 @@ fn board_ui_ac02_the_scan_admits_the_card_calls_and_no_other_card_name() {
                    specengine_cli::card_reopen(env, globals, &reopen)\n\
                    }).await }";
     assert_eq!(caught(handler), ["task_claim", "card_reopen"], "{handler}");
+    // department-split S7: a split's name the list does not hold is caught.
+    let by_path = "fn f() { let _ = specengine_cli::card_split_all(&env, &globals, &r); }";
+    assert_eq!(caught(by_path), ["card_split_all"], "{by_path}");
     // card-questions L3: an unlisted `card_ask` is caught, by path and bare.
     let by_path = "fn f() { let _ = specengine_cli::card_ask(&env, &globals, &r); }";
     assert_eq!(caught(by_path), ["card_ask"], "{by_path}");
@@ -1093,7 +1106,7 @@ fn board_ui_ac02_the_scan_admits_the_card_calls_and_no_other_card_name() {
         caught("fn f() { card_ask(&env, &globals, &r)?; }"),
         ["card_ask"]
     );
-    // Negative controls: the eleven, by path and bare; the handler of the
+    // Negative controls: the twelve, by path and bare; the handler of the
     // slice with its yes; the types, the outcome's variant, the body's cap;
     // a method of something else; a name in a string or a comment.
     for name in CARD_CALLS {
@@ -1314,6 +1327,31 @@ fn card_writes_touch_only_the_queue() {
         assert_eq!(added, ["proposal.created"], "{card}: one event");
         seen = after;
     }
+    // docs/features/department-split.md S7: a split, the third exception: its
+    // three `card.created`, the parent's first, and nothing else; git, the
+    // files and the open question as they were. A dry run adds none.
+    let split = json!({"target": ["PRN-WEEKLY"], "title": "The weekly run",
+        "discipline": "copy", "child": ["copy", "plates"], "reviewer": "ben", "as": "desk"});
+    let mut dry = split.clone();
+    dry["dry_run"] = json!(true);
+    let reply = post("cards/split", &dry);
+    assert_eq!(reply.status, 200, "a dry run: {}", reply.text());
+    assert_eq!(
+        round_state(&scratch, &home, &cwd, &a, &ids),
+        seen,
+        "a dry run: nothing changed"
+    );
+    let reply = post("cards/split", &split);
+    assert_eq!(reply.status, 200, "a split: {}", reply.text());
+    let after = round_state(&scratch, &home, &cwd, &a, &ids);
+    assert_eq!(after.0, before.0, "a split: git, the refs, every file");
+    assert_eq!(after.1, before.1, "a split: the question as it was");
+    let added: Vec<&str> = after.2[seen.2.len()..]
+        .iter()
+        .map(|(_, kind, _)| kind.as_str())
+        .collect();
+    assert_eq!(added, ["card.created"; 3], "a split: its three events");
+    let seen = after;
     let stored = seen;
 
     // Refused at the door.
@@ -1444,8 +1482,9 @@ fn board_handoff_bh20_a_hand_off_and_a_return_touch_only_the_queue() {
             "{path} {body}: nothing changed"
         );
     }
-    // card-questions D6 added the eleventh, `card_raise`; no hand-off call.
-    assert_eq!(CARD_CALLS.len(), 11, "the eleven card calls");
+    // card-questions D6 added the eleventh, `card_raise`; department-split
+    // S7 the twelfth, `card_split`; no hand-off call.
+    assert_eq!(CARD_CALLS.len(), 12, "the twelve card calls");
     for name in ["card_return", "card_hand_off", "card_handoff"] {
         let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
         assert_eq!(caught(&by_path), [name], "{by_path}");

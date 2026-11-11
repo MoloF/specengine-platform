@@ -308,7 +308,8 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
 
 /// The class of a write, default deny: `None` for a route this hub does not
 /// serve. Exact raw segments, so an encoded or trailing form of a route is
-/// not listed. Plain: POST on `.../cards` or
+/// not listed. Plain: POST on `.../cards`, `.../cards/split`
+/// (`docs/features/department-split.md` "Acceptance criteria", S7) or
 /// `.../cards/:id/{move,edit,assign,cancel,items}`. Team: POST, DELETE on
 /// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
 /// `.../cards/:id/{accept,clear}`, `.../trace/clear` and
@@ -327,6 +328,7 @@ fn class(method: &Method, path: &str) -> Option<Class> {
     }
     match route {
         ["cards"] if post => Some(Class::Plain),
+        ["cards", "split"] if post => Some(Class::Plain),
         ["cards", id, verb] if post && !id.is_empty() => {
             if WRITES.contains(verb) {
                 Some(Class::Plain)
@@ -921,6 +923,9 @@ mod tests {
             "/api/projects/p/cards/C-0001/cancel",
             // docs/features/card-questions.md H1: the sixth plain write.
             "/api/projects/p/cards/C-0001/items",
+            // docs/features/department-split.md "Acceptance criteria", S7:
+            // the seventh.
+            "/api/projects/p/cards/split",
         ];
         let team = [
             "/api/projects/p/proposals/PR-0001/decision",
@@ -1002,6 +1007,10 @@ mod tests {
             "/api/projects/p/cards/C-0001/accept/",
             "/api/projects/p/cards/C-0001/%61ccept",
             "/api/projects/p/cards//accept",
+            "/api/projects/p/cards/split/",
+            "/api/projects/p/cards/split/x",
+            "/api/projects/p/cards/%73plit",
+            "/api/projects/p/cards/Split",
             "/api/projects/p/proposals/PR-0001/decision/",
             "/api/projects/p/proposals//decision",
             "/api/projects/p/proposals/PR-0001/%64ecision",
@@ -1042,6 +1051,37 @@ mod tests {
         // A read of any path past the fence: the routes answer it.
         assert!(get("/api/projects/p/inbox", &proxied(&[])).is_ok());
         assert!(get("/api/projects/p/nothing", &proxied(&[])).is_ok());
+    }
+
+    /// docs/features/department-split.md "Acceptance criteria", S7: a split is
+    /// the seventh plain write: `POST .../cards/split` is `Plain`; DELETE and
+    /// every other method, a trailing segment and an encoded or capitalised
+    /// `split` are no route; `split` is no verb of `WRITES`, whose five stay.
+    /// M: the arm left out of `class`.
+    #[test]
+    fn s7_a_split_is_the_seventh_plain_write() {
+        assert_eq!(
+            class(&Method::POST, "/api/projects/p/cards/split"),
+            Some(Class::Plain)
+        );
+        for method in [Method::DELETE, Method::GET, Method::PUT, Method::PATCH] {
+            assert_eq!(
+                class(&method, "/api/projects/p/cards/split"),
+                None,
+                "{method}"
+            );
+        }
+        for path in [
+            "/api/projects/p/cards/split/",
+            "/api/projects/p/cards/split/x",
+            "/api/projects/p/cards/%73plit",
+            "/api/projects/p/cards/Split",
+            "/api/projects//cards/split",
+        ] {
+            assert_eq!(class(&Method::POST, path), None, "{path}");
+        }
+        assert!(!WRITES.contains(&"split"));
+        assert_eq!(WRITES.len(), 5);
     }
 
     /// docs/features/card-questions.md H1: a card's raise is the sixth plain

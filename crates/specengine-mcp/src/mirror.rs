@@ -1599,6 +1599,56 @@ pub(crate) struct CardWriteDocument {
     pub notes: Vec<String>,
 }
 
+/// `spec card split --json` (`docs/features/department-split.md`
+/// "Acceptance criteria", S8): written, planned (every `id` null) or
+/// refused (`parent` null, `children` empty, the reason the last note).
+#[derive(JsonSchema)]
+pub(crate) struct CardSplitDocument {
+    pub dry_run: bool,
+    pub parent: Option<CardSplitParentShape>,
+    pub children: Vec<CardSplitChildShape>,
+    /// Who accepts each card's result; a dry run's unjudged.
+    pub reviewer: Option<String>,
+    /// The plan's notes; a refusal's reason last.
+    pub notes: Vec<String>,
+}
+
+/// A split's parent: made by it, or a stored card it never writes.
+#[derive(JsonSchema)]
+pub(crate) struct CardSplitParentShape {
+    pub id: Option<String>,
+    pub created: bool,
+    pub title: String,
+    pub discipline: Option<String>,
+    pub flow: String,
+    /// The flow's title; untitled, its name.
+    pub flow_title: String,
+    pub column: String,
+    pub targets: Vec<String>,
+}
+
+/// One subtask of a split.
+#[derive(JsonSchema)]
+pub(crate) struct CardSplitChildShape {
+    pub id: Option<String>,
+    pub discipline: String,
+    pub flow: String,
+    pub flow_title: String,
+    pub column: String,
+    pub targets: Vec<String>,
+    pub from: SplitTargetsFrom,
+    /// A split row the scope matched lists its discipline.
+    pub suggested: bool,
+}
+
+/// Where a subtask's targets come from: its rows' kinds, or the parent.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum SplitTargetsFrom {
+    Kinds,
+    Parent,
+}
+
 // ----------------------------------------------------------------- roadmap
 //
 // `spec roadmap --json` (`docs/canon/spec-roadmap.md` "Command"): the

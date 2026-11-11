@@ -146,6 +146,8 @@ describe("one primary per area (DF-4)", () => {
     expect([primaries(dialog), primaries(acts), primaries(part(dialog, ".issue-view-side"))]).toEqual([1, 1, 0]);
     for (const [act, title] of [
       ["Hand off", "Hand off C-0001"],
+      // department-split (U1, U2): its lazy dialog, one primary.
+      ["Split to departments…", "Split C-0001 to departments"],
       ["Return", "Return C-0001"],
       // card-questions (U3; minor 1 of its review): the two raise dialogs, one primary each.
       ["Ask a question…", "Ask a question on C-0001"],
@@ -217,7 +219,7 @@ describe("one primary per area (DF-4)", () => {
     expect([primaries(part(view, ".issue-view-actions")), primaries(part(view, ".issue-view-side"))]).toEqual([1, 0]);
     const bare = await modal(BARE);
     expect(primaries(bare)).toBe(0);
-    expect(within(part(bare, ".issue-view-actions")).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Edit", "Assign", "Cancel task"]);
+    expect(within(part(bare, ".issue-view-actions")).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Split to departments…", "Edit", "Assign", "Cancel task"]);
   });
 });
 

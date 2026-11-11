@@ -18,10 +18,15 @@ import type {
   CardNotFound,
   CardRaiseBody,
   CardRow,
+  CardSplit,
+  CardSplitBody,
+  CardSplitChild,
+  CardSplitParent,
   CardWrite,
   IntakeDocument,
   IntakeMatch,
   TraceCard,
+  TreeNode,
 } from "../api/types";
 import { proposal, stamp, type MockProposal, type StoredReview } from "./build";
 import type { Scenario } from "./scenario";
@@ -73,6 +78,20 @@ export interface MockBoard {
   changed: Map<string, string>;
   /** The targets that no longer resolve. */
   gone: ReadonlySet<string>;
+  /** The project's split templates, `[[card.split]]` as its config writes them (docs/canon/card-split.md "The rule"). */
+  splits: readonly MockSplit[];
+}
+
+/** One `[[card.split]]` row: a node kind and the disciplines its work usually needs. */
+export interface MockSplit {
+  kind: string;
+  disciplines: readonly string[];
+}
+
+/** A node of a split's scope, as the tree read serves it: its REF and its kind, none for a node with none. */
+export interface MockScopeNode {
+  target: string;
+  kind: string | null;
 }
 
 /** Whether a discrepancy is `applied` or `rejected`. */
@@ -110,7 +129,8 @@ function everyMove(columns: readonly string[], closing: string) {
 const COPY: CardFlow = {
   name: "copy",
   title: "Copy desk",
-  disciplines: ["copy"],
+  // Two disciplines on one desk, so a split's row shows its raw discipline beside the flow's title (docs/features/department-split.md "Acceptance criteria", U2).
+  disciplines: ["copy", "captions"],
   columns: [
     { id: "draft", title: "Draft" },
     { id: "edit", title: "Edit" },
@@ -562,11 +582,28 @@ function largeColumn(at: number): StoredCard[] {
   );
 }
 
+/**
+ * harbor-sim's split templates: a mechanic's work goes to copy and the plates, a rule's to the
+ * plates; captions has none, so its subtask takes the parent's targets. ledger-api writes none.
+ */
+const HARBOR_SPLITS: readonly MockSplit[] = [
+  { kind: "mechanic", disciplines: ["copy", "plates"] },
+  { kind: "rule", disciplines: ["plates"] },
+];
+
 /** A project's board for a scenario; `empty` keeps the columns and no card. */
 export function mockBoard(slug: string, scenario: Scenario, at: number): MockBoard {
   const harbor = slug === "harbor-sim";
   const flows = structuredClone(harbor ? [COPY, PLATES] : [PLAIN]);
-  const board = (cards: StoredCard[], events: MockEvent[], changed: Map<string, string>): MockBoard => ({ flows, cards, events, seq: events.length, changed, gone: new Set(harbor ? [GONE_TARGET] : []) });
+  const board = (cards: StoredCard[], events: MockEvent[], changed: Map<string, string>): MockBoard => ({
+    flows,
+    cards,
+    events,
+    seq: events.length,
+    changed,
+    gone: new Set(harbor ? [GONE_TARGET] : []),
+    splits: harbor ? HARBOR_SPLITS : [],
+  });
   if (scenario === "empty") {
     return board([], [], new Map());
   }
@@ -903,6 +940,16 @@ function nextId(board: MockBoard): string {
   return `C-${String(highest + 1).padStart(4, "0")}`;
 }
 
+/** The flow the new-card rule gives a discipline: the first listing it, else the one listing none; else why none does. */
+function flowFor(board: MockBoard, discipline: string | null): CardFlow | string {
+  const flow = board.flows.find((candidate) => discipline !== null && candidate.disciplines.includes(discipline)) ?? board.flows.find((candidate) => candidate.disciplines.length === 0);
+  if (flow !== undefined && flow.columns[0] !== undefined) {
+    return flow;
+  }
+  const asked = discipline === null ? "a card without a discipline" : `the discipline \`${discipline}\``;
+  return `no flow takes ${asked}: none lists it, and every \`[[card.flow]]\` lists its disciplines`;
+}
+
 /** `card_new`: the first flow listing the discipline, else the one flow listing none; goes last. */
 export function createCardIn(board: MockBoard, body: CardCreateBody, at: string): CardWrite {
   checkName(body.as);
@@ -923,12 +970,11 @@ export function createCardIn(board: MockBoard, body: CardCreateBody, at: string)
   if (body.estimate !== undefined && !/^\d+(-\d+)?$/.test(body.estimate)) {
     throw refused(`estimate: \`${body.estimate}\` is not \`N\` or \`N-M\``);
   }
-  const flow = board.flows.find((candidate) => body.discipline !== undefined && candidate.disciplines.includes(body.discipline)) ?? board.flows.find((candidate) => candidate.disciplines.length === 0);
-  const column = flow?.columns[0]?.id;
-  if (flow === undefined || column === undefined) {
-    const asked = body.discipline === undefined ? "a card without a discipline" : `the discipline \`${body.discipline}\``;
-    throw refused(`no flow takes ${asked}: none lists it, and every \`[[card.flow]]\` lists its disciplines`);
+  const flow = flowFor(board, body.discipline ?? null);
+  if (typeof flow === "string") {
+    throw refused(flow);
   }
+  const column = flow.columns[0]?.id ?? "";
   const as = body.as ?? LOCAL;
   const card: StoredCard = {
     id: nextId(board),
@@ -1307,4 +1353,209 @@ export function changeElsewhere(board: MockBoard, id: string, at: string): void 
   if (card !== undefined && !closed(card)) {
     changed(board, card, "card.edited", { fields: ["goal"], as: ELSEWHERE }, at);
   }
+}
+
+// A split (docs/canon/card-split.md "The rule";
+// docs/features/department-split.md "Acceptance criteria", U2): the daemon's plan and write over the
+// mock's board, in its words. The scope is each parent target and the nodes under it to depth 2, the
+// tree read's rows, handed in by the client.
+
+/** At most this many subtasks in one split, and this many targets a subtask takes from its kinds. */
+const SPLIT_CHILDREN_MAX = 32;
+const SPLIT_TARGETS_MAX = 64;
+
+/** At most this many bytes in a flow's, a discipline's or a workspace's name, `MAX_NAME_BYTES`. */
+const CONFIG_NAME_MAX_BYTES = 64;
+
+/** Why a discipline is no name, `name_problem`'s words: 1 to 64 bytes of lower-case ASCII letters, digits, `_` and `-`; null when it is one. */
+function nameProblem(name: string): string | null {
+  const bytes = new TextEncoder().encode(name).length;
+  if (bytes === 0 || bytes > CONFIG_NAME_MAX_BYTES) {
+    return `\`${name}\` is ${String(bytes)} bytes long; a name has 1 to ${String(CONFIG_NAME_MAX_BYTES)}`;
+  }
+  return /^[a-z0-9_-]+$/.test(name) ? null : `\`${name}\` is not a name: lower-case ASCII letters, digits, \`_\` and \`-\``;
+}
+
+/** Why the disciplines a write names make no split, `chosen_problem`'s words: none, past 32, then each in order off a name or named twice. */
+function chosenProblem(chosen: readonly string[]): string | null {
+  if (chosen.length === 0) {
+    return `child: none named; name 1 to ${String(SPLIT_CHILDREN_MAX)}`;
+  }
+  if (chosen.length > SPLIT_CHILDREN_MAX) {
+    return `child: ${String(chosen.length)} named; a split makes 1 to ${String(SPLIT_CHILDREN_MAX)}`;
+  }
+  for (const [at, discipline] of chosen.entries()) {
+    const problem = nameProblem(discipline);
+    if (problem !== null) {
+      return `child: ${problem}`;
+    }
+    if (chosen.slice(0, at).includes(discipline)) {
+      return `child: \`${discipline}\` is named twice`;
+    }
+  }
+  return null;
+}
+
+/**
+ * A split's scope under one target, from the tree read's rows to depth 2 (`split_scope`): the root
+ * named as the target, each other row by its ID, else, a document, by its path; an ID-less section is
+ * passed over, and the mock's sections all hold an ID. Each with its kind.
+ */
+export function splitScopeOf(target: string, rows: readonly TreeNode[]): MockScopeNode[] {
+  return rows.map((row) => ({ target: row.depth === 0 ? target : (row.id ?? row.path), kind: row.kind }));
+}
+
+/** The plan over a scope: the suggested disciplines, each child's flow, column and targets, the notes; or a refusal's reason. */
+function splitPlanIn(board: MockBoard, scope: readonly MockScopeNode[], parentTargets: readonly string[], chosen: readonly string[] | null): { children: CardSplitChild[]; notes: string[] } | string {
+  // Only what a write names is judged: a plan of every discipline the flows list is never capped.
+  const problem = chosen === null ? null : chosenProblem(chosen);
+  if (problem !== null) {
+    return problem;
+  }
+  const matched = board.splits.filter((row) => scope.some((node) => node.kind === row.kind));
+  const suggested = [...new Set(matched.flatMap((row) => row.disciplines))];
+  const asked = chosen ?? [...new Set(board.flows.flatMap((flow) => flow.disciplines))];
+  const notes: string[] = [];
+  const children: CardSplitChild[] = [];
+  for (const discipline of asked) {
+    const flow = flowFor(board, discipline);
+    if (typeof flow === "string") {
+      return `child: ${flow}`;
+    }
+    const kinds = matched.filter((row) => row.disciplines.includes(discipline)).map((row) => row.kind);
+    const found = scope.filter((node) => node.kind !== null && kinds.includes(node.kind)).map((node) => node.target);
+    if (found.length > SPLIT_TARGETS_MAX) {
+      notes.push(`subtask \`${discipline}\`: ${String(found.length)} nodes of its kinds; the first 64 taken`);
+    }
+    const byKinds = found.length > 0;
+    children.push({
+      id: null,
+      discipline,
+      flow: flow.name,
+      flow_title: flow.title,
+      column: flow.columns[0]?.id ?? "",
+      targets: byKinds ? found.slice(0, SPLIT_TARGETS_MAX) : [...parentTargets],
+      from: byKinds ? "kinds" : "parent",
+      suggested: suggested.includes(discipline),
+    });
+  }
+  return { children, notes };
+}
+
+/** A card a split makes, last in its flow's first column. */
+function splitCard(board: MockBoard, fields: { flow: CardFlow; title: string; goal: string | null; discipline: string | null; targets: readonly string[]; reviewer: string; parent: string | null; as: string }, at: string): StoredCard {
+  const column = fields.flow.columns[0]?.id ?? "";
+  const card: StoredCard = {
+    id: nextId(board),
+    flow: fields.flow.name,
+    column,
+    position: standing(board, fields.flow.name, column).length + 1,
+    title: fields.title,
+    goal: fields.goal,
+    discipline: fields.discipline,
+    targets: [...fields.targets],
+    snapshot: fields.targets.map((target) => frozenNow(board, target)),
+    criteria: [],
+    assignee: null,
+    reviewer: fields.reviewer,
+    estimate: null,
+    due: null,
+    parent: fields.parent,
+    corrects: null,
+    evidence: [],
+    tasks: [],
+    acceptance: null,
+    cancellation: null,
+    created_by: fields.as,
+    created_at: at,
+    updated_at: at,
+    revision: "1",
+  };
+  board.cards.push(card);
+  board.seq += 1;
+  board.events.push({ id: card.id, seq: board.seq, type: "card.created", at, payload: { id: card.id, flow: card.flow, column, position: card.position, assignee: null, reviewer: card.reviewer, as: fields.as } });
+  return card;
+}
+
+/**
+ * `card_split`: the usage rules (400), the stored parent (409 `parent: no card C`), the plan (409, a
+ * child's line), the reviewer's chain on a write (409), then the parent and each child in one go. A
+ * dry run writes nothing and judges no person. `meetsConflict`, asked of a write that passed every
+ * rule: true when it meets a config changed elsewhere, its first child's flow gone, and stores
+ * nothing. A stored parent is read, never written.
+ */
+export function splitCardsIn(board: MockBoard, body: CardSplitBody, scopeOf: (target: string) => MockScopeNode[], at: string, meetsConflict: () => boolean): CardSplit {
+  checkName(body.as);
+  checkPerson("reviewer", body.reviewer);
+  const children = body.child === null || body.child.length === 0 ? null : body.child;
+  if (body.parent !== null && ((body.target ?? []).length > 0 || body.title !== null || body.goal !== null || body.discipline !== null)) {
+    throw new ClientError({ status: CARD_USAGE, message: "spec: --parent C splits under a stored card: give no --target, --title, --goal or --discipline with it" });
+  }
+  if (body.parent === null && body.title === null) {
+    throw new ClientError({ status: CARD_USAGE, message: "spec: a split makes a parent card: give --title T, or --parent C to split under a stored card" });
+  }
+  if (children === null && !body.dry_run) {
+    throw new ClientError({ status: CARD_USAGE, message: "spec: name each subtask's discipline with --child, or plan with --dry-run" });
+  }
+  if (body.title !== null && body.title.trim() === "") {
+    throw refused("title: blank; a card has a title");
+  }
+  const stored = body.parent === null ? null : (board.cards.find((card) => card.id === body.parent) ?? null);
+  if (body.parent !== null && stored === null) {
+    throw refused(`parent: no card ${body.parent}`);
+  }
+  const as = body.as ?? LOCAL;
+  const reviewer = body.reviewer ?? stored?.reviewer ?? body.as;
+  if (!body.dry_run) {
+    const named = reviewer ?? LOCAL;
+    if (named === CLEAR) {
+      throw refused(`reviewer: \`${CLEAR}\` clears a name: a new card has none`);
+    }
+    if (named === LOCAL || named === AGENT) {
+      throw refused(`reviewer: \`${named}\` can be no reviewer: a person accepts a result`);
+    }
+  }
+  const targets = stored?.targets ?? body.target ?? [];
+  // Each node once, at its first place.
+  const scope: MockScopeNode[] = [];
+  for (const node of targets.flatMap(scopeOf)) {
+    if (!scope.some((held) => held.target === node.target)) {
+      scope.push(node);
+    }
+  }
+  const plan = splitPlanIn(board, scope, targets, children);
+  if (typeof plan === "string") {
+    throw refused(plan);
+  }
+  const parentFlow = stored === null ? flowFor(board, body.discipline) : (flowOf(board, stored.flow) ?? `no flow \`${stored.flow}\``);
+  if (typeof parentFlow === "string") {
+    throw refused(parentFlow);
+  }
+  if (!body.dry_run && meetsConflict()) {
+    throw refused(`child: no flow takes the discipline \`${plan.children[0]?.discipline ?? ""}\`: none lists it, and every \`[[card.flow]]\` lists its disciplines`);
+  }
+  const shape = (card: { id: string | null; title: string; discipline: string | null; flow: string; column: string; targets: string[] }, created: boolean): CardSplitParent => ({
+    id: card.id,
+    created,
+    title: card.title,
+    discipline: card.discipline,
+    flow: card.flow,
+    flow_title: flowOf(board, card.flow)?.title ?? card.flow,
+    column: card.column,
+    targets: [...card.targets],
+  });
+  if (body.dry_run) {
+    const parent = stored ?? { id: null, title: body.title ?? "", discipline: body.discipline, flow: parentFlow.name, column: parentFlow.columns[0]?.id ?? "", targets: [...targets] };
+    return { dry_run: true, parent: shape({ ...parent, id: null }, stored === null), children: plan.children, reviewer: reviewer ?? null, notes: plan.notes };
+  }
+  const named = reviewer ?? LOCAL;
+  const parent =
+    stored ??
+    splitCard(board, { flow: parentFlow, title: body.title ?? "", goal: body.goal, discipline: body.discipline, targets, reviewer: named, parent: null, as }, at);
+  const made = plan.children.map((child) => {
+    const flow = flowOf(board, child.flow) ?? parentFlow;
+    const card = splitCard(board, { flow, title: parent.title, goal: parent.goal, discipline: child.discipline, targets: child.targets, reviewer: named, parent: parent.id, as }, at);
+    return { ...child, id: card.id };
+  });
+  return { dry_run: false, parent: shape(parent, stored === null), children: made, reviewer: named, notes: plan.notes };
 }

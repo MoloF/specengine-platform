@@ -52,7 +52,7 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 
 `spec workspace [--json]` (CLI `workspace.rs`): the config once (`discover_with_text`), no index, no write, no cut. Text: `workspaces <source> | workspaces <n>, modules <m>`; `workspace <name> | <title> | landing <l> | sections <a, b> | flows <a, b> | module <m>`, `(all)` for `null` flows, `(none)` for no module or sections; `module <name> | <title> | root <REF>`, a direction `| kinds <a, b>` (card-press, studio-lamp `expected.json`). JSON `{source, notes, workspaces: [{name, title, landing, sections, flows, disciplines, module}], modules: [{name, title, root, kinds}]}`, every key, that order, `root` or `kinds` null. Notes and lines are one line, controls escaped (a newline a space, ESC `\u{1b}`): `note:` lines equal JSON `notes`. Exit 0 whatever the tables; 2 on usage, no project, a config `ProjectConfig` refuses.
 
-`GET /api/projects/:p/workspaces` (http `app.rs`): that JSON byte for byte; a query 400, not GET 405 `Allow: GET`, a refused config 503. **No turn**: config only, as `/api/projects` (`serve.md` "Concurrency"). A hub mounts it for every login, never reading `[team]`. Daemon key sets 111-113: `WorkspaceDocument`, `Workspace`, `WorkspaceModule`. No MCP tool: an agent works on documents and cards, not a viewer's nav.
+`GET /api/projects/:p/workspaces` (http `app.rs`): that JSON byte for byte; a query 400, not GET 405 `Allow: GET`, a refused config 503. **No turn**: config only, as `/api/projects` (`serve.md` "Concurrency"). A hub mounts it for every login, never reading `[team]`. Key sets `WorkspaceDocument`, `Workspace`, `WorkspaceModule`. No MCP tool: an agent needs no viewer's nav.
 
 **`disciplines`**, JSON only (core `disciplines_of`), what Hand off offers (`card-flows.md` "Hand-off"): the department's flows in its order (`null`: every flow, config order), each flow's disciplines as written, each once, one kept only if the first flow listing it in config order (`CardConfig::flow_for`, the new-card rule) is one of them. Flows `a` `[x, y]`, `b` `[y, z]`: `[b]` gives `[z]`, `[b, a]` `[y, z, x]`. Every listed flow unknown: `flows` `null`, so every discipline; the implicit workspace likewise.
 
@@ -67,28 +67,29 @@ UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edi
 - **Notes**: `Config notes (n)` beside the switcher or alone: the notes verbatim, in order, or a failed read's message and Retry; else none.
 - **Module bar** (`ModuleBar.tsx`, the Tree's; Flow's, of links, in its places pane): when `modules` is not empty, never from the tree; groups "Modules" (All modules, rooted titles) and "Directions" (`directions.md` "Tree"), one choice, `aria-pressed`, wrapping at 320 px. The Tree starts at the module's root or a direction's list, reset on a change; Flow's lens root, rooted modules only, also in its hash (`spec-flow-place.md`). Board, Tree, Flow draw once the read answers. A root naming nothing: the read's `reason`, the bar kept.
 - **Board**: a tab per department flow the cards read serves, in its order, labelled by its `title`; one shown: no tab; `null` or none served: all. Hidden ones: `Showing <k> of <n> flows.` and Show all flows (then "Show this department's flows") for the visit, reset on a switch; a routed card in a hidden flow turns Show all flows on, once the cards are read.
-- **Strings**: every chrome string is a key of the catalog's `workspace` group, named as `WORKSPACE_TEXT`'s members were (`ui-languages.md`); section labels: `app.sections`.
+- **Strings**: the catalog's `workspace` group (`ui-languages.md`); section labels `app.sections`.
 
 ## Preset
 
-`scripts/presets/gamedev.toml`: five `[[card.flow]]`, `narrative` "Narrative", `development` "Programming", `art` "Art", `level-design` "Level design", `production` "Production", each its own discipline, the role research's columns, `accept` its last two, no `moves`, and the return column `sent-back`, titled "Returned", second in `columns`, `return = "sent-back"` (`card-flows.md` "Config"); its header says a flow's `title` and `return` need a build that reads them on every terminal, plugin and hub serving the project. No live `[[module]]` (roots and kinds are a project's); after the workspaces, a commented direction `scenes`, pinned verbatim. A project copies it, adds modules and each `module`, retitles. No name echoes `[team]`'s `lead`.
+`scripts/presets/gamedev.toml`: six `[[card.flow]]`, `narrative` "Narrative", `development` "Programming", `art` "Art", `level-design` "Level design", `production` "Production", `sound` "Sound", each its own discipline, the role research's columns, `accept` its last two, no `moves`, the return column `sent-back` "Returned", second (`card-flows.md` "Config"); its header says a flow's `title` and `return`, and a `[[card.split]]` row, need a build that reads them on every terminal, plugin and hub serving the project. No live `[[module]]` or split row (roots and kinds are a project's); after the workspaces, a commented direction `scenes` and two commented `[[card.split]]` rows (`card-split.md`), pinned verbatim. A project copies it, adds modules, retitles. No name echoes `[team]`'s `lead`.
 
 | Workspace | Sections | Landing | Flows |
 |---|---|---|---|
 | `writing` | flow, tree, board, questions, inbox | flow | narrative |
 | `development` | board, inbox, tree, flow, graph, health, roadmap, questions | board | development |
 | `art` "Art and levels" | board, flow, tree, questions, inbox | board | art, level-design |
+| `sound` | board, flow, tree, questions, inbox | board | sound |
 | `production` | inbox, roadmap, board, flow, tree, graph, health, questions | overview | all |
 
 ## Guards
 
-http `tests/no_domain.rs` takes each `[[workspace]]` and `[[module]]` name and `kinds` entry of the repository's `specengine.toml` files and `scripts/presets/*.toml`, and each preset flow's `return` column, as words; eval `tests/workspace_names.rs` finds none, nor a preset flow, its `title` or `return` column, as a literal in `crates/*/src` or `ui/src` app code; `ui/src/policy.test.ts` none of the mock's. `ui_policy.rs` pins `SECTIONS` to `sections.ts`; `anonymity.rs` reads `scripts/presets`.
+http `tests/no_domain.rs` takes each `[[workspace]]` and `[[module]]` name and `kinds` entry of the repository's `specengine.toml` files and `scripts/presets/*.toml`, each preset flow's `return` column and each `[[card.split]]` row's `disciplines` (`card-split.md`), as words; eval `tests/workspace_names.rs` finds none, nor a preset flow, its `title` or `return` column, as a literal in `crates/*/src` or `ui/src` app code; `ui/src/policy.test.ts` none of the mock's. `ui_policy.rs` pins `SECTIONS` to `sections.ts`; `anonymity.rs` reads `scripts/presets`.
 
 ## Known limits
 
-- **Older binaries.** `RawFile` is `deny_unknown_fields` (core `project_toml.rs`), so a `spec`, daemon or MCP server older than `workspaces` refuses a whole config holding either table; a `v0.29.1` hub fails every read with 503. One older than `departments` refuses a flow's `title` and drops every module when one holds `kinds`, one note. The rule: **commit no such key before every hub, terminal and plugin serving the project runs a build that reads it**. The gate's hook is unaffected (`docs/canon/gate.md`).
+- **Older binaries.** `RawFile` is `deny_unknown_fields`, so a `spec`, daemon or MCP server older than `workspaces` refuses a whole config holding either table; a `v0.29.1` hub fails every read with 503. One older than `departments` refuses a flow's `title` and drops every module when one holds `kinds`, one note. The rule: **commit no such key before every hub, terminal and plugin serving the project runs a build that reads it**. The gate's hook is unaffected (`gate.md`).
 - Flow draws no direction (RM-0102). A choice is per browser. No `spec check` finding: only the notes.
 
 ## Tests
 
-core `workspace_toml.rs`, `departments.rs`; CLI `workspace_cli.rs`, `departments.rs`; mcp `mcp_workspaces.rs`; http `workspaces.rs`, `turn.rs`, `hub.rs` (28 routes), `daemon_keys.rs`; the guards; `card-press`, `studio-lamp` (the preset verbatim); UI `src/workspace/`, `mocks/workspace*.smoke`. Not asserted: no cut, `sections (none)`, escapes.
+core `workspace_toml.rs`, `departments.rs`; CLI `workspace_cli.rs`, `departments.rs`; mcp `mcp_workspaces.rs`; http `workspaces.rs`, `turn.rs`, `hub.rs` (29 routes), `daemon_keys.rs`; the guards; `card-press`, `studio-lamp` (the preset verbatim); UI `src/workspace/`, `mocks/workspace*.smoke`. Not asserted: no cut, `sections (none)`, escapes.

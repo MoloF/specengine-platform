@@ -11,7 +11,8 @@
 //! (docs/features/board-ui.md "Data"): `…/cards` a read and a write, its 405
 //! `Allow: GET, POST`; `…/cards/<id>` a read; its seven writes `Allow: POST`,
 //! `…/cards/<id>/items` among them
-//! (`docs/canon/card-questions.md` "The rule").
+//! (`docs/canon/card-questions.md` "The rule"); `…/cards/split` a write,
+//! `Allow: POST` (`docs/canon/card-split.md` "The rule").
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `…/workspaces` a read of the config
@@ -37,8 +38,8 @@
 //! "Data"), confirmed on a terminal (ADR-0035, ADR-0038) or, on a hub alone,
 //! by [`crate::confirm`], one item at a time, which takes a stage and never
 //! a choice: no handler here walks a round or decides an item. A card's
-//! writes are the library's `card_new`, `card_move`, `card_edit`,
-//! `card_assign`, `card_cancel`,
+//! writes are the library's `card_new`, `card_split`, `card_move`,
+//! `card_edit`, `card_assign`, `card_cancel`,
 //! `card_accept`, `card_clear`, `card_clear_group` and `card_raise`, through
 //! the same door (docs/features/board-ui.md "Data",
 //! docs/features/card-trace.md); they touch the queue alone, a departing
@@ -71,12 +72,12 @@ use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest,
-    CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest, CheckRequest, CliError,
-    FlowRequest, GraphRequest, HealthRequest, InboxRequest, IndexTrust, LockDiffRequest, Outcome,
-    ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
-    SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow,
-    TraceRequest, TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags,
-    round_limit, team_read, utc_now,
+    CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest, CardSplitBody,
+    CheckRequest, CliError, FlowRequest, GraphRequest, HealthRequest, InboxRequest, IndexTrust,
+    LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest,
+    RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest,
+    TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View, process_git,
+    project_entry, roadmap_flags, round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -219,6 +220,12 @@ pub(crate) fn router(app: Shared) -> Router {
                 .fallback(only_cards),
         )
         .route("/api/projects/{p}/cards/{id}", read(card))
+        // A static segment beside `{id}`, which no card ID spells
+        // (`docs/features/department-split.md` "Acceptance criteria", S7).
+        .route(
+            "/api/projects/{p}/cards/split",
+            post(split_card).fallback(only_post),
+        )
         .route(
             "/api/projects/{p}/cards/{id}/move",
             post(move_card).fallback(only_post),
@@ -1193,6 +1200,28 @@ async fn new_card(State(app): State<Shared>, request: Request) -> Result<Respons
     hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_new(env, globals, &body.request(utc_now())).map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/split`: `card_split`, past [`new_card`]'s door
+/// (`docs/canon/card-split.md` "The rule"; `docs/features/department-split.md`
+/// "Acceptance criteria", S7): a parent and a subtask per `child`, all or
+/// none, or the plan with `dry_run`. Then one call in the project's turn,
+/// one clock reading: 200 the split document, written or planned, 400 a body,
+/// a person or a usage rule, 409 refused (the document, its reason the last
+/// note; a missing parent too, the path naming no card), 503 cannot run
+/// (`answer.rs`). On a hub a plain write: any login, `as` its login
+/// ([`hub::acting`]), a dry run too; `[team]` is not read.
+async fn split_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(request.uri())?;
+    same_origin(request.headers())?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CardSplitBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_split(env, globals, &body.request(utc_now()))
+            .map(|outcome| Outcome::CardSplit(Box::new(outcome)))
     })
     .await)
 }

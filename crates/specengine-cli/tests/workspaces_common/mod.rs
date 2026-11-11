@@ -39,15 +39,18 @@ pub const PRESS_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\"
      \"kinds\":null}]}";
 
 /// docs/features/departments.md DP-3: studio-lamp's `spec workspace`
-/// text, the preset's four workspaces, two rooted modules and the direction
+/// text, the preset's workspaces (five since docs/features/department-split.md
+/// S9, `sound` before `production`), two rooted modules and the direction
 /// `scenes`.
-pub const LAMP_TEXT: &str = "workspaces config | workspaces 4, modules 3\n\
+pub const LAMP_TEXT: &str = "workspaces config | workspaces 5, modules 3\n\
      workspace writing | Writing | landing flow | sections flow, tree, board, questions, inbox | \
      flows narrative | module (none)\n\
      workspace development | Development | landing board | sections board, inbox, tree, flow, \
      graph, health, roadmap, questions | flows development | module (none)\n\
      workspace art | Art and levels | landing board | sections board, flow, tree, questions, \
      inbox | flows art, level-design | module (none)\n\
+     workspace sound | Sound | landing board | sections board, flow, tree, questions, inbox | \
+     flows sound | module (none)\n\
      workspace production | Production | landing overview | sections inbox, roadmap, board, \
      flow, tree, graph, health, questions | flows (all) | module (none)\n\
      module shore | The shore | root CHP-SHORE\n\
@@ -66,10 +69,13 @@ pub const LAMP_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\":
      \"questions\"],\"flows\":[\"development\"],\"disciplines\":[\"development\"],\"module\":null},\
      {\"name\":\"art\",\"title\":\"Art and levels\",\"landing\":\"board\",\"sections\":[\"board\",\
      \"flow\",\"tree\",\"questions\",\"inbox\"],\"flows\":[\"art\",\"level-design\"],\
-     \"disciplines\":[\"art\",\"level-design\"],\"module\":null},{\"name\":\"production\",\"title\":\
+     \"disciplines\":[\"art\",\"level-design\"],\"module\":null},{\"name\":\"sound\",\"title\":\
+     \"Sound\",\"landing\":\"board\",\"sections\":[\"board\",\"flow\",\"tree\",\"questions\",\
+     \"inbox\"],\"flows\":[\"sound\"],\"disciplines\":[\"sound\"],\"module\":null},{\"name\":\
+     \"production\",\"title\":\
      \"Production\",\"landing\":\"overview\",\"sections\":[\"inbox\",\"roadmap\",\"board\",\"flow\",\
      \"tree\",\"graph\",\"health\",\"questions\"],\"flows\":null,\"disciplines\":[\"narrative\",\
-     \"development\",\"art\",\"level-design\",\"production\"],\"module\":null}],\"modules\":[{\"name\":\
+     \"development\",\"art\",\"level-design\",\"production\",\"sound\"],\"module\":null}],\"modules\":[{\"name\":\
      \"shore\",\"title\":\"The shore\",\"root\":\"CHP-SHORE\",\"kinds\":null},{\"name\":\"island\",\
      \"title\":\"The lamp island\",\"root\":\"ISL-LAMP\",\"kinds\":null},{\"name\":\"scenes\",\
      \"title\":\"Scenes\",\"root\":null,\"kinds\":[\"scene\"]}]}";

@@ -84,10 +84,11 @@ const PRESS_LIST_JSON: &str = "{\"flows\":[{\"name\":\"copy\",\"title\":\"Copy d
      \"checked\",\"to\":\"struck\"},\"return\":null}],\"cards\":[],\"notes\":[],\"truncated\":false,\
      \"omitted\":null}\n";
 
-/// The preset's five flows, `(name, columns, accept.from, accept.to)`, as
+/// The preset's flows, `(name, columns, accept.from, accept.to)`, as
 /// docs/canon/workspaces.md "Preset" and docs/canon/card-flows.md "Config"
-/// give them: `sent-back` second in each.
-const LAMP_FLOWS: [(&str, &[&str], &str, &str); 5] = [
+/// give them: `sent-back` second in each. Six since
+/// docs/features/department-split.md "Acceptance criteria", S9 (`sound`).
+const LAMP_FLOWS: [(&str, &[&str], &str, &str); 6] = [
     (
         "narrative",
         &[
@@ -151,6 +152,20 @@ const LAMP_FLOWS: [(&str, &[&str], &str, &str); 5] = [
         &["to-do", "sent-back", "in-progress", "review", "done"],
         "review",
         "done",
+    ),
+    (
+        "sound",
+        &[
+            "backlog",
+            "sent-back",
+            "design",
+            "recording",
+            "implementation",
+            "review",
+            "in-game",
+        ],
+        "review",
+        "in-game",
     ),
 ];
 
@@ -610,7 +625,7 @@ fn bh13_flows_serve_return_after_accept() {
     let document = listed.json();
     let ordered = Ordered::of(&listed.stdout);
     let flows = document["flows"].as_array().expect("flows");
-    assert_eq!(flows.len(), 5);
+    assert_eq!(flows.len(), 6, "department-split S9: `sound` sixth");
     for (index, (flow, (name, columns, from, to))) in flows.iter().zip(LAMP_FLOWS).enumerate() {
         assert_eq!(
             ordered.get("flows").at(index).keys(),
@@ -1289,7 +1304,11 @@ fn bh19_list_parent_lists_exactly_its_children() {
         )
     );
     let document = doc(&pair, &["card", "list", "--parent", "C-0001"]);
-    assert_eq!(document["flows"].as_array().map(Vec::len), Some(5));
+    // department-split S9: the preset's six flows, `sound` the sixth.
+    assert_eq!(
+        document["flows"].as_array().map(Vec::len),
+        Some(LAMP_FLOWS.len())
+    );
     assert!(
         document["cards"]
             .as_array()
@@ -1337,7 +1356,11 @@ fn bh19_no_child_lists_none_and_a_bad_id_exits_2() {
         let document = doc(&pair, &["card", "list", "--parent", id]);
         assert_eq!(document["cards"], json!([]), "{id}");
         assert_eq!(document["notes"], json!([]), "{id}");
-        assert_eq!(document["flows"].as_array().map(Vec::len), Some(5), "{id}");
+        assert_eq!(
+            document["flows"].as_array().map(Vec::len),
+            Some(LAMP_FLOWS.len()),
+            "{id}"
+        );
     }
     let before = state(&pair);
     let look_alike = "\u{0421}-0001";

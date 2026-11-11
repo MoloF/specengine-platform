@@ -672,6 +672,31 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"card_id": "C-0001", "reviewer": "ben"}),
             ],
         ),
+        // docs/features/department-split.md "Acceptance criteria", S8: a
+        // split on a node and under a stored card, a dry run, and the
+        // refusals (no person, no such parent, a look-alike, no child): each
+        // a result; a wrong type, `as` and an unknown field are bad
+        // arguments. Its cards are queue rows under `HOME`.
+        "split_card" => (
+            vec![
+                json!({"target": ["MEC-STAMINA"], "title": "Split", "child": ["design"],
+                    "reviewer": "ana"}),
+                json!({"parent": "C-0001", "child": ["design", "art"], "reviewer": "ana"}),
+                json!({"target": ["MEC-STAMINA"], "title": "Plan", "dry_run": true}),
+                json!({"title": "No person", "child": ["design"]}),
+                json!({"parent": "C-0999", "child": ["design"], "reviewer": "ana"}),
+                json!({"parent": "\u{0421}-0001", "child": ["design"], "reviewer": "ana"}),
+                json!({"title": "No child", "child": [], "reviewer": "ana"}),
+                json!({}),
+            ],
+            vec![
+                json!({"title": 7}),
+                json!({"title": "T", "child": "design"}),
+                json!({"title": "T", "dry_run": "yes"}),
+                json!({"title": "T", "child": ["design"], "as": "ana"}),
+                json!({"title": "T", "bogus": true}),
+            ],
+        ),
         // docs/features/impact.md TE-6: spec-a has no `[code]`, so a REF
         // answers with no code (exit 0), `depth` too; a REF naming nothing
         // is exit 1, a look-alike and `depth: -1` exit 2, `symbol` the

@@ -9,6 +9,9 @@ import type { MoveChoice } from "./MoveMenu";
 const AskDialog = lazy(() => import("./CardItems").then((module) => ({ default: module.AskDialog })));
 const DecideDialog = lazy(() => import("./CardItems").then((module) => ({ default: module.DecideDialog })));
 
+/** Split to departments, a chunk of its own, loaded once pressed (docs/features/department-split.md "Acceptance criteria", U1). */
+const SplitDialog = lazy(() => import("./SplitDialog").then((module) => ({ default: module.SplitDialog })));
+
 // What a card's acts open, shared by the Board (a tile, the modal) and the card's page: the dialog
 // of each write, and the lines of the Move menu. Each dialog is one call; what follows a write
 // (focus, the live region, the notes) is the caller's (`ui/README.md` "Screen rules", Dialogs).
@@ -22,7 +25,7 @@ export type OpenDialog =
   | { action: "accept"; card: AcceptTarget; trigger: HTMLElement | null }
   | { action: "handoff"; card: HandOffSource; trigger: HTMLElement | null }
   | { action: "return"; card: ReturnTarget; to: string; before: string | null; trigger: HTMLElement | null }
-  | { action: "edit" | "assign" | "cancel" | "clear" | "ask" | "decide"; card: Card; trigger: HTMLElement | null };
+  | { action: "edit" | "assign" | "cancel" | "clear" | "ask" | "decide" | "split"; card: Card; trigger: HTMLElement | null };
 
 /** How a write's outcome is said around the card's ID, the answer's place at hand. */
 export type Said = (id: string) => string;
@@ -30,7 +33,8 @@ export type Said = (id: string) => string;
 /**
  * The open dialog. `current` gives each write the card as read now, so a submit goes on its current
  * revision; `onWritten` hears the answer, how to say it, and whether focus follows the card;
- * `onRaised` what to say once a question or a decision is stored on it, no card having moved.
+ * `onRaised` what to say once a question or a decision is stored on it, or a split made its
+ * subtasks, the card itself not having moved.
  */
 export function CardActDialog({
   project,
@@ -171,6 +175,23 @@ export function CardActDialog({
           <DecideDialog project={project} card={current.card(dialog.card)} onClose={onClose} onActingLine={onActingLine} onRaised={onRaised} />
         </Suspense>
       );
+    case "split": {
+      // The card is the parent: only subtasks are made, and the card is no write's (docs/canon/card-split.md "The rule").
+      const parent = current.card(dialog.card);
+      return (
+        <Suspense fallback={null}>
+          <SplitDialog
+            project={project}
+            source={{ parent: parent.id, reviewer: parent.reviewer }}
+            onClose={onClose}
+            onActingLine={onActingLine}
+            onDone={(answer) => {
+              onRaised(t("board.split.doneCard", { id: parent.id, count: answer.children.length }));
+            }}
+          />
+        </Suspense>
+      );
+    }
     case "cancel":
       return (
         <CancelCardDialog

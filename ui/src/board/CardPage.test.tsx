@@ -46,7 +46,7 @@ describe("a card's page (BH-6)", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("link", { name: "Open on the board" }).getAttribute("href")).toBe("#/alpha/board/C-0001");
     // The work item's order (DF-6 of design-foundation): the head's acts, Move in the side column's Status.
-    expect(within(screen.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Return", "Edit", "Assign", "Cancel task"]);
+    expect(within(screen.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Split to departments…", "Return", "Edit", "Assign", "Cancel task"]);
     expect(within(screen.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
     expect(within(await screen.findByRole("region", { name: "Goal" })).getByText("What it is for")).toBeTruthy();
     // Relies on and the row each link the open child (docs/features/handoff-progress.md "Acceptance criteria", HP-5).

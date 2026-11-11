@@ -1902,14 +1902,18 @@ fn code_mirrors_pin_the_q35_types() {
 /// bytes), [`EVIDENCE_CLAUSE`] cut (32 bytes); [`as_of_card_store`] takes that
 /// back. 2 048, the limit again, since docs/features/trace-views.md:
 /// `get_flow` gains [`TRACE_INPUT`] (8 bytes); [`as_of_card_trace`] takes that
-/// back.
+/// back. 2 048 still since docs/features/department-split.md
+/// "Acceptance criteria", S8 (the orchestrator's decision): the cards line
+/// names `split_card` and `split` ([`SPLIT_WORDS`], 18 bytes), `search` loses
+/// [`SEARCH_INPUTS`] (18 bytes, still in its schema);
+/// [`as_of_department_split`] takes that back.
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec in git. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
     "\n",
     "Reads:\n",
     "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = ",
-    "show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, ",
+    "show; search(query, kinds?) = search; get_context_bundle(node_ids, ",
     "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
     "pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?, \
      trace?) = flow; get_trace(ref?) = trace.\n",
@@ -1925,8 +1929,8 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- review_proposal = review --brief after the owner's form; only when the owner asks.\n",
     "- get_task, claim_task, submit_plan, report_run, complete_task = spec task ",
     "show|claim|plan|report|complete.\n",
-    "- list_cards, get_card, create_card, edit_card, move_card = spec card ",
-    "list|show|new|edit|move; no tool accepts.\n",
+    "- list_cards, get_card, create_card, split_card, edit_card, move_card = spec card ",
+    "list|show|new|split|edit|move; no tool accepts.\n",
     "\n",
     "REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: ",
     "--kind is kinds, ROOT is root, --links, --bindings are with items. Answers are cut at ",
@@ -1942,9 +1946,35 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
 );
 
 /// docs/features/card-store.md "MCP": the cards line, its LF included (112
-/// bytes), right after the tasks line.
-const CARDS_LINE: &str = "- list_cards, get_card, create_card, edit_card, move_card = spec card \
-                          list|show|new|edit|move; no tool accepts.\n";
+/// bytes), right after the tasks line; [`CARDS_LINE`] since
+/// department-split.
+const CARD_STORE_CARDS_LINE: &str = "- list_cards, get_card, create_card, edit_card, move_card = \
+                                     spec card list|show|new|edit|move; no tool accepts.\n";
+
+/// docs/features/department-split.md S8: the cards line naming `split_card`
+/// and `split`, its LF included (130 bytes).
+const CARDS_LINE: &str = "- list_cards, get_card, create_card, split_card, edit_card, move_card = \
+                          spec card list|show|new|split|edit|move; no tool accepts.\n";
+
+/// docs/features/department-split.md S8: what the cards line gains (18
+/// bytes) ...
+const SPLIT_WORDS: [&str; 2] = ["split_card, ", "split|"];
+
+/// ... and what `search`'s clause loses for it (18 bytes), its inputs kept in
+/// its schema.
+const SEARCH_INPUTS: &str = ", limit?, archive?";
+
+/// trace-views' text (2 048 bytes) out of department-split's: the cards
+/// line and `search`'s inputs as they were.
+fn as_of_department_split(instructions: &str) -> String {
+    instructions
+        .replacen(CARDS_LINE, CARD_STORE_CARDS_LINE, 1)
+        .replacen(
+            "search(query, kinds?) = search",
+            &format!("search(query, kinds?{SEARCH_INPUTS}) = search"),
+            1,
+        )
+}
 
 /// docs/features/card-store.md "MCP": what makes room for [`CARDS_LINE`]
 /// beside the 0 bytes left (83 + 30 = 113 bytes).
@@ -1984,7 +2014,7 @@ fn as_of_card_store(instructions: &str) -> String {
 /// [`CARDS_LINE`] taken out, the two cuts put back.
 fn as_of_flow_read(instructions: &str) -> String {
     instructions
-        .replacen(CARDS_LINE, "", 1)
+        .replacen(CARD_STORE_CARDS_LINE, "", 1)
         .replacen(
             "show|claim|plan|report|complete.\n",
             &format!("show|claim|plan|report|complete{TASK_ID_CLAUSE}.\n"),
@@ -2065,9 +2095,10 @@ const SINCE_INPUT: &str = "|since";
 /// docs/features/impact.md "INSTRUCTIONS": the reads' line, its LF
 /// included (312 bytes; 318 since docs/features/impact-since.md; 350 since
 /// docs/features/flow-read.md; 375 since docs/features/card-trace.md; 383 since
-/// docs/features/trace-views.md).
+/// docs/features/trace-views.md; 365 since docs/features/department-split.md,
+/// [`SEARCH_INPUTS`] cut).
 const READS_LINE: &str = "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = \
-                          show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, \
+                          show; search(query, kinds?) = search; get_context_bundle(node_ids, \
                           budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, \
                           pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, \
                           depth?, trace?) = flow; get_trace(ref?) = trace.\n";
@@ -2128,8 +2159,14 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// docs/features/show-bindings.md, docs/features/impact.md,
 /// docs/features/impact-since.md, docs/features/review-form.md,
 /// docs/features/flow-read.md, docs/features/card-store.md,
-/// docs/features/card-trace.md and docs/features/trace-views.md).
-const PLANNED_BLAKE3: &str = "bfaa9e7888de1025f06d68969a727d585b889547254d747427b6c567aefa6bb4";
+/// docs/features/card-trace.md, docs/features/trace-views.md and
+/// docs/features/department-split.md).
+const PLANNED_BLAKE3: &str = "7de2fdaa1885277df812c2e368a1fce532f8fc5aba6db0e6185ead5fbe87d351";
+
+/// trace-views' text (2 048 bytes), [`as_of_department_split`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/department-split.md.
+const TRACE_VIEWS_BLAKE3: &str = "bfaa9e7888de1025f06d68969a727d585b889547254d747427b6c567aefa6bb4";
 
 /// card-trace's text (2 040 bytes), [`as_of_card_trace`] over
 /// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
@@ -2184,14 +2221,15 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
 /// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 940
-/// bytes since docs/features/trace-views.md); card-trace's 1 932 was
+/// bytes since docs/features/trace-views.md, trace-views' `3dce41d9…`, and
+/// department-split's); card-trace's 1 932 was
 /// `576f7ffe…`, card-store's 1 939
 /// `6e322b8c…`, flow-read's 1 910 `322b35f2…`, review-form's 1 902
 /// `f0924769…`, impact-since's 1 885
 /// `381344b2…`, impact's 1 879 `523f0715…`, show-bindings' 1 839
 /// `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "3dce41d92a1ddf690092d4d41553ae9fcad38d0e5e003e86bee12fb8e9a1197f";
+    "a975a81193ece079d8ce216a16768cda8c163faf56ce1f72ecb98da72e2eb2e5";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -2242,7 +2280,11 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TRACE_INPUT.len(), 8);
     assert_eq!(TRACE_READ.len(), 25);
     assert_eq!(EVIDENCE_CLAUSE.len(), 32);
-    assert_eq!(CARDS_LINE.len(), 112);
+    assert_eq!(CARD_STORE_CARDS_LINE.len(), 112);
+    // docs/features/department-split.md S8: 18 bytes in, 18 out.
+    assert_eq!(CARDS_LINE.len(), 130);
+    assert_eq!(SPLIT_WORDS.concat().len(), 18);
+    assert_eq!(SEARCH_INPUTS.len(), 18);
     assert_eq!(ERROR_SENTENCE.len() + TASK_ID_CLAUSE.len(), 113);
     assert_eq!(FLOW_READ.len(), 32);
     assert_eq!(WITH_HINTS.len() - WITH_ITEMS.len(), 24);
@@ -2254,7 +2296,7 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(ROADMAP_READ.len(), 40);
     assert_eq!(IMPACT_READ.len(), 46);
     assert_eq!(SINCE_INPUT.len(), 6);
-    assert_eq!(READS_LINE.len(), 383, "the spec's reads line");
+    assert_eq!(READS_LINE.len(), 365, "the spec's reads line");
     assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
     assert_eq!(BINDINGS_HINT.len(), 33);
     assert_eq!(NO_PROJECT_GLOSS.len(), 34);
@@ -2290,7 +2332,15 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
     assert_eq!(instructions.matches(IMPACT_READ).count(), 1);
-    let card_trace = as_of_card_trace(instructions);
+    // The text before docs/features/department-split.md: trace-views' 2 048.
+    let trace_views = as_of_department_split(instructions);
+    assert_eq!(trace_views.len(), 2048);
+    assert_eq!(
+        blake3_hex(trace_views.as_bytes()),
+        TRACE_VIEWS_BLAKE3,
+        "only `split_card` and `split` were added and `search`'s two inputs cut"
+    );
+    let card_trace = as_of_card_trace(&trace_views);
     assert_eq!(card_trace.matches(FLOW_READ).count(), 1);
     assert_eq!(instructions.matches(CHECK_BINDING_CLAUSE).count(), 1);
     assert_eq!(instructions.matches(WITH_ITEMS).count(), 1);
@@ -2439,7 +2489,9 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
-    let card_trace = as_of_card_trace(PLANNED_INSTRUCTIONS);
+    let trace_views = as_of_department_split(PLANNED_INSTRUCTIONS);
+    assert_eq!(blake3_hex(trace_views.as_bytes()), TRACE_VIEWS_BLAKE3);
+    let card_trace = as_of_card_trace(&trace_views);
     assert_eq!(blake3_hex(card_trace.as_bytes()), CARD_TRACE_BLAKE3);
     let card_store = as_of_card_store(&card_trace);
     assert_eq!(blake3_hex(card_store.as_bytes()), CARD_STORE_BLAKE3);

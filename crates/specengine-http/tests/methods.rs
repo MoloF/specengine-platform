@@ -72,8 +72,10 @@ const ROUND_ANSWERS: &str = "/api/projects/lantern-keep/round/answers";
 const CARDS: &str = "/api/projects/lantern-keep/cards";
 
 /// The six writes on one card, and a group's clear
-/// (docs/features/card-trace.md).
-const CARD_WRITES: [&str; 7] = [
+/// (docs/features/card-trace.md), and a split
+/// (docs/features/department-split.md "Acceptance criteria", S7: a static
+/// segment beside `.../cards/:id`, POST alone).
+const CARD_WRITES: [&str; 8] = [
     "/api/projects/lantern-keep/cards/C-0001/move",
     "/api/projects/lantern-keep/cards/C-0001/edit",
     "/api/projects/lantern-keep/cards/C-0001/assign",
@@ -81,6 +83,7 @@ const CARD_WRITES: [&str; 7] = [
     "/api/projects/lantern-keep/cards/C-0001/accept",
     "/api/projects/lantern-keep/cards/C-0001/clear",
     "/api/projects/lantern-keep/trace/clear",
+    "/api/projects/lantern-keep/cards/split",
 ];
 
 /// Paths no route serves (`tasks/:id/transition`, 07 s3, stays one:

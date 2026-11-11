@@ -817,11 +817,12 @@ describe("the card's modal", () => {
   // The work item's order (DF-6 of design-foundation): Accept first and primary in accept.from, Cancel
   // card last; Move stands in the side column's Status. A card with a target asks and records after
   // Return's place (docs/features/card-questions.md "Acceptance criteria", U3).
-  it("offers Accept first and primary, in accept.from alone, then Hand off, Ask a question…, Record a decision…, Edit, Assign and Cancel card, with Move in the side column's Status; no Return in a flow that names none", async () => {
+  it("offers Accept first and primary, in accept.from alone, then Hand off, Split to departments… (U1 of department-split), Ask a question…, Record a decision…, Edit, Assign and Cancel card, with Move in the side column's Status; no Return in a flow that names none", async () => {
     const panel = within(await panelOf(FULL));
     expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Accept",
       "Hand off",
+      "Split to departments…",
       "Ask a question…",
       "Record a decision…",
       "Edit",
@@ -829,11 +830,14 @@ describe("the card's modal", () => {
       "Cancel task",
     ]);
     expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
+    // Each act opens a dialog and says so, Split to departments… among them; Move opens a menu.
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.getAttribute("aria-haspopup"))).toEqual(Array<string>(8).fill("dialog"));
+    expect(panel.getByRole("button", { name: "Move" }).getAttribute("aria-haspopup")).toBe("menu");
   });
 
   it("has no Accept outside accept.from", async () => {
     const panel = within(await panelOf({ ...FULL, column: "todo" }));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Ask a question…", "Record a decision…", "Edit", "Assign", "Cancel task"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Split to departments…", "Ask a question…", "Record a decision…", "Edit", "Assign", "Cancel task"]);
     expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
   });
 
@@ -1484,7 +1488,7 @@ describe("the card against its brief", () => {
     await open(client, "#/alpha/board/C-0001");
     const panel = await modal("The card");
     expect((await within(panel).findByText(sentence(/could not be read: the index is locked/))).textContent).toContain("The state of this task's targets");
-    expect(within(panel).getByRole("button", { name: "Clear" })).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "Clear" }).getAttribute("aria-haspopup")).toBe("dialog");
     expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
   });
 

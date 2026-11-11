@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts there and defers tools behind tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, tasks, cards, REF, the cut, resources, rules (`server.rs`), 2 048 B in every build, 1 940 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): none left: `get_trace`'s `stage?`, `summary?` and `get_flow`'s `stage?`, `in_flow?` stay in their schemas, `FLOW_DESCRIPTION` at 2 048 with no room for `[--in-flow]`. Each description <= 2 048 (`get_node` 1 670), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts there and defers tools behind tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, tasks, cards, REF, the cut, resources, rules (`server.rs`), 2 048 B in every build, 1 940 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): none left: `search`'s `limit?`, `archive?` (0.37.0), `get_trace`'s `stage?`, `summary?` and `get_flow`'s `stage?`, `in_flow?` stay in their schemas, `FLOW_DESCRIPTION` at 2 048 with no room for `[--in-flow]`. Each description <= 2 048 (`get_node` 1 670), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
@@ -59,12 +59,12 @@ AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8-28 ms, warm 2-6 ms; 83 docs 
 AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Recorded 2026-10-03**: Claude Code 2.1.288, `claude --mcp-config fixtures/mcp/mcp.json --strict-mcp-config` from the repository root, `MAX_MCP_OUTPUT_TOKENS` unset.
 
 - `${…}` expands: the DB landed in the scratch `HOME`, not the owner's data directory. `/mcp`: 7 tools, the `probes` set.
-- cwd = the session's: `get_tree {}` used this repository's config.
+- cwd = the session's: `get_tree {}` used this repository's.
 - The four tools work (`get_context_bundle ADR-0031` at budget 2 000: 385 tokens).
 - `structuredContent` reaches the model: it gave `end_line` 18, `utf8` `true` of `get_node ADR-0031` (JSON only; `wc -l` 18).
 - Content only (`probe_output`, no lever): 48 000 characters inline; 60 000, 104 000, 200 000 stored in a file: the content cap lies in 48 000-60 000.
 - Above it in total, `get_node` of 05 (text ≈ 40 000 characters, the same in `structuredContent`) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished.
-- `@specengine:` lists the template and documents by path, not the `tree` resource.
+- `@specengine:` lists the template and documents by path, not `tree`.
 - Not verified: which explanation holds (a probe with the lever; one with small text, large `structuredContent`); UTF-16 counting; the adversarial maxima (Size); `nextCursor` (< 200 resources here); inserting a node by `@`-mention.
 
 ## Tests

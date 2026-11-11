@@ -36,8 +36,8 @@ show|claim|plan|report|complete."
 /// "MCP").
 macro_rules! cards_line {
     () => {
-        "- list_cards, get_card, create_card, edit_card, move_card = spec card \
-list|show|new|edit|move; no tool accepts."
+        "- list_cards, get_card, create_card, split_card, edit_card, move_card = spec card \
+list|show|new|split|edit|move; no tool accepts."
     };
 }
 
@@ -70,7 +70,10 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// (25 bytes) and cuts report_drift's `; evidence computed, never typed` (32
 /// bytes): 2 040 bytes; task spec `trace-views` adds `trace?` to `get_flow`
 /// (8 bytes): 2 048 bytes, the limit, so `get_trace`'s `stage?, summary?` (18
-/// bytes) stay in its schema alone.
+/// bytes) stay in its schema alone; task spec `department-split` adds
+/// `split_card` to the cards line, as a hub's has it (18 bytes), so
+/// `search`'s `limit?, archive?` (18 bytes) stay in its schema alone: 2 048
+/// bytes, the limit.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
@@ -78,7 +81,7 @@ output, structuredContent its --json document.
 
 Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
-search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
+search(query, kinds?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
 get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?, trace?) = flow; \
 get_trace(ref?) = trace.

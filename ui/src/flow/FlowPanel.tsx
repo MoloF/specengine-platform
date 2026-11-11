@@ -113,8 +113,14 @@ function Counts({ counts }: { counts: TraceCounts | null }) {
   );
 }
 
-/** Open document, the primary, and New card: a document's ways on from the panel. */
-function Acts({ name, onNewCard, children }: { name: string; onNewCard: (name: string, trigger: HTMLElement) => void; children?: ReactNode }) {
+/** What the panel's Split to departments… opens on: the node, as New task presets it, and its title for the parent's. */
+export type SplitAsked = (name: string, title: string, trigger: HTMLElement) => void;
+
+/**
+ * Open document, the primary, New card and Split to departments… (docs/features/department-split.md
+ * "Acceptance criteria", U1): a document's ways on from the panel.
+ */
+function Acts({ name, title, onNewCard, onSplit, children }: { name: string; title: string; onNewCard: (name: string, trigger: HTMLElement) => void; onSplit: SplitAsked; children?: ReactNode }) {
   const t = useTranslate();
   return (
     <p className="flow-panel-actions">
@@ -136,6 +142,15 @@ function Acts({ name, onNewCard, children }: { name: string; onNewCard: (name: s
         }}
       >
         {t("flow.newCard")}
+      </Button>
+      <Button
+        icon="workspace"
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          onSplit(name, title, event.currentTarget);
+        }}
+      >
+        {t("board.split.act")}
       </Button>
       {children}
     </p>
@@ -172,12 +187,14 @@ export function ScopeView({
   scope,
   headingRef,
   onNewCard,
+  onSplit,
   children,
 }: {
   project: string;
   scope: ScopeShown;
   headingRef: Ref<HTMLHeadingElement>;
   onNewCard: (name: string, trigger: HTMLElement) => void;
+  onSplit: SplitAsked;
   children: ReactNode;
 }) {
   const t = useTranslate();
@@ -190,7 +207,7 @@ export function ScopeView({
       </header>
       <Counts counts={scope.counts} />
       {scope.name !== null && scope.read !== null && <Lead project={project} name={scope.name} read={scope.read} />}
-      {scope.name !== null && <Acts name={scope.name} onNewCard={onNewCard} />}
+      {scope.name !== null && <Acts name={scope.name} title={scope.title} onNewCard={onNewCard} onSplit={onSplit} />}
       {children}
       {scope.name !== null && (
         <TechnicalDetails>
@@ -225,6 +242,7 @@ export function BoxView({
   enterPlace,
   onBack,
   onNewCard,
+  onSplit,
   children,
 }: {
   project: string;
@@ -242,6 +260,7 @@ export function BoxView({
   enterPlace: (name: string) => FlowPlace;
   onBack: () => void;
   onNewCard: (name: string, trigger: HTMLElement) => void;
+  onSplit: SplitAsked;
   /** Under the acts: the note of a card made from this box. */
   children?: ReactNode;
 }) {
@@ -276,7 +295,7 @@ export function BoxView({
       </p>
       {isGroup(node) && <Counts counts={node.counts} />}
       <Lead project={project} name={name} read={read} />
-      <Acts name={name} onNewCard={onNewCard}>
+      <Acts name={name} title={title} onNewCard={onNewCard} onSplit={onSplit}>
         {isGroup(node) && (
           <a className="button" href={flowHash(project, enterPlace(name))}>
             <Icon name="chevronRight" />

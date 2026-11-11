@@ -2194,8 +2194,11 @@ fn every_route_in(source: &str) -> Vec<String> {
 /// The card routes of docs/canon/board-ui.md "Routes", the two reads and the
 /// six writes: a hand-off is `POST .../cards`, a return `POST .../move`; and
 /// since docs/features/card-questions.md L3 a card's raise, `POST .../items`.
-const CARD_ROUTES: [&str; 9] = [
+const CARD_ROUTES: [&str; 10] = [
     "/api/projects/{p}/cards",
+    // docs/features/department-split.md "Acceptance criteria", S7: a split,
+    // a static segment beside `{id}`.
+    "/api/projects/{p}/cards/split",
     "/api/projects/{p}/cards/{id}",
     "/api/projects/{p}/cards/{id}/accept",
     "/api/projects/{p}/cards/{id}/assign",

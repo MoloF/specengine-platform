@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 49 open, 60 done; current mvp; to mvp 2-3 days; total 13-21 days, 10 unestimated
+roadmap: 48 open, 61 done; current mvp; to mvp 2-3 days; total 13-21 days, 9 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,17 +29,16 @@ roadmap: 49 open, 60 done; current mvp; to mvp 2-3 days; total 13-21 days, 10 un
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 9 open, 8 done | 0 days, 9 unestimated
+## release v5 | 8 open, 9 done | 0 days, 8 unestimated
 
 1. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | -
-2. [RM-0100](../roadmap/RM-0100.md) | department-split (Phase 7, v5 step 6c): a task and a subtask per department, in one act | draft | must | -
-3. [RM-0104](../roadmap/RM-0104.md) | task-mandate (Phase 7, v5 step 6d): a subtask is binding, or its department decides | draft | must | - | waits on RM-0100
-4. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
-5. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
-6. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0059, RM-0060
-7. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a config proposal | draft | could | -
-8. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
-9. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+2. [RM-0104](../roadmap/RM-0104.md) | task-mandate (Phase 7, v5 step 6d): a subtask is binding, or its department decides | draft | must | -
+3. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
+4. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
+5. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0059, RM-0060
+6. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a config proposal | draft | could | -
+7. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
+8. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
 
 ## pool | 33 open, 1 done | 7-12 days, 29 unestimated
 
@@ -50,7 +49,7 @@ roadmap: 49 open, 60 done; current mvp; to mvp 2-3 days; total 13-21 days, 10 un
 - [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | -
 - [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0035, RM-0036
 - [RM-0070](../roadmap/RM-0070.md) | trial-followups (Phase 7): what the second trial and earlier review left | draft | should | -
-- [RM-0105](../roadmap/RM-0105.md) | upstream-signal (Phase 7, pool): a subtask shows that its parent changed above it | draft | should | - | waits on RM-0100
+- [RM-0105](../roadmap/RM-0105.md) | upstream-signal (Phase 7, pool): a subtask shows that its parent changed above it | draft | should | -
 - [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, pool): a direction as a table of its documents | draft | should | - | waits on RM-0035
 - [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, pool): what was delivered, against its estimate, and why it took longer | draft | should | -
 - [RM-0108](../roadmap/RM-0108.md) | card-context (Phase 7, pool): an agent reads a task with its context in one call | draft | should | -

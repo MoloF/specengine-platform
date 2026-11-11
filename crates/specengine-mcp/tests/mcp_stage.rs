@@ -363,7 +363,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&repo.linked), Home::At(&repo.home));
         let list = session.tools();
-        assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty-nine tools");
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}: thirty tools");
         let mut seen = 0;
         for tool in list["tools"].as_array().expect("tools") {
             let name = tool["name"].as_str().unwrap_or_default();

@@ -190,28 +190,9 @@ pub fn tree_with_view(
     };
 
     let mut listed = Vec::new();
-    let mut visited = BTreeSet::new();
-    let mut stack: Vec<(NodeAt, usize, Option<NodeAt>)> =
-        roots.iter().rev().map(|&root| (root, 0, None)).collect();
-    while let Some((at, level, parent)) = stack.pop() {
-        if !visited.insert(at) {
-            continue;
-        }
+    for (at, level, parent) in walked(&graph, &admission, &roots, depth, &mut outcome.left_out) {
         messages.extend(parent_warning(&graph, at));
         listed.push(line_of(&graph, at, level, parent));
-        if depth.is_some_and(|depth| level >= depth) {
-            continue;
-        }
-        for &child in graph.children(at).iter().rev() {
-            if visited.contains(&child) {
-                continue;
-            }
-            if !admission.admits(child.file) {
-                outcome.left_out.add(graph.standing(child.file));
-                continue;
-            }
-            stack.push((child, level + 1, Some(at)));
-        }
     }
     if !request.kinds.is_empty() {
         listed.retain(|node: &TreeNode| {
@@ -233,6 +214,45 @@ pub fn tree_with_view(
         View::Browser => outcome.nodes.len(),
     };
     Ok(outcome)
+}
+
+/// The tree's walk from `roots`, pre-order: a node's nested sections by
+/// position, then its child documents by path, each node once, at most
+/// `depth` levels down (`None`: unbounded); a child of a file `admission`
+/// leaves out is counted in `left_out` and not walked. Each node with its
+/// level and the node it is listed under. `spec card split`'s scope walks
+/// it too, so its rows are the tree's (task spec `department-split` S3).
+pub(crate) fn walked(
+    graph: &SpecGraph<'_>,
+    admission: &Admission<'_, '_>,
+    roots: &[NodeAt],
+    depth: Option<usize>,
+    left_out: &mut LeftOut,
+) -> Vec<(NodeAt, usize, Option<NodeAt>)> {
+    let mut walked = Vec::new();
+    let mut visited = BTreeSet::new();
+    let mut stack: Vec<(NodeAt, usize, Option<NodeAt>)> =
+        roots.iter().rev().map(|&root| (root, 0, None)).collect();
+    while let Some((at, level, parent)) = stack.pop() {
+        if !visited.insert(at) {
+            continue;
+        }
+        walked.push((at, level, parent));
+        if depth.is_some_and(|depth| level >= depth) {
+            continue;
+        }
+        for &child in graph.children(at).iter().rev() {
+            if visited.contains(&child) {
+                continue;
+            }
+            if !admission.admits(child.file) {
+                left_out.add(graph.standing(child.file));
+                continue;
+            }
+            stack.push((child, level + 1, Some(at)));
+        }
+    }
+    walked
 }
 
 fn not_found(mut outcome: TreeOutcome, reason: String, messages: Vec<Message>) -> TreeOutcome {

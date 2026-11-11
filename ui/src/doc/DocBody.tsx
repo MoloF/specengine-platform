@@ -1,11 +1,12 @@
-import { useId, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useId, useRef, useState, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import { useProjects, useTrace, type NodeQuery } from "../api/queries";
-import type { CardWrite, NodeView, ShownNode, TraceDocument } from "../api/types";
+import type { CardSplit, CardWrite, NodeView, ShownNode, TraceDocument } from "../api/types";
 import { docPageHash, flowHash, homeHash, sectionHash } from "../app/routes";
 import { NewCardDialog } from "../board/CardDialogs";
 import { rollupLozenge } from "../flow/labels";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { Prose } from "../markdown/Prose";
 import { splitFrontMatter } from "../markdown/source";
 import { CardsBlock } from "../trace/CardsBlock";
@@ -21,6 +22,9 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { DocInside } from "./DocInside";
 import { DocLinks, PartHeading, type PartLevel } from "./DocLinks";
 import { DocTechnical } from "./DocTechnical";
+
+/** Split to departments, a chunk of its own, loaded once pressed (docs/features/department-split.md "Acceptance criteria", U1). */
+const SplitDialog = lazy(() => import("../board/SplitDialog").then((module) => ({ default: module.SplitDialog })));
 
 // One document as a work item (docs/features/doc-modal.md "Acceptance criteria", DM-12): the parts the
 // frame (./DocFrame.tsx) lays out around its own title, loaded on demand as one chunk: the path from
@@ -124,13 +128,21 @@ function TreeAct({ project, name }: { project: string; name: string }) {
   );
 }
 
-/** The acts: New card (the one primary, its dialog here), Open in Flow under the last ancestor, Open in Spec tree; a REF naming nothing, the last alone. */
+/**
+ * The acts: New card (the one primary, its dialog here), Split to departments… (its dialog a chunk of
+ * its own, the document the parent's target: docs/features/department-split.md "Acceptance criteria",
+ * U1), Open in Flow under the last ancestor, Open in Spec tree; a REF naming nothing, the last alone.
+ * A split made is said in the live region and noted under the acts, the parent a link to its work item.
+ */
 export function DocActs({ project, docRef, holder }: { project: string; docRef: string; holder: ShownNode | undefined }) {
   const t = useTranslate();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
   const newButton = useRef<HTMLButtonElement>(null);
+  const splitButton = useRef<HTMLButtonElement>(null);
   const [creating, setCreating] = useState(false);
+  const [splitting, setSplitting] = useState(false);
+  const [split, setSplit] = useState<{ id: string; count: number } | null>(null);
   if (holder === undefined) {
     return (
       <div className="doc-acts">
@@ -150,6 +162,16 @@ export function DocActs({ project, docRef, holder }: { project: string; docRef: 
     }
   }
 
+  function splitDone(answer: CardSplit | null) {
+    setSplitting(false);
+    focusLater(() => splitButton.current);
+    const id = answer?.parent?.id ?? null;
+    if (answer !== null && id !== null) {
+      setSplit({ id, count: answer.children.length });
+      announce(t("board.split.done", { id, count: answer.children.length }));
+    }
+  }
+
   return (
     <div className="doc-acts">
       <Button
@@ -162,6 +184,17 @@ export function DocActs({ project, docRef, holder }: { project: string; docRef: 
         }}
       >
         {t("doc.newCard")}
+      </Button>
+      <Button
+        ref={splitButton}
+        icon="workspace"
+        aria-haspopup="dialog"
+        onClick={() => {
+          setSplit(null);
+          setSplitting(true);
+        }}
+      >
+        {t("board.split.act")}
       </Button>
       <a className={buttonClasses()} href={flowHash(project, flowPlace)}>
         <Icon name="flowStart" />
@@ -183,6 +216,31 @@ export function DocActs({ project, docRef, holder }: { project: string; docRef: 
             onDone={made}
           />
         </div>
+      )}
+      {splitting && (
+        <div
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <Suspense fallback={null}>
+            <SplitDialog
+              project={project}
+              source={{ target: name, title: holder.title ?? docRef }}
+              heldTraceRef={docRef}
+              onClose={() => {
+                splitDone(null);
+              }}
+              onDone={splitDone}
+            />
+          </Suspense>
+        </div>
+      )}
+      {split !== null && (
+        <p className="note doc-acts-note">
+          <Icon name="info" />
+          <span>{fill(t("board.split.done", { id: slot("id"), count: split.count }), { id: <a href={sectionHash(project, "board", split.id)}>{split.id}</a> })}</span>
+        </p>
       )}
     </div>
   );

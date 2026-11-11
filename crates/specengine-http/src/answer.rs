@@ -151,7 +151,8 @@ enum Answered {
 /// 409 (the refused review document); a card write's alike
 /// (docs/features/board-ui.md "Data"): 404 `{id, reason}`, 409 the write
 /// document, a lost compare-and-set too, 403 a hub's group clear outside the
-/// login's `[team]` cover (docs/features/hub-team.md); a card's raise 404 no
+/// login's `[team]` cover (docs/features/hub-team.md); a split 200 written or
+/// planned, 400 usage, 409 refused; a card's raise 404 no
 /// such card, 409 refused, 200 the intake document stored or not; a
 /// confirm's by its cause too (docs/features/hub-confirm.md "Data").
 fn answered(outcome: &Outcome) -> Answered {
@@ -180,6 +181,11 @@ fn answered(outcome: &Outcome) -> Answered {
             return caused(outcome, Some(status));
         }
         Outcome::CardGroup(group) => return caused(outcome, write_status(group.cause)),
+        // A split: 200 written or planned, 400 a usage rule, 409 refused
+        // with the document; never a 404, the path naming no card
+        // (`docs/features/department-split.md`
+        // "Acceptance criteria", S7).
+        Outcome::CardSplit(split) => return caused(outcome, write_status(split.cause)),
         Outcome::Confirm(confirm) => {
             return match confirm.cause {
                 None => caused(outcome, Some(StatusCode::OK)),

@@ -584,7 +584,7 @@ fn kinds_of(
     }
     let mut kept: Vec<String> = Vec::with_capacity(listed.len());
     for (kind, at) in listed {
-        if let Some(problem) = kind_problem(&kind) {
+        if let Some(problem) = kind_problem("kinds", &kind) {
             errors.push(at, problem);
         } else if kept.contains(&kind) {
             errors.push(at, format!("`kinds`: `{kind}` is listed twice"));
@@ -595,19 +595,22 @@ fn kinds_of(
     Some(kept)
 }
 
-/// Why `kind` is no entry of `kinds`: 1 to [`MAX_KIND_BYTES`] bytes, no
-/// control character, no space at either end.
-fn kind_problem(kind: &str) -> Option<String> {
+/// Why `kind`, written under `key`, is no node kind: 1 to [`MAX_KIND_BYTES`]
+/// bytes, no control character, no space at either end. A direction's
+/// `kinds` and a `[[card.split]]` row's `kind` take these checks
+/// (`docs/features/department-split.md` "Acceptance criteria", S1), each
+/// message opening with its key.
+pub(crate) fn kind_problem(key: &str, kind: &str) -> Option<String> {
     if kind.is_empty() || kind.len() > MAX_KIND_BYTES {
         return Some(format!(
-            "`kinds`: `{kind}` is {} bytes long; a kind has 1 to {MAX_KIND_BYTES}",
+            "`{key}`: `{kind}` is {} bytes long; a kind has 1 to {MAX_KIND_BYTES}",
             kind.len()
         ));
     }
     if kind.chars().any(char::is_control) {
-        return Some("`kinds`: a kind holds a control character".to_owned());
+        return Some(format!("`{key}`: a kind holds a control character"));
     }
-    (kind.trim() != kind).then(|| format!("`kinds`: `{kind}` has a space at an end"))
+    (kind.trim() != kind).then(|| format!("`{key}`: `{kind}` has a space at an end"))
 }
 
 /// The string `value` and its span, else the TOML reader's error (pushed).

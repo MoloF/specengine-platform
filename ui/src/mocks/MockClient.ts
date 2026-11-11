@@ -29,6 +29,8 @@ import type {
   CardMoveBody,
   CardNotFound,
   CardRaiseBody,
+  CardSplit,
+  CardSplitBody,
   CardWrite,
   CheckReport,
   ConfirmBody,
@@ -78,8 +80,11 @@ import {
   mockBoard,
   moveCardIn,
   raiseOnCardIn,
+  splitCardsIn,
+  splitScopeOf,
   type MockBoard,
   type Settled,
+  type MockScopeNode,
   type StoredCard,
 } from "./cards";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
@@ -175,6 +180,8 @@ export class MockClient implements SpecEngineClient {
   private readonly roundConflicted = new Set<string>();
   /** `conflict`: the projects whose first raise on a card has met its corpus hit. */
   private readonly raiseConflicted = new Set<string>();
+  /** `conflict`: the projects whose first split written has met a config changed meanwhile. */
+  private readonly splitConflicted = new Set<string>();
 
   constructor(scenario: Scenario, options: MockOptions = {}) {
     this.scenario = scenario;
@@ -624,6 +631,28 @@ export class MockClient implements SpecEngineClient {
       }
     }
     return structuredClone(answer);
+  }
+
+  /**
+   * A split into this mock's queue, planned or written (src/mocks/cards.ts `splitCardsIn`): its scope
+   * each target's tree read to depth 2, an ID-less document by its path. The `conflict` scenario: a project's first
+   * written split is refused, nothing stored; the next one is taken.
+   */
+  async splitCard(project: string, body: CardSplitBody): Promise<CardSplit> {
+    await this.wait();
+    const meetsConflict = () => {
+      if (this.scenario !== "conflict" || this.splitConflicted.has(project)) {
+        return false;
+      }
+      this.splitConflicted.add(project);
+      return true;
+    };
+    return structuredClone(splitCardsIn(this.board(project), body, (target) => this.scopeOf(project, target), this.stamp(), meetsConflict));
+  }
+
+  /** A split's scope under one target: the tree read's rows to depth 2, as `split_scope` names them (src/mocks/cards.ts `splitScopeOf`). */
+  private scopeOf(project: string, target: string): MockScopeNode[] {
+    return splitScopeOf(target, treeOf(this.project(project).corpus, { root: target, depth: 2 }).nodes);
   }
 
   async createCard(project: string, body: CardCreateBody): Promise<CardWrite> {

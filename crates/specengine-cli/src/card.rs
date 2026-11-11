@@ -66,8 +66,9 @@ use specengine_core::card::{
     estimate_problem, parse_card_id, parse_evidence, reviewer_problem, stale_refusal,
     task_links_problem,
 };
+use specengine_core::card_split::{ScopeNode, SplitPlan, TargetsFrom, split_plan};
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
-use specengine_core::check::{NodeAt, SpecGraph};
+use specengine_core::check::{CheckInput, NodeAt, Resolver, SpecGraph, canonical_id};
 use specengine_core::intake::{
     AuthorInput, DECISION_KIND, DecisionInput, GapType, IntakeSeverity, QUESTION_KIND,
     discrepancy_problem,
@@ -86,12 +87,13 @@ use specengine_model::{
 };
 use specengine_store::{
     CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, Event, GitEnv,
-    IntakeResult, NewCard, NewIntake, Place, Proposal, QueueError, SqliteQueue, WorktreeGit,
+    IntakeResult, NewCard, NewIntake, NewSplit, NewSplitChild, Place, Proposal, QueueError,
+    SplitParent, SqliteQueue, WorktreeGit,
 };
 
 use crate::apply::Consent;
 use crate::cap::{View, lines_within};
-use crate::corpus::{indexed_in, locate};
+use crate::corpus::{Admission, LeftOut, indexed_in, locate};
 use crate::intake::{
     DecisionRequest, IntakeOutcome, IntakeTarget, QuestionRequest, departing_hits,
     departure_intake, prefixed, propose_decision_as, propose_question_as,
@@ -107,7 +109,11 @@ use crate::trace::{
     QueueRead, correction_of, facts_of, fresh_norms, group_marks, held_documents, norms_read,
     settled_of, target_norms, target_places,
 };
-use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, process_git};
+use crate::tree::walked;
+use crate::{
+    CliError, Env, Exit, Globals, Message, SPLIT_DRY_RUN_FLAG, escape_controls, one_line,
+    process_git,
+};
 
 /// How a line prints an absent field.
 const ABSENT: &str = "-";
@@ -117,6 +123,10 @@ const GROUP_REV_IGNORED: &str = "`spec card clear --group` reads the current fil
 
 /// Who a tool acts as (MCP's card tools).
 pub const TOOL_ACTOR: &str = AGENT_ACTOR;
+
+/// How deep under each parent target a split's scope reads: a document's
+/// Inside (task spec `department-split` S2).
+const SCOPE_DEPTH: usize = 2;
 
 /// `spec card new` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1789,6 +1799,571 @@ fn resolved_targets(
     Ok(Ok((targets, norms)))
 }
 
+// -------------------------------------------------------------- split
+
+/// `spec card split` (task spec `department-split` S3): a new parent on
+/// `targets` and `title`, or the stored card `parent`, and one subtask per
+/// `children` entry.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardSplitRequest {
+    /// `--target REF…`, a new parent's, resolved as `new` resolves them.
+    pub targets: Vec<String>,
+    /// `--title T`: required without `parent`, refused with it.
+    pub title: Option<String>,
+    pub goal: Option<String>,
+    /// A new parent's discipline: its flow, as `new` picks one.
+    pub discipline: Option<String>,
+    /// `--parent C`: a stored card, in any state; only subtasks are made.
+    pub parent: Option<String>,
+    /// `--child D…`, each a subtask's discipline in this order; `None` (or
+    /// empty): none named, which a dry run plans as every discipline.
+    pub children: Option<Vec<String>>,
+    /// `--reviewer N`; absent, the stored parent's, else the acting name.
+    pub reviewer: Option<String>,
+    /// `--dry-run`: the plan, nothing written, no person judged.
+    pub dry_run: bool,
+    /// `--as N`; `None`: `local`.
+    pub actor: Option<String>,
+    pub now: String,
+}
+
+/// The body of `POST …/cards/split`: `split_card`'s keys and `as`, every
+/// key optional; the CLI's usage rules judge it after decoding. `child`
+/// `null` or `[]` names none; `dry_run` absent or `null` is false.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardSplitBody {
+    pub target: Option<Vec<String>>,
+    pub title: Option<String>,
+    pub goal: Option<String>,
+    pub discipline: Option<String>,
+    pub parent: Option<String>,
+    pub child: Option<Vec<String>>,
+    pub reviewer: Option<String>,
+    pub dry_run: Option<bool>,
+    /// The acting name; `null`: `local`.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardSplitBody {
+    /// `bytes` decoded, its persons judged as the flags judge them; else
+    /// exit 2 naming the defect, nothing read or changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(
+            bytes,
+            "\"target\",\"title\",\"goal\",\"discipline\",\"parent\",\"child\",\"reviewer\",\
+             \"dry_run\",\"as\"",
+        )?;
+        persons_named(
+            body.actor.as_deref(),
+            &[("reviewer", body.reviewer.as_deref())],
+        )?;
+        Ok(body)
+    }
+
+    /// The request at `now`.
+    pub fn request(self, now: String) -> CardSplitRequest {
+        CardSplitRequest {
+            targets: self.target.unwrap_or_default(),
+            title: self.title,
+            goal: self.goal,
+            discipline: self.discipline,
+            parent: self.parent,
+            children: self.child.filter(|children| !children.is_empty()),
+            reviewer: self.reviewer,
+            dry_run: self.dry_run.unwrap_or(false),
+            actor: self.actor,
+            now,
+        }
+    }
+}
+
+/// A split's parent as its document serves it: made, or as stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CardSplitParent {
+    /// `null` in a dry run.
+    pub id: Option<String>,
+    /// Made by this split; false: a stored card, never written.
+    pub created: bool,
+    pub title: String,
+    pub discipline: Option<String>,
+    pub flow: String,
+    /// The flow's `title`, else its name.
+    pub flow_title: String,
+    pub column: String,
+    pub targets: Vec<String>,
+}
+
+/// One subtask as the split's document serves it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CardSplitChild {
+    /// `null` in a dry run.
+    pub id: Option<String>,
+    pub discipline: String,
+    pub flow: String,
+    pub flow_title: String,
+    pub column: String,
+    pub targets: Vec<String>,
+    /// `kinds`: the nodes of its rows' kinds; `parent`: the parent's
+    /// targets.
+    pub from: TargetsFrom,
+    /// A `[[card.split]]` row matched in the scope lists its discipline.
+    pub suggested: bool,
+}
+
+/// What `spec card split` answered: the document and its exit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardSplitOutcome {
+    pub dry_run: bool,
+    /// `None` when refused.
+    pub parent: Option<CardSplitParent>,
+    pub children: Vec<CardSplitChild>,
+    /// Who accepts each card's result; a dry run's unjudged, `None` when the
+    /// chain ends at no name; `None` when refused.
+    pub reviewer: Option<String>,
+    /// The plan's notes, then a refusal's reason.
+    pub notes: Vec<String>,
+    /// Why nothing was written (exit 1), or the usage line (exit 2).
+    pub refusal: Option<String>,
+    pub cause: Option<CardCause>,
+    pub messages: Vec<Message>,
+}
+
+impl CardSplitOutcome {
+    /// 0 written or planned; 2 a usage defect; 1 refused.
+    pub fn exit(&self) -> Exit {
+        match self.cause {
+            None => Exit::Answered,
+            Some(CardCause::Usage) => Exit::CannotRun,
+            Some(CardCause::Unknown | CardCause::Refused | CardCause::Outside) => Exit::NotFound,
+        }
+    }
+
+    /// A usage defect as the terminal gives it, a [`CliError`]: its one line
+    /// on stderr, stdout empty, `--json` too. Any other outcome as it is.
+    pub fn or_usage_error(self) -> Result<Self, CliError> {
+        match (self.cause, &self.refusal) {
+            (Some(CardCause::Usage), Some(reason)) => Err(CliError::spec(reason)),
+            _ => Ok(self),
+        }
+    }
+
+    fn refused(
+        dry_run: bool,
+        mut notes: Vec<String>,
+        reason: &str,
+        messages: Vec<Message>,
+    ) -> Self {
+        let reason = one_line(reason);
+        notes.push(reason.clone());
+        Self {
+            dry_run,
+            parent: None,
+            children: Vec::new(),
+            reviewer: None,
+            notes,
+            refusal: Some(reason),
+            cause: Some(CardCause::Refused),
+            messages,
+        }
+    }
+
+    fn usage(dry_run: bool, line: &str) -> Self {
+        Self {
+            cause: Some(CardCause::Usage),
+            ..Self::refused(dry_run, Vec::new(), line, Vec::new())
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CardSplitJson<'a> {
+    dry_run: bool,
+    parent: Option<&'a CardSplitParent>,
+    children: &'a [CardSplitChild],
+    reviewer: Option<&'a str>,
+    notes: &'a [String],
+}
+
+/// `{dry_run, parent, children, reviewer, notes}`, every key present.
+impl Serialize for CardSplitOutcome {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        CardSplitJson {
+            dry_run: self.dry_run,
+            parent: self.parent.as_ref(),
+            children: &self.children,
+            reviewer: self.reviewer.as_deref(),
+            notes: &self.notes,
+        }
+        .serialize(serializer)
+    }
+}
+
+/// The first usage defect of `request` (exit 2; the daemon's 400).
+fn split_usage(request: &CardSplitRequest) -> Option<String> {
+    let named = |children: &Option<Vec<String>>| children.as_ref().is_some_and(|c| !c.is_empty());
+    if request.parent.is_some()
+        && (!request.targets.is_empty()
+            || request.title.is_some()
+            || request.goal.is_some()
+            || request.discipline.is_some())
+    {
+        return Some(
+            "--parent C splits under a stored card: give no --target, --title, --goal or \
+             --discipline with it"
+                .to_owned(),
+        );
+    }
+    if request.parent.is_none() && request.title.is_none() {
+        return Some(
+            "a split makes a parent card: give --title T, or --parent C to split under a stored \
+             card"
+                .to_owned(),
+        );
+    }
+    if !named(&request.children) && !request.dry_run {
+        return Some(format!(
+            "name each subtask's discipline with --child, or plan with --{SPLIT_DRY_RUN_FLAG}"
+        ));
+    }
+    None
+}
+
+/// Why `name`, a split's reviewer, can be none: `assign`'s person grammar,
+/// then core's, so `agent` and `local` are no reviewer.
+fn split_reviewer_problem(name: &str) -> Option<String> {
+    (name == CLEAR)
+        .then(|| format!("reviewer: `{CLEAR}` clears a name: a new card has none"))
+        .or_else(|| person_problem("reviewer", name))
+        .or_else(|| reviewer_problem(name).map(|text| format!("reviewer: {text}")))
+}
+
+/// What a split reads of the corpus: the parent's targets, the plan over
+/// their scope, and what every planned target reads now (a write's alone).
+struct SplitRead {
+    targets: Vec<String>,
+    plan: SplitPlan,
+    norms: TargetNorms,
+}
+
+/// `spec card split`: one parent and a subtask per `--child`, all or none
+/// (task spec `department-split` S3, S5); `--dry-run` the plan (S6).
+pub fn card_split(
+    env: &Env,
+    globals: &Globals,
+    request: &CardSplitRequest,
+) -> Result<CardSplitOutcome, CliError> {
+    run_split(env, globals, request).map_err(escaped_error)
+}
+
+fn run_split(
+    env: &Env,
+    globals: &Globals,
+    request: &CardSplitRequest,
+) -> Result<CardSplitOutcome, CliError> {
+    let dry_run = request.dry_run;
+    let refuse = |reason: String, notes: Vec<String>, messages: Vec<Message>| {
+        Ok(CardSplitOutcome::refused(dry_run, notes, &reason, messages))
+    };
+    let now = checked_now(&request.now)?;
+    // 1. Usage, then the config (exit 2).
+    if let Some(line) = split_usage(request) {
+        return Ok(CardSplitOutcome::usage(dry_run, &line));
+    }
+    let actor = actor_of(request.actor.as_deref())?;
+    let parent = match request.parent.as_deref() {
+        Some(written) => Some(linked_card("parent", written)?),
+        None => None,
+    };
+    let mut context = open_cards(env, globals)?;
+    // 3. Fields.
+    let problem = field_problem(
+        request.title.as_deref(),
+        request.goal.as_deref(),
+        request.targets.len(),
+        &[],
+        None,
+        None,
+    )
+    .or_else(|| {
+        request
+            .discipline
+            .as_deref()
+            .and_then(name_problem)
+            .map(|problem| format!("discipline: {problem}"))
+    });
+    if let Some(problem) = problem {
+        return refuse(problem, Vec::new(), Vec::new());
+    }
+    // 4. The stored parent, in any state.
+    let stored = match parent {
+        None => None,
+        Some(Err(reason)) => return refuse(reason, Vec::new(), Vec::new()),
+        Some(Ok(id)) => match context.queue.get_card(&id).map_err(queue_cannot)? {
+            Some(card) => Some(card),
+            None => return refuse(format!("parent: {}", no_card(&id)), Vec::new(), Vec::new()),
+        },
+    };
+    // 5. The reviewer: given, else the stored parent's, else the acting
+    // name; judged for a write alone.
+    let reviewer = request
+        .reviewer
+        .as_deref()
+        .map(|name| card_person(name).to_owned())
+        .or_else(|| stored.as_ref().and_then(|card| card.reviewer.clone()))
+        .unwrap_or_else(|| actor.clone());
+    if !dry_run && let Some(problem) = split_reviewer_problem(&reviewer) {
+        return refuse(problem, Vec::new(), Vec::new());
+    }
+    // 6. Targets and the scope; 7. the plan.
+    let mut messages = Vec::new();
+    let read = match split_read(env, &context, request, stored.as_ref(), &mut messages)? {
+        Ok(read) => read,
+        Err(reason) => return refuse(reason, Vec::new(), messages),
+    };
+    let SplitRead {
+        targets,
+        plan,
+        norms,
+    } = read;
+    let config = &context.config;
+    let (title, goal, parent_view) = match &stored {
+        Some(card) => (
+            card.title.clone(),
+            card.goal.clone(),
+            CardSplitParent {
+                id: None,
+                created: false,
+                title: card.title.clone(),
+                discipline: card.discipline.clone(),
+                flow: card.flow.clone(),
+                flow_title: config
+                    .flow(&card.flow)
+                    .map_or_else(|| card.flow.clone(), |flow| flow.title.clone()),
+                column: card.column.clone(),
+                targets: card.targets.clone(),
+            },
+        ),
+        None => {
+            let flow = match config.flow_for(request.discipline.as_deref()) {
+                Ok(flow) => flow,
+                Err(reason) => return refuse(reason, plan.notes, messages),
+            };
+            let title = request.title.clone().unwrap_or_default();
+            (
+                title.clone(),
+                request.goal.clone(),
+                CardSplitParent {
+                    id: None,
+                    created: true,
+                    title,
+                    discipline: request.discipline.clone(),
+                    flow: flow.name.clone(),
+                    flow_title: flow.title.clone(),
+                    column: flow.first_column().to_owned(),
+                    targets: targets.clone(),
+                },
+            )
+        }
+    };
+    let planned: Vec<CardSplitChild> = plan
+        .children
+        .iter()
+        .map(|child| CardSplitChild {
+            id: None,
+            discipline: child.discipline.clone(),
+            flow: child.flow.clone(),
+            flow_title: child.flow_title.clone(),
+            column: child.column.clone(),
+            targets: child.targets.clone(),
+            from: child.from,
+            suggested: child.suggested,
+        })
+        .collect();
+    if dry_run {
+        return Ok(CardSplitOutcome {
+            dry_run,
+            parent: Some(parent_view),
+            children: planned,
+            reviewer: (!reviewer.is_empty()).then_some(reviewer),
+            notes: plan.notes,
+            refusal: None,
+            cause: None,
+            messages,
+        });
+    }
+    // 8. The store: one transaction, all cards or none.
+    let card_of =
+        |flow: &str, column: &str, discipline: Option<&str>, targets: &[String]| NewCard {
+            flow: flow.to_owned(),
+            column: column.to_owned(),
+            title: title.clone(),
+            goal: goal.clone(),
+            discipline: discipline.map(str::to_owned),
+            targets: targets.to_vec(),
+            criteria: Vec::new(),
+            assignee: None,
+            reviewer: Some(reviewer.clone()),
+            estimate: None,
+            due: None,
+            parent: None,
+            corrects: None,
+            by: actor.clone(),
+        };
+    let split = NewSplit {
+        parent: match &stored {
+            Some(card) => SplitParent::Stored(card.id.clone()),
+            None => SplitParent::New {
+                card: Box::new(card_of(
+                    &parent_view.flow,
+                    &parent_view.column,
+                    request.discipline.as_deref(),
+                    &targets,
+                )),
+                snapshot: freeze(&targets, &norms),
+            },
+        },
+        children: plan
+            .children
+            .iter()
+            .map(|child| NewSplitChild {
+                card: card_of(
+                    &child.flow,
+                    &child.column,
+                    Some(&child.discipline),
+                    &child.targets,
+                ),
+                snapshot: freeze(&child.targets, &norms),
+            })
+            .collect(),
+    };
+    match context.queue.split_cards(&split, now) {
+        Ok(done) => Ok(CardSplitOutcome {
+            dry_run,
+            parent: Some(CardSplitParent {
+                id: Some(done.parent.id.clone()),
+                created: done.created,
+                ..parent_view
+            }),
+            children: planned
+                .into_iter()
+                .zip(&done.children)
+                .map(|(child, card)| CardSplitChild {
+                    id: Some(card.id.clone()),
+                    ..child
+                })
+                .collect(),
+            reviewer: Some(reviewer),
+            notes: plan.notes,
+            refusal: None,
+            cause: None,
+            messages,
+        }),
+        Err(QueueError::CardRefused { reason, .. }) => refuse(reason, plan.notes, messages),
+        Err(error) => Err(queue_cannot(error)),
+    }
+}
+
+/// The parent's targets (`--target` resolved as `new` resolves them, or the
+/// stored parent's as stored), the plan over their scope, and, for a write,
+/// what every target of the split reads now. No target: no index is read,
+/// the scope is empty and every subtask a manual card.
+fn split_read(
+    env: &Env,
+    context: &CardContext,
+    request: &CardSplitRequest,
+    stored: Option<&Card>,
+    messages: &mut Vec<Message>,
+) -> Result<Result<SplitRead, String>, CliError> {
+    let config = &context.config;
+    let chosen = request
+        .children
+        .as_deref()
+        .filter(|children| !children.is_empty());
+    let written = stored.map_or(request.targets.as_slice(), |card| card.targets.as_slice());
+    if written.is_empty() {
+        return Ok(split_plan(config, &[], &[], chosen).map(|plan| SplitRead {
+            targets: Vec::new(),
+            plan,
+            norms: TargetNorms::new(),
+        }));
+    }
+    let project = &context.project;
+    let mut open = open_index(env, project)?;
+    let input = indexed_in(&mut open.index, project, messages, false)?;
+    let targets = match stored {
+        Some(card) => card.targets.clone(),
+        None => match resolved_list(project, &input, written, "target")? {
+            Ok(targets) => targets,
+            Err(reason) => return Ok(Err(reason)),
+        },
+    };
+    let graph = SpecGraph::new(&input, &project.config.scheme, &project.config.paths);
+    let scope = split_scope(project, &input, &graph, &targets);
+    let plan = match split_plan(config, &scope, &targets, chosen) {
+        Ok(plan) => plan,
+        Err(reason) => return Ok(Err(reason)),
+    };
+    let norms = if request.dry_run {
+        TargetNorms::new()
+    } else {
+        let wanted: BTreeSet<&String> = targets
+            .iter()
+            .chain(plan.children.iter().flat_map(|child| &child.targets))
+            .collect();
+        norms_read(&open.index, &graph, wanted.iter().copied())?
+    };
+    Ok(Ok(SplitRead {
+        targets,
+        plan,
+        norms,
+    }))
+}
+
+/// The scope of a split: for each parent target in its order, the rows `spec
+/// tree <target> --depth 2` lists, in its order, the target first; each node
+/// once, at its first place, named as a card stores a target (its canonical
+/// ID, else its document's path); an ID-less section is passed over. A target
+/// that no longer names a node adds nothing.
+fn split_scope(
+    project: &ProjectRoot,
+    input: &CheckInput,
+    graph: &SpecGraph<'_>,
+    targets: &[String],
+) -> Vec<ScopeNode> {
+    let scheme = &project.config.scheme;
+    let resolver = Resolver::new(input, scheme, &project.config.paths);
+    let places = target_places(graph, targets);
+    let mut seen = BTreeSet::new();
+    let mut scope = Vec::new();
+    for target in targets {
+        let roots = places.get(target).map_or(&[][..], Vec::as_slice);
+        let admission = Admission::new(graph, false, roots.iter().map(|root| root.file));
+        let mut left_out = LeftOut::default();
+        for (at, _, _) in walked(graph, &admission, roots, Some(SCOPE_DEPTH), &mut left_out) {
+            let node = graph.node(at);
+            let path = graph.paths()[at.file];
+            let name = if roots.contains(&at) {
+                target.clone()
+            } else {
+                match node.and_then(|node| node.id.as_deref()) {
+                    Some(id) => canonical_id(&resolver, scheme, path, id, None),
+                    None if at.ord == 0 => path.to_owned(),
+                    None => continue,
+                }
+            };
+            if seen.insert(name.clone()) {
+                scope.push(ScopeNode {
+                    target: name,
+                    kind: node.and_then(|node| node.kind.clone()),
+                });
+            }
+        }
+    }
+    scope
+}
+
 // -------------------------------------------------------------- reads
 
 /// `spec card show C [--history] [--marks]`.
@@ -3437,6 +4012,79 @@ pub(crate) fn render_text(outcome: &CardOutcome) -> String {
         format!("{verb} {}: {}/{}\n", card.id, card.flow, card.column)
     };
     escape_controls(&line)
+}
+
+/// A split, one line each (task spec `department-split` S3): `split C-0001
+/// new|stored: <flow>/<column> | <title> | <targets> | reviewer <name>`,
+/// then `subtask C-0002: <flow>/<column> | <discipline> | <targets> | by
+/// kind|the task's targets[, suggested]` each, then `note: <note>` each; a
+/// dry run `plan`, `-` for each ID, and `dry run: nothing written` last.
+/// `-` for none; the body cut at [`crate::OUTPUT_CAP_CHARS`] with a tail.
+/// Nothing when refused.
+pub(crate) fn render_split_text(outcome: &CardSplitOutcome) -> String {
+    let Some(parent) = &outcome.parent else {
+        return String::new();
+    };
+    let id = |id: &Option<String>| id.as_deref().unwrap_or(ABSENT).to_owned();
+    let listed = |targets: &[String]| {
+        if targets.is_empty() {
+            ABSENT.to_owned()
+        } else {
+            targets.join(", ")
+        }
+    };
+    let mut lines = vec![format!(
+        "{} {} {}: {}/{} | {} | {} | reviewer {}",
+        if outcome.dry_run { "plan" } else { "split" },
+        id(&parent.id),
+        if parent.created { "new" } else { "stored" },
+        parent.flow,
+        parent.column,
+        parent.title,
+        listed(&parent.targets),
+        outcome.reviewer.as_deref().unwrap_or(ABSENT)
+    )];
+    for child in &outcome.children {
+        let from = match child.from {
+            TargetsFrom::Kinds => "by kind",
+            TargetsFrom::Parent => "the task's targets",
+        };
+        lines.push(format!(
+            "subtask {}: {}/{} | {} | {} | {from}{}",
+            id(&child.id),
+            child.flow,
+            child.column,
+            child.discipline,
+            listed(&child.targets),
+            if child.suggested { ", suggested" } else { "" }
+        ));
+    }
+    lines.extend(outcome.notes.iter().map(|note| format!("note: {note}")));
+    let lines: Vec<String> = lines.iter().map(|line| one_line(line)).collect();
+    let last = outcome.dry_run.then_some("dry run: nothing written");
+    let reserved = last.map_or(0, |line| line.chars().count() + 1);
+    let (shown, _) = lines_within(
+        lines.iter().map(|line| line.chars().count() + 1),
+        reserved,
+        true,
+    );
+    let mut out = String::new();
+    for line in &lines[..shown] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    if shown < lines.len() {
+        out.push_str(&format!(
+            "[truncated: {} of {} lines not shown]\n",
+            lines.len() - shown,
+            lines.len()
+        ));
+    }
+    if let Some(line) = last {
+        out.push_str(line);
+        out.push('\n');
+    }
+    escape_controls(&out)
 }
 
 /// `cleared C-0001: <flow>/<column>`, a line per card; nothing when refused.

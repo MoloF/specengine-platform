@@ -22,6 +22,9 @@ import type {
   CardMove,
   CardNotFound,
   CardRow,
+  CardSplit,
+  CardSplitChild,
+  CardSplitParent,
   CardTask,
   CardWrite,
   CheckCause,
@@ -180,10 +183,12 @@ import type {
 // `omitted_edges` (13) and a flow node's `in_flow` after `end` (16); and card-questions' three
 // (docs/features/card-questions.md "Acceptance criteria", K1, L3: a card's item, the intake
 // document, a match, sets 116 to 118, the last), with the review document's `card_id` and `why`
-// after `interpretation` (50 keys) and a card's `items` after `tasks` (32). A key the types carry
-// ahead of the file is listed in AHEAD_OF_FIXTURE, empty again since card-questions' test wrote its
-// three sets and three keys; a listed key the file already names fails. While that file is absent the comparison is
-// skipped, saying so; once it exists it names all one hundred and eighteen, in the slices' order.
+// after `interpretation` (50 keys) and a card's `items` after `tasks` (32); and department-split's three
+// (docs/features/department-split.md "Acceptance criteria", S3, U2: the split document, its parent and a
+// subtask, sets 119 to 121, the last). A key the types carry ahead of the file is listed in
+// AHEAD_OF_FIXTURE, empty again since department-split's test wrote its three sets; a listed key the
+// file already names fails. While that file is absent the comparison is skipped, saying so; once it
+// exists it names all one hundred and twenty-one, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -865,6 +870,10 @@ const KEYS = {
   } satisfies Record<keyof CardItem, true>,
   IntakeDocument: { id: true, created: true, hits: true, related: true, linked: true, diagnostics: true, notes: true } satisfies Record<keyof IntakeDocument, true>,
   IntakeMatch: { id: true, source: true, status: true, path: true, answer: true, record: true } satisfies Record<keyof IntakeMatch, true>,
+  // docs/features/department-split.md "Acceptance criteria" (S3, U2): the split document (set 119), its parent (120) and a subtask (121); every key present.
+  CardSplit: { dry_run: true, parent: true, children: true, reviewer: true, notes: true } satisfies Record<keyof CardSplit, true>,
+  CardSplitParent: { id: true, created: true, title: true, discipline: true, flow: true, flow_title: true, column: true, targets: true } satisfies Record<keyof CardSplitParent, true>,
+  CardSplitChild: { id: true, discipline: true, flow: true, flow_title: true, column: true, targets: true, from: true, suggested: true } satisfies Record<keyof CardSplitChild, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1002,6 +1011,9 @@ const CITED: Record<Named, string> = {
   CardItem: "id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
   IntakeDocument: "id, created, hits, related, linked, diagnostics, notes",
   IntakeMatch: "id, source, status, path, answer, record",
+  CardSplit: "dry_run, parent, children, reviewer, notes",
+  CardSplitParent: "id, created, title, discipline, flow, flow_title, column, targets",
+  CardSplitChild: "id, discipline, flow, flow_title, column, targets, from, suggested",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1212,8 +1224,14 @@ const BEFORE_CARD_QUESTIONS: readonly Named[] = [...BEFORE_FLOW_SCENARIO, ...FLO
 /** card-questions' three: a card's item, the intake document, a match, sets 116 to 118 (docs/features/card-questions.md "Acceptance criteria", K1, L3). */
 const CARD_QUESTIONS: readonly Named[] = ["CardItem", "IntakeDocument", "IntakeMatch"];
 
+/** The hundred and eighteen types the fixture named before department-split. */
+const BEFORE_DEPARTMENT_SPLIT: readonly Named[] = [...BEFORE_CARD_QUESTIONS, ...CARD_QUESTIONS];
+
+/** department-split's three: the split document, its parent, a subtask, sets 119 to 121 (docs/features/department-split.md "Acceptance criteria", S3, U2). */
+const DEPARTMENT_SPLIT: readonly Named[] = ["CardSplit", "CardSplitParent", "CardSplitChild"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_CARD_QUESTIONS, ...CARD_QUESTIONS];
+const ALL: readonly Named[] = [...BEFORE_DEPARTMENT_SPLIT, ...DEPARTMENT_SPLIT];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1249,7 +1267,8 @@ function served(name: Named): string[] {
  * flow's `title`, a workspace's `disciplines` and a module's `kinds`
  * (docs/features/departments.md "Acceptance criteria", DP-4), and again since card-questions'
  * wrote the review document's `card_id` and `why`, a card's `items` and sets 116 to 118
- * (docs/features/card-questions.md "Acceptance criteria", K1, L1, L3).
+ * (docs/features/card-questions.md "Acceptance criteria", K1, L1, L3), and since department-split's
+ * wrote sets 119 to 121 (docs/features/department-split.md "Acceptance criteria", S3, U2).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1301,7 +1320,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_CARD_TASKS.at(-1)).toBe("WorkspaceModule");
     expect(BEFORE_FLOW_SCENARIO.at(-1)).toBe("CardTask");
     expect(BEFORE_CARD_QUESTIONS.at(-1)).toBe("ShownAncestor");
-    expect(ALL.at(-1)).toBe("IntakeMatch");
+    expect(BEFORE_DEPARTMENT_SPLIT.at(-1)).toBe("IntakeMatch");
+    expect(ALL.at(-1)).toBe("CardSplitChild");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1330,7 +1350,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(118);
+    expect(ALL).toHaveLength(121);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1417,10 +1437,27 @@ describe("the daemon's document types (AC-09)", () => {
     const review = declaredKeys("Proposal");
     expect(review.slice(-4)).toEqual(["interpretation", "card_id", "why", "notes"]);
     expect(source).toMatch(/^ {2}card_id: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}why: string \| null;$/m);
-    expect(ALL.slice(BEFORE_CARD_QUESTIONS.length)).toEqual([...CARD_QUESTIONS]);
+    expect(ALL.slice(BEFORE_CARD_QUESTIONS.length, BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...CARD_QUESTIONS]);
     // The body of the card's raise and the stage's `as`: requests, no set.
     expect(declaredKeys("CardRaiseBody")).toEqual(["kind", "node_ids", "text", "working_answer", "price_of_other", "why", "severity", "distinct_from", "as"]);
     expect(source).toMatch(/^export type StageBody = StageChoice & \{ updated_at: string; as\?: string \| null \};$/m);
+  });
+
+  it('types department-split\'s three as the spec writes them: the split document 5 keys, its parent 8, a subtask 8, every one present; an `id` null in a plan, `parent` and `reviewer` nullable, `from` a served word kept whatever it is, each citing `docs/features/department-split.md` "Acceptance criteria" (S3, U2 of department-split)', () => {
+    expect(DEPARTMENT_SPLIT.map((name) => served(name).length)).toEqual([5, 8, 8]);
+    for (const name of DEPARTMENT_SPLIT) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} `);
+      expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/department-split.md` "Acceptance criteria"');
+    }
+    expect(source).toMatch(/^export interface CardSplit \{\n {2}dry_run: boolean;\n {2}parent: CardSplitParent \| null;\n {2}children: CardSplitChild\[\];\n {2}reviewer: string \| null;\n {2}notes: string\[\];\n\}$/m);
+    expect(source).toMatch(/^export interface CardSplitParent \{\n {2}id: string \| null;\n {2}created: boolean;\n {2}title: string;\n {2}discipline: string \| null;\n/m);
+    expect(source).toMatch(/^ {2}from: SplitTargetsFrom;\n {2}suggested: boolean;\n\}$/m);
+    expect(source).toMatch(/^export type KnownSplitTargetsFrom = "kinds" \| "parent";$/m);
+    expect(source).toMatch(/^export type SplitTargetsFrom = KnownSplitTargetsFrom \| Unlisted;$/m);
+    expect(ALL.slice(BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...DEPARTMENT_SPLIT]);
+    // The body of the split's route: a request, no set (docs/features/department-split.md "Acceptance criteria", S7).
+    expect(declaredKeys("CardSplitBody")).toEqual(["target", "title", "goal", "discipline", "parent", "child", "reviewer", "dry_run", "as"]);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -1573,8 +1610,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_CARD_TASKS).toHaveLength(113);
     expect(BEFORE_FLOW_SCENARIO).toHaveLength(114);
     expect(BEFORE_CARD_QUESTIONS).toHaveLength(115);
-    expect(ALL).toHaveLength(118);
-    expect(new Set(ALL).size).toBe(118);
+    expect(BEFORE_DEPARTMENT_SPLIT).toHaveLength(118);
+    expect(ALL).toHaveLength(121);
+    expect(new Set(ALL).size).toBe(121);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1819,18 +1857,27 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and eighteen types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three", () => {
+  it("names exactly the one hundred and twenty-one types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and eighteen, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and twenty-one, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(118);
+    expect(Object.keys(sets)).toHaveLength(121);
   });
 
-  it("names card-questions' three last, after ShownAncestor, sets 116 to 118 with their keys in the types' order: 16, 7, 6 (K1, L3 of card-questions)", () => {
-    expect(Object.keys(sets).slice(BEFORE_CARD_QUESTIONS.length)).toEqual([...CARD_QUESTIONS]);
+  it("names department-split's three last, after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 8 (S3, U2 of department-split)", () => {
+    expect(Object.keys(sets).slice(BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...DEPARTMENT_SPLIT]);
+    expect(Object.keys(sets).indexOf("CardSplit")).toBe(118);
+    expect(Object.keys(sets).at(-1)).toBe("CardSplitChild");
+    expect(DEPARTMENT_SPLIT.map((name) => sets[name])).toEqual(DEPARTMENT_SPLIT.map((name) => served(name)));
+    expect(DEPARTMENT_SPLIT.map((name) => sets[name]?.length)).toEqual([5, 8, 8]);
+    expect(DEPARTMENT_SPLIT.map((name) => sets[name])).toEqual(DEPARTMENT_SPLIT.map((name) => declaredKeys(name)));
+  });
+
+  it("names card-questions' three after ShownAncestor, before department-split's three, sets 116 to 118 with their keys in the types' order: 16, 7, 6 (K1, L3 of card-questions)", () => {
+    expect(Object.keys(sets).slice(BEFORE_CARD_QUESTIONS.length, BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...CARD_QUESTIONS]);
     expect(Object.keys(sets).indexOf("CardItem")).toBe(115);
-    expect(Object.keys(sets).at(-1)).toBe("IntakeMatch");
+    expect(Object.keys(sets).at(BEFORE_DEPARTMENT_SPLIT.length - 1)).toBe("IntakeMatch");
     expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => served(name)));
     expect(CARD_QUESTIONS.map((name) => sets[name]?.length)).toEqual([16, 7, 6]);
     expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => declaredKeys(name)));

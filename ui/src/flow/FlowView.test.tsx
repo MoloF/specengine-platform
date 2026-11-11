@@ -1844,7 +1844,8 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
   it("acts with Open document, the one primary, and New card alone; a group adds its Open; no links, cards, tree or graph in the panel", async () => {
     await bisque();
     const acts = Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent);
-    expect(acts).toEqual(["Open document", "New task"]);
+    // Split to departments… after New task (U1 of department-split).
+    expect(acts).toEqual(["Open document", "New task", "Split to departments…"]);
     expect(within(panel()).getByRole("button", { name: "Open document" }).className).toContain("button-primary");
     expect(panel().querySelectorAll(".button-primary")).toHaveLength(1);
     expect(panel().querySelector(".links-panel, .cards-block")).toBeNull();
@@ -1858,7 +1859,7 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
     await waitFor(() => {
       expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Firing run");
     });
-    expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New task", "Open Firing run"]);
+    expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New task", "Split to departments…", "Open Firing run"]);
   });
 
   it("folds name, kind, place and distance under Technical details, collapsed", async () => {
@@ -1917,7 +1918,7 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
     renderApp(asideClient(), FIRING);
     await drawn("POT-BISQUE");
     await waitFor(() => {
-      expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New task"]);
+      expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New task", "Split to departments…"]);
     });
     renderApp(studioClient(reads({ top: aFlowView([aFlowNode({ id: "P", distance: 0 }), aFlowNode({ id: "Q", distance: 1 })], []) })), "#/alpha/flow");
     await drawn("Q");
@@ -1925,5 +1926,6 @@ describe("the minimal panel (DM-14 of doc-modal)", () => {
     const top = panels[panels.length - 1] as HTMLElement;
     expect(within(top).queryByRole("button", { name: "Open document" })).toBeNull();
     expect(within(top).queryByRole("button", { name: "New task" })).toBeNull();
+    expect(within(top).queryByRole("button", { name: "Split to departments…" })).toBeNull();
   });
 });

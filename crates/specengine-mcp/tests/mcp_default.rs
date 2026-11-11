@@ -53,8 +53,12 @@ mod default_build {
     fn assert_tool(tool: &Value, era: Era) {
         let name = tool["name"].as_str().expect("name");
         let moves_a_task = TASK_TOOLS.contains(&name) && name != "get_task";
-        // docs/features/card-store.md "MCP": annotated as `claim_task`.
-        let moves_a_card = CARD_TOOLS.contains(&name) && !matches!(name, "get_card" | "list_cards");
+        // docs/features/card-store.md "MCP": annotated as `claim_task`;
+        // docs/features/department-split.md S8: `split_card` too, a card
+        // write that is no tool of 0.22.0's `CARD_TOOLS`.
+        let moves_a_card = (CARD_TOOLS.contains(&name)
+            && !matches!(name, "get_card" | "list_cards"))
+            || name == "split_card";
         let owner = OWNER_TOOLS.contains(&name);
         let annotations = if WRITE_TOOLS.contains(&name) || moves_a_task || moves_a_card || owner {
             json!({

@@ -179,7 +179,7 @@ export function TextArea({
 }
 
 /** A choice among served values: `placeholder`, when given, an empty first option that is no choice. */
-function SelectField({
+export function SelectField({
   label,
   value,
   onChange,
@@ -312,6 +312,7 @@ export function WriteDialog({
   primary = true,
   revision = null,
   canSubmit = true,
+  className,
   check,
   onClose,
   onSubmit,
@@ -323,6 +324,8 @@ export function WriteDialog({
   dismiss?: string;
   danger?: boolean;
   primary?: boolean;
+  /** Layout only: a wider dialog's class beside the card dialogs' own. */
+  className?: string;
   revision?: string | null;
   canSubmit?: boolean;
   /** Why this submit cannot be sent, else null. */
@@ -405,7 +408,7 @@ export function WriteDialog({
   }
 
   return (
-    <Dialog title={title} onClose={cancel} className="decision-dialog card-dialog">
+    <Dialog title={title} onClose={cancel} className={className === undefined ? "decision-dialog card-dialog" : `decision-dialog card-dialog ${className}`}>
       {changed && (
         // A new alert for each revision, so a second one is spoken too.
         <div key={shown} className="notice" role="alert">

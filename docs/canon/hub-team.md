@@ -40,7 +40,7 @@ Read per request, no cache in `App`, through `answer::read`, before the turn, fr
 
 | Act | Route on a hub | Who | Class |
 |---|---|---|---|
-| Six plain writes | POST `.../cards`, `.../cards/:id/{move,edit,assign,cancel,items}` | any login | plain |
+| Seven plain writes | POST `.../cards`, `.../cards/split`, `.../cards/:id/{move,edit,assign,cancel,items}` | any login | plain |
 | Stage, unstage | POST, DELETE `.../proposals/:id/decision` | any `[team]` login | team |
 | Round answers | POST `.../round/answers` | any `[team]` login | team |
 | Accept | POST `.../cards/:id/accept` | a `[team]` login, the card's reviewer, never its assignee | confirm |

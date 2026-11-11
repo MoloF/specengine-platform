@@ -24,9 +24,11 @@
 //! `docs/canon/agent-intake.md` "Tools"); the task tools `get_task`,
 //! `claim_task`, `submit_plan`, `report_run`, `complete_task` (`spec task
 //! show|claim|plan|report|complete`; `docs/canon/task-package.md` "MCP");
-//! the card tools `list_cards`, `get_card`, `create_card`, `edit_card`,
-//! `move_card` (`spec card list|show|new|edit|move`: task spec `card-store`,
-//! writing only the queue, and none accepts a card);
+//! the card tools `list_cards`, `get_card`, `create_card`, `split_card`,
+//! `edit_card`, `move_card` (`spec card list|show|new|split|edit|move`: task
+//! spec `card-store` and `docs/features/department-split.md`
+//! "Acceptance criteria", S8, writing only the queue, and none accepts a
+//! card);
 //! resources `spec://<slug>/tree` and `spec://<slug>/node/<id>` over the
 //! same calls; the owner's form `review_proposal` (task spec
 //! `review-form`: `_meta["anthropic/requiresUserInteraction"]: true`, a

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { flowForm, useFlowRead, useScopeNode, useScopeStages, useTopOnDemand, useTreeOnDemand } from "../api/queries";
-import type { CardWrite, FlowGap, FlowNode, FlowView as FlowAnswer, WorkspaceModule } from "../api/types";
+import type { CardSplit, CardWrite, FlowGap, FlowNode, FlowView as FlowAnswer, WorkspaceModule } from "../api/types";
 import { pushHash, replaceHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { flowHash, isBareFlow, parseFlowPlace, sectionHash, type FlowEdgeKey, type FlowPlace } from "../app/routes";
@@ -10,6 +10,7 @@ import { useOpenShortcuts } from "../app/shortcuts";
 import { NewCardDialog, type NewCardPreset } from "../board/CardDialogs";
 import { nodeName } from "../graph/layout";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
@@ -34,6 +35,9 @@ import { isRooted } from "../workspace/choice";
 
 /** The canvas and its drawing library load with the first answer drawn, not with the app. */
 const FlowCanvas = lazy(() => import("./FlowCanvas").then((module) => ({ default: module.FlowCanvas })));
+
+/** Split to departments, a chunk of its own, loaded once pressed (docs/features/department-split.md "Acceptance criteria", U1). */
+const SplitDialog = lazy(() => import("../board/SplitDialog").then((module) => ({ default: module.SplitDialog })));
 
 export type FlowTab = "canvas" | "list";
 
@@ -210,7 +214,10 @@ export function FlowView({
   const [hand, setHand] = useState<Hand | null>(null);
   /** New card on the scope or a box, open: its target and the control it goes back to. */
   const [scopeCard, setScopeCard] = useState<{ target: string; trigger: HTMLElement | null } | null>(null);
-  const [made, setMade] = useState<string | null>(null);
+  /** Split to departments on the scope or a box, open: the node, its title and the control it goes back to. */
+  const [splitAsked, setSplitAsked] = useState<{ target: string; title: string; trigger: HTMLElement | null } | null>(null);
+  /** What the panel made, noted under its acts: a card, or a split's parent and its subtasks' count. */
+  const [made, setMade] = useState<{ id: string; count: number | null } | null>(null);
   /** The seek that found nothing, or failed, for one place: a note until the place changes. */
   const [lost, setLost] = useState<{ key: string; name: string } | null>(null);
   const [seekFailure, setSeekFailure] = useState<{ key: string; name: string; message: string } | null>(null);
@@ -930,12 +937,17 @@ export function FlowView({
   const gapsShown = shown !== undefined && refused === null;
   const boxShown = selBox ?? null;
   const madeNote =
-    made === null ? null : (
+    made === null ? null : made.count === null ? (
       <p className="note">
         <Icon name="info" />
         <span>
-          <span className="mono">{t("flow.cardMade", { id: made })}</span> <a href={sectionHash(project, "board", made)}>{t("flow.cardOnBoard")}</a>
+          <span className="mono">{t("flow.cardMade", { id: made.id })}</span> <a href={sectionHash(project, "board", made.id)}>{t("flow.cardOnBoard")}</a>
         </span>
+      </p>
+    ) : (
+      <p className="note">
+        <Icon name="info" />
+        <span>{fill(t("board.split.done", { id: slot("id"), count: made.count }), { id: <a href={sectionHash(project, "board", made.id)}>{made.id}</a> })}</span>
       </p>
     );
   const panelBody = (
@@ -955,6 +967,7 @@ export function FlowView({
             enterPlace={enterPlace}
             onBack={clearSelection}
             onNewCard={newCard}
+            onSplit={askSplit}
           >
             {boxShown !== null && nodeName(boxShown) === nodeName(keptBox) ? madeNote : null}
           </BoxView>
@@ -978,6 +991,7 @@ export function FlowView({
           scope={scopeShown}
           headingRef={panelHeading}
           onNewCard={newCard}
+          onSplit={askSplit}
         >
           {madeNote}
         </ScopeView>
@@ -991,12 +1005,31 @@ export function FlowView({
     setScopeCard({ target, trigger });
   }
 
+  /** Split to departments from the panel (docs/features/department-split.md "Acceptance criteria", U1): the scope or the box the parent's target. */
+  function askSplit(target: string, title: string, trigger: HTMLElement) {
+    setMade(null);
+    setSplitAsked({ target, title, trigger });
+  }
+
   const afterCard = (trigger: HTMLElement | null) => (answer: CardWrite | null) => {
     setHand(null);
     setScopeCard(null);
     if (answer !== null && answer.id !== null) {
-      setMade(answer.id);
+      setMade({ id: answer.id, count: null });
       announce(t("flow.cardMade", { id: answer.id }));
+    }
+    if (trigger?.isConnected === true) {
+      trigger.focus();
+    }
+  };
+
+  /** A split made from the panel: said in the live region and noted under the acts, the parent a link to its work item. */
+  const afterSplit = (trigger: HTMLElement | null) => (answer: CardSplit | null) => {
+    setSplitAsked(null);
+    const id = answer?.parent?.id ?? null;
+    if (answer !== null && id !== null) {
+      setMade({ id, count: answer.children.length });
+      announce(t("board.split.done", { id, count: answer.children.length }));
     }
     if (trigger?.isConnected === true) {
       trigger.focus();
@@ -1142,6 +1175,24 @@ export function FlowView({
           <NewCardDialog project={project} target={scopeCard.target} onClose={() => {
             afterCard(scopeCard.trigger)(null);
           }} onDone={afterCard(scopeCard.trigger)} />
+        </div>
+      )}
+      {splitAsked !== null && (
+        <div
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <Suspense fallback={null}>
+            <SplitDialog
+              project={project}
+              source={{ target: splitAsked.target, title: splitAsked.title }}
+              onClose={() => {
+                afterSplit(splitAsked.trigger)(null);
+              }}
+              onDone={afterSplit(splitAsked.trigger)}
+            />
+          </Suspense>
         </div>
       )}
     </section>

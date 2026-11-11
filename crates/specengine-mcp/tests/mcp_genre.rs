@@ -724,8 +724,9 @@ fn hub_mcp_h11_the_hub_texts_hold_no_stack_word_and_no_game_kind() {
     }
     assert_eq!(
         texts.len(),
-        18,
-        "the instructions and seventeen descriptions"
+        // docs/features/department-split.md S8: eighteen descriptions.
+        19,
+        "the instructions and eighteen descriptions"
     );
     let mut offenders = Vec::new();
     for (name, text) in &texts {

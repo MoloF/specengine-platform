@@ -1107,6 +1107,38 @@ describe("the cards (docs/features/board-ui.md \"Routes\")", () => {
   });
 });
 
+// docs/features/department-split.md "Acceptance criteria", S7 and U2, the browser side: a split, planned or
+// written, is one POST of the body as given to `.../cards/split`, no signal; a 200 resolves as the split
+// document; a 409's document rejects with its last note, the reason; a 400 or 503 with its message.
+describe("a split (S7, U2 of department-split)", () => {
+  const body = { target: ["SCN-LAMP"], title: "Lamp room", goal: null, discipline: "narrative", parent: null, child: ["narrative", "art"], reviewer: "Ana Ruiz", dry_run: false, as: "Ana Ruiz" };
+  const written = {
+    dry_run: false,
+    parent: { id: "C-0001", created: true, title: "Lamp room", discipline: "narrative", flow: "narrative", flow_title: "Narrative", column: "draft", targets: ["SCN-LAMP"] },
+    children: [{ id: "C-0002", discipline: "art", flow: "art", flow_title: "Art", column: "sketch", targets: ["SCN-LAMP"], from: "parent", suggested: false }],
+    reviewer: "Ana Ruiz",
+    notes: [],
+  };
+
+  it("posts the body as JSON to the project's cards/split, no signal; a 200 resolves as the document", async () => {
+    const stub = stubFetch(() => jsonAnswer(200, written));
+    expect(await new HttpClient().splitCard("my proj", body)).toEqual(written);
+    expect(urlsOf(stub)).toEqual(["/api/projects/my%20proj/cards/split"]);
+    expect([stub.mock.calls[0]?.[1]?.method, "signal" in (stub.mock.calls[0]?.[1] ?? {})]).toEqual(["POST", false]);
+    expect(stub.mock.calls[0]?.[1]?.body).toBe(JSON.stringify(body));
+  });
+
+  it.each([
+    [409, { dry_run: false, parent: null, children: [], reviewer: null, notes: ["parent: no card C-0099"] }, "parent: no card C-0099"],
+    [400, { status: 400, message: "spec: name each subtask's discipline with --child, or plan with --dry-run" }, "spec: name each subtask's discipline with --child, or plan with --dry-run"],
+    [503, { status: 503, message: "specengine.toml:41: unknown field `splits`, expected `flow` or `split`" }, "specengine.toml:41: unknown field `splits`, expected `flow` or `split`"],
+  ])("rejects a split's %i in the daemon's words", async (status, answer, message) => {
+    stubFetch(() => jsonAnswer(status, answer));
+    const error = await rejection(new HttpClient().splitCard("alpha", body));
+    expect([error.status, error.message]).toEqual([status, message]);
+  });
+});
+
 // docs/features/card-questions.md "Acceptance criteria", L3 and L4, the browser side: a card's raise
 // is one POST of the body as given to `.../cards/:id/items`, no signal; a 200 resolves whether stored
 // or not; a 409's intake document rejects with its last note, a 404 with its reason. The stage's `as`

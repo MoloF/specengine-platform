@@ -19,7 +19,7 @@ ADR-0065, built by `hub-mcp` (RM-0053, step 11). Working answers of the orchestr
 
 No method takes a query: `refused: this route takes no query`.
 
-In the fence, POST and DELETE are class `Mcp`: any login, `[team]` never read. GET passes as every GET does. Any other method, and `/mcp/<slug>/...`, meets default deny. `Host`, `Origin`, `Sec-Fetch-Site` and `Remote-User` are judged as on every route. The board's `same-origin` write door is not asked, since no MCP client sends `Sec-Fetch-Site`. An unknown slug gets the unknown-slug 404. A local daemon answers every method with its unknown-route 404 and never reads `Remote-User`.
+In the fence, POST and DELETE are class `Mcp`: any login, `[team]` never read. GET passes as every GET does. Any other method, and `/mcp/<slug>/...`, meets default deny. `Host`, `Origin`, `Sec-Fetch-Site` and `Remote-User` are judged as on every route. The board's `same-origin` door is not asked: no MCP client sends `Sec-Fetch-Site`. An unknown slug gets the unknown-slug 404. A local daemon answers every method with its unknown-route 404 and never reads `Remote-User`.
 
 **`Authorization`.** On every hub route but `/mcp/<slug>`, an `Authorization` header, any value, once or more, is refused at fence step 5, before the class: `refused: the Authorization header is for /mcp alone: this route takes the login door's session`. On `/mcp/<slug>` it passes, never read, logged or stored. A local daemon never reads it.
 
@@ -37,13 +37,13 @@ Held in memory only: session id -> slug, login, last use. The ids are rmcp's, a 
 
 - **Bound.** A session belongs to the slug and login of the POST whose 2xx issued it. A request naming an id not bound to its own slug and login gets 404 `Not Found: Session not found`, rmcp's bytes, on every method, with rmcp never called. The id may be unknown, ended, another login's or another project's; all four answer alike, so no login learns of another's session.
 - **One id per request.** A request carrying more than one `Mcp-Session-Id` value, equal or not, gets the same 404, with rmcp never called and nothing unbound. rmcp would close only the first value on DELETE, leaving live sessions no cap counts.
-- **Drop-safe.** A request dropped after rmcp issued an id but before the daemon bound it has that session closed, so no unbound session outlives its request.
+- **Drop-safe.** A request dropped after rmcp issued an id, before the daemon bound it, has that session closed: no unbound session outlives its request.
 - **Caps.** 4 per login per project and 64 per hub, counting only the sessions rmcp still holds.
-  - A login's fifth session in a project closes that login's least recently used one there.
+  - A login's fifth session in a project closes its least recently used one there.
   - Past 64, the new session is closed and the answer is 503 `refused: this hub holds 64 MCP sessions, its cap: try again once one ends`.
   - No login's session is ever closed for another's.
 - **Life.** A session ends at a restart, after 300 s idle, at its own login's DELETE, or at an eviction. The stateless era opens none. A GET stream (one resuming a POST's too) ends 300 s after it opens, not its session, which rmcp's idle, re-armed by that GET first, ends. Nothing rides it (no hub tool notifies or asks): a reconnect loses nothing.
-- **Stored nowhere, naming no one.** No id appears in the queue, an event, a dump, a trailer, a commit, an answer body or stderr. A session only refuses: it is never a login, an author, an actor, a `run` or an argument.
+- **Stored nowhere, naming no one.** No id is in the queue, an event, a dump, a trailer, a commit, an answer body or stderr. A session only refuses: it is never a login, an author, an actor, a `run` or an argument.
 
 ## Turn
 
@@ -61,16 +61,16 @@ The transport stays in `specengine-http`: `App::new` builds one service per proj
 
 ## Tools
 
-Seventeen tools and both resources, each its stdio twin's CLI call:
+Eighteen tools and both resources, each its stdio twin's CLI call:
 - **reads:** `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_roadmap`, `get_flow`, `get_trace`, `get_proposal`;
 - **queue**, without `task_id`: `propose_change` (four kinds, `dry_run`), `ask_question`, `report_discrepancy`, `report_decision`;
-- **cards:** `list_cards`, `get_card`, `create_card`, `edit_card`, `move_card`.
+- **cards:** `list_cards`, `get_card`, `create_card`, `split_card`, `edit_card`, `move_card`.
 
-None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 17 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it, never only on a typed `CallToolRequest`. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
+None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 18 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it, never only on a typed `CallToolRequest`. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
 
 Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub).
 
-**Texts.** `HUB_INSTRUCTIONS`, and twelve hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the three card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other five are stdio's. Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
+**Texts.** `HUB_INSTRUCTIONS`, and thirteen hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the four card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other five are stdio's. Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
 
 ## Identity
 
@@ -129,9 +129,9 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 ## Client check
 
 By hand at the gate, not yet run; findings land in `hub-deploy.md` "Gate" with the client's version and the date.
-1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http ... --header "Authorization: Basic ..."`. Expected: the session holds, the GET stream reopens at 300 s, 17 tools, `login` on a proposal and a card, a second login's own sessions.
+1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http ... --header "Authorization: Basic ..."`. Expected: the session holds, the GET stream reopens at 300 s, 18 tools, `login` on a proposal and a card, a second login's own sessions.
 2. **claude.ai and Claude Desktop, at the gate, step 11b-3,** on the public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
 
 ## Tests
 
-http `tests/hub_mcp.rs` (H1-H11, H13-H20 of `docs/features/hub-mcp.md`), its client `tests/common/mcp_http.rs`; `tests/hub.rs` (`GET_ROUTES` with `/mcp/{p}`, the fence order with `Authorization`); `tests/door.rs` (`specengine_mcp` named in `src/mcp.rs` alone); units in `src/hub.rs` (item 6's rule) and `src/mcp.rs` (idle, life, the bound count, the `handle` counter). mcp `tests/mcp_hub.rs` (the 17, the texts' budget), `mcp_hub_trust.rs`, `mcp_genre.rs`; http `tests/hub_trust.rs`; eval `build_graph.rs` (the daemon's ten dependencies, rmcp's feature, the seven crates' versions). UI `src/inbox/ProposalCard.test.tsx`.
+http `tests/hub_mcp.rs` (H1-H11, H13-H20 of `docs/features/hub-mcp.md`), its client `tests/common/mcp_http.rs`; `tests/hub.rs` (`GET_ROUTES` with `/mcp/{p}`, the fence order with `Authorization`); `tests/door.rs` (`specengine_mcp` named in `src/mcp.rs` alone); units in `src/hub.rs` (item 6's rule) and `src/mcp.rs` (idle, life, the bound count, the `handle` counter). mcp `tests/mcp_hub.rs` (the 18, the texts' budget), `mcp_hub_trust.rs`, `mcp_genre.rs`; http `tests/hub_trust.rs`; eval `build_graph.rs` (the daemon's ten dependencies, rmcp's feature, the seven crates' versions). UI `src/inbox/ProposalCard.test.tsx`.

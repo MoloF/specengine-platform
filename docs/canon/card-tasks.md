@@ -67,9 +67,9 @@ A **Tasks** part inside the work item's Agent tasks, collapsed (`ui-design.md` "
 
 - **`edit_card {task}`**: `[string]` or null, `["-"]` clears; `deny_unknown_fields`, so an older server refuses it. Its text names the field, the cap (asserted against `CARD_TASKS_MAX`) and that no move, accept or gate reads the link; the hub's says the hub holds no task, checks none and shows them without state.
 - **`get_card`**: `tasks` (`CardTaskShape`), byte-equal to `show --json`; `GET_DESCRIPTION`, stdio and hub, says each task is read now, `null` with a note starting with its ID where this server cannot read it.
-- **The daemon**: `CardEditBody.task`, plus `as`; no new route, query name, fence class or stream type, `CARD_CALLS` ten; on a hub the edit stays in the plain class.
+- **The daemon**: `CardEditBody.task`, plus `as`; no new route, query name, fence class, stream type or `CARD_CALLS` entry; on a hub the edit stays in the plain class.
 - **Where tasks are read**: `tasks_here` (`cards.md` "Commands") is true for the CLI, the stdio MCP (`seam().is_none()`) and a local daemon (`app.hub.is_none()`), which read and check through the caller's `GitEnv`. A hub (its routes and its `/mcp`) reads no `tasks` row on a card path, serves each linked ID `null` with the hub note, and keeps `--task` IDs as written after the grammar, repeat and cap.
-- 29 tools on stdio, 17 on a hub, unchanged; plugin 0.32.0 (`plugin-files.md`).
+- No tool added; plugin 0.32.0 (`plugin-files.md`).
 
 ## Store and backup
 

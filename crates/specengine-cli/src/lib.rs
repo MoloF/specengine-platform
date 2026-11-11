@@ -323,9 +323,10 @@ pub use card::{
     CardClearGroupRequest, CardClearOutcome, CardClearRequest, CardEditBody, CardEditRequest,
     CardGroupOutcome, CardItem, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest,
     CardNewBody, CardNewRequest, CardOutcome, CardRaiseBody, CardRaiseKind, CardRaiseOutcome,
-    CardRaiseRequest, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept, card_assign,
+    CardRaiseRequest, CardShowOutcome, CardShowRequest, CardSplitBody, CardSplitChild,
+    CardSplitOutcome, CardSplitParent, CardSplitRequest, TOOL_ACTOR, card_accept, card_assign,
     card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move, card_new,
-    card_raise, card_show,
+    card_raise, card_show, card_split,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
@@ -431,6 +432,13 @@ pub use sparse::{SparseOutcome, sparse};
 pub use specengine_core::card::{
     EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, HISTORY_MAX, hub_login_problem,
 };
+/// The most subtasks one split makes, and where a subtask's targets come
+/// from (core's), for the bridges.
+pub use specengine_core::card_split::{MAX_SPLIT_CHILDREN, TargetsFrom};
+
+/// `spec card split`'s plan-only flag, without its dashes: one spelling for
+/// the parser and the usage line that names it.
+pub const SPLIT_DRY_RUN_FLAG: &str = "dry-run";
 /// The intake's input types, enums and caps (core's), for the bridges;
 /// the names of the kinds `propose_change` takes and of a decision, and a
 /// kind's name with its article.
@@ -714,6 +722,8 @@ pub enum Outcome {
     /// [`card_raise`] (no command; the daemon's card door): the intake
     /// document, or why there is no such card.
     CardRaise(Box<CardRaiseOutcome>),
+    /// `card split`: the parent and its subtasks, written or planned.
+    CardSplit(Box<CardSplitOutcome>),
     /// `card list`: the flows and the cards.
     CardList(Box<CardListOutcome>),
     /// `approve --open`: what the walk applied and left.
@@ -771,6 +781,7 @@ impl Outcome {
             Self::Trace(trace) => trace.exit(),
             Self::CardShow(show) => show.exit(),
             Self::CardRaise(raise) => raise.exit(),
+            Self::CardSplit(split) => split.exit(),
             Self::Round(run) => run.exit(),
             Self::RoundAnswers(answers) => answers.exit(),
             _ => Exit::Answered,
@@ -833,6 +844,7 @@ impl Outcome {
                 Some(intake) => (&intake.messages, intake.refusal.as_deref()),
                 None => (&outcome.messages, outcome.reason.as_deref()),
             },
+            Self::CardSplit(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::CardList(outcome) => (&outcome.messages, None),
             Self::RoundSheet(outcome) => (&outcome.messages, None),
             Self::Round(outcome) => (&outcome.messages, None),
@@ -893,6 +905,7 @@ impl Outcome {
                 | Self::Trace(_)
                 | Self::CardShow(_)
                 | Self::CardRaise(_)
+                | Self::CardSplit(_)
                 | Self::CardList(_)
                 | Self::RoundSheet(_)
                 | Self::Round(_)
@@ -954,6 +967,7 @@ pub fn render_text(outcome: &Outcome) -> String {
             .intake
             .as_deref()
             .map_or_else(String::new, intake::render_text),
+        Outcome::CardSplit(outcome) => card::render_split_text(outcome),
         Outcome::CardList(outcome) => card::render_list_text(outcome),
         Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
         Outcome::Round(outcome) => round::render_text(outcome),
@@ -1010,6 +1024,7 @@ impl serde::Serialize for Outcome {
             Self::Trace(outcome) => outcome.serialize(serializer),
             Self::CardShow(outcome) => outcome.serialize(serializer),
             Self::CardRaise(outcome) => outcome.serialize(serializer),
+            Self::CardSplit(outcome) => outcome.serialize(serializer),
             Self::CardList(outcome) => outcome.serialize(serializer),
             Self::RoundSheet(outcome) => outcome.serialize(serializer),
             Self::Round(outcome) => outcome.serialize(serializer),

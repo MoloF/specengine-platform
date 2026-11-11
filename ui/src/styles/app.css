@@ -7526,3 +7526,121 @@ mark {
 .issue-view-side .command-meaning {
   grid-column: 1 / -1;
 }
+
+/* Split to departments (SplitDialog.tsx; docs/features/department-split.md "Acceptance criteria",
+   U3): wider than a card write's dialog and at most the work item's; under 36rem it is the screen.
+   Each subtask a checkbox at the target's height, its flow's title, the raw discipline and its
+   targets under it, long labels wrapping. */
+.card-dialog.split-dialog {
+  width: min(var(--modal-width-m), 100%);
+}
+
+.split-subtasks,
+.split-department {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.split-subtasks > legend,
+.split-department > legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.split-department > legend {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.split-rows,
+.split-target-list,
+.split-existing-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.split-row {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+}
+
+.split-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  min-width: 0;
+}
+
+.split-choice input[type="checkbox"] {
+  flex: none;
+  width: var(--target-min);
+  height: var(--target-min);
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.split-choice-text {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.split-discipline,
+.split-targets-line {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.split-targets-line {
+  margin: 0;
+}
+
+.split-target-list {
+  gap: var(--space-1);
+  padding-top: var(--space-1);
+}
+
+.split-target-list a,
+.split-existing-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  overflow-wrap: anywhere;
+}
+
+.split-existing {
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* A split's note under the document's acts takes a line of its own. */
+.doc-acts-note {
+  flex-basis: 100%;
+}
+
+@media (max-width: 36rem) {
+  .dialog-host:has(.split-dialog) {
+    padding: 0;
+  }
+
+  .card-dialog.split-dialog {
+    width: 100vw;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+}

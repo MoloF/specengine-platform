@@ -46,6 +46,14 @@
 //! lowercased, read with the TOML reader ([`module_kinds`]): on the
 //! repository exactly `{"scene"}`, studio-lamp's direction. M: the reader
 //! taking `root` instead of `kinds`.
+//!
+//! docs/features/department-split.md (RM-0100) "Acceptance criteria", S9: the
+//! words gain every `disciplines` entry of every `[[card.split]]` row of the
+//! same configs and presets, lowercased, read with the TOML reader
+//! ([`split_disciplines`]): on the repository exactly `{"copy", "plates"}`,
+//! card-press's two rows (the preset's rows are commented). A row's `kind`
+//! already comes with `kind = "..."`. A planted `"plates"` in a probe source
+//! is red. M: the reader not reading the rows' disciplines.
 
 mod common;
 
@@ -268,7 +276,10 @@ fn configs(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// The `kind = "…"` values of the repository's config and every config
-/// under `fixtures/`.
+/// under `fixtures/`, live lines alone: a TOML comment line (`#` first, after
+/// any indent) is no config, so a commented example's kind is no project's
+/// word (docs/features/department-split.md "Acceptance criteria", S9: the
+/// preset's commented `[[card.split]]` rows, copied into studio-lamp).
 fn kinds() -> (BTreeSet<String>, Vec<PathBuf>) {
     let root = repository_root();
     let mut files = vec![root.join("specengine.toml")];
@@ -277,30 +288,38 @@ fn kinds() -> (BTreeSet<String>, Vec<PathBuf>) {
     let mut kinds = BTreeSet::new();
     for file in &files {
         let text = fs::read_to_string(file).expect("a config");
-        for line in text.lines() {
-            let mut rest = line;
-            while let Some(at) = rest.find("kind") {
-                let after = &rest[at + 4..];
-                let boundary = at == 0
-                    || !rest[..at]
-                        .chars()
-                        .last()
-                        .is_some_and(|c| c.is_alphanumeric() || c == '_');
-                let value = after
-                    .trim_start()
-                    .strip_prefix('=')
-                    .map(str::trim_start)
-                    .and_then(|v| v.strip_prefix('"'))
-                    .and_then(|v| v.split_once('"'))
-                    .map(|(kind, _)| kind);
-                if boundary && let Some(kind) = value {
-                    kinds.insert(kind.to_lowercase());
-                }
-                rest = after;
-            }
-        }
+        kinds_in(&text, &mut kinds);
     }
     (kinds, files)
+}
+
+/// The `kind = "…"` values of `text`'s live lines, lowercased, into `kinds`.
+fn kinds_in(text: &str, kinds: &mut BTreeSet<String>) {
+    for line in text.lines() {
+        if line.trim_start().starts_with('#') {
+            continue;
+        }
+        let mut rest = line;
+        while let Some(at) = rest.find("kind") {
+            let after = &rest[at + 4..];
+            let boundary = at == 0
+                || !rest[..at]
+                    .chars()
+                    .last()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_');
+            let value = after
+                .trim_start()
+                .strip_prefix('=')
+                .map(str::trim_start)
+                .and_then(|v| v.strip_prefix('"'))
+                .and_then(|v| v.split_once('"'))
+                .map(|(kind, _)| kind);
+            if boundary && let Some(kind) = value {
+                kinds.insert(kind.to_lowercase());
+            }
+            rest = after;
+        }
+    }
 }
 
 /// The `toml` files of `dir` (not below it), sorted.
@@ -377,6 +396,43 @@ fn module_kinds() -> BTreeSet<String> {
         }
     }
     kinds
+}
+
+/// docs/features/department-split.md (RM-0100) S9: every `disciplines` entry
+/// of every `[[card.split]]` row of the repository's config, every config
+/// under `fixtures/` and every preset under `scripts/presets/`, lowercased:
+/// a row's discipline is a project's word, looked up, never compared. A file
+/// the TOML reader refuses holds none.
+fn split_disciplines() -> BTreeSet<String> {
+    let root = repository_root();
+    let mut files = vec![root.join("specengine.toml")];
+    configs(&root.join("fixtures"), &mut files);
+    files.extend(toml_files(&root.join("scripts/presets")));
+    files.sort();
+    let mut disciplines = BTreeSet::new();
+    for file in &files {
+        let text = fs::read_to_string(file).expect("a config");
+        let Ok(table) = text.parse::<toml::Table>() else {
+            continue;
+        };
+        let rows = table
+            .get("card")
+            .and_then(|card| card.get("split"))
+            .and_then(toml::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        for row in rows {
+            let listed = row
+                .get("disciplines")
+                .and_then(toml::Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            for discipline in listed.iter().filter_map(toml::Value::as_str) {
+                disciplines.insert(discipline.to_lowercase());
+            }
+        }
+    }
+    disciplines
 }
 
 /// docs/features/board-handoff.md (RM-0085) BH-13: the `return` column of
@@ -546,6 +602,16 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
             "studio-lamp's `{kind}` is read: {kinds:?}"
         );
     }
+    // docs/features/department-split.md S9: card-press's live rows' kinds
+    // are read; the preset's commented example (`# kind = "character"`,
+    // copied into studio-lamp) is not.
+    for kind in ["broadsheet", "print-run"] {
+        assert!(kinds.contains(kind), "card-press's `{kind}`: {kinds:?}");
+    }
+    assert!(
+        !kinds.contains("character"),
+        "a commented example is no kind: {kinds:?}"
+    );
     let (names, name_files) = workspace_names();
     assert!(
         name_files
@@ -579,6 +645,13 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
     // docs/features/board-handoff.md BH-13: the preset's return column.
     let returns = preset_return_columns();
     assert!(returns.contains("sent-back"), "{returns:?}");
+    // docs/features/department-split.md S9: the rows' disciplines.
+    let split = split_disciplines();
+    assert_eq!(
+        split,
+        BTreeSet::from(["copy".to_owned(), "plates".to_owned()]),
+        "card-press's two rows (M: the rows' disciplines not read)"
+    );
     let mut found = Vec::new();
     let mut exempt = Vec::new();
     let mut scanned = 0;
@@ -603,6 +676,12 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
             for word in return_words(&literal.text, &returns) {
                 found.push(format!(
                     "{relative}:{}: {:?} holds `{word}`, a preset return column",
+                    literal.line, literal.text
+                ));
+            }
+            for word in return_words(&literal.text, &split) {
+                found.push(format!(
+                    "{relative}:{}: {:?} holds `{word}`, a `[[card.split]]` row's discipline",
                     literal.line, literal.text
                 ));
             }
@@ -831,5 +910,48 @@ fn back(column: &str) -> u16 {
     assert_eq!(
         hits,
         [(4, "sent-back".to_owned()), (5, "sent-back".to_owned())]
+    );
+}
+
+/// docs/features/department-split.md (RM-0100) S9: with the rows'
+/// disciplines the configs hold, a probe source branching on `"plates"`, or
+/// wording `copy` in a message, is red; a comment and a word that only holds
+/// one are not. M: the reader not reading the rows' disciplines.
+#[test]
+fn department_split_s9_the_scan_sees_a_split_rows_discipline_in_a_literal() {
+    let split = split_disciplines();
+    let probe = r#"
+// A comment saying plates or copy is no literal.
+fn split(discipline: &str) -> u16 {
+    if discipline == "plates" { return 1; }
+    let _ = "the Copy desk";
+    let _ = "copyright; templates";
+    let _ = "/api/projects/{p}/cards/split";
+    0
+}
+"#;
+    let mut hits = Vec::new();
+    for literal in literals(probe) {
+        for word in return_words(&literal.text, &split) {
+            hits.push((literal.line, word));
+        }
+    }
+    assert_eq!(hits, [(4, "plates".to_owned()), (5, "copy".to_owned())]);
+}
+
+/// docs/features/department-split.md (RM-0100) S9: the kind scan reads live
+/// lines alone. A commented `[[card.split]]` row's `kind`, at any indent, is
+/// no kind; a live one is, beside a commented one or after a table header.
+/// M: comment lines read (the preset's `character` would flag "control
+/// character" in a `#[cfg(test)]` literal of the daemon).
+#[test]
+fn department_split_s9_a_commented_kind_is_no_kind() {
+    let text = "# [[card.split]]\n# kind = \"character\"\n   # kind = \"voice\"\n\
+                [[card.split]]\nkind = \"Broadsheet\"\n[ids]\nSHT = { kind = \"sheet\" }\n";
+    let mut kinds = BTreeSet::new();
+    kinds_in(text, &mut kinds);
+    assert_eq!(
+        kinds,
+        BTreeSet::from(["broadsheet".to_owned(), "sheet".to_owned()])
     );
 }

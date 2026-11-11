@@ -34,7 +34,7 @@ function harbor(notes: string[]): WorkspaceDocument {
     source: "config",
     notes,
     workspaces: [
-      { name: "galley", title: "Galley", landing: "flow", sections: ["board", "flow", "tree", "inbox"], flows: ["copy"], disciplines: ["copy"], module: "berths" },
+      { name: "galley", title: "Galley", landing: "flow", sections: ["board", "flow", "tree", "inbox"], flows: ["copy"], disciplines: ["copy", "captions"], module: "berths" },
       { name: "foundry", title: "Foundry", landing: "overview", sections: ["board", "health", "graph", "tree"], flows: ["plates"], disciplines: ["plates"], module: null },
     ],
     modules: [

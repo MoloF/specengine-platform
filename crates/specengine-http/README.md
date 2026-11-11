@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -47,7 +47,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../round`; POST `.../round/answers` | `limit`; -- | `spec round new --json`, uncut; stage answers (`round-ui.md`) |
 | GET `.../events` | header `Last-Event-ID` | the live tail (SSE) |
 | POST, DELETE `.../proposals/:id/decision` | -- | stage, unstage |
-| GET, POST `.../cards`, GET `.../cards/:id`, POST its seven verbs, GET `.../trace`, POST `.../trace/clear` | `board-ui.md` | the Board |
+| GET, POST `.../cards`, POST `.../cards/split`, GET `.../cards/:id`, POST its seven verbs, GET `.../trace`, POST `.../trace/clear` | `board-ui.md` | the Board |
 | POST, GET, DELETE `/mcp/<slug>`, a hub's alone (`mcp.rs`) | refused | MCP (`hub-mcp.md`) |
 | GET `/`, `/assets/<file>` | ignored | the web UI (`serve-ui.md`) |
 
@@ -59,13 +59,13 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {root}`, `render_json`), the config found again first (a changed slug, a config `discover` refuses -> 503 with the reason, `check` too; `/api/projects` 503 if any). Exit 0 -> 200, the document; 1 -> 404, the exit-1 document; 2 -> 503, the error body, `message` the `CliError` line(s) verbatim. **The exceptions** (`answered`), never a verdict word: `Outcome::Check` (a report), `Outcome::RoundAnswers` 200 whatever the exit; `Outcome::{Stage,Confirm}`, `Outcome::Card{,Group}` by their cause (`caused`; `decision-staging.md` "Daemon"); a `CliError` 503. **Error body** `{"status":<code>,"message":"..."}`, exactly two keys: 400, 403, 404 (an unknown slug or route, listing the served ones), 405, 413, 415, 500 (a caught panic), 503. Bodies `application/json; charset=utf-8`, the CLI's stdout less the final LF; stderr not carried (a read's notes: JSON `notes`).
 
-**One door.** The write routes stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps, or write a card (`board-ui.md`). No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`, any `card_` outside `CARD_CALLS`, `confirm_*` outside `src/confirm.rs`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and six more names. A departing accept's proposal stands inside `card_accept` (ADR-0057), a card's question or decision inside `card_raise` (ADR-0077); a hub's `/mcp` raises proposals and writes cards through `specengine-mcp`'s hub server (`hub-mcp.md`). No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind, a workspace or module name or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, but a hub's confirm, in the data directory: stages and cards in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`).
+**One door.** The write routes stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps, or write a card (`board-ui.md`). No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`, any `card_` outside `CARD_CALLS` (12), `confirm_*` outside `src/confirm.rs`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and six more names. A departing accept's proposal stands inside `card_accept` (ADR-0057), a card's question or decision inside `card_raise` (ADR-0077); a hub's `/mcp` raises proposals and writes cards through `specengine-mcp`'s hub server (`hub-mcp.md`). No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind, a workspace or module name or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, but a hub's confirm, in the data directory: stages and cards in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`).
 
 **Worktrees**: the corpus reads read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, `check` no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
 
 ## Live tail
 
-`GET .../events` (`tail.rs`): the project slug's queue `events` only. A stream opens with one poll (a newer build's queue or a changed slug: 503), then `id: <start>` and a blank line, so one dropped before its first event resumes there. `<start>`: the highest `seq` now (0 without a database), or `Last-Event-ID` when not above it (above: a new database, the highest). Per event `id: <seq>`, `event: <type>`, `data: <payload>` (the stored JSON, one line), a blank line; a `:` comment every 15 s. No `Last-Event-ID`: no replay; `Last-Event-ID: n`: exactly `seq > n`, at once; not a non-negative decimal integer, or sent twice -> 400. On a hub it ends after 300 s; types and polls: `serve.md` "Live tail".
+`GET .../events` (`tail.rs`): the project slug's queue `events` only. A stream opens with one poll (a newer build's queue or a changed slug: 503), then `id: <start>` and a blank line, so one dropped before its first event resumes there. `<start>`: the highest `seq` now (0 without a database), or `Last-Event-ID` when not above it (above: a new database, the highest). Per event `id: <seq>`, `event: <type>`, `data: <payload>` (the stored JSON, one line), blank; a `:` comment every 15 s. No `Last-Event-ID`: no replay; `Last-Event-ID: n`: exactly `seq > n`, at once; not a non-negative decimal integer, or sent twice -> 400. On a hub it ends after 300 s; types and polls: `serve.md` "Live tail".
 
 ## Concurrency
 
@@ -74,9 +74,9 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 ## Known limits
 
 - Repositories of one slug share `<slug>.db` and its events: a tail carries every one's.
-- U+0002 to U+0004 in the corpus can fake a snippet's hit or cut, capped too.
+- U+0002 to U+0004 in the corpus can fake a snippet's hit or cut.
 - A database replaced under a live stream: its events up to the stream's cursor are never sent.
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]`-only edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]` edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

@@ -43,7 +43,7 @@ use std::path::Path;
 use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CardEditRequest, CardListRequest, CardMoveRequest, CardNewRequest,
-    CardShowRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput,
+    CardShowRequest, CardSplitRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput,
     DiscrepancyRequest, DriftRequest, Env, Exit, FlowRequest, GitEnv, Globals, ImpactRequest,
     IntakeSeverity, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
     ReviewRequest, RoadmapRequest, SearchRequest, ShowRequest, SymbolsForm, SymbolsRequest,
@@ -107,8 +107,9 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// since docs/features/review-form.md ([`OWNER_TOOLS`]), twenty-three since
 /// docs/features/flow-read.md (`get_flow`), twenty-eight since
 /// docs/features/card-store.md ([`CARD_TOOLS`]), twenty-nine since
-/// docs/features/card-trace.md (`get_trace`).
-pub const TOOLS: [&str; 29] = [
+/// docs/features/card-trace.md (`get_trace`), thirty since
+/// docs/features/department-split.md (`split_card`).
+pub const TOOLS: [&str; 30] = [
     "ask_question",
     "check_binding",
     "claim_task",
@@ -136,6 +137,7 @@ pub const TOOLS: [&str; 29] = [
     "report_run",
     "review_proposal",
     "search",
+    "split_card",
     "submit_plan",
     "unmapped",
 ];
@@ -720,6 +722,31 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                 now: now.to_owned(),
             },
         ),
+        // docs/features/department-split.md "Acceptance criteria", S8:
+        // `split_card` = `spec card split`, `child` as `--child`, acting as
+        // `agent`; a refusal keeps its split document.
+        "split_card" => {
+            let children = args["child"].as_array().map(|_| strings(&args["child"]));
+            return expected(
+                specengine_cli::card_split(
+                    env,
+                    globals,
+                    &CardSplitRequest {
+                        targets: strings(&args["target"]),
+                        title: text("title"),
+                        goal: text("goal"),
+                        discipline: text("discipline"),
+                        parent: text("parent"),
+                        children,
+                        reviewer: text("reviewer"),
+                        dry_run: args["dry_run"] == json!(true),
+                        actor,
+                        now: now.to_owned(),
+                    },
+                )
+                .map(|outcome| Outcome::CardSplit(Box::new(outcome))),
+            );
+        }
         other => panic!("no card twin for tool {other}"),
     };
     let mut want = expected(outcome.map(|outcome| Outcome::Card(Box::new(outcome))));
@@ -852,7 +879,9 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             &server_git(env),
         );
     }
-    if CARD_TOOLS.contains(&tool) {
+    // docs/features/department-split.md S8: `split_card`, a card write that
+    // is no tool of 0.22.0's `CARD_TOOLS`, is `spec card split`.
+    if CARD_TOOLS.contains(&tool) || tool == "split_card" {
         return card_library(tool, args, env, globals, &specengine_cli::utc_now());
     }
     if OWNER_TOOLS.contains(&tool) {

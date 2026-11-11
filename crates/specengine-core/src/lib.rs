@@ -103,6 +103,7 @@
 
 pub mod anchor;
 pub mod card;
+pub mod card_split;
 pub mod card_toml;
 pub mod check;
 pub mod code_toml;
@@ -149,8 +150,11 @@ use specengine_model::{
     LinkTarget, Node, ParentRef, ParsedFile, PathTarget, Reference, Span,
 };
 
+pub use card_split::{
+    MAX_SPLIT_CHILDREN, PlannedChild, ScopeNode, SplitPlan, TargetsFrom, split_plan,
+};
 pub use card_toml::{
-    CardAccept, CardColumn, CardConfig, CardFlow, CardMove, PLAIN_FLOW, card_from_toml,
+    CardAccept, CardColumn, CardConfig, CardFlow, CardMove, CardSplit, PLAIN_FLOW, card_from_toml,
 };
 pub use code_toml::{CodeConfig, code_from_toml};
 pub use flow::{

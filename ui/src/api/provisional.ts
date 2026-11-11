@@ -2234,6 +2234,84 @@ export interface CardRaiseBody {
   as: string | null;
 }
 
+/**
+ * POST `.../cards/split`: `split_card`'s keys and the acting name, every key sent, null for none: a
+ * new parent's `target`, `title`, `goal` and `discipline`, or a stored card's ID in `parent`, never
+ * both; `child` the subtasks' disciplines in order, null for none, which only a plan (`dry_run`
+ * true) takes, planning every discipline the flows list; `reviewer` null: the stored parent's, else
+ * the acting name. Sources: `docs/canon/card-split.md` "The rule";
+ * `docs/features/department-split.md` "Acceptance criteria" (S7, U2).
+ */
+export interface CardSplitBody {
+  target: string[] | null;
+  title: string | null;
+  goal: string | null;
+  discipline: string | null;
+  parent: string | null;
+  child: string[] | null;
+  reviewer: string | null;
+  dry_run: boolean;
+  as: string | null;
+}
+
+/** Where a subtask's targets come from, the daemon's two words. Source: `docs/features/department-split.md` "Acceptance criteria" (S2). */
+export type KnownSplitTargetsFrom = "kinds" | "parent";
+
+/**
+ * `kinds`: the nodes of the kinds its project's split templates name for its discipline, found in
+ * the parent's targets or under them; `parent`: the parent's targets. Told apart in
+ * `src/board/labels.ts` alone; a word this build does not know shown raw. Source:
+ * `docs/features/department-split.md` "Acceptance criteria" (S2, U2).
+ */
+export type SplitTargetsFrom = KnownSplitTargetsFrom | Unlisted;
+
+/**
+ * A split's parent: made by it (`created`), or a stored card it never writes; `id` null in a plan;
+ * `flow_title` the flow's title, else its name. Sources: `docs/canon/card-split.md` "The rule";
+ * `docs/features/department-split.md` "Acceptance criteria" (S3, S4, S6).
+ */
+export interface CardSplitParent {
+  id: string | null;
+  created: boolean;
+  title: string;
+  discipline: string | null;
+  flow: string;
+  flow_title: string;
+  column: string;
+  targets: string[];
+}
+
+/**
+ * One subtask of a split, made or planned (`id` null): its discipline, the flow and first column the
+ * new-card rule gives it, its targets and where they come from, and whether a split template of the
+ * project suggests it. Sources: `docs/canon/card-split.md` "The rule";
+ * `docs/features/department-split.md` "Acceptance criteria" (S2, S3, S6).
+ */
+export interface CardSplitChild {
+  id: string | null;
+  discipline: string;
+  flow: string;
+  flow_title: string;
+  column: string;
+  targets: string[];
+  from: SplitTargetsFrom;
+  suggested: boolean;
+}
+
+/**
+ * `spec card split --json`, the route's 200 and 409: written, planned (`dry_run`, every `id` null,
+ * `reviewer` unjudged, null when no name stands) or refused (`parent` null, `children` empty,
+ * `reviewer` null, its reason the last of `notes`); `notes` the plan's, then a refusal's reason. Sources:
+ * `docs/canon/card-split.md` "The rule"; `docs/features/department-split.md` "Acceptance criteria" (S3, S6, S7).
+ */
+export interface CardSplit {
+  dry_run: boolean;
+  parent: CardSplitParent | null;
+  children: CardSplitChild[];
+  reviewer: string | null;
+  notes: string[];
+}
+
 /** How many nodes stand in each state. Source: `docs/features/card-trace.md` "Data". */
 export interface TraceCounts {
   no_card: number;

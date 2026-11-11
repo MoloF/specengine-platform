@@ -84,7 +84,7 @@ Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first:
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034, `architecture.md#distribution`). The daemon's `127.0.0.1` bind, its Host, Origin and Sec-Fetch-Site fence (`crates/specengine-http/README.md`) and absent CORS stop other sites' pages; they identify no one. A link from another site still opens `/`: static bytes in the person's tab, never framed, whose requests take the whole fence (`serve-ui.md` "Rules"). Threat model: any local process of any account can read everything served, stage a decision, raise a question or decision on a card, and move, cancel, accept or clear one under any name (loopback is not per-user; ADR-0057, `board-ui.md`), a departing accept storing one discrepancy; none confirms a decision from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve`. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy), never in-app; a hub's answer: `hub.md#trust`.
+No authentication inside SpecEngine (ADR-0034, `architecture.md#distribution`). The daemon's `127.0.0.1` bind, its Host, Origin and Sec-Fetch-Site fence (`crates/specengine-http/README.md`) and absent CORS stop other sites' pages; they identify no one. A link from another site still opens `/`: static bytes in the person's tab, never framed, whose requests take the whole fence (`serve-ui.md` "Rules"). Threat model: any local process of any account can read everything served, stage a decision, raise a question or decision on a card, and split, move, cancel, accept or clear one under any name (loopback is not per-user; ADR-0057, `board-ui.md`), a departing accept storing one discrepancy; none confirms a decision from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve`. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy), never in-app; a hub's answer: `hub.md#trust`.
 
 ## Concurrency
 
@@ -98,7 +98,7 @@ Requests of one project run one at a time on the blocking pool (a read refreshes
 
 - Between a winner's lock and its publish, an earlier daemon's stale `daemon.json` reads as published: a probe answers `already running: pid <dead pid>`, exit 0. A fix conflicts with "never removed" and "no pid check".
 - A root holding a control character is named escaped in the restart command: not runnable as printed.
-- `execvp` runs a found file that is no binary through `/bin/sh` (ENOEXEC; 127 when it fails).
+- `execvp` runs a found non-binary through `/bin/sh` (ENOEXEC; 127 when it fails).
 - Deleting the data directory under a live daemon lets a second start lock a new file.
 - Version skew: crates 0.1.0, no build id; an old daemon after `cargo install` answers `SchemaTooNew` 503s: restart it.
 - `daemon.json.tmp` is one fixed name, safe because the lock serialises starts.

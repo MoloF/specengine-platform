@@ -52,7 +52,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs · crates/specengine-mcp, crates/specengine-cli, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-department (Phase 7, v5 step 13): a hub's per-login default department · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0099.md](roadmap/RM-0099.md) design-sweep (Phase 7, v5 step 7): every other screen on the foundation · ui · draft
-- [docs/roadmap/RM-0100.md](roadmap/RM-0100.md) department-split (Phase 7, v5 step 6c): a task and a subtask per department, in one act · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, scripts, fixtures · draft
 - [docs/roadmap/RM-0102.md](roadmap/RM-0102.md) flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0103.md](roadmap/RM-0103.md) canvas-clicks (Phase 7, v5 pool): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy · ui · draft
 - [docs/roadmap/RM-0104.md](roadmap/RM-0104.md) task-mandate (Phase 7, v5 step 6d): a subtask is binding, or its department decides · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin · draft

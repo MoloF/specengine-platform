@@ -709,7 +709,8 @@ fn no_queue_reads_no_card_within_the_schema() {
 /// docs/features/trace-views.md (`get_flow`'s `, trace?`).
 #[test]
 fn ac10_no_tool_clears_and_get_trace_is_a_read() {
-    assert_eq!(TOOLS.len(), 29);
+    // docs/features/department-split.md S8: thirty with `split_card`.
+    assert_eq!(TOOLS.len(), 30);
     assert!(TOOLS.contains(&"get_trace"));
     let instructions = specengine_mcp::INSTRUCTIONS;
     assert_eq!(instructions.len(), 2048);

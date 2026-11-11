@@ -49,7 +49,8 @@ describe("the sections (DM-12 of doc-modal)", () => {
   it("acts in order: New card, the one primary; Open in Flow under the last ancestor; Open in Spec tree; the tools Open as a page and Close", async () => {
     const { dialog, shown } = await ferry();
     const acts = Array.from(dialog.querySelectorAll(".doc-acts > *"));
-    expect(acts.map((act) => act.textContent)).toEqual(["New task", "Open in Flow", "Open in Spec tree"]);
+    // Split to departments… after New task (U1 of department-split).
+    expect(acts.map((act) => act.textContent)).toEqual(["New task", "Split to departments…", "Open in Flow", "Open in Spec tree"]);
     expect(dialog.querySelectorAll(".button-primary")).toHaveLength(1);
     expect(acts[0]?.className).toContain("button-primary");
     expect(shown.getByRole("link", { name: "Open in Flow" }).getAttribute("href")).toBe("#/alpha/flow/DOM-FERRY?scope=DOM-RIVER");

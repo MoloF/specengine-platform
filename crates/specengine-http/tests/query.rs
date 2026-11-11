@@ -511,7 +511,8 @@ fn board_handoff_bh19_parent_lists_its_children() {
         let document = reply.json();
         assert_eq!(
             document["flows"].as_array().map(Vec::len),
-            Some(5),
+            // department-split S9: the preset's six flows.
+            Some(6),
             "{target}: every flow"
         );
         document["cards"]

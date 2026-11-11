@@ -16,6 +16,10 @@
 //! literal of `crates/specengine-cli/src/task.rs`); a fixture's `return` is
 //! its own word, as its flow names are.
 //!
+//! docs/features/department-split.md (RM-0100) "Acceptance criteria", S9: the
+//! preset's sixth flow and fifth workspace, `sound`, and its title join the
+//! names as read; no source holds a `sound` literal.
+//!
 //! docs/features/departments.md (RM-0096) DP-6: the names gain every `kinds`
 //! entry of every `[[module]]` (a direction's kinds, as written) in the same
 //! configs and presets, and each preset flow's `title`; a fixture flow's
@@ -291,6 +295,10 @@ fn ws6b_no_workspace_module_or_preset_flow_name_is_a_literal() {
         "Art",
         "Level design",
         "Production",
+        // docs/features/department-split.md "Acceptance criteria", S9: the
+        // preset's `sound` flow and workspace, and its title.
+        "sound",
+        "Sound",
     ] {
         assert!(names.contains(name), "`{name}` is read: {names:?}");
     }

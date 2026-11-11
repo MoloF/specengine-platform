@@ -14,6 +14,8 @@ import type {
   CardMoveBody,
   CardNotFound,
   CardRaiseBody,
+  CardSplit,
+  CardSplitBody,
   CardWrite,
   CheckReport,
   ConfirmBody,
@@ -276,6 +278,14 @@ export interface SpecEngineClient {
    * (400, 403, 413, 415, 503) its message.
    */
   raiseOnCard(project: string, id: string, body: CardRaiseBody): Promise<IntakeDocument>;
+  /**
+   * POST /api/projects/:p/cards/split (docs/canon/card-split.md "The rule";
+   * docs/features/department-split.md "Acceptance criteria", S7, U2): a parent task and one subtask
+   * per discipline in `child`, all or none, one write under the acting name; with `dry_run` the plan,
+   * nothing written. 200 the split document, written or planned; a refusal (409) its last note, an
+   * error body (400, 403, 413, 415, 503) its message.
+   */
+  splitCard(project: string, body: CardSplitBody): Promise<CardSplit>;
   /** POST /api/projects/:p/trace/clear (docs/features/card-trace.md "Clearing"; no effect only, one event per card) */
   clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite>;
   /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] [--stage S] [--summary] --json, the browser view; 404 the exit-1 document) */

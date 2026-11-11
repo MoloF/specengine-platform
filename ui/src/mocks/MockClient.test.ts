@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import type { InboxEntry } from "../api/types";
+import type { CardFlow, InboxEntry } from "../api/types";
+import { mockBoard, splitCardsIn, splitScopeOf } from "./cards";
+import { DRAFT_FILE } from "./harbor-sim/fixtures";
 import { MockClient } from "./MockClient";
 import { scenarioFromSearch, SLOW_MS } from "./scenario";
 
@@ -73,7 +75,7 @@ describe("the normal scenario", () => {
     const harbor = await client.getWorkspaces("harbor-sim");
     expect(harbor.source).toBe("config");
     expect(harbor.workspaces.map(({ name, landing, sections, flows, disciplines, module }) => [name, landing, sections, flows, disciplines, module])).toEqual([
-      ["galley", "flow", ["board", "flow", "tree", "inbox"], ["copy"], ["copy"], "berths"],
+      ["galley", "flow", ["board", "flow", "tree", "inbox"], ["copy"], ["copy", "captions"], "berths"],
       ["foundry", "overview", ["board", "health", "graph", "tree"], ["plates"], ["plates"], null],
     ]);
     expect(harbor.modules.map(({ name, title, root, kinds }) => [name, title, root, kinds])).toEqual([
@@ -84,7 +86,7 @@ describe("the normal scenario", () => {
     // Each department's disciplines are what the daemon's rule gives over the mock's flows: each flow's own.
     const flows = (await client.getCards("harbor-sim")).flows;
     expect(flows.map((flow) => [flow.name, flow.title, flow.disciplines])).toEqual([
-      ["copy", "Copy desk", ["copy"]],
+      ["copy", "Copy desk", ["copy", "captions"]],
       ["plates", "plates", ["plates"]],
     ]);
     expect(harbor.notes).toEqual([]);
@@ -399,5 +401,117 @@ describe("a card's items over the mock (card-questions)", () => {
     const card = await cardOf(client, "C-0008");
     expect(card.history?.at(-1)).toMatchObject({ type: "proposal.staged", payload: { id: "PR-0055", as: "Mira Holt" } });
     expect(card.items[0]?.staged_at).toBe("2026-10-05T12:00:00Z");
+  });
+});
+
+// The mock's split (docs/features/department-split.md "Acceptance criteria", U2): the daemon's plan
+// over harbor-sim's two templates, a write of the parent and its subtasks, all or none, a stored
+// parent left as it was, and the conflict scenario's one refusal.
+describe("a split over the mock (department-split)", () => {
+  const SLUG = "harbor-sim";
+  const plan = { target: ["MEC-MOORING"], title: "Mooring", goal: null, discipline: "copy", parent: null, child: null, reviewer: null, dry_run: true, as: "Ivo Brandt" };
+
+  it("plans every discipline the flows list: copy and the plates suggested by the mooring's kinds, captions on the task's targets; nothing stored", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const before = (await client.getCards(SLUG)).cards.length;
+    const planned = await client.splitCard(SLUG, plan);
+    expect(Object.keys(planned)).toEqual(["dry_run", "parent", "children", "reviewer", "notes"]);
+    expect(planned.parent).toEqual({ id: null, created: true, title: "Mooring", discipline: "copy", flow: "copy", flow_title: "Copy desk", column: "draft", targets: ["MEC-MOORING"] });
+    expect(planned.children.map(({ id, discipline, flow, column, targets, from, suggested }) => [id, discipline, flow, column, targets, from, suggested])).toEqual([
+      [null, "copy", "copy", "draft", ["MEC-MOORING"], "kinds", true],
+      [null, "captions", "copy", "draft", ["MEC-MOORING"], "parent", false],
+      [null, "plates", "plates", "queued", ["MEC-MOORING", "RULE-MOOR-CREW", "RULE-MOOR-NIGHT"], "kinds", true],
+    ]);
+    expect([planned.reviewer, planned.notes]).toEqual(["Ivo Brandt", []]);
+    expect((await client.getCards(SLUG)).cards.length).toBe(before);
+  });
+
+  it("writes the parent first, then each subtask in the order asked, its parent the parent, its reviewer the split's, the parent's title and goal; one card.created each", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const made = await client.splitCard(SLUG, { ...plan, goal: "Fees and crews", child: ["plates", "copy"], reviewer: "Mira Holt", dry_run: false });
+    const [parent, first, second] = [made.parent?.id ?? "", made.children[0]?.id ?? "", made.children[1]?.id ?? ""];
+    expect([parent, first, second]).toEqual(["C-0020", "C-0021", "C-0022"]);
+    const read = await client.getCard(SLUG, first);
+    expect(read).toMatchObject({ parent, reviewer: "Mira Holt", title: "Mooring", goal: "Fees and crews", discipline: "plates", flow: "plates", column: "queued", targets: ["MEC-MOORING", "RULE-MOOR-CREW", "RULE-MOOR-NIGHT"], assignee: null });
+    expect((await client.getCards(SLUG, { parent })).cards.map((row) => row.id)).toEqual([second, first]);
+  });
+
+  it("under a stored task: only subtasks, the task's row and revision as they were; its reviewer the chain's", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const before = await client.getCard(SLUG, "C-0001");
+    const made = await client.splitCard(SLUG, { target: null, title: null, goal: null, discipline: null, parent: "C-0001", child: ["captions"], reviewer: null, dry_run: false, as: "Mira Holt" });
+    expect([made.parent?.id, made.parent?.created, made.reviewer]).toEqual(["C-0001", false, "Ivo Brandt"]);
+    expect(await client.getCard(SLUG, "C-0001")).toMatchObject({ revision: "revision" in before ? before.revision : "", updated_at: "updated_at" in before ? before.updated_at : "" });
+  });
+
+  it("refuses in the daemon's words, nothing stored: no such parent, a repeat, a reviewer who is no person, a usage line", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const before = (await client.getCards(SLUG)).cards.length;
+    const write = { ...plan, child: ["copy"], reviewer: "Mira Holt", dry_run: false };
+    const missing = await rejection(client.splitCard(SLUG, { ...write, target: null, title: null, discipline: null, parent: "C-0099" }));
+    expect([missing.status, missing.message]).toEqual([409, "parent: no card C-0099"]);
+    const twice = await rejection(client.splitCard(SLUG, { ...write, child: ["copy", "copy"] }));
+    expect([twice.status, twice.message]).toEqual([409, "child: `copy` is named twice"]);
+    const agent = await rejection(client.splitCard(SLUG, { ...write, reviewer: "agent" }));
+    expect([agent.status, agent.message]).toEqual([409, "reviewer: `agent` can be no reviewer: a person accepts a result"]);
+    // A plan judges no person.
+    expect((await client.splitCard(SLUG, { ...plan, reviewer: "agent" })).reviewer).toBe("agent");
+    const usage = await rejection(client.splitCard(SLUG, { ...write, child: null }));
+    expect([usage.status, usage.message]).toEqual([400, "spec: name each subtask's discipline with --child, or plan with --dry-run"]);
+    expect((await client.getCards(SLUG)).cards.length).toBe(before);
+  });
+
+  it("its scope names each node as split_scope does: the root as the target was written, an ID-less document by its path", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const README = "docs/spec/berths/README.md";
+    const rows = (await client.getTree(SLUG, { root: README, depth: 2 })).nodes;
+    expect(splitScopeOf(README, rows)).toEqual([
+      { target: README, kind: "domain" },
+      { target: "RULE-BASIN-NAME", kind: "rule" },
+      { target: DRAFT_FILE, kind: null },
+      { target: "RULE-BERTH-DRAFT", kind: "rule" },
+      { target: "MEC-MOORING", kind: "mechanic" },
+      { target: "RULE-MOOR-CREW", kind: "rule" },
+    ]);
+  });
+
+  it("judges only the disciplines a write names: a plan of every one the flows list is never capped; 33 named, a name off the rule or one named twice is refused in the daemon's words", () => {
+    const board = mockBoard(SLUG, "normal", NOW);
+    const many = Array.from({ length: 33 }, (_, index) => `d${String(index + 1)}`);
+    board.flows = [{ ...(board.flows[0] as CardFlow), disciplines: many }, ...board.flows.slice(1)];
+    const at = "2026-10-05T12:00:00Z";
+    const split = (child: string[] | null) => () => splitCardsIn(board, { ...plan, discipline: "d1", child }, () => [], at, () => false);
+    // 33 on the first flow and the plates' one: all planned, none refused.
+    expect(split(null)().children.map((child) => child.discipline)).toEqual([...many, "plates"]);
+    const before = board.cards.length;
+    expect(split(many)).toThrow("child: 33 named; a split makes 1 to 32");
+    expect(split(["d1", "D2"])).toThrow("child: `D2` is not a name: lower-case ASCII letters, digits, `_` and `-`");
+    expect(split(["x".repeat(65)])).toThrow(`child: \`${"x".repeat(65)}\` is 65 bytes long; a name has 1 to 64`);
+    // In order, as the daemon checks each: a repeat before a later name off the rule.
+    expect(split(["d1", "d1", "Bad"])).toThrow("child: `d1` is named twice");
+    expect(split(["d1", "Bad", "Bad"])).toThrow("child: `Bad` is not a name");
+    expect(board.cards.length).toBe(before);
+  });
+
+  it("a new card and a subtask take their flow by one rule, in one wording, the subtask's prefixed child:", async () => {
+    const client = new MockClient("normal", { now: clock });
+    expect((await client.createCard(SLUG, { title: "x", discipline: "captions", reviewer: "Mira Holt", as: null })).flow).toBe("copy");
+    const card = await rejection(client.createCard(SLUG, { title: "x", discipline: "sound", reviewer: "Mira Holt", as: null }));
+    expect([card.status, card.message]).toEqual([409, "no flow takes the discipline `sound`: none lists it, and every `[[card.flow]]` lists its disciplines"]);
+    const child = await rejection(client.splitCard(SLUG, { ...plan, child: ["sound"] }));
+    expect([child.status, child.message]).toEqual([409, `child: ${card.message}`]);
+    const bare = await rejection(client.createCard(SLUG, { title: "x", reviewer: "Mira Holt", as: null }));
+    expect(bare.message).toBe("no flow takes a card without a discipline: none lists it, and every `[[card.flow]]` lists its disciplines");
+  });
+
+  it("the conflict scenario: the first write is refused, nothing stored; the next is taken", async () => {
+    const client = new MockClient("conflict", { now: clock });
+    const write = { ...plan, child: ["copy", "plates"], reviewer: "Mira Holt", dry_run: false };
+    const before = (await client.getCards(SLUG)).cards.length;
+    const refused = await rejection(client.splitCard(SLUG, write));
+    expect([refused.status, refused.message]).toEqual([409, "child: no flow takes the discipline `copy`: none lists it, and every `[[card.flow]]` lists its disciplines"]);
+    expect((await client.getCards(SLUG)).cards.length).toBe(before);
+    expect((await client.splitCard(SLUG, write)).children).toHaveLength(2);
+    expect((await client.getCards(SLUG)).cards.length).toBe(before + 3);
   });
 });

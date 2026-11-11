@@ -35,19 +35,19 @@ use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveOpenRequest, ApproveRequest, BumpRequest, BundleRequest,
     CardAcceptRequest, CardAssignRequest, CardCancelRequest, CardClearGroupRequest,
     CardClearOutcome, CardClearRequest, CardEditRequest, CardListRequest, CardMoveRequest,
-    CardNewRequest, CardShowRequest, CheckRequest, CheckedTree, CliError, CreateRequest,
-    DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest,
-    ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
-    GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
-    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
-    InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest,
-    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
-    RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
-    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
-    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
-    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
-    TaskStatus, TraceRequest, TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat,
-    VerifyRequest, VerifyTestsRequest, render_json, render_text,
+    CardNewRequest, CardShowRequest, CardSplitRequest, CheckRequest, CheckedTree, CliError,
+    CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit,
+    ExportIndexRequest, ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput,
+    GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
+    INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
+    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
+    LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest,
+    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest,
+    RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve,
+    ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest, UnmappedRequest,
+    VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -596,6 +596,36 @@ enum CardCommand {
         /// Who acts, self-declared and recorded; absent: `local`.
         #[arg(long = "as", value_name = "N")]
         actor: Option<String>,
+    },
+    /// Split work to departments in one act: a parent card, or a stored one, and one subtask per --child, all or none.
+    Split {
+        /// A node the parent answers, an ID, `slug/ID` or a root-relative `.md` path (repeatable, at most 64).
+        #[arg(long = "target", value_name = "REF")]
+        targets: Vec<String>,
+        /// The parent's title, at most 256 bytes; each subtask takes it.
+        #[arg(long, value_name = "T")]
+        title: Option<String>,
+        /// The parent's goal, at most 4096 bytes; each subtask takes it.
+        #[arg(long, value_name = "T")]
+        goal: Option<String>,
+        /// The parent's discipline, a name `[card]` may list.
+        #[arg(long, value_name = "D")]
+        discipline: Option<String>,
+        /// Split under this stored card: only subtasks are made.
+        #[arg(long, value_name = "C")]
+        parent: Option<String>,
+        /// A subtask's discipline: one subtask per --child, first column of the flow listing it.
+        #[arg(long = "child", value_name = "D")]
+        children: Vec<String>,
+        /// Who accepts each card's result, a person; absent: the stored parent's, else --as.
+        #[arg(long, value_name = "N")]
+        reviewer: Option<String>,
+        /// Who acts, self-declared and recorded; absent: `local`.
+        #[arg(long = "as", value_name = "N")]
+        actor: Option<String>,
+        /// Plan only: print what the split would make and write nothing.
+        #[arg(long = specengine_cli::SPLIT_DRY_RUN_FLAG)]
+        dry_run: bool,
     },
     /// List the flows, then the cards by flow, column and position; filters are exact and ANDed.
     List {
@@ -2338,6 +2368,34 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 now: now(),
             },
         )?),
+        CardCommand::Split {
+            targets,
+            title,
+            goal,
+            discipline,
+            parent,
+            children,
+            reviewer,
+            actor,
+            dry_run,
+        } => specengine_cli::card_split(
+            env,
+            globals,
+            &CardSplitRequest {
+                targets,
+                title,
+                goal,
+                discipline,
+                parent,
+                children: (!children.is_empty()).then_some(children),
+                reviewer,
+                dry_run,
+                actor,
+                now: now(),
+            },
+        )?
+        .or_usage_error()
+        .map(|outcome| Outcome::CardSplit(Box::new(outcome))),
         CardCommand::List {
             flow,
             column,

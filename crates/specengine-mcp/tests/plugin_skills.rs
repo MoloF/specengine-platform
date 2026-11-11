@@ -108,6 +108,8 @@ const NAMES: [(&str, &[&str]); 7] = [
             "list_cards",
             "get_card",
             "create_card",
+            // docs/features/department-split.md "Acceptance criteria", P1.
+            "split_card",
             "edit_card",
             "move_card",
         ],
@@ -383,7 +385,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's twenty-nine tools"
+        "the default build's thirty tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1228,8 +1230,8 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // (RM-0095, `get_node`'s link `title`, `end_kind`, `get_flow`'s gap
     // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
     // `title`); 0.36.0 since card-questions (RM-0097, `card_id`, `why`,
-    // `items`).
-    assert_eq!(manifest["version"], "0.36.0");
+    // `items`); 0.37.0 since department-split (RM-0100, `split_card`).
+    assert_eq!(manifest["version"], "0.37.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1336,8 +1338,8 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // (RM-0095, `get_node`'s link `title`, `end_kind`, `get_flow`'s gap
     // `titles`); 0.35.0 since departments (RM-0096, `list_cards`' flow
     // `title`); 0.36.0 since card-questions (RM-0097, `card_id`, `why`,
-    // `items`).
-    assert_eq!(manifest["version"], "0.36.0");
+    // `items`); 0.37.0 since department-split (RM-0100, `split_card`).
+    assert_eq!(manifest["version"], "0.37.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1440,7 +1442,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.36.0",
+        manifest["version"], "0.37.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1451,7 +1453,8 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          (`reviewer`, `note`, `parent`): 0.31.0; card-tasks (`edit_card`'s `task`): 0.32.0; \
          flow-scenario (`get_flow`'s `in_flow`): 0.33.0; doc-modal (link `title`, `end_kind`, \
          gap `titles`): 0.34.0; departments (`list_cards`' flow `title`): 0.35.0; \
-         card-questions (`card_id`, `why`, `items`): 0.36.0"
+         card-questions (`card_id`, `why`, `items`): 0.36.0; department-split \
+         (`split_card`): 0.37.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1583,8 +1586,10 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // twenty-three since docs/features/flow-read.md (`get_flow`, which no
     // skill teaches yet); twenty-eight since docs/features/card-store.md
     // (the card tools, one bullet of `read-spec`); twenty-nine since
-    // docs/features/card-trace.md (`get_trace`, one line of `read-spec`).
-    assert_eq!(TOOLS.len(), 29);
+    // docs/features/card-trace.md (`get_trace`, one line of `read-spec`);
+    // thirty since docs/features/department-split.md (`split_card`, named
+    // in `read-spec`'s cards bullet).
+    assert_eq!(TOOLS.len(), 30);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
     assert!(
         READ_SPEC_CODE_TOOLS
@@ -2075,13 +2080,15 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        4_410,
+        4_407,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
          154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
          docs/features/card-store.md (the cards bullet), 172 more since \
          docs/features/board-handoff.md (the hand-off sentence), 15 more since \
          docs/features/flow-scenario.md (`ancestors` and `in_flow`, two lines reworded), 5 \
-         fewer since docs/features/departments.md (two trims and the vocabulary sentence)"
+         fewer since docs/features/departments.md (two trims and the vocabulary sentence), 3 \
+         fewer since docs/features/department-split.md (`split_card` in, \"beside the tasks\" \
+         out)"
     );
     let reworded = edited(
         &skills,
@@ -2187,8 +2194,9 @@ fn tested_reads_skills_name_tested() {
         // sentence, the body still within 4 096; flow-scenario (RM-0094):
         // 15 more, `ancestors` and `in_flow` in two reworded lines;
         // departments (RM-0096, DP-4): 5 fewer, two trims and the
-        // vocabulary sentence.
-        (4_089, 4_410),
+        // vocabulary sentence; department-split (RM-0100, P1): 3 fewer,
+        // `split_card` named and "beside the tasks" dropped.
+        (4_086, 4_407),
         "read-spec's bytes"
     );
     assert_eq!(
@@ -2537,8 +2545,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // flow-scenario (RM-0094, `get_flow`'s `in_flow`); 0.34.0 since doc-modal
     // (RM-0095, keys `get_node` and `get_flow` return); 0.35.0 since
     // departments (RM-0096, `list_cards`' flow `title`); 0.36.0 since
-    // card-questions (RM-0097, `card_id`, `why`, `items`).
-    assert_eq!(manifest["version"], "0.36.0");
+    // card-questions (RM-0097, `card_id`, `why`, `items`); 0.37.0 since
+    // department-split (RM-0100, `split_card`).
+    assert_eq!(manifest["version"], "0.37.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -2563,7 +2572,9 @@ fn departments_dp4_read_spec_gives_the_web_ui_s_words() {
             .expect("a front-matter and a body")
             .len()
     };
-    assert_eq!((body(read_spec), read_spec.len()), (4_089, 4_410));
+    // docs/features/department-split.md P1: `split_card` named, "beside the
+    // tasks" dropped, net -3: 4 086 and 4 407.
+    assert_eq!((body(read_spec), read_spec.len()), (4_086, 4_407));
     assert!(body(read_spec) <= 4096);
     let last = bullets(read_spec).last().cloned().expect("a bullet");
     assert!(
@@ -2608,6 +2619,50 @@ fn departments_dp4_read_spec_gives_the_web_ui_s_words() {
             .last()
             .is_some_and(|bullet| bullet.ends_with(READ_SPEC_WORDS)),
         "the mutation is seen"
+    );
+}
+
+// --------------------------------------------- department-split (RM-0100)
+
+/// docs/features/department-split.md (RM-0100) "Acceptance criteria", P1:
+/// `read-spec`'s body within 4 096 bytes (4 086, net -3 on 0.36.0's), its
+/// cards bullet naming `split_card` after `create_card`, once in the skill;
+/// every content rule passing. M: `split_card` dropped from `read-spec`.
+#[test]
+fn department_split_p1_read_spec_names_split_card() {
+    let skills = committed();
+    let read_spec = &skills["read-spec"];
+    let body = read_spec
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert!(body.len() <= 4096, "the body is {} bytes", body.len());
+    let cards = bullets(read_spec)
+        .into_iter()
+        .find(|bullet| bullet.starts_with("- Work of any trade stands on cards"))
+        .expect("the cards bullet");
+    assert!(
+        cards.contains(
+            "queue rows, not in the spec: `list_cards` and `get_card` read them, `create_card`, \
+             `split_card`, `edit_card` and `move_card` file and change one"
+        ),
+        "{cards}"
+    );
+    assert_eq!(read_spec.matches("`split_card`").count(), 1);
+    let listed = listed();
+    assert!(listed.tools.contains("split_card"), "a tool of the server");
+    assert_eq!(ac06_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(skill_text_problems(&skills, &listed), Vec::<String>::new());
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    assert_eq!(word_problems(&plugin_files()), Vec::<String>::new());
+    // M: `split_card` dropped: the skill no longer names it.
+    let dropped = edited(&skills, "read-spec", " `split_card`,", "");
+    assert!(
+        ac06_problems(&dropped, &listed)
+            .iter()
+            .any(|problem| problem.contains("split_card")),
+        "the mutation is seen: {:?}",
+        ac06_problems(&dropped, &listed)
     );
 }
 

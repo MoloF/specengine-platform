@@ -305,6 +305,43 @@ impl From<UnreadableCard> for QueueError {
     }
 }
 
+/// A split's parent (`docs/canon/card-split.md` "The rule"): a new card and
+/// its snapshot (empty: none), or a stored card, read and never written.
+/// The new card is boxed: it outweighs a stored card's ID many times over.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SplitParent {
+    New {
+        card: Box<NewCard>,
+        snapshot: Vec<CardFrozen>,
+    },
+    Stored(String),
+}
+
+/// One subtask of a split and its snapshot (empty: none). Its `parent` is
+/// set to the split's parent in the transaction, whatever it holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewSplitChild {
+    pub card: NewCard,
+    pub snapshot: Vec<CardFrozen>,
+}
+
+/// What [`SqliteQueue::split_cards`] stores: the parent first, then the
+/// subtasks in the order given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewSplit {
+    pub parent: SplitParent,
+    pub children: Vec<NewSplitChild>,
+}
+
+/// What a split did: the parent (made, or as stored), whether it was made,
+/// and the subtasks by ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SplitCards {
+    pub parent: Card,
+    pub created: bool,
+    pub children: Vec<Card>,
+}
+
 /// What [`SqliteQueue::card_items`] gives: the questions, discrepancies and
 /// decisions naming one card, by ID number, and the rows naming it that do
 /// not decode (`docs/canon/card-questions.md` "The rule").
@@ -366,6 +403,59 @@ impl SqliteQueue {
         let stored = insert_card(&tx, &project, card, snapshot, now)?;
         tx.commit().db()?;
         Ok(stored)
+    }
+
+    /// A split (`docs/canon/card-split.md` "The rule";
+    /// `docs/features/department-split.md` "Acceptance criteria", S5): one
+    /// `Immediate` transaction, all cards or none. A stored parent is read,
+    /// never written, so its row, revision and history stay; a new one is
+    /// stored first. Then each subtask in order, its `parent` set here to the
+    /// parent's ID whatever the input holds, each stored as
+    /// [`Self::create_card`] stores one: the next ID, last in its column, its
+    /// reviewer and links asked again under the lock, one `card.created`.
+    /// Any refusal ([`QueueError::CardRefused`]: no subtask, no such parent,
+    /// a reviewer, a link) rolls everything back: no row, no event, no ID
+    /// taken.
+    pub fn split_cards(&mut self, split: &NewSplit, now: &str) -> Result<SplitCards, QueueError> {
+        check_time(now)?;
+        let project = self.project.clone();
+        let tx = self.write()?;
+        if split.children.is_empty() {
+            let id = match &split.parent {
+                SplitParent::Stored(id) => id.clone(),
+                SplitParent::New { .. } => next_card_id(&tx)?,
+            };
+            return Err(refused(&id, "child: none named".to_owned()));
+        }
+        let (parent, created) = match &split.parent {
+            SplitParent::Stored(id) => match select_card(&tx, &project, id)? {
+                Some(card) => (card, false),
+                None => return Err(refused(id, format!("parent: {}", no_card(id)))),
+            },
+            SplitParent::New { card, snapshot } => {
+                (insert_card(&tx, &project, card, Some(snapshot), now)?, true)
+            }
+        };
+        let mut children = Vec::with_capacity(split.children.len());
+        for child in &split.children {
+            let card = NewCard {
+                parent: Some(parent.id.clone()),
+                ..child.card.clone()
+            };
+            children.push(insert_card(
+                &tx,
+                &project,
+                &card,
+                Some(&child.snapshot),
+                now,
+            )?);
+        }
+        tx.commit().db()?;
+        Ok(SplitCards {
+            parent,
+            created,
+            children,
+        })
     }
 
     /// The project's card `id`, in one snapshot; `Ok(None)` when there is

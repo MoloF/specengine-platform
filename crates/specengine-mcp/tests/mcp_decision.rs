@@ -386,14 +386,18 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 940 and 2 048 since docs/features/trace-views.md (`get_flow`'s
     // `, trace?`, 8 bytes: the limit); the values `mcp_code.rs`' re-pinned
     // `PLANNED_*_BLAKE3`.
+    // 1 940 and 2 048 still since docs/features/department-split.md S8
+    // (`split_card` and `split` in the cards line, 18 bytes; `search`'s
+    // `, limit?, archive?` out, 18); the values `mcp_code.rs`' re-pinned
+    // `PLANNED_*_BLAKE3`.
     assert_eq!(before.len(), 1940);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "3dce41d92a1ddf690092d4d41553ae9fcad38d0e5e003e86bee12fb8e9a1197f"
+        "a975a81193ece079d8ce216a16768cda8c163faf56ce1f72ecb98da72e2eb2e5"
     );
     assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "bfaa9e7888de1025f06d68969a727d585b889547254d747427b6c567aefa6bb4"
+        "7de2fdaa1885277df812c2e368a1fce532f8fc5aba6db0e6185ead5fbe87d351"
     );
 }

@@ -66,6 +66,15 @@ export function workspaceOf(document: WorkspaceDocument, stored: string | null):
 }
 
 /**
+ * The workspace the viewer chose for `project`, as the switcher stored it, over a document read;
+ * null with none read. Outside the Shell (a dialog's default): a choice the browser refused to
+ * store reads as the first, as after a reload.
+ */
+export function storedWorkspace(project: string, document: WorkspaceDocument | undefined): Workspace | null {
+  return document === undefined ? null : workspaceOf(document, recall(workspaceKey(project)));
+}
+
+/**
  * The module the stored value gives: none for All modules (`""`), a served name's module, else the
  * workspace's own `module` while served (no key, or a name no longer served); null: the whole project.
  */

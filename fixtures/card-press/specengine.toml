@@ -8,6 +8,9 @@
 # under PRN-WEEKLY are the brief of docs/features/card-trace.md: SHT-BACK uses
 # SHT-FRONT-HEAD, and the accepted STY-0001, outside that tree, constrains
 # SHT-FRONT, so a departure from it meets a dedup hit.
+# Two `[[card.split]]` rows (docs/features/department-split.md) pre-select
+# `copy` and `plates` for a `broadsheet` and `plates` for a `print-run`: only a
+# split's plan reads them, so no other read and no `expected.json` value moves.
 
 [project]
 slug = "card-press"
@@ -33,6 +36,14 @@ name = "plates"
 disciplines = ["plates"]
 columns = ["queued", "blocked", "checked", "struck"]
 accept = { from = "checked", to = "struck" }
+
+[[card.split]]
+kind = "broadsheet"
+disciplines = ["copy", "plates"]
+
+[[card.split]]
+kind = "print-run"
+disciplines = ["plates"]
 
 [[workspace]]
 name = "newsroom"

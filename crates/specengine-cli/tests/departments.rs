@@ -389,7 +389,8 @@ fn dp7_studio_lamp_s_flows_are_titled_as_the_preset() {
             )
         })
         .collect();
-    assert_eq!(want.len(), 5);
+    // docs/features/department-split.md "Acceptance criteria", S9: six.
+    assert_eq!(want.len(), 6);
     let scratch = Scratch::new("dp7-lamp");
     let home = scratch.home("h");
     let lamp = scratch.copy("studio-lamp", "lamp");

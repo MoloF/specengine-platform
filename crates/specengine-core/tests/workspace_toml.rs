@@ -321,8 +321,10 @@ fn ws4a_an_unknown_section_is_left_out_with_its_note() {
     assert_eq!(module_rows(&config), press_modules());
     let line = line_holding(&text, "\"stage\"");
     // docs/features/departments.md DP-1: card-press's `copy` gains its
-    // `title` line, so every line below it moves one down.
-    assert_eq!(line, 40, "the sections line of card-press");
+    // `title` line, so every line below it moves one down;
+    // docs/features/department-split.md S1: its header's three lines and
+    // its two `[[card.split]]` rows' eight, eleven more.
+    assert_eq!(line, 51, "the sections line of card-press");
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
@@ -330,7 +332,7 @@ fn ws4a_an_unknown_section_is_left_out_with_its_note() {
             &format!("workspace `newsroom`: `stage` is no section {SECTION_LIST}: left out")
         )]
     );
-    assert_eq!(config.notes[0].line.to_string(), "40");
+    assert_eq!(config.notes[0].line.to_string(), "51");
     assert_eq!(
         config.notes[0].message,
         format!("workspace `newsroom`: `stage` is no section {SECTION_LIST}: left out")
@@ -356,7 +358,7 @@ fn a_repeated_section_keeps_the_first_and_none_left_is_none() {
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
-            40,
+            51,
             "workspace `newsroom`: section `tree` is listed twice: the second left out"
         )]
     );
@@ -417,7 +419,7 @@ fn a_repeated_flow_keeps_the_first_and_none_left_is_null() {
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
-            42,
+            53,
             "workspace `newsroom`: flow `copy` is listed twice: the second left out"
         )]
     );
@@ -428,7 +430,7 @@ fn a_repeated_flow_keeps_the_first_and_none_left_is_null() {
     assert_eq!(
         config.notes_at(CONFIG),
         [note(
-            42,
+            53,
             "workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"
         )]
     );
@@ -564,7 +566,8 @@ fn ws4e_a_bad_name_serves_the_implicit_workspace_and_keeps_the_modules() {
     let problem = name_problem("News room").expect("a space is no name character");
     assert_eq!(
         config.notes_at(CONFIG),
-        [note(38, &format!("{problem}{IMPLICIT_SERVED}"))]
+        // department-split S1: card-press's rows move it eleven down.
+        [note(49, &format!("{problem}{IMPLICIT_SERVED}"))]
     );
     assert_eq!(
         problem,
@@ -589,12 +592,13 @@ fn ws4f_a_module_without_root_serves_no_module() {
          (none)"
     );
     let header = nth_line_holding(&text, "[[module]]", 2);
-    assert_eq!(header, 56, "rulings' header");
+    // department-split S1: card-press's rows move both eleven down.
+    assert_eq!(header, 67, "rulings' header");
     assert_eq!(
         config.notes_at(CONFIG),
         [
             note(
-                43,
+                54,
                 "workspace `newsroom`: no `[[module]]` is named `weekly`: no default module"
             ),
             note(
@@ -1102,10 +1106,11 @@ fn notes_at_names_the_file_as_given() {
     assert_eq!(
         config.notes_at("conf/press.toml"),
         // docs/features/departments.md DP-1: `copy`'s `title` line
-        // moves the flows line from 41 to 42.
-        ["conf/press.toml:42: workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"]
+        // moves the flows line from 41 to 42; department-split S1:
+        // card-press's header and rows, eleven lines more, to 53.
+        ["conf/press.toml:53: workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"]
     );
-    assert_eq!(config.notes[0].line.to_string(), "42");
+    assert_eq!(config.notes[0].line.to_string(), "53");
     assert_eq!(
         config.notes[0].message,
         "workspace `newsroom`: no `[[card.flow]]` is named `inks`: left out"
@@ -1149,14 +1154,18 @@ fn preset() -> String {
     fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
-/// The four workspaces of "The gamedev preset", as [`row`]s.
-const PRESET_ROWS: [&str; 4] = [
+/// The workspaces of "The gamedev preset", as [`row`]s: four, five since
+/// docs/features/department-split.md (S9: `sound` after `art`, before
+/// `production`).
+const PRESET_ROWS: [&str; 5] = [
     "writing | Writing | landing flow | sections flow, tree, board, questions, inbox | flows \
      narrative | module (none)",
     "development | Development | landing board | sections board, inbox, tree, flow, graph, \
      health, roadmap, questions | flows development | module (none)",
     "art | Art and levels | landing board | sections board, flow, tree, questions, inbox | flows \
      art, level-design | module (none)",
+    "sound | Sound | landing board | sections board, flow, tree, questions, inbox | flows sound | \
+     module (none)",
     "production | Production | landing overview | sections inbox, roadmap, board, flow, tree, \
      graph, health, questions | flows (all) | module (none)",
 ];
@@ -1173,16 +1182,17 @@ type PresetFlow = (
 );
 
 /// docs/features/departments.md DP-7: each preset flow's `title`, in order
-/// (W8: `development` is "Programming").
-const PRESET_TITLES: [&str; 5] = [
+/// (W8: `development` is "Programming"); department-split S9: "Sound" sixth.
+const PRESET_TITLES: [&str; 6] = [
     "Narrative",
     "Programming",
     "Art",
     "Level design",
     "Production",
+    "Sound",
 ];
 
-const PRESET_FLOWS: [PresetFlow; 5] = [
+const PRESET_FLOWS: [PresetFlow; 6] = [
     (
         "narrative",
         &[
@@ -1247,6 +1257,20 @@ const PRESET_FLOWS: [PresetFlow; 5] = [
             ("done", "Done"),
         ],
         ("review", "done"),
+    ),
+    // docs/features/department-split.md S9: the sixth flow, `sound`.
+    (
+        "sound",
+        &[
+            ("backlog", "Backlog"),
+            ("sent-back", "Returned"),
+            ("design", "Sound design"),
+            ("recording", "Recording"),
+            ("implementation", "Implementation"),
+            ("review", "Review"),
+            ("in-game", "In game"),
+        ],
+        ("review", "in-game"),
     ),
 ];
 
@@ -1385,7 +1409,8 @@ fn board_handoff_bh13_the_preset_gives_each_flow_its_return_line() {
         .filter(|(_, line)| line.starts_with("accept = "))
         .map(|(index, _)| index)
         .collect();
-    assert_eq!(accepts.len(), 5, "one `accept` per flow");
+    // department-split S9: six flows, `sound` the sixth.
+    assert_eq!(accepts.len(), 6, "one `accept` per flow");
     for at in accepts {
         assert_eq!(
             lines.get(at + 1).copied(),
@@ -1394,13 +1419,13 @@ fn board_handoff_bh13_the_preset_gives_each_flow_its_return_line() {
             lines[at]
         );
     }
-    assert_eq!(text.matches("return = ").count(), 5, "five return lines");
+    assert_eq!(text.matches("return = ").count(), 6, "six return lines");
     let columns: Vec<&str> = lines
         .iter()
         .copied()
         .filter(|line| line.starts_with("columns = ["))
         .collect();
-    assert_eq!(columns.len(), 5);
+    assert_eq!(columns.len(), 6);
     for line in columns {
         let second = line
             .trim_start_matches("columns = [")
@@ -1414,7 +1439,7 @@ fn board_handoff_bh13_the_preset_gives_each_flow_its_return_line() {
         .copied()
         .filter(|line| line.starts_with("titles = {"))
         .collect();
-    assert_eq!(titles.len(), 5);
+    assert_eq!(titles.len(), 6);
     for line in titles {
         assert_eq!(
             line.trim_start_matches("titles = { ").split(", ").nth(1),

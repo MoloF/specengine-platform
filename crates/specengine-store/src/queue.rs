@@ -163,7 +163,8 @@ pub use cards::{
     CardAccept, CardAccepted, CardChange, CardClear, CardCleared, CardClearing, CardDeparture,
     CardEdit, CardItems, CardList, CardRefresh, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
     EVENT_CARD_CANCELLED, EVENT_CARD_CLEARED, EVENT_CARD_CREATED, EVENT_CARD_EDITED,
-    EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, NewCard, UnreadableCard,
+    EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, NewCard, NewSplit,
+    NewSplitChild, SplitCards, SplitParent, UnreadableCard,
 };
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
