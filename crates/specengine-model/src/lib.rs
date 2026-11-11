@@ -30,7 +30,7 @@ pub mod value;
 
 pub use card::{
     CARD_TASKS_MAX, Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, CardVerdict,
-    EvidenceKind,
+    EvidenceKind, Mandate,
 };
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use grammar::{Canon, Definition, Found, Homoglyph};

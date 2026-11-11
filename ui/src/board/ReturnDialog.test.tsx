@@ -463,3 +463,77 @@ describe("Return with a question (U2 of card-questions)", () => {
   });
 });
 
+// V2 of docs/features/task-mandate.md "Acceptance criteria": a binding task's departure goes back as a
+// return with a question, so on a binding task with a target "Ask a question with it" starts expanded;
+// the person may still close it, and then the move alone goes. On a task with no mandate, or one its
+// department decides, it starts closed as ever. The page sends what is typed; the daemon judges.
+describe("Return on a binding task (V2 of task-mandate)", () => {
+  const BINDING = [aCardRow({ id: "C-0001", revision: "3", targets: ["SCN-LAMP"], mandate: "binding" }), aCardRow({ id: "C-0002", position: 2, targets: ["SCN-LAMP"], mandate: "open" }), aCardRow({ id: "C-0003", position: 3, targets: ["SCN-LAMP"] }), aCardRow({ id: "C-0004", column: "doing" })];
+
+  it("starts with the question part open on a binding task, its three texts required; closed on an open one and on one with none (M: askOpen ignored)", async () => {
+    const client = returnClient(BINDING);
+    const dialog = await returning(client);
+    const part = within(dialog).getByRole("button", { name: "Ask a question with it" });
+    expect(part.getAttribute("aria-expanded")).toBe("true");
+    expect(within(dialog).getByLabelText("Question").getAttribute("aria-required")).toBe("true");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    for (const id of ["C-0002", "C-0003"]) {
+      tile(id).focus();
+      fireEvent.keyDown(tile(id), { key: "r" });
+      const other = await screen.findByRole("dialog", { name: `Return ${id}` });
+      expect([id, within(other).getByRole("button", { name: "Ask a question with it" }).getAttribute("aria-expanded")]).toEqual([id, "false"]);
+      fireEvent.click(within(other).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+      });
+    }
+  });
+
+  it("open, a blank question stops before the move; the person may close it, and the move alone goes", async () => {
+    const client = returnClient(BINDING);
+    const dialog = await returning(client);
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Two endings." } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Fill in all three: the question, a working answer and what another answer would cost.");
+    expect(client.moveCard).not.toHaveBeenCalled();
+    const part = within(dialog).getByRole("button", { name: "Ask a question with it" });
+    fireEvent.click(part);
+    expect(part.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await waitFor(() => {
+      expect(client.moveCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.moveCard.mock.calls[0]?.[2]).toEqual({ to: "doing", note: "Two endings.", revision: "3", as: null });
+    expect(client.raiseOnCard).not.toHaveBeenCalled();
+  });
+
+  it("filled in, the move then the question go, as any return with a question", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = returnClient(BINDING);
+    const order = writesOf(client);
+    const dialog = await returning(client);
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Departs from SCN-LAMP." } });
+    fireEvent.change(within(dialog).getByLabelText("Question"), { target: { value: "May the lamp stay lit?" } });
+    fireEvent.change(within(dialog).getByLabelText("Working answer"), { target: { value: "Yes, all night." } });
+    fireEvent.change(within(dialog).getByLabelText("What another answer would cost"), { target: { value: "The night scene is redrawn." } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Return task" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Return C-0001" })).toBeNull();
+    });
+    expect(order).toEqual(["move", "raise"]);
+    expect(client.raiseOnCard.mock.calls[0]?.[1]).toBe("C-0001");
+  });
+
+  it("from the work item's Return as from the tile: open on a binding task", async () => {
+    const card = aCard({ id: "C-0001", revision: "3", targets: ["SCN-LAMP"], mandate: "binding", allowed: [{ to: "doing", by: [] }] });
+    const client = returnClient(BINDING, { "C-0001": card });
+    renderApp(client, "#/alpha/board/C-0001");
+    const modal = await screen.findByRole("dialog", { name: card.title });
+    fireEvent.click(await within(modal).findByRole("button", { name: "Return" }));
+    const dialog = await screen.findByRole("dialog", { name: "Return C-0001" });
+    expect(within(dialog).getByRole("button", { name: "Ask a question with it" }).getAttribute("aria-expanded")).toBe("true");
+  });
+});

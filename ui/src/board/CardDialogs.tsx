@@ -29,7 +29,7 @@ import { assigneeChoices, disciplineChoices } from "./filter";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { isCard } from "./CardPanel";
-import { evidenceKinds, gapTypes, nameIsLogin, nameIsTyped, RAISED_KINDS } from "./labels";
+import { asMandate, evidenceKinds, gapTypes, mandateChoices, mandateWord, nameIsLogin, nameIsTyped, RAISED_KINDS } from "./labels";
 
 /** How `spec card edit` and `assign` write a cleared value (`docs/canon/cards.md` "Commands"). */
 const CLEAR = "-";
@@ -658,7 +658,42 @@ export function editChanges(form: EditForm, opened: EditForm, evidence: string |
   };
 }
 
-/** Edit: New card's fields less discipline and assignee, changed fields only; Add evidence appends one. */
+/**
+ * The mandate as Edit offers it (docs/canon/card-mandate.md "The rule"; docs/features/task-mandate.md
+ * "Acceptance criteria", V1), on a card with a reviewer alone: to that reviewer, the acting name typed
+ * here or a hub's login, the select, at the stored word, else at "Choose…", never cleared; to anyone
+ * else, a line naming who changes it, when one is set. The daemon judges the name either way.
+ * `opened` is the value as the dialog opened: "Choose…" stands by it, so a re-read meanwhile that
+ * sets the card's mandate leaves the select's value among its options.
+ */
+function MandateField({ card, opened, value, onChange }: { card: Card; opened: string; value: string; onChange: (value: string) => void }) {
+  const t = useTranslate();
+  // The name typed, or a hub's login, which `useActing` gives in its place.
+  const [acting] = useActing();
+  const reviewer = card.reviewer;
+  // The stored word as the card stands now, for the line to anyone but its reviewer.
+  const word = mandateWord(card.mandate, t);
+  if (reviewer === null) {
+    return null;
+  }
+  if (actingName(acting) === reviewer) {
+    // None stored as the dialog opened: "Choose…" leads the select.
+    return <SelectField label={t("board.mandate.label")} value={value} onChange={onChange} options={mandateChoices(t)} placeholder={asMandate(opened) === null ? t("board.mandate.choose") : undefined} />;
+  }
+  return word === null ? null : (
+    <dl className="facts">
+      <div className="fact">
+        <dt>{t("board.mandate.label")}</dt>
+        <dd>
+          <span>{word}</span>
+          <p className="card-field-hint">{fill(t("board.mandate.reviewerOnly", { name: slot("name") }), { name: <bdi>{shownSlot(reviewer)}</bdi> })}</p>
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+/** Edit: New card's fields less discipline and assignee, changed fields only; Add evidence appends one; the mandate, its reviewer's alone. */
 export function EditCardDialog({ project, card, ...handlers }: { project: string; card: Card } & WriteHandlers) {
   const t = useTranslate();
   const kinds = evidenceKinds(t);
@@ -671,6 +706,10 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
   const [evidenceKind, setEvidenceKind] = useState(kinds[0]?.word ?? "");
   const [value, setValue] = useState("");
   const valueHint = kinds.find((entry) => entry.word === evidenceKind)?.hint;
+  // The mandate as it opened and as chosen: a changed word goes out, an unchanged one is no key.
+  const [openedChoice] = useState(() => card.mandate ?? "");
+  const [choice, setChoice] = useState(openedChoice);
+  const picked = asMandate(choice);
 
   function field(key: keyof EditForm) {
     return (typed: string) => {
@@ -678,7 +717,10 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
     };
   }
 
-  const changes = editChanges(form, opened, value.trim() === "" ? null : `${evidenceKind}=${value.trim()}`);
+  const changes = {
+    ...editChanges(form, opened, value.trim() === "" ? null : `${evidenceKind}=${value.trim()}`),
+    ...(picked === null || choice === openedChoice ? {} : { mandate: picked }),
+  };
   // A change of an estimate the card holds, a clear too, says why and stands alone: the daemon judges and words it.
   const reestimated = card.estimate !== null && changes.estimate !== undefined;
   const [reason, setReason] = useState("");
@@ -713,6 +755,7 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
         <TextField label={t("board.field.parent")} value={form.parent} onChange={field("parent")} hint={t("board.hint.cardId")} />
         <TextField label={t("board.field.corrects")} value={form.corrects} onChange={field("corrects")} hint={t("board.hint.cardId")} />
       </div>
+      <MandateField card={card} opened={openedChoice} value={choice} onChange={setChoice} />
       <fieldset className="card-evidence-field">
         <legend>{t("board.dialog.addEvidence")}</legend>
         <div className="card-form-row">
@@ -940,6 +983,8 @@ interface HandOffForm {
   goal: string;
   targets: string;
   reviewer: string;
+  /** The mandate chosen, a stored word; `""` before a choice, which no submit sends. */
+  mandate: string;
 }
 
 /**
@@ -962,7 +1007,9 @@ export function handOffDepartments(document: WorkspaceDocument | undefined): Wor
  * goal and targets come from the card, all editable; criteria, estimate, due date and evidence stay
  * with it, and no assignee is named: the receiving trade takes the card with a move. The reviewer is
  * the asking side, required: the parent's reviewer by default, else the acting name when it names a
- * person; on a hub the login, read-only. Submit is one `POST .../cards`, nothing else: no assign follows.
+ * person; on a hub the login, read-only. Then the mandate, required, with no default: binding, or its
+ * department decides (docs/canon/card-mandate.md "The rule"; docs/features/task-mandate.md
+ * "Acceptance criteria", V1). Submit is one `POST .../cards`, nothing else: no assign follows.
  */
 export function HandOffDialog({ project, card, flows, ...handlers }: { project: string; card: HandOffSource; flows: readonly CardFlow[] } & WriteHandlers) {
   const t = useTranslate();
@@ -978,7 +1025,7 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
   const read = useCard(project, card.goal === undefined ? card.id : null);
   const readGoal = read.data !== undefined && isCard(read.data) ? read.data.goal : undefined;
   // The reviewer the daemon takes: the parent's, else a person's acting name, never `agent` (docs/canon/card-flows.md "Hand-off").
-  const [form, setForm] = useState<HandOffForm>({ department: "", discipline: "", title: card.title, goal: card.goal ?? "", targets: card.targets.join("\n"), reviewer: handOffReviewer(card.reviewer, acting) });
+  const [form, setForm] = useState<HandOffForm>({ department: "", discipline: "", title: card.title, goal: card.goal ?? "", targets: card.targets.join("\n"), reviewer: handOffReviewer(card.reviewer, acting), mandate: "" });
   const [goalFilled, setGoalFilled] = useState(card.goal !== undefined);
   const [goalTyped, setGoalTyped] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -1008,6 +1055,8 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
     setForm((current) => ({ ...current, department: name, discipline: chosen?.disciplines[0] ?? "" }));
   }
 
+  const chosen = asMandate(form.mandate);
+
   function bodyOf(): CardCreateBody {
     return {
       title: form.title.trim(),
@@ -1016,6 +1065,7 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
       ...presentList("target", form.targets),
       parent: card.id,
       reviewer: reviewer.trim(),
+      ...(chosen === null ? {} : { mandate: chosen }),
       as: actingName(acting),
     };
   }
@@ -1037,7 +1087,10 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
         if (form.title.trim() === "") {
           return t("board.dialog.needsTitle");
         }
-        return reviewer.trim() === "" ? t("board.handoff.reviewerNeeded") : null;
+        if (reviewer.trim() === "") {
+          return t("board.handoff.reviewerNeeded");
+        }
+        return chosen === null ? t("board.mandate.needed") : null;
       }}
       onSubmit={() => send({ write: "create", body: bodyOf() })}
     >
@@ -1099,6 +1152,15 @@ export function HandOffDialog({ project, card, flows, ...handlers }: { project: 
       ) : (
         <TextField label={t("board.field.reviewer")} value={login} onChange={field("reviewer")} readOnly hint={t("board.handoff.reviewerHint")} />
       )}
+      <SelectField
+        label={t("board.mandate.label")}
+        value={form.mandate}
+        onChange={field("mandate")}
+        options={mandateChoices(t)}
+        placeholder={t("board.mandate.choose")}
+        required
+        invalid={checked && chosen === null}
+      />
     </WriteDialog>
   );
 }
@@ -1321,8 +1383,8 @@ export function RaiseNotice({ outcome, sentBack = null }: { outcome: RaiseOutcom
   );
 }
 
-/** What a return moves: the card as the list or its read has it now, so a submit goes on its current revision; its targets, which a question may be about. */
-export type ReturnTarget = Pick<CardRow, "id" | "title" | "revision" | "targets">;
+/** What a return moves: the card as the list or its read has it now, so a submit goes on its current revision; its targets, which a question may be about; its mandate, which says whether the question part starts open. */
+export type ReturnTarget = Pick<CardRow, "id" | "title" | "revision" | "targets" | "mandate">;
 
 /**
  * Return (`docs/canon/card-flows.md` "The rule"): a move into the flow's `return` column with a
@@ -1330,7 +1392,8 @@ export type ReturnTarget = Pick<CardRow, "id" | "title" | "revision" | "targets"
  * column, the note and, from a drop between two cards, its place. Cancel moves nothing: the card
  * stays where it stood. The daemon judges the move as any other and words a refusal. A card with a
  * target may ask a question with it (docs/features/card-questions.md "Acceptance criteria", U2): its
- * part, closed at first, takes the three texts and the targets; submit then sends the move, and only
+ * part, closed at first but open on a binding task (`askOpen`, docs/features/task-mandate.md
+ * "Acceptance criteria", V2), takes the three texts and the targets; submit then sends the move, and only
  * once it is taken the question, `POST .../items`. A refused move asks nothing. A question not stored
  * or refused leaves the card sent back and the dialog open on its fields, the reason held; Ask anyway
  * or Ask again then resends the question alone, and closing it reports the move.
@@ -1338,11 +1401,12 @@ export type ReturnTarget = Pick<CardRow, "id" | "title" | "revision" | "targets"
 export function ReturnDialog({
   project,
   card,
+  askOpen = false,
   to,
   toTitle,
   before = null,
   ...handlers
-}: { project: string; card: ReturnTarget; to: string; toTitle: string; before?: string | null } & Omit<WriteHandlers, "onDone"> & {
+}: { project: string; card: ReturnTarget; askOpen?: boolean; to: string; toTitle: string; before?: string | null } & Omit<WriteHandlers, "onDone"> & {
   /** The move went; `asked` the question stored with it, else null. */
   onDone: (answer: CardWrite, asked: string | null) => void;
 }) {
@@ -1352,7 +1416,8 @@ export function ReturnDialog({
   const [acting] = useActing();
   const [reason, setReason] = useState("");
   const [missing, setMissing] = useState(false);
-  const [asking, setAsking] = useState(false);
+  // Open at first on a task that leads with asking, when it has a target to ask about; the person may still close it.
+  const [asking, setAsking] = useState(askOpen && card.targets.length > 0);
   const [form, setForm] = useState<RaiseForm>(() => raiseFormOf(card.targets));
   const [checked, setChecked] = useState(false);
   // The move once taken, and the revision it went on: the dialog never reads its own move as a change made elsewhere.

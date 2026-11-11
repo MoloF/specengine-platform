@@ -1337,7 +1337,7 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     let lines = dump_lines(&bytes);
     assert!(
         lines[0].starts_with(
-            "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":3,\
+            "{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":3,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{}",
@@ -1422,13 +1422,13 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
 \"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null}}";
     let mut v2_lines = v3_lines.clone();
     assert!(
-        v2_lines[0].starts_with("{\"format\":5,\"queue_schema\":11,"),
+        v2_lines[0].starts_with("{\"format\":6,\"queue_schema\":12,"),
         "{}",
         v2_lines[0]
     );
     v2_lines[0] = v2_lines[0]
         .replacen(
-            "\"format\":5,\"queue_schema\":11,",
+            "\"format\":6,\"queue_schema\":12,",
             "\"format\":1,\"queue_schema\":2,",
             1,
         )
@@ -1482,7 +1482,8 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
         "export steps nothing"
     );
     pair.inbox(&pair.main, true).expect("inbox");
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "11");
+    // 12 since docs/features/task-mandate.md M5 (`proposals` unchanged).
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "12");
     assert_eq!(
         pair.sql("SELECT name FROM pragma_table_info('proposals');")
             .lines()

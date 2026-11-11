@@ -846,8 +846,9 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .expect("user_version");
     assert_eq!(version, QUEUE_SCHEMA_VERSION);
-    // Queue schema 11 since docs/features/card-questions.md S1.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    // Queue schema 11 since docs/features/card-questions.md S1; 12 since
+    // docs/features/task-mandate.md M5.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
     conn.execute(
         "UPDATE proposals SET id = 'PR-9999' WHERE id = 'PR-0002'",
         [],

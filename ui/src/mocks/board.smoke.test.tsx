@@ -530,9 +530,9 @@ describe("hand-offs and returns over the mock", () => {
     ]);
     expect((await shown("harbor-sim", "C-0002")).tasks).toEqual([]);
     expect((await shown("ledger-api", "C-0102")).tasks.map((task) => [task.id, task.status])).toEqual([["T-0033", "review"]]);
-    // The list's rows keep their 21 keys: no task on a tile.
+    // The list's rows keep their keys, 22 since task-mandate's `mandate` (docs/features/task-mandate.md "Acceptance criteria", M1): no task on a tile.
     const list = await client.getCards("harbor-sim", { marks: true });
-    expect(list.cards.every((row) => !("tasks" in row) && Object.keys(row).length === 21)).toBe(true);
+    expect(list.cards.every((row) => !("tasks" in row) && Object.keys(row).length === 22)).toBe(true);
   });
 
   it("the modal of a card with three links: its Tasks part shows each, the approval to copy on the one in review", async () => {
@@ -582,8 +582,9 @@ describe("a card's questions over the mock (card-questions)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Ask" }));
     await closed();
     const activity = within(panel).getByRole("region", { name: "Activity" });
-    const raised = await within(activity).findByRole("article", { name: "PR-0057" });
-    expect(raised.closest("li")?.textContent).toContain("Raised PR-0057 by Ivo Brandt");
+    // PR-0059: the next free number past C-0001's subtasks' two decisions (task-mandate).
+    const raised = await within(activity).findByRole("article", { name: "PR-0059" });
+    expect(raised.closest("li")?.textContent).toContain("Raised PR-0059 by Ivo Brandt");
   });
 
   it("hub: a reject staged from the card and confirmed there reads back Rejected, no Answer\u2026 left (M1 of card-questions' review)", async () => {

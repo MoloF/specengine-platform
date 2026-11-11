@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # Card questions: the items a card names, and its Activity
@@ -29,7 +29,7 @@ Queue schema 11 (`STEP_11`) adds TEXT `card_id`, then `why`: `PROPOSAL_COLUMNS` 
 
 **Corrupt**, named (`get`, `list` fail; `inbox` skips it, a note; `card_items` lists it unreadable): `` proposal PR-0001: the stored `card_id` cannot be read: `` `it is set on an update, which names no card` or `` `X-7` is no card ID ``; `` the stored `why` cannot be read: it is set on a question, which holds none ``. A blank or over-long `why` from a hand edit reads as stored.
 
-**Review document**: `card_id`, `why` after `interpretation`, `null` where absent; text lines `card_id: C-0007`, `why: <text>` after `staged_at`'s. The inbox's entries are unchanged. **Backup**: format 5, 48 columns; format 4 imports with both `NULL` (`queue-backup.md` "Format").
+**Review document**: `card_id`, `why` after `interpretation`, `null` where absent; text lines `card_id: C-0007`, `why: <text>` after `staged_at`'s. The inbox's entries are unchanged. **Backup**: from format 5, 48 columns; format 4 imports with both `NULL` (`queue-backup.md` "Format").
 
 ## Raise
 
@@ -59,7 +59,7 @@ The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh
 
 ## Read
 
-`spec card show C [--history] --json`, `get_card`, `GET .../cards/:id`: `items` after `tasks`, the items naming it by ID number, read now, no git: `[{id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title}]`, each value the row's, `author` its object. Text: `items: PR-0012 | question | applied | <summary> | record DEC-0031` per item after `tasks:`, `items: -` with none. A row that does not read is left out with a note, `PR-0014: its row does not read (<column>: <reason>); not listed`; `show` exits 0. Store `card_items(id) -> CardItems {items, unreadable}`, `item_history(ids, limit)`.
+`spec card show C [--history] --json`, `get_card`, `GET .../cards/:id`: `items` after `tasks`, the items naming it by ID number, read now, no git: `[{id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title}]`, each value the row's, `author` its object. Text: `items: PR-0012 | question | applied | <summary> | record DEC-0031` per item after `tasks:`, `items: -` with none. A row that does not read is left out with a note, `PR-0014: its row does not read (<column>: <reason>); not listed`; `show` exits 0. Store `card_items(id) -> CardItems {items, unreadable}`, `item_history(ids, limit)`. A parent's `subtask_items`: `card-mandate.md`.
 
 `history` (`--history`, else `null`): the card's last 64 `card.*` events and its items' last 64 `proposal.*` events (a payload whose `id` is an item's), merged by `seq`, oldest first; a linked update's are not an item's. `list`, its rows and every write's document are unchanged. Scale: one scan per card read, never on the Board's `list`; unmeasured.
 
@@ -70,21 +70,19 @@ The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh
 ## Screen
 
 - **Activity** replaces the work item's History, its blocks and dialogs lazy (`CardItems.tsx`). Items whose `proposal.created` is not in `history` come first, under "Earlier items", by ID; then every `history` entry in served order: a `card.*` as before; a `proposal.*` its word (`labels.ts` `ITEM_EVENT_WORDS`), the item's ID and "by <who>" (the payload's `as`, else `author.login`, else `author.role`); an unknown type raw under `lang="en"`. A `proposal.created` opens the item's block: `kind` raw in a neutral badge under `lang="en"`, the status lozenge, the summary, the working answer and why; Staged <at> in the shared date format; the record as a `DocLink` by `record_title` with `decided_by`; a `decision_note`, the answer on a rejected item; Answer… on an open item. The card is read again on every `proposal.*` live event and after a confirm.
-- **Return** (`ReturnDialog`, first load), on a card with a target: a closed "Ask a question with it", the question, a working answer and what another answer would cost, all required, and the targets, at least one checked. The move first, then the raise; a refused move asks nothing; a raise failed or not stored leaves the card returned and the dialog open on its fields, its hits listed, Ask anyway (naming them in `distinct_from`) or Ask again (no answer) resending the raise alone; every hit named and nothing stored: the too-many line. The stored ID is announced with the return.
-- **Ask a question…, Record a decision…** follow Return… on any card with a target, open or closed; Record sends `why` or `null`; hits as in Return; a 400 or 409 in the dialog's alert, its fields kept.
-- **Answer…**: the Questions screen's controls by structure (`round-ui.md` "Screen"), each with its price, staged through `stageDecision` with `as`; then the local command and Copy (`decision-staging.md` "UI"), or a hub's Confirm (the lazy `ConfirmDialog`) where `allowed` lists `confirm`; off (`ActOff`) where it lacks `stage`. At most one primary button.
+- **Return** (`ReturnDialog`, first load), on a card with a target: "Ask a question with it", closed (open on a binding task), the question, a working answer and what another answer would cost, all required, and the targets, at least one checked. The move first, then the raise; a refused move asks nothing; a raise failed or not stored leaves the card returned and the dialog open on its fields, its hits listed, Ask anyway (naming them in `distinct_from`) or Ask again (no answer) resending the raise alone; every hit named and nothing stored: the too-many line. The stored ID is announced with the return.
+- **Ask a question…, Record a decision…** follow Return… on any card with a target, open or closed, a mandate leading and framing them (`card-mandate.md` "Screen"); Record sends `why` or `null`, required by the form on an open task; hits as in Return; a 400 or 409 in the dialog's alert, its fields kept.
+- **Answer…**: the Questions screen's controls by structure (`round-ui.md` "Screen"), each with its price, staged through `stageDecision` with `as`; then the local command and Copy (`decision-staging.md` "UI"), or a hub's Confirm (the lazy `ConfirmDialog`) where `allowed` lists `confirm`; off (`ActOff`) where it lacks `stage`. At most one primary button; off while a card write is out.
 - **Inbox**: a proposal shows "Task C-0008", a link to `#/<p>/board/C-0008`, and a decision's Why.
 - Focus never lands on a read-only field or the body; the status region always exists. Nothing outside `labels.ts` compares a kind, status or event type (`policy.test.ts`); the chrome says "Ask a question", never a trade (`words.test.ts`).
 
 ## Known limits
 
-- **Rollout.** Older binaries refuse a schema-11 queue (`SchemaTooNew`; the hook's gate gives no verdict, so `selective` refuses controlled writes until `spec` and the plugin reinstall) and a format-5 dump; an older `spec approve` refuses a `{{why}}` template. Every terminal, plugin and hub of a project upgrades from one commit (`card-tasks.md` "Known limits"' steps), the old build and the last format-4 dump the way back.
-- **The hub's upgrade** steps its queue from 10 to 11: dump on the old version first (`hub-ops.md` "Upgrade"); with no `backup` service the dumps live on tmpfs alone, so copy one off the host first. A format-5 dump fits only this build or later.
+- **Rollout.** Older binaries refuse a newer queue (`SchemaTooNew`; the hook's gate gives no verdict, so `selective` refuses controlled writes until reinstall) and a newer dump; an older `spec approve` refuses a `{{why}}` template. Every terminal, plugin and hub upgrades from one commit (`card-tasks.md` "Known limits"' steps), the old build and its last dump the way back; a hub dumps first (`card-mandate.md` "Known limits").
 - **Who asked.** A local Activity names whoever "Acting as" holds; empty goes out as `local`. Follow-up: default to the hub login, or ask once locally.
 - **Two stores.** A card ID names a card of one queue: a terminal's `--card` never reaches a hub's card. A hub filled from a terminal's dump holds its cards and items as stored.
 - **Dedup.** A card's target linked to an accepted decision makes every question on it a hit: Ask anyway is the way through; over 64 hits nothing is stored (`agent-intake.md` "Dedup").
 - The Questions screen sends no `as` and links no card (RM-0099).
-- First-load JS 840.79 kB of 845: RM-0098 moves `RoadmapView` out of first load first, then `GraphView`.
 
 ## Tests
 

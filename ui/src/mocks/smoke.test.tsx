@@ -21,8 +21,9 @@ describe("the UI over the mock", () => {
     const ids = within(list)
       .getAllByRole("option")
       .map((option) => option.dataset.proposal);
-    // PR-0055, C-0008's open question, among them; the applied PR-0056 is not listed (card-questions, U1).
-    expect(ids).toEqual(["PR-0041", "PR-0042", "PR-0048", "PR-0050", "PR-0046", "PR-0043", "PR-0047", "PR-0045", "PR-0055", "PR-0044", "PR-0049", "PR-0051", "PR-0052"]);
+    // PR-0055, C-0008's open question, among them; the applied PR-0056 is not listed (card-questions, U1);
+    // C-0001's subtasks' open decisions PR-0057 and PR-0058 after it (docs/features/task-mandate.md "Acceptance criteria", V3).
+    expect(ids).toEqual(["PR-0041", "PR-0042", "PR-0048", "PR-0050", "PR-0046", "PR-0043", "PR-0047", "PR-0045", "PR-0055", "PR-0057", "PR-0058", "PR-0044", "PR-0049", "PR-0051", "PR-0052"]);
     expect(within(list).getByText(new RegExp(BASIN_NAME_DECOMPOSED))).toBeTruthy();
     fireEvent.click(within(list).getByText(/undocumented sample format/));
     expect(await screen.findByText(new RegExp(LONG_TOKEN))).toBeTruthy();

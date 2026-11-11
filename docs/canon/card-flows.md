@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # Card flows: config, hand-off and return
@@ -12,7 +12,7 @@ ADR-0056, ADR-0074, ADR-0076; `[card]` built by `card-store`, the hand-off and t
 
 ## Config
 
-Core `CardConfig::from_toml` (`flow_toml.rs`' family), the first error by line; `ProjectConfig` only name-checks `card`. A bad `[card]` exits 2 `<config>:<line>: <message>` for `spec card` alone, is the card routes' 503 (`board-ui.md` "The door") and fails no other command, finding or gate; `spec workspace` serves its flows unjudged with the note (`workspaces.md` "Config").
+Core `CardConfig::from_toml` (`flow_toml.rs`' family), the first error by line; `ProjectConfig` name-checks `card`. A bad `[card]` exits 2 `<config>:<line>: <message>` for `spec card` alone, is the card routes' 503 (`board-ui.md` "The door") and fails no other command, finding or gate; `spec workspace` serves its flows unjudged with the note (`workspaces.md` "Config").
 
 ```toml
 [[card.flow]]
@@ -28,7 +28,7 @@ moves = [
 ```
 
 - `[card]` holds `flow`, at most 32, and `split` (`card-split.md` "Config"). A flow's keys (`FLOW_KEYS`, 8): `name`, `title`, `disciplines`, `columns`, `titles`, `accept`, `return`, `moves`. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
-- **`title`**, optional, a flow's display name: any script, 1-64 UTF-8 bytes, no control character (`title_problem`, shared with `workspace_toml.rs`); absent, the name; served after `name` in `list`'s `flows[]` (`cards.md` "Documents and events"), the text output unchanged. Each error at the value's line; `titles` of another type keeps `` `titles` is a table, not <type> ``, an unknown key's message lists the eight:
+- **`title`**, optional, a display name: any script, 1-64 UTF-8 bytes, no control character (`title_problem`, shared with `workspace_toml.rs`); absent, the name; served after `name` in `list`'s `flows[]`, the text output unchanged. Each error at the value's line; `titles` of another type keeps `` `titles` is a table, not <type> ``, an unknown key's message lists the eight:
 
   ```text
   `title` is a string, not a table: column titles go in `titles`
@@ -40,11 +40,11 @@ moves = [
 - `accept` required, two columns; `to` is reached only by an accept, `spec card accept` or `POST .../accept`, so it may not be the first column, and a move at it, either end, is a config error.
 - `moves` `{from, to, by?}` of two columns, each pair once. No `by`, or `by: []` as served: anyone. No `moves`: every ordered pair of the other columns, expanded by the reader, so moves are looked up, never judged.
 - **A new card** takes the first column of the first flow listing its discipline, else of the one flow listing none, else exit 1 naming why.
-- **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so pasting it changes nothing: `plain`, titled `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, no `return`, `--discipline` free.
+- **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this reader, so pasting it changes nothing: `plain`, titled `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, no `return`, `--discipline` free.
 
 ### `return`
 
-Optional: the one column of the flow a move enters only with a note. Absent, or `null` as served: none. Core `CardFlow::return_column`, `is_return`; served as `return` after `accept` in `list`'s `flows[]` (`cards.md` "Documents and events"). The core knows a column whose entry needs a note, never its name (ADR-0008). Each error at its line:
+Optional: the one column of the flow a move enters only with a note. Absent, or `null` as served: none. Core `CardFlow::return_column`, `is_return`; served as `return` after `accept` in `list`'s `flows[]`. The core knows a column whose entry needs a note, never its name (ADR-0008). Each error at its line:
 
 ```text
 <config>:<line>: `return` is a string, not <a type>
@@ -73,11 +73,11 @@ No card write moves, creates or refuses another card; a split (`card-split.md`, 
 
 ## Hand-off
 
-`spec card new --title T --discipline D --parent C --reviewer N [--target REF]... [--as N]`, `create_card {…, parent, reviewer}`, `POST .../cards {…, parent, reviewer, as}`: one write, one `card.created` with `reviewer`, the parent untouched.
+`spec card new --title T --discipline D --parent C --reviewer N [--mandate M] [--target REF]... [--as N]`, `create_card {…, parent, reviewer}`, `POST .../cards {…, parent, reviewer, as}`: one write, one `card.created` with `reviewer`, the parent untouched.
 
 - **`--reviewer N`**: `assign`'s checks and texts. Off the person grammar (`cards.md` "Who acts"): exit 1, the daemon's 400. Then core `reviewer_problem`: ``reviewer: `agent` can be no reviewer: a person accepts a result``, `local` alike, exit 1, a 409; the store asks it again under its lock. `--reviewer -` is refused on `new`, exit 1, as `--assignee -` is: ``reviewer: `-` clears a name: a new card has none``. Nothing is written on a refusal.
 - **Accept**: the child in its `accept.from`, `--as` its reviewer, never its assignee (`cards.md` "Rules").
-- **The dialog** (`CardDialogs.tsx` `HandOffDialog`; an open card, the modal, the page, `h` on a tile), its form chosen on open from the Shell's held workspaces read (`useHeldWorkspaces`, never fetching). Two or more departments whose served `disciplines` (`workspaces.md` "Read") is not empty: a required Department select, served order, no default, "Choose a department", one with none not offered; one with several disciplines adds a Discipline select, its first chosen. Fewer, or the read pending or failed on open: Discipline, a datalist of every served flow's disciplines, a hidden flow's too, for the dialog's life. Title, Goal, Targets prefilled; no assignee, criteria, estimate, due or evidence; Reviewer prefilled with the parent's reviewer, else the acting name unless `agent` or `local` (refused above), else empty (`acting.ts` `handOffReviewer`), editable and required locally, the read-only login on a hub; the parent fixed. Submit: one `POST .../cards` with `title`, `goal`, `discipline`, `target`, `parent`, `reviewer`, `as`, nothing new; a polite line names the child and its raw `<flow>/<column>`.
+- **The dialog** (`CardDialogs.tsx` `HandOffDialog`; an open card, the modal, the page, `h` on a tile), its form chosen on open from the Shell's held workspaces read (`useHeldWorkspaces`, never fetching). Two or more departments whose served `disciplines` (`workspaces.md` "Read") is not empty: a required Department select, served order, no default, "Choose a department", one with none not offered; one with several disciplines adds a Discipline select, its first chosen. Fewer, or the read pending or failed on open: Discipline, a datalist of every served flow's disciplines, a hidden flow's too, for the dialog's life. Title, Goal, Targets prefilled; no assignee, criteria, estimate, due or evidence; Reviewer prefilled with the parent's reviewer, else the acting name unless `agent` or `local` (refused above), else empty (`acting.ts` `handOffReviewer`), editable and required locally, the read-only login on a hub; then the required mandate, no default (`card-mandate.md` "Screen"); the parent fixed. Submit: one `POST .../cards` with `title`, `goal`, `discipline`, `target`, `parent`, `reviewer`, `mandate`, `as`; a polite line names the child and its raw `<flow>/<column>`.
 
 ## Return
 

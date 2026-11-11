@@ -34,8 +34,12 @@ describe("the Questions screen over the mock", () => {
       "PR-0043",
       "PR-0047",
       "PR-0044",
+      // C-0001's subtask C-0013's decision (docs/features/task-mandate.md "Acceptance criteria", V3).
+      "PR-0058",
       // C-0008's open question (card-questions, U1).
       "PR-0055",
+      // C-0001's subtask C-0019's decision (task-mandate, V3).
+      "PR-0057",
     ]);
     expect(within(screen.getByRole("list", { name: "Notes from the daemon" })).getByRole("listitem").textContent).toBe(
       "4 open change proposal(s) not on this sheet: PR-0042, PR-0049, PR-0051 and PR-0052; spec inbox lists them",

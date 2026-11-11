@@ -43,9 +43,9 @@ use specengine_core::card_toml::CardConfig;
 use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity};
 use specengine_core::proposal::Author;
 use specengine_store::{
-    CardChange, Intake, NewCard, NewIntake, NewProposal, NewTask, PROPOSAL_COLUMNS, Place,
-    ProposalKind, ProposalQueue as _, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, card_columns,
-    patch_hash, proposal_columns,
+    CARD_COLUMNS, CardChange, Intake, NewCard, NewIntake, NewProposal, NewTask, PROPOSAL_COLUMNS,
+    Place, ProposalKind, ProposalQueue as _, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue,
+    card_columns, patch_hash, proposal_columns,
 };
 
 const T0: &str = "2026-11-11T09:00:00Z";
@@ -216,6 +216,7 @@ fn new_card(config: &CardConfig, title: &str) -> NewCard {
         criteria: Vec::new(),
         assignee: None,
         reviewer: None,
+        mandate: None,
         estimate: None,
         due: None,
         parent: None,
@@ -287,10 +288,12 @@ fn filled(db: &Path) {
 
 /// `filled`'s queue set back to schema 10: step 11's two columns dropped.
 fn at_schema_10(db: &Path) {
+    // docs/features/task-mandate.md M5: a schema-10 queue holds no
+    // `cards.mandate` either.
     sqlite3(
         db,
         "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
-         PRAGMA user_version = 10;",
+         ALTER TABLE cards DROP COLUMN mandate; PRAGMA user_version = 10;",
     );
 }
 
@@ -316,11 +319,12 @@ fn rows_of_10(db: &Path) -> String {
 /// `card_columns` 25 for 10 and 11. M: `why` added before `card_id`.
 #[test]
 fn s1_a_new_queue_stands_at_11_with_48_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    // 12 since docs/features/task-mandate.md M5, `proposals` unchanged.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
     let scratch = Scratch::new("cq-s1-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "11");
+    assert_eq!(user_version(&db), "12");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(PROPOSAL_COLUMNS.len(), 48);
     assert_eq!(PROPOSAL_COLUMNS[46..], STEP_11_COLUMNS);
@@ -333,7 +337,10 @@ fn s1_a_new_queue_stands_at_11_with_48_columns() {
             "schema {schema}"
         );
     }
-    assert_eq!(proposal_columns(12), None);
+    // docs/features/task-mandate.md M5: 48 at 12 too, `None` from 13;
+    // `cards` 26 at 12.
+    assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(13), None);
     for schema in 10..=11 {
         assert_eq!(
             card_columns(schema).map(<[_]>::len),
@@ -341,7 +348,8 @@ fn s1_a_new_queue_stands_at_11_with_48_columns() {
             "schema {schema}"
         );
     }
-    assert_eq!(card_columns(12), None);
+    assert_eq!(card_columns(12).map(<[_]>::len), Some(26));
+    assert_eq!(card_columns(13), None);
     assert_eq!(
         sqlite3(
             &db,
@@ -366,12 +374,14 @@ fn s1_a_schema_10_queue_steps_to_11_at_its_first_open() {
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS[..46], "premise");
     let before = rows_of_10(&db);
     let cards = sqlite3(&db, "SELECT * FROM cards;");
+    let card_25 = format!("SELECT {} FROM cards;", CARD_COLUMNS[..25].join(", "));
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(user_version(&db), "11");
+    // 12 since docs/features/task-mandate.md M5: steps 11 and 12.
+    assert_eq!(user_version(&db), "12");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(rows_of_10(&db), before, "every row as it was");
-    assert_eq!(sqlite3(&db, "SELECT * FROM cards;"), cards);
+    assert_eq!(sqlite3(&db, &card_25), cards);
     assert_eq!(
         sqlite3(
             &db,
@@ -389,7 +399,7 @@ fn s1_a_schema_10_queue_steps_to_11_at_its_first_open() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "11", "stepped once");
+    assert_eq!(user_version(&db), "12", "stepped once");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS, "no second column");
 }
 
@@ -403,14 +413,16 @@ fn s1_a_schema_9_queue_reaches_11_in_one_open() {
     sqlite3(
         &db,
         "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
-         ALTER TABLE cards DROP COLUMN tasks; PRAGMA user_version = 9;",
+         ALTER TABLE cards DROP COLUMN mandate; ALTER TABLE cards DROP COLUMN tasks; \
+         PRAGMA user_version = 9;",
     );
     let before = rows_of_10(&db);
     drop(SqliteQueue::open(&db, PROJECT).expect("open steps"));
-    assert_eq!(user_version(&db), "11");
+    // 12 and 26 since docs/features/task-mandate.md M5.
+    assert_eq!(user_version(&db), "12");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
-    assert_eq!(card_table(&db).len(), 25);
-    assert_eq!(card_table(&db).last().map(String::as_str), Some("tasks"));
+    assert_eq!(card_table(&db).len(), 26);
+    assert_eq!(card_table(&db).last().map(String::as_str), Some("mandate"));
     assert_eq!(rows_of_10(&db), before);
 }
 
@@ -425,8 +437,8 @@ fn s1_a_failing_step_11_leaves_a_schema_9_queue_at_9() {
     filled(&db);
     sqlite3(
         &db,
-        "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE cards DROP COLUMN tasks; \
-         PRAGMA user_version = 9;",
+        "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE cards DROP COLUMN mandate; \
+         ALTER TABLE cards DROP COLUMN tasks; PRAGMA user_version = 9;",
     );
     assert!(
         proposal_table(&db).contains(&"card_id".to_owned()),

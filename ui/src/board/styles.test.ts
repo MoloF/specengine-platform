@@ -128,3 +128,35 @@ describe("the header stays; the page never scrolls sideways (BH-2)", () => {
     expect(ruleWith(".board-card", /position/)).toMatch(/position:\s*relative;/);
   });
 });
+
+/**
+ * The value `property` takes on an element of `classes`, by the cascade over the stylesheet's rules
+ * whose selector is classes alone (`.a`, `.a.b`): the most classes win, then the later rule.
+ */
+function cascaded(classes: readonly string[], property: string): string | null {
+  const css = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
+  let won: { weight: number; value: string } | null = null;
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const value = new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+);`).exec(match[2] ?? "")?.[1]?.trim();
+    if (value === undefined) {
+      continue;
+    }
+    for (const selector of (match[1] ?? "").split(",").map((part) => part.trim())) {
+      const named = /^(\.[\w-]+)+$/.test(selector) ? selector.slice(1).split(".") : null;
+      if (named !== null && named.every((name) => classes.includes(name)) && (won === null || named.length >= won.weight)) {
+        won = { weight: named.length, value };
+      }
+    }
+  }
+  return won?.value ?? null;
+}
+
+// A review minor of task-mandate (docs/features/task-mandate.md "Acceptance criteria", V3): a parent's
+// Decisions from subtasks keeps its entries --space-3 apart, though it is a `.board-panel-list` too,
+// whose rule of one class stands later in the sheet with --space-1.
+describe("Decisions from subtasks keeps its entries apart (V3 of task-mandate)", () => {
+  it("lays its entries --space-3 apart, over the panel list's --space-1 (M: the gap rule of one class, losing to .board-panel-list)", () => {
+    expect(cascaded(["board-panel-list"], "gap")).toBe("var(--space-1)");
+    expect(cascaded(["board-panel-list", "board-from-subtasks"], "gap")).toBe("var(--space-3)");
+  });
+});

@@ -83,7 +83,7 @@ const WRITE_KEYS: [&str; 7] = [
 /// (docs/canon/cards.md "Documents and events": each linked task as read now),
 /// `items` after `tasks` (docs/features/card-questions.md D4), then
 /// `allowed`, `history`, `notes`.
-const SHOW_KEYS: [&str; 32] = [
+const SHOW_KEYS: [&str; 34] = [
     "id",
     "flow",
     "column",
@@ -100,6 +100,8 @@ const SHOW_KEYS: [&str; 32] = [
     "criteria",
     "assignee",
     "reviewer",
+    // docs/features/task-mandate.md M1.
+    "mandate",
     "estimate",
     "due",
     "parent",
@@ -107,6 +109,8 @@ const SHOW_KEYS: [&str; 32] = [
     "evidence",
     "tasks",
     "items",
+    // docs/features/task-mandate.md M6.
+    "subtask_items",
     "acceptance",
     "cancellation",
     "created_by",
@@ -122,7 +126,7 @@ const SHOW_KEYS: [&str; 32] = [
 const LIST_KEYS: [&str; 5] = ["flows", "cards", "notes", "truncated", "omitted"];
 
 /// A row of `list`'s document.
-const ROW_KEYS: [&str; 21] = [
+const ROW_KEYS: [&str; 22] = [
     "id",
     "flow",
     "column",
@@ -132,6 +136,8 @@ const ROW_KEYS: [&str; 21] = [
     "targets",
     "assignee",
     "reviewer",
+    // docs/features/task-mandate.md M1.
+    "mandate",
     "estimate",
     "due",
     "parent",
@@ -336,7 +342,7 @@ fn ac01_seven_writes_leave_git_alone_and_write_one_event_each() {
             "created C-0001: copy/draft\n",
             "card.created",
             json!({"id": "C-0001", "flow": "copy", "column": "draft", "position": 1,
-                   "assignee": null, "reviewer": null, "as": "writer"}),
+                   "assignee": null, "reviewer": null, "mandate": null, "as": "writer"}),
         ),
         (
             vec![
@@ -2192,7 +2198,7 @@ fn ac07_cards_round_trip_through_a_format_3_dump() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":5,\"queue_schema\":11,\"project\":\"card-press\",\"proposals\":0,\
+            "{{\"format\":6,\"queue_schema\":12,\"project\":\"card-press\",\"proposals\":0,\
              \"tasks\":1,\"runs\":0,\"cards\":4,\"events\":{event_rows}}}"
         )
     );
@@ -2328,7 +2334,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let v3_lines: Vec<String> = v3.lines().map(str::to_owned).collect();
     assert_eq!(
         v3_lines[0],
-        "{\"format\":5,\"queue_schema\":11,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
+        "{\"format\":6,\"queue_schema\":12,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
          \"runs\":0,\"cards\":0,\"events\":1}"
     );
     let old_header = "{\"format\":2,\"queue_schema\":8,\"project\":\"card-press\",\"proposals\":0,\
@@ -2365,7 +2371,8 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     );
     let rows = pair.sql("SELECT * FROM tasks; SELECT * FROM events;");
     assert_eq!(ok(&pair, &["card", "list"]), PRESS_BOARD);
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "11", "stepped");
+    // 12 since docs/features/task-mandate.md M5.
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "12", "stepped");
     assert_eq!(pair.sql("SELECT * FROM tasks; SELECT * FROM events;"), rows);
 
     // The refusals, on a dump holding one card.
@@ -2392,7 +2399,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut format_2_with_a_card = lines.clone();
     format_2_with_a_card[0] = format_2_with_a_card[0]
         .replacen(
-            "\"format\":5,\"queue_schema\":11,",
+            "\"format\":6,\"queue_schema\":12,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
@@ -2402,26 +2409,28 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut extra_column = lines.clone();
     extra_column[1] = card_row.replacen("\"goal\":null,", "\"goal\":null,\"bogus\":null,", 1);
     let cases: Vec<(&str, Vec<String>, usize)> = vec![
-        // docs/features/card-questions.md: format 5, schema 11 the current.
-        ("format-5-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
+        // docs/features/card-questions.md: format 5, schema 11 the current;
+        // docs/features/task-mandate.md M5: format 6, schema 12.
+        ("format-6-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
         (
-            "format-5-of-schema-10",
-            change(0, "\"queue_schema\":11,", "\"queue_schema\":10,"),
+            "format-6-of-schema-11",
+            change(0, "\"queue_schema\":12,", "\"queue_schema\":11,"),
             1,
         ),
         (
             "format-2-of-eight-keys",
             change(
                 0,
-                "\"format\":5,\"queue_schema\":11,",
+                "\"format\":6,\"queue_schema\":12,",
                 "\"format\":2,\"queue_schema\":8,",
             ),
             1,
         ),
-        ("format-6", change(0, "\"format\":5,", "\"format\":6,"), 1),
+        // docs/features/task-mandate.md R1: format 6 refused at 8a43e5d, 7 here.
+        ("format-7", change(0, "\"format\":6,", "\"format\":7,"), 1),
         (
-            "schema-12",
-            change(0, "\"queue_schema\":11,", "\"queue_schema\":12,"),
+            "schema-13",
+            change(0, "\"queue_schema\":12,", "\"queue_schema\":13,"),
             1,
         ),
         ("a-card-in-format-2", format_2_with_a_card, 2),
@@ -3234,7 +3243,7 @@ fn list_is_capped_with_a_tail() {
          INSERT INTO cards SELECT printf('C-%04d', i), project, flow, col, i, title, goal, \
          discipline, targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, \
          corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, \
-         revision, tasks FROM cards, n WHERE id = 'C-0001';",
+         revision, tasks, mandate FROM cards, n WHERE id = 'C-0001';",
     );
     let text = ok(&pair, &["card", "list"]);
     let last = text.lines().last().expect("a tail");
@@ -4242,7 +4251,10 @@ fn card_questions_k1_show_serves_items_after_tasks() {
     let keys = top_keys(&shown.stdout);
     let tasks = keys.iter().position(|key| key == "tasks").expect("tasks");
     assert_eq!(keys[tasks + 1], "items", "{keys:?}");
-    assert_eq!(keys.len(), 32, "{keys:?}");
+    // 34 since docs/features/task-mandate.md M6: `subtask_items` after
+    // `items`, `mandate` after `reviewer`.
+    assert_eq!(keys[tasks + 2], "subtask_items", "{keys:?}");
+    assert_eq!(keys.len(), 34, "{keys:?}");
     let items = raw_array(&shown.stdout, "items");
     for item_keys in serde_json::from_str::<Vec<OrderedKeys>>(items).expect("items") {
         assert_eq!(item_keys.0, ITEM_KEYS, "{items}");

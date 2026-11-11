@@ -1,17 +1,20 @@
-//! The queue's dump, format 5
+//! The queue's dump, format 6
 //! (canon `queue-backup`, "Format", "Import";
 //! cards: canon `cards`, "Backup"; tasks: canon `tasks`, "Backup"; a
-//! proposal's card and why: canon `card-questions`, "The rule"): UTF-8
+//! proposal's card and why: canon `card-questions`, "The rule"; a card's
+//! mandate: canon `card-mandate`, "The rule"): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":5,"queue_schema":11,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
+//! `{"format":6,"queue_schema":12,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `cards` row by ID number, every
 //! `events` row by `seq`, each `{"<table>":{…}}` with every column in table
 //! order: `TEXT` a string, `NULL` `null`, `run`, `position` and `seq`
 //! numbers; JSON columns stay the strings stored. No export time and no host
-//! inside: equal queues give equal bytes. Format 5 holds queue schema 11,
-//! its proposals' 48 columns, `card_id` and `why` last. A format-4 dump
+//! inside: equal queues give equal bytes. Format 6 holds queue schema 12,
+//! its cards' 26 columns, `mandate` last. A format-5 dump holds queue
+//! schema 11 and still restores, its cards' 25 columns, `mandate` restored
+//! `NULL`; its proposals' 48 columns, `card_id` and `why` last. A format-4 dump
 //! holds queue schema 10 and still restores, its proposals' 46 columns,
 //! `card_id` and `why` restored `NULL`; its cards' 25 columns, `tasks`
 //! last. A format-3 dump (eight header keys)
@@ -49,7 +52,7 @@ use specengine_store::{
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 5;
+pub const STATE_FORMAT: u64 = 6;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
@@ -63,6 +66,9 @@ const NO_TASK_LINKS_FORMAT: u64 = 3;
 /// The format of proposals naming no card: queue schema 10 alone.
 const NO_CARD_ITEMS_FORMAT: u64 = 4;
 
+/// The format of cards without a mandate: queue schema 11 alone.
+const NO_MANDATE_FORMAT: u64 = 5;
+
 /// The first queue schema with tasks and runs: format 1 holds the schemas
 /// before it, format 2 it and those after, to [`CARDS_SCHEMA`].
 const TASKS_SCHEMA: i64 = 4;
@@ -74,8 +80,12 @@ const CARDS_SCHEMA: i64 = 9;
 const TASK_LINKS_SCHEMA: i64 = 10;
 
 /// The first queue schema whose proposals hold `card_id` and `why`: format
-/// 5 holds it, to this build's.
+/// 5 holds it alone.
 const CARD_ITEMS_SCHEMA: i64 = 11;
+
+/// The first queue schema whose cards hold `mandate`: format 6 holds it, to
+/// this build's.
+const MANDATE_SCHEMA: i64 = 12;
 
 /// The header's keys, in the order written.
 const HEADER_KEYS: [&str; 8] = [
@@ -370,9 +380,9 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 }
 
 /// The header line: `format` first (a newer build's header may differ in
-/// all else), then exactly the format's keys (format 1: five; 2: seven; 3,
-/// 4, 5: eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9; 4: 10;
-/// 5: 11 to this build's), `project` the root's slug, the counts.
+/// all else), then exactly the format's keys (format 1: five; 2: seven; 3
+/// to 6: eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9; 4: 10;
+/// 5: 11; 6: 12 to this build's), `project` the root's slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
         entries
@@ -433,13 +443,15 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     }
     // Format 1 holds the schemas before the tasks, format 2 those to the
     // cards, format 3 the one before a card's tasks, format 4 the one before
-    // a proposal's card, format 5 the rest.
+    // a proposal's card, format 5 the one before a card's mandate, format 6
+    // the rest.
     let held = match format {
         PROPOSALS_ONLY_FORMAT => 1..TASKS_SCHEMA,
         NO_CARDS_FORMAT => TASKS_SCHEMA..CARDS_SCHEMA,
         NO_TASK_LINKS_FORMAT => CARDS_SCHEMA..TASK_LINKS_SCHEMA,
         NO_CARD_ITEMS_FORMAT => TASK_LINKS_SCHEMA..CARD_ITEMS_SCHEMA,
-        _ => CARD_ITEMS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
+        NO_MANDATE_FORMAT => CARD_ITEMS_SCHEMA..MANDATE_SCHEMA,
+        _ => MANDATE_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
     };
     let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {

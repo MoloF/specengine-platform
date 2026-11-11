@@ -384,7 +384,7 @@ impl PlanItem {
 }
 
 /// A value on one line: line breaks become spaces.
-fn one_line(text: &str) -> String {
+pub(crate) fn one_line(text: &str) -> String {
     text.replace("\r\n", " ").replace(['\n', '\r'], " ")
 }
 

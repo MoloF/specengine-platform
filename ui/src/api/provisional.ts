@@ -1902,6 +1902,14 @@ export interface CardFlow {
   return: string | null;
 }
 
+/**
+ * Who decides what a subtask's brief leaves open, named by the asking side and changed by the card's
+ * reviewer alone: `binding`, the brief stands; `open`, its department decides. Shown as "Binding" and
+ * "Department decides", told apart in `src/board/labels.ts` alone; it allows and refuses nothing.
+ * Sources: `docs/canon/card-mandate.md` "The rule"; `docs/features/task-mandate.md` "Acceptance criteria" (V1, V2).
+ */
+export type Mandate = "binding" | "open";
+
 /** A row of `spec card list --json`, by flow, column, position; `revision` decimal text; `mark` core's over all its targets, told apart in `src/board/labels.ts` alone, with what it names: null without `--marks`, and on a cancelled card. Source: `docs/canon/cards.md` "Documents and events", `docs/features/trace-views.md` "The board tile". */
 export interface CardRow {
   id: string;
@@ -1913,6 +1921,8 @@ export interface CardRow {
   targets: string[];
   assignee: string | null;
   reviewer: string | null;
+  /** Null on a card made without one (`docs/features/task-mandate.md` "Acceptance criteria", M1). */
+  mandate: Mandate | null;
   estimate: string | null;
   due: string | null;
   parent: string | null;
@@ -2026,6 +2036,32 @@ export interface CardItem {
   record_title: string | null;
 }
 
+/**
+ * One question, discrepancy or decision naming a subtask of the card read, as its `subtask_items`
+ * serves it: the subtask's ID, then the 16 keys of a `CardItem`, by ID number, read with the card in
+ * one read. `kind` and `status` shown as sent, told apart in `src/board/labels.ts` alone. Sources:
+ * `docs/canon/card-mandate.md` "The rule"; `docs/features/task-mandate.md` "Acceptance criteria" (M6, V3).
+ */
+export interface CardSubtaskItem {
+  card_id: string;
+  id: string;
+  kind: string;
+  status: ProposalStatus;
+  summary: string | null;
+  working_answer: string | null;
+  why: string | null;
+  author: Author;
+  created_at: string;
+  updated_at: string;
+  staged_at: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  record_id: string | null;
+  record_path: string | null;
+  record_title: string | null;
+}
+
 /** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`; `items` the questions, discrepancies and decisions naming it, after `tasks`, and `history` their last 64 `proposal.*` events merged with its own by `seq`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule", `docs/features/card-questions.md` "Acceptance criteria" (K1). */
 export interface Card {
   id: string;
@@ -2044,6 +2080,7 @@ export interface Card {
   criteria: string[];
   assignee: string | null;
   reviewer: string | null;
+  mandate: Mandate | null;
   estimate: string | null;
   due: string | null;
   parent: string | null;
@@ -2051,6 +2088,8 @@ export interface Card {
   evidence: CardEvidence[];
   tasks: CardTask[];
   items: CardItem[];
+  /** Every item naming one of its subtasks, cancelled ones too, no grandchild's, by ID number, each with its `card_id` (`docs/features/task-mandate.md` "Acceptance criteria", M6). */
+  subtask_items: CardSubtaskItem[];
   acceptance: CardAcceptance | null;
   cancellation: CardCancellation | null;
   created_by: string;
@@ -2096,6 +2135,8 @@ export interface CardCreateBody {
   corrects?: string;
   /** Who accepts the result, named at creation: a hand-off's asking side (`docs/canon/card-flows.md` "The rule"). */
   reviewer?: string;
+  /** The subtask's mandate, which goes with a reviewer; left out: none (`docs/canon/card-mandate.md` "The rule"). */
+  mandate?: Mandate;
   as: string | null;
 }
 
@@ -2123,6 +2164,8 @@ export interface CardEditBody {
   parent?: string;
   corrects?: string;
   evidence?: string[];
+  /** A new mandate, which only the card's reviewer sets; left out: unchanged (`docs/canon/card-mandate.md` "The rule"). */
+  mandate?: Mandate;
   reason?: string;
   revision: string;
   as: string | null;
@@ -2249,6 +2292,8 @@ export interface CardSplitBody {
   discipline: string | null;
   parent: string | null;
   child: string[] | null;
+  /** Each subtask's mandate as `<discipline>=binding` or `<discipline>=open`, a discipline of `child` once; null or left out: none (`docs/features/task-mandate.md` "Acceptance criteria", M2, V1). */
+  mandate?: string[] | null;
   reviewer: string | null;
   dry_run: boolean;
   as: string | null;
@@ -2296,6 +2341,8 @@ export interface CardSplitChild {
   targets: string[];
   from: SplitTargetsFrom;
   suggested: boolean;
+  /** The mandate the split asked for it, a plan's too; null: none (`docs/features/task-mandate.md` "Acceptance criteria", M2). */
+  mandate: Mandate | null;
 }
 
 /**

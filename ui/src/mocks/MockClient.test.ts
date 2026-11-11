@@ -352,18 +352,19 @@ describe("a card's items over the mock (card-questions)", () => {
   it("stores a raised question into the queue: the next ID, the card named, a person its author, its event under the acting name; the card reads it", async () => {
     const client = new MockClient("normal", { now: clock });
     const raised = await client.raiseOnCard(SLUG, "C-0007", question);
-    expect(raised).toEqual({ id: "PR-0057", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] });
-    expect(ids((await client.getInbox(SLUG)).proposals)).toContain("PR-0057");
-    const review = await client.getProposal(SLUG, "PR-0057");
+    // PR-0059: the next free number past C-0001's subtasks' decisions PR-0057 and PR-0058 (task-mandate).
+    expect(raised).toEqual({ id: "PR-0059", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] });
+    expect(ids((await client.getInbox(SLUG)).proposals)).toContain("PR-0059");
+    const review = await client.getProposal(SLUG, "PR-0059");
     expect([review.kind, review.card_id, review.why, review.author, review.target_ids]).toEqual(["question", "C-0007", null, { type: "human", role: null, model: null, run: null }, ["MEC-FAIRWAY"]]);
     const card = await cardOf(client, "C-0007");
-    expect(card.items.map((item) => item.id)).toEqual(["PR-0057"]);
-    expect(card.history?.at(-1)).toMatchObject({ type: "proposal.created", payload: { id: "PR-0057", as: "Ivo Brandt" } });
+    expect(card.items.map((item) => item.id)).toEqual(["PR-0059"]);
+    expect(card.history?.at(-1)).toMatchObject({ type: "proposal.created", payload: { id: "PR-0059", as: "Ivo Brandt" } });
     // The same text again is the first's hit: nothing stored, until it is named.
     const again = await client.raiseOnCard(SLUG, "C-0007", question);
-    expect([again.id, again.created, again.hits.map((hit) => hit.id)]).toEqual([null, false, ["PR-0057"]]);
-    const named = await client.raiseOnCard(SLUG, "C-0007", { ...question, distinct_from: ["PR-0057"] });
-    expect([named.id, named.created]).toEqual(["PR-0058", true]);
+    expect([again.id, again.created, again.hits.map((hit) => hit.id)]).toEqual([null, false, ["PR-0059"]]);
+    const named = await client.raiseOnCard(SLUG, "C-0007", { ...question, distinct_from: ["PR-0059"] });
+    expect([named.id, named.created]).toEqual(["PR-0060", true]);
   });
 
   it("stores a decision with its why; refuses an unknown card (404), another kind and a question's why (400), a blank text (409), nothing stored", async () => {
@@ -389,7 +390,7 @@ describe("a card's items over the mock (card-questions)", () => {
     const again = await client.raiseOnCard(SLUG, "C-0007", question);
     expect(again.created).toBe(false);
     const named = await client.raiseOnCard(SLUG, "C-0007", { ...question, distinct_from: ["DEC-0012"] });
-    expect([named.id, named.created]).toEqual(["PR-0057", true]);
+    expect([named.id, named.created]).toEqual(["PR-0059", true]);
     const next = await client.raiseOnCard(SLUG, "C-0007", { ...question, text: "Another question?" });
     expect(next.hits).toEqual([]);
   });
@@ -513,5 +514,133 @@ describe("a split over the mock (department-split)", () => {
     expect((await client.getCards(SLUG)).cards.length).toBe(before);
     expect((await client.splitCard(SLUG, write)).children).toHaveLength(2);
     expect((await client.getCards(SLUG)).cards.length).toBe(before + 3);
+  });
+});
+
+// The mock's mandate (docs/canon/card-mandate.md "The rule"; docs/features/task-mandate.md
+// "Acceptance criteria", V1, V3): C-0013 binding and C-0019 open, every other card none; stored on
+// create, per child on a split, on an edit by the card's reviewer alone, in the store's words
+// otherwise; `card.created` always names it, `card.edited` only when it changes; C-0001 reads its
+// subtasks' items in one read.
+describe("a mandate over the mock (task-mandate)", () => {
+  const SLUG = "harbor-sim";
+
+  async function shown(client: MockClient, id: string) {
+    const read = await client.getCard(SLUG, id);
+    if (!("items" in read)) {
+      throw new Error(`no card ${id}`);
+    }
+    return read;
+  }
+
+  it("serves C-0013 binding and C-0019 open, each with one of C-0001's targets, every other card none; rows hold it after the reviewer", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const rows = (await client.getCards(SLUG, { with_cancelled: true })).cards;
+    expect(rows.filter((row) => row.mandate !== null).map((row) => [row.id, row.mandate, row.targets])).toEqual([
+      ["C-0019", "open", ["DOM-WATER"]],
+      ["C-0013", "binding", ["MEC-TIDE-TABLES"]],
+    ]);
+    const parent = await shown(client, "C-0001");
+    expect((await shown(client, "C-0013")).targets.every((target) => parent.targets.includes(target))).toBe(true);
+    expect((await shown(client, "C-0019")).targets.every((target) => parent.targets.includes(target))).toBe(true);
+    // C-0013's plates flow opens its return column to it, so Return stands on its work item.
+    expect((await shown(client, "C-0013")).allowed.map((move) => move.to)).toContain("blocked");
+    const row = rows[0] ?? {};
+    expect(Object.keys(row).slice(Object.keys(row).indexOf("reviewer"), Object.keys(row).indexOf("reviewer") + 2)).toEqual(["reviewer", "mandate"]);
+  });
+
+  it("C-0001 reads its subtasks' decisions in subtask_items, by ID, each its card first; a card with no subtask, none", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const parent = await shown(client, "C-0001");
+    expect(parent.subtask_items.map((item) => [item.card_id, item.id, item.kind, item.status, item.why])).toEqual([
+      ["C-0019", "PR-0057", "decision", "open", "The glossary serves the tables: a word outside them sends the reader elsewhere."],
+      ["C-0013", "PR-0058", "decision", "open", null],
+    ]);
+    expect(Object.keys(parent.subtask_items[0] ?? {})).toEqual(["card_id", ...Object.keys(parent.items[0] ?? (await shown(client, "C-0008")).items[0] ?? {})]);
+    expect((await shown(client, "C-0013")).subtask_items).toEqual([]);
+    // A question raised on a subtask joins the parent's read too, the page showing decisions alone.
+    const asked = await client.raiseOnCard(SLUG, "C-0019", { kind: "question", node_ids: ["DOM-WATER"], text: "About PR-0057: tide words too?", working_answer: "Yes.", price_of_other: "More pages.", as: "Ivo Brandt" });
+    expect((await shown(client, "C-0001")).subtask_items.map((item) => item.id)).toEqual(["PR-0057", "PR-0058", asked.id]);
+  });
+
+  it("create: a hand-off stores its mandate, card.created naming it; none, null; a mandate with no reviewer is the store's 409, nothing stored", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const made = await client.createCard(SLUG, { title: "Keeper's voice", discipline: "plates", parent: "C-0001", reviewer: "Ivo Brandt", mandate: "open", as: "Ivo Brandt" });
+    const card = await shown(client, made.id ?? "");
+    expect([card.mandate, card.history?.at(-1)?.payload]).toEqual(["open", { id: made.id, flow: "plates", column: "queued", position: 3, assignee: null, reviewer: "Ivo Brandt", mandate: "open", as: "Ivo Brandt" }]);
+    const plain = await client.createCard(SLUG, { title: "No mandate", discipline: "copy", as: null });
+    expect((await shown(client, plain.id ?? "")).history?.at(-1)?.payload).toMatchObject({ mandate: null });
+    const before = (await client.getCards(SLUG)).cards.length;
+    const refused = await rejection(client.createCard(SLUG, { title: "Unreviewed", discipline: "copy", mandate: "binding", as: null }));
+    expect([refused.status, refused.message]).toEqual([409, "mandate: a mandate goes with a reviewer, who alone changes it: name one with --reviewer"]);
+    expect((await client.getCards(SLUG)).cards.length).toBe(before);
+  });
+
+  it("edit: the reviewer changes it, one card.edited naming it; another name, or a card with no reviewer, the store's 409 and nothing changed, the title unwritten too; an edit without it keeps {id, fields, as}", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const answer = await client.editCard(SLUG, "C-0013", { mandate: "open", revision: "1", as: "Mira Holt" });
+    expect(answer.revision).toBe("2");
+    const card = await shown(client, "C-0013");
+    expect([card.mandate, card.history?.at(-1)?.type, card.history?.at(-1)?.payload]).toEqual(["open", "card.edited", { id: "C-0013", fields: ["mandate"], as: "Mira Holt", mandate: "open" }]);
+    const other = await rejection(client.editCard(SLUG, "C-0013", { title: "Plates", mandate: "binding", revision: "2", as: "Ben Ode" }));
+    expect([other.status, other.message]).toEqual([409, "mandate: only C-0013's reviewer `Mira Holt` changes its mandate, not `Ben Ode`; nothing changed"]);
+    const unnamed = await rejection(client.editCard(SLUG, "C-0013", { mandate: "binding", revision: "2", as: null }));
+    expect(unnamed.message).toBe("mandate: only C-0013's reviewer `Mira Holt` changes its mandate, not `local`; nothing changed");
+    const kept = await shown(client, "C-0013");
+    expect([kept.title, kept.mandate, kept.revision]).toEqual(["Tide table plate", "open", "2"]);
+    const none = await rejection(client.editCard(SLUG, "C-0008", { mandate: "binding", revision: "1", as: "Noor Ainsley" }));
+    expect([none.status, none.message]).toEqual([409, "mandate: C-0008 has no reviewer, who alone changes its mandate: name one with `spec card assign C-0008 --reviewer N` first; nothing changed"]);
+    await client.editCard(SLUG, "C-0013", { title: "Plates", revision: "2", as: "Ben Ode" });
+    expect((await shown(client, "C-0013")).history?.at(-1)?.payload).toEqual({ id: "C-0013", fields: ["title"], as: "Ben Ode" });
+  });
+
+  it("split: each child its own mandate by discipline, never by place, one named by none none; the plan's children too; a new parent none", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const write = { target: ["MEC-MOORING"], title: "Mooring", goal: null, discipline: "copy", parent: null, child: ["plates", "copy", "captions"], mandate: ["copy=open", "plates=binding"], reviewer: "Mira Holt", dry_run: false, as: "Mira Holt" };
+    const planned = await client.splitCard(SLUG, { ...write, dry_run: true });
+    expect(planned.children.map((child) => [child.discipline, child.mandate])).toEqual([
+      ["plates", "binding"],
+      ["copy", "open"],
+      ["captions", null],
+    ]);
+    const made = await client.splitCard(SLUG, write);
+    expect(made.children.map((child) => [child.discipline, child.mandate])).toEqual([
+      ["plates", "binding"],
+      ["copy", "open"],
+      ["captions", null],
+    ]);
+    expect((await shown(client, made.parent?.id ?? "")).mandate).toBeNull();
+    for (const child of made.children) {
+      const card = await shown(client, child.id ?? "");
+      expect([child.discipline, card.mandate, card.history?.at(-1)?.payload]).toEqual([child.discipline, child.mandate, expect.objectContaining({ mandate: child.mandate })]);
+    }
+  });
+
+  it("split: refuses a mandate off D=M, off the name rule, naming no child or named twice, in the store's words, nothing stored, a plan too; a mandate with no child is a usage line", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const write = { target: ["MEC-MOORING"], title: "Mooring", goal: null, discipline: "copy", parent: null, child: ["copy", "plates"], reviewer: "Mira Holt", dry_run: false, as: "Mira Holt" };
+    const before = (await client.getCards(SLUG)).cards.length;
+    for (const [mandate, line] of [
+      [["copy"], "mandate: `copy` is not `<discipline>=binding` or `<discipline>=open`"],
+      [["copy=maybe"], "mandate: `copy=maybe` is not `<discipline>=binding` or `<discipline>=open`"],
+      [["Copy=open"], "mandate: `Copy` is not a name: lower-case ASCII letters, digits, `_` and `-`"],
+      [["voice=open"], "mandate: `voice` is no --child of this split"],
+      [["copy=open", "copy=binding"], "mandate: `copy` is named twice"],
+    ] as const) {
+      const refused = await rejection(client.splitCard(SLUG, { ...write, mandate: [...mandate] }));
+      expect([mandate, refused.status, refused.message]).toEqual([mandate, 409, line]);
+      const plan = await rejection(client.splitCard(SLUG, { ...write, mandate: [...mandate], dry_run: true }));
+      expect([mandate, plan.message]).toEqual([mandate, line]);
+    }
+    const usage = await rejection(client.splitCard(SLUG, { ...write, child: null, mandate: ["copy=open"], dry_run: true }));
+    expect([usage.status, usage.message]).toEqual([400, "spec: --mandate names a subtask: give its --child too"]);
+    expect((await client.getCards(SLUG)).cards.length).toBe(before);
+  });
+
+  it("the conflict scenario stays as it was: the first card write meets a change elsewhere, a mandate edit among them", async () => {
+    const client = new MockClient("conflict", { now: clock });
+    const first = await rejection(client.editCard(SLUG, "C-0013", { mandate: "open", revision: "1", as: "Mira Holt" }));
+    expect(first.message).toMatch(/^`C-0013` changed since this run read it/);
+    expect((await client.editCard(SLUG, "C-0013", { mandate: "open", revision: "2", as: "Mira Holt" })).revision).toBe("3");
   });
 });

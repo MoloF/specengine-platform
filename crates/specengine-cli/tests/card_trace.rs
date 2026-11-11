@@ -3068,6 +3068,7 @@ fn many_cards(pair: &Pair, target: &str, count: usize) {
                     criteria: Vec::new(),
                     assignee: None,
                     reviewer: None,
+                    mandate: None,
                     estimate: None,
                     due: None,
                     parent: None,

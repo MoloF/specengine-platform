@@ -1113,9 +1113,10 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    // This build's queue schema is 11 (docs/features/card-questions.md
-    // S1): 12 is newer. M1's record at a62c81c: 11 over 10.
-    sqlite3(&db(&s.home), "PRAGMA user_version = 12;");
+    // This build's queue schema is 12 (docs/features/task-mandate.md M5):
+    // 13 is newer. M1's record at a62c81c: 11 over 10; task-mandate R1's at
+    // 8a43e5d: 12 over 11.
+    sqlite3(&db(&s.home), "PRAGMA user_version = 13;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
@@ -1123,14 +1124,14 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
     assert!(
-        message.contains("12") && message.contains("11"),
+        message.contains("13") && message.contains("12"),
         "{message}"
     );
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "12",
+        "13",
         "left alone"
     );
     assert_eq!(

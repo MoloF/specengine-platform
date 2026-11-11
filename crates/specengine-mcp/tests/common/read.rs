@@ -677,6 +677,8 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                 criteria: strings(&args["criterion"]),
                 assignee: text("assignee"),
                 reviewer: text("reviewer"),
+                // docs/features/task-mandate.md M7: `mandate`, `--mandate`.
+                mandate: serde_json::from_value(args["mandate"].clone()).unwrap_or_default(),
                 estimate: text("estimate"),
                 due: text("due"),
                 parent: text("parent"),
@@ -703,6 +705,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                 // `--task`; `["-"]` clears.
                 tasks: strings(&args["task"]),
                 tasks_here: true,
+                mandate: serde_json::from_value(args["mandate"].clone()).unwrap_or_default(),
                 reason: text("reason"),
                 revision: text("revision"),
                 actor,
@@ -738,6 +741,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                         discipline: text("discipline"),
                         parent: text("parent"),
                         children,
+                        mandate: strings(&args["mandate"]),
                         reviewer: text("reviewer"),
                         dry_run: args["dry_run"] == json!(true),
                         actor,

@@ -575,7 +575,9 @@ slug/ID or root-relative .md path), resolved as a task's; none makes a manual ca
 most 32, each at most 1024 bytes. estimate: N or N-M, no unit. due: YYYY-MM-DD. parent, corrects: \
 existing cards. reviewer: the login that accepts its result, never agent or local; on a hub only \
 a [team] login accepts. A hand-off is a card with parent the asking card, in the other trade's \
-flow, its reviewer the side that asked. ",
+flow, its reviewer the side that asked. mandate: binding (a departure from the brief goes back as \
+a return with a question) or open (the department decides and says why); needs reviewer; null: \
+none. Nothing reads it to allow or refuse. ",
     hub_card_tail!()
 );
 
@@ -592,7 +594,8 @@ card; then no target, title, goal or discipline. child: 1 to 32 disciplines, eac
 with dry_run. reviewer: a person, never agent or local; absent: the parent card's. dry_run: plan \
 only, nothing written; without child it plans every discipline. A child targets the nodes of the \
 kinds a [[card.split]] row names for it, found in the targets or two levels under them, else the \
-parent's targets; suggested marks a row's pick. ",
+parent's targets; suggested marks a row's pick. mandate: D=binding or D=open per child \
+discipline, each once; a child without one holds none. ",
     hub_card_tail!()
 );
 
@@ -608,7 +611,8 @@ and no other field beside it. evidence appends, at most 32 on a card: url=http..
 path=<path>@<hex blob>, build=... or note=..., one line, at most 1024 bytes: a reference, never a \
 binary, and nothing is fetched. revision: only if the card still stands at it, the revision a read \
 gave. task: T- IDs as a terminal writes them, listed once, at most 32; it replaces the list, - \
-clears it. This hub holds no task: it checks none and get_card shows them without state. ",
+clears it. This hub holds no task: it checks none and get_card shows them without state. \
+mandate: binding or open; only the card's reviewer, your login, changes it. ",
     hub_card_tail!()
 );
 

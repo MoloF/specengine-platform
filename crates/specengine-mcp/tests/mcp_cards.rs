@@ -252,6 +252,8 @@ fn ac10_the_card_tools_and_their_schemas() {
                     "due",
                     "estimate",
                     "goal",
+                    // docs/features/task-mandate.md M7.
+                    "mandate",
                     "parent",
                     // docs/canon/card-flows.md "Hand-off".
                     "reviewer",
@@ -270,6 +272,8 @@ fn ac10_the_card_tools_and_their_schemas() {
                     "estimate",
                     "evidence",
                     "goal",
+                    // docs/features/task-mandate.md M7.
+                    "mandate",
                     "parent",
                     "reason",
                     "revision",
@@ -993,17 +997,18 @@ fn board_handoff_the_card_tools_take_reviewer_note_and_parent() {
             (
                 "card.created".to_owned(),
                 json!({"id": "C-0001", "flow": "narrative", "column": "backlog", "position": 1,
-                       "assignee": null, "reviewer": null, "as": "agent"})
+                       "assignee": null, "reviewer": null, "mandate": null, "as": "agent"})
             ),
             (
                 "card.created".to_owned(),
                 json!({"id": "C-0002", "flow": "development", "column": "backlog",
-                       "position": 1, "assignee": null, "reviewer": "Ann", "as": "agent"})
+                       "position": 1, "assignee": null, "reviewer": "Ann", "mandate": null,
+                       "as": "agent"})
             ),
             (
                 "card.created".to_owned(),
                 json!({"id": "C-0003", "flow": "art", "column": "waiting", "position": 1,
-                       "assignee": null, "reviewer": "Ann", "as": "agent"})
+                       "assignee": null, "reviewer": "Ann", "mandate": null, "as": "agent"})
             ),
             (
                 "card.moved".to_owned(),

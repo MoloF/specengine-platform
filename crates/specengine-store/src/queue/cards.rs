@@ -42,7 +42,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use specengine_core::card::{
     EVIDENCE_ENTRIES_MAX, accept_refusal, card_id, card_move, card_number, closed_refusal,
-    reviewer_problem, stale_refusal, task_links_problem,
+    mandate_change_problem, mandate_problem, reviewer_problem, stale_refusal, task_links_problem,
 };
 use specengine_core::card_toml::CardFlow;
 use specengine_core::intake::{DISTINCT_MAX, distinct_entry_fits};
@@ -53,26 +53,28 @@ use specengine_core::trace::{
 };
 use specengine_model::{
     Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, CardVerdict, EvidenceKind,
+    Mandate,
 };
 
 use super::state::{TASK_LINKS_SCHEMA, stored_text};
 use super::{
     CARD_COLUMNS, CARD_ITEMS_SCHEMA, COLUMNS, EVENT_CREATED, Event, ID_ORDER, IntakeResult,
-    NewIntake, Proposal, ProposalKind, QueueError, RawRow, SqliteQueue, UnreadableRow, check_time,
-    created_payload, existing, index_only, insert_intake, link_problem, log, log_text,
-    queue_matches, to_json, user_version,
+    MANDATE_SCHEMA, NewIntake, Proposal, ProposalKind, QueueError, RawRow, SqliteQueue,
+    UnreadableRow, check_time, created_payload, existing, index_only, insert_intake, link_problem,
+    log, log_text, queue_matches, to_json, user_version,
 };
 use crate::error::{Db, StoreError};
 use crate::floor::read_floor;
 use crate::schema;
 
 /// `card.created`, with `flow`, `column`, `position`, `assignee`,
-/// `reviewer`, `as`.
+/// `reviewer`, `mandate` (`null` when none), `as`.
 pub const EVENT_CARD_CREATED: &str = "card.created";
 /// `card.moved`, with `from`, `to`, `position`, `as`, `note` (`null` when
 /// none): a move's own event is the one home of its note.
 pub const EVENT_CARD_MOVED: &str = "card.moved";
-/// `card.edited`, with `fields`, `as`.
+/// `card.edited`, with `fields`, `as`, and `mandate` only when `fields`
+/// hold it.
 pub const EVENT_CARD_EDITED: &str = "card.edited";
 /// `card.assigned`, with `assignee`, `reviewer`, `as`.
 pub const EVENT_CARD_ASSIGNED: &str = "card.assigned";
@@ -105,12 +107,16 @@ macro_rules! step_9_columns {
 }
 
 /// Every column of `cards` in table order, for a statement.
-const CARD_SELECT: &str = concat!(step_9_columns!(), ", tasks");
+const CARD_SELECT: &str = concat!(step_9_columns!(), ", tasks, mandate");
 
 /// [`CARD_SELECT`] over a queue still at schema 9, no step run (a handle
-/// of [`SqliteQueue::open_existing`]): `tasks` read `NULL`, as on a row
-/// step 10 stepped.
-const CARD_SELECT_9: &str = concat!(step_9_columns!(), ", NULL");
+/// of [`SqliteQueue::open_existing`]): `tasks` and `mandate` read `NULL`,
+/// as on a row steps 10 and 12 stepped.
+const CARD_SELECT_9: &str = concat!(step_9_columns!(), ", NULL, NULL");
+
+/// [`CARD_SELECT`] over a queue still at schema 10 or 11, no step run:
+/// `mandate` read `NULL`, as on a row step 12 stepped.
+const CARD_SELECT_10: &str = concat!(step_9_columns!(), ", tasks, NULL");
 
 /// `position` among the columns; the one that is no `TEXT`.
 pub(super) const POSITION_COLUMN: usize = 4;
@@ -131,6 +137,10 @@ pub struct NewCard {
     pub assignee: Option<String>,
     /// Who accepts its result, named at creation: a hand-off's asking side.
     pub reviewer: Option<String>,
+    /// Who decides what its brief leaves open, named by the asking side:
+    /// only with a reviewer, asked again under the lock
+    /// (`docs/canon/card-mandate.md` "The rule").
+    pub mandate: Option<Mandate>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -163,6 +173,10 @@ pub struct CardEdit {
     /// under the lock; whether a task exists is the caller's to ask, and no
     /// task is read here (`docs/canon/card-tasks.md` "The rule").
     pub tasks: Option<Vec<String>>,
+    /// The mandate it takes; never cleared. It stands only when the acting
+    /// name is the card's stored reviewer, judged under the lock
+    /// (`docs/canon/card-mandate.md` "The rule").
+    pub mandate: Option<Mandate>,
 }
 
 impl CardEdit {
@@ -180,6 +194,7 @@ impl CardEdit {
             ("corrects", self.corrects.is_some()),
             ("evidence", !self.evidence.is_empty()),
             ("tasks", self.tasks.is_some()),
+            ("mandate", self.mandate.is_some()),
         ];
         written
             .into_iter()
@@ -488,9 +503,12 @@ impl SqliteQueue {
             return Err(QueueError::SchemaTooNew { found: version });
         }
         let list = if schema::has_table(&tx, "cards")? {
-            // A queue at schema 9 holds no `tasks` yet: its cards link none.
+            // A queue at schema 9 holds no `tasks` yet: its cards link none;
+            // one below 12 holds no `mandate`: its cards hold none.
             let select = if version < TASK_LINKS_SCHEMA {
                 CARD_SELECT_9
+            } else if version < MANDATE_SCHEMA {
+                CARD_SELECT_10
             } else {
                 CARD_SELECT
             };
@@ -527,6 +545,44 @@ impl SqliteQueue {
                     .db()?;
                 statement
                     .query_map([self.project.as_str(), id], RawRow::read)
+                    .db()?
+                    .collect::<rusqlite::Result<_>>()
+                    .db()?
+            };
+            for raw in raws {
+                match raw.decode() {
+                    Ok(proposal) => found.items.push(proposal),
+                    Err(row) => found.unreadable.push(row),
+                }
+            }
+        }
+        tx.commit().db()?;
+        Ok(found)
+    }
+
+    /// The questions, discrepancies and decisions whose `card_id` is one of
+    /// the cards whose `parent` is exactly `parent` (a cancelled child
+    /// included, no grandchild), by ID number, in one snapshot and one
+    /// statement; each names its child in `card_id`, and a row that does not
+    /// decode is listed in [`CardItems::unreadable`]. Below step 11, or on an
+    /// index-only DB, there is none, as [`Self::card_items`] reads them. A
+    /// read only: no card rule asks it
+    /// (`docs/canon/card-mandate.md` "The rule").
+    pub fn subtask_items(&self, parent: &str) -> Result<CardItems, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let mut found = CardItems::default();
+        if !index_only(&tx)? && user_version(&tx)? >= CARD_ITEMS_SCHEMA {
+            let raws: Vec<RawRow> = {
+                let mut statement = tx
+                    .prepare(&format!(
+                        "SELECT {COLUMNS} FROM main.proposals \
+                         WHERE project = ?1 AND card_id IN \
+                         (SELECT id FROM main.cards WHERE project = ?1 AND parent = ?2) \
+                         {ID_ORDER}"
+                    ))
+                    .db()?;
+                statement
+                    .query_map([self.project.as_str(), parent], RawRow::read)
                     .db()?
                     .collect::<rusqlite::Result<_>>()
                     .db()?
@@ -858,8 +914,8 @@ fn listed_cards(tx: &Transaction<'_>, project: &str) -> Result<CardList, QueueEr
     listed_from(tx, project, CARD_SELECT)
 }
 
-/// [`listed_cards`] by the columns `select`, [`CARD_SELECT`]'s or
-/// [`CARD_SELECT_9`]'s.
+/// [`listed_cards`] by the columns `select`, [`CARD_SELECT`]'s,
+/// [`CARD_SELECT_10`]'s or [`CARD_SELECT_9`]'s.
 fn listed_from(tx: &Transaction<'_>, project: &str, select: &str) -> Result<CardList, QueueError> {
     let raws = {
         let mut statement = tx
@@ -1107,6 +1163,9 @@ fn insert_card(
     if let Some(problem) = card.reviewer.as_deref().and_then(reviewer_problem) {
         return Err(refused(&id, format!("reviewer: {problem}")));
     }
+    if let Some(problem) = mandate_problem(card.mandate, card.reviewer.as_deref()) {
+        return Err(refused(&id, problem));
+    }
     check_links(
         tx,
         project,
@@ -1115,11 +1174,12 @@ fn insert_card(
         card.corrects.as_deref(),
     )?;
     let position = last_position(tx, project, &card.flow, &card.column)? + 1;
+    let mandate = card.mandate.map(Mandate::as_str);
     tx.execute(
         &format!(
             "INSERT INTO main.cards ({CARD_SELECT}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, \
              ?9, ?10, ?11, ?12, ?19, ?13, ?14, ?15, ?16, '[]', NULL, NULL, ?17, ?18, ?18, \
-             '1', '[]')"
+             '1', '[]', ?20)"
         ),
         rusqlite::params![
             id,
@@ -1141,9 +1201,12 @@ fn insert_card(
             card.by,
             now,
             card.reviewer,
+            mandate,
         ],
     )
     .db()?;
+    // `mandate` on every card's, `null` when none
+    // (`docs/features/task-mandate.md` "Acceptance criteria", M1).
     log(
         tx,
         project,
@@ -1155,6 +1218,7 @@ fn insert_card(
             "position": position,
             "assignee": card.assignee,
             "reviewer": card.reviewer,
+            "mandate": mandate,
             "as": card.by,
         }),
         now,
@@ -1373,6 +1437,14 @@ impl Change<'_> {
     fn edited(&self, edit: &CardEdit) -> Result<(), QueueError> {
         let card = self.current;
         let id = self.id();
+        // The reviewer compare, against the row under this lock, whatever
+        // else the edit holds
+        // (`docs/features/task-mandate.md` "Acceptance criteria", M3).
+        if edit.mandate.is_some()
+            && let Some(problem) = mandate_change_problem(id, card.reviewer.as_deref(), self.actor)
+        {
+            return Err(refused(id, problem));
+        }
         let keep = |field: Option<&Option<String>>, stored: &Option<String>| match field {
             Some(value) => value.clone(),
             None => stored.clone(),
@@ -1419,13 +1491,16 @@ impl Change<'_> {
             let snapshot = retargeted(card.snapshot.as_deref(), targets, norms);
             write_snapshot(self.tx, self.project, id, &snapshot)?;
         }
+        let mandate = edit.mandate.map(Mandate::as_str);
         // `tasks` written whole when given, else left as stored (a row
-        // stepped from schema 9 keeps its `NULL`).
+        // stepped from schema 9 keeps its `NULL`); `mandate` likewise, never
+        // cleared.
         self.tx
             .execute(
                 "UPDATE main.cards SET title = ?1, goal = ?2, targets = ?3, criteria = ?4, \
                  estimate = ?5, due = ?6, parent = ?7, corrects = ?8, evidence = ?9, \
-                 tasks = COALESCE(?12, tasks) WHERE id = ?10 AND project = ?11",
+                 tasks = COALESCE(?12, tasks), mandate = COALESCE(?13, mandate) \
+                 WHERE id = ?10 AND project = ?11",
                 rusqlite::params![
                     edit.title.as_ref().unwrap_or(&card.title),
                     keep(edit.goal.as_ref(), &card.goal),
@@ -1439,6 +1514,7 @@ impl Change<'_> {
                     id,
                     self.project,
                     tasks,
+                    mandate,
                 ],
             )
             .db()?;
@@ -1457,13 +1533,13 @@ impl Change<'_> {
                 self.now,
             );
         }
-        log(
-            self.tx,
-            self.project,
-            EVENT_CARD_EDITED,
-            &json!({ "id": id, "fields": edit.fields(), "as": self.actor }),
-            self.now,
-        )
+        // `mandate` only when the edit sets it: every other edit's payload
+        // stays `{id, fields, as}`.
+        let mut payload = json!({ "id": id, "fields": edit.fields(), "as": self.actor });
+        if let (Some(mandate), Value::Object(entries)) = (mandate, &mut payload) {
+            entries.insert("mandate".to_owned(), Value::from(mandate));
+        }
+        log(self.tx, self.project, EVENT_CARD_EDITED, &payload, self.now)
     }
 
     fn assigned(
@@ -1869,6 +1945,18 @@ fn decode_card(raw: RawCard) -> Result<Card, UnreadableCard> {
     if let Some(entry) = tasks.iter().find(|entry| task_number(entry).is_none()) {
         return Err(unreadable(&id, "tasks", format!("{entry:?} is no task ID")));
     }
+    // `NULL` (a row stepped from schema 11) holds none; any other word than
+    // the two is a corrupt row (`docs/canon/cards.md` "Store").
+    let mandate = match take() {
+        None => None,
+        Some(word) => Some(Mandate::parse(&word).ok_or_else(|| {
+            unreadable(
+                &id,
+                "mandate",
+                format!("{word:?} is not `binding` or `open`"),
+            )
+        })?),
+    };
     Ok(Card {
         id,
         project,
@@ -1883,6 +1971,7 @@ fn decode_card(raw: RawCard) -> Result<Card, UnreadableCard> {
         criteria,
         assignee,
         reviewer,
+        mandate,
         estimate,
         due,
         parent,

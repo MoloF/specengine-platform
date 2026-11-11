@@ -75,6 +75,38 @@ impl CardVerdict {
     }
 }
 
+/// Who decides what a subtask's brief leaves open
+/// (`docs/canon/card-mandate.md` "The rule"): named by the asking side,
+/// changed by the card's reviewer alone. It decides nothing: no move,
+/// accept, rollup, stage, approve, confirm or gate reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mandate {
+    /// The brief stands; a departure goes back as a return with a question.
+    Binding,
+    /// The department decides, and records each decision with its why.
+    Open,
+}
+
+impl Mandate {
+    pub const ALL: [Self; 2] = [Self::Binding, Self::Open];
+
+    /// The stored word, lower-case.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Binding => "binding",
+            Self::Open => "open",
+        }
+    }
+
+    /// The mandate `text` names, exactly: no trim, no case fold.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|mandate| mandate.as_str() == text)
+    }
+}
+
 /// `acceptance`: the reviewer's act.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CardAcceptance {
@@ -144,6 +176,9 @@ pub struct Card {
     pub criteria: Vec<String>,
     pub assignee: Option<String>,
     pub reviewer: Option<String>,
+    /// `binding` or `open`; none on a row stored before the mandate, and on
+    /// any card made without one.
+    pub mandate: Option<Mandate>,
     pub estimate: Option<String>,
     /// As given; nothing is derived from it.
     pub due: Option<String>,

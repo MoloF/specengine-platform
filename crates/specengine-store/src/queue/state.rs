@@ -17,8 +17,8 @@ use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
 use specengine_core::intake::{DRIFT_KIND, INTERPRETATION_KIND};
 
 use super::{
-    CARD_ITEMS_SCHEMA, ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, cards, corrupt,
-    migrate, stage, tasks, user_version,
+    CARD_ITEMS_SCHEMA, ID_ORDER, MANDATE_SCHEMA, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue,
+    cards, corrupt, migrate, stage, tasks, user_version,
 };
 
 use crate::error::{Db, StoreError};
@@ -182,8 +182,10 @@ pub const RUN_COLUMNS: [&str; 11] = [
 /// Every column of `cards`, in table order
 /// (`docs/canon/cards.md` "Store"): `position` `INTEGER`, the rest `TEXT`
 /// (`col` the documents' key `column`, `revision` a decimal counter from 1);
-/// `tasks`, the `T-` IDs a card links, step 9 → 10 appends.
-pub const CARD_COLUMNS: [&str; 25] = [
+/// `tasks`, the `T-` IDs a card links, step 9 → 10 appends; `mandate`,
+/// `binding` or `open`, step 11 → 12 appends
+/// (`docs/canon/card-mandate.md` "The rule").
+pub const CARD_COLUMNS: [&str; 26] = [
     "id",
     "project",
     "flow",
@@ -209,23 +211,30 @@ pub const CARD_COLUMNS: [&str; 25] = [
     "updated_at",
     "revision",
     "tasks",
+    "mandate",
 ];
 
 /// The columns of queue schema 9's `cards`: the first of
 /// [`CARD_COLUMNS`].
 const SCHEMA_9_CARD_COLUMNS: usize = 24;
 
+/// The columns of queue schemas 10 and 11's `cards` (step 11 adds no card
+/// column): the first of [`CARD_COLUMNS`].
+const SCHEMA_10_CARD_COLUMNS: usize = 25;
+
 /// The first queue schema whose `cards` holds `tasks` (step 9 → 10).
 pub(super) const TASK_LINKS_SCHEMA: i64 = 10;
 
 /// The `cards` columns of queue schema `schema`, in table order
-/// (`docs/canon/queue-backup.md` "Format"): 9, 10 and 11 (this build's) are
-/// known, a dump of any restores, a schema-9 row's `tasks` `NULL`; `None`
-/// for any other (before 9 there is no card; step 11 adds no card column).
+/// (`docs/canon/queue-backup.md` "Format"): 9, 10, 11 and 12 (this build's)
+/// are known, a dump of any restores, a schema-9 row's `tasks` and a schema
+/// 9-11 row's `mandate` `NULL`; `None` for any other (before 9 there is no
+/// card; step 11 adds no card column).
 pub fn card_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         CARDS_SCHEMA => Some(&CARD_COLUMNS[..SCHEMA_9_CARD_COLUMNS]),
-        TASK_LINKS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&CARD_COLUMNS),
+        TASK_LINKS_SCHEMA..MANDATE_SCHEMA => Some(&CARD_COLUMNS[..SCHEMA_10_CARD_COLUMNS]),
+        MANDATE_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&CARD_COLUMNS),
         _ => None,
     }
 }
@@ -432,7 +441,8 @@ impl SqliteQueue {
     /// 24, 35, 40, 41, 43, 44 or 46 proposal columns, the later ones `None`
     /// (a schema-10 row's `card_id` and `why`), its tasks and
     /// runs from schema 4 on (none before), and its cards from schema 9 on
-    /// (a schema-9 card's `tasks` `None`).
+    /// (a schema-9 card's `tasks` and a schema 9-11 card's `mandate`
+    /// `None`).
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();
@@ -490,7 +500,7 @@ impl SqliteQueue {
                 drop(statement);
             }
             // A queue at schema 9 (no step runs here) reads its 24 columns,
-            // `tasks` `None`.
+            // `tasks` `None`; at 10 or 11 its 25, `mandate` `None`.
             if let Some(card_columns) = card_columns(version) {
                 let mut statement = tx
                     .prepare(&format!(

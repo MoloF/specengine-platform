@@ -1547,7 +1547,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1583,7 +1583,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":5,\"queue_schema\":11,",
+            "\"format\":6,\"queue_schema\":12,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )

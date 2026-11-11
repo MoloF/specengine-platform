@@ -5,8 +5,8 @@
 //! docs/canon/card-split.md "The rule".
 //!
 //! - `tools/list` holds thirty with `split_card`, its input
-//!   `additionalProperties: false`, eight keys and no `as`; its output the
-//!   split document's five keys.
+//!   `additionalProperties: false`, nine keys (`mandate` since task-mandate
+//!   M7) and no `as`; its output the split document's five keys.
 //! - A new parent with no `reviewer`: an error result naming `agent` (the
 //!   chain ends at the acting name), the refusal's document, nothing stored.
 //! - `reviewer` a person: stored, each `card.created` `as` `agent`, the
@@ -205,7 +205,8 @@ fn split_args(extra: &Value) -> Value {
 
 /// S8: stdio `tools/list` holds thirty, `split_card` among them; its input
 /// is closed (`additionalProperties: false`), the eight keys of the
-/// criterion, each nullable, none required, no `as`; it is no read; its
+/// criterion and `mandate` (docs/features/task-mandate.md M7), each
+/// nullable, none required, no `as`; it is no read; its
 /// output the split document's keys.
 #[test]
 fn s8_tools_list_holds_split_card() {
@@ -230,6 +231,7 @@ fn s8_tools_list_holds_split_card() {
             "discipline",
             "dry_run",
             "goal",
+            "mandate",
             "parent",
             "reviewer",
             "target",
@@ -247,6 +249,8 @@ fn s8_tools_list_holds_split_card() {
         ("parent", "string"),
         ("reviewer", "string"),
         ("dry_run", "boolean"),
+        // docs/features/task-mandate.md M7: each `D=M`.
+        ("mandate", "array"),
     ] {
         assert_eq!(
             input["properties"][key]["type"],
@@ -309,11 +313,11 @@ fn s8_a_stdio_split_acts_as_agent_and_needs_a_person() {
             "children": [
                 {"id": "C-0002", "discipline": "copy", "flow": "copy",
                  "flow_title": "Copy desk", "column": "draft",
-                 "targets": of_kinds(&["broadsheet"]), "from": "kinds", "suggested": true},
+                 "targets": of_kinds(&["broadsheet"]), "from": "kinds", "suggested": true, "mandate": null},
                 {"id": "C-0003", "discipline": "plates", "flow": "plates",
                  "flow_title": "plates", "column": "queued",
                  "targets": of_kinds(&["broadsheet", "print-run"]), "from": "kinds",
-                 "suggested": true}
+                 "suggested": true, "mandate": null}
             ],
             "reviewer": ANA,
             "notes": []

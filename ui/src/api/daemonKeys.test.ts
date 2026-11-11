@@ -25,6 +25,7 @@ import type {
   CardSplit,
   CardSplitChild,
   CardSplitParent,
+  CardSubtaskItem,
   CardTask,
   CardWrite,
   CheckCause,
@@ -185,10 +186,13 @@ import type {
 // document, a match, sets 116 to 118, the last), with the review document's `card_id` and `why`
 // after `interpretation` (50 keys) and a card's `items` after `tasks` (32); and department-split's three
 // (docs/features/department-split.md "Acceptance criteria", S3, U2: the split document, its parent and a
-// subtask, sets 119 to 121, the last). A key the types carry ahead of the file is listed in
-// AHEAD_OF_FIXTURE, empty again since department-split's test wrote its three sets; a listed key the
-// file already names fails. While that file is absent the comparison is skipped, saying so; once it
-// exists it names all one hundred and twenty-one, in the slices' order.
+// subtask, sets 119 to 121); and task-mandate's one (docs/features/task-mandate.md
+// "Acceptance criteria", M6, M7: a subtask's item, set 122 `CardSubtaskItem`, the last), with a row's `mandate`
+// after `reviewer` (22 keys), a card's `mandate` after `reviewer` and `subtask_items` after `items`
+// (34) and a split's subtask's `mandate` last (9). A key the types carry ahead of the file is listed
+// in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already names fails.
+// While that file is absent the comparison is skipped, saying so; once it exists it names all one
+// hundred and twenty-two, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -769,6 +773,8 @@ const KEYS = {
     targets: true,
     assignee: true,
     reviewer: true,
+    // docs/features/task-mandate.md "Acceptance criteria" (M1): the mandate after the reviewer.
+    mandate: true,
     estimate: true,
     due: true,
     parent: true,
@@ -799,6 +805,8 @@ const KEYS = {
     criteria: true,
     assignee: true,
     reviewer: true,
+    // docs/features/task-mandate.md "Acceptance criteria" (M1, M6): the mandate after the reviewer, the subtasks' items after the card's.
+    mandate: true,
     estimate: true,
     due: true,
     parent: true,
@@ -807,6 +815,7 @@ const KEYS = {
     // docs/features/card-tasks.md "Documents": the linked tasks after `evidence` (card-tasks, RM-0092).
     tasks: true,
     items: true,
+    subtask_items: true,
     acceptance: true,
     cancellation: true,
     created_by: true,
@@ -873,7 +882,27 @@ const KEYS = {
   // docs/features/department-split.md "Acceptance criteria" (S3, U2): the split document (set 119), its parent (120) and a subtask (121); every key present.
   CardSplit: { dry_run: true, parent: true, children: true, reviewer: true, notes: true } satisfies Record<keyof CardSplit, true>,
   CardSplitParent: { id: true, created: true, title: true, discipline: true, flow: true, flow_title: true, column: true, targets: true } satisfies Record<keyof CardSplitParent, true>,
-  CardSplitChild: { id: true, discipline: true, flow: true, flow_title: true, column: true, targets: true, from: true, suggested: true } satisfies Record<keyof CardSplitChild, true>,
+  CardSplitChild: { id: true, discipline: true, flow: true, flow_title: true, column: true, targets: true, from: true, suggested: true, mandate: true } satisfies Record<keyof CardSplitChild, true>,
+  // docs/features/task-mandate.md "Acceptance criteria" (M6, M7): a subtask's item (set 122), its card first, then a card's item's 16; every key present.
+  CardSubtaskItem: {
+    card_id: true,
+    id: true,
+    kind: true,
+    status: true,
+    summary: true,
+    working_answer: true,
+    why: true,
+    author: true,
+    created_at: true,
+    updated_at: true,
+    staged_at: true,
+    decided_by: true,
+    decided_at: true,
+    decision_note: true,
+    record_id: true,
+    record_path: true,
+    record_title: true,
+  } satisfies Record<keyof CardSubtaskItem, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -983,8 +1012,8 @@ const CITED: Record<Named, string> = {
   CardFlow: "name, title, disciplines, columns, moves, accept, return",
   CardColumn: "id, title",
   CardMove: "from, to, by",
-  CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
-  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, tasks, items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
+  CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
+  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
   CardEvidence: "kind, value, by, at",
   CardAcceptance: "by, at, note, verdict, departs, discrepancy",
   CardCancellation: "by, at, reason",
@@ -1013,7 +1042,8 @@ const CITED: Record<Named, string> = {
   IntakeMatch: "id, source, status, path, answer, record",
   CardSplit: "dry_run, parent, children, reviewer, notes",
   CardSplitParent: "id, created, title, discipline, flow, flow_title, column, targets",
-  CardSplitChild: "id, discipline, flow, flow_title, column, targets, from, suggested",
+  CardSplitChild: "id, discipline, flow, flow_title, column, targets, from, suggested, mandate",
+  CardSubtaskItem: "card_id, id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1230,8 +1260,14 @@ const BEFORE_DEPARTMENT_SPLIT: readonly Named[] = [...BEFORE_CARD_QUESTIONS, ...
 /** department-split's three: the split document, its parent, a subtask, sets 119 to 121 (docs/features/department-split.md "Acceptance criteria", S3, U2). */
 const DEPARTMENT_SPLIT: readonly Named[] = ["CardSplit", "CardSplitParent", "CardSplitChild"];
 
+/** The hundred and twenty-one types the fixture named before task-mandate. */
+const BEFORE_TASK_MANDATE: readonly Named[] = [...BEFORE_DEPARTMENT_SPLIT, ...DEPARTMENT_SPLIT];
+
+/** task-mandate's one: a subtask's item, set 122 (docs/features/task-mandate.md "Acceptance criteria", M6, M7). */
+const TASK_MANDATE: readonly Named[] = ["CardSubtaskItem"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_DEPARTMENT_SPLIT, ...DEPARTMENT_SPLIT];
+const ALL: readonly Named[] = [...BEFORE_TASK_MANDATE, ...TASK_MANDATE];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1268,7 +1304,9 @@ function served(name: Named): string[] {
  * (docs/features/departments.md "Acceptance criteria", DP-4), and again since card-questions'
  * wrote the review document's `card_id` and `why`, a card's `items` and sets 116 to 118
  * (docs/features/card-questions.md "Acceptance criteria", K1, L1, L3), and since department-split's
- * wrote sets 119 to 121 (docs/features/department-split.md "Acceptance criteria", S3, U2).
+ * wrote sets 119 to 121 (docs/features/department-split.md "Acceptance criteria", S3, U2), and
+ * since task-mandate's wrote a row's and a card's `mandate`, a card's `subtask_items`, a split's
+ * subtask's `mandate` and set 122 (docs/features/task-mandate.md "Acceptance criteria", M7).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1321,7 +1359,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_FLOW_SCENARIO.at(-1)).toBe("CardTask");
     expect(BEFORE_CARD_QUESTIONS.at(-1)).toBe("ShownAncestor");
     expect(BEFORE_DEPARTMENT_SPLIT.at(-1)).toBe("IntakeMatch");
-    expect(ALL.at(-1)).toBe("CardSplitChild");
+    expect(BEFORE_TASK_MANDATE.at(-1)).toBe("CardSplitChild");
+    expect(ALL.at(-1)).toBe("CardSubtaskItem");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1350,7 +1389,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(121);
+    expect(ALL).toHaveLength(122);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1366,6 +1405,7 @@ describe("the daemon's document types (AC-09)", () => {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
+    // Empty again since task-mandate's Rust test wrote its keys and set 122 (docs/features/task-mandate.md "Acceptance criteria", M7).
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -1391,15 +1431,15 @@ describe("the daemon's document types (AC-09)", () => {
     expect(ALL.slice(BEFORE_WORKSPACES.length, BEFORE_CARD_TASKS.length)).toEqual([...WORKSPACES]);
   });
 
-  it('types a card\'s linked tasks as docs/features/card-tasks.md "Documents" writes them: `tasks` after `evidence` (32 keys since card-questions\' `items` after it), a CardTask\'s four, its state a task state or null, title and stale nullable, citing `docs/canon/cards.md` "Documents and events" (CT-5)', () => {
+  it('types a card\'s linked tasks as docs/features/card-tasks.md "Documents" writes them: `tasks` after `evidence` (34 keys since card-questions\' `items` and task-mandate\'s `subtask_items` after it), a CardTask\'s four, its state a task state or null, title and stale nullable, citing `docs/canon/cards.md` "Documents and events" (CT-5)', () => {
     const card = declaredKeys("Card");
-    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 4)).toEqual(["evidence", "tasks", "items", "acceptance"]);
+    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
     expect(card).toEqual(served("Card"));
-    expect(card).toHaveLength(32);
+    expect(card).toHaveLength(34);
     expect(served("CardTask")).toEqual(["id", "status", "title", "stale"]);
     expect(declaredKeys("CardTask")).toEqual(served("CardTask"));
     expect(source).toMatch(/^export interface CardTask \{\n {2}id: string;\n {2}status: TaskStatus \| null;\n {2}title: string \| null;\n {2}stale: boolean \| null;\n\}$/m);
-    expect(source).toMatch(/^ {2}evidence: CardEvidence\[\];\n {2}tasks: CardTask\[\];\n {2}items: CardItem\[\];\n {2}acceptance: CardAcceptance \| null;$/m);
+    expect(source).toMatch(/^ {2}evidence: CardEvidence\[\];\n {2}tasks: CardTask\[\];\n {2}items: CardItem\[\];\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}subtask_items: CardSubtaskItem\[\];\n {2}acceptance: CardAcceptance \| null;$/m);
     const at = source.indexOf("export interface CardTask ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/cards.md` "Documents and events"');
     expect(ALL.slice(BEFORE_CARD_TASKS.length, BEFORE_FLOW_SCENARIO.length)).toEqual([...CARD_TASKS]);
@@ -1443,8 +1483,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^export type StageBody = StageChoice & \{ updated_at: string; as\?: string \| null \};$/m);
   });
 
-  it('types department-split\'s three as the spec writes them: the split document 5 keys, its parent 8, a subtask 8, every one present; an `id` null in a plan, `parent` and `reviewer` nullable, `from` a served word kept whatever it is, each citing `docs/features/department-split.md` "Acceptance criteria" (S3, U2 of department-split)', () => {
-    expect(DEPARTMENT_SPLIT.map((name) => served(name).length)).toEqual([5, 8, 8]);
+  it('types department-split\'s three as the spec writes them: the split document 5 keys, its parent 8, a subtask 9 (task-mandate\'s `mandate` last), every one present; an `id` null in a plan, `parent` and `reviewer` nullable, `from` a served word kept whatever it is, each citing `docs/features/department-split.md` "Acceptance criteria" (S3, U2 of department-split)', () => {
+    expect(DEPARTMENT_SPLIT.map((name) => served(name).length)).toEqual([5, 8, 9]);
     for (const name of DEPARTMENT_SPLIT) {
       expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
       const at = source.indexOf(`export interface ${name} `);
@@ -1452,12 +1492,36 @@ describe("the daemon's document types (AC-09)", () => {
     }
     expect(source).toMatch(/^export interface CardSplit \{\n {2}dry_run: boolean;\n {2}parent: CardSplitParent \| null;\n {2}children: CardSplitChild\[\];\n {2}reviewer: string \| null;\n {2}notes: string\[\];\n\}$/m);
     expect(source).toMatch(/^export interface CardSplitParent \{\n {2}id: string \| null;\n {2}created: boolean;\n {2}title: string;\n {2}discipline: string \| null;\n/m);
-    expect(source).toMatch(/^ {2}from: SplitTargetsFrom;\n {2}suggested: boolean;\n\}$/m);
+    expect(source).toMatch(/^ {2}from: SplitTargetsFrom;\n {2}suggested: boolean;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}mandate: Mandate \| null;\n\}$/m);
     expect(source).toMatch(/^export type KnownSplitTargetsFrom = "kinds" \| "parent";$/m);
     expect(source).toMatch(/^export type SplitTargetsFrom = KnownSplitTargetsFrom \| Unlisted;$/m);
-    expect(ALL.slice(BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...DEPARTMENT_SPLIT]);
-    // The body of the split's route: a request, no set (docs/features/department-split.md "Acceptance criteria", S7).
-    expect(declaredKeys("CardSplitBody")).toEqual(["target", "title", "goal", "discipline", "parent", "child", "reviewer", "dry_run", "as"]);
+    expect(ALL.slice(BEFORE_DEPARTMENT_SPLIT.length, BEFORE_TASK_MANDATE.length)).toEqual([...DEPARTMENT_SPLIT]);
+    // The body of the split's route: a request, no set (docs/features/department-split.md "Acceptance criteria", S7), its `mandate` after `child` (task-mandate, M7).
+    expect(declaredKeys("CardSplitBody")).toEqual(["target", "title", "goal", "discipline", "parent", "child", "mandate", "reviewer", "dry_run", "as"]);
+  });
+
+  it('types task-mandate\'s keys as the spec writes them: a mandate `binding`, `open` or null, a row\'s after `reviewer` (22 keys), a card\'s after `reviewer` with `subtask_items` after `items` (34), a split\'s subtask\'s last (9); set 122 `CardSubtaskItem`, `card_id` then a card\'s item\'s 16 in their order; each citing `docs/features/task-mandate.md` "Acceptance criteria" (M1, M6, M7 of task-mandate)', () => {
+    expect(source).toMatch(/^export type Mandate = "binding" \| "open";$/m);
+    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([22, 34, 9, 17]);
+    const row = declaredKeys("CardRow");
+    expect(row.slice(row.indexOf("reviewer"), row.indexOf("reviewer") + 3)).toEqual(["reviewer", "mandate", "estimate"]);
+    const card = declaredKeys("Card");
+    expect(card.slice(card.indexOf("reviewer"), card.indexOf("reviewer") + 3)).toEqual(["reviewer", "mandate", "estimate"]);
+    expect(card.slice(card.indexOf("items"), card.indexOf("items") + 3)).toEqual(["items", "subtask_items", "acceptance"]);
+    expect(declaredKeys("CardSplitChild").at(-1)).toBe("mandate");
+    expect(served("CardSubtaskItem")).toEqual(["card_id", ...served("CardItem")]);
+    expect(declaredKeys("CardSubtaskItem")).toEqual(served("CardSubtaskItem"));
+    expect(source).toMatch(/^export interface CardSubtaskItem \{\n {2}card_id: string;\n {2}id: string;\n {2}kind: string;\n {2}status: ProposalStatus;\n/m);
+    for (const type of ["Mandate", "CardSubtaskItem"]) {
+      const at = Math.max(source.indexOf(`export interface ${type} `), source.indexOf(`export type ${type} =`));
+      expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/task-mandate.md` "Acceptance criteria"');
+    }
+    expect(ALL.slice(BEFORE_TASK_MANDATE.length)).toEqual([...TASK_MANDATE]);
+    // The bodies of the three writes gain one key each: requests, no set (M7).
+    expect(declaredKeys("CardCreateBody").slice(-3)).toEqual(["reviewer", "mandate", "as"]);
+    expect(declaredKeys("CardEditBody").slice(-4)).toEqual(["mandate", "reason", "revision", "as"]);
+    expect(source).toMatch(/^ {2}mandate\?: Mandate;$/m);
+    expect(source).toMatch(/^ {2}mandate\?: string\[\] \| null;$/m);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -1611,8 +1675,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_FLOW_SCENARIO).toHaveLength(114);
     expect(BEFORE_CARD_QUESTIONS).toHaveLength(115);
     expect(BEFORE_DEPARTMENT_SPLIT).toHaveLength(118);
-    expect(ALL).toHaveLength(121);
-    expect(new Set(ALL).size).toBe(121);
+    expect(BEFORE_TASK_MANDATE).toHaveLength(121);
+    expect(ALL).toHaveLength(122);
+    expect(new Set(ALL).size).toBe(122);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1857,21 +1922,39 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and twenty-one types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three", () => {
+  it("names exactly the one hundred and twenty-two types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and twenty-one, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and twenty-two, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(121);
+    expect(Object.keys(sets)).toHaveLength(122);
   });
 
-  it("names department-split's three last, after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 8 (S3, U2 of department-split)", () => {
-    expect(Object.keys(sets).slice(BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...DEPARTMENT_SPLIT]);
+  it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
+    expect(Object.keys(sets).slice(BEFORE_DEPARTMENT_SPLIT.length, BEFORE_TASK_MANDATE.length)).toEqual([...DEPARTMENT_SPLIT]);
     expect(Object.keys(sets).indexOf("CardSplit")).toBe(118);
-    expect(Object.keys(sets).at(-1)).toBe("CardSplitChild");
+    expect(Object.keys(sets).at(BEFORE_TASK_MANDATE.length - 1)).toBe("CardSplitChild");
     expect(DEPARTMENT_SPLIT.map((name) => sets[name])).toEqual(DEPARTMENT_SPLIT.map((name) => served(name)));
-    expect(DEPARTMENT_SPLIT.map((name) => sets[name]?.length)).toEqual([5, 8, 8]);
+    expect(DEPARTMENT_SPLIT.map((name) => sets[name]?.length)).toEqual([5, 8, 9]);
     expect(DEPARTMENT_SPLIT.map((name) => sets[name])).toEqual(DEPARTMENT_SPLIT.map((name) => declaredKeys(name)));
+  });
+
+  it("names task-mandate's one last, after CardSplitChild, set 122 `CardSubtaskItem`: `card_id`, then a card's item's 16; a row's `mandate` after `reviewer` (22), a card's after `reviewer` and its `subtask_items` after `items` (34) (M6, M7 of task-mandate)", () => {
+    expect(Object.keys(sets).slice(BEFORE_TASK_MANDATE.length)).toEqual([...TASK_MANDATE]);
+    expect(Object.keys(sets).indexOf("CardSubtaskItem")).toBe(121);
+    expect(Object.keys(sets).at(-1)).toBe("CardSubtaskItem");
+    expect(sets.CardSubtaskItem).toEqual(["card_id", ...(sets.CardItem ?? [])]);
+    expect(sets.CardSubtaskItem).toEqual(declaredKeys("CardSubtaskItem"));
+    for (const [name, key, after] of [
+      ["CardRow", "mandate", "reviewer"],
+      ["Card", "mandate", "reviewer"],
+      ["Card", "subtask_items", "items"],
+    ] as const) {
+      const file = sets[name] ?? [];
+      expect([name, key, file[file.indexOf(after) + 1]]).toEqual([name, key, key]);
+    }
+    expect([sets.CardRow?.length, sets.Card?.length, sets.CardSplitChild?.at(-1)]).toEqual([22, 34, "mandate"]);
+    expect([sets.CardRow, sets.Card]).toEqual([declaredKeys("CardRow"), declaredKeys("Card")]);
   });
 
   it("names card-questions' three after ShownAncestor, before department-split's three, sets 116 to 118 with their keys in the types' order: 16, 7, 6 (K1, L3 of card-questions)", () => {
@@ -1897,7 +1980,7 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.FlowNode).toEqual(declaredKeys("FlowNode"));
   });
 
-  it('names card-tasks\' one after WorkspaceModule, before flow-scenario\'s one, set 114 `CardTask` with its four keys in the types\' order; a card\'s `tasks` right after `evidence`, 31 keys (docs/features/card-tasks.md "Documents")', () => {
+  it('names card-tasks\' one after WorkspaceModule, before flow-scenario\'s one, set 114 `CardTask` with its four keys in the types\' order; a card\'s `tasks` right after `evidence`, 34 keys since card-questions\' `items` and task-mandate\'s two (docs/features/card-tasks.md "Documents")', () => {
     expect(Object.keys(sets).slice(BEFORE_CARD_TASKS.length, BEFORE_FLOW_SCENARIO.length)).toEqual([...CARD_TASKS]);
     expect(Object.keys(sets).at(BEFORE_FLOW_SCENARIO.length - 1)).toBe("CardTask");
     expect(Object.keys(sets).indexOf("CardTask")).toBe(113);
@@ -1905,9 +1988,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.CardTask).toEqual(declaredKeys("CardTask"));
     // A card's `items` right after `tasks` since card-questions (docs/features/card-questions.md "Acceptance criteria", K1).
     const card = sets.Card ?? [];
-    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 4)).toEqual(["evidence", "tasks", "items", "acceptance"]);
+    expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
     expect(card).toEqual(declaredKeys("Card"));
-    expect(card).toHaveLength(32);
+    expect(card).toHaveLength(34);
   });
 
   it('names workspaces\' three after HubSync, before card-tasks\' one, sets 111 to 113, each with its keys in the types\' order: 4, 7, 4 (docs/features/workspaces.md "Data"; DP-4 of departments)', () => {
@@ -2061,7 +2144,7 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(CARD_TRACE.map((name) => declaredKeys(name))).toEqual(CARD_TRACE.map((name) => served(name)));
   });
 
-  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 7, 2, 3, 21, 31, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\", docs/features/card-tasks.md \"Documents\")", () => {
+  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 7, 2, 3, 22, 34, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\", docs/features/card-tasks.md \"Documents\")", () => {
     expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length, BEFORE_CARD_TRACE.length)).toEqual([...BOARD_UI]);
     expect(Object.keys(sets).indexOf("CardList")).toBe(86);
     expect(Object.keys(sets).at(BEFORE_CARD_TRACE.length - 1)).toBe("CardNotFound");
@@ -2069,8 +2152,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // A flow's `return` after `accept` (board-handoff, docs/canon/card-flows.md "The rule"); a
     // card's `tasks` after `evidence` (card-tasks, docs/features/card-tasks.md "Documents"); a
     // flow's `title` after `name` (docs/features/departments.md "Acceptance criteria", DP-4); a
-    // card's `items` after `tasks` (K1 of card-questions).
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 21, 32, 4, 6, 3, 4, 7, 2]);
+    // card's `items` after `tasks` (K1 of card-questions); a row's and a card's `mandate`, a card's
+    // `subtask_items` (M1, M6 of task-mandate).
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 22, 34, 4, 6, 3, 4, 7, 2]);
     expect(sets.CardFlow?.at(-1)).toBe("return");
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });

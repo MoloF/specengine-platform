@@ -684,7 +684,8 @@ fn concurrent_raises_from_two_handles_store_one_item() {
 /// omitted; `proposal_columns` mapping 8 to 44.
 #[test]
 fn schema_6_and_7_step_to_8() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    // 12 since docs/features/task-mandate.md M5.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
     assert_eq!(PROPOSAL_COLUMNS.len(), 48);
     assert_eq!(PROPOSAL_COLUMNS[44..46], ["drift", "drift_hash"]);
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
@@ -695,9 +696,11 @@ fn schema_6_and_7_step_to_8() {
     // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
     // stays 46).
     assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..46]));
-    // 48 at 11 (docs/features/card-questions.md S1).
+    // 48 at 11 (docs/features/card-questions.md S1), and at 12
+    // (docs/features/task-mandate.md M5: `cards` alone gains a column).
     assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(12), None);
+    assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(13), None);
     for version in [6, 7] {
         let scratch = Scratch::new(&format!("qdr-schema-{version}"));
         let db = scratch.db("q");
@@ -742,8 +745,8 @@ fn schema_6_and_7_step_to_8() {
         drop(read);
         assert_eq!(sqlite3(&db, "PRAGMA user_version;"), version.to_string());
 
-        let mut queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping to 11");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "from {version}");
+        let mut queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping to 12");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12", "from {version}");
         assert_eq!(
             sqlite3(
                 &db,
@@ -764,7 +767,7 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(id, "PR-0002");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "stepped once");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12", "stepped once");
     }
 }
 

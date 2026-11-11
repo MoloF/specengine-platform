@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # Card progress: a parent's subtasks, Ready to accept and Relies on
@@ -36,6 +36,8 @@ Nothing closes a parent on its own; a person accepts it. "Ready to accept" is a 
 3. **Relies on** (`board.progress.reliesOn`), on an open parent with an open child: each line as a Subtasks row: its ID a `CardLink` (a plain click replaces the modal's card), title, flow title (`flowTitleOf`, raw when unserved).
 4. **The rows**, the not-cancelled children: ID, title, flow title, status lozenge, assignee, the hand-off word; no child at all, "None yet." alone.
 5. **Cancelled subtasks** (`board.progress.cancelledList`): ID, title, flow title, status lozenge, the Cancelled badge, then the reason as shown text and `board.panel.byAt`. Its read pending: `board.progress.reasonReading`; failed: `board.progress.reasonFailed`, the daemon's words under `lang="en"`, no live region. The other parts stand either way.
+
+After Subtasks, **Decisions from subtasks**, a lazy part from the card's `subtask_items` and this children read: `card-mandate.md` "Screen".
 
 The children read pending: a `Skeleton` `board.progress.reading`. Failed: `board.progress.failed`, the daemon's words under `lang="en"`, `role="alert"` and Retry; the rest of the work item stands, and no count comes from the Board's list. A failed re-read keeps the last parts with its line (`useRetainedFailure`).
 

@@ -405,16 +405,18 @@ describe("the work item and the header in Russian (DF-11 of design-foundation)",
     fireEvent.change(languageSelect(en.language.label), { target: { value: "ru" } });
     await settle();
     fireEvent.click(within(dialog).getByRole("button", { name: `${ru.board.item.development} · ${ruT("board.item.agentTasks", { count: 2 })}` }));
-    fireEvent.click(within(dialog).getByRole("button", { name: ruT("ui.moreFields", { n: "7" }) }));
+    // Eight folded since task-mandate's Mandate row, empty on a card with none (docs/features/task-mandate.md "Acceptance criteria", V2).
+    fireEvent.click(within(dialog).getByRole("button", { name: ruT("ui.moreFields", { n: "8" }) }));
     expect(within(dialog).getByRole("region", { name: ru.board.tasks.title })).toBeTruthy();
     expect(within(dialog).getByRole("region", { name: ru.board.item.status })).toBeTruthy();
-    expect(within(dialog).getAllByText(ru.ui.emptyValue)).toHaveLength(7);
+    expect(within(dialog).getAllByText(ru.ui.emptyValue)).toHaveLength(8);
+    expect(within(dialog).getByText(ru.board.mandate.label)).toBeTruthy();
     expect(within(dialog).getByText(ru.board.item.flow)).toBeTruthy();
     const trail = within(dialog).getByRole("navigation", { name: ru.ui.breadcrumbs });
     expect(within(trail).getByRole("link", { name: ru.app.sections.board.label })).toBeTruthy();
     expect(within(document.querySelector(".app-header") as HTMLElement).getByRole("combobox", { name: ru.app.theme.label })).toBeTruthy();
     // No English of the slice's own is left: its words, the trail's name, the header's Theme.
-    const english = [en.board.item.status, en.board.item.flow, en.board.item.noAgentTasks, enT("board.item.agentTasks", { count: 2 }), enT("ui.moreFields", { n: "7" }), en.ui.emptyValue, en.app.theme.label, en.app.theme.system];
+    const english = [en.board.item.status, en.board.item.flow, en.board.item.noAgentTasks, enT("board.item.agentTasks", { count: 2 }), enT("ui.moreFields", { n: "8" }), en.ui.emptyValue, en.board.mandate.label, en.app.theme.label, en.app.theme.system];
     for (const word of english) {
       expect([word, screen.queryAllByText(word, { exact: false }).length]).toEqual([word, 0]);
     }
@@ -517,12 +519,18 @@ describe("the departments' words in Russian (DP-9 of departments)", () => {
     fireEvent.change(department, { target: { value: "foundry" } });
     expect(within(handOff).getByRole<HTMLSelectElement>("combobox", { name: ru.board.field.discipline }).value).toBe("plates");
     fireEvent.change(within(handOff).getByLabelText(ru.board.field.reviewer), { target: { value: "Ann" } });
+    // The mandate, required (docs/features/task-mandate.md "Acceptance criteria", V1): its words Russian, none chosen says why.
+    const mandate = within(handOff).getByRole<HTMLSelectElement>("combobox", { name: ru.board.mandate.label });
+    expect(Array.from(mandate.options).map((option) => option.textContent)).toEqual([ru.board.mandate.choose, ru.board.mandate.binding, ru.board.mandate.open]);
+    fireEvent.click(within(handOff).getByRole("button", { name: ru.board.handoff.submit }));
+    expect((await within(handOff).findByRole("alert")).textContent).toBe(ru.board.mandate.needed);
+    fireEvent.change(mandate, { target: { value: "open" } });
     fireEvent.click(within(handOff).getByRole("button", { name: ru.board.handoff.submit }));
     const refusal = await within(handOff).findByText("card C-1 changed: read it again");
     expect(refusal.getAttribute("lang")).toBe("en");
     expect(within(handOff).getByText(ru.board.view.refused)).toBeTruthy();
     // No English of the slice's own words is left on the page.
-    for (const word of [en.workspace.workspaceLabel, en.board.modal.handOffs, en.board.field.department, en.board.handoff.chooseDepartment, en.board.handoff.departmentHint]) {
+    for (const word of [en.workspace.workspaceLabel, en.board.modal.handOffs, en.board.field.department, en.board.handoff.chooseDepartment, en.board.handoff.departmentHint, en.board.mandate.label, en.board.mandate.binding, en.board.mandate.open]) {
       expect([word, screen.queryAllByText(word, { exact: false }).length]).toEqual([word, 0]);
     }
   });

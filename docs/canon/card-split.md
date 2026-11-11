@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # Card split: a task and a subtask per department, in one act
@@ -13,7 +13,7 @@ ADR-0078, built by `department-split` (RM-0100, plugin 0.37.0). The card: `cards
 <a id="the-rule"></a>
 ## The rule
 
-A split hands one piece of work to several departments at once. It makes a parent task on a document, or takes a stored task as the parent, and one subtask per chosen discipline: each a hand-off (`card-flows.md` "The rule"), its `parent` the parent, its `reviewer` the split's (named, else the parent's, else the acting name), its flow and first column the new-card rule's for its discipline. It is one write: one transaction, all cards or none, one `card.created` each, the parent first. It writes no stored card: a parent that exists keeps its row, revision and history. So no other card write creates, moves or refuses another, and a split makes no card wait on another (ADR-0074).
+A split hands one piece of work to several departments at once. It makes a parent task on a document, or takes a stored task as the parent, and one subtask per chosen discipline: each a hand-off (`card-flows.md` "The rule"), its `parent` the parent, its `reviewer` the split's (named, else the parent's, else the acting name), its flow and first column the new-card rule's for its discipline. It is one write: one transaction, all cards or none, one `card.created` each, the parent first. It writes no stored card: a parent that exists keeps its row, revision and history, and makes no card wait on another (ADR-0074).
 
 A `[[card.split]]` row under `[card]` names a node kind and the disciplines its work usually needs. Rows only pre-select: the disciplines of the rows whose kind a node of the parent's targets, or a node under them, holds; and a subtask's targets, the nodes of its rows' kinds found there, else the parent's targets. A row never refuses, requires or orders a split, and no move, accept, rollup, gate or check reads one (ADR-0012). Kinds and disciplines are the project's words; the core names none (ADR-0008). ADR-0078.
 
@@ -46,17 +46,17 @@ Core `split_plan(config, scope, parent_targets, chosen)`, pure, its `Err` a refu
 
 ```text
 spec card split --target REF... --title T [--goal T] [--discipline D] [--child D]...
-  [--reviewer N] [--as N] [--dry-run]
-spec card split --parent C [--child D]... [--reviewer N] [--as N] [--dry-run]
+  [--mandate D=M]... [--reviewer N] [--as N] [--dry-run]
+spec card split --parent C [--child D]... [--mandate D=M]... [--reviewer N] [--as N] [--dry-run]
 ```
 
 `card_split(&Env, &Globals, &CardSplitRequest)` -> `CardSplitOutcome`; the daemon's `CardSplitBody`. Checks in order, each stopping:
-1. **Usage**, exit 2: `--parent` with `--target`, `--title`, `--goal` or `--discipline`; no `--parent` and no `--title`; no `--child` without `--dry-run` (``name each subtask's discipline with --child, or plan with --dry-run``); `--as`; a look-alike `--parent`; `C` in `[ids]`. Then a bad `[card]`, exit 2.
-2. Exit 1: `field_problem`, `discipline: <problem>`; the stored parent, in any state (`parent: no card C-0099`); a write's reviewer: named, else the stored parent's, else the acting name, then `assign`'s grammar and `reviewer_problem` (`agent`, `local` refused); `--target` by `resolved_targets` and the scope read; the plan, then a new parent's `flow_for`; the store.
+1. **Usage**, exit 2: `--parent` with `--target`, `--title`, `--goal` or `--discipline`; no `--parent` and no `--title`; no `--child` without `--dry-run` (``name each subtask's discipline with --child, or plan with --dry-run``), `--mandate`'s line first; `--as`; a look-alike `--parent`; `C` in `[ids]`. Then a bad `[card]`, exit 2.
+2. Exit 1: `field_problem`, `discipline: <problem>`, then `split_mandates` (`card-mandate.md`); the stored parent, in any state (`parent: no card C-0099`); a write's reviewer: named, else the stored parent's, else the acting name, then `assign`'s grammar and `reviewer_problem` (`agent`, `local` refused); `--target` by `resolved_targets` and the scope read; the plan, then a new parent's `flow_for`; the store.
 
 A dry run stops before the store and judges no person. The flag's name is `SPLIT_DRY_RUN_FLAG`: `proposal_genre`'s guard bans the literal in `card.rs`.
 
-**Store** `SqliteQueue::split_cards(&NewSplit, now)` -> `SplitCards {parent, created, children}`, one `Immediate` transaction: `SplitParent::Stored(id)` read by `select_card` (none: `CardRefused`), `SplitParent::New {card: Box<NewCard>, snapshot}` by `insert_card`; each child's `parent` set inside it, then `insert_card`, reviewer and links asked again under the lock; no children, `child: none named`. A refusal rolls all back: no row, no event, no ID taken. No storage change: queue schema 11, backup format 5, `card.created` as ever; a split's card is told by its `parent` alone.
+**Store** `SqliteQueue::split_cards(&NewSplit, now)` -> `SplitCards {parent, created, children}`, one `Immediate` transaction: `SplitParent::Stored(id)` read by `select_card` (none: `CardRefused`), `SplitParent::New {card: Box<NewCard>, snapshot}` by `insert_card`; each child's `parent` set inside it, then `insert_card`, reviewer and links asked again under the lock; no children, `child: none named`. A refusal rolls all back: no row, event or ID taken. No storage of its own (schema 12 is the mandate's): a split's card is told by its `parent` alone.
 
 ## The document
 
@@ -67,7 +67,7 @@ A dry run stops before the store and judges no person. The flag's name is `SPLIT
  "parent": {"id": "C-0001", "created": true, "title": "The weekly run", "discipline": "copy",
    "flow": "copy", "flow_title": "Copy desk", "column": "draft", "targets": ["PRN-WEEKLY"]},
  "children": [{"id": "C-0002", "discipline": "copy", "flow": "copy", "flow_title": "Copy desk",
-   "column": "draft", "targets": ["SHT-BACK"], "from": "kinds", "suggested": true}],
+   "column": "draft", "targets": ["SHT-BACK"], "from": "kinds", "suggested": true, "mandate": "open"}],
  "reviewer": "Ana Ruiz", "notes": []}
 ```
 
@@ -75,7 +75,7 @@ A stored parent: `created` false, its stored fields. A dry run: every `id` null,
 
 ```text
 split C-0001 new: copy/draft | The weekly run | PRN-WEEKLY | reviewer Ana Ruiz
-subtask C-0002: copy/draft | copy | SHT-BACK, SHT-FRONT, SHT-INNER | by kind, suggested
+subtask C-0002: copy/draft | copy | SHT-BACK, SHT-FRONT, SHT-INNER | by kind, suggested | mandate open
 note: <note>
 ```
 
@@ -83,32 +83,32 @@ note: <note>
 
 ## Route and hub
 
-`POST /api/projects/:p/cards/split`, `CardSplitBody` `{target, title, goal, discipline, parent, child, reviewer, dry_run, as}`, `deny_unknown_fields`, each optional, then the CLI's usage rules; `child` null or `[]` none, `dry_run` null false. `board-ui.md` "The door", then one `card_split` (the twelfth of `CARD_CALLS`, handler `split_card`) in the project's turn, one clock reading. 200 the document, written or planned; 400 a body, person or usage rule; 409 refused, the document; 503 cannot run. No 404: a missing `parent` is a 409. Else 405 `Allow: POST`. `split` is a static segment. A written split adds one `card.created` per card, a dry run none. **A hub**: the seventh plain write, any login, `as` bound to it, a dry run too (`hub-team.md` "Classes").
+`POST /api/projects/:p/cards/split`, `CardSplitBody` `{target, title, goal, discipline, parent, child, mandate, reviewer, dry_run, as}`, `deny_unknown_fields`, each optional, then the CLI's usage rules; `child` null or `[]` none, `dry_run` null false. `board-ui.md` "The door", then one `card_split` (twelfth of `CARD_CALLS`, handler `split_card`), one clock reading. 200 the document, written or planned; 400 a body, person or usage rule; 409 refused, the document; 503 cannot run. A missing `parent` is a 409, no 404. Else 405 `Allow: POST`. A written split adds one `card.created` per card, a dry run none. **A hub**: the seventh plain write, any login, `as` bound to it, a dry run too (`hub-team.md` "Classes").
 
 ## MCP
 
-`split_card` on stdio (30 tools) and a hub's `/mcp` (18): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card that has one; a hub as the login, its call walking. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, the determinism sentence: stdio 1 655 B, hub 1 670 ("You act as your login"). `INSTRUCTIONS`' and `HUB_INSTRUCTIONS`' cards lines name it (`mcp-read.md` "Tools", `hub-mcp.md` "Tools"); `read-spec` too.
+`split_card` on stdio (30 tools) and a hub's `/mcp` (18): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `mandate`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card with one; a hub as the login. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, the determinism sentence: stdio 1 749 B, hub 1 764 ("You act as your login"). `INSTRUCTIONS`, `HUB_INSTRUCTIONS` (`mcp-read.md`, `hub-mcp.md` "Tools") and `read-spec` name it.
 
 ## Screen
 
 "Split to departments…" opens `SplitDialog`, one lazy chunk, never preloaded: on the document modal and page after New task (`{target: [REF], title}`); on Flow's panel, the rooted scope and a box, after New task; on a task's work item after Hand off, open cards alone (`{parent: C}`, only subtasks made).
-- **The plan read**, once on open: `dry_run: true`, `child: null` (`useSplitPlan`, held for the dialog: `staleTime` Infinity, `gcTime` 0); a skeleton; a failure's words and Retry. A form change reads nothing.
-- **The form.** A new parent's Title (prefilled), Goal, Discipline (the department's first); Reviewer as Hand off's (`handOffReviewer`; a hub's login, read-only); Subtasks, a checkbox per plan child, `suggested` checked, grouped under the first department whose `flows` names the row's flow, the rest last: its `flow_title`, the raw discipline when it differs, "By kind: <n> documents" or "The task's targets", the targets in a `Disclosure`. From a document, "Tasks on this document" from the held trace read under its REF (`heldTraceRef`).
-- **Split** posts the checked disciplines in row order (`useCardSplit`, the card writes' key and re-reads): 200 closes with "Split into C-0012 and 3 subtasks" ("3 subtasks for C-0012" from a task); 409, 400 the reason in the alert, the fields kept; 503 the daemon's words.
+- **The plan read**, once on open: `dry_run: true`, `child: null` (`useSplitPlan`, held: `staleTime` Infinity, `gcTime` 0); a skeleton; a failure's words and Retry. A form change reads nothing.
+- **The form.** A new parent's Title (prefilled), Goal, Discipline (the department's first); Reviewer as Hand off's (`handOffReviewer`; a hub's login, read-only); Subtasks, a checkbox per plan child, `suggested` checked, grouped under the first department whose `flows` names the row's flow, the rest last: its `flow_title`, the raw discipline when it differs, "By kind: <n> documents" or "The task's targets", the targets in a `Disclosure`; checked, a required mandate, "Mandate for <flow title>", with the raw discipline as above (`mandateForDiscipline`). From a document, "Tasks on this document" from the held trace read under its REF (`heldTraceRef`).
+- **Split**, off until each checked row has one (`mandateNeeded`), posts the checked disciplines, `mandate` as `D=M`, in row order (`useCardSplit`): 200 closes with "Split into C-0012 and 3 subtasks" ("3 subtasks for C-0012" from a task); 409, 400 the reason in the alert, the fields kept; 503 the daemon's words.
 
 The page computes no target, suggestion or placement. Words `board.split.*`. Mock (harbor-sim): rows `mechanic` `[copy, plates]`, `rule` `[plates]`; `?scenario=conflict` refuses the first write.
 
 ## Known limits
 
-- **Older binaries** refuse `split` (`` unknown field `split`, expected `flow` ``), their card surfaces alone (`card-flows.md` "Known limits"): commit a row only once every terminal, plugin and hub serving the project reads it. The preset's rows stay commented.
-- **A typo in a row** stops this build's card surfaces too; `spec card list` names its line, `spec check` does not.
+- **Older binaries** refuse `split` (`` unknown field `split`, expected `flow` ``), their card surfaces alone (`card-flows.md` "Known limits"): commit a row only once every terminal, plugin and hub of the project reads it. The preset's rows stay commented.
+- **A typo in a row** stops the card surfaces; `spec card list` names its line, `spec check` does not.
 - **No dedup**: two splits make two sets; the dialog lists the document's tasks. A split names cards of one store.
 - **A stored parent is read outside the transaction**: a concurrent edit can leave its children the old title or goal.
 - **A dry run's reviewer**: the route judges its format (`persons_named`), the CLI does not.
 - **A duplicated ID**: a target two documents carry walks both, its row keeping the first's kind.
-- **Cost**: each split or dry run decodes the whole index, a graph and a resolver; 0.25-0.39 s on a real game corpus (R1, 2026-11-11).
-- Subtasks carry the parent's title; the Board tells them apart by department (the owner's Q-C open).
+- **Cost**: a split or dry run decodes the whole index, a graph and a resolver: 0.25-0.39 s on a real game corpus.
+- Subtasks carry the parent's title, told apart by department (the owner's Q-C, open).
 
 ## Tests
 
-core `card_split.rs` (18: config, plan); store `card_split.rs` (5: all or none); CLI `card_split.rs` (15, `fixtures/card-press`'s two live rows: split, stored parent, dry run, no cascade); http `card_split.rs` (7: route, hub), `door.rs` (`CARD_CALLS` 12, three `card.created`), `hub.rs` units (`class`), `daemon_keys.rs` (121); mcp `card_split.rs` (5), `mcp_hub.rs` (18); `plugin_files.rs`, `plugin_skills.rs`. `no_domain.rs` takes each row's `disciplines` as words, and its `kind = "…"` scan reads live lines alone, a TOML comment line no config. UI `board/SplitDialog.test.tsx`, `mocks/split.smoke.test.tsx`, `MockClient.test.ts`.
+core `card_split.rs` (18: config, plan); store `card_split.rs` (5: all or none); CLI `card_split.rs` (15, `fixtures/card-press`: split, stored parent, dry run, no cascade); http `card_split.rs` (7: route, hub), `door.rs` (`CARD_CALLS` 12, three `card.created`), `hub.rs` units (`class`), `daemon_keys.rs` (122); mcp `card_split.rs` (5), `mcp_hub.rs` (18); `plugin_files.rs`, `plugin_skills.rs`. `no_domain.rs` takes each row's `disciplines` as words and scans `kind = "…"` on live lines alone. UI `board/SplitDialog.test.tsx`, `mocks/split.smoke.test.tsx`, `MockClient.test.ts`.

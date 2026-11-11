@@ -1013,6 +1013,23 @@ describe("source policy", () => {
     expect(offending(/\bnew Map\(\[/, scanned)).toEqual([]);
   });
 
+  // V2 of docs/features/task-mandate.md "Acceptance criteria": a task's mandate orders the acts and frames
+  // two dialogs by labels.ts's lookups alone; no other app module compares one, against a word, null or
+  // another value. Mocks and tests may.
+  it("compares a mandate in labels.ts alone: no `mandate ===` or `mandate !==` in any other app module (V2 of task-mandate)", () => {
+    const compares = /\bmandate\b\s*[!=]==|[!=]==\s*[\w.?]*\bmandate\b/;
+    const app = (path: string) => path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css") || path === "/src/board/labels.ts";
+    expect(offending(compares, app)).toEqual([]);
+    expect(compares.test(sources["/src/board/labels.ts"] ?? "")).toBe(true);
+    // The control: the order computed by comparing the card's mandate is caught; the lookups are not.
+    for (const line of ['if (card.mandate === "binding") {', 'const lead = "open" === card.mandate;', "return mandate !== null ? a : b;", 'card.mandate !== "open" && <Return />']) {
+      expect([line, compares.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["const lead = leadActs(card.mandate);", "askOpen={asksOnReturn(card.mandate)}", "const picked = asMandate(choice);", "mandate: card.mandate,"]) {
+      expect([line, compares.test(line)]).toEqual([line, false]);
+    }
+  });
+
   it("spells no column or flow the mock serves in the Board's code, and compares no bare column with a spelled word: a status category is the column's place, looked up (design-foundation)", () => {
     const mockBoard = mockCards["/src/mocks/cards.ts"]?.mockBoard;
     const scenarios = mockScenarios["/src/mocks/scenario.ts"]?.SCENARIOS ?? [];

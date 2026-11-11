@@ -585,6 +585,8 @@ describe("the department's Board (DP-10 of departments)", () => {
     fireEvent.click(await within(modal).findByRole("button", { name: "Hand off" }));
     const dialog = await screen.findByRole("dialog", { name: "Hand off C-0001" });
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Department" }), { target: { value: "galley" } });
+    // The mandate, required (docs/features/task-mandate.md "Acceptance criteria", V1).
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Mandate" }), { target: { value: "open" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(/^C-\d+ handed off to copy\/draft$/);

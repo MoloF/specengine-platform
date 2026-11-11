@@ -87,3 +87,51 @@ describe("a split's target lines", () => {
     expect(board.splitFromWords("rows", 4, enT)).toEqual({ text: "rows", served: true });
   });
 });
+
+// docs/features/task-mandate.md "Acceptance criteria", V1 and V2: a mandate is looked up here alone.
+// Its two stored words, their screen words in both catalogs, the acts each puts after Accept (binding
+// Return and Ask, open Record, none none), and the frames of a return and a decision; a word this build
+// does not know reads raw, under lang="en", and frames nothing.
+describe("a task's mandate (V1, V2 of task-mandate)", () => {
+  it("names the two stored words, binding first, each with its screen word in English and Russian; none, none", () => {
+    expect(board.MANDATE_WORDS).toEqual(["binding", "open"]);
+    expect(board.mandateChoices(enT)).toEqual([
+      { value: "binding", label: "Binding" },
+      { value: "open", label: "Department decides" },
+    ]);
+    expect(board.mandateChoices(ruT).map((choice) => choice.label)).toEqual([ru.board.mandate.binding, ru.board.mandate.open]);
+    expect([board.mandateWord("binding", enT), board.mandateWord("open", enT), board.mandateWord(null, enT)]).toEqual(["Binding", "Department decides", null]);
+    expect(board.mandateMark("binding", enT)).toEqual({ icon: "mandateBinding", label: "Binding" });
+    expect(board.mandateMark("open", ruT)).toEqual({ icon: "mandateOpen", label: ru.board.mandate.open });
+    expect(board.mandateMark(null, enT)).toBeNull();
+  });
+
+  it("puts binding's Return and Ask, open's Record, after Accept; none, nothing (M: binding leading with Record)", () => {
+    expect([board.leadActs("binding"), board.leadActs("open"), board.leadActs(null)]).toEqual([["return", "ask"], ["decide"], []]);
+    expect([board.asksOnReturn("binding"), board.asksOnReturn("open"), board.asksOnReturn(null)]).toEqual([true, false, false]);
+  });
+
+  it("frames Record a decision: binding departs, open asks a why; none neither", () => {
+    expect([board.decisionDeparts("binding"), board.decisionDeparts("open"), board.decisionDeparts(null)]).toEqual([true, false, false]);
+    expect([board.decisionNeedsWhy("binding"), board.decisionNeedsWhy("open"), board.decisionNeedsWhy(null)]).toEqual([false, true, false]);
+    expect([board.mandateAbout("binding", enT), board.mandateAbout("open", enT), board.mandateAbout(null, enT)]).toEqual([
+      "Binding: the brief stands. To depart from it, return the task with a question.",
+      "Department decides: record each decision and why.",
+      null,
+    ]);
+  });
+
+  it("marks a binding subtask's decision as a departure that warns, an open one's as the department's, neutral; each with its icon", () => {
+    expect(board.subtaskMandateLook("binding", enT)).toEqual({ appearance: "warning", icon: "mandateBinding", label: "Departure from a binding task" });
+    expect(board.subtaskMandateLook("open", enT)).toEqual({ appearance: "neutral", icon: "mandateOpen", label: "Department decides" });
+    expect(board.subtaskMandateLook(null, enT)).toBeNull();
+    expect(board.subtaskMandateLook("binding", ruT)?.label).toBe(ru.board.fromSubtasks.departure);
+  });
+
+  it("reads a chosen value as a mandate, Choose… and any other word none; a served word it does not know raw, served", () => {
+    expect([board.asMandate("binding"), board.asMandate("open"), board.asMandate(""), board.asMandate("Binding"), board.asMandate(" open")]).toEqual(["binding", "open", null, null, null]);
+    expect(board.mandateWords("open", enT)).toEqual({ text: "Department decides", served: false });
+    expect(board.mandateWords("advisory", enT)).toEqual({ text: "advisory", served: true });
+    expect([board.isDecision({ kind: "decision" }), board.isDecision({ kind: "question" }), board.isDecision({ kind: "discrepancy" })]).toEqual([true, false, false]);
+  });
+});

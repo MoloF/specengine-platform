@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # UI design: themes, the scale, primitives, the work item
 
-Built by `design-foundation` (RM-0093), no ADR, on the owner's answers of 2026-11-10: two themes, Inter bundled, a mature tracker's look. The numbers follow the Atlassian Design System's public tokens (Apache-2.0); no Atlassian name, logo, font or illustration, the accent SpecEngine's own. Code: `ui/src/styles/`, `src/ui/`, `src/app/theme.ts`, `src/board/category.ts`.
+Built by `design-foundation` (RM-0093), no ADR, on the owner's answers of 2026-11-10: two themes, Inter, a mature tracker's look. The numbers follow the Atlassian Design System's public tokens (Apache-2.0); no Atlassian name, logo, font or illustration, the accent SpecEngine's own. Code: `ui/src/styles/`, `src/ui/`, `src/app/theme.ts`, `src/board/category.ts`.
 
 ## The rule
 
@@ -17,15 +17,15 @@ One file, `src/styles/tokens.css`, holds every colour literal, in both themes, a
 ## Themes
 
 - **Roles.** A colour role is declared once in `:root` as `light-dark(<light>, <dark>)`, each side six-digit hex or a `var()`; an alias `var(--role)` is theme-free; `light-dark(` stands in no other file. The alpha roles, by name: `--scrim`, `--shadow-key`, `--shadow-ambient`, `--graph-minimap-mask`, `--graph-selection-surface`.
-- **System.** `:root` has `color-scheme: light dark`: with no choice the page follows `prefers-color-scheme`, light when the system states none, with no script, and a system change applies at once.
-- **Choice.** The header's Theme select (System, Light, Dark) writes `localStorage` `specengine.theme`, `light` or `dark` (System removes it), and sets `<html data-theme>`; `:root[data-theme="light"|"dark"]` pins `color-scheme`. Another value, or a storage that throws, reads System silently. Per browser profile, as the language; a hub keeps none. `src/app/theme.ts`: `THEMES = ["system", "light", "dark"]`, `THEME_KEY`, `isTheme`, `storedTheme(): Theme`, `applyTheme(theme)`, `chooseTheme(theme)` (store, then apply); keys `app.theme.{label,system,light,dark}`.
-- **First paint.** `src/main.tsx` runs `applyTheme(storedTheme())` before `createRoot`. `index.html` has `<meta name="color-scheme" content="light dark">` and, under the CSP, no inline script.
+- **System.** `:root` has `color-scheme: light dark`: with no choice the page follows `prefers-color-scheme`, light when it states none, with no script; a change applies at once.
+- **Choice.** The header's Theme select (System, Light, Dark) writes `localStorage` `specengine.theme`, `light` or `dark` (System removes it), and sets `<html data-theme>`; `:root[data-theme="light"|"dark"]` pins `color-scheme`. Another value, or a throwing storage, reads System silently. Per browser profile; a hub keeps none. `src/app/theme.ts`: `THEMES = ["system", "light", "dark"]`, `THEME_KEY`, `isTheme`, `storedTheme(): Theme`, `applyTheme(theme)`, `chooseTheme(theme)` (store, then apply); keys `app.theme.{label,system,light,dark}`.
+- **First paint.** `src/main.tsx` runs `applyTheme(storedTheme())` before `createRoot`; `index.html` has `<meta name="color-scheme" content="light dark">`, no inline script.
 - **Palette.** Neutral grey surfaces in both themes: canvas, sunken (board columns, wells), panel (header, nav), raised (tiles, `--shadow-raised`), overlay (dialogs, menus, `--shadow-overlay`), hovered, selected. Accent indigo `#4f46e5` / `#a5b4fc`, not the information blue. Six lozenge pairs `--lozenge-<a>-surface`, `-text`: neutral, information, success, warning, danger, discovery.
 - **Canvases.** Flow's, Graph's and Roadmap's `--xy-*` resolve to `light-dark()` roles; `@xyflow/react`'s `colorMode` is never set.
 
 ## Contrast
 
-`tokens.test.ts` resolves every role per theme and checks both. At least 4.5:1: text (primary, secondary, subtlest) and the accent on every surface, hovered and selected too; on-accent, on-warning, on-danger on their fills; each lozenge's text on its surface; primary and secondary text on lozenge, diff and highlight surfaces. At least 3:1: focus ring, control border, every status role. Roles earlier tests keep distinct (states, edges, cannot-verify and ok) differ in both themes.
+`tokens.test.ts` resolves every role per theme and checks both. At least 4.5:1: text (primary, secondary, subtlest) and the accent on every surface, hovered and selected too; on-accent, on-warning, on-danger on their fills; each lozenge's text on its surface; primary and secondary text on lozenge, diff and highlight surfaces. At least 3:1: focus ring, control border, every status role. Roles kept distinct (states, edges, cannot-verify and ok) differ in both themes.
 
 ## Type, space and size
 
@@ -38,7 +38,7 @@ One file, `src/styles/tokens.css`, holds every colour literal, in both themes, a
 
 `src/styles/scale.test.ts` reads every CSS file under `src` but `tokens.css`: `font-size`, `line-height`, `padding*`, `margin*`, gaps and radii take one `var()` of their family (spacing also `0`, `auto`, `calc()` of tokens); `font` only `inherit`; a last declaration with no `;`, a raw length in a custom property outside `tokens.css` and a `var()` fallback count. Every token resolves into the scale's sets. `.button` and `.field` are `var(--control-height)` tall, `.button-compact` the compact one. No non-test `.tsx` sets a size, space or radius inline.
 
-`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0099" | null}` matching a declaration. 13: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), 11 other screens' (RM-0099). A new one names its reason and the item that empties it.
+`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0099" | null}` matching a declaration. 13: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), 11 other screens' (RM-0099). A new one names its reason and the item emptying it.
 
 ## Primitives
 
@@ -59,10 +59,10 @@ In `src/ui/`, each with its test:
 ## The work item
 
 `CardModal` (`view: (frame: {heading, tools}) => ReactNode`, by `Dialog`'s `frame`) and `CardPage` render one `CardView` (`CardPanel.tsx`) in an `IssueView`; a document's, `DocFrame` (`doc-view.md`). Routes, history, focus and writes: `board-screen.md` "The card modal and page".
-- **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Ask a question…, Record a decision…, Edit, Assign, Cancel task (subtle, last).
-- **Main.** Mark and Clear, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (`card-progress.md`); Evidence; Activity (`card-questions.md` "Screen").
-- **Side**, at most 360 px. Status: the lozenge, then Move, compact, none on a closed card. Details: Assignee, Reviewer, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Agent tasks, collapsed: `card-tasks.md` "Screen".
-- **Width.** One column, main first, under 44.5rem of its own width (`@container issue-view`); DOM order main then side. The modal: 1200 px or the viewport less 2rem, its head still; at two columns Main and the side scroll apart (`overscroll-behavior: contain`, each padded for focus rings), at one the body; under 36rem the screen, scrolling as one. The page, 1200 px at most, scrolls the window.
+- **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Ask a question…, Record a decision…, Edit, Assign, Cancel task (subtle, last), a mandate moving some after Accept (`card-mandate.md`).
+- **Main.** Mark and Clear, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (`card-progress.md`), Decisions from subtasks; Evidence; Activity (`card-questions.md` "Screen").
+- **Side**, at most 360 px. Status: the lozenge, then Move, compact, none on a closed card. Details: Assignee, Reviewer, Mandate, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Agent tasks, collapsed: `card-tasks.md` "Screen".
+- **Width.** One column, main first, under 44.5rem of its own width (`@container issue-view`); DOM order main, side. The modal: 1200 px or the viewport less 2rem, its head still; at two columns Main and the side scroll apart (`overscroll-behavior: contain`, each padded for focus rings), at one the body; under 36rem the screen, scrolling as one. The page, 1200 px at most, scrolls the window.
 
 ## The focus trap
 
@@ -79,7 +79,7 @@ Inter 4.001 from `@fontsource-variable/inter` 5.3.0, committed in `ui/fonts/inte
 ## Known limits
 
 - `field-sizing: content` is Chrome's; elsewhere a header select is as wide as its widest option. Past 13rem a value is cut while closed.
-- Every asset is served `no-store`, so fonts are fetched once per page load; the blank page before the entry module shows the system scheme.
+- Every asset is served `no-store`, so fonts load once per page load; the blank page before the entry module shows the system scheme.
 - `.app-body`'s `min-height` stays, pinned by Flow's styles test, until RM-0099.
 - Safari scrolls a modal's column by keyboard only with focus in it.
 - Sizes, the one-row header and the two scrollers are a look in Chrome (`design-foundation.md` DF-10, DF-14): jsdom lays nothing out.

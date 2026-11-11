@@ -34,6 +34,13 @@ function rows(dialog: HTMLElement): [string, boolean][] {
     .map((box) => [box.closest("label")?.textContent ?? "", box.checked]);
 }
 
+/** Every checked row's mandate chosen (docs/features/task-mandate.md "Acceptance criteria", V1). */
+function chooseMandates(dialog: HTMLElement, value = "binding") {
+  for (const select of within(dialog).queryAllByLabelText(/^Mandate for /)) {
+    fireEvent.change(select, { target: { value } });
+  }
+}
+
 /** Mooring's page, its acts landed, Split to departments pressed: the dialog with its plan. */
 async function fromMooring(scenario: Scenario = "normal") {
   window.localStorage.setItem("specengine.board.as", "Ivo Brandt");
@@ -47,7 +54,7 @@ async function fromMooring(scenario: Scenario = "normal") {
 describe("Split to departments over the mock (U1, U2 of department-split)", () => {
   it("from a document's page: one plan read; Galley's two rows and Foundry's one, copy and the plates suggested by kind, captions by the task's targets; Split makes the parent and two subtasks, the parent's work item lists them", async () => {
     const { dialog, splitCard } = await fromMooring();
-    expect(bodies(splitCard)).toEqual([{ target: ["MEC-MOORING"], title: "Mooring", goal: null, discipline: "copy", parent: null, child: null, reviewer: null, dry_run: true, as: "Ivo Brandt" }]);
+    expect(bodies(splitCard)).toEqual([{ target: ["MEC-MOORING"], title: "Mooring", goal: null, discipline: "copy", parent: null, child: null, mandate: null, reviewer: null, dry_run: true, as: "Ivo Brandt" }]);
     expect(rows(dialog)).toEqual([
       ["Copy desk ", true],
       ["Copy desk captions", false],
@@ -60,11 +67,14 @@ describe("Split to departments over the mock (U1, U2 of department-split)", () =
     expect(within(dialog).getByRole("button", { name: "By kind: 3 documents" })).toBeTruthy();
     // The mooring's accepted fees table, a task on this document already: listed, never judged.
     expect(within(dialog).getByRole("link", { name: "C-0005 Mooring fees table" }).getAttribute("href")).toBe("#/harbor-sim/board/C-0005");
+    // Each checked subtask's mandate, required (docs/features/task-mandate.md "Acceptance criteria", V1).
+    fireEvent.change(within(dialog).getByLabelText("Mandate for Copy desk"), { target: { value: "binding" } });
+    fireEvent.change(within(dialog).getByLabelText("Mandate for plates"), { target: { value: "open" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Split" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Split to departments" })).toBeNull();
     });
-    expect(bodies(splitCard)[1]).toMatchObject({ child: ["copy", "plates"], reviewer: "Ivo Brandt", dry_run: false });
+    expect(bodies(splitCard)[1]).toMatchObject({ child: ["copy", "plates"], mandate: ["copy=binding", "plates=open"], reviewer: "Ivo Brandt", dry_run: false });
     const polite = await waitFor(() => {
       const said = document.querySelector('[aria-live="polite"]')?.textContent ?? "";
       expect(said).toMatch(/^Split into C-\d{4} and 2 subtasks$/);
@@ -91,7 +101,8 @@ describe("Split to departments over the mock (U1, U2 of department-split)", () =
     await within(dialog).findAllByRole("checkbox");
     expect(within(dialog).queryByLabelText("Title")).toBeNull();
     expect(within(dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("Ivo Brandt");
-    expect(bodies(splitCard)[0]).toMatchObject({ parent: "C-0001", target: null, title: null, child: null, dry_run: true });
+    expect(bodies(splitCard)[0]).toMatchObject({ parent: "C-0001", target: null, title: null, child: null, mandate: null, dry_run: true });
+    chooseMandates(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Split" }));
     await waitFor(() => {
       expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(/^\d+ subtasks? for C-0001$/);
@@ -117,6 +128,7 @@ describe("Split to departments over the mock (U1, U2 of department-split)", () =
     const dialog = await screen.findByRole("dialog", { name: "Split to departments" });
     await within(dialog).findAllByRole("checkbox");
     expect(bodies(splitCard)[0]).toMatchObject({ target: ["MEC-MOORING"], title: "Mooring", dry_run: true, child: null });
+    chooseMandates(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Split" }));
     const note = await waitFor(() => {
       const found = Array.from(details.querySelectorAll<HTMLElement>(".note")).find((line) => /^Split into C-\d{4} and 2 subtasks$/.test(line.textContent));
@@ -153,6 +165,7 @@ describe("Split to departments over the mock (U1, U2 of department-split)", () =
   it("the conflict scenario: the first Split is refused in the daemon's words, the dialog and its choice kept, nothing stored; the next one is taken", async () => {
     const { client, dialog, splitCard } = await fromMooring("conflict");
     const before = (await client.getCards("harbor-sim")).cards.length;
+    chooseMandates(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Split" }));
     const refusal = await within(dialog).findByText("child: no flow takes the discipline `copy`: none lists it, and every `[[card.flow]]` lists its disciplines");
     expect(refusal.getAttribute("lang")).toBe("en");

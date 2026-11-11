@@ -239,3 +239,79 @@ describe("Ask a question… and Record a decision… (U3 of card-questions)", ()
     });
   });
 });
+
+// V2 of docs/features/task-mandate.md "Acceptance criteria": Record a decision… framed by the task's
+// mandate. On a binding task a note says a decision departs from its brief, and why stays optional: a
+// blank one posts `why: null`. On a task its department decides, the Why field reads as required and
+// a blank one stops in the form, nothing posted; filled, it goes. A form rule only: the daemon keeps
+// `why` optional (ADR-0077). With no mandate, today's dialog.
+describe("Record a decision… by mandate (V2 of task-mandate)", () => {
+  const BINDING: Card = aCard({ id: "C-0013", title: "Tide table plate", targets: ["MEC-TIDE-TABLES"], reviewer: "Mira Holt", mandate: "binding" });
+  const OPEN_MANDATE: Card = aCard({ id: "C-0019", title: "Tide table glossary", targets: ["DOM-WATER"], reviewer: "Mira Holt", mandate: "open" });
+
+  function mandateClient(): StubClient {
+    const stub = stubClient();
+    const cards = [BINDING, OPEN_MANDATE, OPEN];
+    stub.getCards.mockImplementation(() => Promise.resolve(aCardList(cards.map((card) => aCardRow({ id: card.id, title: card.title, targets: card.targets, mandate: card.mandate })), { flows: [FLOW] })));
+    stub.getCard.mockImplementation((_project, id) => {
+      const card = cards.find((candidate) => candidate.id === id);
+      return Promise.resolve(card === undefined ? { id, reason: `no card ${id}` } : structuredClone(card));
+    });
+    stub.raiseOnCard.mockResolvedValue(STORED);
+    return stub;
+  }
+
+  function fillTexts(dialog: HTMLElement) {
+    type(dialog, "What had to be decided", "One plate or two?");
+    type(dialog, "The decision", "Two plates.");
+    type(dialog, "What another answer would cost", "The figures shrink.");
+  }
+
+  const NOTE = "This task is binding: a decision here departs from its brief, and its reviewer sees it as one.";
+
+  it("binding: the note above the fields, why optional; a blank why posts why null (M: why required on a binding task too)", async () => {
+    const stub = mandateClient();
+    const dialog = await opened(BINDING, "Record a decision…", stub);
+    const note = within(dialog).getByText(NOTE);
+    // Above the fields: before the first of them in the DOM.
+    expect(note.compareDocumentPosition(within(dialog).getByLabelText("What had to be decided")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const why = within(dialog).getByLabelText("Why (optional)");
+    expect(why.getAttribute("aria-required")).toBe("false");
+    fillTexts(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Record" }));
+    await waitFor(() => {
+      expect(stub.raiseOnCard).toHaveBeenCalledTimes(1);
+    });
+    expect(stub.raiseOnCard.mock.calls[0]?.[1]).toBe("C-0013");
+    expect(stub.raiseOnCard.mock.calls[0]?.[2]).toMatchObject({ kind: "decision", why: null });
+  });
+
+  it("open: the Why field reads as required; blank, the form says why it stops and posts nothing; filled, it posts why", async () => {
+    const stub = mandateClient();
+    const dialog = await opened(OPEN_MANDATE, "Record a decision…", stub);
+    expect(within(dialog).queryByText(NOTE)).toBeNull();
+    const why = within(dialog).getByLabelText("Why (required: the department decides)");
+    expect(why.getAttribute("aria-required")).toBe("true");
+    expect(within(dialog).queryByLabelText("Why (optional)")).toBeNull();
+    fillTexts(dialog);
+    type(dialog, "Why (required: the department decides)", "   ");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Record" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Say why: this task's department decides.");
+    expect(why.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(why);
+    expect(stub.raiseOnCard).not.toHaveBeenCalled();
+    type(dialog, "Why (required: the department decides)", " Skippers read them at the helm. ");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Record" }));
+    await waitFor(() => {
+      expect(stub.raiseOnCard).toHaveBeenCalledTimes(1);
+    });
+    expect(stub.raiseOnCard.mock.calls[0]?.[2]).toMatchObject({ kind: "decision", why: "Skippers read them at the helm." });
+  });
+
+  it("no mandate: today's dialog, no note, why optional", async () => {
+    const stub = mandateClient();
+    const dialog = await opened(OPEN, "Record a decision…", stub);
+    expect(within(dialog).queryByText(NOTE)).toBeNull();
+    expect(within(dialog).getByLabelText("Why (optional)").getAttribute("aria-required")).toBe("false");
+  });
+});

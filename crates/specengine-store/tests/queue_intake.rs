@@ -482,8 +482,9 @@ INSERT INTO events (project, type, payload, at)
 #[test]
 fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     // Schema 11 and 48 columns since docs/features/card-questions.md S1; 46
-    // since docs/features/drift-queue.md "Queue schema 8".
-    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    // since docs/features/drift-queue.md "Queue schema 8". Schema 12 since
+    // docs/features/task-mandate.md M5, `proposals` unchanged.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
     assert_eq!(PROPOSAL_COLUMNS.len(), 48);
     assert_eq!(PROPOSAL_COLUMNS[24..35], INTAKE_COLUMNS);
     assert_eq!(PROPOSAL_COLUMNS[35..40], RECORD_COLUMNS);
@@ -516,9 +517,11 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
     // stays 46).
     assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..46]));
-    // 48 at 11 (docs/features/card-questions.md S1).
+    // 48 at 11 (docs/features/card-questions.md S1), and at 12
+    // (docs/features/task-mandate.md M5: `cards` alone gains a column).
     assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(12), None);
+    assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(13), None);
 
     let scratch = Scratch::new("qi-v1");
     let db = scratch.db("q");
@@ -546,7 +549,8 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert!(state.tasks.is_empty() && state.runs.is_empty(), "no task");
 
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps the schema");
-    assert_eq!(user_version(&db), "11");
+    // 12 since docs/features/task-mandate.md M5.
+    assert_eq!(user_version(&db), "12");
     let tables: Vec<String> = sqlite3(
         &db,
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('tasks', 'runs') \
@@ -585,7 +589,7 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert_eq!(next.id, "PR-0008");
     drop(queue);
     let reopened = SqliteQueue::open(&db, PROJECT).expect("reopen");
-    assert_eq!(user_version(&db), "11", "stepped once");
+    assert_eq!(user_version(&db), "12", "stepped once");
     assert_eq!(reopened.get("PR-0008").unwrap().unwrap(), next);
 }
 

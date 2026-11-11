@@ -858,17 +858,18 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     // Released: a verdict again.
     assert_refused(&verdict(&pair, &main, "src/a.rs"), "released");
 
-    // A queue of a newer schema (this build's is 11 since
-    // docs/features/card-questions.md S1; D16: the path an
-    // older build meets at 11; M1's record at a62c81c: 11 over 10).
-    pair.sql("PRAGMA user_version = 12;");
+    // A queue of a newer schema (this build's is 12 since
+    // docs/features/task-mandate.md M5; D15: the path an older build meets
+    // at 12, R1's record at 8a43e5d: 12 over 11; card-questions M1's at
+    // a62c81c: 11 over 10).
+    pair.sql("PRAGMA user_version = 13;");
     let ran = spec_path(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(
         &ran,
         "Reinstall spec and the plugin from one commit.",
-        "schema 12",
+        "schema 13",
     );
-    pair.sql("PRAGMA user_version = 11;");
+    pair.sql("PRAGMA user_version = 12;");
 
     // The root outside git.
     let loose = pair.scratch.copy("spec-a", "no-git");

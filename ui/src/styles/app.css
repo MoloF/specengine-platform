@@ -6805,6 +6805,36 @@ mark {
   margin: 0;
 }
 
+/* A task's mandate (CardPanel.tsx, CardItems.tsx; docs/canon/card-mandate.md "The rule"): in
+   Details its icon and word, never colour alone; on a parent, each subtask's decision under its
+   head line, then Ask about it…, the words wrapping whatever their script. */
+.board-mandate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Both classes: a later `.board-panel-list` rule, one class, would else set its own gap. */
+.board-panel-list.board-from-subtasks {
+  gap: var(--space-3);
+}
+
+.board-from-subtask {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.board-from-subtask > .board-handoff {
+  margin: 0;
+}
+
+.board-from-subtask > .board-panel-actions {
+  margin-top: var(--space-050);
+}
+
 /* A link in a row of the work item stands at least the target's height. */
 .board-handoff a,
 .board-panel-target a,

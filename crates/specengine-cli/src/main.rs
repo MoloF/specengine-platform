@@ -41,13 +41,14 @@ use specengine_cli::{
     GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
     INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
     InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
-    LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest,
-    RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve,
-    ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
-    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest, UnmappedRequest,
-    VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
+    LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Mandate, Outcome,
+    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest,
+    ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
+    SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES,
+    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest,
+    UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json,
+    render_text,
 };
 use specengine_store::GitEnv;
 
@@ -581,6 +582,9 @@ enum CardCommand {
         /// Who accepts it, a person: a hand-off's asking side.
         #[arg(long, value_name = "N")]
         reviewer: Option<String>,
+        /// The subtask's mandate: binding (a departure from the brief goes back with a question) or open (its department decides and says why). Needs --reviewer, who alone changes it.
+        #[arg(long, value_name = "M", value_parser = PossibleValuesParser::new(Mandate::ALL.map(Mandate::as_str)))]
+        mandate: Option<String>,
         /// `N` or `N-M`.
         #[arg(long, value_name = "E")]
         estimate: Option<String>,
@@ -617,6 +621,9 @@ enum CardCommand {
         /// A subtask's discipline: one subtask per --child, first column of the flow listing it.
         #[arg(long = "child", value_name = "D")]
         children: Vec<String>,
+        /// A subtask's mandate, D one of the --child disciplines: binding or open; once each.
+        #[arg(long = "mandate", value_name = "D=M")]
+        mandates: Vec<String>,
         /// Who accepts each card's result, a person; absent: the stored parent's, else --as.
         #[arg(long, value_name = "N")]
         reviewer: Option<String>,
@@ -722,6 +729,9 @@ enum CardCommand {
         /// Why an estimate the card holds changes, at most 4096 bytes; required then, and no other field beside it.
         #[arg(long, value_name = "T")]
         reason: Option<String>,
+        /// Change the mandate: binding or open; only the card's reviewer, acting with --as, changes it.
+        #[arg(long, value_name = "M", value_parser = PossibleValuesParser::new(Mandate::ALL.map(Mandate::as_str)))]
+        mandate: Option<String>,
         /// Only if the card still stands at this revision.
         #[arg(long, value_name = "R")]
         revision: Option<String>,
@@ -2344,6 +2354,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             criteria,
             assignee,
             reviewer,
+            mandate,
             estimate,
             due,
             parent,
@@ -2360,6 +2371,8 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 criteria,
                 assignee,
                 reviewer,
+                // clap took one of the two words.
+                mandate: mandate.as_deref().and_then(Mandate::parse),
                 estimate,
                 due,
                 parent,
@@ -2375,6 +2388,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             discipline,
             parent,
             children,
+            mandates,
             reviewer,
             actor,
             dry_run,
@@ -2388,6 +2402,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 discipline,
                 parent,
                 children: (!children.is_empty()).then_some(children),
+                mandate: mandates,
                 reviewer,
                 dry_run,
                 actor,
@@ -2465,6 +2480,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             tasks,
             evidence,
             reason,
+            mandate,
             revision,
             actor,
         } => card(specengine_cli::card_edit(
@@ -2482,6 +2498,8 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 corrects,
                 evidence,
                 tasks,
+                // clap took one of the two words.
+                mandate: mandate.as_deref().and_then(Mandate::parse),
                 reason,
                 revision,
                 actor,

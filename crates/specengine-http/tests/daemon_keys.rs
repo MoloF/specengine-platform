@@ -290,6 +290,15 @@
 //! `fixtures/card-press`: a split of PRN-WEEKLY, a dry run of STY-0001, a
 //! split under the stored parent and a refusal through `POST .../cards/split`.
 //! M: a key missing from the fixture.
+//!
+//! docs/features/task-mandate.md (RM-0104) "Acceptance criteria", M7: one
+//! set more, 122 in all, last: `CardSubtaskItem` (122, 17 keys, `card_id`
+//! then `CardItem`'s 16), from the same copy of `fixtures/card-press`, whose
+//! split parent `C-0004` reads the question raised on its child `C-0005`;
+//! `CardRow` (91) gains `mandate` after `reviewer` (22 keys), `Card` (92)
+//! `mandate` after `reviewer` and `subtask_items` after `items` (34),
+//! `CardSplitChild` (121) `mandate` last (9). M: a key missing from the
+//! fixture.
 
 mod common;
 mod task_state;
@@ -1151,6 +1160,27 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .to_owned()
     })
     .collect();
+    // docs/features/task-mandate.md M7, set 122: a question on the split's
+    // child `C-0005`, then its parent `C-0004`'s read.
+    let subtask_question = serde_json::json!({"kind": "question", "node_ids": ["SHT-FRONT"],
+        "text": "Which ink takes the front page masthead?", "working_answer": "Black.",
+        "price_of_other": "A plate redone.", "why": null, "severity": null,
+        "distinct_from": ["STY-0001"], "as": "desk"});
+    let raised = server
+        .stage(
+            &format!("{cards}/C-0005/items"),
+            &subtask_question.to_string(),
+        )
+        .status(200)
+        .json();
+    assert_eq!(raised["created"], serde_json::json!(true), "{raised}");
+    let subtask_shows = vec![
+        server
+            .get(&format!("{cards}/C-0004"))
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -1370,6 +1400,12 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     assert_eq!(split_parents.len(), 3, "{splits:?}");
     let split_children = items(&splits, "children");
     assert_eq!(split_children.len(), 5, "two, two, one: {splits:?}");
+    let subtask_items = items(&subtask_shows, "subtask_items");
+    assert_eq!(
+        subtask_items.len(),
+        1,
+        "C-0005's question: {subtask_shows:?}"
+    );
     assert_eq!(card_flows.len(), 2, "copy, plates: {card_lists:?}");
     assert_eq!(card_rows.len(), 2, "both endings: {card_lists:?}");
     card_rows.extend(items(&card_marked, "cards"));
@@ -1917,6 +1953,11 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "CardSplitChild",
             one_key_set("CardSplitChild", &split_children, keys_of),
         ),
+        // docs/features/task-mandate.md M7, set 122.
+        (
+            "CardSubtaskItem",
+            one_key_set("CardSubtaskItem", &subtask_items, keys_of),
+        ),
     ]
 }
 
@@ -2247,13 +2288,13 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        121,
+        122,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
          board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108; \
          hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114; \
-         flow-scenario: 115; card-questions: 118; department-split: 121)"
+         flow-scenario: 115; card-questions: 118; department-split: 121; task-mandate: 122)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2754,6 +2795,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "targets",
                 "assignee",
                 "reviewer",
+                // docs/features/task-mandate.md M7.
+                "mandate",
                 "estimate",
                 "due",
                 "parent",
@@ -2787,6 +2830,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "criteria",
                 "assignee",
                 "reviewer",
+                // docs/features/task-mandate.md M7.
+                "mandate",
                 "estimate",
                 "due",
                 "parent",
@@ -2796,6 +2841,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "tasks",
                 // docs/features/card-questions.md D4: after `tasks`.
                 "items",
+                // docs/features/task-mandate.md M7: after `items`.
+                "subtask_items",
                 "acceptance",
                 "cancellation",
                 "created_by",
@@ -2983,6 +3030,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         ]
     );
     assert_eq!(sets[120].0, "CardSplitChild");
+    // docs/features/task-mandate.md M7: `mandate` last.
     assert_eq!(
         sets[120].1,
         [
@@ -2993,9 +3041,37 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "column",
             "targets",
             "from",
-            "suggested"
+            "suggested",
+            "mandate"
         ]
     );
+    // docs/features/task-mandate.md M7: set 122, last: `card_id`, then
+    // `CardItem`'s 16. M: a key missing from the fixture.
+    assert_eq!(sets[121].0, "CardSubtaskItem");
+    let mut subtask_item = vec!["card_id".to_owned()];
+    subtask_item.extend(sets[115].1.iter().cloned());
+    assert_eq!(sets[121].1, subtask_item);
+    assert_eq!(sets[121].1.len(), 17);
+    assert_eq!(sets[91].0, "Card");
+    assert_eq!(sets[91].1.len(), 34);
+    let reviewer = sets[91].1.iter().position(|key| key == "reviewer");
+    let items_at = sets[91].1.iter().position(|key| key == "items");
+    assert_eq!(
+        sets[91].1[reviewer.expect("reviewer") + 1],
+        "mandate",
+        "{:?}",
+        sets[91].1
+    );
+    assert_eq!(
+        sets[91].1[items_at.expect("items") + 1],
+        "subtask_items",
+        "{:?}",
+        sets[91].1
+    );
+    assert_eq!(sets[90].0, "CardRow");
+    assert_eq!(sets[90].1.len(), 22);
+    let reviewer = sets[90].1.iter().position(|key| key == "reviewer");
+    assert_eq!(sets[90].1[reviewer.expect("reviewer") + 1], "mandate");
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -3016,7 +3092,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 121 sets (41 until
+/// unchanged, no new key): the fixture holds 122 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3039,7 +3115,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/card-tasks.md its `CardTask`, and
 /// docs/features/flow-scenario.md its `ShownAncestor`, and
 /// docs/features/card-questions.md its three, and
-/// docs/features/department-split.md its three); a decision
+/// docs/features/department-split.md its three, and
+/// docs/features/task-mandate.md its `CardSubtaskItem`); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -3053,8 +3130,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        121,
-        "121 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        122,
+        "122 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3063,7 +3140,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
-         `ShownAncestor` (FS-11), card-questions' three and department-split's three"
+         `ShownAncestor` (FS-11), card-questions' three, department-split's three and \
+         task-mandate's `CardSubtaskItem`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -3178,7 +3256,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 121 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 122 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3199,7 +3277,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/card-tasks.md its `CardTask`, and
 /// docs/features/flow-scenario.md its `ShownAncestor`, and
 /// docs/features/card-questions.md its three, and
-/// docs/features/department-split.md its three); the amendment of
+/// docs/features/department-split.md its three, and
+/// docs/features/task-mandate.md its `CardSubtaskItem`); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -3216,8 +3295,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        121,
-        "121 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        122,
+        "122 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3226,7 +3305,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
-         `ShownAncestor` (FS-11), card-questions' three and department-split's three"
+         `ShownAncestor` (FS-11), card-questions' three, department-split's three and \
+         task-mandate's `CardSubtaskItem`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

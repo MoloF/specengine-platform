@@ -75,7 +75,7 @@ const NO_SNAPSHOT: &str =
 /// `show --json`'s keys in order: docs/canon/cards.md
 /// "Documents and events" with `tasks` after `evidence` (card-tasks CT-2) and
 /// `items` after `tasks` (docs/features/card-questions.md D4).
-const CARD_KEYS: [&str; 32] = [
+const CARD_KEYS: [&str; 34] = [
     "id",
     "flow",
     "column",
@@ -92,6 +92,8 @@ const CARD_KEYS: [&str; 32] = [
     "criteria",
     "assignee",
     "reviewer",
+    // docs/features/task-mandate.md M1.
+    "mandate",
     "estimate",
     "due",
     "parent",
@@ -99,6 +101,8 @@ const CARD_KEYS: [&str; 32] = [
     "evidence",
     "tasks",
     "items",
+    // docs/features/task-mandate.md M6.
+    "subtask_items",
     "acceptance",
     "cancellation",
     "created_by",
@@ -119,7 +123,7 @@ const WRITE_KEYS: [&str; 7] = [
 ];
 
 /// A list row's 21 keys (D9: unchanged).
-const ROW_KEYS: [&str; 21] = [
+const ROW_KEYS: [&str; 22] = [
     "id",
     "flow",
     "column",
@@ -129,6 +133,8 @@ const ROW_KEYS: [&str; 21] = [
     "targets",
     "assignee",
     "reviewer",
+    // docs/features/task-mandate.md M1.
+    "mandate",
     "estimate",
     "due",
     "parent",
@@ -1026,7 +1032,9 @@ fn ct6_the_link_decides_nothing_on_twin_projects() {
 /// makes `spec card show` (and `edit --task`) exit 2 with the `SchemaTooNew`
 /// line naming 11 and this build's 10, the queue's rows and version left
 /// alone (the name kept, cited by docs/features/card-tasks.md: since
-/// docs/features/card-questions.md the probe is 12 over this build's 11).
+/// docs/features/card-questions.md the probe is 12 over this build's 11;
+/// since docs/features/task-mandate.md, R1 recorded at 8a43e5d, 13 over
+/// 12).
 /// The gate's no verdict is `gate.rs`' AC-06.
 #[test]
 fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
@@ -1034,7 +1042,7 @@ fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     assert_eq!(task(&pair, Some(NORTH), &["ISL-LAMP"]), "T-0001");
     make(&pair, "Light the lamp", &["--discipline", "development"]);
     link(&pair, "C-0001", &["T-0001"]);
-    pair.sql("PRAGMA user_version = 12;");
+    pair.sql("PRAGMA user_version = 13;");
     let rows = pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;");
     for args in [
         &["card", "show", "C-0001"][..],
@@ -1043,10 +1051,10 @@ fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     ] {
         let message = cannot(&pair, args);
         assert!(
-            message.contains("schema version 12, this build knows 11"),
+            message.contains("schema version 13, this build knows 12"),
             "{args:?}: {message}"
         );
-        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "12", "{args:?}");
+        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "13", "{args:?}");
         assert_eq!(
             pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;"),
             rows,

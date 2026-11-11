@@ -75,8 +75,9 @@ const PARENT_KEYS: [&str; 8] = [
     "targets",
 ];
 
-/// A child's keys, in order.
-const CHILD_KEYS: [&str; 8] = [
+/// A child's keys, in order; `mandate` last since
+/// docs/features/task-mandate.md M2.
+const CHILD_KEYS: [&str; 9] = [
     "id",
     "discipline",
     "flow",
@@ -85,6 +86,7 @@ const CHILD_KEYS: [&str; 8] = [
     "targets",
     "from",
     "suggested",
+    "mandate",
 ];
 
 /// `PRN-WEEKLY`'s scope as `spec tree PRN-WEEKLY --depth 2` serves it: the
@@ -266,7 +268,7 @@ fn created(id: &str, flow: &str, column: &str, position: u64) -> (String, Value)
     (
         "card.created".to_owned(),
         json!({"id": id, "flow": flow, "column": column, "position": position,
-               "assignee": null, "reviewer": ANA, "as": ANA}),
+               "assignee": null, "reviewer": ANA, "mandate": null, "as": ANA}),
     )
 }
 
@@ -334,10 +336,10 @@ fn s3_a_split_from_a_document_serves_its_document() {
             "children": [
                 {"id": "C-0002", "discipline": "copy", "flow": "copy", "flow_title": "Copy desk",
                  "column": "draft", "targets": copy_targets(), "from": "kinds",
-                 "suggested": true},
+                 "suggested": true, "mandate": null},
                 {"id": "C-0003", "discipline": "plates", "flow": "plates", "flow_title": "plates",
                  "column": "queued", "targets": plates_targets(), "from": "kinds",
-                 "suggested": true}
+                 "suggested": true, "mandate": null}
             ],
             "reviewer": ANA,
             "notes": []
@@ -467,7 +469,7 @@ fn s4_a_split_under_a_stored_task() {
             "children": [
                 {"id": "C-0002", "discipline": "plates", "flow": "plates",
                  "flow_title": "plates", "column": "queued", "targets": [], "from": "parent",
-                 "suggested": false}
+                 "suggested": false, "mandate": null}
             ],
             "reviewer": ANA,
             "notes": []
@@ -663,10 +665,10 @@ fn s6_a_dry_run_plans_every_discipline_and_writes_nothing() {
             "children": [
                 {"id": null, "discipline": "copy", "flow": "copy", "flow_title": "Copy desk",
                  "column": "draft", "targets": copy_targets(), "from": "kinds",
-                 "suggested": true},
+                 "suggested": true, "mandate": null},
                 {"id": null, "discipline": "plates", "flow": "plates", "flow_title": "plates",
                  "column": "queued", "targets": plates_targets(), "from": "kinds",
-                 "suggested": true}
+                 "suggested": true, "mandate": null}
             ],
             "reviewer": ANA,
             "notes": []

@@ -214,6 +214,13 @@
 //!   `read-spec`'s one edit ([`READ_SPEC_0_37_0`]) set back 0.36.0's; a
 //!   `SCHEMA_PINS` entry 0.37.0, 0.36.0's schemas today's without
 //!   `split_card` ([`as_of_0_36_0`]).
+//! - task-mandate (RM-0104, P1, D14): 0.37.0 -> 0.38.0, MINOR: three tools
+//!   take a key, `mandate` of `create_card`, `edit_card` and `split_card`,
+//!   and two return new ones, `get_card`'s `mandate` and `subtask_items`,
+//!   `list_cards`' rows' and `split_card`'s children's `mandate`. A `PINS`
+//!   entry 0.38.0, the tree with plugin.json's version set back 0.37.0's
+//!   (`read-spec` byte-equal); a `SCHEMA_PINS` entry 0.38.0, 0.37.0's
+//!   schemas today's without the mandate's keys ([`as_of_0_37_0`]).
 //!
 //! The repository is only read.
 
@@ -584,6 +591,13 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.37.0",
         "3eff908635a5392669f7ce8f20f18e89e2692d32cd6f31d096e877675e41dc3e",
+    ),
+    // task-mandate (RM-0104, P1, D14: 0.37.0 -> 0.38.0, MINOR: keys tools
+    // take and return, the mandate's): plugin.json's version alone; set
+    // back, the tree hashes as 0.37.0's pin, `read-spec` byte-equal.
+    (
+        "0.38.0",
+        "af7a741936a39b395c7c23fc704107dfeb5f198f4ce250c44fd0a88b2dcb4a49",
     ),
 ];
 
@@ -959,6 +973,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.37.0",
         "def093f696ccce852f985936a58d49e4c3a48897eda2b5c775c78cb5b21ecee3",
+    ),
+    // task-mandate (RM-0104, P1): `mandate` in `create_card`'s, `edit_card`'s
+    // and `split_card`'s input, `get_card`'s `mandate` and `subtask_items`,
+    // `list_cards`' rows' and `split_card`'s children's `mandate`
+    // ([`as_of_0_37_0`] takes them out; no other tool's schema changed).
+    (
+        "0.38.0",
+        "57a26d3e883478b6769ce9c80c506557c335cf12b84eb5918ce1f492e31dcde2",
     ),
 ];
 
@@ -1969,8 +1991,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092), 0.33.0
 /// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095), 0.35.0
 /// since departments (RM-0096), 0.36.0 since card-questions (RM-0097),
-/// 0.37.0 since department-split (RM-0100). No room is left, so the next
-/// byte is over.
+/// 0.37.0 since department-split (RM-0100), 0.38.0 since task-mandate
+/// (RM-0104). No room is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -1992,7 +2014,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.37.0")
+        json!("0.38.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2143,12 +2165,38 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // task-mandate (RM-0104, P1, D14: 0.37.0 -> 0.38.0): plugin.json's
+    // version alone; set back, the tree is 0.37.0's pinned content,
+    // `read-spec`'s body and every other skill and role byte-equal. M:
+    // plugin.json left at 0.37.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.38.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.38.0"),
+        "plugin.json's version"
+    );
+    let at_0_37_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.38.0\"",
+        "\"version\": \"0.37.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_37_0),
+        PINS[PINS.len() - 2].1,
+        "0.38.0 changes plugin.json's version only"
+    );
+    let tree = at_0_37_0;
+    let pins_0_37_0 = &PINS[..PINS.len() - 1];
     // department-split (RM-0100, P1, D14: 0.36.0 -> 0.37.0): plugin.json's
     // version and `read-spec`'s one edit naming `split_card`, net -3 bytes;
     // both set back, the tree is 0.36.0's pinned content, every other skill
     // and role byte-equal. M: plugin.json left at 0.36.0; `split_card`
     // dropped from read-spec; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.37.0"));
+    assert_eq!(
+        pins_0_37_0.last().map(|(version, _)| *version),
+        Some("0.37.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.37.0"),
@@ -2169,11 +2217,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_36_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_37_0[pins_0_37_0.len() - 2].1,
         "0.37.0 changes plugin.json's version and read-spec's one edit only"
     );
     let tree = at_0_36_0;
-    let pins_0_36_0 = &PINS[..PINS.len() - 1];
+    let pins_0_36_0 = &pins_0_37_0[..pins_0_37_0.len() - 1];
     // card-questions (RM-0097, P1: 0.35.0 -> 0.36.0): plugin.json's version
     // and `ask-owner`'s two edits; all set back, the tree is 0.35.0's pinned
     // content, every other skill and role byte-equal. M: plugin.json left at
@@ -3269,6 +3317,39 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// task-mandate (RM-0104, P1): `schemas` as 0.37.0 listed them: no
+/// `mandate` in `create_card`'s, `edit_card`'s and `split_card`'s input, no
+/// `mandate` and `subtask_items` in `get_card`'s output, no `mandate` in a
+/// `list_cards` row or a `split_card` child; no other tool's schema changed.
+fn as_of_0_37_0(schemas: &mut Value) {
+    for tool in ["create_card", "edit_card", "split_card"] {
+        assert!(
+            without_property(&mut schemas[tool]["inputSchema"], "mandate"),
+            "{tool} takes mandate"
+        );
+    }
+    for key in ["mandate", "subtask_items"] {
+        assert!(
+            without_property(&mut schemas["get_card"]["outputSchema"], key),
+            "get_card returns {key}"
+        );
+    }
+    assert!(
+        without_property(
+            &mut schemas["list_cards"]["outputSchema"]["properties"]["cards"]["items"],
+            "mandate"
+        ),
+        "a list_cards row holds mandate"
+    );
+    assert!(
+        without_property(
+            &mut schemas["split_card"]["outputSchema"]["properties"]["children"]["items"],
+            "mandate"
+        ),
+        "a split_card child holds mandate"
+    );
+}
+
 /// department-split (RM-0100, P1): `schemas` as 0.36.0 listed them: no
 /// `split_card`; no other tool's schema changed.
 fn as_of_0_36_0(schemas: &mut Value) {
@@ -3928,7 +4009,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[26].0, "0.35.0", "an entry for 0.35.0");
     assert_eq!(SCHEMA_PINS[27].0, "0.36.0", "an entry for 0.36.0");
     assert_eq!(SCHEMA_PINS[28].0, "0.37.0", "an entry for 0.37.0");
-    assert_eq!(SCHEMA_PINS.len(), 29, "0.37.0 the last entry");
+    assert_eq!(SCHEMA_PINS[29].0, "0.38.0", "an entry for 0.38.0");
+    assert_eq!(SCHEMA_PINS.len(), 30, "0.38.0 the last entry");
+    // task-mandate (RM-0104, P1): 0.37.0's schemas are today's without the
+    // mandate's keys. M: `SCHEMA_PINS` not appended.
+    let mut at_0_37_0 = schemas.clone();
+    as_of_0_37_0(&mut at_0_37_0);
+    let at_0_37_0_hash = schema_hash(&at_0_37_0);
+    assert_eq!(
+        at_0_37_0_hash, SCHEMA_PINS[28].1,
+        "0.37.0's schemas are today's without the mandate's keys"
+    );
+    assert_ne!(at_0_37_0_hash, current, "task-mandate changed the schemas");
+    let (schemas, current) = (at_0_37_0, at_0_37_0_hash);
     // department-split (RM-0100, P1): 0.36.0's schemas are today's without
     // the tool `split_card`.
     let mut at_0_36_0 = schemas.clone();

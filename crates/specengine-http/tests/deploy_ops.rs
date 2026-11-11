@@ -2621,8 +2621,9 @@ fn data_a_queue_round_dumps_real_queues_with_the_built_spec() {
             let dump = read(&generation.join(format!("{name}.jsonl")));
             let header: Value =
                 serde_json::from_str(dump.lines().next().expect("a header")).expect("JSON");
-            // Format 5 since docs/features/card-questions.md S5.
-            assert_eq!(header["format"], 5, "{shell}: {name}: {dump}");
+            // Format 5 since docs/features/card-questions.md S5; 6 since
+            // docs/features/task-mandate.md M5.
+            assert_eq!(header["format"], 6, "{shell}: {name}: {dump}");
             assert_eq!(header["proposals"], 1, "{shell}: {name}: {dump}");
             if name == "a" {
                 assert_eq!(header["project"], "lantern-keep", "{shell}: {dump}");

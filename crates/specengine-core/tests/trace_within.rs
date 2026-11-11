@@ -67,6 +67,7 @@ fn card(entry: CardFrozen) -> Card {
         criteria: Vec::new(),
         assignee: None,
         reviewer: None,
+        mandate: None,
         estimate: None,
         due: None,
         parent: None,

@@ -381,7 +381,7 @@ fn bh12_new_names_the_reviewer_and_card_created_carries_it() {
         (
             "card.created".to_owned(),
             json!({"id": "C-0001", "flow": "narrative", "column": "backlog", "position": 1,
-                   "assignee": null, "reviewer": null, "as": "Ann"})
+                   "assignee": null, "reviewer": null, "mandate": null, "as": "Ann"})
         ),
         "no --reviewer: `reviewer` null"
     );
@@ -411,7 +411,7 @@ fn bh12_new_names_the_reviewer_and_card_created_carries_it() {
         (
             "card.created".to_owned(),
             json!({"id": "C-0002", "flow": "development", "column": "backlog", "position": 1,
-                   "assignee": null, "reviewer": "Ann", "as": "Ann"})
+                   "assignee": null, "reviewer": "Ann", "mandate": null, "as": "Ann"})
         )
     );
     assert_eq!(events(&pair).len(), 2, "one event per write");

@@ -15,15 +15,18 @@
 //! (ADR-0056). They write only the queue in SpecEngine's data directory:
 //! nothing under the project root, and no git.
 
+use std::borrow::Cow;
+
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::CallToolResult;
+use rmcp::model::{CallToolResult, JsonObject};
 use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
+use serde_json::Value;
 use specengine_cli::{
     CARD_TASKS_MAX, CRITERIA_MAX, CRITERION_MAX, CardEditRequest, CardListRequest, CardMoveRequest,
     CardNewRequest, CardShowRequest, CardSplitRequest, EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX,
-    GOAL_MAX, HISTORY_MAX, MAX_SPLIT_CHILDREN, NODES_MAX, NOTE_MAX, OUTPUT_CAP_CHARS, Outcome,
-    TITLE_MAX, TOOL_ACTOR, process_git, utc_now,
+    GOAL_MAX, HISTORY_MAX, MAX_SPLIT_CHILDREN, Mandate, NODES_MAX, NOTE_MAX, OUTPUT_CAP_CHARS,
+    Outcome, TITLE_MAX, TOOL_ACTOR, process_git, utc_now,
 };
 
 use crate::mirror::{
@@ -78,7 +81,9 @@ spec task list reads it; status null, with a note that starts with its ID, for a
 cannot read: a corrupt row, another repository, a hub. items: the questions, discrepancies and \
 decisions that name it {id, kind, status, summary, working_answer, why, author, created_at, \
 updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, \
-record_title}, by ID, read now; with history, their last 64 proposal.* events join it by seq.
+record_title}, by ID, read now; with history, their last 64 proposal.* events join it by seq. \
+mandate: binding, open or null. subtask_items: the items naming one of its subtasks, each with \
+card_id first, by ID, in one read.
 
 Reads only: no state changes, nothing under the project root is written. No such card: an error \
 result with the reason. A look-alike ID, a corrupt row or an index that cannot be read: an error \
@@ -97,7 +102,10 @@ title: required, at most 256 bytes. goal: at most 4096 bytes. target: at most 64
 slug/ID or root-relative .md path), resolved as a task's; none makes a manual card. criterion: at \
 most 32, each at most 1024 bytes. estimate: N or N-M, no unit. due: YYYY-MM-DD. parent, corrects: \
 existing cards. reviewer: the person who accepts its result, never agent or local. A hand-off is a \
-card with parent the asking card, in the other trade's flow, its reviewer the side that asked. ",
+card with parent the asking card, in the other trade's flow, its reviewer the side that asked. \
+mandate: binding (a departure from the brief goes back as a return with a question) or open (the \
+department decides and says why); needs reviewer; null: none. Nothing reads it to allow or \
+refuse. ",
     card_tail!()
 );
 
@@ -114,7 +122,8 @@ card; then no target, title, goal or discipline. child: 1 to 32 disciplines, eac
 with dry_run. reviewer: a person, never agent or local; absent: the parent card's. dry_run: plan \
 only, nothing written; without child it plans every discipline. A child targets the nodes of the \
 kinds a [[card.split]] row names for it, found in the targets or two levels under them, else the \
-parent's targets; suggested marks a row's pick. ",
+parent's targets; suggested marks a row's pick. mandate: D=binding or D=open per child \
+discipline, each once; a child without one holds none. ",
     card_tail!()
 );
 
@@ -130,7 +139,8 @@ and no other field beside it. evidence appends, at most 32 on a card: url=http..
 path=<path>@<hex blob>, build=... or note=..., one line, at most 1024 bytes: a reference, never a \
 binary, and nothing is fetched. revision: only if the card still stands at it, the revision a read \
 gave. task: the T- tasks it links, each an existing task of this queue, listed once, at most 32; it \
-replaces the list, - clears it. The link decides nothing: no move, accept or gate reads it. ",
+replaces the list, - clears it. The link decides nothing: no move, accept or gate reads it. \
+mandate: binding or open; only the card's reviewer changes it, never agent. ",
     card_tail!()
 );
 
@@ -282,6 +292,36 @@ pub(crate) struct GetCardArgs {
     pub history: Option<bool>,
 }
 
+/// A card's mandate as a tool takes it: core's two words, exactly
+/// (`docs/canon/card-mandate.md` "The rule"). The model's type holds no
+/// schema, so this one gives it.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct MandateArg(pub Mandate);
+
+/// `{"type": "string", "enum": ["binding", "open"]}`, inlined, from the
+/// model's words.
+impl schemars::JsonSchema for MandateArg {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("Mandate")
+    }
+
+    fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let mut object = JsonObject::new();
+        object.insert("type".to_owned(), Value::from("string"));
+        let words: Vec<Value> = Mandate::ALL
+            .into_iter()
+            .map(|mandate| Value::from(mandate.as_str()))
+            .collect();
+        object.insert("enum".to_owned(), Value::from(words));
+        schemars::Schema::from(object)
+    }
+}
+
 /// `create_card` arguments: `spec card new`'s flags, no `as`.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -295,6 +335,8 @@ pub(crate) struct CreateCardArgs {
     pub assignee: Option<String>,
     /// Who accepts its result: a person, never `agent` or `local`.
     pub reviewer: Option<String>,
+    /// Who decides what its brief leaves open; needs `reviewer`.
+    pub mandate: Option<MandateArg>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -318,6 +360,8 @@ pub(crate) struct SplitCardArgs {
     pub reviewer: Option<String>,
     /// Each subtask's discipline, in order; none only with `dry_run`.
     pub child: Option<Vec<String>>,
+    /// Each `D=binding` or `D=open`, `D` one of `child`, once each.
+    pub mandate: Option<Vec<String>>,
     /// The plan only: nothing written.
     pub dry_run: Option<bool>,
 }
@@ -339,6 +383,8 @@ pub(crate) struct EditCardArgs {
     pub evidence: Option<Vec<String>>,
     /// The `T-` tasks it links, replacing the list; `["-"]` clears it.
     pub task: Option<Vec<String>>,
+    /// The mandate it takes, only from the card's reviewer.
+    pub mandate: Option<MandateArg>,
     /// Why an estimate the card holds changes.
     pub reason: Option<String>,
     pub revision: Option<String>,
@@ -531,6 +577,7 @@ impl SpecEngineServer {
                 criteria: args.criterion.unwrap_or_default(),
                 assignee: args.assignee,
                 reviewer: args.reviewer,
+                mandate: args.mandate.map(|MandateArg(mandate)| mandate),
                 estimate: args.estimate,
                 due: args.due,
                 parent: args.parent,
@@ -556,6 +603,7 @@ impl SpecEngineServer {
                 discipline: args.discipline,
                 parent: args.parent,
                 children: args.child.filter(|children| !children.is_empty()),
+                mandate: args.mandate.unwrap_or_default(),
                 reviewer: args.reviewer,
                 dry_run: args.dry_run.unwrap_or(false),
                 actor: Some(actor),
@@ -587,6 +635,7 @@ impl SpecEngineServer {
                     corrects: args.corrects,
                     evidence: args.evidence.unwrap_or_default(),
                     tasks: args.task.unwrap_or_default(),
+                    mandate: args.mandate.map(|MandateArg(mandate)| mandate),
                     reason: args.reason,
                     revision: args.revision,
                     actor: Some(actor),

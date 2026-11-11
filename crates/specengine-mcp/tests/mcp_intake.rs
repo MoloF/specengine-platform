@@ -1156,8 +1156,9 @@ fn ac13_each_queue_tool_answers_as_its_twin() {
 /// root `additionalProperties: false` (a parsed reply keeps no key order, so
 /// "after `distinct_from`" is the source's alone); the descriptions are "Data"'s bytes
 /// (`ask_question` 2 033, `report_decision` 1 810, `report_discrepancy`
-/// 1 736, `get_card` 1 411, `get_proposal` 1 150), ASCII, each raise's
-/// naming `card_id`, holding "Data"'s new sentences and not the dropped
+/// 1 736, `get_card` 1 411, `get_proposal` 1 150; `get_card` 1 541 since
+/// docs/features/task-mandate.md M7, its mandate sentence added), ASCII,
+/// each raise's naming `card_id`, holding "Data"'s new sentences and not the dropped
 /// ones. M: the question text left untrimmed (over 2 048).
 #[test]
 fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
@@ -1210,8 +1211,10 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
             ("report_discrepancy", 1736, vec!["card_id"], vec![]),
             (
                 "get_card",
-                1411,
+                1541,
                 vec![
+                    "mandate: binding, open or null. subtask_items: the items naming one of its \
+                     subtasks, each with card_id first, by ID, in one read.",
                     "items: the questions, discrepancies and decisions that name it {id, kind, \
                      status, summary, working_answer, why, author, created_at, updated_at, \
                      staged_at, decided_by, decided_at, decision_note, record_id, record_path, \

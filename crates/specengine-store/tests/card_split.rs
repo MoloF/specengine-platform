@@ -91,6 +91,7 @@ fn split_card(
         criteria: Vec::new(),
         assignee: None,
         reviewer: Some(REVIEWER.to_owned()),
+        mandate: None,
         estimate: None,
         due: None,
         parent: parent.map(str::to_owned),
@@ -183,7 +184,7 @@ fn created(id: &str, flow: &str, column: &str, position: u64) -> (String, Value)
     (
         EVENT_CARD_CREATED.to_owned(),
         json!({"id": id, "flow": flow, "column": column, "position": position,
-               "assignee": null, "reviewer": REVIEWER, "as": REVIEWER}),
+               "assignee": null, "reviewer": REVIEWER, "mandate": null, "as": REVIEWER}),
     )
 }
 

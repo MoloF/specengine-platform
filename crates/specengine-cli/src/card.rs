@@ -63,8 +63,8 @@ use specengine_core::card::{
     AGENT_ACTOR, AllowedMove, CLEAR, CardIdError, EVIDENCE_ENTRIES_MAX, HISTORY_MAX, LOCAL_ACTOR,
     accept_refusal, allowed_moves, card_look_alike_message, card_move as decide_move, card_number,
     card_person, card_person_problem, card_prefix_clash, closed_refusal, due_problem,
-    estimate_problem, parse_card_id, parse_evidence, reviewer_problem, stale_refusal,
-    task_links_problem,
+    estimate_problem, mandate_problem, parse_card_id, parse_evidence, reviewer_problem,
+    split_mandates, stale_refusal, task_links_problem,
 };
 use specengine_core::card_split::{ScopeNode, SplitPlan, TargetsFrom, split_plan};
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
@@ -83,7 +83,7 @@ use specengine_core::trace::{
     correction_refusal, correction_title, departure_input, freeze, mark_notes, suspect_on,
 };
 use specengine_model::{
-    Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, TaskStatus,
+    Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, Mandate, TaskStatus,
 };
 use specengine_store::{
     CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, Event, GitEnv,
@@ -141,6 +141,9 @@ pub struct CardNewRequest {
     /// `--reviewer N`: who accepts its result, as `assign` names one; a
     /// hand-off's asking side (canon `card-flows`, "The rule").
     pub reviewer: Option<String>,
+    /// `--mandate M`: who decides what its brief leaves open; needs a
+    /// reviewer (canon `card-mandate`, "The rule").
+    pub mandate: Option<Mandate>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -222,6 +225,9 @@ pub struct CardEditRequest {
     /// `--task T…`: the `T-` tasks it links, replacing the list in the
     /// order given; a lone `-` clears it.
     pub tasks: Vec<String>,
+    /// `--mandate M`: the mandate it takes, only from the card's reviewer
+    /// (canon `card-mandate`, "The rule"); `None` leaves it.
+    pub mandate: Option<Mandate>,
     /// `--reason T`: why an estimate the card holds changes.
     pub reason: Option<String>,
     pub revision: Option<String>,
@@ -362,6 +368,8 @@ pub struct CardNewBody {
     pub assignee: Option<String>,
     /// Who accepts its result.
     pub reviewer: Option<String>,
+    /// `binding` or `open`; `null` or absent: none.
+    pub mandate: Option<Mandate>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -378,7 +386,7 @@ impl CardNewBody {
         let body: Self = decoded(
             bytes,
             "\"title\",\"goal\",\"discipline\",\"target\",\"criterion\",\"assignee\",\
-             \"reviewer\",\"estimate\",\"due\",\"parent\",\"corrects\",\"as\"",
+             \"reviewer\",\"mandate\",\"estimate\",\"due\",\"parent\",\"corrects\",\"as\"",
         )?;
         persons_named(
             body.actor.as_deref(),
@@ -400,6 +408,7 @@ impl CardNewBody {
             criteria: self.criterion.unwrap_or_default(),
             assignee: self.assignee,
             reviewer: self.reviewer,
+            mandate: self.mandate,
             estimate: self.estimate,
             due: self.due,
             parent: self.parent,
@@ -465,6 +474,9 @@ pub struct CardEditBody {
     pub evidence: Option<Vec<String>>,
     /// The `T-` tasks it links, replacing the list; `["-"]` clears it.
     pub task: Option<Vec<String>>,
+    /// `binding` or `open`, only from the card's reviewer; `null` or
+    /// absent: unchanged.
+    pub mandate: Option<Mandate>,
     /// Why an estimate the card holds changes.
     pub reason: Option<String>,
     pub revision: Option<String>,
@@ -480,7 +492,7 @@ impl CardEditBody {
         let body: Self = decoded(
             bytes,
             "\"title\",\"goal\",\"target\",\"criterion\",\"estimate\",\"due\",\"parent\",\
-             \"corrects\",\"evidence\",\"task\",\"reason\",\"revision\",\"as\"",
+             \"corrects\",\"evidence\",\"task\",\"mandate\",\"reason\",\"revision\",\"as\"",
         )?;
         persons_named(body.actor.as_deref(), &[])?;
         Ok(body)
@@ -501,6 +513,7 @@ impl CardEditBody {
             corrects: self.corrects,
             evidence: self.evidence.unwrap_or_default(),
             tasks: self.task.unwrap_or_default(),
+            mandate: self.mandate,
             reason: self.reason,
             revision: self.revision,
             actor: self.actor,
@@ -1174,6 +1187,26 @@ impl CardItem {
     }
 }
 
+/// One question, discrepancy or decision naming one of a card's subtasks
+/// (task spec `task-mandate` M6): the child's ID first, then [`CardItem`]'s
+/// keys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CardSubtaskItem {
+    pub card_id: String,
+    #[serde(flatten)]
+    pub item: CardItem,
+}
+
+impl CardSubtaskItem {
+    /// `proposal`'s keys, its `card_id` the child it names.
+    fn of(proposal: &Proposal) -> Self {
+        Self {
+            card_id: proposal.card_id.clone().unwrap_or_default(),
+            item: CardItem::of(proposal),
+        }
+    }
+}
+
 /// What `spec card show` answered: the card, or why there is none.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CardShowOutcome {
@@ -1191,6 +1224,10 @@ pub struct CardShowOutcome {
     /// read now; a row that does not read is left out, its note after the
     /// tasks' (task spec `card-questions` K1).
     pub items: Vec<CardItem>,
+    /// The items naming one of its subtasks (`parent` exactly this card),
+    /// by ID number, in one read; a row that does not read is left out, its
+    /// note after the items'.
+    pub subtask_items: Vec<CardSubtaskItem>,
     pub notes: Vec<String>,
     /// The card asked for, when there is none.
     pub id: Option<String>,
@@ -1240,6 +1277,7 @@ struct CardJson<'a> {
     criteria: &'a [String],
     assignee: Option<&'a str>,
     reviewer: Option<&'a str>,
+    mandate: Option<&'static str>,
     estimate: Option<&'a str>,
     due: Option<&'a str>,
     parent: Option<&'a str>,
@@ -1247,6 +1285,7 @@ struct CardJson<'a> {
     evidence: &'a [CardEvidence],
     tasks: &'a [LinkedTask],
     items: &'a [CardItem],
+    subtask_items: &'a [CardSubtaskItem],
     acceptance: Option<&'a CardAcceptance>,
     cancellation: Option<&'a CardCancellation>,
     created_by: &'a str,
@@ -1285,6 +1324,7 @@ impl Serialize for CardShowOutcome {
             criteria: &card.criteria,
             assignee: card.assignee.as_deref(),
             reviewer: card.reviewer.as_deref(),
+            mandate: card.mandate.map(Mandate::as_str),
             estimate: card.estimate.as_deref(),
             due: card.due.as_deref(),
             parent: card.parent.as_deref(),
@@ -1292,6 +1332,7 @@ impl Serialize for CardShowOutcome {
             evidence: &card.evidence,
             tasks: &self.tasks,
             items: &self.items,
+            subtask_items: &self.subtask_items,
             acceptance: card.acceptance.as_ref(),
             cancellation: card.cancellation.as_ref(),
             created_by: &card.created_by,
@@ -1366,6 +1407,7 @@ struct CardRowJson<'a> {
     targets: &'a [String],
     assignee: Option<&'a str>,
     reviewer: Option<&'a str>,
+    mandate: Option<&'static str>,
     estimate: Option<&'a str>,
     due: Option<&'a str>,
     parent: Option<&'a str>,
@@ -1410,6 +1452,7 @@ impl Serialize for CardListOutcome {
                         targets: &card.targets,
                         assignee: card.assignee.as_deref(),
                         reviewer: card.reviewer.as_deref(),
+                        mandate: card.mandate.map(Mandate::as_str),
                         estimate: card.estimate.as_deref(),
                         due: card.due.as_deref(),
                         parent: card.parent.as_deref(),
@@ -1728,7 +1771,10 @@ fn run_new(
                 .or_else(|| person_problem("reviewer", name))
                 .or_else(|| reviewer_problem(name).map(|text| format!("reviewer: {text}")))
         })
-    });
+    })
+    // After the reviewer's: a mandate goes with one (canon `card-mandate`,
+    // "The rule"); the store asks it again under its lock.
+    .or_else(|| mandate_problem(request.mandate, reviewer));
     if let Some(problem) = problem {
         return refuse(problem, Vec::new());
     }
@@ -1753,6 +1799,7 @@ fn run_new(
         criteria: request.criteria.clone(),
         assignee: assignee.map(str::to_owned),
         reviewer: reviewer.map(str::to_owned),
+        mandate: request.mandate,
         estimate: request.estimate.clone(),
         due: request.due.clone(),
         parent,
@@ -1818,6 +1865,10 @@ pub struct CardSplitRequest {
     /// `--child D…`, each a subtask's discipline in this order; `None` (or
     /// empty): none named, which a dry run plans as every discipline.
     pub children: Option<Vec<String>>,
+    /// `--mandate D=M…`: a subtask's mandate, `D` one of `children`, each
+    /// once; a child no entry names holds none
+    /// (canon `card-mandate`, "The rule").
+    pub mandate: Vec<String>,
     /// `--reviewer N`; absent, the stored parent's, else the acting name.
     pub reviewer: Option<String>,
     /// `--dry-run`: the plan, nothing written, no person judged.
@@ -1829,7 +1880,8 @@ pub struct CardSplitRequest {
 
 /// The body of `POST …/cards/split`: `split_card`'s keys and `as`, every
 /// key optional; the CLI's usage rules judge it after decoding. `child`
-/// `null` or `[]` names none; `dry_run` absent or `null` is false.
+/// `null` or `[]` names none, as `mandate` does; `dry_run` absent or `null`
+/// is false.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardSplitBody {
@@ -1839,6 +1891,8 @@ pub struct CardSplitBody {
     pub discipline: Option<String>,
     pub parent: Option<String>,
     pub child: Option<Vec<String>>,
+    /// Each `D=M`, as `--mandate`.
+    pub mandate: Option<Vec<String>>,
     pub reviewer: Option<String>,
     pub dry_run: Option<bool>,
     /// The acting name; `null`: `local`.
@@ -1852,8 +1906,8 @@ impl CardSplitBody {
     pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
         let body: Self = decoded(
             bytes,
-            "\"target\",\"title\",\"goal\",\"discipline\",\"parent\",\"child\",\"reviewer\",\
-             \"dry_run\",\"as\"",
+            "\"target\",\"title\",\"goal\",\"discipline\",\"parent\",\"child\",\"mandate\",\
+             \"reviewer\",\"dry_run\",\"as\"",
         )?;
         persons_named(
             body.actor.as_deref(),
@@ -1871,6 +1925,7 @@ impl CardSplitBody {
             discipline: self.discipline,
             parent: self.parent,
             children: self.child.filter(|children| !children.is_empty()),
+            mandate: self.mandate.unwrap_or_default(),
             reviewer: self.reviewer,
             dry_run: self.dry_run.unwrap_or(false),
             actor: self.actor,
@@ -1910,6 +1965,8 @@ pub struct CardSplitChild {
     pub from: TargetsFrom,
     /// A `[[card.split]]` row matched in the scope lists its discipline.
     pub suggested: bool,
+    /// The `--mandate` naming its discipline; `null` when none does.
+    pub mandate: Option<Mandate>,
 }
 
 /// What `spec card split` answered: the document and its exit.
@@ -2022,6 +2079,9 @@ fn split_usage(request: &CardSplitRequest) -> Option<String> {
                 .to_owned(),
         );
     }
+    if !named(&request.children) && !request.mandate.is_empty() {
+        return Some("--mandate names a subtask: give its --child too".to_owned());
+    }
     if !named(&request.children) && !request.dry_run {
         return Some(format!(
             "name each subtask's discipline with --child, or plan with --{SPLIT_DRY_RUN_FLAG}"
@@ -2096,6 +2156,20 @@ fn run_split(
     if let Some(problem) = problem {
         return refuse(problem, Vec::new(), Vec::new());
     }
+    // Each subtask's mandate, paired by discipline with the `--child` list;
+    // a dry run judges it too (task spec `task-mandate` M2).
+    let asked: &[String] = request.children.as_deref().unwrap_or_default();
+    let mandates = match split_mandates(&request.mandate, asked) {
+        Ok(mandates) => mandates,
+        Err(reason) => return refuse(reason, Vec::new(), Vec::new()),
+    };
+    let mandate_of = |discipline: &str| {
+        asked
+            .iter()
+            .zip(&mandates)
+            .find(|(child, _)| *child == discipline)
+            .and_then(|(_, mandate)| *mandate)
+    };
     // 4. The stored parent, in any state.
     let stored = match parent {
         None => None,
@@ -2179,6 +2253,7 @@ fn run_split(
             targets: child.targets.clone(),
             from: child.from,
             suggested: child.suggested,
+            mandate: mandate_of(&child.discipline),
         })
         .collect();
     if dry_run {
@@ -2193,7 +2268,8 @@ fn run_split(
             messages,
         });
     }
-    // 8. The store: one transaction, all cards or none.
+    // 8. The store: one transaction, all cards or none. A new parent holds
+    // no mandate; each subtask the one its discipline was given.
     let card_of =
         |flow: &str, column: &str, discipline: Option<&str>, targets: &[String]| NewCard {
             flow: flow.to_owned(),
@@ -2205,6 +2281,7 @@ fn run_split(
             criteria: Vec::new(),
             assignee: None,
             reviewer: Some(reviewer.clone()),
+            mandate: discipline.and_then(mandate_of),
             estimate: None,
             due: None,
             parent: None,
@@ -2215,12 +2292,15 @@ fn run_split(
         parent: match &stored {
             Some(card) => SplitParent::Stored(card.id.clone()),
             None => SplitParent::New {
-                card: Box::new(card_of(
-                    &parent_view.flow,
-                    &parent_view.column,
-                    request.discipline.as_deref(),
-                    &targets,
-                )),
+                card: Box::new(NewCard {
+                    mandate: None,
+                    ..card_of(
+                        &parent_view.flow,
+                        &parent_view.column,
+                        request.discipline.as_deref(),
+                        &targets,
+                    )
+                }),
                 snapshot: freeze(&targets, &norms),
             },
         },
@@ -2387,6 +2467,7 @@ fn run_show(
         mark: None,
         tasks: Vec::new(),
         items: Vec::new(),
+        subtask_items: Vec::new(),
         notes: Vec::new(),
         id,
         reason: Some(reason),
@@ -2404,9 +2485,14 @@ fn run_show(
     // (canon `card-questions`, "The rule").
     let read = context.queue.card_items(&id).map_err(queue_cannot)?;
     let items: Vec<CardItem> = read.items.iter().map(CardItem::of).collect();
+    // Its subtasks' items, one read; nothing reads a mandate from them
+    // (canon `card-mandate`, "The rule").
+    let below = context.queue.subtask_items(&id).map_err(queue_cannot)?;
+    let subtask_items: Vec<CardSubtaskItem> = below.items.iter().map(CardSubtaskItem::of).collect();
     let item_notes: Vec<String> = read
         .unreadable
         .iter()
+        .chain(&below.unreadable)
         .map(|row| {
             one_line(&format!(
                 "{}: its row does not read ({}: {}); not listed",
@@ -2468,6 +2554,7 @@ fn run_show(
         mark,
         tasks,
         items,
+        subtask_items,
         messages,
         notes,
         id: None,
@@ -2809,7 +2896,8 @@ fn flow_line(flow: &CardFlow, cards: &[Card]) -> String {
 }
 
 /// `<id> | <flow>/<column> | <position> | <title> | <discipline> | <assignee>
-/// | <due> | <targets>[ | cancelled][ | mark <mark>]`, no line end.
+/// | <due> | <targets>[ | mandate <m>][ | cancelled][ | mark <mark>]`, no
+/// line end: a card with no mandate prints as before it.
 fn card_line(card: &Card, mark: Option<&CardMark>) -> String {
     let optional = |value: &Option<String>| value.as_deref().map_or(ABSENT.to_owned(), one_line);
     let targets = if card.targets.is_empty() {
@@ -2828,6 +2916,9 @@ fn card_line(card: &Card, mark: Option<&CardMark>) -> String {
         optional(&card.assignee),
         optional(&card.due),
     );
+    if let Some(mandate) = card.mandate {
+        line.push_str(&format!(" | mandate {}", mandate.as_str()));
+    }
     if card.cancellation.is_some() {
         line.push_str(" | cancelled");
     }
@@ -2979,7 +3070,8 @@ fn run_edit(
         || request.parent.is_some()
         || request.corrects.is_some()
         || !request.evidence.is_empty()
-        || !request.tasks.is_empty();
+        || !request.tasks.is_empty()
+        || request.mandate.is_some();
     let beside_estimate = request.title.is_some()
         || request.goal.is_some()
         || !request.targets.is_empty()
@@ -2988,7 +3080,8 @@ fn run_edit(
         || request.parent.is_some()
         || request.corrects.is_some()
         || !request.evidence.is_empty()
-        || !request.tasks.is_empty();
+        || !request.tasks.is_empty()
+        || request.mandate.is_some();
     if !asked {
         return Ok(CardOutcome::usage(
             ACTION,
@@ -3135,6 +3228,10 @@ fn run_edit(
         reason: request.reason.clone(),
         norms,
         tasks,
+        // Judged by the store against the row under its lock, whatever else
+        // the edit holds: only the card's reviewer changes it (canon
+        // `card-mandate`, "The rule").
+        mandate: request.mandate,
     };
     let change = CardChange::Edit(Box::new(edit));
     let mut answer = changed(&mut context, ACTION, &card, seen, &change, &actor, now)?;
@@ -3663,6 +3760,7 @@ fn correction_card(
         criteria: Vec::new(),
         assignee: None,
         reviewer: None,
+        mandate: None,
         estimate: request.estimate.clone(),
         due: None,
         parent: None,
@@ -4049,8 +4147,11 @@ pub(crate) fn render_split_text(outcome: &CardSplitOutcome) -> String {
             TargetsFrom::Kinds => "by kind",
             TargetsFrom::Parent => "the task's targets",
         };
+        let mandate = child.mandate.map_or_else(String::new, |mandate| {
+            format!(" | mandate {}", mandate.as_str())
+        });
         lines.push(format!(
-            "subtask {}: {}/{} | {} | {} | {from}{}",
+            "subtask {}: {}/{} | {} | {} | {from}{}{mandate}",
             id(&child.id),
             child.flow,
             child.column,
@@ -4184,6 +4285,7 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
     lines.extend([
         format!("assignee: {}", optional(&card.assignee)),
         format!("reviewer: {}", optional(&card.reviewer)),
+        format!("mandate: {}", card.mandate.map_or(ABSENT, Mandate::as_str)),
         format!("estimate: {}", optional(&card.estimate)),
         format!("due: {}", optional(&card.due)),
         format!("parent: {}", optional(&card.parent)),
@@ -4226,25 +4328,31 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
             })
             .collect(),
     );
+    let item_line = |item: &CardItem| {
+        let record = item
+            .record_id
+            .as_deref()
+            .map_or_else(String::new, |record| format!(" | record {record}"));
+        format!(
+            "{} | {} | {} | {}{record}",
+            item.id,
+            item.kind,
+            item.status,
+            one_line(&item.summary)
+        )
+    };
     list(
         &mut lines,
         "items",
+        outcome.items.iter().map(item_line).collect(),
+    );
+    list(
+        &mut lines,
+        "subtask_items",
         outcome
-            .items
+            .subtask_items
             .iter()
-            .map(|item| {
-                let record = item
-                    .record_id
-                    .as_deref()
-                    .map_or_else(String::new, |record| format!(" | record {record}"));
-                format!(
-                    "{} | {} | {} | {}{record}",
-                    item.id,
-                    item.kind,
-                    item.status,
-                    one_line(&item.summary)
-                )
-            })
+            .map(|below| format!("{} | {}", below.card_id, item_line(&below.item)))
             .collect(),
     );
     lines.push(format!(

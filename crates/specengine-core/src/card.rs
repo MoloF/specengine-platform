@@ -10,13 +10,13 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 use specengine_model::script::normalize_char;
-use specengine_model::{CARD_TASKS_MAX, Card, EvidenceKind, IdScheme};
+use specengine_model::{CARD_TASKS_MAX, Card, EvidenceKind, IdScheme, Mandate};
 
-use crate::card_toml::CardFlow;
+use crate::card_toml::{CardFlow, MAX_NAME_BYTES, name_problem};
 use crate::check::is_calendar_date;
 use crate::record::is_escaped;
-use crate::roadmap::parse_estimate;
-use crate::task::task_number;
+use crate::roadmap::{one_line, parse_estimate};
+use crate::task::{cut_with_ellipsis, task_number};
 use crate::walk_scope::is_clean_relative;
 
 /// The prefix of every card ID; a project's `[ids]` may not take it.
@@ -45,6 +45,10 @@ pub const HISTORY_MAX: usize = 64;
 
 /// The most bytes of a card person's name, trimmed.
 pub const CARD_PERSON_MAX: usize = 128;
+
+/// The most bytes of a `--mandate` entry a refusal echoes, `…` included:
+/// the longest entry that can be right, a longest name and `=binding`.
+pub const MANDATE_ENTRY_ECHO_MAX: usize = MAX_NAME_BYTES + 1 + Mandate::Binding.as_str().len();
 
 /// The card ID of `number`: `C-` and the number, zero-padded to
 /// [`CARD_DIGITS`].
@@ -311,6 +315,80 @@ pub fn accept_refusal(card: &Card, flow: Option<&CardFlow>, actor: &str) -> Opti
             "{id} has no reviewer: `spec card assign {id} --reviewer N` names one; nothing changed"
         )),
     }
+}
+
+/// Why a new card may not hold `mandate`: a mandate goes with a reviewer,
+/// who alone changes it (`docs/canon/card-mandate.md` "The rule"). The CLI
+/// asks it, and the store again under its lock.
+pub fn mandate_problem(mandate: Option<Mandate>, reviewer: Option<&str>) -> Option<String> {
+    (mandate.is_some() && reviewer.is_none()).then(|| {
+        "mandate: a mandate goes with a reviewer, who alone changes it: name one with --reviewer"
+            .to_owned()
+    })
+}
+
+/// Why `actor` may not change the mandate of the card `id`, whose stored
+/// reviewer is `reviewer`: only that reviewer changes it, compared exactly
+/// as [`accept_refusal`] compares one; a card with none takes no change
+/// until one is assigned. The store asks it against the row under its lock.
+pub fn mandate_change_problem(id: &str, reviewer: Option<&str>, actor: &str) -> Option<String> {
+    match reviewer {
+        Some(reviewer) if reviewer == actor => None,
+        Some(reviewer) => Some(format!(
+            "mandate: only {id}'s reviewer `{reviewer}` changes its mandate, not `{actor}`; \
+             nothing changed"
+        )),
+        None => Some(format!(
+            "mandate: {id} has no reviewer, who alone changes its mandate: name one with `spec \
+             card assign {id} --reviewer N` first; nothing changed"
+        )),
+    }
+}
+
+/// Each split subtask's mandate, in `children` order, from `given`'s
+/// `D=M` entries (`docs/features/task-mandate.md` "Acceptance criteria",
+/// M2): paired by discipline, never by position; a child no entry names
+/// holds none. Refused, the first defect in `given` order: an entry off
+/// `D=M` (`M` exactly `binding` or `open`; echoed on one line, cut past
+/// [`MANDATE_ENTRY_ECHO_MAX`]), a `D` off the name grammar, a `D` no child
+/// holds, a `D` named twice.
+pub fn split_mandates(
+    given: &[String],
+    children: &[String],
+) -> Result<Vec<Option<Mandate>>, String> {
+    let mut named: Vec<(&str, Mandate)> = Vec::with_capacity(given.len());
+    for entry in given {
+        let Some((discipline, mandate)) = entry
+            .split_once('=')
+            .and_then(|(discipline, word)| Some((discipline, Mandate::parse(word)?)))
+        else {
+            let shown = cut_with_ellipsis(&one_line(entry), MANDATE_ENTRY_ECHO_MAX);
+            return Err(format!(
+                "mandate: `{shown}` is not `<discipline>=binding` or `<discipline>=open`"
+            ));
+        };
+        if let Some(problem) = name_problem(discipline) {
+            return Err(format!("mandate: {problem}"));
+        }
+        if !children.iter().any(|child| child == discipline) {
+            return Err(format!(
+                "mandate: `{discipline}` is no --child of this split"
+            ));
+        }
+        if named.iter().any(|(seen, _)| *seen == discipline) {
+            return Err(format!("mandate: `{discipline}` is named twice"));
+        }
+        named.push((discipline, mandate));
+    }
+    Ok(children
+        .iter()
+        .map(|child| {
+            named
+                .iter()
+                .find(|(discipline, _)| discipline == child)
+                .map(|(_, mandate)| *mandate)
+        })
+        .collect())
 }
 
 /// Why `name` can be no reviewer: [`LOCAL_ACTOR`] and [`AGENT_ACTOR`] are no

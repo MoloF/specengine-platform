@@ -33,6 +33,7 @@ const FULL: Card = aCard({
   criteria: ["Reads aloud"],
   assignee: "Mira Holt",
   reviewer: "Ivo Brandt",
+  mandate: "binding",
   estimate: "3",
   due: "2999-01-01",
   parent: "C-0007",
@@ -136,7 +137,8 @@ function crumbs(scope: HTMLElement): [string, string | null, string | null][] {
     });
 }
 
-const SIDE_ORDER = ["Status", "Assignee", "Reviewer", "Flow", "Due", "Estimate", "Discipline", "Parent", "Corrects", "Created by", "Created at"];
+// The Mandate after the Reviewer (docs/features/task-mandate.md "Acceptance criteria", V2).
+const SIDE_ORDER = ["Status", "Assignee", "Reviewer", "Mandate", "Flow", "Due", "Estimate", "Discipline", "Parent", "Corrects", "Created by", "Created at"];
 
 describe("one primary per area (DF-4)", () => {
   it("in the modal and each dialog it opens: at most one primary per dialog, in the head's acts and in the side column; Accept the one, in accept.from", async () => {
@@ -258,7 +260,7 @@ describe("the work item's order (DF-6)", () => {
   it("holds Flow, Created by and Created at alone when no optional field is filled", async () => {
     const dialog = await modal(BARE);
     expect(sideLabels(dialog)).toEqual(["Status", "Flow", "Created by", "Created at"]);
-    expect(within(dialog).getByRole("button", { name: "More fields (7)" }).getAttribute("aria-expanded")).toBe("false");
+    expect(within(dialog).getByRole("button", { name: "More fields (8)" }).getAttribute("aria-expanded")).toBe("false");
   });
 
   // docs/features/handoff-progress.md "Acceptance criteria", M-1: the work item widened.
@@ -378,5 +380,110 @@ describe("focus in the card's modal (the focus trap)", () => {
     title.focus();
     fireEvent.keyDown(title, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(focusables(dialog).at(-1));
+  });
+});
+
+// V2 of docs/features/task-mandate.md "Acceptance criteria": the mandate orders the acts and frames the
+// work item, and nothing else. A binding task leads with Return and Ask a question… right after Accept,
+// an open one with Record a decision…; a task with none keeps today's acts, act for act. Main says what
+// the mandate asks before Goal; Details names it after Reviewer, its icon and word; the Activity names
+// a mandate an event holds, an unknown one raw under lang="en". Nothing is gated: Accept stands where
+// it stands, idle or not, whatever the mandate.
+describe("the work item by mandate (V2 of task-mandate)", () => {
+  /** A card in `accept.from` with a target, its flow's return column open to it: every act shows. */
+  function shown(id: string, mandate: Card["mandate"], fields: Partial<Card> = {}): Card {
+    return aCard({ id, title: `Mandate ${mandate ?? "none"}`, column: "check", targets: ["R-1"], reviewer: "Ivo Brandt", mandate, allowed: [{ to: "doing", by: [] }], ...fields });
+  }
+
+  function acts(scope: HTMLElement): string[] {
+    return within(part(scope, ".issue-view-actions")).getAllByRole("button").map((button) => button.textContent);
+  }
+
+  const TODAY = ["Accept", "Hand off", "Split to departments…", "Return", "Ask a question…", "Record a decision…", "Edit", "Assign", "Cancel task"];
+
+  it("binding: Return and Ask a question… right after Accept, the rest in today's order; open: Record a decision… there; none: today's acts, act for act (M: the order computed by comparing card.mandate in CardPanel.tsx)", async () => {
+    const binding = shown("C-0021", "binding");
+    const open = shown("C-0022", "open");
+    const none = shown("C-0023", null);
+    const stub = client({ ...CARDS, [binding.id]: binding, [open.id]: open, [none.id]: none });
+    expect(acts(await modal(binding, stub))).toEqual(["Accept", "Return", "Ask a question…", "Hand off", "Split to departments…", "Record a decision…", "Edit", "Assign", "Cancel task"]);
+    expect(acts(await modal(open, stub))).toEqual(["Accept", "Record a decision…", "Hand off", "Split to departments…", "Return", "Ask a question…", "Edit", "Assign", "Cancel task"]);
+    const today = await modal(none, stub);
+    expect(acts(today)).toEqual(TODAY);
+    // The same elements as a card with no mandate field at all would give: one primary, Accept.
+    expect([primaries(part(today, ".issue-view-actions"))]).toEqual([1]);
+  });
+
+  it("binding with no return open and no target: the lead acts it does not show are skipped, the rest in today's order; Accept idle on a hub stays first and idle", async () => {
+    const binding = shown("C-0024", "binding", { targets: [], allowed: [] });
+    const stub = client({ ...CARDS, [binding.id]: binding });
+    stub.getIdentity.mockResolvedValue({ login: "mira" });
+    stub.getTeam.mockResolvedValue({ login: "mira", name: null, allowed: ["stage"] });
+    const dialog = await modal(binding, stub);
+    await waitFor(() => {
+      expect(within(part(dialog, ".issue-view-actions")).getByRole("button", { name: "Accept" }).getAttribute("aria-disabled")).toBe("true");
+    });
+    expect(acts(dialog)).toEqual(["Accept", "Hand off", "Split to departments…", "Edit", "Assign", "Cancel task"]);
+  });
+
+  it("a closed task keeps its two item acts in its mandate's order: open leads with Record a decision…", async () => {
+    const accepted = { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: null, verdict: "briefed" as const, departs: [], discrepancy: null };
+    const open = shown("C-0025", "open", { acceptance: accepted, column: "closed" });
+    const binding = shown("C-0026", "binding", { acceptance: accepted, column: "closed" });
+    const stub = client({ ...CARDS, [open.id]: open, [binding.id]: binding });
+    expect(acts(await modal(open, stub))).toEqual(["Record a decision…", "Ask a question…"]);
+    expect(acts(await modal(binding, stub))).toEqual(["Ask a question…", "Record a decision…"]);
+  });
+
+  it("Main: before Goal, the note line with the info icon, one per mandate, none without; Details: Mandate after Reviewer, its icon and word, folded when none", async () => {
+    const binding = shown("C-0027", "binding", { goal: "The goal" });
+    const open = shown("C-0028", "open", { goal: "The goal" });
+    const none = shown("C-0029", null, { goal: "The goal" });
+    const stub = client({ ...CARDS, [binding.id]: binding, [open.id]: open, [none.id]: none });
+    const notes = new Map([
+      [binding, "Binding: the brief stands. To depart from it, return the task with a question."],
+      [open, "Department decides: record each decision and why."],
+    ]);
+    for (const [card, line] of notes) {
+      const dialog = await modal(card, stub);
+      const main = part(dialog, ".issue-view-main");
+      const note = within(main).getByText(line).closest("p") as HTMLElement;
+      expect(note.querySelector("svg")).not.toBeNull();
+      // The note stands right before Goal.
+      expect(note.nextElementSibling?.getAttribute("aria-label")).toBe("Goal");
+      const labels = sideLabels(dialog);
+      expect(labels.slice(labels.indexOf("Reviewer"), labels.indexOf("Reviewer") + 2)).toEqual(["Reviewer", "Mandate"]);
+      const value = Array.from(dialog.querySelectorAll("dt")).find((term) => term.textContent === "Mandate")?.nextElementSibling;
+      expect([value?.textContent, value?.querySelector(".board-mandate svg") === null]).toEqual([card === binding ? "Binding" : "Department decides", false]);
+    }
+    const dialog = await modal(none, stub);
+    expect(within(part(dialog, ".issue-view-main")).queryByText(/^(Binding|Department decides):/)).toBeNull();
+    expect(sideLabels(dialog)).not.toContain("Mandate");
+    const more = within(dialog).getByRole("button", { name: /^More fields/ });
+    fireEvent.click(more);
+    const folded = part(document.body, `[id="${more.getAttribute("aria-controls") ?? ""}"]`);
+    expect(Array.from(folded.querySelectorAll("dt"), (term) => term.textContent)).toContain("Mandate");
+  });
+
+  it("Activity: a card.created naming a mandate and a card.edited setting one read mandate <word>; a null one adds nothing; an unknown one raw under lang=en", async () => {
+    const card = shown("C-0030", "binding", {
+      history: [
+        { seq: 1, type: "card.created", at: "2026-10-29T09:00:00Z", payload: { id: "C-0030", column: "todo", reviewer: "Ivo Brandt", mandate: "open", as: "Ivo Brandt" } },
+        { seq: 2, type: "card.edited", at: "2026-10-29T10:00:00Z", payload: { id: "C-0030", fields: ["mandate"], as: "Ivo Brandt", mandate: "binding" } },
+        { seq: 3, type: "card.edited", at: "2026-10-29T11:00:00Z", payload: { id: "C-0030", fields: ["title"], as: "Ivo Brandt" } },
+        { seq: 4, type: "card.created", at: "2026-10-29T12:00:00Z", payload: { id: "C-0030", column: "todo", mandate: null, as: "Ivo Brandt" } },
+        { seq: 5, type: "card.edited", at: "2026-10-29T13:00:00Z", payload: { id: "C-0030", fields: ["mandate"], as: "Ivo Brandt", mandate: "advisory" } },
+      ],
+    });
+    const dialog = await modal(card, client({ ...CARDS, [card.id]: card }));
+    const lines = Array.from(within(dialog).getByRole("region", { name: "Activity" }).querySelectorAll("li.board-history-line"), (line) => line.textContent);
+    expect(lines[0]).toMatch(/reviewer Ivo Brandt, mandate Department decides$/);
+    expect(lines[1]).toMatch(/changed mandate, mandate Binding$/);
+    expect(lines[2]).not.toContain("mandate");
+    expect(lines[3]).not.toContain("mandate");
+    expect(lines[4]).toMatch(/mandate advisory$/);
+    const activity = within(dialog).getByRole("region", { name: "Activity" });
+    expect(within(activity).getByText("advisory").getAttribute("lang")).toBe("en");
+    expect(within(activity).getByText("Binding").getAttribute("lang")).toBeNull();
   });
 });

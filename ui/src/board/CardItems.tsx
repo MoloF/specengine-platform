@@ -1,7 +1,7 @@
 import { lazy, Suspense, useId, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
-import { useProposal, useStageDecision, withActing } from "../api/queries";
-import type { Card, CardItem, CardRaiseBody, Proposal, Team } from "../api/types";
+import { useCardWriting, useProposal, useStageDecision, withActing, type ChildrenQuery } from "../api/queries";
+import type { Card, CardItem, CardRaiseBody, CardRow, CardSubtaskItem, Proposal, Team } from "../api/types";
 import { DocLink } from "../doc/DocLink";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -20,7 +20,9 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { actingName, useActing, useAllowed, useConfirmer } from "./acting";
 import { ActOff } from "./ActOff";
 import { ActingNote, questionBodyOf, QuestionFields, raiseAction, raiseFormOf, RaiseNotice, raiseProblem, raiseTextsOf, TargetChoice, TextArea, useRaise, WriteDialog, type RaiseForm } from "./CardDialogs";
-import { itemStatusLook, noteAnswers, RAISED_KINDS, takesAnswer } from "./labels";
+import { CardLink, type CardLinks } from "./CardLink";
+import { flowTitleOf } from "./filter";
+import { decisionDeparts, decisionNeedsWhy, itemStatusLook, noteAnswers, RAISED_KINDS, subtaskMandateLook, takesAnswer } from "./labels";
 
 // A card's items and the acts that raise and answer them (docs/canon/card-questions.md "The rule";
 // docs/features/card-questions.md "Acceptance criteria", U1, U3, U4), a chunk of its own: the work
@@ -47,12 +49,14 @@ function Text({ text }: { text: string }) {
  * `lang="en"`), its state's lozenge and its text; under them the working answer and the why. Then how
  * it stands: staged when it is; its record, a document link by the record's title, and who decided;
  * else a decision's note, which is a rejected item's answer. An open item takes Answer…, which a hub's
- * `allowed` without `stage` keeps idle with its line.
+ * `allowed` without `stage` keeps idle with its line, and which opens nothing while a card write of the
+ * project is out (`ui/README.md` "Screen rules", Dialogs).
  */
 export function ItemBlock({ project, item }: { project: string; item: CardItem }) {
   const t = useTranslate();
   const headingId = useId();
   const allows = useAllowed(project);
+  const writing = useCardWriting(project);
   const focusLater = useFocusLater();
   const trigger = useRef<HTMLButtonElement>(null);
   const [answering, setAnswering] = useState(false);
@@ -131,7 +135,7 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
             ref={trigger}
             aria-disabled={!stages}
             onClick={() => {
-              if (stages) {
+              if (stages && !writing) {
                 setAnswering(true);
               }
             }}
@@ -411,12 +415,14 @@ interface RaiseDialogProps {
  * Ask a question… on a card with a target, open or closed (docs/features/card-questions.md
  * "Acceptance criteria", U3): the question, a working answer and what another answer would cost, all
  * required, about the card's targets, each checked at first. One `POST .../items` with `kind`
- * `question`; hits keep the dialog with Ask anyway; a refusal keeps it with its words.
+ * `question`; hits keep the dialog with Ask anyway; a refusal keeps it with its words. `question`
+ * starts the question's text: a parent's objection names the decision it is about
+ * (docs/features/task-mandate.md "Acceptance criteria", V3).
  */
-export function AskDialog({ project, card, onClose, onRaised, onActingLine }: RaiseDialogProps) {
+export function AskDialog({ project, card, question = "", onClose, onRaised, onActingLine }: RaiseDialogProps & { question?: string }) {
   const t = useTranslate();
   const [acting] = useActing();
-  const [form, setForm] = useState<RaiseForm>(() => raiseFormOf(card.targets));
+  const [form, setForm] = useState<RaiseForm>(() => ({ ...raiseFormOf(card.targets), text: question }));
   const [checked, setChecked] = useState(false);
   const raise = useRaise(project, card.id, onActingLine);
   return (
@@ -462,14 +468,20 @@ function decisionBodyOf(form: RaiseForm, targets: readonly string[], as: string 
  * Record a decision… on a card with a target, open or closed (docs/features/card-questions.md
  * "Acceptance criteria", U3): what had to be decided, the decision and what another answer would
  * cost, required; why, optional; about the card's targets. One `POST .../items` with `kind`
- * `decision`, raised for the owner to confirm; hits and refusals as Ask a question….
+ * `decision`, raised for the owner to confirm; hits and refusals as Ask a question…. The task's
+ * mandate frames it (docs/features/task-mandate.md "Acceptance criteria", V2): on a binding task a
+ * note that a decision departs from its brief, why still optional; on one its department decides,
+ * a why the form asks, a blank one stopped before anything is sent. The daemon keeps `why` optional
+ * either way.
  */
-export function DecideDialog({ project, card, onClose, onRaised, onActingLine }: RaiseDialogProps) {
+export function DecideDialog({ project, card, onClose, onRaised, onActingLine }: Omit<RaiseDialogProps, "card"> & { card: Pick<Card, "id" | "targets" | "mandate"> }) {
   const t = useTranslate();
   const [acting] = useActing();
   const [form, setForm] = useState<RaiseForm>(() => raiseFormOf(card.targets));
   const [checked, setChecked] = useState(false);
   const raise = useRaise(project, card.id, onActingLine);
+  const departs = decisionDeparts(card.mandate);
+  const needsWhy = decisionNeedsWhy(card.mandate);
   return (
     <WriteDialog
       title={t("board.decide.title", { id: card.id })}
@@ -478,7 +490,8 @@ export function DecideDialog({ project, card, onClose, onRaised, onActingLine }:
       onClose={onClose}
       check={() => {
         setChecked(true);
-        return raiseProblem(form, t("board.decide.needsTexts"), t("board.ask.needsTarget"));
+        const problem = raiseProblem(form, t("board.decide.needsTexts"), t("board.ask.needsTarget"));
+        return problem ?? (needsWhy && form.why.trim() === "" ? t("board.mandate.whyNeeded") : null);
       }}
       onSubmit={async () => {
         const raised = await raise.send(decisionBodyOf(form, card.targets, actingName(acting)));
@@ -489,10 +502,18 @@ export function DecideDialog({ project, card, onClose, onRaised, onActingLine }:
         return "kept" in raised ? false : raised.refusal;
       }}
     >
+      {departs && (
+        <p className="note">
+          <Icon name="mandateBinding" />
+          <span>{t("board.mandate.decideBinding")}</span>
+        </p>
+      )}
       <QuestionFields form={form} labels={{ text: t("board.decide.matter"), working: t("board.decide.decision"), price: t("board.decide.price") }} checked={checked} autoFocus onChange={setForm} />
       <TextArea
-        label={t("board.decide.why")}
+        label={needsWhy ? t("board.mandate.whyRequired") : t("board.decide.why")}
         value={form.why}
+        required={needsWhy}
+        invalid={needsWhy && checked && form.why.trim() === ""}
         onChange={(why) => {
           setForm((current) => ({ ...current, why }));
         }}
@@ -507,5 +528,92 @@ export function DecideDialog({ project, card, onClose, onRaised, onActingLine }:
       <ActingNote />
       <RaiseNotice outcome={raise.outcome} />
     </WriteDialog>
+  );
+}
+
+/** The "Ask about it…" open: the decision it is about, the subtask's row, and the button that opened it. */
+interface Objection {
+  item: CardSubtaskItem;
+  row: CardRow;
+  trigger: HTMLElement;
+}
+
+/**
+ * A parent's Decisions from subtasks (docs/canon/card-mandate.md "The rule";
+ * docs/features/task-mandate.md "Acceptance criteria", V3): each decision its card's read serves in
+ * `subtask_items`, in served order. Its head names the subtask, a link, with its title and flow's title
+ * from the parent's children read, the ID alone while that read is out, and the subtask's mandate as
+ * that row has it: a binding task's decision marked as a departure, an open one's as the department's.
+ * Then the item's block; then Ask about it…, once the row is read and has a target: Ask a question… on
+ * the subtask, its question naming the decision; while a card write of the project is out it opens
+ * nothing (`ui/README.md` "Screen rules", Dialogs). Reads nothing of its own: the card's one read and
+ * the children read Subtasks already holds. Confirming stays where it is: nothing here approves.
+ */
+export function SubtaskDecisions({ project, decisions, subtasks, links }: { project: string; decisions: readonly CardSubtaskItem[]; subtasks: ChildrenQuery; links: CardLinks }) {
+  const t = useTranslate();
+  const announce = useAnnounce();
+  const focusLater = useFocusLater();
+  const writing = useCardWriting(project);
+  const [asking, setAsking] = useState<Objection | null>(null);
+  const list = subtasks.data;
+  const rowOf = (id: string) => list?.cards.find((row) => row.id === id);
+  const flowOf = (name: string) => list?.flows.find((flow) => flow.name === name);
+
+  function close() {
+    const trigger = asking?.trigger ?? null;
+    setAsking(null);
+    focusLater(() => (trigger?.isConnected === true ? trigger : null));
+  }
+
+  return (
+    <>
+      <ul className="board-panel-list board-from-subtasks">
+        {decisions.map((item) => {
+          const row = rowOf(item.card_id);
+          const look = row === undefined ? null : subtaskMandateLook(row.mandate, t);
+          return (
+            <li key={item.id} className="board-from-subtask">
+              <p className="board-handoff">
+                <CardLink id={item.card_id} links={links} />
+                {row !== undefined && (
+                  <>
+                    <bdi className="board-handoff-title">{shownSlot(row.title)}</bdi>
+                    <bdi className="muted">{shownSlot(flowTitleOf(flowOf(row.flow), row.flow))}</bdi>
+                  </>
+                )}
+                {look !== null && <Lozenge {...look} />}
+              </p>
+              <ItemBlock project={project} item={item} />
+              {row !== undefined && row.targets.length > 0 && (
+                <div className="board-panel-actions">
+                  <Button
+                    aria-haspopup="dialog"
+                    onClick={(event) => {
+                      if (!writing) {
+                        setAsking({ item, row, trigger: event.currentTarget });
+                      }
+                    }}
+                  >
+                    {t("board.fromSubtasks.ask")}
+                  </Button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {asking !== null && (
+        <AskDialog
+          project={project}
+          card={{ id: asking.row.id, targets: asking.row.targets }}
+          question={t("board.fromSubtasks.about", { id: asking.item.id })}
+          onClose={close}
+          onRaised={(said) => {
+            announce(said);
+            close();
+          }}
+        />
+      )}
+    </>
   );
 }

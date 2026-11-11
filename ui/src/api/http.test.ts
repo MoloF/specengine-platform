@@ -1139,6 +1139,34 @@ describe("a split (S7, U2 of department-split)", () => {
   });
 });
 
+// docs/features/task-mandate.md "Acceptance criteria", M7 and V1, the browser side: the three card
+// bodies carry `mandate` as given, one key each, and no other: a hand-off's word after its reviewer, an
+// edit's word, a split's `<discipline>=<mandate>` list after `child`; a refusal in the daemon's words.
+describe("a mandate in the card bodies (M7, V1 of task-mandate)", () => {
+  it("posts each body with its mandate as given, in its key's place", async () => {
+    const written = { id: "C-0002", flow: "sound", column: "backlog", position: 1, revision: "1", allowed: [], notes: [] };
+    const split = { dry_run: false, parent: null, children: [], reviewer: "Ana Ruiz", notes: [] };
+    const stub = stubFetch((url) => jsonAnswer(200, url.endsWith("/split") ? split : written));
+    const client = new HttpClient();
+    await client.createCard("alpha", { title: "Keeper's voice", discipline: "sound", parent: "C-0001", reviewer: "Ana Ruiz", mandate: "open", as: "Ana Ruiz" });
+    await client.editCard("alpha", "C-0002", { mandate: "binding", revision: "1", as: "Ana Ruiz" });
+    await client.splitCard("alpha", { target: null, title: null, goal: null, discipline: null, parent: "C-0001", child: ["art", "sound"], mandate: ["art=binding", "sound=open"], reviewer: "Ana Ruiz", dry_run: false, as: "Ana Ruiz" });
+    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/cards", "/api/projects/alpha/cards/C-0002/edit", "/api/projects/alpha/cards/split"]);
+    expect(stub.mock.calls.map((call) => call[1]?.body)).toEqual([
+      '{"title":"Keeper\'s voice","discipline":"sound","parent":"C-0001","reviewer":"Ana Ruiz","mandate":"open","as":"Ana Ruiz"}',
+      '{"mandate":"binding","revision":"1","as":"Ana Ruiz"}',
+      '{"target":null,"title":null,"goal":null,"discipline":null,"parent":"C-0001","child":["art","sound"],"mandate":["art=binding","sound=open"],"reviewer":"Ana Ruiz","dry_run":false,"as":"Ana Ruiz"}',
+    ]);
+  });
+
+  it("rejects an edit's 409 with the store's line", async () => {
+    const line = "mandate: only C-0002's reviewer `Ana Ruiz` changes its mandate, not `Ben Ode`; nothing changed";
+    stubFetch(() => jsonAnswer(409, { id: "C-0002", flow: "sound", column: "backlog", position: 1, revision: "2", allowed: [], notes: [line] }));
+    const error = await rejection(new HttpClient().editCard("alpha", "C-0002", { mandate: "binding", revision: "2", as: "Ben Ode" }));
+    expect([error.status, error.message]).toEqual([409, line]);
+  });
+});
+
 // docs/features/card-questions.md "Acceptance criteria", L3 and L4, the browser side: a card's raise
 // is one POST of the body as given to `.../cards/:id/items`, no signal; a 200 resolves whether stored
 // or not; a 409's intake document rejects with its last note, a 404 with its reason. The stage's `as`

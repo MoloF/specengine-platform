@@ -452,6 +452,7 @@ export const en = {
       changed: "changed {{value}}",
       assignee: "assignee {{value}}",
       reviewer: "reviewer {{value}}",
+      mandate: "mandate {{value}}",
     },
     // The card's panel (CardPanel.tsx).
     panel: {
@@ -569,6 +570,22 @@ export const en = {
       reviewerHint: "Who checks the result: the side that asks.",
       reviewerNeeded: "Name who checks the result: a person on the side that asks.",
     },
+    // A task's mandate (docs/canon/card-mandate.md "The rule"): who decides what its brief leaves open,
+    // named in Hand off, Split and, by the reviewer alone, Edit; it frames the work item and two dialogs.
+    // No word reads as a status (Open, Approved) or is built on accept (src/board/words.test.ts).
+    mandate: {
+      label: "Mandate",
+      binding: "Binding",
+      open: "Department decides",
+      choose: "Choose…",
+      needed: "Choose whether the subtask is binding or its department decides",
+      bindingAbout: "Binding: the brief stands. To depart from it, return the task with a question.",
+      openAbout: "Department decides: record each decision and why.",
+      reviewerOnly: "Only the reviewer, {{name}}, changes the mandate.",
+      decideBinding: "This task is binding: a decision here departs from its brief, and its reviewer sees it as one.",
+      whyRequired: "Why (required: the department decides)",
+      whyNeeded: "Say why: this task's department decides.",
+    },
     // A split: a parent task and one subtask per department in one write, from a document, Flow's panel or a task (SplitDialog.tsx; docs/canon/card-split.md "The rule").
     split: {
       act: "Split to departments…",
@@ -596,6 +613,11 @@ export const en = {
       // The plan read's skeleton and its failure's title: the daemon's words follow it, then Retry.
       reading: "Reading the plan",
       failed: "The plan could not be read",
+      // Each checked subtask's mandate (docs/features/task-mandate.md "Acceptance criteria", V1): its row's
+      // flow title, the raw discipline beside it when it differs, so two rows of one flow read apart.
+      mandateFor: "Mandate for {{name}}",
+      mandateForDiscipline: "Mandate for {{name}} ({{discipline}})",
+      mandateNeeded: "Choose a mandate for each checked subtask",
     },
     // A return: a move into the flow's return column, with a reason (ReturnDialog in CardDialogs.tsx; the badge, labels.ts).
     return: {
@@ -669,6 +691,14 @@ export const en = {
     answer: {
       action: "Answer…",
       title: "Answer {{id}}",
+    },
+    // A parent's Decisions from subtasks (SubtaskDecisions in CardItems.tsx): its subtasks' decisions, a
+    // binding one's marked as a departure, each open to a question on the subtask.
+    fromSubtasks: {
+      heading: "Decisions from subtasks",
+      departure: "Departure from a binding task",
+      ask: "Ask about it…",
+      about: "About {{id}}: ",
     },
     // A parent's hand-offs: each child's word, and the counts on its tile (labels.ts, BoardCard.tsx).
     rollup: {

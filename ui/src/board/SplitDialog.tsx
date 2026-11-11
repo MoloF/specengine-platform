@@ -12,7 +12,7 @@ import { shownSlot } from "../ui/text";
 import { storedWorkspace } from "../workspace/choice";
 import { actingName, handOffReviewer, isActingLine, useActing, useHubLogin } from "./acting";
 import { SelectField, TextArea, TextField, WriteDialog } from "./CardDialogs";
-import { splitFromWords } from "./labels";
+import { asMandate, mandateChoices, splitFromWords } from "./labels";
 
 // The Split dialog (docs/canon/card-split.md "The rule"; docs/features/department-split.md
 // "Acceptance criteria", U1, U2): a parent task and one subtask per chosen department in one write,
@@ -80,10 +80,33 @@ function sourceKeys(source: SplitSource, form: Pick<SplitForm, "title" | "goal" 
     : { target: [source.target], title: form.title.trim(), goal: given(form.goal), discipline: given(form.discipline), parent: null };
 }
 
-/** One subtask: its checkbox labelled by its flow's title, the raw discipline under it when another, then its targets' line and the targets folded. */
-function SplitRow({ project, child, checked, pending, onToggle }: { project: string; child: CardSplitChild; checked: boolean; pending: boolean; onToggle: (discipline: string) => void }) {
+/**
+ * One subtask: its checkbox labelled by its flow's title, the raw discipline under it when another;
+ * checked, its mandate's select, at "Choose…" until chosen, named by the row's flow title (and its
+ * discipline when another, so two rows of one flow read apart; docs/features/task-mandate.md
+ * "Acceptance criteria", V1); then its targets' line and the targets folded.
+ */
+function SplitRow({
+  project,
+  child,
+  checked,
+  mandate,
+  pending,
+  onToggle,
+  onMandate,
+}: {
+  project: string;
+  child: CardSplitChild;
+  checked: boolean;
+  mandate: string;
+  pending: boolean;
+  onToggle: (discipline: string) => void;
+  onMandate: (discipline: string, value: string) => void;
+}) {
   const t = useTranslate();
   const words = splitFromWords(child.from, child.targets.length, t);
+  // Named by its flow's title, the raw discipline beside it when another: two rows of one flow read apart.
+  const ownFlow = child.discipline === child.flow;
   return (
     <li className="split-row">
       <label className="split-choice">
@@ -106,6 +129,18 @@ function SplitRow({ project, child, checked, pending, onToggle }: { project: str
           )}
         </span>
       </label>
+      {checked && (
+        <SelectField
+          label={ownFlow ? t("board.split.mandateFor", { name: child.flow_title }) : t("board.split.mandateForDiscipline", { name: child.flow_title, discipline: child.discipline })}
+          value={mandate}
+          onChange={(value) => {
+            onMandate(child.discipline, value);
+          }}
+          options={mandateChoices(t)}
+          placeholder={t("board.mandate.choose")}
+          required
+        />
+      )}
       {child.targets.length === 0 ? (
         <p className="split-targets-line">{t("board.split.noTargets")}</p>
       ) : (
@@ -159,9 +194,12 @@ function ExistingTasks({ project, heldRef, target }: { project: string; heldRef:
  * out; a failure in the daemon's words and Retry, which reads again with the form's discipline. A
  * new parent's Title, Goal and Discipline (every discipline the departments serve; the chosen
  * department's first by default); Reviewer, Hand off's; a checkbox per planned subtask, the
- * suggested ones checked; from a document view, its tasks, read from the trace that view holds under
- * `heldTraceRef` (none given, as from Flow or a task: none listed). Split is one POST of the checked
- * disciplines in row order; `onDone` hears the answer, the caller closing the dialog and saying it.
+ * suggested ones checked, each checked one with its mandate's select, none chosen by default; from a
+ * document view, its tasks, read from the trace that view holds under `heldTraceRef` (none given, as
+ * from Flow or a task: none listed). Split stays off until every checked row has a mandate, saying so
+ * (docs/features/task-mandate.md "Acceptance criteria", V1); it is one POST of the checked
+ * disciplines in row order, each one's mandate as `<discipline>=<mandate>`; `onDone` hears the
+ * answer, the caller closing the dialog and saying it.
  */
 export function SplitDialog({
   project,
@@ -195,16 +233,19 @@ export function SplitDialog({
     reviewer: handOffReviewer("parent" in source ? source.reviewer : null, acting),
   }));
   // The discipline the plan was read with: the default as it opens, the form's on Retry.
-  const [asked, setAsked] = useState(form.discipline);
+  const [planned, setPlanned] = useState(form.discipline);
   const plan = useSplitPlan(project, {
-    ...sourceKeys(source, { title: doc?.title ?? "", goal: "", discipline: asked }),
+    ...sourceKeys(source, { title: doc?.title ?? "", goal: "", discipline: planned }),
     child: null,
+    mandate: null,
     reviewer: null,
     dry_run: true,
     as: actingName(acting),
   });
   // The rows checked, by discipline: the plan's suggestions once it lands, then the person's.
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
+  // Each row's mandate as chosen, by discipline, none by default; an unchecked row's is kept but never sent.
+  const [mandates, setMandates] = useState<ReadonlyMap<string, string>>(new Map());
   const [checkedFrom, setCheckedFrom] = useState<CardSplit | undefined>(undefined);
   const [stopped, setStopped] = useState(false);
   const pending = write.isPending;
@@ -216,6 +257,12 @@ export function SplitDialog({
   const groups = useMemo(() => groupsOf(plan.data?.children ?? [], departments, t("board.split.otherFlows")), [plan.data, departments, t]);
   const rows = groups.flatMap((group) => group.rows);
   const chosen = rows.filter((child) => checked.has(child.discipline)).map((child) => child.discipline);
+  // `<discipline>=<mandate>` per checked row, in row order; a row with none leaves Split off.
+  const asked = chosen.flatMap((discipline) => {
+    const picked = asMandate(mandates.get(discipline) ?? "");
+    return picked === null ? [] : [`${discipline}=${picked}`];
+  });
+  const unchosen = asked.length < chosen.length;
   const reviewer = login ?? form.reviewer;
 
   function field(key: keyof SplitForm) {
@@ -234,17 +281,21 @@ export function SplitDialog({
     });
   }
 
+  function choose(discipline: string, value: string) {
+    setMandates((current) => new Map(current).set(discipline, value));
+  }
+
   function retry() {
-    if (form.discipline === asked) {
+    if (form.discipline === planned) {
       void plan.refetch({ cancelRefetch: false });
     } else {
-      setAsked(form.discipline);
+      setPlanned(form.discipline);
     }
   }
 
   async function submit(): Promise<string | null> {
     try {
-      onDone(await write.mutateAsync({ ...sourceKeys(source, form), child: chosen, reviewer: reviewer.trim(), dry_run: false, as: actingName(acting) }));
+      onDone(await write.mutateAsync({ ...sourceKeys(source, form), child: chosen, mandate: asked, reviewer: reviewer.trim(), dry_run: false, as: actingName(acting) }));
       return null;
     } catch (error) {
       const answer = apiErrorOf(error);
@@ -271,7 +322,16 @@ export function SplitDialog({
           group.title === null ? (
             <ul key={group.key} className="split-rows">
               {group.rows.map((child) => (
-                <SplitRow key={child.discipline} project={project} child={child} checked={checked.has(child.discipline)} pending={pending} onToggle={toggle} />
+                <SplitRow
+                  key={child.discipline}
+                  project={project}
+                  child={child}
+                  checked={checked.has(child.discipline)}
+                  mandate={mandates.get(child.discipline) ?? ""}
+                  pending={pending}
+                  onToggle={toggle}
+                  onMandate={choose}
+                />
               ))}
             </ul>
           ) : (
@@ -281,7 +341,16 @@ export function SplitDialog({
               </legend>
               <ul className="split-rows">
                 {group.rows.map((child) => (
-                  <SplitRow key={child.discipline} project={project} child={child} checked={checked.has(child.discipline)} pending={pending} onToggle={toggle} />
+                  <SplitRow
+                    key={child.discipline}
+                    project={project}
+                    child={child}
+                    checked={checked.has(child.discipline)}
+                    mandate={mandates.get(child.discipline) ?? ""}
+                    pending={pending}
+                    onToggle={toggle}
+                    onMandate={choose}
+                  />
                 ))}
               </ul>
             </fieldset>
@@ -290,6 +359,11 @@ export function SplitDialog({
         {chosen.length === 0 && (
           <p className="card-field-hint" role="status">
             {t("board.split.none")}
+          </p>
+        )}
+        {unchosen && (
+          <p className="card-field-hint" role="status">
+            {t("board.split.mandateNeeded")}
           </p>
         )}
         {plan.data.notes.length > 0 && (
@@ -311,7 +385,7 @@ export function SplitDialog({
       action={t("board.split.submit")}
       sending={t("board.split.pending")}
       className="split-dialog"
-      canSubmit={plan.data !== undefined && chosen.length > 0}
+      canSubmit={plan.data !== undefined && chosen.length > 0 && !unchosen}
       check={() => {
         setStopped(true);
         if (doc !== null && form.title.trim() === "") {

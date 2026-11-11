@@ -317,7 +317,7 @@ fn ac02_each_post_is_a_200_its_document_and_one_event() {
             write("C-0001", "copy", "draft", 1, 1, draft),
             "card.created",
             json!({"id": "C-0001", "flow": "copy", "column": "draft", "position": 1,
-                "assignee": null, "reviewer": null, "as": "desk"}),
+                "assignee": null, "reviewer": null, "mandate": null, "as": "desk"}),
         ),
         (
             "cards/C-0001/assign",
@@ -378,7 +378,7 @@ fn ac02_each_post_is_a_200_its_document_and_one_event() {
             ),
             "card.created",
             json!({"id": "C-0002", "flow": "plates", "column": "queued", "position": 1,
-                "assignee": null, "reviewer": null, "as": "local"}),
+                "assignee": null, "reviewer": null, "mandate": null, "as": "local"}),
         ),
         (
             "cards/C-0002/cancel",
@@ -2503,7 +2503,7 @@ fn board_handoff_bh12_a_body_names_the_reviewer() {
         press.events().last().map(|event| event.1.clone()),
         Some(
             json!({"id": "C-0001", "flow": "narrative", "column": "backlog", "position": 1,
-                    "assignee": null, "reviewer": null, "as": "Ann"})
+                    "assignee": null, "reviewer": null, "mandate": null, "as": "Ann"})
         )
     );
     let made = press.lamp_post(
@@ -2520,7 +2520,8 @@ fn board_handoff_bh12_a_body_names_the_reviewer() {
         Some((
             "card.created".to_owned(),
             json!({"id": "C-0002", "flow": "development", "column": "backlog",
-                   "position": 1, "assignee": "Rob", "reviewer": "Ann", "as": "Ann"})
+                   "position": 1, "assignee": "Rob", "reviewer": "Ann", "mandate": null,
+                   "as": "Ann"})
         ))
     );
     let card = press
@@ -2990,7 +2991,8 @@ fn card_tasks_ct2_the_read_serves_tasks_as_the_cli_document() {
         .status(200)
         .json();
     let row = board["cards"][0].as_object().expect("a row");
-    assert_eq!(row.len(), 21, "{board}");
+    // 22 since docs/features/task-mandate.md M1 (`mandate`).
+    assert_eq!(row.len(), 22, "{board}");
     assert!(!row.contains_key("tasks"), "{board}");
 }
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # SpecEngine architecture rules
@@ -49,12 +49,12 @@ A `generated` document is no spec file: only its registered generator writes it 
 
 Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`architecture-code.md#tests`). ADR-0044.
 
-Any trade's work is a card, `C-NNNN`, a queue row beside `T-`, never read by the gate (`cards.md`); a lead's move to `ready` is a convention until the hub; the requesting side accepts it. ADR-0056. No card write creates, moves or refuses another; a split makes a task and its subtasks in one act (`card-split.md`). ADR-0074, ADR-0078.
+Any trade's work is a card, `C-NNNN`, a queue row beside `T-`, never read by the gate (`cards.md`); the requesting side accepts it. ADR-0056. No card write creates, moves or refuses another; a split makes a task and subtasks in one act (`card-split.md`); a mandate only frames the page (`card-mandate.md`). ADR-0074, ADR-0078, ADR-0079.
 
 <a id="rules-format"></a>
 ## Rule form
 
-EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a checked requirement. ADR-0007.
+EARS ("WHEN … the system SHALL …") is a suggested rule template, not a checked requirement. ADR-0007.
 
 <a id="universal"></a>
 ## Universality

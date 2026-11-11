@@ -71,13 +71,14 @@ describe("Hand off (BH-11)", () => {
     const dialog = await fromModal(client);
     type(dialog, "Discipline", "development");
     type(dialog, "Reviewer", "Ann Lee");
+    type(dialog, "Mandate", "open");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
     });
     expect(client.createCard.mock.calls[0]).toEqual([
       "alpha",
-      { title: "Lamp room dialogue", goal: "Two endings, one lamp.", discipline: "development", target: ["SCN-LAMP", "SCN-ROOM"], parent: "C-0001", reviewer: "Ann Lee", as: "Ann" },
+      { title: "Lamp room dialogue", goal: "Two endings, one lamp.", discipline: "development", target: ["SCN-LAMP", "SCN-ROOM"], parent: "C-0001", reviewer: "Ann Lee", mandate: "open", as: "Ann" },
     ]);
     for (const other of [client.assignCard, client.moveCard, client.editCard, client.cancelCard, client.acceptCard, client.clearCard]) {
       expect(other).not.toHaveBeenCalled();
@@ -122,6 +123,7 @@ describe("Hand off (BH-11)", () => {
     client.createCard.mockRejectedValueOnce(new ClientError({ status: 409, message: "target: no node `SCN-ROOM`; nothing changed" }));
     const dialog = await fromModal(client);
     type(dialog, "Discipline", "development");
+    type(dialog, "Mandate", "binding");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     const said = await within(dialog).findByText("target: no node `SCN-ROOM`; nothing changed");
     expect(said.getAttribute("lang")).toBe("en");
@@ -143,11 +145,12 @@ describe("Hand off (BH-11)", () => {
     const reviewer = within(dialog).getByLabelText<HTMLInputElement>("Reviewer");
     expect([reviewer.value, reviewer.readOnly, reviewer.classList.contains("field-fixed")]).toEqual(["mira", true, true]);
     type(dialog, "Discipline", "art");
+    type(dialog, "Mandate", "open");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
     });
-    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ reviewer: "mira", as: "mira" });
+    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ reviewer: "mira", mandate: "open", as: "mira" });
   });
 
   it("from `h` on a tile, a Russian layout's key too: the card's goal read for the form; never on a closed card", async () => {
@@ -189,6 +192,7 @@ describe("Hand off (BH-11)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Hand off" }));
     const dialog = await screen.findByRole("dialog", { name: "Hand off C-0001" });
     type(dialog, "Discipline", "development");
+    type(dialog, "Mandate", "binding");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
@@ -262,13 +266,14 @@ describe("Hand off by department (DP-14 of departments)", () => {
     const dialog = await fromModalRead(client);
     choose(dialog, "Department", "galley");
     expect(within(dialog).queryByLabelText("Discipline")).toBeNull();
+    choose(dialog, "Mandate", "binding");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
     });
     expect(client.createCard.mock.calls[0]).toEqual([
       "alpha",
-      { title: "Lamp room dialogue", goal: "Two endings, one lamp.", discipline: "copy", target: ["SCN-LAMP", "SCN-ROOM"], parent: "C-0001", reviewer: "Ann", as: "Ann" },
+      { title: "Lamp room dialogue", goal: "Two endings, one lamp.", discipline: "copy", target: ["SCN-LAMP", "SCN-ROOM"], parent: "C-0001", reviewer: "Ann", mandate: "binding", as: "Ann" },
     ]);
   });
 
@@ -280,12 +285,14 @@ describe("Hand off by department (DP-14 of departments)", () => {
     const discipline = within(dialog).getByRole<HTMLSelectElement>("combobox", { name: "Discipline" });
     expect([discipline.value, Array.from(discipline.options).map((option) => option.value)]).toEqual(["plates", ["plates", "proofs"]]);
     choose(dialog, "Discipline", "proofs");
+    choose(dialog, "Mandate", "open");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
     });
     expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ discipline: "proofs", parent: "C-0001" });
-    expect(Object.keys(client.createCard.mock.calls[0]?.[1] ?? {})).toEqual(["title", "goal", "discipline", "target", "parent", "reviewer", "as"]);
+    // task-mandate's one key after the reviewer (docs/features/task-mandate.md "Acceptance criteria", V1).
+    expect(Object.keys(client.createCard.mock.calls[0]?.[1] ?? {})).toEqual(["title", "goal", "discipline", "target", "parent", "reviewer", "mandate", "as"]);
   });
 
   it("Foundry, its first discipline untouched, posts plates", async () => {
@@ -293,6 +300,7 @@ describe("Hand off by department (DP-14 of departments)", () => {
     const client = departmentClient();
     const dialog = await fromModalRead(client);
     choose(dialog, "Department", "foundry");
+    choose(dialog, "Mandate", "binding");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
@@ -329,6 +337,7 @@ describe("Hand off by department (DP-14 of departments)", () => {
     expect(within(dialog).queryByRole("combobox", { name: "Department" })).toBeNull();
     expect(within(dialog).getByLabelText("Discipline").tagName).toBe("INPUT");
     type(dialog, "Discipline", "proofs");
+    type(dialog, "Mandate", "binding");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
@@ -354,6 +363,7 @@ describe("the hand-off's reviewer as the form opens (L2 of departments' looks)",
     const { dialog, client } = await reviewerOf("agent", "Ivo Brandt");
     expect(within(dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("Ivo Brandt");
     type(dialog, "Discipline", "development");
+    type(dialog, "Mandate", "binding");
     fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
     await waitFor(() => {
       expect(client.createCard).toHaveBeenCalledTimes(1);
@@ -381,5 +391,80 @@ describe("the hand-off's reviewer as the form opens (L2 of departments' looks)",
     cleanup();
     window.localStorage.clear();
     expect(within((await reviewerOf("   ", "")).dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("");
+  });
+});
+
+// V1 of docs/features/task-mandate.md "Acceptance criteria": the hand-off names the subtask's mandate,
+// required, no default: a select right after Reviewer at Choose…, then Binding and Department
+// decides. Submitting with none says why in the dialog's alert and posts nothing; a choice goes out
+// as `mandate`. On a hub alike, the Reviewer read-only.
+describe("the hand-off's mandate (V1 of task-mandate)", () => {
+  function fieldLabels(dialog: HTMLElement): string[] {
+    return Array.from(dialog.querySelectorAll<HTMLLabelElement>("label.field-label"), (label) => label.textContent);
+  }
+
+  it("stands right after Reviewer at Choose…, required, Binding and Department decides after it", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const dialog = await fromModal();
+    const labels = fieldLabels(dialog);
+    expect(labels.slice(labels.indexOf("Reviewer"))).toEqual(["Reviewer", "Mandate"]);
+    const mandate = within(dialog).getByRole<HTMLSelectElement>("combobox", { name: "Mandate" });
+    expect([mandate.value, mandate.getAttribute("aria-required")]).toEqual(["", "true"]);
+    expect(Array.from(mandate.options, (option) => [option.value, option.textContent])).toEqual([
+      ["", "Choose…"],
+      ["binding", "Binding"],
+      ["open", "Department decides"],
+    ]);
+  });
+
+  it("submitting with none says why in the alert and posts nothing; Department decides posts mandate open (M: a default of binding)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = handOffClient();
+    const dialog = await fromModal(client);
+    type(dialog, "Discipline", "development");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Choose whether the subtask is binding or its department decides");
+    const mandate = within(dialog).getByRole<HTMLSelectElement>("combobox", { name: "Mandate" });
+    expect(mandate.getAttribute("aria-invalid")).toBe("true");
+    expect(client.createCard).not.toHaveBeenCalled();
+    type(dialog, "Mandate", "open");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ parent: "C-0001", reviewer: "Ann", mandate: "open" });
+  });
+
+  it("on a hub alike: the Reviewer the login, read-only; none chosen posts nothing; Binding posts it", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = handOffClient();
+    client.getIdentity.mockResolvedValue({ login: "mira" });
+    renderApp(client, "#/alpha/board/C-0001");
+    const box = await screen.findByLabelText<HTMLInputElement>("Acting as");
+    await waitFor(() => {
+      expect(box.value).toBe("mira");
+    });
+    const modal = await screen.findByRole("dialog", { name: "Lamp room dialogue" });
+    fireEvent.click(await within(modal).findByRole("button", { name: "Hand off" }));
+    const dialog = await screen.findByRole("dialog", { name: "Hand off C-0001" });
+    expect(within(dialog).getByLabelText<HTMLInputElement>("Reviewer").readOnly).toBe(true);
+    type(dialog, "Discipline", "art");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Choose whether the subtask is binding or its department decides");
+    expect(client.createCard).not.toHaveBeenCalled();
+    type(dialog, "Mandate", "binding");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hand off" }));
+    await waitFor(() => {
+      expect(client.createCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.createCard.mock.calls[0]?.[1]).toMatchObject({ reviewer: "mira", mandate: "binding", as: "mira" });
+  });
+
+  it("New task has no mandate (V1)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    renderApp(handOffClient(), "#/alpha/board");
+    fireEvent.click(await screen.findByRole("button", { name: "New task" }));
+    const dialog = await screen.findByRole("dialog", { name: "New task" });
+    expect(within(dialog).queryByLabelText("Mandate")).toBeNull();
   });
 });

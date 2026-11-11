@@ -1157,7 +1157,7 @@ fn ac10_path_targets_round_trip_through_a_backup() {
     let text = String::from_utf8(bytes.clone()).expect("a UTF-8 dump");
     assert!(
         text.starts_with(
-            "{\"format\":5,\"queue_schema\":11,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{text}"

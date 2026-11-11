@@ -641,8 +641,9 @@ fn ac_r8_an_amendment_stages_an_approve_without_a_span_hash() {
 #[test]
 fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     // Schema 11 and 48 columns since docs/features/card-questions.md S1 (an
-    // amendment still adds none).
-    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    // amendment still adds none); schema 12 since
+    // docs/features/task-mandate.md M5, `proposals` unchanged.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
     assert_eq!(PROPOSAL_COLUMNS.len(), 48);
     let scratch = Scratch::new("qa-schema");
     let db = scratch.db("q");
@@ -661,7 +662,7 @@ fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "48"

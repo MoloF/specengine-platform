@@ -1,4 +1,4 @@
-import type { CardAllowed, CardFlow, CardMove, CardRow, KnownProposalStatus, KnownSplitTargetsFrom, KnownTeamAct, TraceCard } from "../api/types";
+import type { CardAllowed, CardFlow, CardMove, CardRow, KnownProposalStatus, KnownSplitTargetsFrom, KnownTeamAct, Mandate, TraceCard } from "../api/types";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
 import type { IconName } from "../ui/Icon";
@@ -391,4 +391,89 @@ const SPLIT_FROM: Readonly<Record<KnownSplitTargetsFrom, (count: number, t: Tran
 /** A subtask's targets line over `count` of them; a word this build does not know raw, `served` so it stands under `lang="en"`. */
 export function splitFromWords(from: string, count: number, t: Translate): { text: string; served: boolean } {
   return Object.hasOwn(SPLIT_FROM, from) ? { text: SPLIT_FROM[from as KnownSplitTargetsFrom](count, t), served: false } : { text: from, served: true };
+}
+
+/**
+ * A card's mandate (docs/canon/card-mandate.md "The rule"; docs/features/task-mandate.md
+ * "Acceptance criteria", V1, V2): each stored word with its catalog word and icon, the acts it puts right after
+ * Accept, and how it frames a return and a decision. Looked up here alone: nothing else compares a
+ * mandate, and nothing here allows or refuses an act; the daemon judges every write either way.
+ */
+export type LeadAct = "return" | "ask" | "decide";
+
+const MANDATES: Readonly<Record<Mandate, { icon: IconName; lead: readonly LeadAct[]; about: "bindingAbout" | "openAbout"; departs: boolean; needsWhy: boolean; look: LozengeLook["appearance"]; lozenge: "fromSubtasks.departure" | "mandate.open" }>> = {
+  // The brief stands: a departure goes back up as a return with a question.
+  binding: { icon: "mandateBinding", lead: ["return", "ask"], about: "bindingAbout", departs: true, needsWhy: false, look: "warning", lozenge: "fromSubtasks.departure" },
+  // The department decides, and says why with each decision.
+  open: { icon: "mandateOpen", lead: ["decide"], about: "openAbout", departs: false, needsWhy: true, look: "neutral", lozenge: "mandate.open" },
+};
+
+/** The two stored mandates, in the choice's order. */
+export const MANDATE_WORDS = Object.keys(MANDATES) as readonly Mandate[];
+
+function mandateOf(value: string | null): (typeof MANDATES)[Mandate] | undefined {
+  return value !== null && Object.hasOwn(MANDATES, value) ? MANDATES[value as Mandate] : undefined;
+}
+
+/** A chosen value as a mandate: one of the two stored words, else null (the empty "Choose…" among them). */
+export function asMandate(value: string): Mandate | null {
+  return mandateOf(value) === undefined ? null : (value as Mandate);
+}
+
+/** A mandate's screen word: "Binding" or "Department decides"; null none. */
+export function mandateWord(mandate: Mandate | null, t: Translate): string | null {
+  return mandate === null ? null : t(`board.mandate.${mandate}`);
+}
+
+/** A served mandate as words: a known one its screen word, any other raw, `served` so it stands under `lang="en"`. */
+export function mandateWords(value: string, t: Translate): { text: string; served: boolean } {
+  return mandateOf(value) === undefined ? { text: value, served: true } : { text: t(`board.mandate.${value as Mandate}`), served: false };
+}
+
+/** A mandate's word with its icon, as Details shows it; null none. */
+export function mandateMark(mandate: Mandate | null, t: Translate): { icon: IconName; label: string } | null {
+  const known = mandateOf(mandate);
+  return known === undefined || mandate === null ? null : { icon: known.icon, label: t(`board.mandate.${mandate}`) };
+}
+
+/** The choice's options: each stored word with its screen word, binding first; no default. */
+export function mandateChoices(t: Translate): readonly { value: string; label: string }[] {
+  return MANDATE_WORDS.map((value) => ({ value, label: t(`board.mandate.${value}`) }));
+}
+
+/** The acts a mandate puts right after Accept, in order: binding Return and Ask, open Record; none, none. */
+export function leadActs(mandate: Mandate | null): readonly LeadAct[] {
+  return mandateOf(mandate)?.lead ?? [];
+}
+
+/** Whether a return opens with its question part expanded: a task whose mandate leads with asking. */
+export function asksOnReturn(mandate: Mandate | null): boolean {
+  return leadActs(mandate).includes("ask");
+}
+
+/** The work item's note on its mandate, before Goal; null none. */
+export function mandateAbout(mandate: Mandate | null, t: Translate): string | null {
+  const known = mandateOf(mandate);
+  return known === undefined ? null : t(`board.mandate.${known.about}`);
+}
+
+/** Whether a decision recorded on the task departs from its brief: a binding task's does. */
+export function decisionDeparts(mandate: Mandate | null): boolean {
+  return mandateOf(mandate)?.departs === true;
+}
+
+/** Whether Record a decision's form asks a why: a task its department decides. A form rule only: the daemon keeps `why` optional. */
+export function decisionNeedsWhy(mandate: Mandate | null): boolean {
+  return mandateOf(mandate)?.needsWhy === true;
+}
+
+/** A subtask's mandate on its parent's Decisions from subtasks: binding a departure that warns, open the department's; none, none. */
+export function subtaskMandateLook(mandate: Mandate | null, t: Translate): LozengeLook | null {
+  const known = mandateOf(mandate);
+  return known === undefined ? null : { appearance: known.look, icon: known.icon, label: t(`board.${known.lozenge}`) };
+}
+
+/** Whether an item is a decision: the parent's Decisions from subtasks lists these alone. */
+export function isDecision({ kind }: { kind: string }): boolean {
+  return kind === RAISED_KINDS.decision;
 }

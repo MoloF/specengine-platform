@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # Card tasks: the `T-` tasks a card links
@@ -76,7 +76,7 @@ A **Tasks** part inside the work item's Agent tasks, collapsed (`ui-design.md` "
 - **Step 9 -> 10** (`STEP_10`, `ALTER TABLE cards ADD COLUMN tasks TEXT`), in `migrate`'s one transaction with every due step: `QUEUE_SCHEMA_VERSION` 10, `CARD_COLUMNS` 25, `tasks` last.
 - **The column**: a JSON array of task IDs, `'[]'` at `new`, written whole by an edit (`COALESCE(?, tasks)`: a stepped row keeps `NULL` until an edit gives `--task`); `NULL` links none. Bad JSON, no array of strings, or an entry that is no task ID: the card does not read (column `tasks`), `show` exit 2, `list` a note. A repeat or more than 32 from a hand edit reads as stored. `CardEdit.tasks`, `Some` of none clearing.
 - **Not yet stepped**: `list_existing_cards` (`open_existing`, no step: `trace`, `impact`, `flow --trace`) reads a schema-9 queue's cards, `tasks` `NULL`; `stored_rows` reads its 24 columns (`card_columns(9)`), `tasks` `None`.
-- **Backup** (`queue-backup.md` "Format"): card rows of 25 columns from format 4 (schema 10) on. Format 3 (schema 9, 24) still imports, `tasks` `NULL`, re-exported as `"tasks":null`; a schema-9 DB exports unmigrated. Refused, exit 2: a format-4 or -5 card row without `tasks`, a format-3 one with it, a format-4 header of seven keys.
+- **Backup** (`queue-backup.md` "Format"): card rows hold `tasks` from format 4 (schema 10) on. Format 3 (schema 9, 24) still imports, `tasks` `NULL`, re-exported as `"tasks":null`; a schema-9 DB exports unmigrated. Refused, exit 2: a format-4 to -6 card row without `tasks`, a format-3 one with it, a format-4 header of seven keys.
 
 ## Known limits
 

@@ -47,6 +47,10 @@ import { nodeKinds, specStatuses } from "./kinds";
 // two items raised from the page: PR-0055, a question Noor Ainsley asked as she sent it back, open;
 // PR-0056, a decision Tomas Oakes recorded with why he took it, applied as DEC-0013. Their events
 // stand in the task's history (src/mocks/cards.ts); `spec inbox` lists PR-0055, never the applied one.
+//
+// task-mandate (docs/features/task-mandate.md "Acceptance criteria", V3): C-0001's two subtasks each
+// recorded a decision, both open: PR-0057 on the glossary C-0019, whose department decides, with
+// its why; PR-0058 on the plate C-0013, a binding task, so its parent shows it as a departure.
 
 const SLUG = "harbor-sim";
 
@@ -169,6 +173,21 @@ export const CRANE_DECISION = {
   working_answer: "Yes: the diagram shows the reach at full boom; partial booms are left out.",
   price_of_other: "Every boom angle needs a second plate.",
   why: "Pilots read the diagram for the worst case, and full boom is it.",
+};
+
+/** PR-0057's texts and why, recorded on C-0019, whose department decides. */
+export const GLOSSARY_DECISION = {
+  text: "Which words does the glossary define?",
+  working_answer: "Every word a skipper meets in the tables, and no other.",
+  price_of_other: "A full nautical glossary doubles the page count.",
+  why: "The glossary serves the tables: a word outside them sends the reader elsewhere.",
+};
+
+/** PR-0058's texts, recorded on C-0013, a binding task: a departure from its brief. */
+export const PLATE_DECISION = {
+  text: "One plate or two for the tide tables?",
+  working_answer: "Two plates: the spring and the neap tables apart.",
+  price_of_other: "One plate sets the figures at a size a skipper cannot read at the helm.",
 };
 
 /** PR-0052's new file: a feature document with no `id:`, so the queue names it by its path. */
@@ -1287,6 +1306,37 @@ export function harborSim(now: number): MockProject {
         choice: { working_answer: true },
         created_at: at(570),
         updated_at: at(540),
+      }),
+      // C-0001's subtasks' decisions (task-mandate): the glossary's department decided, saying why.
+      proposal({
+        id: "PR-0057",
+        project: SLUG,
+        kind: "decision",
+        severity: null,
+        target_id: "DOM-WATER",
+        target_ids: ["DOM-WATER"],
+        summary: GLOSSARY_DECISION.text,
+        working_answer: GLOSSARY_DECISION.working_answer,
+        price_of_other: GLOSSARY_DECISION.price_of_other,
+        why: GLOSSARY_DECISION.why,
+        author: PERSON,
+        card_id: "C-0019",
+        created_at: at(240),
+      }),
+      // The plate's, on a binding task, with no why: a departure its parent marks.
+      proposal({
+        id: "PR-0058",
+        project: SLUG,
+        kind: "decision",
+        severity: null,
+        target_id: "MEC-TIDE-TABLES",
+        target_ids: ["MEC-TIDE-TABLES"],
+        summary: PLATE_DECISION.text,
+        working_answer: PLATE_DECISION.working_answer,
+        price_of_other: PLATE_DECISION.price_of_other,
+        author: PERSON,
+        card_id: "C-0013",
+        created_at: at(180),
       }),
     ],
   };

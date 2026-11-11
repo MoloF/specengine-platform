@@ -89,8 +89,8 @@
   "CardFlow": ["name", "title", "disciplines", "columns", "moves", "accept", "return"],
   "CardColumn": ["id", "title"],
   "CardMove": ["from", "to", "by"],
-  "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled", "mark", "on", "discrepancy", "correction"],
-  "Card": ["id", "flow", "column", "position", "title", "goal", "discipline", "targets", "mark", "on", "discrepancy", "correction", "snapshot", "criteria", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "evidence", "tasks", "items", "acceptance", "cancellation", "created_by", "created_at", "updated_at", "revision", "allowed", "history", "notes"],
+  "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "mandate", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled", "mark", "on", "discrepancy", "correction"],
+  "Card": ["id", "flow", "column", "position", "title", "goal", "discipline", "targets", "mark", "on", "discrepancy", "correction", "snapshot", "criteria", "assignee", "reviewer", "mandate", "estimate", "due", "parent", "corrects", "evidence", "tasks", "items", "subtask_items", "acceptance", "cancellation", "created_by", "created_at", "updated_at", "revision", "allowed", "history", "notes"],
   "CardEvidence": ["kind", "value", "by", "at"],
   "CardAcceptance": ["by", "at", "note", "verdict", "departs", "discrepancy"],
   "CardCancellation": ["by", "at", "reason"],
@@ -119,5 +119,6 @@
   "IntakeMatch": ["id", "source", "status", "path", "answer", "record"],
   "CardSplit": ["dry_run", "parent", "children", "reviewer", "notes"],
   "CardSplitParent": ["id", "created", "title", "discipline", "flow", "flow_title", "column", "targets"],
-  "CardSplitChild": ["id", "discipline", "flow", "flow_title", "column", "targets", "from", "suggested"]
+  "CardSplitChild": ["id", "discipline", "flow", "flow_title", "column", "targets", "from", "suggested", "mandate"],
+  "CardSubtaskItem": ["card_id", "id", "kind", "status", "summary", "working_answer", "why", "author", "created_at", "updated_at", "staged_at", "decided_by", "decided_at", "decision_note", "record_id", "record_path", "record_title"]
 }

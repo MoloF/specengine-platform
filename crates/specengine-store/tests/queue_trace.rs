@@ -119,6 +119,7 @@ fn new_card(flow: &CardFlow, title: &str, targets: &[&str], corrects: Option<&st
         criteria: Vec::new(),
         assignee: None,
         reviewer: None,
+        mandate: None,
         estimate: None,
         due: None,
         parent: None,

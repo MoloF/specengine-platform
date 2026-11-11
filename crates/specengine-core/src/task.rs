@@ -384,7 +384,7 @@ pub fn follow_up_goal(item: &FollowUpItem<'_>) -> String {
 
 /// `text` whole when it holds at most `max` bytes, else its longest
 /// prefix on a character boundary followed by `…`, within `max` bytes.
-fn cut_with_ellipsis(text: &str, max: usize) -> String {
+pub(crate) fn cut_with_ellipsis(text: &str, max: usize) -> String {
     const ELLIPSIS: char = '\u{2026}';
     if text.len() <= max {
         return text.to_owned();

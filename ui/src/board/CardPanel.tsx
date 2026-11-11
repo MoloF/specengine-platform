@@ -10,7 +10,7 @@ import { Badge } from "../ui/Badge";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
 import { Button } from "../ui/Button";
 import { Disclosure } from "../ui/Disclosure";
-import { Icon } from "../ui/Icon";
+import { Icon, type IconName } from "../ui/Icon";
 import { IssueView } from "../ui/IssueView";
 import { Lozenge } from "../ui/Lozenge";
 import { PropertyList, type Property } from "../ui/PropertyList";
@@ -32,9 +32,14 @@ import {
   cancelledLook,
   columnTitle,
   eventWords,
+  isDecision,
   isItemEvent,
   itemEventWords,
   knowsEvent,
+  leadActs,
+  mandateAbout,
+  mandateMark,
+  mandateWords,
   markLine,
   markLook,
   needsLine,
@@ -42,6 +47,7 @@ import {
   raisesItem,
   returnedLook,
   type CardMark,
+  type LeadAct,
 } from "./labels";
 import { returnReasonOf } from "./rollup";
 import { CardLink, type CardLinks } from "./CardLink";
@@ -66,6 +72,13 @@ export type { CardLinks } from "./CardLink";
  * (docs/features/card-questions.md "Acceptance criteria", U1, U7): until it arrives, the item's ID.
  */
 const ItemBlock = lazy(() => import("./CardItems").then((module) => ({ default: module.ItemBlock })));
+
+/**
+ * A parent's Decisions from subtasks, in the items' chunk (docs/features/task-mandate.md
+ * "Acceptance criteria", V3): drawn only when the card's `subtask_items` holds a decision, its
+ * heading standing until the chunk arrives.
+ */
+const SubtaskDecisions = lazy(() => import("./CardItems").then((module) => ({ default: module.SubtaskDecisions })));
 
 /** The card's acts, each a dialog but Move, which opens the Move menu; `ask` and `decide` raise an item on it. */
 export type CardAction = "move" | "handoff" | "split" | "return" | "edit" | "assign" | "cancel" | "accept" | "clear" | "ask" | "decide";
@@ -145,6 +158,9 @@ function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undef
   const by = payloadWord(event.payload, "as");
   const detail = eventDetail(event.payload, flow, t);
   const note = payloadWord(event.payload, "note");
+  // A mandate the payload holds, named or changed (docs/features/task-mandate.md "Acceptance criteria", V2): its word; a value this build does not know raw, under lang="en".
+  const named = payloadWord(event.payload, "mandate");
+  const words = named === null ? null : mandateWords(named, t);
   return (
     <li className="board-history-line">
       <At at={event.at} />
@@ -153,6 +169,12 @@ function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undef
         <strong lang={knowsEvent(event.type) ? undefined : "en"}>{eventWords(event.type, t)}</strong>
         {by !== null && fill(t("board.history.by", { by: slot("by") }), { by: <bdi>{shownSlot(by)}</bdi> })}
         {detail !== "" && <span className="muted"> {shownSlot(detail)}</span>}
+        {words !== null && (
+          <span className="muted">
+            {detail === "" ? " " : ", "}
+            {fill(t("board.history.mandate", { value: slot("value") }), { value: <span lang={words.served ? "en" : undefined}>{shownSlot(words.text)}</span> })}
+          </span>
+        )}
       </span>
       {note !== null && <span className="board-text">{fill(t("board.history.why", { note: slot("note") }), { note: <bdi>{shownText(note)}</bdi> })}</span>}
     </li>
@@ -319,13 +341,29 @@ function TargetState({ rollup }: { rollup: string | undefined }) {
   return rollup === undefined ? null : <Badge look={rollupLook(rollup, t)} />;
 }
 
+/** An act of the head, by its key: the acts a mandate leads with among them (labels.ts `leadActs`). */
+type HeadAct = [LeadAct | "handoff" | "split" | "edit" | "assign" | "cancel", ReactNode];
+
+/**
+ * The acts in the head's order: the ones the card's mandate leads with, those shown, right after
+ * Accept and in its order (binding: Return, then Ask a question…; open: Record a decision…); every
+ * other act in today's order. A card with no mandate keeps today's order, act for act
+ * (docs/features/task-mandate.md "Acceptance criteria", V2). The order is looked up, never judged.
+ */
+function ordered(acts: readonly HeadAct[], card: Pick<Card, "mandate">): ReactNode[] {
+  const lead = leadActs(card.mandate);
+  const first = lead.flatMap((wanted) => acts.filter(([key]) => key === wanted));
+  return [...first, ...acts.filter(([key]) => !first.some(([led]) => led === key))].map(([, node]) => node);
+}
+
 /**
  * An open card's acts, the head's, in this order: Accept, the one primary, in `accept.from` alone and
- * idle where a hub's `allowed` omits it; Hand off; Split to departments…, the card the parent
- * (docs/features/department-split.md "Acceptance criteria", U1); Return when its flow names a return column it is
- * not in and `allowed` holds the move there; Edit; Assign; Cancel card, subtle and last. Move stands
- * in the side column's Status. Each opens a dialog and says so (`aria-haspopup`). A `by` the acting
- * name lacks reads "needs <names>", as in the Move menu; the daemon judges either way.
+ * idle where a hub's `allowed` omits it; then the acts its mandate leads with; then the rest: Hand off;
+ * Split to departments…, the card the parent (docs/features/department-split.md "Acceptance criteria",
+ * U1); Return when its flow names a return column it is not in and `allowed` holds the move there; Ask
+ * a question… and Record a decision… on a card with a target; Edit; Assign; Cancel card, subtle and
+ * last. Move stands in the side column's Status. Each opens a dialog and says so (`aria-haspopup`). A
+ * `by` the acting name lacks reads "needs <names>", as in the Move menu; the daemon judges either way.
  */
 function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | undefined; accepts: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
   const t = useTranslate();
@@ -340,6 +378,49 @@ function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow |
       onAct(action, card, event.currentTarget);
     };
   }
+  const acts: HeadAct[] = [
+    [
+      "handoff",
+      <Button key="handoff" icon="cardHandOff" aria-haspopup="dialog" onClick={act("handoff")}>
+        <span>{t("board.handoff.action")}</span>
+      </Button>,
+    ],
+    [
+      "split",
+      <Button key="split" icon="workspace" aria-haspopup="dialog" onClick={act("split")}>
+        <span>{t("board.split.act")}</span>
+      </Button>,
+    ],
+    ...(returning === undefined
+      ? []
+      : ([
+          [
+            "return",
+            <Button key="return" icon="cardReturned" aria-haspopup="dialog" onClick={act("return")}>
+              <span>{t("board.return.action")}</span>
+            </Button>,
+          ],
+        ] satisfies HeadAct[])),
+    ...itemActs(card, onAct, t),
+    [
+      "edit",
+      <Button key="edit" aria-haspopup="dialog" onClick={act("edit")}>
+        {t("board.panel.edit")}
+      </Button>,
+    ],
+    [
+      "assign",
+      <Button key="assign" aria-haspopup="dialog" onClick={act("assign")}>
+        {t("board.panel.assign")}
+      </Button>,
+    ],
+    [
+      "cancel",
+      <Button key="cancel" appearance="subtle" aria-haspopup="dialog" onClick={act("cancel")}>
+        {t("board.panel.cancel")}
+      </Button>,
+    ],
+  ];
   return (
     <>
       <div className="board-panel-actions" role="group" aria-label={t("board.panel.actions")}>
@@ -348,23 +429,7 @@ function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow |
             {t("board.panel.accept")}
           </Button>
         )}
-        <Button icon="cardHandOff" aria-haspopup="dialog" onClick={act("handoff")}>
-          <span>{t("board.handoff.action")}</span>
-        </Button>
-        <Button icon="workspace" aria-haspopup="dialog" onClick={act("split")}>
-          <span>{t("board.split.act")}</span>
-        </Button>
-        {returning !== undefined && (
-          <Button icon="cardReturned" aria-haspopup="dialog" onClick={act("return")}>
-            <span>{t("board.return.action")}</span>
-          </Button>
-        )}
-        <ItemActs card={card} onAct={onAct} />
-        <Button aria-haspopup="dialog" onClick={act("edit")}>{t("board.panel.edit")}</Button>
-        <Button aria-haspopup="dialog" onClick={act("assign")}>{t("board.panel.assign")}</Button>
-        <Button appearance="subtle" aria-haspopup="dialog" onClick={act("cancel")}>
-          {t("board.panel.cancel")}
-        </Button>
+        {ordered(acts, card)}
       </div>
       {needs !== null && (
         <p className="note">
@@ -382,39 +447,44 @@ function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow |
  * "The rule"; docs/features/card-questions.md "Acceptance criteria", U3): Ask a question… and Record a
  * decision…; a card with no target has none.
  */
-function ItemActs({ card, onAct }: { card: Card; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
-  const t = useTranslate();
+function itemActs(card: Card, onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void, t: Translate): HeadAct[] {
   if (card.targets.length === 0) {
-    return null;
+    return [];
   }
-  return (
-    <>
+  return [
+    [
+      "ask",
       <Button
+        key="ask"
         aria-haspopup="dialog"
         onClick={(event) => {
           onAct("ask", card, event.currentTarget);
         }}
       >
         {t("board.ask.action")}
-      </Button>
+      </Button>,
+    ],
+    [
+      "decide",
       <Button
+        key="decide"
         aria-haspopup="dialog"
         onClick={(event) => {
           onAct("decide", card, event.currentTarget);
         }}
       >
         {t("board.decide.action")}
-      </Button>
-    </>
-  );
+      </Button>,
+    ],
+  ];
 }
 
-/** A closed card's acts: only those that raise an item, when it has a target (U3 of docs/features/card-questions.md "Acceptance criteria"). */
+/** A closed card's acts: only those that raise an item, when it has a target (U3 of docs/features/card-questions.md "Acceptance criteria"), in its mandate's order. */
 function ClosedActs({ card, onAct }: { card: Card; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
   const t = useTranslate();
   return (
     <div className="board-panel-actions" role="group" aria-label={t("board.panel.actions")}>
-      <ItemActs card={card} onAct={onAct} />
+      {ordered(itemActs(card, onAct, t), card)}
     </div>
   );
 }
@@ -450,6 +520,9 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
   const cancelled = card.cancellation !== null;
   const back = flow?.return ?? null;
   const notes = ownNotes(card);
+  const about = mandateAbout(card.mandate, t);
+  // Its subtasks' decisions, served with the card in its one read; their questions stand on each subtask's Activity.
+  const decisions = card.subtask_items.filter(isDecision);
   return (
     <>
       {notes.length > 0 && (
@@ -477,6 +550,13 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
       )}
       {back !== null && card.column === back && !cancelled && <ReturnReason card={card} column={back} />}
       <Closure card={card} />
+      {about !== null && (
+        // What the task's mandate asks of its department (docs/features/task-mandate.md "Acceptance criteria", V2).
+        <p className="note board-mandate-note">
+          <Icon name="info" />
+          <span>{about}</span>
+        </p>
+      )}
       {card.goal !== null && (
         <Part title={t("board.panel.goal")} className="issue-document">
           <p className="board-text">{shownText(card.goal)}</p>
@@ -513,6 +593,23 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
       <Part title={t("board.modal.handOffs")}>
         <CardProgress card={card} query={subtasks} links={links} />
       </Part>
+      {decisions.length > 0 && (
+        <Part title={t("board.fromSubtasks.heading")}>
+          <Suspense
+            fallback={
+              <ul className="board-panel-list">
+                {decisions.map((item) => (
+                  <li key={item.id} className="mono muted">
+                    {shownSlot(item.id)}
+                  </li>
+                ))}
+              </ul>
+            }
+          >
+            <SubtaskDecisions project={project} decisions={decisions} subtasks={subtasks} links={links} />
+          </Suspense>
+        </Part>
+      )}
       <Part title={t("board.panel.evidence")}>
         {card.evidence.length === 0 ? (
           <p className="muted">{t("board.panel.noneYet")}</p>
@@ -589,6 +686,16 @@ function CardMain(props: CardViewProps & { subtasks: ChildrenQuery }) {
   );
 }
 
+/** A mandate in Details: its icon and word, never colour alone (docs/features/task-mandate.md "Acceptance criteria", V2). */
+function MandateValue({ icon, label }: { icon: IconName; label: string }) {
+  return (
+    <span className="board-mandate">
+      <Icon name={icon} />
+      <span>{label}</span>
+    </span>
+  );
+}
+
 /** "Agent tasks · 2 linked", or "Agent tasks · none linked": named by its content, every link counted, read here or not. */
 function developmentSummary(card: Card, t: Translate): string {
   const tasks = card.tasks.length === 0 ? t("board.item.noAgentTasks") : t("board.item.agentTasks", { count: card.tasks.length });
@@ -606,9 +713,11 @@ function CardSide({ project, card, flow, today, links, onAct }: { project: strin
   const accepted = card.acceptance !== null;
   const cancelled = card.cancellation !== null;
   const text = (value: string | null) => (value === null ? null : <Value text={value} />);
+  const shown = mandateMark(card.mandate, t);
   const details: Property[] = [
     { key: "assignee", label: t("board.panel.assignee"), value: text(card.assignee) },
     { key: "reviewer", label: t("board.panel.reviewer"), value: text(card.reviewer) },
+    { key: "mandate", label: t("board.mandate.label"), value: shown === null ? null : <MandateValue icon={shown.icon} label={shown.label} /> },
     { key: "flow", label: t("board.item.flow"), value: <Value text={flowTitleOf(flow, card.flow)} /> },
     { key: "due", label: t("board.panel.due"), value: text(card.due) },
     { key: "estimate", label: t("board.panel.estimate"), value: text(card.estimate) },

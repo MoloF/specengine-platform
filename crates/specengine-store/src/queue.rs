@@ -118,6 +118,12 @@
 //!   transaction) and never written again; the card reads them back
 //!   ([`SqliteQueue::card_items`]), and no card write, gate or decision
 //!   reads the link.
+//! - **A card's mandate** (`docs/canon/card-mandate.md` "The rule"): step
+//!   12 adds `cards.mandate`, `binding` or `open`, set at creation with a
+//!   reviewer and changed by that reviewer alone, each judged under the
+//!   write's lock; a parent reads its subtasks' items in one statement
+//!   ([`SqliteQueue::subtask_items`]). No move, accept, stage, decision or
+//!   gate reads it.
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
@@ -182,11 +188,14 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 11;
+pub const QUEUE_SCHEMA_VERSION: i64 = 12;
 
 /// The first queue schema whose `proposals` holds `card_id` and `why`
 /// (step 10 → 11).
 pub(crate) const CARD_ITEMS_SCHEMA: i64 = 11;
+
+/// The first queue schema whose `cards` holds `mandate` (step 11 → 12).
+pub(crate) const MANDATE_SCHEMA: i64 = 12;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -302,6 +311,12 @@ ALTER TABLE cards ADD COLUMN tasks TEXT;
 const STEP_11: &str = "
 ALTER TABLE proposals ADD COLUMN card_id TEXT;
 ALTER TABLE proposals ADD COLUMN why TEXT;
+";
+
+/// Step 11 → 12: a card's mandate, `binding` or `open`, `NULL` on every row
+/// stepped, which reads as none (`docs/canon/card-mandate.md` "The rule").
+const STEP_12: &str = "
+ALTER TABLE cards ADD COLUMN mandate TEXT;
 ";
 
 /// The record columns, in table order.
@@ -2158,11 +2173,13 @@ enum Hold<'a> {
 /// two columns (task spec `drift-queue`), 8 → 9 the cards (task spec
 /// `card-store`), 9 → 10 a card's linked tasks
 /// (`docs/canon/cards.md` "Store"), 10 → 11 a proposal's `card_id` and
-/// `why` (`docs/canon/card-questions.md` "The rule"; 0 → 11 runs all
-/// eleven, every due step in this one transaction; a schema-5 DB opens as
-/// 11, every `interpretation`, `drift`, `drift_hash`, `card_id`, `why`
-/// `NULL`, no card; a schema-9 card reads no task); [`QUEUE_SCHEMA_VERSION`]
-/// is left alone; a higher version is refused.
+/// `why` (`docs/canon/card-questions.md` "The rule"), 11 → 12 a card's
+/// `mandate` (`docs/canon/card-mandate.md` "The rule"; 0 → 12 runs all
+/// twelve, every due step in this one transaction; a schema-5 DB opens as
+/// 12, every `interpretation`, `drift`, `drift_hash`, `card_id`, `why`
+/// `NULL`, no card; a schema-9 card reads no task, a schema-11 one no
+/// mandate); [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is
+/// refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
     if version > QUEUE_SCHEMA_VERSION {
@@ -2223,6 +2240,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 10 {
         tx.execute_batch(STEP_11).db()?;
         version = 11;
+    }
+    if version == 11 {
+        tx.execute_batch(STEP_12).db()?;
+        version = 12;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;

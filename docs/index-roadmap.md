@@ -54,7 +54,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0099.md](roadmap/RM-0099.md) design-sweep (Phase 7, v5 step 7): every other screen on the foundation · ui · draft
 - [docs/roadmap/RM-0102.md](roadmap/RM-0102.md) flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0103.md](roadmap/RM-0103.md) canvas-clicks (Phase 7, v5 pool): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy · ui · draft
-- [docs/roadmap/RM-0104.md](roadmap/RM-0104.md) task-mandate (Phase 7, v5 step 6d): a subtask is binding, or its department decides · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0105.md](roadmap/RM-0105.md) upstream-signal (Phase 7, pool): a subtask shows that its parent changed above it · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0106.md](roadmap/RM-0106.md) direction-catalog (Phase 7, pool): a direction as a table of its documents · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0107.md](roadmap/RM-0107.md) delivery-analytics (Phase 7, pool): what was delivered, against its estimate, and why it took longer · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft

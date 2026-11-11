@@ -42,9 +42,10 @@ describe("the normal scenario", () => {
   it("lists harbor-sim's open questions, discrepancies and decisions in round order, notes the change proposals (an interpretation, a decision's update and an amendment among them), lists no deferred one", async () => {
     const sheet = await new MockClient("normal", { now: clock }).getRound("harbor-sim");
     expect(sheet.project).toBe("harbor-sim");
-    // PR-0055, C-0008's open question, last: no severity (card-questions, U1).
-    expect(sheet.items.map((item) => item.id)).toEqual(["PR-0041", "PR-0048", "PR-0050", "PR-0043", "PR-0047", "PR-0044", "PR-0055"]);
-    expect(sheet.items.map((item) => item.tasks.map((task) => task.id))).toEqual([["T-0107"], [], [], ["T-0112"], [], ["T-0107", "T-0112"], []]);
+    // PR-0055, C-0008's open question, among the last three: no severity (card-questions, U1); with it
+    // C-0001's subtasks' two decisions, PR-0058 and PR-0057 (docs/features/task-mandate.md "Acceptance criteria", V3).
+    expect(sheet.items.map((item) => item.id)).toEqual(["PR-0041", "PR-0048", "PR-0050", "PR-0043", "PR-0047", "PR-0044", "PR-0058", "PR-0055", "PR-0057"]);
+    expect(sheet.items.map((item) => item.tasks.map((task) => task.id))).toEqual([["T-0107"], [], [], ["T-0112"], [], ["T-0107", "T-0112"], ["T-0109"], [], []]);
     expect(sheet.more).toBe(0);
     expect(sheet.minutes).toBeGreaterThan(0);
     expect(sheet.notes).toEqual(["4 open change proposal(s) not on this sheet: PR-0042, PR-0049, PR-0051 and PR-0052; spec inbox lists them"]);
@@ -85,8 +86,8 @@ describe("the normal scenario", () => {
     const two = await client.getRound("harbor-sim", { limit: 2 });
     expect([two.items.map((item) => item.id), two.more, two.notes[0]]).toEqual([
       ["PR-0041", "PR-0048"],
-      5,
-      "5 more item(s) not on this sheet: spec round new --limit 7",
+      7,
+      "7 more item(s) not on this sheet: spec round new --limit 9",
     ]);
     for (const limit of [0, 201, 1.5]) {
       const error = await rejection(client.getRound("harbor-sim", { limit }));

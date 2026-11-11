@@ -65,8 +65,9 @@ const T2: &str = "2026-10-30T09:00:02Z";
 const PROJECT: &str = "card-press";
 
 /// The columns as "Store" lists them, written here: step 9's 24, then step
-/// 10's `tasks` (docs/canon/cards.md "Store").
-const COLUMNS: [&str; 25] = [
+/// 10's `tasks` (docs/canon/cards.md "Store"), then step 12's `mandate`
+/// (docs/features/task-mandate.md M5).
+const COLUMNS: [&str; 26] = [
     "id",
     "project",
     "flow",
@@ -92,6 +93,7 @@ const COLUMNS: [&str; 25] = [
     "updated_at",
     "revision",
     "tasks",
+    "mandate",
 ];
 
 /// Step 9's SQL as `crates/specengine-store/src/queue.rs` holds it
@@ -151,6 +153,7 @@ fn new_card(flow: &CardFlow, title: &str) -> NewCard {
         criteria: Vec::new(),
         assignee: None,
         reviewer: None,
+        mandate: None,
         estimate: None,
         due: None,
         parent: None,
@@ -219,14 +222,15 @@ fn card(id: &str, column: &str, position: u64) -> (String, String, u64) {
 /// moved or retyped.
 #[test]
 fn schema_10_makes_the_cards_table() {
-    // Schema 11 since docs/features/card-questions.md, `cards` unchanged.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    // Schema 11 since docs/features/card-questions.md, `cards` unchanged;
+    // 12 since docs/features/task-mandate.md M5, `mandate` last.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
     assert_eq!(CARD_COLUMNS, COLUMNS);
-    assert_eq!(CARD_COLUMNS.last(), Some(&"tasks"));
+    assert_eq!(CARD_COLUMNS.last(), Some(&"mandate"));
     let scratch = Scratch::new("qc-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12");
     let want: Vec<String> = COLUMNS
         .iter()
         .map(|column| {
@@ -299,7 +303,8 @@ fn a_schema_8_queue_opens_at_10_with_its_rows_unchanged() {
     };
     let before_step = raw(&db);
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
+    // 12 since docs/features/task-mandate.md M5.
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12");
     assert_eq!(
         sqlite3(
             &db,
@@ -383,17 +388,20 @@ fn create_card_numbers_places_and_logs() {
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0001", "flow": "copy", "column": "draft", "position": 1,
-                       "assignee": "ana", "reviewer": null, "as": "writer"})
+                       "assignee": "ana", "reviewer": null, "mandate": null,
+                       "as": "writer"})
             ),
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0002", "flow": "copy", "column": "draft", "position": 2,
-                       "assignee": null, "reviewer": null, "as": "local"})
+                       "assignee": null, "reviewer": null, "mandate": null,
+                       "as": "local"})
             ),
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0003", "flow": "plates", "column": "queued", "position": 1,
-                       "assignee": null, "reviewer": null, "as": "local"})
+                       "assignee": null, "reviewer": null, "mandate": null,
+                       "as": "local"})
             ),
         ]
     );
@@ -844,6 +852,7 @@ fn edits_write_what_they_name_and_keep_links_acyclic() {
                 reason: None,
                 norms: None,
                 tasks: Some(vec!["T-0002".to_owned(), "T-0001".to_owned()]),
+                mandate: None,
             }),
             "ana",
             T1,
@@ -1120,12 +1129,14 @@ fn board_handoff_create_card_stores_the_reviewer_and_card_created_carries_it() {
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0001", "flow": "narrative", "column": "backlog",
-                       "position": 1, "assignee": null, "reviewer": null, "as": "Ann"})
+                       "position": 1, "assignee": null, "reviewer": null, "mandate": null,
+                       "as": "Ann"})
             ),
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0002", "flow": "development", "column": "backlog",
-                       "position": 1, "assignee": null, "reviewer": "Ann", "as": "Ann"})
+                       "position": 1, "assignee": null, "reviewer": "Ann", "mandate": null,
+                       "as": "Ann"})
             ),
         ]
     );
@@ -1772,9 +1783,11 @@ fn card_tasks_a_schema_9_queue_opens_at_10_and_its_card_links_none() {
     let before = row(&db);
 
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
+    // 12 since docs/features/task-mandate.md M5.
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12");
     assert_eq!(columns(&db), CARD_COLUMNS.join(" "));
-    assert_eq!(CARD_COLUMNS.len(), 25);
+    // 26 since docs/features/task-mandate.md M5 (`mandate`).
+    assert_eq!(CARD_COLUMNS.len(), 26);
     assert_eq!(
         sqlite3(&db, "SELECT tasks IS NULL FROM cards WHERE id = 'C-0001';"),
         "1",
@@ -1800,7 +1813,7 @@ fn card_tasks_a_schema_9_queue_opens_at_10_and_its_card_links_none() {
     );
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12", "stepped once");
     assert_eq!(columns(&db), CARD_COLUMNS.join(" "), "no second column");
 }
 

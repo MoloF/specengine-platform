@@ -346,8 +346,9 @@ fn ac_r4_controls_are_stored_raw() {
 fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     // Schema 11 and 48 columns since docs/features/card-questions.md S1; 46
     // since docs/features/drift-queue.md "Queue schema 8":
-    // `drift`, `drift_hash` after `interpretation`.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 11);
+    // `drift`, `drift_hash` after `interpretation`. Schema 12 since
+    // docs/features/task-mandate.md M5, `proposals` unchanged.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
     assert_eq!(PROPOSAL_COLUMNS.len(), 48);
     assert_eq!(PROPOSAL_COLUMNS[43], INTERPRETATION_KIND);
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
@@ -361,9 +362,11 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
     // stays 46).
     assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..46]));
-    // 48 at 11 (docs/features/card-questions.md S1).
+    // 48 at 11 (docs/features/card-questions.md S1), and at 12
+    // (docs/features/task-mandate.md M5: `cards` alone gains a column).
     assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(12), None);
+    assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(13), None);
 
     let scratch = Scratch::new("qi-t5");
     let db = scratch.db("q");
@@ -375,7 +378,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     let made = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12");
     assert_eq!(
         sqlite3(
             &db,
@@ -416,8 +419,8 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
             .all(|row| row.columns[43..].iter().all(Option::is_none))
     );
 
-    let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping 5 -> 11");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11");
+    let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping 5 -> 12");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "48"
@@ -435,7 +438,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12", "stepped once");
     // An interpretation goes into the stepped queue.
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
     assert_eq!(
@@ -447,23 +450,24 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     );
     drop(queue);
 
-    // Schema 12 (this build's is 11, docs/features/card-questions.md S1):
-    // refused by an open and a read, left alone.
-    sqlite3(&db, "PRAGMA user_version = 12;");
+    // Schema 13 (this build's is 12, docs/features/task-mandate.md M5; R1:
+    // 12 over 11 green at 8a43e5d): refused by an open and a read, left
+    // alone.
+    sqlite3(&db, "PRAGMA user_version = 13;");
     let rows = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(error @ QueueError::SchemaTooNew { found: 12 }) => {
+            Err(error @ QueueError::SchemaTooNew { found: 13 }) => {
                 let text = error.to_string();
-                assert!(text.contains("12") && text.contains("11"), "{text}");
+                assert!(text.contains("13") && text.contains("12"), "{text}");
             }
-            other => panic!("expected SchemaTooNew 12, got {other:?}"),
+            other => panic!("expected SchemaTooNew 13, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12", "left alone");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13", "left alone");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), rows);
 }
 

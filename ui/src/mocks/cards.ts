@@ -25,6 +25,7 @@ import type {
   CardWrite,
   IntakeDocument,
   IntakeMatch,
+  Mandate,
   TraceCard,
   TreeNode,
 } from "../api/types";
@@ -60,9 +61,15 @@ import { linkedTaskOf, type MockTasks } from "./tasks";
 // cards' and join the card's history by `seq`. Two of them stand out of time order, as two clocks'
 // writes may (docs/features/card-questions.md "Acceptance criteria", U1): PR-0055 was raised a
 // moment after the return, its `at` thirty seconds before it.
+// A subtask's mandate (docs/canon/card-mandate.md "The rule"; docs/features/task-mandate.md
+// "Acceptance criteria", V2, V3): C-0001's plate C-0013, reviewed by Mira Holt, is binding, and its
+// glossary C-0019 is the copy desk's to decide; every other card holds none. Each holds one of
+// C-0001's targets, so Ask and Record stand on it, and C-0013's plates flow opens its return column
+// to it. Each recorded one decision, open: PR-0057 on C-0019 with its why, PR-0058 on C-0013, a
+// departure from a binding brief; C-0001 reads both in its `subtask_items`, by ID.
 
 /** A stored card: the document less what a read adds, its links as the task IDs the row keeps. */
-export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "items" | "allowed" | "history" | "notes"> & { tasks: string[] };
+export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "items" | "subtask_items" | "allowed" | "history" | "notes"> & { tasks: string[] };
 
 interface MockEvent extends CardEvent {
   id: string;
@@ -119,6 +126,20 @@ const GONE_TARGET = "MEC-OLD-SLIPWAY";
 
 /** The `conflict` scenario's other hand. */
 const ELSEWHERE = "Dana Reyes";
+
+/** `mandate_problem`'s refusal: a mandate with no reviewer to change it (docs/canon/card-mandate.md "The rule"). */
+const MANDATE_NEEDS_REVIEWER = "mandate: a mandate goes with a reviewer, who alone changes it: name one with --reviewer";
+
+/** The two mandates a card may hold, as stored. */
+const MANDATES: readonly Mandate[] = ["binding", "open"];
+
+/** `mandate_change_problem`: only the card's stored reviewer, compared exactly, changes its mandate; none, no one. */
+function mandateChangeProblem(id: string, reviewer: string | null, actor: string): string | null {
+  if (reviewer === null) {
+    return `mandate: ${id} has no reviewer, who alone changes its mandate: name one with \`spec card assign ${id} --reviewer N\` first; nothing changed`;
+  }
+  return reviewer === actor ? null : `mandate: only ${id}'s reviewer \`${reviewer}\` changes its mandate, not \`${actor}\`; nothing changed`;
+}
 
 /** Every ordered pair of the columns but `accept.to`, as the reader expands a flow with no `moves`. */
 function everyMove(columns: readonly string[], closing: string) {
@@ -211,6 +232,7 @@ function aCard(at: number, fields: Partial<StoredCard> & Pick<StoredCard, "id" |
     criteria: [],
     assignee: null,
     reviewer: null,
+    mandate: null,
     estimate: null,
     due: null,
     parent: null,
@@ -406,8 +428,10 @@ function harborCards(at: number): StoredCard[] {
       title: "Tide table plate",
       goal: "The tables set as one plate, the datum line printed under them.",
       discipline: "plates",
+      targets: ["MEC-TIDE-TABLES"],
       parent: "C-0001",
       reviewer: "Mira Holt",
+      mandate: "binding",
     }),
     aCard(at, {
       id: "C-0014",
@@ -476,9 +500,11 @@ function harborCards(at: number): StoredCard[] {
       position: 2,
       title: "Tide table glossary",
       discipline: "copy",
+      targets: ["DOM-WATER"],
       parent: "C-0001",
       assignee: "Tomas Oakes",
       reviewer: "Mira Holt",
+      mandate: "open",
       revision: "2",
     }),
   ];
@@ -510,6 +536,9 @@ function harborItemEvents(at: number): { id: string; type: string; at: string; p
     { id: "PR-0056", type: "proposal.created", at: stamp(at, 570), payload: { id: "PR-0056", as: "Tomas Oakes" } },
     { id: "PR-0056", type: "proposal.approved", at: stamp(at, 540), payload: { id: "PR-0056", record: "DEC-0013" } },
     { id: "PR-0056", type: "proposal.applied", at: stamp(at, 540), payload: { id: "PR-0056", commit: "b7c9d1e3f5a7b9c1d3e5f7a9b1c3d5e7f9a1b3c5" } },
+    // The subtasks' two decisions (task-mandate): C-0019's, then C-0013's.
+    { id: "PR-0057", type: "proposal.created", at: stamp(at, 240), payload: { id: "PR-0057", as: "Tomas Oakes" } },
+    { id: "PR-0058", type: "proposal.created", at: stamp(at, 180), payload: { id: "PR-0058", as: "Noor Ainsley" } },
   ];
 }
 
@@ -615,7 +644,7 @@ export function mockBoard(slug: string, scenario: Scenario, at: number): MockBoa
     id: card.id,
     type: "card.created",
     at: card.created_at,
-    payload: { id: card.id, flow: card.flow, column: card.column, position: card.position, assignee: card.assignee, reviewer: card.reviewer, as: card.created_by },
+    payload: { id: card.id, flow: card.flow, column: card.column, position: card.position, assignee: card.assignee, reviewer: card.reviewer, mandate: card.mandate, as: card.created_by },
   }));
   const events = [...created, ...(harbor ? [...harborMoves(at), ...harborItemEvents(at)] : [])].map((event, index): MockEvent => ({ ...event, seq: index + 1 }));
   return board(cards, events, new Map(harbor ? [["DOM-BERTHS", "b3:dom-berths-2"], ["MEC-MOORING", "b3:mec-mooring-2"]] : []));
@@ -645,8 +674,8 @@ function allowedOf(board: MockBoard, card: StoredCard) {
   return flow.moves.filter((move) => move.from === card.column).map(({ to, by }) => ({ to, by: [...by] }));
 }
 
-function rowOf({ id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, acceptance, cancellation }: StoredCard): CardRow {
-  return { id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted: acceptance !== null, cancelled: cancellation !== null, mark: null, on: null, discrepancy: null, correction: null };
+function rowOf({ id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, acceptance, cancellation }: StoredCard): CardRow {
+  return { id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted: acceptance !== null, cancelled: cancellation !== null, mark: null, on: null, discrepancy: null, correction: null };
 }
 
 /** A row with its mark over all its targets; a cancelled card, which a read ignores, has none. */
@@ -738,6 +767,12 @@ export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks, propo
     .filter(({ review }) => review.card_id === id)
     .map(({ review }) => itemOf(review))
     .sort((a, b) => idNumber(a.id) - idNumber(b.id));
+  // Its subtasks' items, cancelled ones' too, no grandchild's: every item whose card names this one as `parent`, by ID, each its card first (`subtask_items`).
+  const children = new Set(board.cards.filter((candidate) => candidate.parent === id).map((candidate) => candidate.id));
+  const subtaskItems = proposals
+    .filter(({ review }) => review.card_id !== null && children.has(review.card_id))
+    .map(({ review }) => ({ card_id: review.card_id ?? "", ...itemOf(review) }))
+    .sort((a, b) => idNumber(a.id) - idNumber(b.id));
   const named = new Set(items.map((item) => item.id));
   const history = board.events
     .filter((event) => (event.id === id && !event.type.startsWith(ITEM_EVENT)) || (event.type.startsWith(ITEM_EVENT) && named.has(event.id)))
@@ -751,6 +786,7 @@ export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks, propo
     correction: null,
     tasks: linked.map(({ task }) => task),
     items,
+    subtask_items: subtaskItems,
     allowed: allowedOf(board, card),
     history,
     notes: linked.flatMap(({ notes }) => notes),
@@ -961,6 +997,10 @@ export function createCardIn(board: MockBoard, body: CardCreateBody, at: string)
   if (body.reviewer === LOCAL || body.reviewer === AGENT) {
     throw refused(`reviewer: \`${body.reviewer}\` can be no reviewer: a person accepts a result`);
   }
+  // `mandate_problem`, after the reviewer's: a mandate goes with a reviewer, who alone changes it.
+  if (body.mandate !== undefined && body.reviewer === undefined) {
+    throw refused(MANDATE_NEEDS_REVIEWER);
+  }
   if (body.parent !== undefined && !board.cards.some((card) => card.id === body.parent)) {
     throw refused(`parent: no card ${body.parent}`);
   }
@@ -989,6 +1029,7 @@ export function createCardIn(board: MockBoard, body: CardCreateBody, at: string)
     criteria: body.criterion ?? [],
     assignee: body.assignee ?? null,
     reviewer: body.reviewer ?? null,
+    mandate: body.mandate ?? null,
     estimate: body.estimate ?? null,
     due: body.due ?? null,
     parent: body.parent ?? null,
@@ -1004,7 +1045,7 @@ export function createCardIn(board: MockBoard, body: CardCreateBody, at: string)
   };
   board.cards.push(card);
   board.seq += 1;
-  board.events.push({ id: card.id, seq: board.seq, type: "card.created", at, payload: { id: card.id, flow: card.flow, column, position: card.position, assignee: card.assignee, reviewer: card.reviewer, as } });
+  board.events.push({ id: card.id, seq: board.seq, type: "card.created", at, payload: { id: card.id, flow: card.flow, column, position: card.position, assignee: card.assignee, reviewer: card.reviewer, mandate: card.mandate, as } });
   return writeOf(board, card);
 }
 
@@ -1090,10 +1131,14 @@ function list(written: string[] | undefined, stored: string[]): string[] {
 /** `card_edit`: the fields asked, evidence appended. */
 export function editCardIn(board: MockBoard, id: string, body: CardEditBody, at: string): CardWrite {
   checkName(body.as);
+  // A body's mandate off its two words fails decoding, as any typed key: a 400, nothing read.
+  if (body.mandate !== undefined && !MANDATES.includes(body.mandate)) {
+    throw new ClientError({ status: CARD_USAGE, message: `spec: mandate: unknown variant \`${body.mandate}\`, expected \`binding\` or \`open\`` });
+  }
   const card = writable(board, id, body.revision);
   const as = body.as ?? LOCAL;
   const reestimate = body.estimate !== undefined && body.estimate !== CLEAR && card.estimate !== null;
-  const asked = (["title", "goal", "target", "criterion", "due", "parent", "corrects", "evidence"] as const).some((key) => body[key] !== undefined);
+  const asked = (["title", "goal", "target", "criterion", "due", "parent", "corrects", "evidence", "mandate"] as const).some((key) => body[key] !== undefined);
   if (reestimate && asked) {
     throw new ClientError({ status: CARD_USAGE, message: `spec: \`spec card edit\`: ${id} holds an estimate: --estimate takes --reason and no other field` });
   }
@@ -1114,7 +1159,12 @@ export function editCardIn(board: MockBoard, id: string, body: CardEditBody, at:
     }
     return { kind, value, by: as, at };
   });
-  const fields = (["title", "goal", "target", "criterion", "estimate", "due", "parent", "corrects", "evidence"] as const).filter((key) => body[key] !== undefined);
+  // The store's `mandate_change_problem`, against the row under its lock, whatever else the edit holds.
+  const mandateProblem = body.mandate === undefined ? null : mandateChangeProblem(id, card.reviewer, as);
+  if (mandateProblem !== null) {
+    throw refused(mandateProblem);
+  }
+  const fields = (["title", "goal", "target", "criterion", "estimate", "due", "parent", "corrects", "evidence", "mandate"] as const).filter((key) => body[key] !== undefined);
   if (reestimate) {
     const old = card.estimate;
     card.estimate = body.estimate ?? card.estimate;
@@ -1130,7 +1180,9 @@ export function editCardIn(board: MockBoard, id: string, body: CardEditBody, at:
   card.parent = field(body.parent, card.parent);
   card.corrects = field(body.corrects, card.corrects);
   card.evidence = [...card.evidence, ...evidence];
-  return changed(board, card, "card.edited", { fields, as }, at);
+  card.mandate = body.mandate ?? card.mandate;
+  // `mandate` joins the payload only when the edit holds it: every other edit's stays `{id, fields, as}`.
+  return changed(board, card, "card.edited", body.mandate === undefined ? { fields, as } : { fields, as, mandate: body.mandate }, at);
 }
 
 /** `card_assign`: `local` and `agent` are no one's name, so neither can review. */
@@ -1437,13 +1489,42 @@ function splitPlanIn(board: MockBoard, scope: readonly MockScopeNode[], parentTa
       targets: byKinds ? found.slice(0, SPLIT_TARGETS_MAX) : [...parentTargets],
       from: byKinds ? "kinds" : "parent",
       suggested: suggested.includes(discipline),
+      mandate: null,
     });
   }
   return { children, notes };
 }
 
+/**
+ * `split_mandates`: each `<discipline>=<mandate>` of a split, a discipline of its `--child` list once,
+ * by discipline; else the refusal's line (docs/features/task-mandate.md "Acceptance criteria", M2).
+ */
+function splitMandates(given: readonly string[], children: readonly string[]): Map<string, Mandate> | string {
+  const mandates = new Map<string, Mandate>();
+  for (const entry of given) {
+    const at = entry.indexOf("=");
+    const [discipline, value] = at < 0 ? [entry, ""] : [entry.slice(0, at), entry.slice(at + 1)];
+    const mandate = MANDATES.find((word) => word === value);
+    if (mandate === undefined) {
+      return `mandate: \`${entry}\` is not \`<discipline>=binding\` or \`<discipline>=open\``;
+    }
+    const problem = nameProblem(discipline);
+    if (problem !== null) {
+      return `mandate: ${problem}`;
+    }
+    if (!children.includes(discipline)) {
+      return `mandate: \`${discipline}\` is no --child of this split`;
+    }
+    if (mandates.has(discipline)) {
+      return `mandate: \`${discipline}\` is named twice`;
+    }
+    mandates.set(discipline, mandate);
+  }
+  return mandates;
+}
+
 /** A card a split makes, last in its flow's first column. */
-function splitCard(board: MockBoard, fields: { flow: CardFlow; title: string; goal: string | null; discipline: string | null; targets: readonly string[]; reviewer: string; parent: string | null; as: string }, at: string): StoredCard {
+function splitCard(board: MockBoard, fields: { flow: CardFlow; title: string; goal: string | null; discipline: string | null; targets: readonly string[]; reviewer: string; mandate: Mandate | null; parent: string | null; as: string }, at: string): StoredCard {
   const column = fields.flow.columns[0]?.id ?? "";
   const card: StoredCard = {
     id: nextId(board),
@@ -1458,6 +1539,7 @@ function splitCard(board: MockBoard, fields: { flow: CardFlow; title: string; go
     criteria: [],
     assignee: null,
     reviewer: fields.reviewer,
+    mandate: fields.mandate,
     estimate: null,
     due: null,
     parent: fields.parent,
@@ -1473,7 +1555,7 @@ function splitCard(board: MockBoard, fields: { flow: CardFlow; title: string; go
   };
   board.cards.push(card);
   board.seq += 1;
-  board.events.push({ id: card.id, seq: board.seq, type: "card.created", at, payload: { id: card.id, flow: card.flow, column, position: card.position, assignee: null, reviewer: card.reviewer, as: fields.as } });
+  board.events.push({ id: card.id, seq: board.seq, type: "card.created", at, payload: { id: card.id, flow: card.flow, column, position: card.position, assignee: null, reviewer: card.reviewer, mandate: card.mandate, as: fields.as } });
   return card;
 }
 
@@ -1497,8 +1579,17 @@ export function splitCardsIn(board: MockBoard, body: CardSplitBody, scopeOf: (ta
   if (children === null && !body.dry_run) {
     throw new ClientError({ status: CARD_USAGE, message: "spec: name each subtask's discipline with --child, or plan with --dry-run" });
   }
+  const given = body.mandate ?? [];
+  if (given.length > 0 && children === null) {
+    throw new ClientError({ status: CARD_USAGE, message: "spec: --mandate names a subtask: give its --child too" });
+  }
   if (body.title !== null && body.title.trim() === "") {
     throw refused("title: blank; a card has a title");
+  }
+  // At step 2's fields, a dry run's too: each mandate a discipline of the children once.
+  const mandates = splitMandates(given, children ?? []);
+  if (typeof mandates === "string") {
+    throw refused(mandates);
   }
   const stored = body.parent === null ? null : (board.cards.find((card) => card.id === body.parent) ?? null);
   if (body.parent !== null && stored === null) {
@@ -1523,10 +1614,12 @@ export function splitCardsIn(board: MockBoard, body: CardSplitBody, scopeOf: (ta
       scope.push(node);
     }
   }
-  const plan = splitPlanIn(board, scope, targets, children);
-  if (typeof plan === "string") {
-    throw refused(plan);
+  const planned = splitPlanIn(board, scope, targets, children);
+  if (typeof planned === "string") {
+    throw refused(planned);
   }
+  // Each child its own mandate, by discipline, never by place; one named by none holds none.
+  const plan = { ...planned, children: planned.children.map((child) => ({ ...child, mandate: mandates.get(child.discipline) ?? null })) };
   const parentFlow = stored === null ? flowFor(board, body.discipline) : (flowOf(board, stored.flow) ?? `no flow \`${stored.flow}\``);
   if (typeof parentFlow === "string") {
     throw refused(parentFlow);
@@ -1551,10 +1644,10 @@ export function splitCardsIn(board: MockBoard, body: CardSplitBody, scopeOf: (ta
   const named = reviewer ?? LOCAL;
   const parent =
     stored ??
-    splitCard(board, { flow: parentFlow, title: body.title ?? "", goal: body.goal, discipline: body.discipline, targets, reviewer: named, parent: null, as }, at);
+    splitCard(board, { flow: parentFlow, title: body.title ?? "", goal: body.goal, discipline: body.discipline, targets, reviewer: named, mandate: null, parent: null, as }, at);
   const made = plan.children.map((child) => {
     const flow = flowOf(board, child.flow) ?? parentFlow;
-    const card = splitCard(board, { flow, title: parent.title, goal: parent.goal, discipline: child.discipline, targets: child.targets, reviewer: named, parent: parent.id, as }, at);
+    const card = splitCard(board, { flow, title: parent.title, goal: parent.goal, discipline: child.discipline, targets: child.targets, reviewer: named, mandate: child.mandate, parent: parent.id, as }, at);
     return { ...child, id: card.id };
   });
   return { dry_run: false, parent: shape(parent, stored === null), children: made, reviewer: named, notes: plan.notes };

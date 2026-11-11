@@ -1406,6 +1406,8 @@ pub(crate) struct CardRowShape {
     pub targets: Vec<String>,
     pub assignee: Option<String>,
     pub reviewer: Option<String>,
+    /// `null`: none.
+    pub mandate: Option<CardMandateShape>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -1454,6 +1456,9 @@ pub(crate) struct CardShowDocument {
     pub criteria: Vec<String>,
     pub assignee: Option<String>,
     pub reviewer: Option<String>,
+    // `docs/canon/card-mandate.md` "The rule".
+    /// `null`: none.
+    pub mandate: Option<CardMandateShape>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -1465,6 +1470,9 @@ pub(crate) struct CardShowDocument {
     /// The questions, discrepancies and decisions naming it, by ID, read
     /// now.
     pub items: Vec<CardItemShape>,
+    /// The questions, discrepancies and decisions naming one of its
+    /// subtasks, by ID, in one read.
+    pub subtask_items: Vec<CardSubtaskItemShape>,
     pub acceptance: Option<CardAcceptanceShape>,
     pub cancellation: Option<CardCancellationShape>,
     pub created_by: String,
@@ -1504,6 +1512,46 @@ pub(crate) struct CardItemShape {
     pub record_id: Option<String>,
     pub record_path: Option<String>,
     pub record_title: Option<String>,
+}
+
+// `docs/features/task-mandate.md` "Acceptance criteria", M6: the child
+// first, then [`CardItemShape`]'s keys.
+/// One question, discrepancy or decision naming one of the card's subtasks:
+/// `card_id` is that subtask; the other keys are as in `items`.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CardSubtaskItemShape {
+    /// The subtask it names.
+    pub card_id: String,
+    pub id: String,
+    /// Free: the queue's deciding kinds.
+    pub kind: String,
+    pub status: ProposalState,
+    /// A question's or a decision's text, a discrepancy's summary.
+    pub summary: String,
+    pub working_answer: Option<String>,
+    /// A decision's why.
+    pub why: Option<String>,
+    pub author: ProposalAuthor,
+    pub created_at: String,
+    pub updated_at: String,
+    /// When its open stage was staged; `null` when none.
+    pub staged_at: Option<String>,
+    pub decided_by: Option<String>,
+    pub decided_at: Option<String>,
+    /// An approval's note, a rejection's reason: its answer.
+    pub decision_note: Option<String>,
+    pub record_id: Option<String>,
+    pub record_path: Option<String>,
+    pub record_title: Option<String>,
+}
+
+/// Who decides what a subtask's brief leaves open; it decides nothing.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CardMandateShape {
+    Binding,
+    Open,
 }
 
 /// One direct target as a card last saw it.
@@ -1639,6 +1687,8 @@ pub(crate) struct CardSplitChildShape {
     pub from: SplitTargetsFrom,
     /// A split row the scope matched lists its discipline.
     pub suggested: bool,
+    /// The mandate its discipline was given; `null`: none.
+    pub mandate: Option<CardMandateShape>,
 }
 
 /// Where a subtask's targets come from: its rows' kinds, or the parent.

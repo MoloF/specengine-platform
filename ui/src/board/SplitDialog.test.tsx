@@ -17,10 +17,10 @@ import { ACTING_KEY } from "./acting";
 
 /** The four subtasks the stub's daemon plans, in served order: two suggested by kind, one off its flow's name by the task's targets, one no department names. */
 const PLANNED: readonly CardSplitChild[] = [
-  { id: null, discipline: "narrative", flow: "narrative", flow_title: "Narrative", column: "draft", targets: [FERRY, "RULE-FERRY-TIDES"], from: "kinds", suggested: true },
-  { id: null, discipline: "tools", flow: "development", flow_title: "Development", column: "backlog", targets: [FERRY], from: "parent", suggested: false },
-  { id: null, discipline: "art", flow: "art", flow_title: "Art", column: "sketch", targets: ["MEC-BOARDING"], from: "kinds", suggested: true },
-  { id: null, discipline: "sound", flow: "sound", flow_title: "Sound", column: "backlog", targets: [], from: "parent", suggested: false },
+  { id: null, discipline: "narrative", flow: "narrative", flow_title: "Narrative", column: "draft", targets: [FERRY, "RULE-FERRY-TIDES"], from: "kinds", suggested: true, mandate: null },
+  { id: null, discipline: "tools", flow: "development", flow_title: "Development", column: "backlog", targets: [FERRY], from: "parent", suggested: false, mandate: null },
+  { id: null, discipline: "art", flow: "art", flow_title: "Art", column: "sketch", targets: ["MEC-BOARDING"], from: "kinds", suggested: true, mandate: null },
+  { id: null, discipline: "sound", flow: "sound", flow_title: "Sound", column: "backlog", targets: [], from: "parent", suggested: false, mandate: null },
 ];
 
 /** The departments: writing names narrative's flow, studio art's and development's, all every flow, so it takes no row; none names sound's. */
@@ -84,6 +84,18 @@ function splitButton(dialog: HTMLElement): HTMLButtonElement {
   return within(dialog).getByRole<HTMLButtonElement>("button", { name: "Split" });
 }
 
+/** Each checked row's mandate select, in row order. */
+function mandateSelects(dialog: HTMLElement): HTMLSelectElement[] {
+  return within(dialog).queryAllByLabelText<HTMLSelectElement>(/^Mandate for /);
+}
+
+/** Every checked row's mandate chosen, binding unless given (docs/features/task-mandate.md "Acceptance criteria", V1). */
+function chooseMandates(dialog: HTMLElement, value = "binding") {
+  for (const select of mandateSelects(dialog)) {
+    fireEvent.change(select, { target: { value } });
+  }
+}
+
 describe("the Split dialog (U2 of department-split)", () => {
   it("reads the plan once as it opens, dry_run true and child null; rows in served order under the first department whose flows name theirs, Other flows last; the suggested checked; the suggested line", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ann");
@@ -91,7 +103,7 @@ describe("the Split dialog (U2 of department-split)", () => {
     const client = splitClient();
     const dialog = await fromDocument(client);
     await planned(dialog);
-    expect(bodies(client)).toEqual([{ target: [FERRY], title: "The ferry", goal: null, discipline: "art", parent: null, child: null, reviewer: null, dry_run: true, as: "Ann" }]);
+    expect(bodies(client)).toEqual([{ target: [FERRY], title: "The ferry", goal: null, discipline: "art", parent: null, child: null, mandate: null, reviewer: null, dry_run: true, as: "Ann" }]);
     // Writing's row, Studio's two in served order (development's then art's), then the one no department names; Everyone, all flows, takes none.
     expect(rows(dialog)).toEqual([
       ["Narrative ", true],
@@ -104,6 +116,9 @@ describe("the Split dialog (U2 of department-split)", () => {
     expect(within(dialog).getByText("Suggested by the project's split templates")).toBeTruthy();
     // The raw discipline under the flow's title when it differs, as the daemon wrote it.
     expect(Array.from(dialog.querySelectorAll(".split-discipline"), (raw) => [raw.textContent, raw.getAttribute("lang")])).toEqual([["tools", "en"]]);
+    // The suggested rows checked, their mandates not yet chosen: Split stays off (task-mandate, V1).
+    expect(splitButton(dialog).disabled).toBe(true);
+    chooseMandates(dialog);
     expect(splitButton(dialog).disabled).toBe(false);
   });
 
@@ -176,12 +191,13 @@ describe("the Split dialog (U2 of department-split)", () => {
     fireEvent.change(within(dialog).getByLabelText("Goal"), { target: { value: "  One crossing.  " } });
     fireEvent.change(within(dialog).getByLabelText("Discipline"), { target: { value: "tools" } });
     fireEvent.change(within(dialog).getByLabelText("Reviewer"), { target: { value: "Ann Lee" } });
+    chooseMandates(dialog);
     expect(client.splitCard).toHaveBeenCalledTimes(1);
     fireEvent.click(splitButton(dialog));
     await waitFor(() => {
       expect(client.splitCard).toHaveBeenCalledTimes(2);
     });
-    expect(bodies(client)[1]).toEqual({ target: [FERRY], title: "Ferry, all trades", goal: "One crossing.", discipline: "tools", parent: null, child: ["tools", "sound"], reviewer: "Ann Lee", dry_run: false, as: "Ann" });
+    expect(bodies(client)[1]).toEqual({ target: [FERRY], title: "Ferry, all trades", goal: "One crossing.", discipline: "tools", parent: null, child: ["tools", "sound"], mandate: ["tools=binding", "sound=binding"], reviewer: "Ann Lee", dry_run: false, as: "Ann" });
     for (const other of [client.createCard, client.assignCard, client.moveCard, client.editCard]) {
       expect(other).not.toHaveBeenCalled();
     }
@@ -191,6 +207,7 @@ describe("the Split dialog (U2 of department-split)", () => {
     window.localStorage.setItem(ACTING_KEY, "Ann");
     const dialog = await fromDocument();
     await planned(dialog);
+    chooseMandates(dialog);
     const act = screen.getAllByRole("button", { name: "Split to departments…" })[0] as HTMLElement;
     fireEvent.click(splitButton(dialog));
     await waitFor(() => {
@@ -215,6 +232,7 @@ describe("the Split dialog (U2 of department-split)", () => {
     client.splitCard.mockImplementation((_project, body) => (body.dry_run ? Promise.resolve(answerOf(body)) : Promise.reject(new ClientError({ status: 409, message: reason }))));
     const dialog = await fromDocument(client);
     await planned(dialog);
+    chooseMandates(dialog);
     fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Kept" } });
     fireEvent.click(splitButton(dialog));
     const alert = await within(dialog).findByText(reason);
@@ -263,6 +281,7 @@ describe("the Split dialog (U2 of department-split)", () => {
     client.splitCard.mockImplementation((_project, body) => (body.dry_run ? Promise.resolve(answerOf(body)) : Promise.reject(new ClientError({ status: 400, message: line }))));
     const dialog = await fromDocument(client);
     await planned(dialog);
+    chooseMandates(dialog);
     fireEvent.click(splitButton(dialog));
     expect((await within(dialog).findByText(line)).closest('[role="alert"]')).not.toBeNull();
   });
@@ -295,12 +314,13 @@ describe("from a task (U1, U2 of department-split)", () => {
     expect(within(dialog).queryByText("Tasks on this document:")).toBeNull();
     expect(within(dialog).getByLabelText<HTMLInputElement>("Reviewer").value).toBe("Ivo Brandt");
     await planned(dialog);
-    expect(bodies(client)).toEqual([{ target: null, title: null, goal: null, discipline: null, parent: "C-0001", child: null, reviewer: null, dry_run: true, as: "Ann" }]);
+    expect(bodies(client)).toEqual([{ target: null, title: null, goal: null, discipline: null, parent: "C-0001", child: null, mandate: null, reviewer: null, dry_run: true, as: "Ann" }]);
+    chooseMandates(dialog, "open");
     fireEvent.click(splitButton(dialog));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Split C-0001 to departments" })).toBeNull();
     });
-    expect(bodies(client)[1]).toEqual({ target: null, title: null, goal: null, discipline: null, parent: "C-0001", child: ["narrative", "art"], reviewer: "Ivo Brandt", dry_run: false, as: "Ann" });
+    expect(bodies(client)[1]).toEqual({ target: null, title: null, goal: null, discipline: null, parent: "C-0001", child: ["narrative", "art"], mandate: ["narrative=open", "art=open"], reviewer: "Ivo Brandt", dry_run: false, as: "Ann" });
     await waitFor(() => {
       expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("2 subtasks for C-0001");
     });
@@ -318,6 +338,7 @@ describe("from a task (U1, U2 of department-split)", () => {
     const reviewer = within(dialog).getByLabelText<HTMLInputElement>("Reviewer");
     expect(reviewer.value).toBe("");
     await planned(dialog);
+    chooseMandates(dialog);
     fireEvent.click(splitButton(dialog));
     expect((await within(dialog).findByRole("alert")).textContent).toBe("Name who checks the result: a person on the side that asks.");
     expect(reviewer.getAttribute("aria-invalid")).toBe("true");
@@ -332,6 +353,7 @@ describe("from a task (U1, U2 of department-split)", () => {
     const reviewer = await within(dialog).findByLabelText<HTMLInputElement>("Reviewer");
     expect([reviewer.value, reviewer.readOnly]).toEqual(["mira", true]);
     await planned(dialog);
+    chooseMandates(dialog);
     fireEvent.click(splitButton(dialog));
     await waitFor(() => {
       expect(client.splitCard).toHaveBeenCalledTimes(2);
@@ -368,6 +390,7 @@ describe("from a task (U1, U2 of department-split)", () => {
     );
     const { modal, dialog } = await fromTask(client);
     await planned(dialog);
+    chooseMandates(dialog);
     fireEvent.click(splitButton(dialog));
     await waitFor(() => {
       expect(client.splitCard).toHaveBeenCalledTimes(2);
@@ -408,6 +431,7 @@ describe("from a task (U1, U2 of department-split)", () => {
     await within(part).findByText("None yet.");
     const before = childrenReads();
     await planned(dialog);
+    chooseMandates(dialog);
     fireEvent.click(splitButton(dialog));
     await waitFor(() => {
       expect(screen.getAllByRole("dialog")).toEqual([modal]);
@@ -417,6 +441,84 @@ describe("from a task (U1, U2 of department-split)", () => {
     });
     expect(childrenReads()).toBe(before + 1);
     expect(within(part).queryByText("None yet.")).toBeNull();
+  });
+});
+
+// V1 of docs/features/task-mandate.md "Acceptance criteria": a mandate per checked subtask, none by
+// default; Split off until each checked row has one, saying so; posted as `<discipline>=<mandate>` in
+// row order, an unchecked row's never; the plan read unchanged but `mandate: null`, read once.
+describe("a mandate per subtask (V1 of task-mandate)", () => {
+  it("puts a select on each checked row alone, at Choose…, Binding and Department decides after it; none on an unchecked one; named by the row's flow title, its discipline beside it when another", async () => {
+    const dialog = await fromDocument();
+    await planned(dialog);
+    // Narrative and Art checked, suggested; Development (tools) and Sound not.
+    expect(mandateSelects(dialog).map((select) => select.labels[0]?.textContent)).toEqual(["Mandate for Narrative", "Mandate for Art"]);
+    for (const select of mandateSelects(dialog)) {
+      expect([select.value, Array.from(select.options, (option) => [option.value, option.textContent])]).toEqual([
+        "",
+        [
+          ["", "Choose…"],
+          ["binding", "Binding"],
+          ["open", "Department decides"],
+        ],
+      ]);
+      expect(select.closest("li")?.querySelector('input[type="checkbox"]')?.getAttribute("type")).toBe("checkbox");
+    }
+    const boxes = await planned(dialog);
+    fireEvent.click(boxes[1] as HTMLElement);
+    expect(mandateSelects(dialog).map((select) => select.labels[0]?.textContent)).toEqual(["Mandate for Narrative", "Mandate for Development (tools)", "Mandate for Art"]);
+  });
+
+  it("keeps Split off, saying so, until every checked row has a mandate (M: a default of binding)", async () => {
+    const dialog = await fromDocument();
+    await planned(dialog);
+    expect(splitButton(dialog).disabled).toBe(true);
+    expect(within(dialog).getByRole("status").textContent).toBe("Choose a mandate for each checked subtask");
+    const [narrative, art] = mandateSelects(dialog);
+    fireEvent.change(narrative as HTMLSelectElement, { target: { value: "binding" } });
+    expect(splitButton(dialog).disabled).toBe(true);
+    fireEvent.change(art as HTMLSelectElement, { target: { value: "open" } });
+    expect(splitButton(dialog).disabled).toBe(false);
+    expect(within(dialog).queryByText("Choose a mandate for each checked subtask")).toBeNull();
+    // Back to Choose…: off again.
+    fireEvent.change(narrative as HTMLSelectElement, { target: { value: "" } });
+    expect(splitButton(dialog).disabled).toBe(true);
+  });
+
+  it("posts art binding and sound open as mandate [art=binding, sound=open] in row order, whatever order they were chosen in; unchecking art drops its entry; one plan read (M: Split sending an unchecked row's mandate)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = splitClient();
+    const dialog = await fromDocument(client);
+    const boxes = await planned(dialog);
+    // Narrative off; Sound on; Art stays on.
+    fireEvent.click(boxes[0] as HTMLElement);
+    fireEvent.click(boxes[3] as HTMLElement);
+    fireEvent.change(within(dialog).getByLabelText("Mandate for Sound"), { target: { value: "open" } });
+    fireEvent.change(within(dialog).getByLabelText("Mandate for Art"), { target: { value: "binding" } });
+    fireEvent.click(splitButton(dialog));
+    await waitFor(() => {
+      expect(client.splitCard).toHaveBeenCalledTimes(2);
+    });
+    expect(bodies(client)[1]).toMatchObject({ child: ["art", "sound"], mandate: ["art=binding", "sound=open"] });
+    expect(bodies(client).filter((body) => body.dry_run)).toEqual([expect.objectContaining({ child: null, mandate: null })]);
+  });
+
+  it("an unchecked row's mandate is never sent, though chosen before", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const client = splitClient();
+    const dialog = await fromDocument(client);
+    const boxes = await planned(dialog);
+    fireEvent.click(boxes[3] as HTMLElement);
+    chooseMandates(dialog, "open");
+    // Art unchecked after its mandate was chosen: its select goes, and so does its entry.
+    fireEvent.click(boxes[2] as HTMLElement);
+    expect(within(dialog).queryByLabelText("Mandate for Art")).toBeNull();
+    fireEvent.click(splitButton(dialog));
+    await waitFor(() => {
+      expect(client.splitCard).toHaveBeenCalledTimes(2);
+    });
+    expect(bodies(client)[1]).toMatchObject({ child: ["narrative", "sound"], mandate: ["narrative=open", "sound=open"] });
+    expect(client.splitCard).toHaveBeenCalledTimes(2);
   });
 });
 

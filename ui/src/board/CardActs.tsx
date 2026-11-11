@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import type { Card, CardAllowed, CardFlow, CardMoveBody, CardRow, CardWrite } from "../api/types";
 import type { Translate } from "../i18n";
 import { AcceptCardDialog, AssignDialog, CancelCardDialog, ClearCardDialog, EditCardDialog, HandOffDialog, NewCardDialog, ReturnDialog, type HandOffSource, type ReturnTarget } from "./CardDialogs";
-import { columnTitle, needsLine } from "./labels";
+import { asksOnReturn, columnTitle, needsLine } from "./labels";
 import type { MoveChoice } from "./MoveMenu";
 
 /** The two dialogs that raise an item on a card, in the items' chunk (docs/features/card-questions.md "Acceptance criteria", U3, U7). */
@@ -110,10 +110,13 @@ export function CardActDialog({
     case "return": {
       const row = current.row(dialog.card.id);
       const flow = flowOf(row?.flow ?? "");
+      const card = row ?? dialog.card;
       return (
         <ReturnDialog
           project={project}
-          card={row ?? dialog.card}
+          card={card}
+          // A binding task's departure goes back with a question: its part starts open (docs/features/task-mandate.md "Acceptance criteria", V2).
+          askOpen={asksOnReturn(card.mandate)}
           to={dialog.to}
           toTitle={columnTitle(flow, dialog.to)}
           before={dialog.before}

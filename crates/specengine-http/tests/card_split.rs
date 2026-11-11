@@ -74,11 +74,11 @@ fn written(first: u32, created: bool) -> Value {
         "children": [
             {"id": id(first + 1), "discipline": "copy", "flow": "copy",
              "flow_title": "Copy desk", "column": "draft",
-             "targets": of_kinds(&["broadsheet"]), "from": "kinds", "suggested": true},
+             "targets": of_kinds(&["broadsheet"]), "from": "kinds", "suggested": true, "mandate": null},
             {"id": id(first + 2), "discipline": "plates", "flow": "plates",
              "flow_title": "plates", "column": "queued",
              "targets": of_kinds(&["broadsheet", "print-run"]), "from": "kinds",
-             "suggested": true}
+             "suggested": true, "mandate": null}
         ],
         "reviewer": ANA,
         "notes": []
@@ -172,7 +172,7 @@ fn events_of(home: &Path, root: &Path) -> Vec<(String, Value)> {
 
 fn created(id: &str, flow: &str, column: &str, position: u64, reviewer: &str, by: &str) -> Value {
     json!({"id": id, "flow": flow, "column": column, "position": position,
-           "assignee": null, "reviewer": reviewer, "as": by})
+           "assignee": null, "reviewer": reviewer, "mandate": null, "as": by})
 }
 
 /// The `card.created` payloads of `events`.

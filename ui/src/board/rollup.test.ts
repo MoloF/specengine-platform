@@ -3,7 +3,7 @@ import type { CardEvent } from "../api/types";
 import { aCardFlow, aCardRow } from "../test/builders";
 import { enT } from "../test/text";
 import { handOffLook } from "./labels";
-import { returnReasonOf, rollupsOf, type Rollup } from "./rollup";
+import { progressOf, returnReasonOf, rollupsOf, type Rollup } from "./rollup";
 
 /** One card's rollup from one list: none when it has no child standing. */
 function rollupOf(id: string, rows: Parameters<typeof rollupsOf>[0], flows: Parameters<typeof rollupsOf>[1]): Rollup {
@@ -75,5 +75,34 @@ describe("why a card came back (BH-15)", () => {
     expect(returnReasonOf([], "doing")).toBeNull();
     expect(returnReasonOf([moved(1, "doing", null), moved(2, "doing", 7), moved(3, "check", "x")], "doing")).toBeNull();
     expect(returnReasonOf([{ seq: 1, type: "card.moved", at: "2026-11-01T10:00:00Z", payload: "garbled" }], "doing")).toBeNull();
+  });
+});
+
+// M4 of docs/features/task-mandate.md "Acceptance criteria": nothing reads a mandate (ADR-0012). Rows
+// alike but for it give the same progress, Ready and Relies on, and the same rollup and hand-off words.
+describe("a parent's progress and rollup, whatever its subtasks' mandates (M4 of task-mandate)", () => {
+  const rows = [
+    aCardRow({ id: "C-0001", flow: "plain", title: "Parent" }),
+    aCardRow({ id: "C-0002", flow: "art", column: "todo", parent: "C-0001" }),
+    aCardRow({ id: "C-0003", flow: "art", column: "doing", parent: "C-0001" }),
+    aCardRow({ id: "C-0004", flow: "art", column: "closed", parent: "C-0001", accepted: true }),
+    aCardRow({ id: "C-0005", flow: "art", column: "todo", parent: "C-0001", cancelled: true, position: 0 }),
+  ];
+
+  it("counts, words, Ready and Relies on are equal across null, binding and open (M: a binding subtask left out of Relies on)", () => {
+    const parent = { id: "C-0001", open: true };
+    const plain = progressOf(rows, FLOWS, parent);
+    for (const mandate of ["binding", "open"] as const) {
+      const marked = rows.map((row) => (row.parent === null ? row : { ...row, mandate }));
+      const progress = progressOf(marked, FLOWS, parent);
+      expect([mandate, progress.segments, progress.ready, progress.reliesOn.map((row) => row.id), progress.children.map((child) => [child.row.id, child.word])]).toEqual([
+        mandate,
+        plain.segments,
+        plain.ready,
+        plain.reliesOn.map((row) => row.id),
+        plain.children.map((child) => [child.row.id, child.word]),
+      ]);
+      expect(rollupOf("C-0001", marked, FLOWS)).toEqual({ ...rollupOf("C-0001", rows, FLOWS), children: rollupOf("C-0001", rows, FLOWS).children.map((child) => ({ ...child, row: { ...child.row, mandate } })) });
+    }
   });
 });

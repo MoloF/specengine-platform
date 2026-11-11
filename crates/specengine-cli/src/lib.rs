@@ -324,9 +324,9 @@ pub use card::{
     CardGroupOutcome, CardItem, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest,
     CardNewBody, CardNewRequest, CardOutcome, CardRaiseBody, CardRaiseKind, CardRaiseOutcome,
     CardRaiseRequest, CardShowOutcome, CardShowRequest, CardSplitBody, CardSplitChild,
-    CardSplitOutcome, CardSplitParent, CardSplitRequest, TOOL_ACTOR, card_accept, card_assign,
-    card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move, card_new,
-    card_raise, card_show, card_split,
+    CardSplitOutcome, CardSplitParent, CardSplitRequest, CardSubtaskItem, TOOL_ACTOR, card_accept,
+    card_assign, card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move,
+    card_new, card_raise, card_show, card_split,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
@@ -467,7 +467,7 @@ pub use specengine_core::task::{
 };
 pub use specengine_core::{ProjectConfig, TeamConfig, TeamEntry, TeamRole};
 /// The task package and its parts (the model's), for the bridges.
-pub use specengine_model::{CARD_TASKS_MAX, RunOutcome, TaskPackage, TaskStatus};
+pub use specengine_model::{CARD_TASKS_MAX, Mandate, RunOutcome, TaskPackage, TaskStatus};
 /// The caller's git environment a queue request carries.
 pub use specengine_store::GitEnv;
 /// A staged choice as the review document carries it (the store's).

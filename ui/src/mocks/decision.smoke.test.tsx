@@ -138,8 +138,10 @@ describe("harbor-sim's decision (AC-U1 of kind-decision)", () => {
     const client = mock();
     const { proposals } = await client.getInbox(SLUG);
     const reviews = await Promise.all(proposals.map((entry) => client.getProposal(SLUG, entry.id)));
-    // Kinds are raw strings: spelled only in mocks and tests (ADR-0031).
-    expect(reviews.filter((review) => review.kind === "decision").map((review) => review.id)).toEqual([DECISION]);
+    // Kinds are raw strings: spelled only in mocks and tests (ADR-0031). The two others are C-0001's
+    // subtasks' decisions, raised on their cards (docs/features/task-mandate.md "Acceptance criteria", V3).
+    expect(reviews.filter((review) => review.kind === "decision").map((review) => review.id)).toEqual([DECISION, "PR-0057", "PR-0058"]);
+    expect(reviews.filter((review) => review.kind === "decision" && review.card_id === null).map((review) => review.id)).toEqual([DECISION]);
     const decision = await client.getProposal(SLUG, DECISION);
     expect(decision).toMatchObject({
       id: DECISION,
