@@ -51,7 +51,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0087.md](roadmap/RM-0087.md) roadmap-states (Phase 7, v4 step 5): the owner's states, and views by state, release and timeline · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs · crates/specengine-mcp, crates/specengine-cli, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-department (Phase 7, v5 step 13): a hub's per-login default department · crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0098.md](roadmap/RM-0098.md) handoff-progress (Phase 7, v5 step 6): a parent shows Ready to accept and a progress bar · ui · draft
+- [docs/roadmap/RM-0098.md](roadmap/RM-0098.md) handoff-progress (Phase 7, v5 step 6): a parent shows Ready to accept and a progress bar; Flow left to right again · ui · draft
 - [docs/roadmap/RM-0099.md](roadmap/RM-0099.md) design-sweep (Phase 7, v5 step 7): every other screen on the foundation · ui · draft
 - [docs/roadmap/RM-0100.md](roadmap/RM-0100.md) journeys (Phase 7, v5, optional): one act hands a task to several departments · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, scripts · draft
 - [docs/roadmap/RM-0102.md](roadmap/RM-0102.md) flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft

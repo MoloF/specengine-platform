@@ -215,7 +215,7 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - Q11: a decision record names no card; the card links back to it.
 - Q12: RM-0087 `roadmap-states` leaves the direction.
 - Q13: the pipeline trial replaces the studio trial.
-- Q14: Flow walks top to bottom with stage dividers, until the owner's look.
+- Q14: Flow walks top to bottom with stage dividers, until the owner's look. Closed by his look on 2026-11-11: Flow walks left to right, as before step 2, keeping its stage dividers (step 6, `docs/features/handoff-progress.md` D10).
 - Flow v2's Q1-Q4 stand at their recommendations.
 
 **Not taken**, because each would contradict a standing ADR: a parent closing itself (ADR-0074), a department hiding others' work (ADR-0073), and `spec.lock` out of git (ADR-0018, ADR-0041).
@@ -229,7 +229,7 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - **Proof** is a decision record that the card links back to.
 - **Folded in the UI.** These are local technical details: the UI folds them and never moves them. They are IDs, paths, raw kinds, revisions and hashes, tokens, distance, gap codes, Bindings, Bundle, the lock diff and drift. `T-` tasks show as a Development summary.
 
-The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6 come to 59-88 pipeline hours (step 3 took RM-0101 in; steps 4 and 5 re-estimated by their analyses) and steps 7-13 to 27-46.
+The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6 come to 65-97 pipeline hours (step 3 took RM-0101 in; steps 4 to 6 re-estimated by their analyses, step 6 with the owner's fixes of 2026-11-11) and steps 7-13 to 27-46.
 
 | Step | Slice | Item | Result | ADR issued | Hours | After |
 |---|---|---|---|---|---|---|
@@ -238,7 +238,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 3 | `doc-modal` | RM-0095, RM-0091, RM-0101 | Shipped 2026-11-11: link ends' `title`, `end_kind` and gap items' `titles` (RM-0101) served; one document view, the `doc` hash pair's modal over any screen and a page, the path its breadcrumb, links by title, Inside on expansion, technical details folded; `DocLink` outside the Spec tree; Flow's panel minimal; RM-0091's thirteen plural fixes; plugin 0.34.0; first-load JS 824.13 kB of 845 (`docs/canon/doc-view.md`) | - | 10-16 | 1, 2 |
 | 4 | `departments` | RM-0096 | Shipped 2026-11-11: the owner's words (Department, Task, Subtask, Agent task); `[[card.flow]] title` on the Board; `[[module]] kinds` directions, the Tree's flat list and Inside's groups, Flow rooted only (RM-0102 in the pool); Hand off by department, its `disciplines` served; preset flow titles; plugin 0.35.0; first-load JS 827.62 kB of 845 (`docs/canon/directions.md`, `workspaces.md`) | ADR-0076 `departments` (amends ADR-0073) | 10-14 | 1 |
 | 5 | `card-questions` | RM-0097 | Shipped 2026-11-11: intake items name `card_id` (queue schema 11, backup format 5); a decision's `why` and its `{{why}}` slot; the card's `items` and Activity; "Ask a question" in Return; ask, record and answer (a stage) from the task; the route a hub's sixth plain write; plugin 0.36.0; first-load JS 840.79 kB of 845 (`docs/canon/card-questions.md`) | ADR-0077 `card-questions` (supplements ADR-0056, ADR-0057, ADR-0074, ADR-0075) | 13-19 | 1 |
-| 6 | `handoff-progress` | RM-0098 | Ready to accept, a segmented bar, cancelled subtasks with reasons, "Relies on"; UI only | - | 3-5 | 1 |
+| 6 | `handoff-progress` | RM-0098 | Ready to accept, a segmented bar, cancelled subtasks with their reasons, "Relies on", from the task's own children read; `RoadmapView` and `GraphView` lazy first; the owner's fixes of 2026-11-11: Flow left to right (Q14 closed), a short press on a box is a click, work-item modals 1200 px; arrows named in reading order; UI only (`docs/features/handoff-progress.md`) | - | 9-14 | 1 |
 | gate | the pipeline trial | - | No code: the bar below | - | - | 1-6 |
 | 7 | `design-sweep` | RM-0099 | (a) Inbox, Questions, Spec tree, Overview; (b) Health, Graph, Roadmap, Tasks, on the foundation; the legacy tokens and step 1's exceptions gone | - | 8-14 | 1, gate |
 | 8 | `intake-similar` | RM-0059 | `similar` and `distinct_from` on create | - | 2-4 | - |
