@@ -98,7 +98,7 @@ No card write moves, creates or refuses another card. A parent waits on no child
 
 `spec card list --parent C`, `list_cards {parent}`, `GET .../cards?parent=C`: the cards whose `parent` is exactly C, with every flow line. None: an empty list, exit 0. C off the card-ID grammar exits 2, a look-alike naming its Latin form; at the daemon that is a 503 with the CLI's line. A second `parent` in the query is a 400 (`query.rs`), `parent` last in its names.
 
-**Rollup** (UI `rollup.ts`, `labels.ts`; nothing served): a card's children are the list's rows whose `parent` is its ID, a cancelled child left out. Each child's word, looked up and never judged: accepted when `accepted`; returned in its flow's `return` column; handed off in its flow's first column; taken in any other column. A child whose flow is not served shows its `<flow>/<column>` with no word; a child in a hidden flow still counts.
+**Rollup** (UI `rollup.ts`, `labels.ts`; nothing served): a card's children are the list's rows whose `parent` is its ID, a cancelled child left out; the work item reads its own children, cancelled ones too (`card-progress.md`). Each child's word, looked up and never judged: accepted when `accepted`; returned in its flow's `return` column; handed off in its flow's first column; taken in any other column. A child whose flow is not served shows its `<flow>/<column>` with no word; a child in a hidden flow still counts.
 
 ## MCP and hub
 

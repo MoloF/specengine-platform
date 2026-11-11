@@ -253,6 +253,8 @@
   /* The Flow studio's panes (docs/features/writer-studio.md D6): places and panel fixed, the canvas
      at least this wide between them. */
   --flow-places-width: 15rem;
+  /* An edge label's width at most: Flow's column gap, 64 px, less its insets (layout.ts `LABEL_WIDTH`). */
+  --flow-edge-label-width: 3.5rem;
   --flow-panel-width: 22rem;
   --flow-canvas-min: 20rem;
 
@@ -314,11 +316,11 @@
   --reading-width: 68ch;
   --empty-state-width: 29rem;
   /* The work item (src/ui/IssueView.tsx): a side column beside a main one; the dialogs' widths. */
-  --issue-side-width: 20.625rem;
+  --issue-side-width: 22.5rem;
   --issue-main-min: 20rem;
   --modal-width-s: 37.5rem;
   --modal-width-m: 50rem;
-  --modal-width-l: 60.5rem;
+  --modal-width-xl: 75rem;
 
   /* The legacy names, aliases onto the scale until RM-0099 renames their uses: 13 px reads 14,
      15 reads 16, 18 reads 20 (W10). */

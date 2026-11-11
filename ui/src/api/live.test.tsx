@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
@@ -14,6 +15,7 @@ import {
   useBundle,
   useCard,
   useCards,
+  useChildren,
   useCheck,
   useGraph,
   useInbox,
@@ -29,7 +31,7 @@ import {
   useTrace,
   useTree,
 } from "./queries";
-import type { Proposal, TaskListEntry } from "./types";
+import type { Proposal, QueueEvent, TaskListEntry } from "./types";
 
 // AC-09 of docs/features/daemon-read.md: the live tail over a stubbed EventSource. A `proposal.*`
 // event reads that project's inbox and that proposal again; `proposal.applied` also that project's
@@ -1245,5 +1247,74 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     });
     await quiet(queryClient);
     expect(client.getCards).not.toHaveBeenCalled();
+  });
+});
+
+// docs/features/handoff-progress.md "Acceptance criteria", HP-1: the work item's children read sits under
+// the project's card lists, so a `card.*` event reads it again while a card is shown, and none once closed.
+describe("a work item's children on the live tail (HP-1 of handoff-progress)", () => {
+  function Children() {
+    useChildren("alpha", "C-0001");
+    return <p>children</p>;
+  }
+
+  function Screen() {
+    useLiveQueue("alpha");
+    const [shown, setShown] = useState(true);
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setShown(false);
+          }}
+        >
+          close
+        </button>
+        {shown && <Children />}
+      </>
+    );
+  }
+
+  it("reads the children again on a card event naming a child, C-0013, and no more once the card is closed", async () => {
+    const client = stubClient();
+    client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-0013", parent: "C-0001" })]));
+    let tail: (event: QueueEvent) => void = () => undefined;
+    const queryClient = createQueryClient();
+    render(
+      <ApiProvider
+        client={{
+          ...client,
+          subscribe: (_project, onEvent) => {
+            tail = onEvent;
+            return () => undefined;
+          },
+        }}
+        queryClient={queryClient}
+      >
+        <Screen />
+      </ApiProvider>,
+    );
+    const asked = () => client.getCards.mock.calls.map((call) => call[1]);
+    await waitFor(() => {
+      expect(asked()).toEqual([{ parent: "C-0001", with_cancelled: true }]);
+    });
+    act(() => {
+      tail({ seq: 90, type: "card.moved", payload: { id: "C-0013" } });
+    });
+    await waitFor(() => {
+      expect(asked()).toEqual([
+        { parent: "C-0001", with_cancelled: true },
+        { parent: "C-0001", with_cancelled: true },
+      ]);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "close" }));
+    act(() => {
+      tail({ seq: 91, type: "card.moved", payload: { id: "C-0013" } });
+    });
+    await waitFor(() => {
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    expect(asked()).toHaveLength(2);
   });
 });

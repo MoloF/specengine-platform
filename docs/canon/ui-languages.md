@@ -60,7 +60,7 @@ Every screen: Home, Inbox, Tasks, Board, Roadmap, Spec tree, Graph, Health, Ques
 
 The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus every `<link rel="modulepreload">` it lists, raw bytes on disk, as the daemon sends them (no `content-encoding`, `serve-ui.md`). Each UI slice prints it in its "Implementation" with the first-load gzip (Vite's per-chunk figures, summed) and `ru-*.js` raw and gzip, for a hub behind a compressing proxy. Baseline, 2026-11-09 (RM-0090): 768.96 kB (768 959 B: `index-*.js` 622.62, `Icon-*.js` 140.15 holding i18next and English, four small chunks), gzip 219.15 kB; `ru-*.js` 134.98 kB, gzip 31.13 kB.
 
-**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a screen or part out of first load (a lazy chunk, as `HealthRegions`, `RoundScreen`, `Markdown` and `DocBody` are) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's 500 kB warning on `index-*.js` is not the gate. At RM-0097, 840.79 kB: the next slice moves `RoadmapView` out of first load, then `GraphView` (RM-0098).
+**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a screen or part out of first load (a lazy chunk, as `HealthRegions`, `RoundScreen`, `Markdown` and `DocBody` are) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's 500 kB warning on `index-*.js` is not the gate. At RM-0098, 815.11 kB (gzip 235.71), from 840.79 at RM-0097, with `RoadmapView` (12.68 kB) and `GraphView` (24.38 kB) lazy chunks; `ru-*.js` 149.07 kB.
 
 ## Known limits
 
@@ -68,6 +68,7 @@ The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus
 - The prose rule is a net, not a proof: a bare lower-case word passes; review covers it.
 - Spec content carries no `lang`; one choice per browser, no cross-tab sync.
 - The Russian awaits the owner's review; rewording breaks no test.
+- After a redeploy, a page loaded before it asks for lazy chunks that are gone: a route's Retry fails until a reload (RM-0103).
 
 ## Tests
 

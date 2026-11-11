@@ -10,7 +10,7 @@ import { DocFrame } from "./DocFrame";
 
 // The document modal (docs/features/doc-modal.md "Acceptance criteria", DM-9, DM-10): the `doc` pair
 // of any project route, over the view and over any dialog beneath, always the top one. A work item
-// labelled by its `h2`, the title once read (the REF until then), where focus starts; 968 px or the
+// labelled by its `h2`, the title once read (the REF until then), where focus starts; 1200 px or the
 // viewport less 2rem, the whole screen under 36rem, its body scrolling (under 36rem the dialog scrolls
 // as one). Esc, Close and the scrim close it as a card's modal closes; while a card write is out none
 // of them does. The frame (./DocFrame.tsx) holds the dialog's own `h2` through the parts' loading.

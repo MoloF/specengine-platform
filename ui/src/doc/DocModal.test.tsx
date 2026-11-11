@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { aProposal } from "../test/builders";
 import { docClient, FERRY } from "../test/docStub";
 import { renderApp } from "../test/render";
+import appCss from "../styles/app.css?raw";
 
 // DM-9 of docs/features/doc-modal.md on the river ferry: the modal is one dialog over the view, the
 // view inert and the live regions not; it opens with one history entry from a link and closes as a
@@ -155,5 +156,23 @@ describe("the document modal (DM-9 of doc-modal)", () => {
     for (const act of ["New task", "Open in Flow"]) {
       expect([act, within(dialog).queryByRole("button", { name: act }), within(dialog).queryByRole("link", { name: act })]).toEqual([act, null, null]);
     }
+  });
+});
+
+// docs/features/handoff-progress.md "Acceptance criteria", M-1: the document's modal and page widen
+// with the card's, 1200 px or the viewport less 2rem.
+describe("the document modal's width (M-1)", () => {
+  /** A top-level rule's body, by its exact selector. */
+  function ruleOf(selector: string): string {
+    const text = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
+    const at = text.indexOf(`\n${selector} {`);
+    return at < 0 ? "" : text.slice(text.indexOf("{", at) + 1, text.indexOf("}", at));
+  }
+
+  it("is 1200 px or the viewport less 2rem, the height less 2rem; its page as wide", () => {
+    // M: `.doc-modal` left at --modal-width-l.
+    expect(ruleOf(".doc-modal")).toMatch(/width:\s*min\(var\(--modal-width-xl\), 100vw - 2rem\);/);
+    expect(ruleOf(".doc-modal")).toMatch(/max-height:\s*calc\(100dvh - 2rem\);/);
+    expect(ruleOf(".doc-page")).toMatch(/max-width:\s*var\(--modal-width-xl\);/);
   });
 });

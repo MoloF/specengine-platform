@@ -107,9 +107,13 @@ export function edgeShownWords(edge: FlowEdge, t: Translate): string[] {
   return edge.kind === null ? words : [kindWords(edge.kind, t), ...words.slice(1)];
 }
 
-/** An arrow's row in the List: `<type> <to title>[, <kind>][, when <when>][, ×<count>]`, the title its name when it has none, its words whole, type raw (flow-scenario D12). */
+/**
+ * An arrow's row in the List: `to <to title>, <type>[, <kind>][, when <when>][, ×<count>]`, the title
+ * its name when it has none, its words whole, the type raw after the end it reaches
+ * (docs/features/handoff-progress.md "Acceptance criteria", E-1).
+ */
 export function edgeRowWords(edge: FlowEdge, toTitle: string | null, t: Translate): string {
-  const parts = [`${edge.type} ${toTitle ?? edge.to}`];
+  const parts = [t("flow.edgeRow", { to: toTitle ?? edge.to }), edge.type];
   if (edge.kind !== null) {
     parts.push(kindWords(edge.kind, t));
   }
@@ -122,9 +126,12 @@ export function edgeRowWords(edge: FlowEdge, toTitle: string | null, t: Translat
   return parts.join(", ");
 }
 
-/** An edge's accessible name: `<from> <type> <to>`, then what it says. */
-export function edgeName(edge: FlowEdge, t: Translate): string {
-  return [`${edge.from} ${edge.type} ${edge.to}`, ...edgeShownWords(edge, t)].join(", ");
+/**
+ * An arrow's accessible name, read forwards: `From <from> to <to>, <type>`, then its kind and its
+ * clipped `when`; each end its box's words, its name when it has no title (E-1).
+ */
+export function edgeName(edge: FlowEdge, fromTitle: string | null, toTitle: string | null, t: Translate): string {
+  return [t("flow.edgeName", { from: fromTitle ?? edge.from, to: toTitle ?? edge.to }), edge.type, ...edgeShownWords(edge, t)].join(", ");
 }
 
 /** The gap codes the daemon writes, each with its catalog key. */

@@ -79,8 +79,8 @@ function sequence(seed: number): (limit: number) => number {
 }
 
 /**
- * The trial of owner's decision 11 (AC-12 of docs/features/flow-canvas.md): 200 boxes, 12 rows,
- * 30 off the walk, 40 edges against it. Forward edges reach the next row, some skip one or two,
+ * The trial of owner's decision 11 (AC-12 of docs/features/flow-canvas.md): 200 boxes, 12 columns,
+ * 30 off the walk, 40 edges against it. Forward edges reach the next column, some skip one or two,
  * and every 5th box off the walk feeds a step while the others are used by two.
  */
 export function flow200(): FlowView {
@@ -145,7 +145,7 @@ export function flow200(): FlowView {
   return aFlowView(nodes, unique);
 }
 
-/** The crossings of forward edges inside the gaps between rows: two curves over one gap whose order swaps. */
+/** The crossings of forward edges inside the gaps between columns: two curves over one gap whose order swaps. */
 export function forwardCrossings(layout: FlowLayout): number {
   const inGap = new Map<string, { from: number; to: number }[]>();
   for (const laid of layout.edges) {
@@ -153,11 +153,11 @@ export function forwardCrossings(layout: FlowLayout): number {
       continue;
     }
     for (let index = 1; index + 1 < laid.points.length; index += 2) {
-      const above = laid.points[index];
-      const below = laid.points[index + 1];
-      if (above !== undefined && below !== undefined) {
-        const key = String(above.y);
-        inGap.set(key, [...(inGap.get(key) ?? []), { from: above.x, to: below.x }]);
+      const left = laid.points[index];
+      const right = laid.points[index + 1];
+      if (left !== undefined && right !== undefined) {
+        const key = String(left.x);
+        inGap.set(key, [...(inGap.get(key) ?? []), { from: left.y, to: right.y }]);
       }
     }
   }

@@ -1,10 +1,10 @@
 import { lazy, Suspense, useId, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
-import { useProjects, type CardQuery } from "../api/queries";
+import { useChildren, useProjects, type CardQuery, type ChildrenQuery } from "../api/queries";
 import type { Card, CardEvent, CardFlow, CardItem, CardNotFound } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { DocLink } from "../doc/DocLink";
-import { cardPageHash, homeHash, sectionHash } from "../app/routes";
+import { homeHash, sectionHash } from "../app/routes";
 import { rollupLook } from "../flow/labels";
 import { Badge } from "../ui/Badge";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
@@ -32,7 +32,6 @@ import {
   cancelledLook,
   columnTitle,
   eventWords,
-  handOffLook,
   isItemEvent,
   itemEventWords,
   knowsEvent,
@@ -42,11 +41,14 @@ import {
   overdueLook,
   raisesItem,
   returnedLook,
-  unassigned,
   type CardMark,
 } from "./labels";
-import { returnReasonOf, type Rollup } from "./rollup";
+import { returnReasonOf } from "./rollup";
+import { CardLink, type CardLinks } from "./CardLink";
+import { CardProgress } from "./CardProgress";
 import { CardTasks, ownNotes } from "./CardTasks";
+
+export type { CardLinks } from "./CardLink";
 
 // A card as a work item (`docs/canon/cards.md` "Documents and events";
 // docs/features/design-foundation.md "The work item: the task modal and page"): one IssueView for
@@ -54,7 +56,7 @@ import { CardTasks, ownNotes } from "./CardTasks";
 // title, and the acts (Accept, primary, in `accept.from` alone; Hand off; Return…; Edit; Assign; Cancel
 // card, subtle and last). The main column holds the card's blocks (its mark and Clear, why it came
 // back, Accept's verdict, the cancellation), Goal and Criteria at the document's size, Source,
-// Subtasks (once Hand-offs), Evidence and Activity, the card's events and its items' in one list (docs/canon/card-questions.md "The rule"). The side column holds the status (its column's
+// Subtasks (once Hand-offs; its progress, CardProgress.tsx, from the card's own children read), Evidence and Activity, the card's events and its items' in one list (docs/canon/card-questions.md "The rule"). The side column holds the status (its column's
 // lozenge and the Move menu), the people's fields with the empty ones folded, and Development, the
 // linked `T-` tasks (`docs/canon/card-tasks.md` "The rule"), folded. Nothing here judges a column: the
 // return column and the accept column are the flow's, looked up (`docs/canon/card-flows.md` "The rule").
@@ -73,13 +75,6 @@ export function isCard(answer: Card | CardNotFound): answer is Card {
   return "title" in answer;
 }
 
-/** How a link to another card goes: to its page or to it on the board, and what a plain click does instead (the modal replaces its card). */
-export interface CardLinks {
-  project: string;
-  page: boolean;
-  onFollow: (id: string) => void;
-}
-
 /** What the work item reads and does, the Board's modal and the card's page alike. */
 export interface CardViewProps {
   project: string;
@@ -90,8 +85,6 @@ export interface CardViewProps {
   mark: CardMark | null;
   /** Each target's rollup, as the trace read has it. */
   rollups: ReadonlyMap<string, string>;
-  /** The card's children in the list read. */
-  handOffs: Rollup;
   /** Why the list, which says the mark, could not be read: no mark is shown. */
   markFailure: string | null;
   /** Why the trace, which says the targets' states, could not be read. */
@@ -108,30 +101,6 @@ function Value({ text }: { text: string }) {
 function At({ at }: { at: string }) {
   const t = useTranslate();
   return <time dateTime={at}>{formatUtc(at, t)}</time>;
-}
-
-/** A plain click with the primary button: a modified one, or another button, is the browser's. */
-function isPlainClick(event: MouseEvent<HTMLElement>): boolean {
-  return event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-}
-
-/** A link to another card; the ID as stored. A plain click follows it in place, any other is the browser's. */
-function CardLink({ id, links }: { id: string; links: CardLinks }) {
-  const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (isPlainClick(event)) {
-      event.preventDefault();
-      links.onFollow(id);
-    }
-  };
-  return links.page ? (
-    <a className="mono" href={cardPageHash(links.project, id)} onClick={onClick}>
-      {shownSlot(id)}
-    </a>
-  ) : (
-    <a className="mono" href={sectionHash(links.project, "board", id)} onClick={onClick}>
-      {shownSlot(id)}
-    </a>
-  );
 }
 
 /** A key of an event's payload as text: its string, a list joined; anything else null. */
@@ -467,35 +436,8 @@ function ReturnReason({ card, column }: { card: Card; column: string }) {
   );
 }
 
-/** The card's children, its Subtasks: ID (a link), title, the flow's title, its status lozenge, assignee and word; a child of a flow not served is stranded and has no word. */
-function HandOffs({ rollup, links, flowOf }: { rollup: Rollup; links: CardLinks; flowOf: (name: string) => CardFlow | undefined }) {
-  const t = useTranslate();
-  return (
-    <Part title={t("board.modal.handOffs")}>
-      {rollup.children.length === 0 ? (
-        <p className="muted">{t("board.panel.noneYet")}</p>
-      ) : (
-        <ul className="board-panel-list">
-          {rollup.children.map(({ row, word }) => (
-            <li key={row.id} className="board-handoff">
-              <CardLink id={row.id} links={links} />
-              <bdi className="board-handoff-title">{shownSlot(row.title)}</bdi>
-              <bdi className="muted">{shownSlot(flowTitleOf(flowOf(row.flow), row.flow))}</bdi>
-              <Lozenge {...statusLook(flowOf(row.flow), row.column)} />
-              <span className={row.assignee === null ? "muted" : undefined}>
-                <bdi>{row.assignee === null ? unassigned(t) : shownSlot(row.assignee)}</bdi>
-              </span>
-              {word !== null && <Badge look={handOffLook(word, t)} />}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Part>
-  );
-}
-
 /** The main column of a card read: its blocks, then Goal, Criteria, Source, Subtasks, Evidence and Activity. */
-function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, stateFailure, links, flowOf, onAct }: Omit<CardViewProps, "id" | "query" | "today"> & { card: Card; flow: CardFlow | undefined }) {
+function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, stateFailure, links, onAct }: Omit<CardViewProps, "id" | "query" | "today"> & { card: Card; flow: CardFlow | undefined; subtasks: ChildrenQuery }) {
   const t = useTranslate();
   const allows = useAllowed(project);
   const cancelled = card.cancellation !== null;
@@ -561,7 +503,9 @@ function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, 
           </ul>
         )}
       </Part>
-      <HandOffs rollup={handOffs} links={links} flowOf={flowOf} />
+      <Part title={t("board.modal.handOffs")}>
+        <CardProgress card={card} query={subtasks} links={links} />
+      </Part>
       <Part title={t("board.panel.evidence")}>
         {card.evidence.length === 0 ? (
           <p className="muted">{t("board.panel.noneYet")}</p>
@@ -590,7 +534,7 @@ function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, 
  * it failed, its `{id, reason}` verbatim when there is no such card, else every part. A read failing
  * again keeps what it last read, saying so.
  */
-function CardMain(props: CardViewProps) {
+function CardMain(props: CardViewProps & { subtasks: ChildrenQuery }) {
   const { project, id, query, flowOf } = props;
   const t = useTranslate();
   const failure = useRetainedFailure(query.error, query.isFetching);
@@ -713,6 +657,8 @@ export function CardView({ heading, tools, notices, ...props }: CardViewProps & 
   const t = useTranslate();
   const projects = useProjects();
   const allows = useAllowed(project);
+  // The card's children, cancelled ones too, read beside the card while it is shown (docs/features/handoff-progress.md "Acceptance criteria", HP-1).
+  const subtasks = useChildren(project, id);
   const card = query.data !== undefined && isCard(query.data) ? query.data : undefined;
   const flow = card === undefined ? undefined : flowOf(card.flow);
   const listed = projects.data?.find((candidate) => candidate.slug === project);
@@ -758,7 +704,7 @@ export function CardView({ heading, tools, notices, ...props }: CardViewProps & 
         <>
           {notices}
           <RegionBoundary name={t("board.view.boundaryCard")}>
-            <CardMain {...props} />
+            <CardMain {...props} subtasks={subtasks} />
           </RegionBoundary>
         </>
       }

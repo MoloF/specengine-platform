@@ -147,7 +147,7 @@ interface RecordsOpen {
 /**
  * Flow as a studio (`#/<p>/flow[/<name>][?module=&scope=&stage=&edge=]`,
  * docs/features/writer-studio.md, docs/features/flow-scenario.md): the path on the left, one scope's
- * scenario in the centre, top to bottom, the panel always on the right. Each picture is one read of
+ * scenario in the centre, left to right, the panel always on the right. Each picture is one read of
  * three forms (D2), cut to what holds part of the flow, never a whole read; what the cut leaves out is
  * Records for the AI, read only when asked. The place is the hash's, so a reload, a link and Back
  * draw one picture. A scope, stage or module change pushes; a selection, a seek's fix and a

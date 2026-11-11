@@ -261,7 +261,7 @@ describe("an edge click (ST-3)", () => {
     await waitFor(() => {
       expect(document.querySelectorAll(".react-flow__edge").length).toBeGreaterThan(3);
     });
-    const hit = hitOf(edgeNamed("C alpha_link E"));
+    const hit = hitOf(edgeNamed("From Craft to Engrave, alpha_link"));
     expect(Number(hit.getAttribute("stroke-width"))).toBeGreaterThanOrEqual(12);
     const transform = document.querySelector<HTMLElement>(".react-flow__viewport")?.style.transform;
     const before = window.history.length;
@@ -285,7 +285,7 @@ describe("an edge click (ST-3)", () => {
     await waitFor(() => {
       expect(document.querySelectorAll(".react-flow__edge").length).toBeGreaterThan(3);
     });
-    fireEvent.click(hitOf(edgeNamed(`B ${TYPE_A} C, alternative, the ink is dry`)));
+    fireEvent.click(hitOf(edgeNamed(`From Bind to Craft, ${TYPE_A}, alternative, the ink is dry`)));
     expect(window.location.hash).toBe("#/alpha/flow?edge=B,C,alpha_link,alternative");
     expect([fact("Kind"), fact("When")]).toEqual(["alternative", "the ink is dry"]);
     const before = window.history.length;
@@ -428,6 +428,8 @@ describe("the legend (ST-8)", () => {
       expect(within(legend).getByText(word)).toBeTruthy();
     }
     expect(within(legend).getByText("Drawn with React Flow (MIT)")).toBeTruthy();
+    // F-6 of handoff-progress: the walk left to right, the arcs under the boxes.
+    expect(within(legend).getByText(enT("flow.legend.about")).textContent).toMatch(/^Left to right/);
     fireEvent.keyDown(toggle, { key: "Escape" });
     expect(screen.queryByRole("region", { name: "Legend" })).toBeNull();
     expect(document.activeElement).toBe(toggle);
@@ -463,15 +465,15 @@ describe("the List (ST-9, cut 2c)", () => {
     });
     expect(Array.from(outline.querySelectorAll("[data-flow-edge]"))).toHaveLength(EDGES.length);
     const first = outline.querySelector("[data-flow-edge] a");
-    expect(first?.textContent).toBe(`${TYPE_B} Dye`);
+    expect(first?.textContent).toBe(`to Dye, ${TYPE_B}`);
     const row = outline.querySelector<HTMLElement>("[data-flow-row='C']");
     expect(row?.querySelector("a")?.getAttribute("href")).toBe("#/alpha/flow/C");
     expect(within(row as HTMLElement).getByRole("link", { name: "Open Craft" }).getAttribute("href")).toBe("#/alpha/flow?scope=C");
     expect(within(row as HTMLElement).getByText("2 documents")).toBeTruthy();
-    expect(within(row as HTMLElement).getByRole("link", { name: `${TYPE_A} Engrave, ×3` }).getAttribute("href")).toBe("#/alpha/flow?edge=C,E,alpha_link");
+    expect(within(row as HTMLElement).getByRole("link", { name: `to Engrave, ${TYPE_A}, \u00d73` }).getAttribute("href")).toBe("#/alpha/flow?edge=C,E,alpha_link");
     expect(outline.textContent).not.toMatch(/\.md:\d/);
     const before = window.history.length;
-    fireEvent.click(within(row as HTMLElement).getByRole("link", { name: `${TYPE_A} Engrave, ×3` }));
+    fireEvent.click(within(row as HTMLElement).getByRole("link", { name: `to Engrave, ${TYPE_A}, \u00d73` }));
     expect(window.location.hash).toBe("#/alpha/flow?edge=C,E,alpha_link");
     expect(window.history.length).toBe(before);
     expect(fact("Where")).toBe("docs/spec/e.md:14");
@@ -483,7 +485,7 @@ describe("the List (ST-9, cut 2c)", () => {
       expect(Array.from(outline.querySelectorAll("[data-flow-row]"), (row) => row.getAttribute("data-flow-row"))).toEqual(["A", "B"]);
     });
     expect(within(outline).getByRole("heading", { level: 2, name: "The guild" })).toBeTruthy();
-    expect(within(outline).getByRole("link", { name: `${TYPE_A} Bind` })).toBeTruthy();
+    expect(within(outline).getByRole("link", { name: `to Bind, ${TYPE_A}` })).toBeTruthy();
   });
 
   it("holds every box past the cap; the canvas draws 200 and the bar counts the rest (R6)", async () => {
@@ -547,8 +549,16 @@ describe("landmarks and keys (ST-10)", () => {
     act(() => {
       box("A").focus();
     });
-    fireEvent.keyDown(box("A"), { key: "ArrowDown" });
+    // F-5 of handoff-progress: Up stays within A's column, which holds A alone; Right goes to the next column's nearest box.
+    fireEvent.keyDown(box("A"), { key: "ArrowUp" });
+    expect(document.activeElement).toBe(box("A"));
+    fireEvent.keyDown(box("A"), { key: "ArrowRight" });
     expect(document.activeElement).toBe(box("B"));
+    await waitFor(() => {
+      expect(box("B").getAttribute("tabindex")).toBe("0");
+    });
+    expect(box("A").getAttribute("tabindex")).toBe("-1");
+    expect(Array.from(region.querySelectorAll("[tabindex='0']"))).toHaveLength(1);
     fireEvent.keyDown(box("B"), { key: "Enter" });
     expect(window.location.hash).toBe("#/alpha/flow/B");
     await waitFor(() => {
@@ -596,6 +606,150 @@ describe("landmarks and keys (ST-10)", () => {
     expect(window.location.hash).toBe("#/alpha/flow/B");
     fireEvent.doubleClick(box("C"));
     expect(window.location.hash).toBe("#/alpha/flow?scope=C");
+  });
+});
+
+// docs/features/handoff-progress.md "Acceptance criteria", C-1, C-3, C-4: no click lost on Flow.
+describe("clicks on Flow (C-1, C-3, C-4)", () => {
+  /** The canvas's pan and zoom, from the viewport's transform. */
+  function viewOf(): string {
+    return document.querySelector<HTMLElement>(".react-flow__viewport")?.style.transform ?? "";
+  }
+
+  /**
+   * A mouse or pointer event with the window as its `view`, as a browser sends it: d3-zoom follows a
+   * press on its event's `view`. jsdom's event constructors refuse this test run's window there, so
+   * the property is set on the event made without it.
+   */
+  function withView<T extends Event>(event: T): T {
+    Object.defineProperty(event, "view", { value: document.defaultView });
+    return event;
+  }
+
+  function mouse(target: Element, type: string, x: number, y: number) {
+    fireEvent(target, withView(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })));
+  }
+
+  /** A mouse press on `target` at (100, 100), a move by (dx, dy), its release and its click. */
+  function pressAndMove(target: HTMLElement, dx: number, dy: number) {
+    mouse(target, "mousedown", 100, 100);
+    mouse(target, "mousemove", 100 + dx, 100 + dy);
+    mouse(target, "mouseup", 100 + dx, 100 + dy);
+    mouse(target, "click", 100 + dx, 100 + dy);
+  }
+
+  /** React Flow's zoom pane measured `width` x `height`, as a browser lays it out; every other element measures 0, as jsdom does. */
+  function stubCanvas(width: number, height: number): () => void {
+    const before = {
+      width: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth"),
+      height: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight"),
+    };
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains("react-flow__renderer") ? width : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains("react-flow__renderer") ? height : 0;
+      },
+    });
+    return () => {
+      for (const [name, descriptor] of [
+        ["offsetWidth", before.width],
+        ["offsetHeight", before.height],
+      ] as const) {
+        if (descriptor !== undefined) {
+          Object.defineProperty(HTMLElement.prototype, name, descriptor);
+        }
+      }
+    };
+  }
+
+  it("takes a press that moves 3 px for a click, box after box; one that moves 8 px pans and selects nothing (C-1)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow");
+    await drawn("E");
+    // M: `paneClickDistance` removed; at React Flow's 1 px the 3 px press selects nothing.
+    pressAndMove(box("B"), 3, 1);
+    expect(window.location.hash).toBe("#/alpha/flow/B");
+    await waitFor(() => {
+      expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Bind");
+    });
+    const before = window.history.length;
+    pressAndMove(box("E"), 3, 1);
+    expect(window.location.hash).toBe("#/alpha/flow/E");
+    expect(window.history.length).toBe(before);
+    await waitFor(() => {
+      expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Engrave");
+    });
+    expect(box("B").getAttribute("aria-label")).not.toMatch(/selected$/);
+    expect(box("E").getAttribute("aria-label")).toMatch(/selected$/);
+    const still = viewOf();
+    pressAndMove(box("A"), 8, 0);
+    expect(window.location.hash).toBe("#/alpha/flow/E");
+    expect(viewOf()).not.toBe(still);
+  });
+
+  it("moves nothing on a focus that is not :focus-visible, a mouse's, a touch's or a pen's; a keyboard focus on a box out of view centres it (C-3)", async () => {
+    const restore = stubCanvas(400, 500);
+    // jsdom never matches :focus-visible; a browser does for a focus that came from the keyboard.
+    let keyboard = false;
+    const own = Object.getOwnPropertyDescriptor(Element.prototype, "matches")?.value as (this: Element, selector: string) => boolean;
+    const spy = vi.spyOn(Element.prototype, "matches").mockImplementation(function (this: Element, selector: string) {
+      return selector === ":focus-visible" ? keyboard && this === document.activeElement : own.call(this, selector);
+    });
+    try {
+      renderApp(studioClient(reads()), "#/alpha/flow");
+      await drawn("E");
+      await waitFor(() => {
+        expect(viewOf()).toMatch(/scale\(0\.92\)/);
+      });
+      const view = viewOf();
+      // B, the second column, stands across the canvas's right edge at the fit.
+      const target = box("B");
+      // A mouse press: pointerdown, the focus it brings, pointerup, click. M: centring on every focus.
+      fireEvent(target, withView(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 })));
+      act(() => {
+        target.focus();
+      });
+      fireEvent(target, withView(new PointerEvent("pointerup", { bubbles: true, cancelable: true, button: 0 })));
+      mouse(target, "click", 100, 100);
+      expect(window.location.hash).toBe("#/alpha/flow/B");
+      expect(viewOf()).toBe(view);
+      // A touch tap focuses after its pointerup: still not :focus-visible, still nothing moves.
+      fireEvent(box("E"), withView(new PointerEvent("pointerup", { bubbles: true, cancelable: true, button: 0, pointerType: "touch" })));
+      act(() => {
+        box("E").focus();
+      });
+      expect(viewOf()).toBe(view);
+      // Tab to A, then Right to B: a keyboard focus, out of view, so centred as before.
+      keyboard = true;
+      act(() => {
+        box("A").focus();
+      });
+      fireEvent.keyDown(box("A"), { key: "ArrowRight" });
+      expect(document.activeElement).toBe(box("B"));
+      await waitFor(() => {
+        expect(viewOf()).not.toBe(view);
+      });
+    } finally {
+      spy.mockRestore();
+      restore();
+    }
+  });
+
+  it("lets no divider and no band caption take a pointer; every box takes it (C-4)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow");
+    await drawn("E");
+    const words = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node-divider, .react-flow__node-band"));
+    expect(document.querySelectorAll(".react-flow__node-divider").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".react-flow__node-band")).toHaveLength(1);
+    // M: WORDS_ONLY without its style.
+    expect(words.map((element) => element.style.pointerEvents)).toEqual(words.map(() => "none"));
+    const shown = boxes();
+    expect(shown.map((element) => element.style.pointerEvents)).toEqual(shown.map(() => "all"));
   });
 });
 
@@ -985,7 +1139,7 @@ describe("the scenario on flow-aside (RM-0094)", () => {
         }
         return found;
       });
-      expect(within(row).getByRole("link", { name: "uses Kiln bay, ×5" })).toBeTruthy();
+      expect(within(row).getByRole("link", { name: "to Kiln bay, uses, \u00d75" })).toBeTruthy();
     });
   });
 

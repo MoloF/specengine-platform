@@ -1542,7 +1542,9 @@ describe("the card against its brief", () => {
     act(() => {
       tail({ seq: 9, type: "card.moved", payload: { id: "C-0002" } });
     });
-    expect((await within(panel).findByText(sentence(/could not be read: the queue is locked/))).textContent).toContain("Whether the brief changed");
+    expect((await within(panel).findByText(sentence(/^Whether the brief changed.*could not be read: the queue is locked/))).textContent).toContain("Whether the brief changed");
+    // The children read failed with it, said in Subtasks; its last parts stand (docs/features/handoff-progress.md "Acceptance criteria", HP-1).
+    expect(await within(within(panel).getByRole("region", { name: "Subtasks" })).findByText(sentence(/^The subtasks could not be read: the queue is locked$/))).toBeTruthy();
     expect(within(panel).queryByRole("button", { name: "Clear" })).toBeNull();
     expect(within(panel).queryByRole("region", { name: "Against the brief" })).toBeNull();
   });

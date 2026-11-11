@@ -259,10 +259,15 @@ describe("the work item's order (DF-6)", () => {
     expect(within(dialog).getByRole("button", { name: "More fields (7)" }).getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("keeps the side column at most 330 px beside the main column, one column under 42.5rem of its own width", () => {
-    expect(/--issue-side-width:\s*20\.625rem;/.test(tokensCss)).toBe(true);
+  // docs/features/handoff-progress.md "Acceptance criteria", M-1: the work item widened.
+  it("keeps the side column at most 360 px beside the main column, one column under 44.5rem of its own width (M-1)", () => {
+    expect(/--issue-side-width:\s*22\.5rem;/.test(tokensCss)).toBe(true);
+    expect(/--modal-width-xl:\s*75rem;/.test(tokensCss)).toBe(true);
+    expect(tokensCss).not.toContain("--modal-width-l:");
+    expect(appCss).not.toContain("--modal-width-l)");
     expect(/\n\.issue-view-side \{[^}]*max-width: var\(--issue-side-width\);/.test(appCss)).toBe(true);
-    expect(/@container issue-view \(min-width: 42\.5rem\) \{\s*\.issue-view-body \{\s*grid-template-columns: minmax\(var\(--issue-main-min\), 1fr\) minmax\(0, var\(--issue-side-width\)\);/.test(appCss)).toBe(true);
+    // M: the container query left at 42.5rem.
+    expect(/@container issue-view \(min-width: 44\.5rem\) \{\s*\.issue-view-body \{\s*grid-template-columns: minmax\(var\(--issue-main-min\), 1fr\) minmax\(0, var\(--issue-side-width\)\);/.test(appCss)).toBe(true);
     expect(/\n\.issue-view-body \{[^}]*grid-template-columns: minmax\(0, 1fr\);/.test(appCss)).toBe(true);
   });
 });

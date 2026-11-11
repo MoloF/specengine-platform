@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
 import { useCardWriting, useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
@@ -8,7 +8,6 @@ import { CardPage } from "../board/CardPage";
 import { DocModal } from "../doc/DocModal";
 import { DocPage } from "../doc/DocPage";
 import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
-import { GraphView } from "../graph/GraphView";
 import { HealthView } from "../health/HealthView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
 import { HomeView } from "../overview/HomeView";
@@ -16,7 +15,7 @@ import { InboxView } from "../inbox/InboxView";
 import { OutsideStageAlert } from "../inbox/OutsideStageAlert";
 import { Palette } from "../palette/Palette";
 import { createRoundMemory } from "../round/memory";
-import { RoadmapView, type RoadmapMemory, type RoadmapTab } from "../roadmap/RoadmapView";
+import type { RoadmapMemory, RoadmapTab } from "../roadmap/RoadmapView";
 import { QuestionsView } from "../round/QuestionsView";
 import { TasksView } from "../tasks/TasksView";
 import { useTranslate } from "../i18n";
@@ -41,6 +40,24 @@ import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash, type Route } fro
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { SyncLine } from "./SyncLine";
 import { NotFound, ViewFailure } from "./views";
+
+/**
+ * The Roadmap and the Graph arrive in chunks of their own, out of first load
+ * (docs/features/handoff-progress.md "Acceptance criteria", S-1); a skeleton stands meanwhile.
+ */
+const RoadmapView = lazy(() => import("../roadmap/RoadmapView").then((module) => ({ default: module.RoadmapView })));
+const GraphView = lazy(() => import("../graph/GraphView").then((module) => ({ default: module.GraphView })));
+
+/**
+ * Calls `onLanded` once committed beside a lazy view: a Suspense boundary resolves without the
+ * Shell rendering again, so the heading a jump or a new view waits on is focused from here.
+ */
+function Landed({ onLanded }: { onLanded: () => void }) {
+  useEffect(() => {
+    onLanded();
+  }, [onLanded]);
+  return null;
+}
 
 /** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl; the cap is the catalog's. */
 const CHORD_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "app.chordApple" : "app.chordOther";
@@ -210,6 +227,13 @@ export function Shell({ scenario }: { scenario: string | null }) {
   const paletteInput = useRef<HTMLInputElement>(null);
   /** A jump's hash: once the route shows it, the view's `h1` takes the focus (once). */
   const jumpedTo = useRef<string | null>(null);
+  /** A new view whose heading was not drawn yet (a lazy view's skeleton), and what had focus then. */
+  const headingWanted = useRef<{ key: string; from: Element | null } | null>(null);
+  /** The hash the Shell last rendered, set before any effect of that commit, a lazy view's included. */
+  const renderedHash = useRef(hash);
+  useLayoutEffect(() => {
+    renderedHash.current = hash;
+  });
   /** The Graph's options per project for this page's life; never in the hash (docs/features/ui-graph.md). */
   const graphSettings = useRef(new Map<string, GraphSettings>());
   const graphMemory = useMemo<GraphMemory>(
@@ -340,10 +364,11 @@ export function Shell({ scenario }: { scenario: string | null }) {
   }, [workspaces.data]);
 
   // A palette jump: focus went to main as the palette closed; the destination's heading takes it
-  // once rendered, also when the view stays the same (one task to another).
-  useEffect(() => {
+  // once rendered, also when the view stays the same (one task to another). A lazy view's heading
+  // lands with its chunk, without a render of the Shell: `Landed` runs this again then.
+  const focusJumped = useCallback(() => {
     const wanted = jumpedTo.current;
-    if (wanted === null || hash !== wanted) {
+    if (wanted === null || renderedHash.current !== wanted) {
       return;
     }
     const heading = main.current?.querySelector<HTMLElement>("h1");
@@ -351,6 +376,9 @@ export function Shell({ scenario }: { scenario: string | null }) {
       jumpedTo.current = null;
       heading.focus();
     }
+  }, []);
+  useEffect(() => {
+    focusJumped();
   });
 
   // The chord, Cmd-K or Ctrl-K: the shell's one document key listener (capture), for the palette
@@ -391,14 +419,33 @@ export function Shell({ scenario }: { scenario: string | null }) {
     if (previous === viewKey) {
       return;
     }
+    headingWanted.current = null;
     const afterRetry = previous === "home" && homeRetried.current && focusIsLost();
     if (previous === "home") {
       homeRetried.current = false;
     }
     if ((previous !== "home" || afterRetry) && (document.activeElement?.closest('[role="dialog"]') ?? null) === null) {
-      main.current?.querySelector<HTMLElement>("h1")?.focus();
+      const heading = main.current?.querySelector<HTMLElement>("h1");
+      if (heading !== null && heading !== undefined) {
+        heading.focus();
+      } else {
+        headingWanted.current = { key: viewKey, from: document.activeElement };
+      }
     }
   }, [viewKey]);
+
+  // A lazy view landed: a jump's heading, else a new view's heading, if focus has not moved meanwhile.
+  const onLanded = useCallback(() => {
+    focusJumped();
+    const wanted = headingWanted.current;
+    headingWanted.current = null;
+    if (wanted === null || wanted.key !== shownKey.current) {
+      return;
+    }
+    if ((document.activeElement === wanted.from || focusIsLost()) && (document.activeElement?.closest('[role="dialog"]') ?? null) === null) {
+      main.current?.querySelector<HTMLElement>("h1")?.focus();
+    }
+  }, [focusJumped]);
 
   // A Retry on home answered with no projects stays on home: its heading takes the focus.
   useEffect(() => {
@@ -552,7 +599,12 @@ export function Shell({ scenario }: { scenario: string | null }) {
       />
     );
   } else if (route.section === "roadmap") {
-    view = <RoadmapView key={route.project} project={route.project} itemId={route.id} memory={roadmapMemory} />;
+    view = (
+      <Suspense key={route.project} fallback={<Skeleton label={t("app.lazy.roadmap")} lines={6} />}>
+        <RoadmapView project={route.project} itemId={route.id} memory={roadmapMemory} />
+        <Landed onLanded={onLanded} />
+      </Suspense>
+    );
   } else if (route.section === "flow") {
     // The module is in Flow's hash, the stored one its default; its bar is in the places pane (docs/features/writer-studio.md D4).
     view = (
@@ -571,7 +623,12 @@ export function Shell({ scenario }: { scenario: string | null }) {
   } else if (route.section === "tree") {
     view = <TreeView key={route.project} project={route.project} nodeRef={route.id} moduleRoot={moduleRoot ?? null} moduleKinds={moduleKinds} moduleKnown={moduleRoot !== undefined} />;
   } else if (route.section === "graph") {
-    view = <GraphView key={route.project} project={route.project} nodeRef={route.id} memory={graphMemory} />;
+    view = (
+      <Suspense key={route.project} fallback={<Skeleton label={t("app.lazy.graph")} lines={6} />}>
+        <GraphView project={route.project} nodeRef={route.id} memory={graphMemory} />
+        <Landed onLanded={onLanded} />
+      </Suspense>
+    );
   } else if (route.section === "health") {
     view = <HealthView key={route.project} project={route.project} />;
   } else {

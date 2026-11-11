@@ -1,11 +1,10 @@
 import { FIT_MARGIN, FIT_MAX_ZOOM, type FitViewport } from "../graph/geometry";
 
-// The Flow's drawing geometry (docs/features/flow-canvas.md "Layout", docs/features/flow-scenario.md
-// D7, D8): pure numbers, no drawing library. The walk runs top to bottom: a forward edge is vertical
-// runs joined by S-curves in the gaps between rows, drawn as the horizontal form with its axes
-// swapped; an arc is an orthogonal line with rounded corners, through the gaps and along its track
-// right of the walk; a loop stays beside its box. Each keeps the points it passes, so "crosses no
-// box" can be checked on them.
+// The Flow's drawing geometry (`docs/canon/spec-flow-layout.md` "Layout"; docs/features/handoff-progress.md
+// "Acceptance criteria", F-4, C-1): pure numbers, no drawing library. The walk runs left to right: a
+// forward edge is horizontal runs joined by S-curves in the gaps between columns; an arc is an
+// orthogonal line with rounded corners, through the gaps and along its track below the walk; a loop
+// stays under its box. Each keeps the points it passes, so "crosses no box" can be checked on them.
 
 /**
  * Flow's own fit floor (flow-scenario D8): a box's 14 px title is 12.9 px or more at fit, so a
@@ -15,6 +14,13 @@ export const FLOW_FIT_MIN_ZOOM = 0.92;
 
 /** Flow's own pinch floor: the owner may zoom out to half, never further (Graph keeps its 0.1). */
 export const FLOW_PINCH_MIN_ZOOM = 0.5;
+
+/**
+ * How far a press may move between down and up and still be a click, in px: past it, it pans. A box
+ * takes no `nopan`, so a drag that starts on one still pans (docs/features/handoff-progress.md
+ * "Acceptance criteria", C-1). React Flow's own default, 1 px, takes a hand's tremor for a pan.
+ */
+export const FLOW_CLICK_DISTANCE = 5;
 
 export interface Point {
   x: number;
@@ -26,7 +32,7 @@ export interface Rect extends Point {
   height: number;
 }
 
-/** One horizontal stretch of a forward edge: inside a column, or the end of a box's port. */
+/** One horizontal stretch of a forward edge: across a column it passes, or a box's port. */
 export interface Run {
   from: number;
   to: number;
@@ -138,22 +144,6 @@ export function loopPath(box: Rect): { path: string; points: Point[]; middle: Po
   };
 }
 
-/** A point with its axes swapped: the horizontal forms drawn top to bottom. */
-export function swapped(point: Point): Point {
-  return { x: point.y, y: point.x };
-}
-
-/** An SVG path with every coordinate pair's axes swapped: `M1,2 C3,4 ...` becomes `M2,1 C4,3 ...`. */
-export function swappedPath(path: string): string {
-  return path.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, "$2,$1");
-}
-
-/** A box's edge to itself, beside it: out of its right side and back into it, arrow last. */
-export function sideLoopPath(box: Rect): { path: string; points: Point[]; middle: Point } {
-  const loop = loopPath({ x: box.y, y: box.x, width: box.height, height: box.width });
-  return { path: swappedPath(loop.path), points: loop.points.map(swapped), middle: swapped(loop.middle) };
-}
-
 /** Whether a point lies inside a rectangle, its border excluded: a port sits on the border. */
 export function pointInside(point: Point, box: Rect): boolean {
   return point.x > box.x && point.x < box.x + box.width && point.y > box.y && point.y < box.y + box.height;
@@ -175,21 +165,22 @@ export function inView(box: Rect, view: { x: number; y: number; zoom: number; wi
   return left >= 0 && top >= 0 && left + box.width * view.zoom <= view.width && top + box.height * view.zoom <= view.height;
 }
 
-/** The fit's zoom: the flow fills the width, no larger than 100 %, no smaller than Flow's floor. Height has no say: a tall picture is panned. */
-function fitZoom(pictureWidth: number, width: number): number {
-  return Math.max(FLOW_FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, (width - 2 * FIT_MARGIN) / pictureWidth));
+/** The fit's zoom: the lesser of the two sides' ratios, no larger than 100 %, no smaller than Flow's floor. */
+function fitZoom(picture: { width: number; height: number }, width: number, height: number): number {
+  const ratio = Math.min((width - 2 * FIT_MARGIN) / picture.width, (height - 2 * FIT_MARGIN) / picture.height);
+  return Math.max(FLOW_FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, ratio));
 }
 
 /**
- * The fit: the picture at the zoom the width gives, centred along each side it fits; along one it
- * overflows, its start at the margin, top left. A tall picture stays readable and is panned, never
- * shrunk to the canvas's height. Null on a canvas with no size yet.
+ * The fit: the picture at the lesser zoom of its two sides, within 0.92 and 1, centred along each
+ * side it fits; along one it overflows, its start at the margin. A long walk lands at the floor from
+ * its first column and is panned, never shrunk past it. Null on a canvas with no size yet.
  */
 export function fitOf(picture: { width: number; height: number }, width: number, height: number): FitViewport | null {
   if (width <= 2 * FIT_MARGIN || height <= 2 * FIT_MARGIN) {
     return null;
   }
-  const zoom = fitZoom(picture.width, width);
+  const zoom = fitZoom(picture, width, height);
   const along = (size: number, span: number) => (span * zoom <= size - 2 * FIT_MARGIN ? (size - span * zoom) / 2 : FIT_MARGIN);
   return { x: along(width, picture.width), y: along(height, picture.height), zoom };
 }

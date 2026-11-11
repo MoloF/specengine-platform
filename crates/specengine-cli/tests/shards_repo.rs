@@ -326,13 +326,15 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
             .filter(|f| !f.parsed.as_ref().is_some_and(is_tier3_file))
             .map(|f| f.path.clone())
             .collect();
-        // The `card*` shard holds the four card canons (card-tasks,
-        // RM-0092; card-questions, RM-0097); every other more than five.
+        // The `card*` shard holds the five card canons (card-tasks,
+        // RM-0092; card-questions, RM-0097; card-progress, RM-0098); every
+        // other more than five.
         if claim == "docs/canon/card*.md" {
             assert_eq!(
                 claimed_live,
                 [
                     "docs/canon/card-flows.md",
+                    "docs/canon/card-progress.md",
                     "docs/canon/card-questions.md",
                     "docs/canon/card-tasks.md",
                     "docs/canon/cards.md"

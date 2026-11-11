@@ -10,7 +10,7 @@ import { shownSlot } from "../ui/text";
 /**
  * A card over the board (`#/<p>/board/<C>`, `ui/README.md` "Screen rules", Dialogs): a modal dialog
  * labelled by its heading, the card's title, where focus starts; the board and its tools inert
- * beneath, so no column moves. It is the work item (CardPanel.tsx `CardView`), 968 px wide: `view`
+ * beneath, so no column moves. It is the work item (CardPanel.tsx `CardView`), 1200 px wide: `view`
  * lays its heading out under the breadcrumbs, with "Open as a page" and Close on the breadcrumb line
  * as subtle buttons; the children (its Move menu) follow. Esc, Close and a click on the scrim close
  * it, the card holding no typed text; while a write is out none of them does.

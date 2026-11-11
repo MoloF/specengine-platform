@@ -5531,8 +5531,11 @@ mark {
   min-height: 12rem;
 }
 
+/* The minimap neither pans nor zooms, so it takes no pointer: a box under it takes its click
+   (docs/features/handoff-progress.md "Acceptance criteria", C-2). */
 .flow-canvas .react-flow__minimap {
   margin: var(--space-050) var(--space-100);
+  pointer-events: none;
 }
 
 /* Labels over every edge; the edges' stacking is the layout's. */
@@ -5787,14 +5790,12 @@ mark {
   font-weight: var(--font-weight-semibold);
 }
 
-/* A stage divider: the stage words raw over a rule across the picture (flow-scenario D7). */
+/* A stage divider: a rule down the picture left of its column, the stage words raw at its top,
+   two lines in the column's width, then an ellipsis (`docs/canon/spec-flow-layout.md` "Layout"). */
 .flow-divider {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-100);
   height: 100%;
   margin: 0;
-  border-bottom: 1px dashed var(--border-control);
+  border-left: 1px dashed var(--border-control);
   color: var(--text-secondary);
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-semibold);
@@ -5803,14 +5804,22 @@ mark {
 }
 
 .flow-divider-words {
-  padding: 0 var(--space-100) var(--space-025);
+  display: -webkit-box;
+  overflow: hidden;
+  padding: 0 var(--space-100);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
+/* An edge's words in its gap: at most the gap less its insets, two lines, then an ellipsis; the List
+   and the panel hold them whole (the orchestrator's look, L1). */
 .flow-edge-label {
   position: absolute;
-  display: grid;
-  justify-items: center;
-  max-width: 128px;
+  display: -webkit-box;
+  max-width: var(--flow-edge-label-width);
+  overflow: hidden;
   padding: var(--space-025) var(--space-050);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
@@ -5821,6 +5830,14 @@ mark {
   text-align: center;
   overflow-wrap: anywhere;
   pointer-events: none;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Each word on a line of its own: a kind, then a `when`. */
+.flow-edge-word {
+  display: block;
 }
 
 .flow-edge-label.is-emphasis {
@@ -6526,29 +6543,29 @@ mark {
 }
 
 /* The card over the board (docs/features/design-foundation.md "The work item: the task modal and page"):
-   the work item, 968 px wide or the viewport less 2rem; how it scrolls is the work item's own (below,
+   the work item, 1200 px wide or the viewport less 2rem; how it scrolls is the work item's own (below,
    "The work item in a dialog"); the whole screen on a phone. */
 .card-modal {
-  width: min(var(--modal-width-l), 100vw - 2rem);
+  width: min(var(--modal-width-xl), 100vw - 2rem);
   max-height: calc(100dvh - 2rem);
   overflow-wrap: anywhere;
 }
 
 .card-page {
-  max-width: var(--modal-width-l);
+  max-width: var(--modal-width-xl);
 }
 
 /* The document over any screen (src/doc/; docs/features/doc-modal.md "Acceptance criteria", DM-9):
-   the card modal's frame, 968 px or the viewport less 2rem, scrolling as the work item does; on its
+   the card modal's frame, 1200 px or the viewport less 2rem, scrolling as the work item does; on its
    page as wide as a card's. Every size is a token. */
 .doc-modal {
-  width: min(var(--modal-width-l), 100vw - 2rem);
+  width: min(var(--modal-width-xl), 100vw - 2rem);
   max-height: calc(100dvh - 2rem);
   overflow-wrap: anywhere;
 }
 
 .doc-page {
-  max-width: var(--modal-width-l);
+  max-width: var(--modal-width-xl);
   overflow-wrap: anywhere;
 }
 
@@ -6681,6 +6698,99 @@ mark {
 .board-handoff-title {
   min-width: 0;
   font-weight: var(--font-weight-medium);
+}
+
+/* A work item's progress (CardProgress.tsx; docs/features/handoff-progress.md "Acceptance criteria",
+   HP-3 to HP-6): Ready to accept as a status line, the bar and its words line, Relies on, the rows,
+   the cancelled subtasks with their reasons. Each segment's fill is its appearance's lozenge text role:
+   no new colour role, and the words line beside it says every count with its icon. */
+.board-progress {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+}
+
+.progress-bar {
+  display: flex;
+  gap: var(--space-025);
+  height: var(--space-100);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+}
+
+.progress-segment {
+  flex-basis: 0;
+  min-width: var(--space-050);
+  background: var(--lozenge-neutral-text);
+}
+
+.progress-segment[data-appearance="success"] {
+  background: var(--lozenge-success-text);
+}
+
+.progress-segment[data-appearance="warning"] {
+  background: var(--lozenge-warning-text);
+}
+
+.progress-segment[data-appearance="information"] {
+  background: var(--lozenge-information-text);
+}
+
+/* The words line: each count with its icon, a middle dot between them as the breadcrumbs' separator
+   stands, hidden from assistive technology; a separator opens the item it precedes, so a wrap never
+   leaves one at a line's end. */
+.progress-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-050);
+  margin: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.progress-word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+  min-width: 0;
+}
+
+.progress-separator {
+  color: var(--text-subtlest);
+}
+
+.board-progress-ready,
+.board-progress-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  margin: 0;
+}
+
+.board-progress-relies,
+.board-progress-cancelled {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+}
+
+.board-progress-label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.board-progress-cancel {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+}
+
+.board-progress-cancel > p {
+  margin: 0;
 }
 
 /* A link in a row of the work item stands at least the target's height. */
@@ -7235,8 +7345,8 @@ mark {
 }
 
 /* The work item (src/ui/IssueView.tsx), a size container: a head (the trail and the tools on one
-   line, the title, the acts), then a main column and a side column at most 330 px wide; under
-   42.5rem of its own width one column, main first, as in the DOM. */
+   line, the title, the acts), then a main column and a side column at most 360 px wide; under
+   44.5rem of its own width one column, main first, as in the DOM. */
 .issue-view {
   container: issue-view / inline-size;
   display: grid;
@@ -7290,7 +7400,7 @@ mark {
   min-width: 0;
 }
 
-@container issue-view (min-width: 42.5rem) {
+@container issue-view (min-width: 44.5rem) {
   .issue-view-body {
     grid-template-columns: minmax(var(--issue-main-min), 1fr) minmax(0, var(--issue-side-width));
   }

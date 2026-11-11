@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 // The work-item layout (docs/features/design-foundation.md "Primitives (`ui/src/ui/`)"), a size container: a head of
 // breadcrumbs and tools on one line, the caller's title (an `h1` on a page, a dialog's `h2` in a
-// modal), a meta line under it (a document's work state and status), then the acts; a body of a main column and a side column at most 330 px wide. Under 42.5rem
+// modal), a meta line under it (a document's work state and status), then the acts; a body of a main column and a side column at most 360 px wide. Under 44.5rem
 // of its own width the body is one column, main first. The DOM order is main then side at every
 // width, so reading and focus order never jump.
 

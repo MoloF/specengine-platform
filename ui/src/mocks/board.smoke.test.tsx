@@ -8,6 +8,22 @@ import type { Scenario } from "./scenario";
 // The Board over the real mock, as `pnpm dev` shows it (docs/features/board-ui.md): AC-05's whole
 // cycle on one screen, AC-07's keys, AC-08's two flows, AC-09's empty board and New card from a node.
 
+/**
+ * Subtasks' rows once the children read lands: the part's one unnamed list, beside Relies on and
+ * Cancelled subtasks (docs/features/handoff-progress.md "Acceptance criteria", HP-5, HP-6).
+ */
+async function subtaskRows(part: HTMLElement): Promise<HTMLElement[]> {
+  return waitFor(() => {
+    const rows = within(part)
+      .getAllByRole("list")
+      .find((list) => list.getAttribute("aria-labelledby") === null);
+    if (rows === undefined) {
+      throw new Error("no subtask rows yet");
+    }
+    return within(rows).getAllByRole("listitem");
+  });
+}
+
 function renderMock(scenario: Scenario, hash: string) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
   const client = new MockClient(scenario, { delayMs: 0 });
@@ -463,7 +479,7 @@ describe("hand-offs and returns over the mock", () => {
   it("the modal: a parent's subtasks with their words across both flows; a returned card's reason, C-0008's with the question asked with it (card-questions; a reason its history no longer keeps: ReturnDialog.test.tsx)", async () => {
     renderMock("normal", "#/harbor-sim/board/C-0001");
     const parent = await modal("Write the tide table foreword");
-    const handOffs = within(await within(parent).findByRole("region", { name: "Subtasks" })).getAllByRole("listitem");
+    const handOffs = await subtaskRows(await within(parent).findByRole("region", { name: "Subtasks" }));
     // Each child's flow by title (DP-10 of departments) and its status lozenge (DF-5 of design-foundation), the raw pair gone.
     expect(handOffs.map((item) => item.textContent)).toEqual([
       "C-0019Tide table glossaryCopy deskEditTomas OakesTaken",

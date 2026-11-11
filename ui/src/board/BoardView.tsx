@@ -1354,7 +1354,6 @@ export function BoardView({
               today={today}
               mark={boardFailed ? null : shownMark}
               rollups={rollups}
-              handOffs={handOffs.get(shownId) ?? NO_ROLLUP}
               markFailure={cards.error === null ? null : apiErrorOf(cards.error).message}
               stateFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
               links={modalLinks}

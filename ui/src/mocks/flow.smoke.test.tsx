@@ -245,6 +245,21 @@ describe("a stage narrows (ST-6)", () => {
     checkForms(spies);
   });
 
+  // docs/features/handoff-progress.md "Acceptance criteria", E-1: an arrow's name reads forwards, from its source's title to its target's.
+  it("under DOM-HARBOR, landfall names the arrow from RULE-HIGH-WATER to RULE-SPRING-WINDOW from the first's title to the second's, the type raw after them (E-1)", async () => {
+    renderMock(LENS);
+    await drawn("MEC-FAIRWAY");
+    fireEvent.click(await placeLink("#/harbor-sim/flow?module=&stage=landfall"));
+    await drawn("RULE-SPRING-WINDOW");
+    const read = await new MockClient("normal", { delayMs: 0 }).getFlow("harbor-sim", { root: "DOM-HARBOR", stage: "landfall", in_flow: true, trace: true });
+    const titleOf = (id: string) => read.nodes.find((node) => node.id === id)?.title ?? id;
+    const named = `From ${titleOf("RULE-HIGH-WATER")} to ${titleOf("RULE-SPRING-WINDOW")}, follows`;
+    expect(titleOf("RULE-HIGH-WATER")).not.toBe("RULE-HIGH-WATER");
+    await waitFor(() => {
+      expect(Array.from(document.querySelectorAll(".react-flow__edge"), (edge) => edge.getAttribute("aria-label"))).toContain(named);
+    });
+  });
+
   it("the long-text step: its 160-character title and its 300-character token stand in the panel, which wraps them", async () => {
     renderMock("#/harbor-sim/flow/MEC-HARBOUR-LOG?module=&scope=DOM-PILOTS");
     await drawn("MEC-HARBOUR-LOG");

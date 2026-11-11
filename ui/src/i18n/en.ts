@@ -96,6 +96,8 @@ export const en = {
       loading: "Loading the mock data",
       failed: "The mock data could not be loaded: {{error}}. Reload the page to try again.",
     },
+    // A view arriving in a chunk of its own (Shell.tsx): its skeleton's label meanwhile.
+    lazy: { roadmap: "Opening the roadmap", graph: "Opening the graph" },
     // Key names in the shortcut list: caps the same in both catalogs, the arrows and Space in words.
     keys: {
       down: "Down arrow",
@@ -503,6 +505,32 @@ export const en = {
     page: {
       openOnBoard: "Open on the board",
     },
+    // A work item's Subtasks (CardProgress.tsx): the bar's words, each a count, in the bar's order;
+    // Ready to accept, the owner's word, a status and never a control; what the task relies on; the
+    // cancelled subtasks with their reasons; the reads' states. Outside the accept guard's scan
+    // (src/board/words.test.ts), pinned there.
+    progress: {
+      accepted_one: "{{count}} accepted",
+      accepted_other: "{{count}} accepted",
+      cancelled_one: "{{count}} cancelled",
+      cancelled_other: "{{count}} cancelled",
+      returned_one: "{{count}} returned",
+      returned_other: "{{count}} returned",
+      doing_one: "{{count}} in progress",
+      doing_other: "{{count}} in progress",
+      todo_one: "{{count}} to do",
+      todo_other: "{{count}} to do",
+      stranded_one: "{{count}} not in the flow",
+      stranded_other: "{{count}} not in the flow",
+      ready: "Ready to accept",
+      readyAbout: "Every subtask is accepted or cancelled.",
+      reliesOn: "Relies on",
+      cancelledList: "Cancelled subtasks",
+      reading: "Reading the subtasks",
+      failed: "The subtasks could not be read: {{message}}",
+      reasonReading: "Reading why it was cancelled",
+      reasonFailed: "Why it was cancelled could not be read: {{message}}",
+    },
     // The work item's side column (CardPanel.tsx): its status, the flow, and the linked agent tasks'
     // summary, named by what it holds: a project may name a department Development
     // (docs/features/departments.md "Acceptance criteria", DP-8).
@@ -831,7 +859,7 @@ export const en = {
     stagesReading: "Reading the stages",
     groupsLabel: "Groups here",
     canvasLabel: "Flow canvas",
-    canvasHint: "The List view holds every box and arrow as text.",
+    canvasHint: "The walk runs left to right. The List view holds every box and arrow as text.",
     panelLabel: "Details",
     legendButton: "Legend",
     offWalk: "Not on the walk",
@@ -851,7 +879,7 @@ export const en = {
       handle: "Link end",
     },
     legend: {
-      about: "Top to bottom is the walk from the start; each box sits by its first step. A line beside the boxes runs against the walk. A line to a box off the walk shows when one of its ends is selected.",
+      about: "Left to right is the walk from the start; each box sits by its first step. A line under the boxes runs against the walk. A line to a box off the walk shows when one of its ends is selected.",
       arc: "an arc: runs against the walk",
       start: "where the walk begins; in a group, Entry",
       end: "where a way through finishes",
@@ -901,6 +929,9 @@ export const en = {
       repeat: "repeat",
     },
     edgeWhen: "when {{when}}",
+    // An arrow's accessible name and its List row start from its ends' words; the type, kind and when follow.
+    edgeName: "From {{from}} to {{to}}",
+    edgeRow: "to {{to}}",
     stateName: "State",
     // flow-scenario D10: the bar's Gaps control.
     gaps: {

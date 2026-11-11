@@ -110,6 +110,11 @@ export const queryKeys = {
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
   /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does; `parent` is never asked here. */
   cards: (project: string, options: BoardCardsOptions = {}) => ["cards", project, { with_cancelled: options.with_cancelled ?? false }] as const,
+  /**
+   * A work item's children, cancelled ones too (docs/features/handoff-progress.md
+   * "Acceptance criteria", HP-1): under the project's card lists, so whatever reads them again reads it again.
+   */
+  children: (project: string, id: string) => ["cards", project, { parent: id, with_cancelled: true }] as const,
   /** One card, its history with it. */
   card: (project: string, id: string) => ["card", project, id] as const,
   /** Marks and rollups, joined per read; `ref` null: the whole project (`docs/features/card-trace.md`); a lane's rows or the lanes alone (`docs/features/trace-views.md` "Timeline"). */
@@ -1139,6 +1144,24 @@ export function useCards(project: string, options: BoardCardsOptions = {}) {
 
 /** The card list's read as the Board shares it. */
 export type CardsQuery = ReturnType<typeof useCards>;
+
+/**
+ * A work item's children, cancelled ones too (docs/features/handoff-progress.md
+ * "Acceptance criteria", HP-1): `--parent` and `--with-cancelled`, no marks (the work item takes its mark from the
+ * Board's list). Read while a card is shown, and again with the project's card lists: a `card.*`
+ * event, a write's settle, a gap; `id` null reads nothing.
+ */
+export function useChildren(project: string, id: string | null) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.children(project, id ?? ""),
+    queryFn: ({ signal }) => client.getCards(project, { parent: id ?? "", with_cancelled: true }, signal),
+    enabled: id !== null,
+  });
+}
+
+/** A work item's children read, as its Subtasks share it. */
+export type ChildrenQuery = ReturnType<typeof useChildren>;
 
 /** One card with its history (`id` null: nothing read); a new ID never shows the last one's card. */
 export function useCard(project: string, id: string | null) {

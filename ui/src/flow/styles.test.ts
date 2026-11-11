@@ -5,6 +5,7 @@ import tokensCss from "../styles/tokens.css?raw";
 import flowCanvas from "./FlowCanvas.tsx?raw";
 import graphCanvas from "../graph/GraphCanvas.tsx?raw";
 import { FLOW_FIT_MIN_ZOOM, FLOW_PINCH_MIN_ZOOM } from "./geometry";
+import { LABEL_WIDTH } from "./layout";
 
 // docs/features/writer-studio.md ST-4, ST-8, ST-11 (and ST-6's no dimming); flow-scenario FS-14 and
 // FS-22 (RM-0094): jsdom lays nothing out, so these pin the studio's rules, as the Board's
@@ -231,5 +232,32 @@ describe("narrow widths (ST-11)", () => {
     for (const block of blocks.filter((candidate) => /\.flow-places/.test(candidate.selector) && candidate.media !== WIDE && candidate.media !== WIDEST)) {
       expect([block.selector, /(^|[^-])width:\s*var\(--flow-places-width\)/.test(block.body)]).toEqual([block.selector, false]);
     }
+  });
+});
+
+// docs/features/handoff-progress.md "Acceptance criteria", C-2: the minimap takes no pointer, so a
+// box under it takes its click; it neither pans nor zooms, so it loses nothing.
+describe("the minimap (C-2)", () => {
+  it("lets every pointer through: `.flow-canvas .react-flow__minimap` holds `pointer-events: none`", () => {
+    // M: the declaration dropped.
+    expect(ruleWith(".flow-canvas .react-flow__minimap", null, /pointer-events:\s*none;/).body).toMatch(/pointer-events:\s*none;/);
+    expect(flowCanvas).toContain("pannable={false} zoomable={false}");
+  });
+
+  it("draws a divider's rule down its left side, its words two lines at most, then an ellipsis (F-3)", () => {
+    expect(ruleWith(".flow-divider", null, /border-left:/).body).toMatch(/border-left:\s*1px dashed var\(--border-control\);/);
+    expect(ruleWith(".flow-divider-words", null, /-webkit-line-clamp:\s*2;/).body).toMatch(/overflow:\s*hidden;/);
+  });
+});
+
+// The orchestrator's look L1 of handoff-progress: an edge's words wrap within its gap, two lines at most.
+describe("an edge's words in its gap (L1 of the looks)", () => {
+  it("caps a label at the gap less its insets, two lines, then an ellipsis; each word a line", () => {
+    const label = ruleWith(".flow-edge-label", null, /max-width:/).body;
+    expect(label).toMatch(/max-width:\s*var\(--flow-edge-label-width\);/);
+    expect(label).toMatch(/-webkit-line-clamp:\s*2;/);
+    expect(label).toMatch(/overflow:\s*hidden;/);
+    expect(tokensCss).toMatch(new RegExp(`--flow-edge-label-width:\\s*${String(LABEL_WIDTH / 16)}rem;`));
+    expect(ruleWith(".flow-edge-word", null, /display:/).body).toMatch(/display:\s*block;/);
   });
 });

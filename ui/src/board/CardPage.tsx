@@ -19,10 +19,6 @@ import { useToday } from "./due";
 import { openRows, reorderOf } from "./filter";
 import { columnTitle, rowMark } from "./labels";
 import { MoveMenu } from "./MoveMenu";
-import { rollupsOf, type Rollup } from "./rollup";
-
-/** No child: nothing listed under Subtasks. */
-const NO_ROLLUP: Rollup = { children: [], returned: 0 };
 
 /** A refused move: the daemon's reason; `count` a new alert for each. */
 interface Refusal {
@@ -33,8 +29,8 @@ interface Refusal {
 /**
  * A card's page (`#/<p>/board/<C>/page`, `ui/README.md` "Screen rules", Shell): no columns, the work
  * item the modal shows (CardPanel.tsx `CardView`), its title the one `h1`, "Open on the board" on the
- * breadcrumb line. It reads what the board reads, the list (for the flows and the children) and the
- * card, so a reload keeps it; the nav marks Board. A link to another card goes to that card's page, replacing this one.
+ * breadcrumb line. It reads what the board reads, the list (for the flows and the mark) and the
+ * card, so a reload keeps it; the work item reads the card's children itself; the nav marks Board. A link to another card goes to that card's page, replacing this one.
  * Nothing here judges a column: the moves are the card's `allowed`, the daemon answers.
  */
 export function CardPage({ project, id }: { project: string; id: string }) {
@@ -61,7 +57,6 @@ export function CardPage({ project, id }: { project: string; id: string }) {
 
   const list = cards.data;
   const all = useMemo(() => list?.cards ?? [], [list]);
-  const handOffs = useMemo(() => rollupsOf(all, list?.flows ?? []).get(id) ?? NO_ROLLUP, [all, list, id]);
   const rollups = useMemo(() => new Map(trace.error === null ? (trace.data?.nodes.map((node) => [node.id, node.rollup]) ?? []) : []), [trace.data, trace.error]);
   const row = all.find((candidate) => candidate.id === id);
   const card = query.data !== undefined && isCard(query.data) ? query.data : undefined;
@@ -223,7 +218,6 @@ export function CardPage({ project, id }: { project: string; id: string }) {
         today={today}
         mark={cards.error !== null || row === undefined ? null : rowMark(row)}
         rollups={rollups}
-        handOffs={handOffs}
         markFailure={cards.error === null ? null : apiErrorOf(cards.error).message}
         stateFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
         links={links}

@@ -8,14 +8,14 @@ reviewed: 2026-11-11
 
 # The Flow screen
 
-The scenario as a three-pane studio, one scope at a time, lifting nothing (ADR-0033, ADR-0055), its boxes against their cards; `flow-canvas`, `trace-views`, `writer-studio`, `flow-scenario`; code `ui/src/flow/`, `ui/src/trace/`. Reads: `spec-flow.md`, `spec-flow-cuts.md`, `spec-trace.md`; the place and the path: `spec-flow-place.md`; placing, fit, forms: `spec-flow-layout.md`; the bar, Gaps, Records for the AI: `spec-flow-bar.md`. Gaps and marks stop nothing (ADR-0012); spec changes go through the AI's proposals; cards, a gap's too, are written from the panel.
+The scenario as a three-pane studio, one scope at a time, lifting nothing (ADR-0033, ADR-0055), its boxes against their cards; `flow-canvas`, `trace-views`, `writer-studio`, `flow-scenario`; code `ui/src/flow/`, `ui/src/trace/`. Reads: `spec-flow.md`, `spec-flow-cuts.md`, `spec-trace.md`; the place and the path: `spec-flow-place.md`; layout, clicks, forms: `spec-flow-layout.md`; the bar, Gaps, Records for the AI: `spec-flow-bar.md`. Gaps and marks stop nothing (ADR-0012); spec changes go through the AI's proposals; cards, a gap's too, are written from the panel.
 
 ## Studio
 
 A section, not a Graph mode (`spec graph` needs a REF). `.flow-studio`: places (`--flow-places-width` 15rem), the centre (the canvas, at least `--flow-canvas-min` 20rem, over the bar), the panel (`--flow-panel-width` 22rem).
 
 - **Header**, one line: the `h1` "Flow", the scope's title (` · <stage>` when chosen, an ellipsis when cut), the Canvas and List tabs, one disclosure (`flow.about`; with notes `flow.aboutNotes`) holding the about text, `left_out` and each note of every read shown, once.
-- **Canvas**, a `region` "Flow canvas", one read, its cut nodes alone, top to bottom. A group is entered, a scope change, never opened in place: no frames, no open groups. A click selects a box; a double-click, its caret, Space or the panel's Open enters a group; a pane click does nothing; an edge click selects the edge (`EDGE_HIT`, 12 px). The wheel pans; a pinch, or the wheel with xyflow's zoom key, zooms; no zoom or fit buttons. No `onlyRenderVisibleElements`: a read draws at most 200 boxes, each reached by the arrow keys.
+- **Canvas**, a `region` "Flow canvas", one read, its cut nodes alone, left to right. A group is entered, a scope change, never opened in place: no frames, no open groups. A click selects a box; a double-click, its caret, Space or the panel's Open enters a group; a pane click does nothing; an edge click selects the edge (`EDGE_HIT`, 12 px). The wheel pans; a pinch, or the wheel with xyflow's zoom key, zooms; no zoom or fit buttons. No `onlyRenderVisibleElements`: a read draws at most 200 boxes, each reached by the arrow keys.
 - **Bar**, the centre's last row: Legend, Gaps and, past the cap, `flow.notDrawn` (`spec-flow-bar.md`).
 - **Width.** Above 64rem the studio fills the viewport below the shell (`100dvh` less the measured `--flow-studio-top`), `overflow: hidden`, each pane scrolling inside and positioned, so a hidden label adds no page scroll; `.app-body:has(.flow-studio)` drops the shell's floor. From 64 to 80rem the places fold into a disclosure (`flow.placesToggle`) opening over the canvas. Under 64rem one column (header, places closed, canvas, panel) and the page scrolls: `panOnScroll` off, `preventScrolling` false, a drag pans; the bar sticky, `scroll-padding-bottom` its height. Under 48rem the List is the default tab unless another is remembered.
 
@@ -54,7 +54,7 @@ In the bar's Gaps control: `spec-flow-bar.md` "Gaps". The scope view lists none.
 
 ## List
 
-The canvas's text twin, in served order, past the cap too: each box an `<a>` selecting it by a replace (a group adds `<holds> documents` and Open); under it its outgoing edges, each a link selecting the edge, `<type> <to title>[, <kind>][, when <when>][, ×<count>]`; the scope's own edges first, under its name; in a stage view, boxes under their `group`. No row prints `path:line`; the panel does.
+The canvas's text twin, in served order, past the cap too: each box an `<a>` selecting it by a replace (a group adds `<holds> documents` and Open); under it its outgoing edges, each a link selecting the edge, `to <to title>, <type>[, <kind>][, when <when>][, ×<count>]`; the scope's own edges first, under its name; in a stage view, boxes under their `group`. No row prints `path:line`; the panel does.
 
 ## States and live
 
@@ -69,7 +69,7 @@ The canvas's text twin, in served order, past the cap too: each box an `<a>` sel
 
 `ui/README.md` "Screen rules" applies; the Canvas and List tabs are kept per project in the Shell (`spec-flow-place.md` "Memory"). Width: "Studio".
 
-- **Keys,** one tab stop on the canvas, none on edges: the List is the keyboard's way to an arrow. Arrows move among boxes only: Up and Down to the nearest box of the row above or below, the band last; Left and Right within a row. Enter selects, focus to the panel heading. Space enters a group, focus to the new picture's first box. `o` the Tree, `c` centres (`letterOf`); Esc closes an open overlay, else clears the selection, focus back where it was made; `?` lists them.
+- **Keys,** one tab stop on the canvas, none on edges: the List is the keyboard's way to an arrow. Arrows move among boxes only: Left and Right to the nearest box of the next or previous column, Up and Down within one, then to the band and across its shelves. Enter selects, focus to the panel heading. Space enters a group, focus to the new picture's first box. `o` the Tree, `c` centres (`letterOf`); Esc closes an open overlay, else clears the selection, focus back where it was made; `?` lists them.
 - **Focus** stays on the link that changed the scope while it stands; lost, on the canvas region, never `body`. A box's name says its title, stage, marks and gaps.
 - **Motion.** Viewport moves take `--duration-*`.
 
@@ -85,15 +85,15 @@ The canvas's text twin, in served order, past the cap too: each box an `<a>` sel
 
 ## Known limits
 
-- **Decision 11, the owner's call.** The 200-box trial with random wiring passes (median 1.9 ms, no overlap) with 1,920 forward crossings, "a hairball by eye"; the look at the cap, `?scenario=large`, is his to judge. A layout library needs his allowlist.
+- **Decision 11, the owner's.** The 200-box trial with random wiring passes (no overlap, under 500 ms, fewer than 2,500 forward crossings), "a hairball by eye"; the look at the cap, `?scenario=large`, is his to judge. A layout library needs his allowlist.
 - **Cost.** At 100k a scope change waits about 1.5 s on two O(N) reads, each taking a hub's project turn (`scale-eval.md` "Baseline").
 - **Two hashes, one picture.** Before the lens root is known, the path's top entry writes `scope=<id>`, the lens root's picture under a second hash.
-- **Minimap.** Bottom-left, it covers a box of a tall flow at fit until panned.
-- **Zoom.** No keyboard zoom or refit; the zoom and fit buttons are gone, a working answer for the owner to confirm. The List is the keyboard path.
+- **Minimap.** Over a box of a tall flow at fit; a click passes through.
+- **Zoom.** No keyboard zoom or refit, no zoom or fit buttons (a working answer for the owner); the List is the keyboard path.
 - The hidden box panel keeps its node query live.
 - Edges answer the mouse only; only an item's first member is sought; exit steps carry no mark (core `Steps.leaving` is not served).
 - 320 px and the still page are proven by looks, not tests: jsdom lays nothing out.
 
 ## Tests
 
-`ui/src/flow/*.test.*` (`FlowView.test.tsx` on stub clients, `src/test/asideStub.ts` the pottery's, `styles.test.ts` the CSS pins); `ui/src/mocks/flow.smoke.test.tsx` (harbor-sim: history, a stage, the hand-off, bounded reads), `flow.test.ts`, `trace.test.ts`; `app/routes.test.ts`; `trace/CardsBlock.test.tsx`; `markdown/Markdown.test.tsx` (the first paragraph); `api/*.test.*`; `policy.test.ts`, `styles/tokens.test.ts`.
+`ui/src/flow/*.test.*` (`FlowView.test.tsx`, `src/test/asideStub.ts` the pottery's, `styles.test.ts` the CSS pins); `ui/src/mocks/flow.smoke.test.tsx` (harbor-sim: history, a stage, the hand-off, bounded reads), `flow.test.ts`, `trace.test.ts`; `app/routes.test.ts`; `trace/CardsBlock.test.tsx`; `markdown/Markdown.test.tsx` (the first paragraph); `api/*.test.*`; `policy.test.ts`, `styles/tokens.test.ts`.

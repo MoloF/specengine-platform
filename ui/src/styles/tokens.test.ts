@@ -348,6 +348,15 @@ describe.each(THEMES)("today's distinctness in the %s theme (AC-09)", (theme) =>
     }
   });
 
+  // docs/features/handoff-progress.md "Acceptance criteria", HP-3: a parent's progress bar, beside its words line.
+  it("fills a parent's progress bar with the lozenges' text roles, each at least 3:1 on every surface, no new role (HP-3)", () => {
+    for (const appearance of ["success", "neutral", "warning", "information"]) {
+      for (const surface of SURFACES) {
+        expect([appearance, surface, contrast(`--lozenge-${appearance}-text`, surface, theme) >= 3]).toEqual([appearance, surface, true]);
+      }
+    }
+  });
+
   it("gives the flow's edge types four colours, each at least 3:1 on every surface, none a state's (AC-06 of flow-canvas)", () => {
     const colours = FLOW_EDGE.map((value) => shade(`--flow-edge-${value}`));
     expect(new Set(colours).size).toBe(4);

@@ -47,3 +47,13 @@ describe("the hand-off's words (BH-18)", () => {
     expect(words(ru).filter(([, value]) => value.toLowerCase().includes(RUSSIAN_STEM))).toEqual([]);
   });
 });
+
+// docs/features/handoff-progress.md "Acceptance criteria", HP-4: "Ready to accept" is the owner's
+// word (v5 Q3), a status beside Accept; it sits under `board.progress`, outside the scan above.
+describe("Ready to accept, outside the guard's scan (HP-4)", () => {
+  it("says Ready to accept, and no board.progress key is among the scanned words", () => {
+    expect(en.board.progress.ready).toBe("Ready to accept");
+    expect(words(en).filter(([path]) => path.startsWith("board.progress"))).toEqual([]);
+    expect(words(ru).filter(([path]) => path.startsWith("board.progress"))).toEqual([]);
+  });
+});

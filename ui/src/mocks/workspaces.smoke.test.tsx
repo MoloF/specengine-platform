@@ -16,6 +16,22 @@ import { HARBOR_NOTES, LEDGER_NOTE, workspacesOf } from "./workspaces";
 // workspace, `config-notes` the notes, `error` a failed read. Counted reads spy on the mock's methods.
 // WS-1 (the screen), WS-2, WS-3, WS-5, WS-9, WS-11, WS-13, WS-14; WS-15: workspaceText.smoke.test.tsx.
 
+/**
+ * Subtasks' rows once the children read lands: the part's one unnamed list, beside Relies on and
+ * Cancelled subtasks (docs/features/handoff-progress.md "Acceptance criteria", HP-5, HP-6).
+ */
+async function subtaskRows(part: HTMLElement): Promise<HTMLElement[]> {
+  return waitFor(() => {
+    const rows = within(part)
+      .getAllByRole("list")
+      .find((list) => list.getAttribute("aria-labelledby") === null);
+    if (rows === undefined) {
+      throw new Error("no subtask rows yet");
+    }
+    return within(rows).getAllByRole("listitem");
+  });
+}
+
 function renderMock(scenario: Scenario, hash: string, prepare: (client: MockClient) => void = () => undefined) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
   const client = new MockClient(scenario, { delayMs: 0 });
@@ -558,7 +574,7 @@ describe("the department's Board (DP-10 of departments)", () => {
     const modal = await screen.findByRole("dialog", { name: "Write the tide table foreword" });
     const flow = Array.from(modal.querySelectorAll("dt")).find((term) => term.textContent === "Flow");
     expect(flow?.nextElementSibling?.textContent).toBe("Copy desk");
-    const subtasks = within(await within(modal).findByRole("region", { name: "Subtasks" })).getAllByRole("listitem");
+    const subtasks = await subtaskRows(await within(modal).findByRole("region", { name: "Subtasks" }));
     expect(subtasks.map((item) => item.querySelector(".board-handoff-title + bdi")?.textContent)).toEqual(["Copy desk", "plates", "plates"]);
   });
 

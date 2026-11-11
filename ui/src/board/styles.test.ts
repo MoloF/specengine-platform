@@ -109,11 +109,12 @@ describe("the header stays; the page never scrolls sideways (BH-2)", () => {
     expect(NARROW).not.toMatch(/\.board-region\s*\{[^}]*overflow:\s*auto/);
   });
 
-  // Replaced by design-foundation (W12, "The work item: the task modal and page"): the work item needs a
-  // main column beside a 330 px side column, so the modal is 968 px wide; its body still scrolls inside.
-  it("keeps the card modal inside the viewport: at most --modal-width-l (968 px) wide and the height less 2rem, its work item's body scrolling", () => {
+  // Widened by handoff-progress (docs/features/handoff-progress.md "Acceptance criteria", M-1): a main
+  // column of about 750 px beside a 360 px side column, so the modal is 1200 px wide; its body still scrolls inside.
+  it("keeps the card modal inside the viewport: at most --modal-width-xl (1200 px) wide and the height less 2rem, its work item's body scrolling, its page as wide (M-1)", () => {
     const modal = ruleWith(".card-modal", /width/);
-    expect(modal).toMatch(/width:\s*min\(var\(--modal-width-l\), 100vw - 2rem\);/);
+    expect(modal).toMatch(/width:\s*min\(var\(--modal-width-xl\), 100vw - 2rem\);/);
+    expect(ruleWith(".card-page", /max-width/)).toMatch(/max-width:\s*var\(--modal-width-xl\);/);
     expect(modal).toMatch(/max-height:\s*calc\(100dvh - 2rem\);/);
     // Its body's scrolling is the work item's own in any dialog (docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look).
     expect(ruleWith(".dialog > .issue-view > .issue-view-body", /overflow/)).toMatch(/overflow:\s*auto;/);

@@ -4,6 +4,7 @@ import type { Look } from "../ui/Badge";
 import type { IconName } from "../ui/Icon";
 import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
 import type { StatusCategory } from "./category";
+import type { ProgressWord } from "./rollup";
 
 // The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"), each from the
 // catalog's `board` group: columns, flows and disciplines are project vocabulary, shown as stored; an
@@ -342,4 +343,37 @@ const CATEGORY_MARKS: Readonly<Record<StatusCategory, { appearance: LozengeAppea
 /** A category's appearance and icon. */
 export function categoryMark(category: StatusCategory): { appearance: LozengeAppearance; icon: IconName } {
   return CATEGORY_MARKS[category];
+}
+
+/**
+ * Each word of a parent's progress bar (docs/features/handoff-progress.md "Acceptance criteria",
+ * HP-3): its fill, a lozenge appearance's text role, and its icon; its words the catalog's
+ * `board.progress` plural. Accepted succeeds, returned warns, in progress informs; cancelled, to do
+ * and not in the flow are neutral, told apart by their icons and words, never by colour alone.
+ */
+const PROGRESS_MARKS: Readonly<Record<ProgressWord, { appearance: LozengeAppearance; icon: IconName }>> = {
+  accepted: { appearance: "success", icon: "taskAccepted" },
+  cancelled: { appearance: "neutral", icon: "taskCancelled" },
+  returned: { appearance: "warning", icon: "cardReturned" },
+  doing: { appearance: "information", icon: "taskInProgress" },
+  todo: { appearance: "neutral", icon: "open" },
+  stranded: { appearance: "neutral", icon: "unknown" },
+};
+
+/** A progress word's fill and icon. */
+export function progressMark(word: ProgressWord): { appearance: LozengeAppearance; icon: IconName } {
+  return PROGRESS_MARKS[word];
+}
+
+/** A progress word with its count, in the viewer's plural: "3 accepted". */
+export function progressWords(word: ProgressWord, count: number, t: Translate): string {
+  return t(`board.progress.${word}`, { count });
+}
+
+/**
+ * A parent whose every child is accepted or cancelled: a status, the owner's word (v5 Q3), never a
+ * control; Accept stands where it stands (ADR-0074).
+ */
+export function readyLook(t: Translate): LozengeLook {
+  return { appearance: "success", icon: "taskAccepted", label: t("board.progress.ready") };
 }

@@ -49,8 +49,9 @@ describe("a card's page (BH-6)", () => {
     expect(within(screen.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Return", "Edit", "Assign", "Cancel task"]);
     expect(within(screen.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
     expect(within(await screen.findByRole("region", { name: "Goal" })).getByText("What it is for")).toBeTruthy();
-    const child = within(screen.getByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0002" });
-    expect(child.getAttribute("href")).toBe("#/alpha/board/C-0002/page");
+    // Relies on and the row each link the open child (docs/features/handoff-progress.md "Acceptance criteria", HP-5).
+    const children = await within(screen.getByRole("region", { name: "Subtasks" })).findAllByRole("link", { name: "C-0002" });
+    expect(children.map((child) => child.getAttribute("href"))).toEqual(["#/alpha/board/C-0002/page", "#/alpha/board/C-0002/page"]);
     expect(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Board" }).getAttribute("aria-current")).toBe("page");
     expect(client.getCards).toHaveBeenCalled();
     expect(client.getCard.mock.calls.map((call) => call[1])).toContain("C-0001");
@@ -66,7 +67,8 @@ describe("a card's page (BH-6)", () => {
   it("a child's link goes to its page, replacing this one", async () => {
     await page();
     const length = window.history.length;
-    fireEvent.click(within(await screen.findByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0002" }));
+    const [child] = await within(await screen.findByRole("region", { name: "Subtasks" })).findAllByRole("link", { name: "C-0002" });
+    fireEvent.click(child as HTMLElement);
     await screen.findByRole("heading", { level: 1, name: "Its child" });
     expect([window.location.hash, window.history.length]).toEqual(["#/alpha/board/C-0002/page", length]);
   });

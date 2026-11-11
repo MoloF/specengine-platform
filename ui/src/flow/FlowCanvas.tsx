@@ -24,14 +24,13 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { focusIsLost } from "../ui/focus";
 import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
-import { durationOf, EDGE_HIT, fitOf, FLOW_PINCH_MIN_ZOOM, inView, type Rect } from "./geometry";
+import { durationOf, EDGE_HIT, fitOf, FLOW_CLICK_DISTANCE, FLOW_PINCH_MIN_ZOOM, inView, type Rect } from "./geometry";
 import { boxWords, countsText, dashOf, dividerWords, edgeName, edgeShownWords, gapMark, holdsText, isNoCard, isRepeat, rollupLook, startWord, typeColour, type GapMark } from "./labels";
-import { BAND_CAPTION_WIDTH, boxAfterKey, DIVIDER_HEIGHT, isGroup, LANE_PAD, type FlowBox, type FlowDivider, type FlowLane, type FlowLayout, type LaidEdge } from "./layout";
+import { BAND_CAPTION_WIDTH, boxAfterKey, isGroup, LANE_PAD, type FlowBox, type FlowDivider, type FlowLane, type FlowLayout, type LaidEdge } from "./layout";
 
-// The Flow's canvas (docs/features/writer-studio.md D1, D8, D9; docs/features/flow-scenario.md D7 to
-// D9; ui/README.md "Screen rules", Canvas): React Flow draws one read's boxes and edges where the
-// layout put them, the walk top to bottom under its stage dividers; nothing drags, connects or
-// deletes. A box says its title, never its ID. An edge with an end off the walk shows only while that
+// The Flow's canvas (`docs/canon/spec-flow-layout.md` "Layout"; ui/README.md "Screen rules", Canvas):
+// React Flow draws one read's boxes and edges where the layout put them, the walk left to right, its
+// stage dividers left of their columns; nothing drags, connects or deletes. A box says its title, never its ID. An edge with an end off the walk shows only while that
 // end or the edge is selected, so no bundle stands on the canvas. A click on a box or an arrow selects
 // it, a group is entered, never opened in place, so no frame lies under an arrow. The wheel pans and a
 // pinch or the zoom key zooms; the picture fits once, when it is drawn, and then only the owner, `c`
@@ -73,8 +72,8 @@ const TOGGLE = "data-flow-toggle";
 function Handles() {
   return (
     <>
-      <Handle type="source" position={Position.Bottom} id="out" isConnectable={false} aria-hidden="true" />
-      <Handle type="target" position={Position.Top} id="in" isConnectable={false} aria-hidden="true" />
+      <Handle type="source" position={Position.Right} id="out" isConnectable={false} aria-hidden="true" />
+      <Handle type="target" position={Position.Left} id="in" isConnectable={false} aria-hidden="true" />
     </>
   );
 }
@@ -214,7 +213,7 @@ const BandCaption = memo(function BandCaption({ data }: NodeProps<Node<BandData,
   );
 });
 
-/** A stage divider: the stage words raw, a rule across the picture; hidden from assistive technology, never focused (flow-scenario D7). */
+/** A stage divider: a rule down the picture, the stage words raw at its top, two lines at most; hidden from assistive technology, never focused. */
 const DividerView = memo(function DividerView({ data }: NodeProps<Node<DividerData, "divider">>) {
   return (
     <p className="flow-divider" aria-hidden="true">
@@ -289,10 +288,10 @@ export function boxName(box: FlowBox, marks: BoxMarks, inLane: boolean, t: Trans
 }
 
 function handlesOf(box: FlowBox) {
-  const x = box.width / 2 - HANDLE_SIZE / 2;
+  const y = box.height / 2 - HANDLE_SIZE / 2;
   return [
-    { id: "out", type: "source" as const, position: Position.Bottom, x, y: box.height - HANDLE_SIZE / 2, width: HANDLE_SIZE, height: HANDLE_SIZE },
-    { id: "in", type: "target" as const, position: Position.Top, x, y: -HANDLE_SIZE / 2, width: HANDLE_SIZE, height: HANDLE_SIZE },
+    { id: "out", type: "source" as const, position: Position.Right, x: box.width - HANDLE_SIZE / 2, y, width: HANDLE_SIZE, height: HANDLE_SIZE },
+    { id: "in", type: "target" as const, position: Position.Left, x: -HANDLE_SIZE / 2, y, width: HANDLE_SIZE, height: HANDLE_SIZE },
   ];
 }
 
@@ -315,8 +314,22 @@ function nodeOf(box: FlowBox, marks: BoxMarks, inLane: boolean, tabStop: boolean
   };
 }
 
-/** The words of the band and of a divider: no box, no tab stop, hidden from assistive technology (the List and the boxes' names say it). */
-const WORDS_ONLY = { zIndex: 2, draggable: false, selectable: false, connectable: false, deletable: false, focusable: false, domAttributes: { "aria-hidden": true } } as const;
+/**
+ * The words of the band and of a divider: no box, no tab stop, hidden from assistive technology (the
+ * List and the boxes' names say it), and no pointer: React Flow gives every node `pointer-events: all`
+ * once a node takes clicks, then spreads its style over it, so a press meant for a box or an arrow
+ * under these words reaches it (docs/features/handoff-progress.md "Acceptance criteria", C-4).
+ */
+const WORDS_ONLY = {
+  zIndex: 2,
+  draggable: false,
+  selectable: false,
+  connectable: false,
+  deletable: false,
+  focusable: false,
+  domAttributes: { "aria-hidden": true },
+  style: { pointerEvents: "none" },
+} as const;
 
 /** The caption's height: two lines of its words, which wrap in a narrow picture. */
 const BAND_CAPTION_HEIGHT = 32;
@@ -325,11 +338,13 @@ function bandNode(lane: FlowLane, x: number, y: number, width: number): CanvasNo
   return { id: "band", type: "band", position: { x, y }, width, height: BAND_CAPTION_HEIGHT, data: { lane }, ...WORDS_ONLY };
 }
 
-function dividerNode(divider: FlowDivider, width: number): CanvasNode {
-  return { id: divider.id, type: "divider", position: { x: 0, y: divider.y }, width, height: DIVIDER_HEIGHT, data: { divider }, ...WORDS_ONLY };
+/** A divider's node: from its rule rightwards over its column, from its words' strip to below the lowest arc track. */
+function dividerNode(divider: FlowDivider): CanvasNode {
+  return { id: divider.id, type: "divider", position: { x: divider.x, y: divider.y }, width: divider.width, height: divider.height, data: { divider }, ...WORDS_ONLY };
 }
 
-function edgeOf(laid: LaidEdge, types: readonly string[], emphasis: boolean, t: Translate): LinkEdge {
+/** An arrow; its name reads forwards, from its source box's words to its target's (E-1). */
+function edgeOf(laid: LaidEdge, ends: { from: FlowBox | undefined; to: FlowBox | undefined }, types: readonly string[], emphasis: boolean, t: Translate): LinkEdge {
   const colour = typeColour(laid.edge.type, types);
   return {
     id: laid.id,
@@ -339,7 +354,7 @@ function edgeOf(laid: LaidEdge, types: readonly string[], emphasis: boolean, t: 
     sourceHandle: "out",
     targetHandle: "in",
     data: { laid, emphasis },
-    ariaLabel: edgeName(laid.edge, t),
+    ariaLabel: edgeName(laid.edge, ends.from === undefined ? null : boxWords(ends.from.node), ends.to === undefined ? null : boxWords(ends.to.node), t),
     className: emphasis ? "is-emphasis" : undefined,
     style: { stroke: colour, strokeDasharray: dashOf(laid.edge, types), ...(isRepeat(laid.edge) ? { strokeWidth: "var(--flow-repeat-width)" } : {}) },
     markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: colour },
@@ -428,7 +443,7 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
   const labels = useMemo(() => ariaLabels(t), [t]);
 
   const selectedId = useMemo(() => layout.boxes.find((box) => box.name === selected)?.id ?? null, [layout, selected]);
-  const firstId = layout.lanes[0]?.rows[0]?.[0] ?? layout.lanes[0]?.band[0]?.[0] ?? null;
+  const firstId = layout.lanes[0]?.columns[0]?.[0] ?? layout.lanes[0]?.band[0]?.[0] ?? null;
   const drawn = useMemo(() => new Set(layout.boxes.map((box) => box.id)), [layout]);
   const rovingId = roving !== null && drawn.has(roving) ? roving : (selectedId ?? firstId);
 
@@ -451,17 +466,16 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
       // The caption's least width, clamped to the picture: it never runs past the layout's right edge.
       return lane.bandY === null || first === undefined ? [] : [bandNode(lane, first.x, lane.bandY, Math.min(Math.max(layout.width - first.x - LANE_PAD, BAND_CAPTION_WIDTH), layout.width - first.x))];
     });
-    const dividers = layout.lanes.flatMap((lane) => lane.dividers.map((divider) => dividerNode(divider, layout.width)));
+    const dividers = layout.lanes.flatMap((lane) => lane.dividers.map(dividerNode));
     return [...dividers, ...boxes, ...bands];
   }, [layout, selected, marked, named, inLane, rovingId, t]);
   // An edge with an end off the walk stands only while that end or the edge is selected (flow-scenario D9).
-  const edges = useMemo(
-    () =>
-      layout.edges
-        .filter((laid) => !laid.offWalk || laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)))
-        .map((laid) => edgeOf(laid, types, laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)), t)),
-    [layout, types, selectedEdge, selectedId, t],
-  );
+  const edges = useMemo(() => {
+    const byId = new Map(layout.boxes.map((box) => [box.id, box]));
+    return layout.edges
+      .filter((laid) => !laid.offWalk || laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)))
+      .map((laid) => edgeOf(laid, { from: byId.get(laid.source), to: byId.get(laid.target) }, types, laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)), t));
+  }, [layout, types, selectedEdge, selectedId, t]);
 
   const boxElement = useCallback((id: string): HTMLElement | null => {
     const found = Array.from(wrapper.current?.querySelectorAll<HTMLElement>(".react-flow__node") ?? []);
@@ -526,7 +540,12 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
     return id === undefined ? undefined : layout.boxes.find((candidate) => candidate.id === id);
   }
 
-  /** A focused box out of sight is centred at the current zoom. */
+  /**
+   * A box focused from the keyboard (`:focus-visible`, as React Flow's own node wrapper tells it), out
+   * of sight, is centred at the current zoom. A mouse, touch or pen press focuses without it, and moves
+   * nothing, so the box stays under the pointer for its click
+   * (docs/features/handoff-progress.md "Acceptance criteria", C-3).
+   */
   function onFocus(event: FocusEvent<HTMLElement>) {
     const box = boxOf(event.target);
     focusInside.current = box !== undefined;
@@ -535,6 +554,9 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
     }
     if (box.id !== rovingId) {
       setRoving(box.id);
+    }
+    if (!(event.target instanceof Element) || !event.target.matches(":focus-visible")) {
+      return;
     }
     const { transform, width, height } = store.getState();
     const [x, y, zoom] = transform;
@@ -633,6 +655,7 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
         defaultMarkerColor={null}
         minZoom={FLOW_PINCH_MIN_ZOOM}
         maxZoom={2}
+        paneClickDistance={FLOW_CLICK_DISTANCE}
         onMoveStart={(event) => {
           if (event !== null) {
             touched.current = true;
@@ -651,7 +674,7 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
           }
         }}
       >
-        {/* Bottom left: the arcs and their words run on the right of the walk. */}
+        {/* Bottom left, and it takes no pointer (app.css): a box under it takes its click; it neither pans nor zooms, so it loses nothing. */}
         {!pictureWhole && <MiniMap position="bottom-left" style={MINIMAP_SIZE} pannable={false} zoomable={false} />}
         <FitOnce layout={layout} touched={touched} />
       </ReactFlow>

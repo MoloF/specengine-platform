@@ -84,7 +84,8 @@ describe("Hand off (BH-11)", () => {
     }
     const modal = screen.getByRole("dialog", { name: "Lamp room dialogue" });
     await waitFor(() => {
-      expect(within(within(modal).getByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0002" })).toBeTruthy();
+      // Relies on and its row (docs/features/handoff-progress.md "Acceptance criteria", HP-5): the children read, read again after the write.
+      expect(within(within(modal).getByRole("region", { name: "Subtasks" })).getAllByRole("link", { name: "C-0002" })).toHaveLength(2);
     });
     expect(screen.getAllByRole("dialog")).toEqual([modal]);
     await waitFor(() => {

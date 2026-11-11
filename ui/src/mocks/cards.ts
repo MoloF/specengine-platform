@@ -41,7 +41,9 @@ import { linkedTaskOf, type MockTasks } from "./tasks";
 // C-0015 were each returned with a reason. Hand-offs run
 // both ways and hold no target, so no trace read changes: C-0001 has a child handed off (C-0013),
 // one taken in its own flow (C-0019), one accepted (C-0016) and one cancelled (C-0017); C-0003's
-// was returned (C-0015), C-0004's taken (C-0014), and the plate C-0009 handed a caption to copy (C-0018).
+// was returned (C-0015), C-0004's accepted (C-0014), so C-0004, in proof, is ready beside Accept
+// (docs/features/handoff-progress.md "Acceptance criteria", HP-4), and the plate C-0009 handed a
+// caption to copy (C-0018).
 // Cards link `T-` tasks of src/mocks/tasks.ts (`docs/canon/card-tasks.md` "The rule"), each read
 // when the card is: C-0001 links T-0107 (plan review), T-0109 (in progress, its spec changed) and
 // T-0106, whose row does not read; C-0004 links T-0104 (done); the accepted C-0012 keeps T-0111
@@ -390,14 +392,15 @@ function harborCards(at: number): StoredCard[] {
     aCard(at, {
       id: "C-0014",
       flow: "plates",
-      column: "checked",
+      column: "struck",
       position: 2,
       title: "Lock hours plate",
       discipline: "plates",
       parent: "C-0004",
       assignee: "Noor Ainsley",
       reviewer: "Mira Holt",
-      revision: "3",
+      acceptance: { by: "Mira Holt", at: stamp(at, 6 * 60), note: null, verdict: "briefed", departs: [], discrepancy: null },
+      revision: "4",
     }),
     aCard(at, {
       id: "C-0015",

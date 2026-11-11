@@ -72,6 +72,17 @@ const CARDS: Record<string, Card> = {
   "C-0003": aCard({ id: "C-0003", flow: "plates", title: "A plate", parent: "C-0001" }),
 };
 
+/**
+ * Subtasks' rows: the part's one unnamed list, beside Relies on and Cancelled subtasks
+ * (docs/features/handoff-progress.md "Acceptance criteria", HP-5, HP-6).
+ */
+function subtaskRows(part: HTMLElement): HTMLElement[] {
+  const rows = within(part)
+    .getAllByRole("list")
+    .find((list) => list.getAttribute("aria-labelledby") === null);
+  return rows === undefined ? [] : within(rows).getAllByRole("listitem");
+}
+
 async function board(client: StubClient = boardClient(LIST, CARDS), hash = "#/alpha/board") {
   renderApp(client, hash);
   await screen.findByRole("heading", { level: 1, name: "Board" });
@@ -289,7 +300,14 @@ describe("links inside the modal (BH-7)", () => {
     clickTitle("C-0001");
     const parent = await screen.findByRole("dialog", { name: "The parent" });
     const length = window.history.length;
-    const child = within(await within(parent).findByRole("region", { name: "Subtasks" })).getByRole("link", { name: "C-0003" });
+    const part = await within(parent).findByRole("region", { name: "Subtasks" });
+    const child = await waitFor(() => {
+      const [first] = subtaskRows(part);
+      if (first === undefined) {
+        throw new Error("no subtask yet");
+      }
+      return within(first).getByRole("link", { name: "C-0003" });
+    });
     expect(child.getAttribute("href")).toBe("#/alpha/board/C-0003");
     fireEvent.click(child);
     const plate = await screen.findByRole("dialog", { name: "A plate" });
@@ -312,10 +330,15 @@ describe("links inside the modal (BH-7)", () => {
 describe("the parent's subtasks (BH-16)", () => {
   // Replaced by DF-5 of design-foundation: the raw `<flow>/<column>` leaves the row for the flow's name
   // and the child's status lozenge, the look `statusLook` gives; an unserved flow's child is stranded.
-  it("lists each child with ID, title, its flow's name and status lozenge, assignee and word; a cancelled one left out, an unserved flow's stranded with no word", async () => {
+  it("lists each child with ID, title, its flow's name and status lozenge, assignee and word; a cancelled one in a list of its own, an unserved flow's stranded with no word", async () => {
     await board(boardClient(LIST, CARDS), "#/alpha/board/C-0001");
     const dialog = await screen.findByRole("dialog", { name: "The parent" });
-    const items = within(await within(dialog).findByRole("region", { name: "Subtasks" })).getAllByRole("listitem");
+    const part = await within(dialog).findByRole("region", { name: "Subtasks" });
+    const items = await waitFor(() => {
+      const found = subtaskRows(part);
+      expect(found.length).toBeGreaterThan(0);
+      return found;
+    });
     expect(items.map((item) => item.textContent)).toEqual([
       "C-0003A plateplatesTo doUnassignedHanded off",
       "C-0004Sent backplatesDoingNoor AinsleyReturned",
@@ -333,6 +356,10 @@ describe("the parent's subtasks (BH-16)", () => {
       }),
     );
     expect(items.map((item) => item.querySelector(".lozenge")?.getAttribute("data-appearance"))).toEqual(["neutral", "warning", "information", "success", "neutral"]);
+    // The cancelled child in its own list, its reason read apart (docs/features/handoff-progress.md "Acceptance criteria", HP-6).
+    const cancelled = within(part).getByRole("list", { name: "Cancelled subtasks" });
+    expect(within(cancelled).getAllByRole("listitem").map((item) => item.querySelector("a")?.textContent)).toEqual(["C-0007"]);
+    expect(items.map((item) => item.textContent).join("")).not.toContain("C-0007");
     for (const item of items.slice(0, 4)) {
       expect(item.querySelector(".badge svg")).not.toBeNull();
     }

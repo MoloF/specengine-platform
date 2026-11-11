@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aFlowEdge, aFlowGap, aFlowNode, aFlowView, tenGapRows } from "../test/builders";
 import { allClear } from "./labels";
+import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
 import { enT, ruT } from "../test/text";
 import * as flow from "./labels";
@@ -85,10 +86,10 @@ describe("the studio's words (writer-studio)", () => {
     expect(flow.edgeKeyText(flow.edgeKeyOf(edge))).not.toBe(flow.edgeKeyText({ from: "A", to: "B", type: "alpha_link", kind: "repeat" }));
   });
 
-  it("words a List row `<type> <to title>[, <kind>][, when <when>][, ×<count>]`, the name with no title, never `path:line` (flow-scenario D12)", () => {
-    expect(flow.edgeRowWords(edge, null, enT)).toBe("alpha_link B");
-    expect(flow.edgeRowWords({ ...edge, kind: "alternative", when: "after dark", count: 3 }, "The berth", enT)).toBe("alpha_link The berth, alternative, when after dark, ×3");
-    expect(flow.edgeRowWords({ ...edge, when: "x" }, null, ruT)).toBe(`alpha_link B, ${ru.flow.edgeWhen.replace("{{when}}", "x")}`);
+  it("words a List row `to <to title>, <type>[, <kind>][, when <when>][, \u00d7<count>]`, the name with no title, never `path:line` (E-1 of handoff-progress)", () => {
+    expect(flow.edgeRowWords(edge, null, enT)).toBe("to B, alpha_link");
+    expect(flow.edgeRowWords({ ...edge, kind: "alternative", when: "after dark", count: 3 }, "The berth", enT)).toBe("to The berth, alpha_link, alternative, when after dark, \u00d73");
+    expect(flow.edgeRowWords({ ...edge, when: "x" }, null, ruT)).toBe(`${ru.flow.edgeRow.replace("{{to}}", "B")}, alpha_link, ${ru.flow.edgeWhen.replace("{{when}}", "x")}`);
     expect(flow.edgeRowWords(edge, "T", enT)).not.toContain("docs/a.md");
   });
 
@@ -133,15 +134,26 @@ describe("the scenario's words (FS-16 to FS-18)", () => {
   it("puts no count on the canvas; the List keeps it", () => {
     expect(flow.edgeWords(edge)).toEqual([]);
     expect(flow.edgeWords({ ...edge, kind: "alternative", when: "cracked" })).toEqual(["alternative", "cracked"]);
-    expect(flow.edgeName(edge, enT)).toBe("A second_link B");
-    expect(flow.edgeRowWords(edge, "Kiln bay", enT)).toBe("second_link Kiln bay, ×5");
+  });
+
+  // docs/features/handoff-progress.md "Acceptance criteria", E-1: an arrow's name reads forwards.
+  it("names an arrow from its source's words to its target's, the type raw after them (E-1)", () => {
+    // M: `from` and `to` swapped.
+    expect(flow.edgeName(edge, "Kiln bay", "Glaze room", enT)).toBe("From Kiln bay to Glaze room, second_link");
+    expect(flow.edgeName({ ...edge, kind: "repeat" }, "Kiln bay", "Glaze room", enT)).toBe("From Kiln bay to Glaze room, second_link, repeat");
+    expect(flow.edgeName({ ...edge, kind: "alternative", when: "the glaze has crawled over the foot ring" }, "Kiln bay", "Glaze room", enT)).toBe(
+      "From Kiln bay to Glaze room, second_link, alternative, the glaze has crawled ov\u2026",
+    );
+    // A box with no title gives its name.
+    expect(flow.edgeName(edge, null, null, enT)).toBe("From A to B, second_link");
+    expect(flow.edgeRowWords(edge, "Glaze room", enT)).toBe("to Glaze room, second_link, \u00d75");
   });
 
   it("names the closed edge kinds in the viewer's language, the canvas, the List and the name alike; an unknown kind raw", () => {
     const parallel = { ...edge, kind: "parallel" };
     expect(flow.edgeShownWords(parallel, ruT)).toEqual([ru.flow.edgeKind.parallel]);
-    expect(flow.edgeRowWords(parallel, "Kiln bay", ruT)).toBe(`second_link Kiln bay, ${ru.flow.edgeKind.parallel}, ×5`);
-    expect(flow.edgeName({ ...edge, kind: "repeat" }, ruT)).toBe(`A second_link B, ${ru.flow.edgeKind.repeat}`);
+    expect(flow.edgeRowWords(parallel, "Kiln bay", ruT)).toBe(`${ru.flow.edgeRow.replace("{{to}}", "Kiln bay")}, second_link, ${ru.flow.edgeKind.parallel}, \u00d75`);
+    expect(flow.edgeName({ ...edge, kind: "repeat" }, "Kiln bay", "Glaze room", ruT)).toBe(`${ru.flow.edgeName.replace("{{from}}", "Kiln bay").replace("{{to}}", "Glaze room")}, second_link, ${ru.flow.edgeKind.repeat}`);
     expect(flow.FLOW_KINDS.map((kind) => flow.kindWords(kind, ruT))).toEqual([ru.flow.edgeKind.alternative, ru.flow.edgeKind.parallel, ru.flow.edgeKind.repeat]);
     expect(flow.kindWords("detour", ruT)).toBe("detour");
     expect(flow.edgeShownWords({ ...edge, kind: "alternative", when: "cracked" }, enT)).toEqual(["alternative", "cracked"]);
@@ -179,5 +191,19 @@ describe("the scenario's words (FS-16 to FS-18)", () => {
   it("joins a divider's stages with a middle dot, raw", () => {
     expect(flow.dividerWords(["glazing"])).toBe("glazing");
     expect(flow.dividerWords(["one", "two"])).toBe("one · two");
+  });
+});
+
+// docs/features/handoff-progress.md "Acceptance criteria", F-6: the words say left to right.
+describe("the walk's words (F-6)", () => {
+  it("says left to right in the legend's about text and the canvas's hint, never top or bottom; the Russian its own", () => {
+    // M: the about text left at top to bottom.
+    expect(en.flow.legend.about).toMatch(/^Left to right/);
+    expect(en.flow.canvasHint).toContain("The walk runs left to right.");
+    for (const words of [en.flow.legend.about, en.flow.canvasHint]) {
+      expect(words).not.toMatch(/\btop\b|\bbottom\b/i);
+    }
+    expect(ru.flow.legend.about).not.toBe(en.flow.legend.about);
+    expect(ru.flow.canvasHint).not.toBe(en.flow.canvasHint);
   });
 });
