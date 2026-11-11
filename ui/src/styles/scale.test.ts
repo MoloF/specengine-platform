@@ -98,7 +98,7 @@ function family(prefix: string): string[] {
 const SIZES = ["0.75rem", "0.875rem", "1rem", "1.25rem", "1.5rem"];
 const LINE_HEIGHTS = ["1rem", "1.25rem", "1.5rem", "1.75rem"];
 const SPACES = ["0.125rem", "0.25rem", "0.375rem", "0.5rem", "0.75rem", "1rem", "1.25rem", "1.5rem", "2rem", "2.5rem", "3rem"];
-const RADII = ["2px", "4px", "6px", "8px", "12px", "999px"];
+const RADII = ["2px", "4px", "6px", "8px", "12px", "16px", "999px"];
 /** The one legacy ratio, `--line-height-tight`, until RM-0099. */
 const LEGACY_RATIO: Readonly<Record<string, string>> = { "--line-height-tight": "1.25" };
 
@@ -290,8 +290,11 @@ describe("radii and control heights (DF-3)", () => {
     expect(raw.filter((declaration) => !listed(declaration)).map(shown)).toEqual([]);
   });
 
-  it("resolves every --radius-* into the scale", () => {
-    expect(family("--radius-").length).toBe(6);
+  // Flow's terminators' 16 px among them (docs/features/room-and-scroll.md "Acceptance criteria", RS-3).
+  it("resolves every --radius-* into the scale, --radius-xl at 16 px", () => {
+    // M: `--radius-xl` at 20px, outside the scale.
+    expect(TOKENS.get("--radius-xl")).toBe("16px");
+    expect(family("--radius-").length).toBe(7);
     for (const name of family("--radius-")) {
       expect([name, RADII.includes(resolved(name))]).toEqual([name, true]);
     }

@@ -25,14 +25,14 @@ One file, `src/styles/tokens.css`, holds every colour literal, in both themes, a
 
 ## Contrast
 
-`tokens.test.ts` resolves every role per theme and checks both. At least 4.5:1: text (primary, secondary, subtlest) and the accent on every surface, hovered and selected too; on-accent, on-warning, on-danger on their fills; each lozenge's text on its surface; primary and secondary text on lozenge, diff and highlight surfaces. At least 3:1: focus ring, control border, every status role. Lowest at ship: light subtlest 5.08, dark 4.55, light control border 3.45, dark minimap node `#7187ad` 3.24. Roles earlier tests keep distinct (states, edges, cannot-verify and ok) differ in both themes.
+`tokens.test.ts` resolves every role per theme and checks both. At least 4.5:1: text (primary, secondary, subtlest) and the accent on every surface, hovered and selected too; on-accent, on-warning, on-danger on their fills; each lozenge's text on its surface; primary and secondary text on lozenge, diff and highlight surfaces. At least 3:1: focus ring, control border, every status role. Roles earlier tests keep distinct (states, edges, cannot-verify and ok) differ in both themes.
 
 ## Type, space and size
 
 - **Type.** `--font-sans` is `"Inter"`, then the system stack; `--font-mono` unchanged. Steps, size/line in rem, as `--font-size-<step>` and `--line-height-<step>`: small 12/16 (labels, lozenges, badges, kbd), body 14/20 (the chrome), document 16/24 (a document's or a task's text, at most `--reading-width` 68ch), heading-s 16/20, heading-m 20/24 (`h2`), heading-l 24/28 (`h1`), code 12/20. Weights 400, 500, 600, 700.
-- **Space.** `--space-025` to `--space-600`: 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48 px. Radii `--radius-xs|s|control|m|l` 2, 4, 6, 8, 12 px and `--radius-full` 999 px; borders 1 px, focus and selection 2 px.
+- **Space.** `--space-025` to `--space-600`: 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48 px. Radii `--radius-xs|s|control|m|l|xl` 2, 4, 6, 8, 12, 16 px and `--radius-full` 999 px; borders 1 px, focus and selection 2 px.
 - **Size.** Controls `--control-height` 32 px, compact 24 px; `--target-min` 24 px; `--nav-height` 48 px; `--issue-side-width` 360 px beside `--issue-main-min` 320 px; `--modal-width-s|m|xl` 600, 800, 1200 px; `--empty-state-width` 464 px; `--lozenge-height` 20 px, `--lozenge-max-width` 200 px.
-- **Legacy aliases**, until RM-0099: `--font-size-s|m|l|xl` onto body, heading-s, -m, -l (13 px became 14, 15 16, 18 20); `--line-height-tight` 1.25, the one ratio; `--space-1..6` onto 050, 100, 150, 200, 300, 400.
+- **Legacy aliases**, until RM-0099: `--font-size-s|m|l|xl` onto body, heading-s, -m, -l; `--line-height-tight` 1.25, the one ratio; `--space-1..6` onto 050, 100, 150, 200, 300, 400.
 
 ## Guards and exceptions
 
@@ -62,7 +62,7 @@ In `src/ui/`, each with its test:
 - **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Ask a question…, Record a decision…, Edit, Assign, Cancel task (subtle, last).
 - **Main.** Mark and Clear, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (`card-progress.md`); Evidence; Activity (`card-questions.md` "Screen").
 - **Side**, at most 360 px. Status: the lozenge, then Move, compact, none on a closed card. Details: Assignee, Reviewer, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Agent tasks, collapsed: `card-tasks.md` "Screen".
-- **Width.** One column, main first, under 44.5rem of its own width (`@container issue-view`); DOM order main then side. The modal: 1200 px or the viewport less 2rem, its body the one scroller, the page 1200 px at most; under 36rem the screen, scrolling as one.
+- **Width.** One column, main first, under 44.5rem of its own width (`@container issue-view`); DOM order main then side. The modal: 1200 px or the viewport less 2rem, its head still; at two columns Main and the side scroll apart (`overscroll-behavior: contain`, each padded for focus rings), at one the body; under 36rem the screen, scrolling as one. The page, 1200 px at most, scrolls the window.
 
 ## The focus trap
 
@@ -70,18 +70,19 @@ In `src/ui/`, each with its test:
 
 ## The header
 
-One row of `--nav-height`, `flex-wrap: nowrap` from 68.75rem (a failed project read wraps), controls 32 px at 14/20: brand, Project, Department, config notes, Language, Theme, the mock indicator, Jump to, Shortcuts. A select shows its value after an icon, its label visually hidden, `flex: none`, `field-sizing: content` up to 13rem. Below 100rem the config notes show icon and count, the mock indicator "Mock data" without the scenario (at 1440 px in Russian the full forms overflowed by 90 px); below 80rem Jump to and Shortcuts are icon-only. Names stay. Nav items are 32 px, the current in accent on `--surface-selected`.
+One row of `--nav-height`, `flex-wrap: nowrap` from 68.75rem (a failed project read wraps), controls 32 px at 14/20: brand, Project, Department, config notes, Language, Theme, the mock indicator, Jump to, Shortcuts. A select shows its value after an icon, its label visually hidden, `flex: none`, `field-sizing: content` up to 13rem. Below 100rem the config notes show icon and count, the mock indicator "Mock data" without the scenario; below 80rem Jump to and Shortcuts are icon-only. Names stay. Nav items are 32 px, the current in accent on `--surface-selected`.
 
 ## Fonts
 
-Inter 4.001 from `@fontsource-variable/inter` 5.3.0, committed in `ui/fonts/inter/` (outside `src`, which `ui_policy.rs` reads as text): `inter-{latin,latin-ext,cyrillic,cyrillic-ext}-wght-normal.woff2` (178 032 B; weights 100-900, upright, italic synthesised), `README.txt` (provenance, SHA-256s) and `OFL.txt`, SIL OFL 1.1, whose byte-equal copy `ui/public/assets/OFL.txt` ships in `dist/assets/`. `src/styles/fonts.css`, imported before `tokens.css`, holds the only `@font-face`s: four, `font-display: swap`, each with the package's `unicode-range`, so a page fetches only its subsets; none preloaded, no `data:` font, no remote `url()`. No package: an update replaces the files and `README.txt`.
+Inter 4.001 from `@fontsource-variable/inter` 5.3.0, committed in `ui/fonts/inter/` (outside `src`, which `ui_policy.rs` reads as text): `inter-{latin,latin-ext,cyrillic,cyrillic-ext}-wght-normal.woff2` (weights 100-900, upright, italic synthesised), `README.txt` (provenance, SHA-256s) and `OFL.txt`, SIL OFL 1.1, whose byte-equal copy `ui/public/assets/OFL.txt` ships in `dist/assets/`. `src/styles/fonts.css`, imported before `tokens.css`, holds the only `@font-face`s: four, `font-display: swap`, each with the package's `unicode-range`, so a page fetches only its subsets; none preloaded, no `data:` font, no remote `url()`. No package: an update replaces the files and `README.txt`.
 
 ## Known limits
 
 - `field-sizing: content` is Chrome's; elsewhere a header select is as wide as its widest option. Past 13rem a value is cut while closed.
 - Every asset is served `no-store`, so fonts are fetched once per page load; the blank page before the entry module shows the system scheme.
 - `.app-body`'s `min-height` stays, pinned by Flow's styles test, until RM-0099.
-- Sizes and the one-row header are a look in Chrome (`design-foundation.md` DF-10, DF-14): jsdom lays nothing out.
+- Safari scrolls a modal's column by keyboard only with focus in it.
+- Sizes, the one-row header and the two scrollers are a look in Chrome (`design-foundation.md` DF-10, DF-14): jsdom lays nothing out.
 
 ## Tests
 

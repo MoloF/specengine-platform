@@ -119,6 +119,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/roadmap-surfaces.md](features/roadmap-surfaces.md) shipped
 - [docs/features/roadmap-view.md](features/roadmap-view.md) shipped
 - [docs/features/roadmap.md](features/roadmap.md) abandoned
+- [docs/features/room-and-scroll.md](features/room-and-scroll.md) shipped
 - [docs/features/round.md](features/round.md) shipped
 - [docs/features/scale-eval.md](features/scale-eval.md) shipped
 - [docs/features/screen-fit.md](features/screen-fit.md) shipped

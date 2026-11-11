@@ -173,6 +173,18 @@ describe("the catalogs (LG-1)", () => {
   });
 });
 
+// docs/features/room-and-scroll.md "Acceptance criteria", RS-7: the legend's row for a selection's
+// lines, said in both languages, the Russian its own words.
+describe("the legend's selection row (RS-7)", () => {
+  it("holds `flow.legend.selected` in both catalogs, the Russian not the English", () => {
+    // M: the key missing from ru.ts.
+    expect(en.flow.legend.selected).toBe("a selected box's lines in and out, or a selected line; the others fade");
+    expect(typeof ru.flow.legend.selected).toBe("string");
+    expect(ru.flow.legend.selected.length).toBeGreaterThan(0);
+    expect(ru.flow.legend.selected).not.toBe(en.flow.legend.selected);
+  });
+});
+
 describe("typed keys (LG-9)", () => {
   it("accepts a key of the catalog and refuses one it lacks at compile time", () => {
     expect(enT("app.mockData")).toBe("Mock data");

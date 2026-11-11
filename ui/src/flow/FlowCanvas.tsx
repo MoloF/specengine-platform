@@ -62,7 +62,9 @@ type BandData = { lane: FlowLane };
 type DividerData = { divider: FlowDivider };
 type BoxNode = Node<BoxData, "box">;
 type CanvasNode = BoxNode | Node<BandData, "band"> | Node<DividerData, "divider">;
-type LinkData = { laid: LaidEdge; emphasis: boolean };
+/** How a drawn edge stands against the selection: lit by it, faded beside a lit one, or plain with nothing lit. */
+type EdgeLook = "plain" | "emphasis" | "faded";
+type LinkData = { laid: LaidEdge; look: EdgeLook };
 type LinkEdge = Edge<LinkData, "link">;
 
 /** Marks the caret: a click there enters the group, anywhere else on the box selects. */
@@ -222,7 +224,7 @@ const DividerView = memo(function DividerView({ data }: NodeProps<Node<DividerDa
   );
 });
 
-/** An edge: the layout's path, its type's colour, its dash, its words where it has any, and a 12 px band a click takes. */
+/** An edge: the layout's path, its type's colour or the selection's accent, its dash, its words where it has any (faded beside a lit edge), and a 12 px band a click takes. */
 const LinkView = memo(function LinkView({ id, markerEnd, style, data }: EdgeProps<LinkEdge>) {
   const t = useTranslate();
   if (data === undefined) {
@@ -235,7 +237,7 @@ const LinkView = memo(function LinkView({ id, markerEnd, style, data }: EdgeProp
       {words.length > 0 && (
         <EdgeLabelRenderer>
           <div
-            className={`flow-edge-label${data.emphasis ? " is-emphasis" : ""}`}
+            className={`flow-edge-label${data.look === "plain" ? "" : ` is-${data.look}`}`}
             aria-hidden="true"
             style={{ transform: `translate(-50%, -50%) translate(${String(data.laid.label.x)}px, ${String(data.laid.label.y)}px)` }}
           >
@@ -343,9 +345,26 @@ function dividerNode(divider: FlowDivider): CanvasNode {
   return { id: divider.id, type: "divider", position: { x: divider.x, y: divider.y }, width: divider.width, height: divider.height, data: { divider }, ...WORDS_ONLY };
 }
 
-/** An arrow; its name reads forwards, from its source box's words to its target's (E-1). */
-function edgeOf(laid: LaidEdge, ends: { from: FlowBox | undefined; to: FlowBox | undefined }, types: readonly string[], emphasis: boolean, t: Translate): LinkEdge {
-  const colour = typeColour(laid.edge.type, types);
+/** A lit edge's stroke and arrowhead, and its width over a repeat's too (docs/features/room-and-scroll.md "Acceptance criteria", RS-4). */
+const EMPHASIS_COLOUR = "var(--graph-edge-emphasis)";
+const EMPHASIS_WIDTH = "var(--graph-edge-width-emphasis)";
+
+/** An edge's stroke width: a lit one's, else a repeat's heavier one, else the canvas's own. */
+function widthOf(laid: LaidEdge, look: EdgeLook): { strokeWidth?: string } {
+  if (look === "emphasis") {
+    return { strokeWidth: EMPHASIS_WIDTH };
+  }
+  return isRepeat(laid.edge) ? { strokeWidth: "var(--flow-repeat-width)" } : {};
+}
+
+/**
+ * An arrow; its name reads forwards, from its source box's words to its target's (E-1). A lit one
+ * takes the accent inline, on its stroke, width and arrowhead, keeping its dash: an inline type
+ * colour would win over any stylesheet rule, so the emphasis is set here, never in app.css alone
+ * (docs/features/room-and-scroll.md "Acceptance criteria", RS-4). A faded one keeps its type's look.
+ */
+function edgeOf(laid: LaidEdge, ends: { from: FlowBox | undefined; to: FlowBox | undefined }, types: readonly string[], look: EdgeLook, t: Translate): LinkEdge {
+  const colour = look === "emphasis" ? EMPHASIS_COLOUR : typeColour(laid.edge.type, types);
   return {
     id: laid.id,
     type: "link",
@@ -353,10 +372,10 @@ function edgeOf(laid: LaidEdge, ends: { from: FlowBox | undefined; to: FlowBox |
     target: laid.target,
     sourceHandle: "out",
     targetHandle: "in",
-    data: { laid, emphasis },
+    data: { laid, look },
     ariaLabel: edgeName(laid.edge, ends.from === undefined ? null : boxWords(ends.from.node), ends.to === undefined ? null : boxWords(ends.to.node), t),
-    className: emphasis ? "is-emphasis" : undefined,
-    style: { stroke: colour, strokeDasharray: dashOf(laid.edge, types), ...(isRepeat(laid.edge) ? { strokeWidth: "var(--flow-repeat-width)" } : {}) },
+    className: look === "plain" ? undefined : `is-${look}`,
+    style: { stroke: colour, strokeDasharray: dashOf(laid.edge, types), ...widthOf(laid, look) },
     markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: colour },
     zIndex: 1,
     selectable: false,
@@ -470,11 +489,17 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
     return [...dividers, ...boxes, ...bands];
   }, [layout, selected, marked, named, inLane, rovingId, t]);
   // An edge with an end off the walk stands only while that end or the edge is selected (flow-scenario D9).
+  // The selected box's edges, or the selected arrow, are lit; while any is, the other drawn edges fade,
+  // and the lit ones come last, so at the same zIndex they paint over the faded ones on a shared trunk
+  // and stay under the boxes (docs/features/room-and-scroll.md "Acceptance criteria", RS-4, RS-5).
   const edges = useMemo(() => {
     const byId = new Map(layout.boxes.map((box) => [box.id, box]));
-    return layout.edges
-      .filter((laid) => !laid.offWalk || laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)))
-      .map((laid) => edgeOf(laid, { from: byId.get(laid.source), to: byId.get(laid.target) }, types, laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)), t));
+    const lit = (laid: LaidEdge) => laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId));
+    const drawnEdges = layout.edges.filter((laid) => !laid.offWalk || lit(laid));
+    const litEdges = drawnEdges.filter(lit);
+    const rest: EdgeLook = litEdges.length > 0 ? "faded" : "plain";
+    const linkOf = (laid: LaidEdge, look: EdgeLook) => edgeOf(laid, { from: byId.get(laid.source), to: byId.get(laid.target) }, types, look, t);
+    return [...drawnEdges.filter((laid) => !lit(laid)).map((laid) => linkOf(laid, rest)), ...litEdges.map((laid) => linkOf(laid, "emphasis"))];
   }, [layout, types, selectedEdge, selectedId, t]);
 
   const boxElement = useCallback((id: string): HTMLElement | null => {

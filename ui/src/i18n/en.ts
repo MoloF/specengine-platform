@@ -881,6 +881,7 @@ export const en = {
     legend: {
       about: "Left to right is the walk from the start; each box sits by its first step. A line under the boxes runs against the walk. A line to a box off the walk shows when one of its ends is selected.",
       arc: "an arc: runs against the walk",
+      selected: "a selected box's lines in and out, or a selected line; the others fade",
       start: "where the walk begins; in a group, Entry",
       end: "where a way through finishes",
       gap: "a row of Gaps names it; a group counts what it holds",

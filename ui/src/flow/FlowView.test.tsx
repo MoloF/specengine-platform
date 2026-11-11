@@ -438,6 +438,20 @@ describe("the legend (ST-8)", () => {
     expect(window.location.hash).toBe("#/alpha/flow");
   });
 
+  // docs/features/room-and-scroll.md "Acceptance criteria", RS-7: after the arc's row, a selection's lines, in words.
+  it("lists the selection's lines after the arc's row: a sample in the accent at its width, and words that say it (RS-7)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow");
+    await drawn("A");
+    fireEvent.click(screen.getByRole("button", { name: "Legend" }));
+    const legend = screen.getByRole("region", { name: "Legend" });
+    const arc = within(legend).getByText(enT("flow.legend.arc")).closest("li");
+    const row = arc?.nextElementSibling;
+    expect(row?.textContent).toBe(enT("flow.legend.selected"));
+    const line = row?.querySelector<SVGLineElement>("line");
+    // M: the sample at `var(--graph-edge)`.
+    expect([line?.style.stroke, line?.style.strokeWidth]).toEqual(["var(--graph-edge-emphasis)", "var(--graph-edge-width-emphasis)"]);
+  });
+
   it("closes on a focus in the canvas: nothing focused lies under it (R10)", async () => {
     renderApp(studioClient(reads()), "#/alpha/flow");
     await drawn("A");
@@ -1029,6 +1043,194 @@ describe("forms (flow-canvas AC-06, kept)", () => {
     const paths = Array.from(document.querySelectorAll<SVGPathElement>(".react-flow__edge-path"));
     expect(paths.filter((path) => path.style.strokeDasharray === "1 7")).toHaveLength(1);
     expect(paths.filter((path) => path.style.strokeWidth === "var(--flow-repeat-width)")).toHaveLength(1);
+  });
+});
+
+// docs/features/room-and-scroll.md "Acceptance criteria", RS-4 and RS-5, on G's children: A->B, B->C
+// (alternative), C->E, E->B (a repeat), and D->A off the walk. A selection lights its lines inline, so no
+// stylesheet rule can lose to a type's inline colour; the rest fade while any is lit; boxes never change
+// but for the selected one's own mark; the lit lines paint last.
+describe("the selection's lines (RS-4, RS-5)", () => {
+  const AB = `From Ask to Bind, ${TYPE_A}`;
+  const BC = `From Bind to Craft, ${TYPE_A}, alternative, the ink is dry`;
+  const CE = `From Craft to Engrave, ${TYPE_A}`;
+  const EB = `From Engrave to Bind, ${TYPE_A}, repeat`;
+  const DA = `From Dye to Ask, ${TYPE_B}`;
+  const EMPHASIS = "var(--graph-edge-emphasis)";
+  const EMPHASIS_WIDTH = "var(--graph-edge-width-emphasis)";
+  const types = typesOf(scopeOfG());
+
+  function pathOf(label: string): SVGPathElement {
+    const path = edgeNamed(label).querySelector<SVGPathElement>(".react-flow__edge-path");
+    if (path === null) {
+      throw new Error(`no path for ${label}`);
+    }
+    return path;
+  }
+
+  /** The arrowhead the path's `marker-end` names. */
+  function headOf(path: SVGPathElement): SVGPolylineElement {
+    const id = /^url\('#(.+)'\)$/.exec(path.getAttribute("marker-end") ?? "")?.[1];
+    const head = id === undefined ? null : (document.getElementById(id)?.querySelector<SVGPolylineElement>("polyline") ?? null);
+    if (head === null) {
+      throw new Error(`no arrowhead for ${path.getAttribute("marker-end") ?? "a path without one"}`);
+    }
+    return head;
+  }
+
+  /** A line's stroke, width, and its arrowhead's stroke and fill, inline. */
+  function look(label: string): string[] {
+    const path = pathOf(label);
+    const head = headOf(path);
+    return [label, path.style.stroke, path.style.strokeWidth, head.style.stroke, head.style.fill];
+  }
+
+  function labelOf(words: string): HTMLElement {
+    const found = Array.from(document.querySelectorAll<HTMLElement>(".flow-edge-label")).find((element) => element.textContent === words);
+    if (found === undefined) {
+      throw new Error(`no label ${words}`);
+    }
+    return found;
+  }
+
+  function drawnEdges(): string[] {
+    return Array.from(document.querySelectorAll(".react-flow__edge"), (edge) => edge.getAttribute("aria-label") ?? "");
+  }
+
+  function withClass(name: string): string[] {
+    return Array.from(document.querySelectorAll(`.react-flow__edge.${name}`), (edge) => edge.getAttribute("aria-label") ?? "").sort();
+  }
+
+  /** Each node of the canvas, a box, the band's caption or a divider: its class and inline style, and its content's. */
+  function nodeLooks(): string[][] {
+    return Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node"), (node) => {
+      const content = node.firstElementChild;
+      return [node.dataset.id ?? "", node.className, node.getAttribute("style") ?? "", content?.className ?? "", content?.getAttribute("style") ?? ""];
+    });
+  }
+
+  async function canvasDrawn() {
+    await drawn("E");
+    await waitFor(() => {
+      expect(drawnEdges()).toHaveLength(4);
+    });
+  }
+
+  it("lights a box's lines inline, B clicked: the accent on stroke, width and arrowhead, a repeat's width too, dashes kept; the rest keep their type's look (RS-4)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow");
+    await canvasDrawn();
+    fireEvent.click(box("B"));
+    expect(window.location.hash).toBe("#/alpha/flow/B");
+    await waitFor(() => {
+      expect(withClass("is-emphasis")).toEqual([AB, BC, EB].sort());
+    });
+    // M: edgeOf leaving the type's colour inline (the CSS-only fix); the marker keeping it; a repeat keeping its width.
+    for (const label of [AB, BC, EB]) {
+      expect(look(label)).toEqual([label, EMPHASIS, EMPHASIS_WIDTH, EMPHASIS, EMPHASIS]);
+    }
+    expect(pathOf(EB).style.strokeDasharray).toBe("1 7");
+    expect(pathOf(BC).style.strokeDasharray).toBe(dashOf(aFlowEdge({ from: "B", to: "C", type: TYPE_A, kind: "alternative" }), types));
+    expect(pathOf(BC).style.strokeDasharray).not.toBe("none");
+    const colour = typeColour(TYPE_A, types);
+    expect(look(CE)).toEqual([CE, colour, "", colour, colour]);
+    // D->A has neither end selected: off the walk, it stays undrawn.
+    expect(drawnEdges()).not.toContain(DA);
+    // The lit lines paint last: every one after every other line in DOM order.
+    const order = drawnEdges();
+    expect(order.slice(order.length - 3).sort()).toEqual([AB, BC, EB].sort());
+    expect(order.slice(0, order.length - 3)).toEqual([CE]);
+  });
+
+  it("lights an off-walk line with its selected end, A selected; and one arrow alone, C->E from the List (RS-4)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow");
+    await canvasDrawn();
+    fireEvent.click(box("A"));
+    await waitFor(() => {
+      expect(withClass("is-emphasis")).toEqual([AB, DA].sort());
+    });
+    expect(look(DA)).toEqual([DA, EMPHASIS, EMPHASIS_WIDTH, EMPHASIS, EMPHASIS]);
+    expect(drawnEdges().slice(-2).sort()).toEqual([AB, DA].sort());
+
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    const outline = await screen.findByRole("region", { name: "Every box and arrow of the view" });
+    const row = outline.querySelector<HTMLElement>("[data-flow-row='C']");
+    fireEvent.click(within(row as HTMLElement).getByRole("link", { name: `to Engrave, ${TYPE_A}, \u00d73` }));
+    expect(window.location.hash).toBe("#/alpha/flow?edge=C,E,alpha_link");
+    fireEvent.click(screen.getByRole("tab", { name: "Canvas" }));
+    await drawn("E");
+    await waitFor(() => {
+      expect(withClass("is-emphasis")).toEqual([CE]);
+    });
+    expect(look(CE)).toEqual([CE, EMPHASIS, EMPHASIS_WIDTH, EMPHASIS, EMPHASIS]);
+    expect(drawnEdges().at(-1)).toBe(CE);
+    expect(withClass("is-faded")).toEqual([AB, BC, EB].sort());
+  });
+
+  it("fades every other drawn line and its words while any is lit, A selected; B's alternative lit, its words too (RS-5)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow");
+    await canvasDrawn();
+    fireEvent.click(box("A"));
+    await waitFor(() => {
+      expect(withClass("is-faded")).toEqual([BC, CE, EB].sort());
+    });
+    expect(withClass("is-emphasis")).toEqual([AB, DA].sort());
+    for (const words of ["alternativethe ink is dry", "repeat"]) {
+      expect([words, labelOf(words).classList.contains("is-faded"), labelOf(words).classList.contains("is-emphasis")]).toEqual([words, true, false]);
+    }
+    // A faded line keeps its type's colour and arrowhead; only its group's opacity, from the stylesheet, fades it.
+    expect(look(CE)).toEqual([CE, typeColour(TYPE_A, types), "", typeColour(TYPE_A, types), typeColour(TYPE_A, types)]);
+    fireEvent.click(box("B"));
+    await waitFor(() => {
+      expect(labelOf("alternativethe ink is dry").classList.contains("is-emphasis")).toBe(true);
+    });
+    expect(labelOf("alternativethe ink is dry").classList.contains("is-faded")).toBe(false);
+  });
+
+  it("changes no box, band caption or divider but the selected box's own mark; after Esc nothing is faded or lit (RS-5)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow");
+    await canvasDrawn();
+    expect(document.querySelectorAll(".react-flow__node-divider").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".react-flow__node-band")).toHaveLength(1);
+    const before = nodeLooks();
+    expect(before.length).toBeGreaterThan(6);
+    fireEvent.click(box("A"));
+    await waitFor(() => {
+      expect(withClass("is-faded").length).toBeGreaterThan(0);
+    });
+    const expected = before.map(([id, node, style, content, contentStyle]) => [id, node, style, id === "n:A" ? `${content ?? ""} is-selected` : content, contentStyle]);
+    expect(nodeLooks()).toEqual(expected);
+    expect(within(box("A")).getByText("Selected")).toBeTruthy();
+    expect(document.querySelectorAll(".react-flow__node.is-faded, .react-flow__node .is-faded")).toHaveLength(0);
+    fireEvent.keyDown(box("A"), { key: "Escape" });
+    expect(window.location.hash).toBe("#/alpha/flow");
+    await waitFor(() => {
+      expect(document.querySelectorAll(".is-faded")).toHaveLength(0);
+    });
+    expect(Array.from(document.querySelectorAll<SVGPathElement>(".react-flow__edge-path")).filter((path) => path.style.stroke === EMPHASIS || path.style.strokeWidth === EMPHASIS_WIDTH)).toEqual([]);
+    expect(withClass("is-emphasis")).toEqual([]);
+    expect(nodeLooks()).toEqual(before);
+  });
+
+  it("fades nothing when the selected box has no drawn line (RS-5)", async () => {
+    const alone = aFlowView(
+      [aFlowNode({ id: "G", distance: null, kind: "domain", title: "The guild" }), node({ id: "A", distance: 0, start: true, title: "Ask" }), node({ id: "B", distance: 1, title: "Bind" }), node({ id: "Z", distance: 0, path: "docs/spec/z.md", title: "Zest" })],
+      [aFlowEdge({ from: "A", to: "B", type: TYPE_A })],
+      { root: "G", depth: 1 },
+    );
+    renderApp(studioClient(reads({ scopes: { G: alone } })), "#/alpha/flow");
+    await drawn("Z");
+    await waitFor(() => {
+      expect(drawnEdges()).toEqual([AB]);
+    });
+    fireEvent.click(box("Z"));
+    expect(window.location.hash).toBe("#/alpha/flow/Z");
+    await waitFor(() => {
+      expect(within(box("Z")).getByText("Selected")).toBeTruthy();
+    });
+    // M: an edge faded whenever it is not lit.
+    expect(document.querySelectorAll(".is-faded")).toHaveLength(0);
+    expect(withClass("is-emphasis")).toEqual([]);
+    expect(pathOf(AB).style.stroke).toBe(typeColour(TYPE_A, typesOf(alone)));
   });
 });
 

@@ -220,6 +220,9 @@
   --flow-marked: var(--attention);
   --flow-box-surface: var(--surface-raised);
   --flow-repeat-width: 2.25;
+  /* While a selection lights some lines, every other line of Flow's canvas, path and arrowhead; its
+     words take --text-subtlest instead, never an opacity (docs/features/room-and-scroll.md "Acceptance criteria", RS-5). */
+  --flow-edge-faded-opacity: 0.4;
 
   /* The Board (docs/features/board-ui.md): a closed card's two marks and a late one's, each a label
      and an icon, none of them a hold on work; where a drag would land. A column's status is its
@@ -253,8 +256,8 @@
   /* The Flow studio's panes (docs/features/writer-studio.md D6): places and panel fixed, the canvas
      at least this wide between them. */
   --flow-places-width: 15rem;
-  /* An edge label's width at most: Flow's column gap, 64 px, less its insets (layout.ts `LABEL_WIDTH`). */
-  --flow-edge-label-width: 3.5rem;
+  /* An edge label's width at most: Flow's column gap, 96 px, less its insets (layout.ts `LABEL_WIDTH`). */
+  --flow-edge-label-width: 5.5rem;
   --flow-panel-width: 22rem;
   --flow-canvas-min: 20rem;
 
@@ -298,12 +301,14 @@
   --space-500: 2.5rem;
   --space-600: 3rem;
 
-  /* Shape: small marks, lozenges and badges, buttons and fields, tiles and panels, dialogs, dots. */
+  /* Shape: small marks, lozenges and badges, buttons and fields, tiles and panels, dialogs, Flow's
+     start and end boxes, dots. */
   --radius-xs: 2px;
   --radius-s: 4px;
   --radius-control: 6px;
   --radius-m: 8px;
   --radius-l: 12px;
+  --radius-xl: 16px;
   --radius-full: 999px;
 
   /* Sizes: controls 32 px or 24 px compact, the 24 px target minimum, the one-line header. */

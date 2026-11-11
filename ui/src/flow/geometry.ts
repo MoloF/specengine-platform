@@ -42,8 +42,11 @@ export interface Run {
 /** The band along an arrow a click takes, in px: wide enough to hit, its stroke unseen (docs/features/writer-studio.md D8). */
 export const EDGE_HIT = 12;
 
-/** A box of the flow: its title on up to two lines, its marks, its state under them (docs/features/trace-views.md "Flow badges"). */
-export const BOX_HEIGHT = 92;
+/**
+ * A box of the flow: its title on up to two lines, its marks, its state under them (docs/features/trace-views.md "Flow badges"),
+ * padded 8 and 12 px, so a terminator's rows stay inside its border (docs/features/room-and-scroll.md "Acceptance criteria", RS-1, RS-3).
+ */
+export const BOX_HEIGHT = 104;
 
 /** A box's width: four of them and their gutters fit a 1100 px studio's canvas at the fit floor (`docs/canon/spec-flow-layout.md` "Layout"). */
 export const BOX_WIDTH = 160;

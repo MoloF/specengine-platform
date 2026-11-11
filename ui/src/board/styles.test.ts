@@ -116,7 +116,8 @@ describe("the header stays; the page never scrolls sideways (BH-2)", () => {
     expect(modal).toMatch(/width:\s*min\(var\(--modal-width-xl\), 100vw - 2rem\);/);
     expect(ruleWith(".card-page", /max-width/)).toMatch(/max-width:\s*var\(--modal-width-xl\);/);
     expect(modal).toMatch(/max-height:\s*calc\(100dvh - 2rem\);/);
-    // Its body's scrolling is the work item's own in any dialog (docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look).
+    // At one column its body's scrolling is the work item's own in any dialog (docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look);
+    // at two, Main and the side scroll apart (docs/features/room-and-scroll.md "Acceptance criteria", RS-8).
     expect(ruleWith(".dialog > .issue-view > .issue-view-body", /overflow/)).toMatch(/overflow:\s*auto;/);
   });
 

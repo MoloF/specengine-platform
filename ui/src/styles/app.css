@@ -5552,6 +5552,13 @@ mark {
   cursor: pointer;
 }
 
+/* While a selection lights some lines (edgeOf sets their accent inline), every other line fades, its
+   path and arrowhead alike; boxes, the band's caption and dividers never do. Flow's alone: its wrapper
+   also carries `.graph-canvas` (docs/features/room-and-scroll.md "Acceptance criteria", RS-5, RS-6). */
+.flow-canvas .react-flow__edge.is-faded {
+  opacity: var(--flow-edge-faded-opacity);
+}
+
 .flow-box {
   position: relative;
   display: grid;
@@ -5559,7 +5566,7 @@ mark {
   gap: var(--space-025);
   width: 100%;
   height: 100%;
-  padding: var(--space-050) var(--space-100);
+  padding: var(--space-100) var(--space-150);
   border: var(--xy-node-border);
   border-radius: var(--radius-m);
   background: var(--flow-box-surface);
@@ -5583,11 +5590,11 @@ mark {
   height: 12px;
 }
 
-/* The terminators of a flowchart, a stadium; an end doubled, so the shape says it without colour. */
+/* The terminators of a flowchart, rounder than a step but never a stadium, so no corner cuts their
+   rows; the box's own padding stands; an end doubled, so the shape says it without colour. */
 .flow-box.is-start,
 .flow-box.is-end {
-  padding-inline: var(--space-150);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-xl);
 }
 
 .flow-box.is-start {
@@ -5843,6 +5850,11 @@ mark {
 .flow-edge-label.is-emphasis {
   border-color: var(--accent);
   color: var(--text-primary);
+}
+
+/* A faded line's words: the subtlest text, never an opacity, so they stay readable. */
+.flow-edge-label.is-faded {
+  color: var(--text-subtlest);
 }
 
 .flow-sample line,
@@ -7421,9 +7433,10 @@ mark {
   max-width: var(--issue-side-width);
 }
 
-/* The work item in a dialog (a card's modal, a document's): the head stays and the body scrolls
-   inside; under 36rem, where the dialog is the screen, the dialog is the one scroll container and the
-   head scrolls away with the body (docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look). */
+/* The work item in a dialog (a card's modal, a document's): the head stays; at two columns each
+   column scrolls on its own, at one column the body scrolls inside; under 36rem, where the dialog is
+   the screen, the dialog is the one scroll container and the head scrolls away with the body
+   (docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look; docs/features/room-and-scroll.md "Acceptance criteria", RS-8). */
 .dialog:has(> .issue-view) {
   display: flex;
   flex-direction: column;
@@ -7442,6 +7455,26 @@ mark {
   min-height: 0;
   overflow: auto;
   padding: var(--space-050);
+}
+
+/* Two columns in a dialog: the body clips, its one row as tall as the taller column up to the
+   dialog's, and Main and the side each scroll, padded so a focus ring stays whole; a column's end
+   scrolls nothing under the scrim. A page keeps one window scroll: nothing here holds without `.dialog >`. */
+@container issue-view (min-width: 44.5rem) {
+  .dialog > .issue-view > .issue-view-body {
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .dialog > .issue-view > .issue-view-body > .issue-view-main,
+  .dialog > .issue-view > .issue-view-body > .issue-view-side {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-050);
+  }
 }
 
 @media (max-width: 36rem) {

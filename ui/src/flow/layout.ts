@@ -18,11 +18,12 @@ export { BOX_HEIGHT, BOX_WIDTH, CANVAS_LIMIT };
 
 /**
  * The band between two columns at least: an edge label of two lines at most (`LABEL_WIDTH`) and its
- * insets, so a column's pitch is 224 px, 206 px at the fit floor (the orchestrator's look, L1).
+ * insets, so a column's pitch is 256 px, 235.5 px at the fit floor
+ * (docs/features/room-and-scroll.md "Acceptance criteria", RS-1, RS-2).
  */
-export const COLUMN_GAP = 64;
+export const COLUMN_GAP = 96;
 /** Between two boxes of a column. */
-export const BOX_GAP = 32;
+export const BOX_GAP = 48;
 /** Inside a lane, each side. */
 export const LANE_PAD = 16;
 /** From one arc's track to the next, and one trunk's. */
@@ -55,10 +56,11 @@ const BAND_MIN_COLUMNS = 4;
 /** Passes that align each column with its neighbours once the order is set. */
 const PLACE_PASSES = 8;
 /**
- * An edge label's width at most, the column gap less its insets (`--flow-edge-label-width` in
- * tokens.css), its lines at most, its line height, and a character's mean width, for telling two apart.
+ * An edge label's width at most, the column gap less 4 px each side (`--flow-edge-label-width` in
+ * tokens.css), about 12 characters a line; its lines at most, its line height, and a character's mean
+ * width, for telling two apart.
  */
-export const LABEL_WIDTH = 56;
+export const LABEL_WIDTH = 88;
 const LABEL_LINES = 2;
 const LABEL_LINE = 16;
 const LABEL_CHARACTER = 6;

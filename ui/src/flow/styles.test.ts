@@ -4,15 +4,18 @@ import appCss from "../styles/app.css?raw";
 import tokensCss from "../styles/tokens.css?raw";
 import flowCanvas from "./FlowCanvas.tsx?raw";
 import graphCanvas from "../graph/GraphCanvas.tsx?raw";
+import roadmapChain from "../roadmap/RoadmapChain.tsx?raw";
 import { FLOW_FIT_MIN_ZOOM, FLOW_PINCH_MIN_ZOOM } from "./geometry";
 import { LABEL_WIDTH } from "./layout";
 
-// docs/features/writer-studio.md ST-4, ST-8, ST-11 (and ST-6's no dimming); flow-scenario FS-14 and
-// FS-22 (RM-0094): jsdom lays nothing out, so these pin the studio's rules, as the Board's
-// styles.test.ts does; the looks hold them to a browser.
+// docs/features/writer-studio.md ST-4, ST-8, ST-11 (and ST-6's no dimming, narrowed by
+// docs/features/room-and-scroll.md "Acceptance criteria", RS-6); flow-scenario FS-14 and FS-22 (RM-0094);
+// room-and-scroll's RS-1, RS-3 and RS-5: jsdom lays nothing out, so these pin the studio's rules, as
+// the Board's styles.test.ts does; the looks hold them to a browser.
 
-/** The file's top-level parts: each rule, and each `@media` block with the rules inside it. */
+/** The file's top-level parts: each rule, and each at-rule block (`@media`, `@container`, `@keyframes`) with the rules inside it. */
 interface Block {
+  /** A `@media` block's query; another at-rule's whole head; null at the top level. */
   media: string | null;
   selector: string;
   body: string;
@@ -30,14 +33,14 @@ function blocksOf(css: string): Block[] {
         return;
       }
       const head = text.slice(at, open).trim();
-      if (head.startsWith("@media")) {
+      if (head.startsWith("@")) {
         let depth = 1;
         let close = open + 1;
         for (; close < text.length && depth > 0; close += 1) {
           depth += text[close] === "{" ? 1 : text[close] === "}" ? -1 : 0;
         }
         at = open + 1;
-        walk(close - 1, head.slice("@media".length).trim());
+        walk(close - 1, head.startsWith("@media") ? head.slice("@media".length).trim() : head);
         at = close;
       } else {
         const close = text.indexOf("}", open);
@@ -113,10 +116,82 @@ describe("the page holds still (ST-4)", () => {
     }
   });
 
-  it("dims nothing: no `--flow-dimmed` in either style file (ST-6, M13)", () => {
+  it("dims no box: no `--flow-dimmed` or `.is-dimmed` in either style file (ST-6, M13)", () => {
     expect(appCss).not.toContain("--flow-dimmed");
     expect(tokensCss).not.toContain("--flow-dimmed");
+    expect(appCss).not.toContain(".is-dimmed");
+    expect(tokensCss).not.toContain(".is-dimmed");
     expect(blocks.some((block) => /\.is-dimmed/.test(block.selector))).toBe(false);
+  });
+});
+
+/** Each selector of the file's rules, one by one, with its rule's declarations. */
+const selectors = blocks.flatMap((block) => block.selector.split(",").map((part) => ({ part: part.trim().replace(/\s+/g, " "), media: block.media, body: block.body })));
+
+// docs/features/room-and-scroll.md "Acceptance criteria", RS-6: ST-6 narrowed by name. Only Flow's
+// lines fade, and only on Flow's canvas or on its edge words; no box, divider or band caption ever
+// fades, dims or takes an opacity, and Graph's and Roadmap's canvases (`.graph-canvas` alone) take nothing.
+describe("only Flow's lines fade (RS-6)", () => {
+  const faded = selectors.filter(({ part }) => part.includes("is-faded"));
+
+  it("scopes every `is-faded` rule to `.flow-canvas` or `.flow-edge-label`, never to `.graph-canvas` alone", () => {
+    expect(faded.length).toBeGreaterThanOrEqual(2);
+    // M: the fade written as `.graph-canvas .react-flow__edge.is-faded`.
+    expect(faded.filter(({ part }) => !part.includes(".flow-canvas") && !part.includes(".flow-edge-label")).map(({ part }) => part)).toEqual([]);
+  });
+
+  it("fades no box, divider, band caption or node", () => {
+    // M: `.flow-box.is-faded { opacity: ... }`.
+    expect(faded.filter(({ part }) => /\.flow-box|\.flow-divider|\.flow-band|\.react-flow__node/.test(part)).map(({ part }) => part)).toEqual([]);
+  });
+
+  it("leaves Graph's and Roadmap's canvases unfaded: neither names a fade, as Flow's canvas does", () => {
+    // Flow builds its class as `is-${look}`, so the scan reads `faded`, not `is-faded`; Flow's own source shows it reads.
+    const fade = /faded/;
+    expect(fade.test(flowCanvas)).toBe(true);
+    // M: `const look = "faded"` added to GraphCanvas.tsx.
+    for (const [name, source] of [["GraphCanvas.tsx", graphCanvas], ["RoadmapChain.tsx", roadmapChain]] as const) {
+      expect([name, source.length > 0, fade.test(source)]).toEqual([name, true, false]);
+    }
+  });
+
+  it("gives no box, divider, band caption, or node on Flow's canvas an opacity", () => {
+    const things = selectors.filter(({ part }) => /\.flow-box|\.flow-divider|\.flow-band/.test(part) || /\.flow-canvas\b.*\.react-flow__node/.test(part));
+    expect(things.length).toBeGreaterThan(10);
+    expect(things.filter(({ body }) => /(^|[\s;])opacity:/.test(body)).map(({ part }) => part)).toEqual([]);
+  });
+});
+
+// docs/features/room-and-scroll.md "Acceptance criteria", RS-5: while a selection lights some lines,
+// the rest fade on Flow's canvas, path and arrowhead alike; their words take the subtlest text colour,
+// never an opacity, so they stay at 4.5:1 or more.
+describe("the fade (RS-5)", () => {
+  it("fades a line's group by the token, its words by colour alone", () => {
+    expect(ruleWith(".flow-canvas .react-flow__edge.is-faded", null, /opacity:/).body).toMatch(/opacity:\s*var\(--flow-edge-faded-opacity\);/);
+    expect(tokensCss).toMatch(/--flow-edge-faded-opacity:\s*0\.4;/);
+    const words = rulesOf(".flow-edge-label.is-faded");
+    expect(words.map((block) => block.body).join("")).toMatch(/color:\s*var\(--text-subtlest\);/);
+    // M: the label faded by `opacity`.
+    expect(words.filter((block) => /opacity/.test(block.body))).toEqual([]);
+  });
+});
+
+// docs/features/room-and-scroll.md "Acceptance criteria", RS-3: a box padded 8 and 12 px; a start and an
+// end rounder than a step at 16 px, never a stadium, their borders and marks kept.
+describe("boxes and terminators (RS-3)", () => {
+  it("pads a box by the scale's 8 and 12 px", () => {
+    expect(ruleWith(".flow-box", null, /padding:/).body).toMatch(/padding:\s*var\(--space-100\) var\(--space-150\);/);
+  });
+
+  it("rounds a start and an end at --radius-xl, with no padding of their own, their borders kept", () => {
+    const terminators = blocks.filter((block) => block.selector.replace(/\s+/g, " ") === ".flow-box.is-start, .flow-box.is-end");
+    expect(terminators).toHaveLength(1);
+    // M: the terminators back at `var(--radius-full)`.
+    expect(terminators[0]?.body).toMatch(/border-radius:\s*var\(--radius-xl\);/);
+    expect(terminators[0]?.body).not.toMatch(/padding/);
+    expect(ruleWith(".flow-box.is-start", null, /border:/).body).toMatch(/border:\s*2px solid var\(--flow-start\);/);
+    expect(ruleWith(".flow-box.is-end", null, /border:/).body).toMatch(/border:\s*4px double var\(--flow-end\);/);
+    expect(tokensCss).toMatch(/--radius-xl:\s*16px;/);
   });
 });
 
@@ -250,14 +325,17 @@ describe("the minimap (C-2)", () => {
   });
 });
 
-// The orchestrator's look L1 of handoff-progress: an edge's words wrap within its gap, two lines at most.
-describe("an edge's words in its gap (L1 of the looks)", () => {
+// The look L1 of handoff-progress, widened by docs/features/room-and-scroll.md "Acceptance criteria", RS-1:
+// an edge's words wrap within its gap, 88 px, two lines at most.
+describe("an edge's words in its gap (L1 of the looks, RS-1)", () => {
   it("caps a label at the gap less its insets, two lines, then an ellipsis; each word a line", () => {
     const label = ruleWith(".flow-edge-label", null, /max-width:/).body;
     expect(label).toMatch(/max-width:\s*var\(--flow-edge-label-width\);/);
     expect(label).toMatch(/-webkit-line-clamp:\s*2;/);
     expect(label).toMatch(/overflow:\s*hidden;/);
+    // M: `--flow-edge-label-width` left at 3.5rem.
     expect(tokensCss).toMatch(new RegExp(`--flow-edge-label-width:\\s*${String(LABEL_WIDTH / 16)}rem;`));
+    expect(tokensCss).toContain("--flow-edge-label-width: 5.5rem;");
     expect(ruleWith(".flow-edge-word", null, /display:/).body).toMatch(/display:\s*block;/);
   });
 });

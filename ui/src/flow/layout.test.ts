@@ -3,7 +3,7 @@ import type { FlowNode } from "../api/types";
 import { asideFiring, asideLens } from "../test/asideStub";
 import { aFlowEdge, aFlowNode, aFlowView } from "../test/builders";
 import { aLine, flow200, forwardCrossings, TYPE_B } from "../test/flowStub";
-import { fitOf, pointInside, stretchCrosses, type Point } from "./geometry";
+import { fitOf, FLOW_FIT_MIN_ZOOM, pointInside, stretchCrosses, type Point } from "./geometry";
 import { BOX_HEIGHT, BOX_WIDTH, BOX_GAP, boxAfterKey, CANVAS_LIMIT, COLUMN_GAP, LABEL_WIDTH, labelSize, layoutFlow, LANE_PAD, type FlowBox, type FlowLayout, type LaidEdge } from "./layout";
 
 // docs/features/flow-canvas.md "Layout" and docs/features/handoff-progress.md "Acceptance criteria",
@@ -205,29 +205,50 @@ function labelOnBoxes(laid: LaidEdge, layout: FlowLayout): string[] {
   return layout.boxes.filter((one) => rect.x < one.x + one.width && one.x < rect.x + rect.width && rect.y < one.y + one.height && one.y < rect.y + rect.height).map((one) => `${laid.id} on ${one.name}`);
 }
 
-// The orchestrator's look L1 of handoff-progress: the pitch tightened, so more of a long walk stands in
-// a 1440 px studio with both panes open; the edge words wrap within the gap, two lines at most.
-describe("the column pitch (L1 of the looks)", () => {
+// The room of docs/features/room-and-scroll.md "Acceptance criteria", RS-1 and RS-2, after the look L1 of
+// handoff-progress: a wider gap, so an edge's words take about 12 characters a line in it, and three of a
+// long walk's columns begun in a 1440 px studio with both panes open; the words two lines at most.
+describe("the column pitch (RS-1, RS-2)", () => {
   /** The studio's canvas at 1440 px, both panes open: 1440 less the nav (13rem) and its border, main's padding (2 x 1.5rem), the places (15rem), the panel (22rem) and two gaps (0.75rem). */
   const CANVAS_1440 = 1440 - 208 - 1 - 48 - 240 - 352 - 24;
 
-  it("steps a column 224 px: a box and a 64 px gap, the edge words' width and their insets", () => {
+  it("holds the room's numbers: a 96 px gap, 48 px between a column's boxes, words 88 px wide, a box 104 tall; the box's width and the fit floor as they were (RS-1)", () => {
+    // M: `COLUMN_GAP` back to 64.
+    expect([COLUMN_GAP, BOX_GAP, LABEL_WIDTH, BOX_HEIGHT]).toEqual([96, 48, 88, 104]);
+    expect([BOX_WIDTH, FLOW_FIT_MIN_ZOOM]).toEqual([160, 0.92]);
+  });
+
+  it("steps a column 256 px: a box and a 96 px gap, the edge words' width and their insets (RS-1)", () => {
     const layout = layoutFlow(aFlowView(aLine(["A", "B", "C"]), [aFlowEdge({ from: "A", to: "B" }), aFlowEdge({ from: "B", to: "C" })]));
-    // M: the gap back to 136.
-    expect(box(layout, "B").x - box(layout, "A").x).toBe(224);
+    expect(box(layout, "B").x - box(layout, "A").x).toBe(256);
     expect(box(layout, "C").x - box(layout, "B").x).toBe(BOX_WIDTH + COLUMN_GAP);
     expect(LABEL_WIDTH + 8).toBe(COLUMN_GAP);
   });
 
-  it("shows two and a half pitches of the firing run in a 1440 px studio at the fit, the third column's box begun in view", () => {
+  it("stands two boxes of one column at least 152 px apart, top to top (RS-1)", () => {
+    const layout = layoutFlow(aFlowView([aFlowNode({ id: "A", distance: 0 }), aFlowNode({ id: "B", distance: 1, path: "docs/b.md" }), aFlowNode({ id: "C", distance: 1, path: "docs/c.md" })], [aFlowEdge({ from: "A", to: "B" }), aFlowEdge({ from: "A", to: "C" })]));
+    expect(BOX_HEIGHT + BOX_GAP).toBe(152);
+    expect(Math.abs(box(layout, "B").y - box(layout, "C").y)).toBeGreaterThanOrEqual(152);
+  });
+
+  it("sets `alternative` alone on one line within the gap (RS-2)", () => {
+    // M: `LABEL_WIDTH` left at 56, two lines.
+    const size = labelSize(aFlowEdge({ from: "A", to: "B", kind: "alternative" }));
+    expect(size.height).toBe(22);
+    expect(size.width).toBeLessThanOrEqual(88);
+  });
+
+  it("begins three of the firing run's columns in a 1440 px studio at the fit, more than two pitches in view (RS-2)", () => {
     expect(CANVAS_1440).toBe(567);
     const layout = layoutFlow(firingBoxes());
     const fit = fitOf(layout, CANVAS_1440, 600);
     expect(fit?.zoom).toBe(0.92);
     const zoom = fit?.zoom ?? 1;
+    const pitch = (BOX_WIDTH + COLUMN_GAP) * zoom;
+    expect(pitch).toBeCloseTo(235.52, 6);
     const lefts = (layout.lanes[0]?.columns ?? []).map((column) => (fit?.x ?? 0) + (layout.boxes.find((one) => one.id === column[0])?.x ?? 0) * zoom);
     expect(lefts.filter((left) => left < CANVAS_1440)).toHaveLength(3);
-    expect((CANVAS_1440 - (lefts[0] ?? 0)) / ((BOX_WIDTH + COLUMN_GAP) * zoom)).toBeGreaterThan(2.5);
+    expect((CANVAS_1440 - (lefts[0] ?? 0)) / pitch).toBeGreaterThan(2);
   });
 
   it("keeps every edge's words off every box: in a gap, under a loop, on a track or a trunk", () => {

@@ -3,11 +3,11 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { countsText, dashOf, FLOW_KINDS, kindWords, rollupMeanings, startWord, typeColour, typeDash } from "./labels";
 
-/** A stroke as the canvas draws it. */
-function Sample({ dash, colour }: { dash: string; colour: string }) {
+/** A stroke as the canvas draws it; a lit one at the selection's own width. */
+function Sample({ dash, colour, width }: { dash: string; colour: string; width?: string }) {
   return (
     <svg className="flow-sample" viewBox="0 0 48 8" width="48" height="8" aria-hidden="true" focusable="false">
-      <line x1="1" y1="4" x2="47" y2="4" style={{ stroke: colour, strokeDasharray: dash }} />
+      <line x1="1" y1="4" x2="47" y2="4" style={{ stroke: colour, strokeDasharray: dash, ...(width === undefined ? {} : { strokeWidth: width }) }} />
     </svg>
   );
 }
@@ -20,7 +20,7 @@ const SAMPLE_COUNTS = { no_card: 0, in_work: 0, suspect: 1, departed: 0, confirm
 
 /**
  * The canvas's legend (docs/features/writer-studio.md "Description and interactions"): each type and kind with its
- * sample, in the daemon's words; what an arc means; the marks; what each state of a box's work says,
+ * sample, in the daemon's words; what an arc means; what a selection lights; the marks; what each state of a box's work says,
  * when a read served any, so a flow drawn bare names no state; the drawing library's credit. It lies
  * over the canvas from its bottom edge and scrolls inside.
  */
@@ -47,6 +47,11 @@ export function FlowLegend({ id, types, states }: { id: string; types: readonly 
             <path d="M1,12 H38 Q42,12 42,8 V6 Q42,2 38,2 H1" style={{ stroke: "var(--graph-edge)" }} />
           </svg>
           <span>{t("flow.legend.arc")}</span>
+        </li>
+        {/* The selection's lines, said in words: colour alone never says it (docs/features/room-and-scroll.md "Acceptance criteria", RS-7). */}
+        <li className="graph-legend-item">
+          <Sample dash="none" colour="var(--graph-edge-emphasis)" width="var(--graph-edge-width-emphasis)" />
+          <span>{t("flow.legend.selected")}</span>
         </li>
       </ul>
       <ul className="graph-legend-list">
