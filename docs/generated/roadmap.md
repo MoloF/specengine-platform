@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 47 open, 62 done; current mvp; to mvp 2-3 days; total 13-21 days, 8 unestimated
+roadmap: 48 open, 62 done; current mvp; to mvp 2-3 days; total 13-21 days, 14 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,29 +29,30 @@ roadmap: 47 open, 62 done; current mvp; to mvp 2-3 days; total 13-21 days, 8 une
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 7 open, 10 done | 0 days, 7 unestimated
+## release v5 | 13 open, 10 done | 0 days, 13 unestimated
 
 1. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | -
-2. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
-3. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
-4. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0059, RM-0060
-5. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a config proposal | draft | could | -
-6. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
-7. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+2. [RM-0035](../roadmap/RM-0035.md) | node-history (Phase 7, v5): a node's changes, who made them and when, on the CLI and in the document view | draft | should | -
+3. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
+4. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
+5. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0060, RM-0099
+6. [RM-0105](../roadmap/RM-0105.md) | upstream-signal (Phase 7, v5): a subtask shows that its parent changed above it | draft | should | -
+7. [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, v5): a direction as a table of its documents | draft | should | - | waits on RM-0035
+8. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | draft | should | -
+9. [RM-0108](../roadmap/RM-0108.md) | card-context (Phase 7, v5): an agent reads a task with its context in one call | draft | should | -
+10. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a non-game preset | draft | could | -
+11. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
+12. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+13. [RM-0103](../roadmap/RM-0103.md) | canvas-clicks (Phase 7, v5): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy | draft | could | -
 
-## pool | 33 open, 1 done | 7-12 days, 29 unestimated
+## pool | 28 open, 1 done | 7-12 days, 24 unestimated
 
-- [RM-0035](../roadmap/RM-0035.md) | node-history (Phase 7, pool): a node's changes, who made them and when, on the CLI and in the document view | draft | should | -
 - [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | -
 - [RM-0040](../roadmap/RM-0040.md) | check-parity: what pilot A's own docs check still does beside spec check | draft | should | -
 - [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch | draft | should | -
 - [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | -
 - [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0035, RM-0036
 - [RM-0070](../roadmap/RM-0070.md) | trial-followups (Phase 7): what the second trial and earlier review left | draft | should | -
-- [RM-0105](../roadmap/RM-0105.md) | upstream-signal (Phase 7, pool): a subtask shows that its parent changed above it | draft | should | -
-- [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, pool): a direction as a table of its documents | draft | should | - | waits on RM-0035
-- [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, pool): what was delivered, against its estimate, and why it took longer | draft | should | -
-- [RM-0108](../roadmap/RM-0108.md) | card-context (Phase 7, pool): an agent reads a task with its context in one call | draft | should | -
 - [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | -
 - [RM-0019](../roadmap/RM-0019.md) | roadmap-moves (Phase 6, 3b): moves from the Roadmap screen | draft | could | -
 - [RM-0021](../roadmap/RM-0021.md) | bevy-dump (10b): the project's schedule dump annotates symbols | draft | could | 3-5
@@ -69,8 +70,8 @@ roadmap: 47 open, 62 done; current mvp; to mvp 2-3 days; total 13-21 days, 8 une
 - [RM-0063](../roadmap/RM-0063.md) | Load flakes: tests that fail under full parallel load | draft | could | -
 - [RM-0087](../roadmap/RM-0087.md) | roadmap-states (Phase 7, v4 step 5): the owner's states, and views by state and release | draft | could | -
 - [RM-0102](../roadmap/RM-0102.md) | flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction | draft | could | -
-- [RM-0103](../roadmap/RM-0103.md) | canvas-clicks (Phase 7, v5 pool): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy | draft | could | -
 - [RM-0109](../roadmap/RM-0109.md) | code-languages (Phase 7, pool, on a trigger): bind code in a second language | draft | could | -
+- [RM-0110](../roadmap/RM-0110.md) | config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal | draft | could | - | waits on RM-0061
 - [RM-0020](../roadmap/RM-0020.md) | code-index-speed (6c): a faster code index | draft | - | -
 - [RM-0022](../roadmap/RM-0022.md) | layer-c-macros (11b): items under attribute macros keep their monikers | draft | - | -
 - [RM-0023](../roadmap/RM-0023.md) | layer-c-registration (11c): what the schedule dump cannot give | draft | - | - | waits on RM-0021

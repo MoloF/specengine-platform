@@ -229,7 +229,7 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - **Proof** is a decision record that the card links back to.
 - **Folded in the UI.** These are local technical details: the UI folds them and never moves them. They are IDs, paths, raw kinds, revisions and hashes, tokens, distance, gap codes, Bindings, Bundle, the lock diff and drift. `T-` tasks show as a Development summary.
 
-The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6d come to 84-126 pipeline hours (step 3 took RM-0101 in; steps 4 to 6 re-estimated by their analyses, step 6 with the owner's fixes of 2026-11-11, step 6b his next four of that day, steps 6c and 6d from his vision of that day) and steps 7-13 to 27-46; the pool rows after them, outside `v5`, to 26-42.
+The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6d come to 84-126 pipeline hours (step 3 took RM-0101 in; steps 4 to 6 re-estimated by their analyses, step 6 with the owner's fixes of 2026-11-11, step 6b his next four of that day, steps 6c and 6d from his vision of that day) and steps 7-13 to 39-56; the six items taken on 2026-11-12, RM-0103, RM-0035 and RM-0105 to RM-0108, to 29-43 (steps 7-13 and those items re-estimated by their analyses of that day); the pool rows, outside `v5`, to 12-19. Since 2026-11-12 the order of the rest is the owner's word below ("Owner's word, 2026-11-12"); the step numbers stay as names.
 
 | Step | Slice | Item | Result | ADR issued | Hours | After |
 |---|---|---|---|---|---|---|
@@ -243,27 +243,29 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 6c | `department-split` | RM-0100 | Shipped 2026-11-11: one act, a task on a document or a stored one and a subtask per chosen discipline, the split's reviewer on each, all or none; `[[card.split]]` pre-selects and picks targets by kind, never refusing; `spec card split` and `--dry-run`, `split_card` (30 tools, a hub's 18), a hub's seventh plain write; one lazy dialog from the document, Flow's panel and a task; the preset's `sound`; plugin 0.37.0; first-load JS 818.68 kB of 845; a dry run 0.25-0.39 s on a real corpus (`docs/canon/card-split.md`) | ADR-0078 `card-split` (supplements ADR-0056, ADR-0074, ADR-0076) | 10-15 | 4, 6 |
 | 6d | `task-mandate` | RM-0104 | Shipped 2026-11-12: a subtask binding, or its department decides: `mandate` on the card (queue schema 12, backup format 6), named per subtask at creation, required in Hand off and Split, changed by the reviewer alone; a binding task leads with Return and a question, an open one with Record a decision, its why required by the form; the parent's Decisions from subtasks, one read; nothing reads it; plugin 0.38.0; first-load JS 823.45 kB of 845 (`docs/canon/card-mandate.md`) | ADR-0079 `card-mandate` (supplements ADR-0056, ADR-0074, ADR-0077) | 7-11 | 5, 6c |
 | gate | the pipeline trial | - | No code: the bar below | - | - | 1-6d |
-| 7 | `design-sweep` | RM-0099 | (a) Inbox, Questions, Spec tree, Overview; (b) Health, Graph, Roadmap, Tasks, on the foundation; the legacy tokens and step 1's exceptions gone | - | 8-14 | 1, gate |
-| 8 | `intake-similar` | RM-0059 | `similar` and `distinct_from` on create | - | 2-4 | - |
-| 9 | `collision-pass` | RM-0060 | Candidates, a pair ledger, a skill | - | 3-5 | 8 |
-| 10 | `plain-questions` | RM-0088 | Re-scoped: a question's gist, why it matters and 2-3 options; collisions as pairs | - | 6-10 | 5, 8, 9 |
-| 11 | `pack` | RM-0061 | `spec init --pack`, a config proposal, a non-game preset | - | 3-5 | 4 |
-| 12 | `department-overview` | RM-0086 | Re-scoped: an Overview per department, counted by status category | - | 4-6 | 4, 5, 6 |
-| 13 | `hub-department` | RM-0089 | A hub login's default department, presentation only | maybe `hub-workspace` | 1-2 | 4, 11b-3 |
-| pool | `upstream-signal` | RM-0105 | A subtask marked when its parent's goal, criteria or targets changed, or a decision on its targets was applied, after it was made; per read | - | 3-5 | 6c |
-| pool | `node-history` | RM-0035 | `spec show --history` from the apply trailers, a History part in the document view; out of RM-0056 | - | 4-6 | - |
-| pool | `direction-catalog` | RM-0106 | A direction as a table: title, revision, work state, open items, tasks, last change | - | 4-7 | 4, RM-0035 |
-| pool | `delivery-analytics` | RM-0107 | Created, taken, accepted against estimate and due; lateness with reasons; by release and department; RM-0087's timeline | - | 6-9 | 6 |
-| pool | `card-context` | RM-0108 | `get_card` with its targets' bundle, its parent's goal and its items' records, within a budget | - | 3-5 | 5 |
+| 7 | `design-sweep` | RM-0099 | Two slices: (a) `design-sweep`, the rename of every legacy-token use and the weights, the aliases out, the guards, Inbox, Questions and the Spec tree on primitives, the Overview renamed only; (b) `design-sweep-b`, Health, Graph, Roadmap and Agent tasks, the last exceptions, the header heights | - | 11-15 | 1, RM-0103 |
+| 8 | `intake-similar` | RM-0059 | `similar` and `distinct_from` on create | - | 4-6 | - |
+| 9 | `collision-pass` | RM-0060 | Candidates, a pair ledger, a skill; queue schema 14 | - | 5-8 | 8 |
+| 10 | `plain-questions` | RM-0088 | Re-scoped: a question's gist, why it matters and 2-3 options; collisions as pairs; two halves, the questions (queue schema 13, backup format 7), then the pairs | - | 9-13 | 5, 7; the pair half 9 |
+| 11 | `pack` | RM-0061 | `spec init --pack` by path, a non-game preset; the config proposal split off to RM-0110 | - | 3-4 | 4 |
+| 12 | `department-overview` | RM-0086 | Re-scoped: an Overview per department, counted by status category | - | 5-7 | 4, 5, 6 |
+| 13 | `hub-department` | RM-0089 | A hub login's default department, presentation only | maybe `hub-workspace` | 2-3 | 4, 11b-3 |
+| v5 | `upstream-signal` | RM-0105 | A subtask marked when its parent's goal, criteria or targets changed, or a decision on its targets was applied, after it was made; per read | - | 4-6 | 6c |
+| v5 | `node-history` | RM-0035 | `spec show --history` from the apply trailers, a History part in the document view; out of RM-0056 | - | 5-7 | - |
+| v5 | `direction-catalog` | RM-0106 | A direction as a table: title, revision, work state, open items, tasks, last change | - | 6-9 | 4, RM-0035 |
+| v5 | `delivery-analytics` | RM-0107 | Created, taken, accepted against estimate and due; lateness with reasons; by release and department; RM-0087's timeline | - | 8-12 | 6 |
+| v5 | `card-context` | RM-0108 | `get_card` with its targets' bundle, its parent's goal and its items' records, within a budget | - | 4-6 | 5 |
+| v5 | `canvas-clicks` | RM-0103 | Graph and Roadmap's Chain take a short press as a click, Graph's minimap no pointer, Graph centres only on a keyboard focus; a lazy chunk gone after a redeploy reloads the page once per build; UI only | - | 2-3 | 6 |
 | trigger | `code-languages` | RM-0109 | Markers and AST hashes in a second language, once a real project in it exists | one amending ADR-0010, ADR-0018, ADR-0020 | 6-10 | - |
+| pool | `config-proposal` | RM-0110 | A writer's type change as a reviewed config proposal, out of RM-0061; never widening `[team]`, `[zones]`, `[gate]` on a hub | `config-proposal`, on `architecture.md#apply` | 6-9 | RM-0061 |
 
 **Lanes.** Two lanes run side by side.
 - **The Rust lane** holds the cores of steps 2-5 (`in_flow` and `ancestors`, link ends' and gap members' titles, the department keys, the card's intake link), then steps 8 and 9.
 - **The UI lane** starts with step 1, then takes the UIs of steps 2-5, then steps 6, 6b and 7. Steps 6c and 6d each run both lanes in parallel, the contract fixed by the spec.
 
-A slice's UI waits for its core and for step 1; no core waits for the UI lane. Steps 10-13 follow both lanes.
+A slice's UI waits for its core and for step 1; no core waits for the UI lane. Steps 10-13 follow both lanes. Since 2026-11-12, "Owner's word, 2026-11-12" below orders both lanes.
 
-**The pipeline trial** is the gate after steps 6 to 6d. It needs no code and replaces the studio trial (Q13). A person who did not write the project gets only the URL and one-line tasks, on a local daemon over a copy of a real corpus, with two departments configured (writers and developers). Unaided, they:
+**The pipeline trial** is the gate after steps 6 to 6d; since 2026-11-12 the owner runs it when he chooses, and nothing waits on it. It needs no code and replaces the studio trial (Q13). A person who did not write the project gets only the URL and one-line tasks, on a local daemon over a copy of a real corpus, with two departments configured (writers and developers). Unaided, they:
 1. find a named document by its path and read it in the modal;
 2. split it to both departments in one act, a task on it and a subtask for each, one binding and one the department's to decide;
 3. as the developer, send the binding subtask back with a question to the writers;
@@ -326,7 +328,33 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 - the mandate is the next slice, not the split's;
 - two slices, then one hub upgrade after both. The live hub runs `v0.36.0` at queue schema 11, where the departments' config works; the mandate takes schema 12.
 
-**Order.** Step 6b `room-and-scroll` and 6c `department-split` (shipped 2026-11-11), then 6d `task-mandate` (shipped 2026-11-12), then the pipeline trial: its step 2 becomes one act, and it gains a step where the writer sees an open subtask's decision on the parent. The `should` items follow the trial in the pool, and `code-languages` waits for its trigger.
+**Order.** Step 6b `room-and-scroll` and 6c `department-split` (shipped 2026-11-11), then 6d `task-mandate` (shipped 2026-11-12), then the pipeline trial: its step 2 becomes one act, and it gains a step where the writer sees an open subtask's decision on the parent. The `should` items follow the trial in the pool, and `code-languages` waits for its trigger. Superseded on 2026-11-12 ("Owner's word, 2026-11-12" below): nothing waits on the trial.
+
+#### Owner's word, 2026-11-12
+
+**His word**, written in chat in Russian; this is a translation: build the remaining features to the end, in parallel where it is safe. The stop point after step 6d is lifted. The pipeline trial stays his gate: he runs it when he chooses, and nothing waits on it. The hub's upgrade to 0.38 still waits for his OK (`docs/canon/card-mandate.md` "Known limits").
+
+**The order** is the orchestrator's scheduling, the analysts' working answers taken (each spec records them as the owner's questions). The core slices run one after another on `main`, each with a Rust lane and a UI lane; a UI-only lane runs beside them. Plugin versions and queue schema numbers are fixed now, so parallel slices never claim the same one; a slice that ends up not changing the MCP surface releases its number to the next.
+
+| # | Core slice | Item | Fixed now |
+|---|---|---|---|
+| 1 | `card-context` | RM-0108 | plugin 0.39.0 (`docs/features/card-context.md`) |
+| 2 | `node-history` | RM-0035 | plugin 0.40.0 |
+| 3 | `upstream-signal` | RM-0105 | plugin 0.41.0 |
+| 4 | `intake-similar` | RM-0059 | plugin 0.42.0; no schema step |
+| 5 | `pack` | RM-0061 | CLI only; the config proposal split off to RM-0110, which needs its own ADR |
+| 6 | `delivery-analytics`, part a | RM-0107 | the read and its tables; no MCP tool |
+| 7 | `direction-catalog` | RM-0106 | no MCP tool |
+| 8 | `plain-questions`, the question half | RM-0088 | queue schema 13, backup format 7 |
+| 9 | `collision-pass` | RM-0060 | queue schema 14; two stdio tools, an eighth skill |
+| 10 | `plain-questions`, the pair half | RM-0088 | a served `pair` for a two-target `contradicts`; after 9 |
+| 11 | `department-overview` | RM-0086 | - |
+| 12 | `hub-department` | RM-0089 | - |
+| 13 | `delivery-analytics`, part b | RM-0107 | the timeline |
+
+**The UI lane**, beside core slices 1-5, in the same tree: RM-0103 `canvas-clicks` (`docs/features/canvas-clicks.md`), then RM-0099 in two slices, `design-sweep` (a) and `design-sweep-b` (b). It shares only documents with the core lane, so the owner commits each slice on its own.
+
+**Not taken:** RM-0109 `code-languages` (its trigger), RM-0087, RM-0070, 10c and RM-0110 `config-proposal`. The taken pool items, RM-0103, RM-0035 and RM-0105 to RM-0108, are `release: v5`; their estimates, and those of steps 7-13, are their analyses' of 2026-11-12.
 
 ## 3. Product acceptance criteria
 

@@ -30,7 +30,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0028.md](roadmap/RM-0028.md) Spec digest into AGENTS.md or CLAUDE.md for external reviewers · crates/specengine-cli · draft
 - [docs/roadmap/RM-0031.md](roadmap/RM-0031.md) symbol-renamed: delta.symbols.renamed from the anchor pairing · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0034.md](roadmap/RM-0034.md) tree-bindings: opt-in binding counters in spec tree, get_tree and the daemon's tree · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin · draft
-- [docs/roadmap/RM-0035.md](roadmap/RM-0035.md) node-history (Phase 7, pool): a node's changes, who made them and when, on the CLI and in the document view · crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0035.md](roadmap/RM-0035.md) node-history (Phase 7, v5): a node's changes, who made them and when, on the CLI and in the document view · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0036.md](roadmap/RM-0036.md) impact-daemon: spec impact on the daemon and the graph's impact mode · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0037.md](roadmap/RM-0037.md) evidence-level: each node's evidence level, computed per read · crates/specengine-core, crates/specengine-cli, ui · draft
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
@@ -41,21 +41,22 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0056.md](roadmap/RM-0056.md) change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0057.md](roadmap/RM-0057.md) draft-overlay (Phase 7, step 15): revisable drafts in reads · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/roadmap/RM-0058.md](roadmap/RM-0058.md) reuse-overrides (Phase 7, step 16): overrides, variants, usage reads · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0059.md](roadmap/RM-0059.md) intake-similar (Phase 7, v5 step 8): similar and distinct_from on create · crates/specengine-cli, crates/specengine-mcp, plugin · draft
+- [docs/roadmap/RM-0059.md](roadmap/RM-0059.md) intake-similar (Phase 7, v5 step 8): similar and distinct_from on create · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill · crates/specengine-core, crates/specengine-cli, plugin · draft
-- [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) pack (Phase 7, v5 step 11): spec init --pack and a config proposal · crates/specengine-cli, crates/specengine-core · draft
+- [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) pack (Phase 7, v5 step 11): spec init --pack and a non-game preset · crates/specengine-cli, crates/specengine-core · draft
 - [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
 - [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store, crates/specengine-http · draft
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
-- [docs/roadmap/RM-0086.md](roadmap/RM-0086.md) department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category · crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0086.md](roadmap/RM-0086.md) department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/roadmap/RM-0087.md](roadmap/RM-0087.md) roadmap-states (Phase 7, v4 step 5): the owner's states, and views by state and release · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs · crates/specengine-mcp, crates/specengine-cli, crates/specengine-http, ui, plugin · draft
-- [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-department (Phase 7, v5 step 13): a hub's per-login default department · crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-department (Phase 7, v5 step 13): a hub's per-login default department · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
 - [docs/roadmap/RM-0099.md](roadmap/RM-0099.md) design-sweep (Phase 7, v5 step 7): every other screen on the foundation · ui · draft
 - [docs/roadmap/RM-0102.md](roadmap/RM-0102.md) flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0103.md](roadmap/RM-0103.md) canvas-clicks (Phase 7, v5 pool): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy · ui · draft
-- [docs/roadmap/RM-0105.md](roadmap/RM-0105.md) upstream-signal (Phase 7, pool): a subtask shows that its parent changed above it · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0106.md](roadmap/RM-0106.md) direction-catalog (Phase 7, pool): a direction as a table of its documents · crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0107.md](roadmap/RM-0107.md) delivery-analytics (Phase 7, pool): what was delivered, against its estimate, and why it took longer · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0108.md](roadmap/RM-0108.md) card-context (Phase 7, pool): an agent reads a task with its context in one call · crates/specengine-cli, crates/specengine-mcp, plugin · draft
+- [docs/roadmap/RM-0103.md](roadmap/RM-0103.md) canvas-clicks (Phase 7, v5): Graph and Roadmap keep their clicks, and a lazy route survives a redeploy · ui · draft
+- [docs/roadmap/RM-0105.md](roadmap/RM-0105.md) upstream-signal (Phase 7, v5): a subtask shows that its parent changed above it · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin · draft
+- [docs/roadmap/RM-0106.md](roadmap/RM-0106.md) direction-catalog (Phase 7, v5): a direction as a table of its documents · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0107.md](roadmap/RM-0107.md) delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0108.md](roadmap/RM-0108.md) card-context (Phase 7, v5): an agent reads a task with its context in one call · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin, fixtures, ui · draft
 - [docs/roadmap/RM-0109.md](roadmap/RM-0109.md) code-languages (Phase 7, pool, on a trigger): bind code in a second language · crates/specengine-code, crates/specengine-core · draft
+- [docs/roadmap/RM-0110.md](roadmap/RM-0110.md) config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
