@@ -69,7 +69,7 @@ A hand-off is how one trade asks another for work: a child card, its `parent` th
 
 A return sends work back. It is a move into the one column a flow names as `return`, and it needs a reason, a note that the move's `card.moved` event keeps. Only the child moves. The asking card stays where it is and shows its children as handed off, taken, returned or accepted.
 
-No card write moves, creates or refuses another card. A parent waits on no child and a child on no parent: each moves, is accepted and is cancelled on its own. A required reason is a transition rule met in the same act, so nothing is blocked (ADR-0012). ADR-0074.
+No card write moves, creates or refuses another card; a split (`card-split.md`, ADR-0078) creates a parent and its subtasks in one act and writes no stored card. A parent waits on no child and a child on no parent: each moves, is accepted and is cancelled on its own. A required reason is a transition rule met in the same act, so nothing is blocked (ADR-0012). ADR-0074.
 
 ## Hand-off
 

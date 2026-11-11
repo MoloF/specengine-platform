@@ -210,7 +210,7 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - Q3: a department is focus only, never an entitlement (ADR-0073).
 - Q5: people raise question and decision items from a task in the UI (the `card-questions` ADR, RM-0097).
 - Q8: the design foundation comes before Flow v2's UI.
-- Q9: journeys wait for the trial (RM-0100, optional).
+- Q9: journeys wait for the trial (RM-0100, optional). Superseded on 2026-11-11: RM-0100 is `department-split`, a `must` before the trial, and the soft `after` is out ("Owner's vision, 2026-11-11" below).
 - Q10: presets are copied and extended by `spec init --pack` (RM-0061).
 - Q11: a decision record names no card; the card links back to it.
 - Q12: RM-0087 `roadmap-states` leaves the direction.
@@ -229,7 +229,7 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - **Proof** is a decision record that the card links back to.
 - **Folded in the UI.** These are local technical details: the UI folds them and never moves them. They are IDs, paths, raw kinds, revisions and hashes, tokens, distance, gap codes, Bindings, Bundle, the lock diff and drift. `T-` tasks show as a Development summary.
 
-The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6b come to 67-100 pipeline hours (step 3 took RM-0101 in; steps 4 to 6 re-estimated by their analyses, step 6 with the owner's fixes of 2026-11-11, step 6b his next four of that day) and steps 7-13 to 27-46.
+The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6d come to 84-126 pipeline hours (step 3 took RM-0101 in; steps 4 to 6 re-estimated by their analyses, step 6 with the owner's fixes of 2026-11-11, step 6b his next four of that day, steps 6c and 6d from his vision of that day) and steps 7-13 to 27-46; the pool rows after them, outside `v5`, to 26-42.
 
 | Step | Slice | Item | Result | ADR issued | Hours | After |
 |---|---|---|---|---|---|---|
@@ -240,7 +240,9 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 5 | `card-questions` | RM-0097 | Shipped 2026-11-11: intake items name `card_id` (queue schema 11, backup format 5); a decision's `why` and its `{{why}}` slot; the card's `items` and Activity; "Ask a question" in Return; ask, record and answer (a stage) from the task; the route a hub's sixth plain write; plugin 0.36.0; first-load JS 840.79 kB of 845 (`docs/canon/card-questions.md`) | ADR-0077 `card-questions` (supplements ADR-0056, ADR-0057, ADR-0074, ADR-0075) | 13-19 | 1 |
 | 6 | `handoff-progress` | RM-0098 | Shipped 2026-11-11: the work item reads its own children, cancelled ones too, and each cancelled one's reason; a segmented bar with its words, Ready to accept beside Accept (never a gate), Relies on, cancelled subtasks with reasons; `RoadmapView` and `GraphView` lazy first; the owner's fixes: Flow left to right again (Q14 closed), a press moving up to 5 px a click, the minimap and dividers taking no pointer, work-item and document modals 1200 px with a 360 px side; arrows named from source to target; UI only, no ADR; first-load JS 815.11 kB of 845; about 2.5 Flow columns in view at 1440 with both panes, more the owner's call; its follow-up RM-0103 `canvas-clicks` in the pool (`docs/canon/card-progress.md`, `spec-flow-layout.md`) | - | 9-14 | 1 |
 | 6b | `room-and-scroll` | - | The owner's four requests of 2026-11-11 on `v0.36.0`, no item: room on Flow (a 96 px column gap, 88 px edge words, 48 px between a column's boxes, 104 px boxes); a selected box's or arrow's lines in the accent, set inline, the rest faded, Flow only; start and end boxes rounded 16 px, so no corner cuts their text; a modal whose Main and side scroll apart; UI only (`docs/features/room-and-scroll.md`) | - | 2-3 | 6 |
-| gate | the pipeline trial | - | No code: the bar below | - | - | 1-6b |
+| 6c | `department-split` | RM-0100 | One act: a task on a document, or a stored one, and a subtask per chosen discipline, each with the parent's reviewer, all or none; `[[card.split]]` pre-selects and picks targets by kind, never refusing; `spec card split` and `--dry-run`, `split_card`, a hub's seventh plain write; one lazy dialog from the document, Flow's panel and a task; the preset's `sound`; plugin 0.37.0 (`docs/features/department-split.md`, `docs/canon/card-split.md`) | ADR-0078 `card-split` (supplements ADR-0056, ADR-0074, ADR-0076) | 10-15 | 4, 6 |
+| 6d | `task-mandate` | RM-0104 | A subtask binding, or its department decides: `mandate` on the card (queue schema 12, backup format 6), named at creation, changed by the reviewer alone; a binding departure goes up as a Return with a question, an open one's decision needs a why and shows on the parent; nothing reads it; plugin 0.38.0 | `card-mandate` (supplements ADR-0056, ADR-0074, ADR-0077) | 7-11 | 5, 6c |
+| gate | the pipeline trial | - | No code: the bar below | - | - | 1-6d |
 | 7 | `design-sweep` | RM-0099 | (a) Inbox, Questions, Spec tree, Overview; (b) Health, Graph, Roadmap, Tasks, on the foundation; the legacy tokens and step 1's exceptions gone | - | 8-14 | 1, gate |
 | 8 | `intake-similar` | RM-0059 | `similar` and `distinct_from` on create | - | 2-4 | - |
 | 9 | `collision-pass` | RM-0060 | Candidates, a pair ledger, a skill | - | 3-5 | 8 |
@@ -248,21 +250,27 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 11 | `pack` | RM-0061 | `spec init --pack`, a config proposal, a non-game preset | - | 3-5 | 4 |
 | 12 | `department-overview` | RM-0086 | Re-scoped: an Overview per department, counted by status category | - | 4-6 | 4, 5, 6 |
 | 13 | `hub-department` | RM-0089 | A hub login's default department, presentation only | maybe `hub-workspace` | 1-2 | 4, 11b-3 |
-| opt. | `journeys` | RM-0100 | One act hands a task to several departments, with a soft `after` | one, for the new key | 6-9 | 4, 6, gate |
+| pool | `upstream-signal` | RM-0105 | A subtask marked when its parent's goal, criteria or targets changed, or a decision on its targets was applied, after it was made; per read | - | 3-5 | 6c |
+| pool | `node-history` | RM-0035 | `spec show --history` from the apply trailers, a History part in the document view; out of RM-0056 | - | 4-6 | - |
+| pool | `direction-catalog` | RM-0106 | A direction as a table: title, revision, work state, open items, tasks, last change | - | 4-7 | 4, RM-0035 |
+| pool | `delivery-analytics` | RM-0107 | Created, taken, accepted against estimate and due; lateness with reasons; by release and department; RM-0087's timeline | - | 6-9 | 6 |
+| pool | `card-context` | RM-0108 | `get_card` with its targets' bundle, its parent's goal and its items' records, within a budget | - | 3-5 | 5 |
+| trigger | `code-languages` | RM-0109 | Markers and AST hashes in a second language, once a real project in it exists | one amending ADR-0010, ADR-0018, ADR-0020 | 6-10 | - |
 
 **Lanes.** Two lanes run side by side.
 - **The Rust lane** holds the cores of steps 2-5 (`in_flow` and `ancestors`, link ends' and gap members' titles, the department keys, the card's intake link), then steps 8 and 9.
-- **The UI lane** starts with step 1, then takes the UIs of steps 2-5, then steps 6, 6b and 7.
+- **The UI lane** starts with step 1, then takes the UIs of steps 2-5, then steps 6, 6b and 7. Steps 6c and 6d each run both lanes in parallel, the contract fixed by the spec.
 
 A slice's UI waits for its core and for step 1; no core waits for the UI lane. Steps 10-13 follow both lanes.
 
-**The pipeline trial** is the gate after steps 6 and 6b. It needs no code and replaces the studio trial (Q13). A person who did not write the project gets only the URL and one-line tasks, on a local daemon over a copy of a real corpus, with two departments configured (writers and developers). Unaided, they:
+**The pipeline trial** is the gate after steps 6 to 6d. It needs no code and replaces the studio trial (Q13). A person who did not write the project gets only the URL and one-line tasks, on a local daemon over a copy of a real corpus, with two departments configured (writers and developers). Unaided, they:
 1. find a named document by its path and read it in the modal;
-2. make a task on it and hand one subtask to each department;
-3. as the developer, send one subtask back with a question to the writers;
+2. split it to both departments in one act, a task on it and a subtask for each, one binding and one the department's to decide;
+3. as the developer, send the binding subtask back with a question to the writers;
 4. as a writer, answer with a decision, which then shows in the task's Activity with who decided and why (on a local daemon the answer is a stage there and its record comes from a terminal, ADR-0035);
-5. as the developer, take the subtask again and move it on; the reviewer accepts both subtasks, the parent shows "Ready to accept" and its bar, and the reviewer accepts the parent;
-6. switch the theme and the language, and switch them back.
+5. as the developer, record a decision on the other subtask, the department's to decide; as the writer, see it on the parent, under its subtasks' decisions;
+6. as the developer, take the returned subtask again and move it on; the reviewer accepts both subtasks, the parent shows "Ready to accept" and its bar, and the reviewer accepts the parent;
+7. switch the theme and the language, and switch them back.
 
 It is recorded as step 7e was: counts of actions, help requests and dead ends, plus each screen's look in both themes. `v5`'s own bar stays v4's: a writers' trial of at least a calendar week ("Only people can do" above).
 
@@ -287,6 +295,38 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 - **Anonymity.**
 - **Two stores on a hub.**
 - **Test churn.** Each slice lists the tests it replaces, and why.
+
+#### Owner's vision, 2026-11-11
+
+**His words**, written in chat in Russian; this is a paraphrase and translation.
+- **Top-down and spec first.** Work starts from the spec at the top, and a correction is made at the top first.
+- **Full documentation, with proofs.** The implementation, in Rust, Go or another language, is a second layer, chosen per project.
+- **A roadmap of delivered features:** where we are, how much is left, what took longer and why.
+- **A game-development catalog:** mechanics, items, sound, maps, each with its version and its fixes, who made them and when.
+- **One distributed app for every trade,** with departments, flows each project configures, and no shifting of responsibility.
+- **Documents indexed** as the AI's context.
+- **Code bound per language,** case by case.
+- **The target workflow.** A writer describes the game; it is split into subtasks per department; questions go back up; a task is either binding, or its department decides. His draft case: "a new female character", where the sound designer picks the voice.
+
+**The gap map** (the analyst's, 2026-11-11), each wish against what has shipped:
+
+| Wish | Shipped | Gap, item | Priority, hours |
+|---|---|---|---|
+| The workflow: split, then binding or the department's | hand-off by department (RM-0096), questions on a task (RM-0097), progress (RM-0098) | one act for every department: RM-0100 `department-split`, re-scoped; a mandate: RM-0104 `task-mandate` | must, 10-15; must, 7-11 |
+| Corrections at the top first | proposals, the trace's marks | a subtask sees its parent change: RM-0105 `upstream-signal` | should, 3-5 |
+| The catalog | directions (RM-0096), revisions | a node's history: RM-0035 `node-history`, out of RM-0056; a direction's table: RM-0106 `direction-catalog` | should, 4-6; should, 4-7 |
+| The roadmap of delivered features | `spec roadmap`, the Roadmap screen | delivery against estimate, and why: RM-0107 `delivery-analytics`, taking RM-0087's timeline | should, 6-9 |
+| Documents for the AI's context | the index, the bundle, MCP | a task read with its context: RM-0108 `card-context` | should, 3-5 |
+| Code per language | Rust, tree-sitter and markers (ADR-0010, ADR-0020) | a second language: RM-0109 `code-languages`, an ADR amending ADR-0010, ADR-0018 and ADR-0020, on a real project's trigger | could, 6-10 |
+| Proofs, departments, one app | decision records, `why`, the hub, workspaces | none | - |
+
+**Working answers taken**, the analyst's recommendations; the owner did not answer, and his review is open:
+- templates are `[[card.split]]` rows under `[card]`, which only pre-select;
+- a subtask targets its rows' kinds' nodes, else the document;
+- the mandate is the next slice, not the split's;
+- two slices, then one hub upgrade after both. The live hub runs `v0.36.0` at queue schema 11, where the departments' config works; the mandate takes schema 12.
+
+**Order.** Step 6b `room-and-scroll`, then 6c `department-split`, then 6d `task-mandate`, then the pipeline trial: its step 2 becomes one act, and it gains a step where the writer sees an open subtask's decision on the parent. The `should` items follow the trial in the pool, and `code-languages` waits for its trigger.
 
 ## 3. Product acceptance criteria
 

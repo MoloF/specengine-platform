@@ -84,3 +84,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0075](decisions/ADR-0075.md) A card links T- tasks on its own row; the link and a task's state decide nothing; local only · architecture · accepted
 - [ADR-0076](decisions/ADR-0076.md) A department is a workspace in the owner's words; a module may be a kinds direction; a hand-off names a department · architecture · accepted
 - [ADR-0077](decisions/ADR-0077.md) A question, discrepancy or decision may name a card, raised from it on the page; the link decides nothing · architecture · accepted
+- [ADR-0078](decisions/ADR-0078.md) A split makes a task and a subtask per discipline in one act; `[[card.split]]` only pre-selects · architecture · accepted
