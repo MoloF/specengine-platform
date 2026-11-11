@@ -1,7 +1,7 @@
 import { FIT_MARGIN, FIT_MAX_ZOOM, type FitViewport } from "../graph/geometry";
 
 // The Flow's drawing geometry (`docs/canon/spec-flow-layout.md` "Layout"; docs/features/handoff-progress.md
-// "Acceptance criteria", F-4, C-1): pure numbers, no drawing library. The walk runs left to right: a
+// "Acceptance criteria", F-4): pure numbers, no drawing library. The walk runs left to right: a
 // forward edge is horizontal runs joined by S-curves in the gaps between columns; an arc is an
 // orthogonal line with rounded corners, through the gaps and along its track below the walk; a loop
 // stays under its box. Each keeps the points it passes, so "crosses no box" can be checked on them.
@@ -14,13 +14,6 @@ export const FLOW_FIT_MIN_ZOOM = 0.92;
 
 /** Flow's own pinch floor: the owner may zoom out to half, never further (Graph keeps its 0.1). */
 export const FLOW_PINCH_MIN_ZOOM = 0.5;
-
-/**
- * How far a press may move between down and up and still be a click, in px: past it, it pans. A box
- * takes no `nopan`, so a drag that starts on one still pans (docs/features/handoff-progress.md
- * "Acceptance criteria", C-1). React Flow's own default, 1 px, takes a hand's tremor for a pan.
- */
-export const FLOW_CLICK_DISTANCE = 5;
 
 export interface Point {
   x: number;

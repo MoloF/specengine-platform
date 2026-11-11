@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # The Flow screen: layout and forms
 
-How a flow read is placed and how its edges are drawn; `flow-canvas`, `flow-scenario`, `handoff-progress` (left to right again, the owner's look closing 08's v5 Q14), `room-and-scroll` (the room, the selection's look), code `ui/src/flow/layout.ts`, `geometry.ts`, `FlowCanvas.tsx`, `FlowLegend.tsx`, `labels.ts`. The screen around it: `spec-flow-screen.md`.
+How a flow read is placed and how its edges are drawn; `flow-canvas`, `flow-scenario`, `handoff-progress` (left to right again, the owner's look closing 08's v5 Q14), `room-and-scroll` (the room, the selection's look), `canvas-clicks` (Clicks on Graph and the Chain too), code `ui/src/flow/layout.ts`, `geometry.ts`, `FlowCanvas.tsx`, `FlowLegend.tsx`, `labels.ts`. The screen around it: `spec-flow-screen.md`.
 
 ## Layout
 
@@ -21,7 +21,7 @@ How a flow read is placed and how its edges are drawn; `flow-canvas`, `flow-scen
 - **The band.** `distance` null: definitions, unreached steps, a part linked to the flow that no step of this picture reaches, children entered from outside, whom the read's own walk does not reach, so the caption is true to the read. Below the lowest arc track and the trunks, captioned `flow.offWalk` with its count and `flow.offWalkAbout` (at least 320 px, `BAND_CAPTION_WIDTH`, the caption clamped to it), wrapped at the walk's width or four boxes, whichever is wider; edges to one band box share a trunk by (target, type, kind); linked neighbours take a direct line.
 - **Off the walk.** An edge with an end whose `distance` is null is drawn only while one of its ends, or the edge itself, is selected (the List, a gap item and the hash select too); Esc's clear hides it again.
 - **Stacking and view.** Node types: a box, the band's caption, a divider; stacking is manual, edges under boxes. A picture fits once, when its read lands; then only the owner, `c` and a gap activation move it. The fit (`fitOf`) takes the lesser of the two sides' ratios, at most 100 %, at least `FLOW_FIT_MIN_ZOOM` 0.92, so a title renders at 12.9 px or more, centred on a side it fits, at the margin on one it overflows: a long walk lands at 0.92 from its first column and is panned, never shrunk. A pinch goes down to `FLOW_PINCH_MIN_ZOOM` 0.5; Graph keeps its own 0.6 and 0.1. The canvas fills the studio's centre pane; the wheel pans it, a pinch or the zoom key zooms it, and a selection moves nothing; the minimap, bottom-left, shows only while the picture is not whole in view.
-- **Clicks.** A press moving at most `FLOW_CLICK_DISTANCE` 5 px before its release is a click (`paneClickDistance`); past it, a pan that selects nothing. Boxes take no `nopan`, so a drag starting on one pans. The minimap (`.flow-canvas .react-flow__minimap`, not pannable or zoomable) and the words-only nodes, dividers and the band's caption (`WORDS_ONLY`'s inline `pointer-events: none` over xyflow's `all`), take no pointer: a box under them takes its click. A press moves nothing: `onFocus` centres a box not wholly in view only when its focus is `:focus-visible` (Tab, the arrows, Space's first box); a mouse, touch or pen press never moves the view.
+- **Clicks**, on every canvas. A press moving at most `CLICK_DISTANCE` 5 px before its release is a click (`paneClickDistance`); past it, a pan that selects nothing. The one constant is `ui/src/graph/geometry.ts`'s, passed by Flow's `FlowCanvas`, Graph's `GraphCanvas` and Roadmap's `RoadmapChain`. Boxes take no `nopan`, so a drag starting on one pans. No minimap pans, zooms or takes the pointer (`.graph-canvas .react-flow__minimap` `pointer-events: none`, every canvas's wrapper carrying `.graph-canvas`; Flow's own `.flow-canvas` declaration kept; the Chain draws none), nor do Flow's words-only nodes, dividers and band caption (`WORDS_ONLY`'s inline `pointer-events: none` over xyflow's `all`): a box under them takes its click. A press moves nothing: Flow's and Graph's `onFocus` centres a box not wholly in view only when its focus is `:focus-visible` (Tab, the arrows, the first box after Flow's Space into a group); a mouse, touch or pen press never moves the view, Graph's still roving its tab stop. The Chain's boxes take no focus.
 
 ## Forms
 
@@ -37,7 +37,7 @@ How a flow read is placed and how its edges are drawn; `flow-canvas`, `flow-scen
 ## Known limits
 
 - A band edge's gutter line crosses the band's caption.
-- Graph and Roadmap keep xyflow's 1 px press and their minimaps take the pointer: a short move there pans (RM-0103).
+- A mouse Close of Graph's details focuses its box from script, not `:focus-visible`, so a box out of view is not centred; Flow's panel does the same.
 - **Columns in view.** At 1440 with both panes the canvas is 567 px: about 2.2 pitches at 0.92, two columns whole and a third begun, the trade-off for the room the owner asked for. More needs narrower boxes, a lower floor or a collapsible pane: the owner's call.
 - Faded lines fall under 3:1 against the canvas by design: the lit ones carry the meaning, faded words stay at `--text-subtlest`. In dark the accent sits near `--flow-edge-0`; its width and the fade tell them apart.
 - A selected end box loses its double border to the selection's 2 px; its End mark and the Selected tab still say it.

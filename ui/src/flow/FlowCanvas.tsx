@@ -17,6 +17,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { CLICK_DISTANCE } from "../graph/geometry";
 import { HANDLE_SIZE } from "../graph/layout";
 import { useTranslate, type Translate } from "../i18n";
 import { TraceBar } from "../trace/TraceBar";
@@ -24,7 +25,7 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { focusIsLost } from "../ui/focus";
 import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
-import { durationOf, EDGE_HIT, fitOf, FLOW_CLICK_DISTANCE, FLOW_PINCH_MIN_ZOOM, inView, type Rect } from "./geometry";
+import { durationOf, EDGE_HIT, fitOf, FLOW_PINCH_MIN_ZOOM, inView, type Rect } from "./geometry";
 import { boxWords, countsText, dashOf, dividerWords, edgeName, edgeShownWords, gapMark, holdsText, isNoCard, isRepeat, rollupLook, startWord, typeColour, type GapMark } from "./labels";
 import { BAND_CAPTION_WIDTH, boxAfterKey, isGroup, LANE_PAD, type FlowBox, type FlowDivider, type FlowLane, type FlowLayout, type LaidEdge } from "./layout";
 
@@ -680,7 +681,7 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
         defaultMarkerColor={null}
         minZoom={FLOW_PINCH_MIN_ZOOM}
         maxZoom={2}
-        paneClickDistance={FLOW_CLICK_DISTANCE}
+        paneClickDistance={CLICK_DISTANCE}
         onMoveStart={(event) => {
           if (event !== null) {
             touched.current = true;

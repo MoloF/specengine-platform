@@ -82,7 +82,15 @@ export function loadLanguage(language: Language): Promise<boolean> {
   if (language === "en") {
     return Promise.resolve(true);
   }
-  russian ??= import("./ru").then(
+  if (russian !== null) {
+    return russian;
+  }
+  // The bare import, its handlers chained on its result: Vite moves a `.then` written on `import()`
+  // inside its preload wrapper, where this failure handler would swallow the rejection before the
+  // wrapper dispatches `vite:preloadError`, and a Russian chunk gone after a redeploy would never
+  // reload the page (docs/features/canvas-clicks.md "Acceptance criteria", CK7).
+  const chunk = import("./ru");
+  russian = chunk.then(
     (module) => {
       instance.addResourceBundle("ru", "translation", module.ru, true, true);
       loaded.add("ru");

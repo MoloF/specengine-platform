@@ -21,7 +21,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/canvas-clicks.md](features/canvas-clicks.md) canvas-clicks: Graph and Roadmap keep their clicks, and a lazy route survives a redeploy (RM-0103) · ui · draft
 - [docs/features/design-sweep.md](features/design-sweep.md) design-sweep: the legacy names gone, the guards closed, Inbox, Questions and the Spec tree on the primitives (RM-0099 a) · ui · draft
 - [docs/features/intake-similar.md](features/intake-similar.md) intake-similar: a create lists what it may repeat, and an exact twin waits to be named (RM-0059) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-eval, plugin, scripts, fixtures, ui · draft
 - [docs/features/node-history.md](features/node-history.md) node-history: a node's changes, who made them and when, on the CLI, over MCP and in the document view (RM-0035) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin, scripts, fixtures, ui · draft

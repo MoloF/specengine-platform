@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import baseCss from "@xyflow/react/dist/base.css?raw";
 import appCss from "../styles/app.css?raw";
 import tokensCss from "../styles/tokens.css?raw";
+import graphCanvas from "./GraphCanvas.tsx?raw";
 
 // AC-12 of docs/features/ui-graph.md: React Flow's base.css only, never style.css; each
 // `--xy-<name>-default` base.css declares has `--xy-<name>` set to a tokens.css role in app.css;
@@ -55,6 +56,48 @@ describe("React Flow's styles (AC-12)", () => {
     expect(imports("/src/main.tsx")).toContain("@xyflow/react/dist/base.css");
     for (const [path, text] of Object.entries(sources)) {
       expect([path, /@xyflow\/react\/dist\/style\.css/.test(text) && !path.endsWith(".test.ts")]).toEqual([path, false]);
+    }
+  });
+});
+
+/** The file's top-level rules, comments dropped: an at-rule's block (`@media` and the like) and the rules inside it left out. */
+function topLevelRules(css: string): { selector: string; body: string }[] {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const found: { selector: string; body: string }[] = [];
+  let at = 0;
+  while (at < text.length) {
+    const open = text.indexOf("{", at);
+    if (open < 0) {
+      break;
+    }
+    const head = text.slice(at, open).trim();
+    let depth = 1;
+    let close = open + 1;
+    for (; close < text.length && depth > 0; close += 1) {
+      depth += text[close] === "{" ? 1 : text[close] === "}" ? -1 : 0;
+    }
+    if (!head.startsWith("@")) {
+      found.push({ selector: head, body: text.slice(open + 1, close - 1) });
+    }
+    at = close;
+  }
+  return found;
+}
+
+// docs/features/canvas-clicks.md "Acceptance criteria", CK4: no canvas's minimap pans or zooms, so the
+// rule every canvas wrapper (`.graph-canvas`) shares lets the pointer through to the box under it.
+describe("the minimap takes no pointer (CK4)", () => {
+  it("holds `pointer-events: none` in the one top-level `.graph-canvas .react-flow__minimap` rule; Graph's minimap neither pans nor zooms", () => {
+    const rules = topLevelRules(appCss).filter((rule) => rule.selector.split(",").some((part) => part.trim() === ".graph-canvas .react-flow__minimap"));
+    expect(rules).toHaveLength(1);
+    // M: the declaration dropped.
+    expect(rules[0]?.body).toMatch(/(^|;)\s*pointer-events:\s*none;/);
+    expect(graphCanvas).toContain("<MiniMap pannable={false} zoomable={false} />");
+  });
+
+  it("puts every canvas inside a `.graph-canvas` wrapper, so the rule reaches each", () => {
+    for (const path of ["/src/graph/GraphCanvas.tsx", "/src/flow/FlowCanvas.tsx", "/src/roadmap/RoadmapChain.tsx"]) {
+      expect([path, /className="graph-canvas( [^"]*)?"/.test(sources[path] ?? "")]).toEqual([path, true]);
     }
   });
 });

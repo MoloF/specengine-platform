@@ -2601,10 +2601,13 @@ mark {
   opacity: 0.5;
 }
 
+/* No canvas's minimap pans or zooms, so it takes no pointer: a box under it takes its click
+   (docs/features/canvas-clicks.md "Acceptance criteria", CK4). */
 .graph-canvas .react-flow__minimap {
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
+  pointer-events: none;
 }
 
 .graph-details {

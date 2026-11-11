@@ -20,7 +20,7 @@ import {
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useId, useMemo, useRef } from "react";
 import type { RoadmapDocument } from "../api/types";
-import { arcOver, readableViewport } from "../graph/geometry";
+import { arcOver, CLICK_DISTANCE, readableViewport } from "../graph/geometry";
 import { BOX_HANDLES, BOX_HEIGHT, BOX_WIDTH, HANDLE_SIZE } from "../graph/layout";
 import { taskStatusLook } from "../tasks/labels";
 import { Icon } from "../ui/Icon";
@@ -359,6 +359,7 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
         defaultMarkerColor={null}
         minZoom={0.1}
         maxZoom={2}
+        paneClickDistance={CLICK_DISTANCE}
         onNodeClick={(_event, node) => {
           if (node.type === "item") {
             onSelect(node.data.box.item.id);

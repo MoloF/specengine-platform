@@ -7,12 +7,15 @@
 // Russian's chunk lands or the wait runs out (docs/canon/ui-languages.md "Catalog"), so a local
 // daemon's page never flashes English. The viewer's theme is applied before the root is made, so the
 // first render is already in it (docs/features/design-foundation.md "Themes"); Inter's faces come
-// before the tokens that name it.
+// before the tokens that name it. A lazy chunk gone after a redeploy reloads the page once per build,
+// installed before the language's chunk is asked for (docs/features/canvas-clicks.md
+// "Acceptance criteria", CK7).
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import type { SpecEngineClient } from "./api/client";
 import { HttpClient } from "./api/http";
 import { App } from "./app/App";
+import { installReload } from "./app/reload";
 import { applyTheme, storedTheme } from "./app/theme";
 import { readyLanguage, useTranslate } from "./i18n";
 import { fill, slot } from "./i18n/fill";
@@ -81,4 +84,10 @@ function boot() {
   }
 }
 
+installReload(window, import.meta.url, {
+  storage: () => window.sessionStorage,
+  reload: () => {
+    window.location.reload();
+  },
+});
 void readyLanguage().then(boot);

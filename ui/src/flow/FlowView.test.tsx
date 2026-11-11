@@ -5,6 +5,7 @@ import type { FlowEdge, FlowNode, FlowView as FlowAnswer, QueueEvent, TraceCount
 import { aCardWrite, aFlowEdge, aFlowGap, aFlowNode, aFlowView, aTreeNode, tenGapRows } from "../test/builders";
 import { ASIDE, asideClient, asideFiring, asideLens, OPEN_DAY } from "../test/asideStub";
 import { studioClient, TYPE_A, TYPE_B, type StudioReads } from "../test/flowStub";
+import { mouse, pointer, pressAndMove, stubCanvas, stubFocusVisible, viewOf } from "../test/press";
 import { renderApp } from "../test/render";
 import { enT } from "../test/text";
 import { focusables } from "../ui/Dialog";
@@ -625,63 +626,6 @@ describe("landmarks and keys (ST-10)", () => {
 
 // docs/features/handoff-progress.md "Acceptance criteria", C-1, C-3, C-4: no click lost on Flow.
 describe("clicks on Flow (C-1, C-3, C-4)", () => {
-  /** The canvas's pan and zoom, from the viewport's transform. */
-  function viewOf(): string {
-    return document.querySelector<HTMLElement>(".react-flow__viewport")?.style.transform ?? "";
-  }
-
-  /**
-   * A mouse or pointer event with the window as its `view`, as a browser sends it: d3-zoom follows a
-   * press on its event's `view`. jsdom's event constructors refuse this test run's window there, so
-   * the property is set on the event made without it.
-   */
-  function withView<T extends Event>(event: T): T {
-    Object.defineProperty(event, "view", { value: document.defaultView });
-    return event;
-  }
-
-  function mouse(target: Element, type: string, x: number, y: number) {
-    fireEvent(target, withView(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })));
-  }
-
-  /** A mouse press on `target` at (100, 100), a move by (dx, dy), its release and its click. */
-  function pressAndMove(target: HTMLElement, dx: number, dy: number) {
-    mouse(target, "mousedown", 100, 100);
-    mouse(target, "mousemove", 100 + dx, 100 + dy);
-    mouse(target, "mouseup", 100 + dx, 100 + dy);
-    mouse(target, "click", 100 + dx, 100 + dy);
-  }
-
-  /** React Flow's zoom pane measured `width` x `height`, as a browser lays it out; every other element measures 0, as jsdom does. */
-  function stubCanvas(width: number, height: number): () => void {
-    const before = {
-      width: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth"),
-      height: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight"),
-    };
-    Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-      configurable: true,
-      get(this: HTMLElement) {
-        return this.classList.contains("react-flow__renderer") ? width : 0;
-      },
-    });
-    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-      configurable: true,
-      get(this: HTMLElement) {
-        return this.classList.contains("react-flow__renderer") ? height : 0;
-      },
-    });
-    return () => {
-      for (const [name, descriptor] of [
-        ["offsetWidth", before.width],
-        ["offsetHeight", before.height],
-      ] as const) {
-        if (descriptor !== undefined) {
-          Object.defineProperty(HTMLElement.prototype, name, descriptor);
-        }
-      }
-    };
-  }
-
   it("takes a press that moves 3 px for a click, box after box; one that moves 8 px pans and selects nothing (C-1)", async () => {
     renderApp(studioClient(reads()), "#/alpha/flow");
     await drawn("E");
@@ -709,11 +653,7 @@ describe("clicks on Flow (C-1, C-3, C-4)", () => {
   it("moves nothing on a focus that is not :focus-visible, a mouse's, a touch's or a pen's; a keyboard focus on a box out of view centres it (C-3)", async () => {
     const restore = stubCanvas(400, 500);
     // jsdom never matches :focus-visible; a browser does for a focus that came from the keyboard.
-    let keyboard = false;
-    const own = Object.getOwnPropertyDescriptor(Element.prototype, "matches")?.value as (this: Element, selector: string) => boolean;
-    const spy = vi.spyOn(Element.prototype, "matches").mockImplementation(function (this: Element, selector: string) {
-      return selector === ":focus-visible" ? keyboard && this === document.activeElement : own.call(this, selector);
-    });
+    const focus = stubFocusVisible();
     try {
       renderApp(studioClient(reads()), "#/alpha/flow");
       await drawn("E");
@@ -724,22 +664,22 @@ describe("clicks on Flow (C-1, C-3, C-4)", () => {
       // B, the second column, stands across the canvas's right edge at the fit.
       const target = box("B");
       // A mouse press: pointerdown, the focus it brings, pointerup, click. M: centring on every focus.
-      fireEvent(target, withView(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 })));
+      pointer(target, "pointerdown");
       act(() => {
         target.focus();
       });
-      fireEvent(target, withView(new PointerEvent("pointerup", { bubbles: true, cancelable: true, button: 0 })));
+      pointer(target, "pointerup");
       mouse(target, "click", 100, 100);
       expect(window.location.hash).toBe("#/alpha/flow/B");
       expect(viewOf()).toBe(view);
       // A touch tap focuses after its pointerup: still not :focus-visible, still nothing moves.
-      fireEvent(box("E"), withView(new PointerEvent("pointerup", { bubbles: true, cancelable: true, button: 0, pointerType: "touch" })));
+      pointer(box("E"), "pointerup", "touch");
       act(() => {
         box("E").focus();
       });
       expect(viewOf()).toBe(view);
       // Tab to A, then Right to B: a keyboard focus, out of view, so centred as before.
-      keyboard = true;
+      focus.keyboard = true;
       act(() => {
         box("A").focus();
       });
@@ -749,7 +689,7 @@ describe("clicks on Flow (C-1, C-3, C-4)", () => {
         expect(viewOf()).not.toBe(view);
       });
     } finally {
-      spy.mockRestore();
+      focus.restore();
       restore();
     }
   });

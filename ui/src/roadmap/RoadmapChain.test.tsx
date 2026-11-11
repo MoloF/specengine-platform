@@ -4,6 +4,7 @@ import type { RoadmapItem } from "../api/types";
 import { CANVAS_LIMIT } from "../graph/layout";
 import { aRoadmap, aRoadmapGroup, aRoadmapItem } from "../test/builders";
 import { renderApp } from "../test/render";
+import { pressAndMove, viewOf } from "../test/press";
 import { aPlan, roadmapClient } from "../test/roadmapStub";
 import { chainOf } from "./chain";
 
@@ -193,6 +194,37 @@ describe("the canvas is the Lanes tab's twin (UI-4)", () => {
     expect(box("RM-0017").getAttribute("aria-label")).toBe(
       "RM-0017, Save and load, agent task T-0001 Draft, agent task T-0002 Analysis, agent task T-0003 Plan review, agent task T-0004 Changes requested, agent task T-0005 Ready",
     );
+  });
+});
+
+// docs/features/canvas-clicks.md "Acceptance criteria", CK2: a press that moves a few px is still a
+// click (its view set, as d3-zoom needs; test/press.ts); past the click distance it pans.
+describe("a slight move is a click on the Chain (CK2)", () => {
+  it("takes a press that moves 3 px for a click, box after box; one that moves 8 px pans and selects nothing (CK2)", async () => {
+    await openChain();
+    await drawn();
+    // M: `paneClickDistance` removed from RoadmapChain; at React Flow's 1 px the 3 px press selects nothing.
+    pressAndMove(box("RM-0011"), 3, 1);
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/roadmap/RM-0011");
+    });
+    pressAndMove(box("RM-0022"), 3, 1);
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/roadmap/RM-0022");
+    });
+    await waitFor(() => {
+      expect(box("RM-0022").querySelector(".chain-box")?.className).toContain("is-selected");
+    });
+    const entries = window.history.length;
+    const still = viewOf();
+    pressAndMove(box("RM-0010"), 8, 0);
+    expect(viewOf()).not.toBe(still);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(window.location.hash).toBe("#/alpha/roadmap/RM-0022");
+    expect(window.history.length).toBe(entries);
+    expect(box("RM-0010").querySelector(".is-selected")).toBeNull();
   });
 });
 

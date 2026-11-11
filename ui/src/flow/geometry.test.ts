@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { FIT_MARGIN } from "../graph/geometry";
-import { curveMiddle, curvePath, curvePoints, durationOf, EDGE_HIT, fitOf, FLOW_CLICK_DISTANCE, FLOW_FIT_MIN_ZOOM, inView, loopPath, LOOP_DEPTH, pointInside, roundedPath, stretchCrosses } from "./geometry";
+import { curveMiddle, curvePath, curvePoints, durationOf, EDGE_HIT, fitOf, FLOW_FIT_MIN_ZOOM, inView, loopPath, LOOP_DEPTH, pointInside, roundedPath, stretchCrosses } from "./geometry";
 
 // The Flow's drawing geometry (docs/features/flow-canvas.md "Layout"; docs/features/handoff-progress.md
-// "Acceptance criteria", F-4 and C-1): pure numbers.
+// "Acceptance criteria", F-4): pure numbers.
 
 describe("a forward edge's path", () => {
   it("is straight when its runs share a height, an S-curve when they do not", () => {
@@ -136,10 +136,6 @@ describe("the view", () => {
     it("gives no fit on a canvas with no size", () => {
       expect(fitOf({ width: 900, height: 400 }, 0, 0)).toBeNull();
     });
-  });
-
-  it("takes a press that moves 5 px or less for a click (C-1)", () => {
-    expect(FLOW_CLICK_DISTANCE).toBe(5);
   });
 
   it("gives an arrow a 12 px band to click (writer-studio D8)", () => {

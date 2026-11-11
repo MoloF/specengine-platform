@@ -25,7 +25,7 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { linkStateLook } from "../tree/labels";
-import { arcOver, readableViewport } from "./geometry";
+import { arcOver, CLICK_DISTANCE, readableViewport } from "./geometry";
 import { BOX_HANDLES, BOX_HEIGHT, BOX_WIDTH, HANDLE_SIZE, patternAt, type Layout, type LayoutBox, type LayoutEdge } from "./layout";
 import { boxLabel, edgeLabel, isArchived, moreLabel } from "./lines";
 import { useTranslate, type Translate } from "../i18n";
@@ -421,7 +421,12 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
     focusRef(focusBox);
   }, [focusRef, focusBox]);
 
-  /** A focused box out of sight is centred at the current zoom. */
+  /**
+   * A focused box takes the tab stop. One focused from the keyboard (`:focus-visible`), out of sight,
+   * is centred at the current zoom; a mouse, touch or pen press focuses without it and moves nothing,
+   * so the box stays under the pointer for its click (docs/features/canvas-clicks.md
+   * "Acceptance criteria", CK5).
+   */
   function onFocus(event: FocusEvent<HTMLDivElement>) {
     const element = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>(".react-flow__node") : null;
     const id = element?.dataset.id;
@@ -431,6 +436,9 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
     }
     if (id !== rovingId) {
       onRove(id);
+    }
+    if (!(event.target instanceof Element) || !event.target.matches(":focus-visible")) {
+      return;
     }
     const { transform, width, height } = store.getState();
     const [tx, ty, zoom] = transform;
@@ -501,6 +509,7 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
         defaultMarkerColor={null}
         minZoom={0.1}
         maxZoom={2}
+        paneClickDistance={CLICK_DISTANCE}
         onNodeClick={(_event, node) => {
           onRove(node.id);
           onSelect(node.id);

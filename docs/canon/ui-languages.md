@@ -22,7 +22,7 @@ Every chrome string is a key of one catalog, `ui/src/i18n/`: English, `en.ts`, t
 - **Values**: plain text, `{{name}}` placeholders, `{{count}}` in every plural form and nowhere else; no markup, `$t(` or format; a command to copy is code. Key caps (`Esc`, `Enter`, `Cmd-K`, letters) match in both; the arrows and Space are words, translated. Two counts on one line are two plural groups joined by a third key.
 - **Elements**: `fill(t(key, {link: slot("link")}), {link: <a/>})` places a React node at each slot of the translated text; never markup. `around(text, value)` cuts a translated sentence at the first `value`, so a count is drawn on its own and the words around it read out: the count's placeholder comes first in every form of both languages, no digit before it, and every key a view cuts is in `catalog.test.ts` `AROUND`.
 - **Instance**: one, initialised synchronously at the first import (`initAsync: false`) with English only, `lng: "en"`, both `supportedLngs`; `fallbackLng: "en"`, silent; `escapeValue: false` (React escapes), `skipOnVariables: true`; no backend, detector, `Trans` or `saveMissing`. English loads with the page.
-- **Russian, a chunk of its own** (`ru-*.js`): reached only by `index.ts`'s one `import("./ru")`, memoised, joined by `addResourceBundle`. `loadLanguage(l)`: English at once; Russian imported once per page; resolves whether it is ready, never rejects; after a failure the next call imports again. `readyLanguage()`, the page's gate, chained by `main.tsx` with `.then` (never a top-level `await`), never rejects: an English start renders at once and imports nothing; a Russian start leaves the root empty until the chunk lands, then renders Russian, or after `LANGUAGE_WAIT_MS` (2 000 ms) renders English and turns Russian when the chunk lands, unless the viewer chose meanwhile: the last choice wins. A failed chunk leaves English, the stored choice and `language.failed`. The language switches only once its catalog is in, never to Russian keys reading English.
+- **Russian, a chunk of its own** (`ru-*.js`): reached only by `index.ts`'s one `import("./ru")`, joined by `addResourceBundle`. `loadLanguage(l)`: English at once; Russian imported once per page; resolves whether it is ready, never rejects; after a failure the next call imports again. `readyLanguage()`, the page's gate, chained by `main.tsx` with `.then` (never a top-level `await`), never rejects: an English start renders at once and imports nothing; a Russian start leaves the root empty until the chunk lands, then renders Russian, or after `LANGUAGE_WAIT_MS` (2 000 ms) renders English and turns Russian when the chunk lands, unless the viewer chose meanwhile: the last choice wins. A failed chunk leaves English, the stored choice and `language.failed`. The language switches only once its catalog is in, never to Russian keys reading English.
 - **Reading**: nothing resolves at module load. A component reads `useTranslate()`, any other module takes a `Translate` (`taskStatusLook(status, t)`, `roadmap/text.ts`), a class component its wrapper's; a switch re-renders, remounting nothing. `switchLanguage` (a loaded language; stores nothing) and `translateIn` (a fixed `t`) are for the select and tests only.
 
 ## Choice
@@ -31,7 +31,7 @@ Every chrome string is a key of one catalog, `ui/src/i18n/`: English, `en.ts`, t
 
 ## Switcher
 
-A Language select in the shell's header beside Department, each option under its `lang` and named in its own language by `languageName(l)`: `Intl.DisplayNames([l], {type: "language"})`, its first letter upper-cased, else the code, so Russian reads right before its chunk loads. A choice is stored and, its catalog in, applies at once: no request, focus, view state and query data kept. Not in yet: the page keeps its language and `lang`, the select shows the choice with `aria-busy`, and it applies when the chunk lands. A failed chunk: English stays, and `language.failed` shows under the select as `role="status"` until the next choice, which imports again. The root error page (`RootFailure`) has none.
+A Language select in the shell's header beside Department, each option under its `lang` and named in its own language by `languageName(l)`: `Intl.DisplayNames([l], {type: "language"})`, its first letter upper-cased, else the code, so Russian reads right before its chunk loads. A choice is stored and, its catalog in, applies at once: no request, focus, view state and query data kept. Not in yet: the page keeps its language and `lang`, the select shows the choice with `aria-busy`, and it applies when the chunk lands. A failed chunk first reloads the page, once per build ("Size"); then English stays, and `language.failed` shows under the select as `role="status"` until the next choice, which imports again. The root error page (`RootFailure`) has none.
 
 ## Served text
 
@@ -43,11 +43,11 @@ Byte for byte in either language: the daemon's `message`, notes, `reason`, gap `
 
 ## Dates and counts
 
-Plural forms by `Intl.PluralRules` (Russian 1, 21 `one`; 2-4 `few`; 0, 5-20 `many`), numbers ungrouped. `ui/time.ts` `formatUtc(stored, t)` fills `ui.time.stamp` from `Intl.DateTimeFormat("en-US", {timeZone: "UTC", hourCycle: "h23", …})` parts: `2026-10-05 21:14 UTC`, Russian `05.10.2026 21:14 UTC`, unparsable raw. `formatAge(stored, now, t)`: plural keys. An English `_one` reads right at 1 ("1 link not shown"; RM-0091, `i18n/plural.test.ts`).
+Plural forms by `Intl.PluralRules` (Russian 1, 21 `one`; 2-4 `few`; 0, 5-20 `many`), numbers ungrouped. `ui/time.ts` `formatUtc(stored, t)` fills `ui.time.stamp` from `Intl.DateTimeFormat("en-US", {timeZone: "UTC", hourCycle: "h23", …})` parts: `2026-10-05 21:14 UTC`, Russian `05.10.2026 21:14 UTC`, unparsable raw. `formatAge(stored, now, t)`: plural keys. An English `_one` reads right at 1 ("1 link not shown", `i18n/plural.test.ts`).
 
 ## Converted
 
-Every screen: Home, Inbox, Tasks, Board, Roadmap, Spec tree, Graph, Health, Questions and Flow, its panel's `tree/LinksPanel.tsx` and `trace/CardsBlock.tsx` too. Every `src/` directory but `api/`, `i18n/`, `mocks/`, `styles/` and `test/` is scanned (`policy.test.ts` `NOT_SCANNED`); a new directory is scanned from the start, and a slice keys its new strings. A line built in the CLI's form (Roadmap's header, a revision line) translates its words and keeps its IDs, numbers and `->`. `src/api/http.ts`'s transport messages stay English, shown as error text under `lang="en"`.
+Every screen and panel. Every `src/` directory but `api/`, `i18n/`, `mocks/`, `styles/` and `test/` is scanned (`policy.test.ts` `NOT_SCANNED`); a new directory is scanned from the start, and a slice keys its new strings. A line built in the CLI's form (Roadmap's header, a revision line) translates its words and keeps its IDs, numbers and `->`. `src/api/http.ts`'s transport messages stay English, shown as error text under `lang="en"`.
 
 ## Guards
 
@@ -58,9 +58,11 @@ Every screen: Home, Inbox, Tasks, Board, Roadmap, Spec tree, Graph, Health, Ques
 
 ## Size
 
-The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus every `<link rel="modulepreload">` it lists, raw bytes on disk, as the daemon sends them (no `content-encoding`, `serve-ui.md`). Each UI slice prints it in its "Implementation" with the first-load gzip (Vite's per-chunk figures, summed) and `ru-*.js` raw and gzip, for a hub behind a compressing proxy. Baseline, 2026-11-09 (RM-0090): 768.96 kB (768 959 B: `index-*.js` 622.62, `Icon-*.js` 140.15 holding i18next and English, four small chunks), gzip 219.15 kB; `ru-*.js` 134.98 kB, gzip 31.13 kB.
+The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus every `<link rel="modulepreload">` it lists, raw bytes on disk, as the daemon sends them (no `content-encoding`, `serve-ui.md`). Each UI slice prints it in its "Implementation" with the first-load gzip (Vite's per-chunk figures, summed) and `ru-*.js` raw and gzip, for a hub behind a compressing proxy. Baseline, 2026-11-09 (RM-0090): 768.96 kB (`Icon-*.js` holding i18next and English), gzip 219.15 kB; `ru-*.js` 134.98 kB, gzip 31.13 kB.
 
-**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a screen or part out of first load (a lazy chunk, as `HealthRegions`, `RoundScreen`, `Markdown` and `DocBody` are) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's 500 kB warning on `index-*.js` is not the gate. At RM-0104, 823.45 kB (gzip 237.96), the lazy `CardItems` 11.95 kB and `SplitDialog` 8.02 kB, `ru-*.js` 152.30 kB; at RM-0100, 818.68 kB (gzip 236.59); at RM-0098, 815.11 kB, from 840.79 at RM-0097, `RoadmapView` (12.68 kB) and `GraphView` (24.38 kB) made lazy.
+**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a screen or part out of first load (a lazy chunk, as `HealthRegions`, `RoundScreen`, `Markdown`, `DocBody`, `RoadmapView` and `GraphView` are) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's 500 kB warning on `index-*.js` is not the gate. At RM-0103, 823.88 kB (gzip 238.09), `ru-*.js` 152.30 kB (gzip 35.12).
+
+**Reload.** A page open across a redeploy asks for lazy chunks that are gone, and `React.lazy` keeps the failure. `app/reload.ts`, installed by `main.tsx` before `readyLanguage()`, takes `vite:preloadError` (from first load's `preload-helper-*.js`) and reloads once per build, silently: `sessionStorage` `specengine.reloaded` holds the entry's hashed `import.meta.url`; holding this build, or a storage call throwing, leaves the route's error and Retry. Never `preventDefault`. `index.ts` chains Russian's handlers on the bare `import("./ru")`, outside Vite's wrapper, so its failure reaches the reload too.
 
 ## Known limits
 
@@ -68,7 +70,8 @@ The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus
 - The prose rule is a net, not a proof: a bare lower-case word passes; review covers it.
 - Spec content carries no `lang`; one choice per browser, no cross-tab sync.
 - The Russian awaits the owner's review; rewording breaks no test.
-- After a redeploy, a page loaded before it asks for lazy chunks that are gone: a route's Retry fails until a reload (RM-0103).
+- The reload cannot tell a redeploy from a lost connection: offline, its one reload shows the browser's offline page, and in-memory drafts are lost.
+- Once the mark holds the build, a route's Retry fails until a reload by hand.
 
 ## Tests
 

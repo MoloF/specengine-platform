@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARC_BEND, arcOver, COLUMN_GAP, FIT_MARGIN, FIT_MAX_ZOOM, FIT_MIN_ZOOM, readableViewport } from "./geometry";
+import { ARC_BEND, arcOver, CLICK_DISTANCE, COLUMN_GAP, FIT_MARGIN, FIT_MAX_ZOOM, FIT_MIN_ZOOM, readableViewport } from "./geometry";
 import { BOX_HEIGHT, BOX_WIDTH, COLUMN_STEP, ROW_STEP } from "./layout";
 
 // The canvas's geometry (docs/features/ui-graph.md "Implementation", Canvas), as numbers jsdom
@@ -91,5 +91,37 @@ describe("a readable fit", () => {
   it("does nothing on a canvas with no size or no box", () => {
     expect(readableViewport(grid([1]), null, 0, 0)).toBeNull();
     expect(readableViewport([], null, 800, 600)).toBeNull();
+  });
+});
+
+const sources = import.meta.glob<string>("/src/**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true });
+
+/** Each canvas and the specifier it imports graph/geometry by. */
+const CANVASES: readonly (readonly [string, string])[] = [
+  ["/src/flow/FlowCanvas.tsx", "../graph/geometry"],
+  ["/src/graph/GraphCanvas.tsx", "./geometry"],
+  ["/src/roadmap/RoadmapChain.tsx", "../graph/geometry"],
+];
+
+// docs/features/canvas-clicks.md "Acceptance criteria", CK3: one click distance for every canvas.
+describe("one click distance (CK3)", () => {
+  it("takes a press that moves 5 px or less for a click", () => {
+    expect(CLICK_DISTANCE).toBe(5);
+  });
+
+  it("is passed once by each canvas as `paneClickDistance`, imported from graph/geometry", () => {
+    for (const [path, specifier] of CANVASES) {
+      const text = sources[path] ?? "";
+      // M: `paneClickDistance={1}` on Graph.
+      expect([path, text.split("paneClickDistance={CLICK_DISTANCE}").length - 1, Array.from(text.matchAll(/paneClickDistance=/g)).length]).toEqual([path, 1, 1]);
+      const imported = Array.from(text.matchAll(/import\s*\{([^}]*)\}\s*from\s*"([^"]+)"/g)).filter((match) => /\bCLICK_DISTANCE\b/.test(match[1] ?? "")).map((match) => match[2]);
+      expect([path, imported]).toEqual([path, [specifier]]);
+    }
+  });
+
+  it("leaves Flow's old name nowhere in ui/src", () => {
+    // Assembled, so this file does not name it.
+    const old = ["FLOW", "CLICK", "DISTANCE"].join("_");
+    expect(Object.entries(sources).filter(([, text]) => text.includes(old)).map(([path]) => path)).toEqual([]);
   });
 });

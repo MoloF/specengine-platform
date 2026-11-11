@@ -255,7 +255,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | v5 | `direction-catalog` | RM-0106 | A direction as a table: title, revision, work state, open items, tasks, last change | - | 6-9 | 4, RM-0035 |
 | v5 | `delivery-analytics` | RM-0107 | Created, taken, accepted against estimate and due; lateness with reasons; by release and department; RM-0087's timeline | - | 8-12 | 6 |
 | v5 | `card-context` | RM-0108 | Shipped 2026-11-12: `get_card {context}`, `spec card show --context [--budget N]`: the parent's goal and one bundle of its targets and its own applied records, fitted into the room its lines leave; a bundle not made is a note (`docs/canon/card-context.md`) | - | 4-6 | 5 |
-| v5 | `canvas-clicks` | RM-0103 | Graph and Roadmap's Chain take a short press as a click, Graph's minimap no pointer, Graph centres only on a keyboard focus; a lazy chunk gone after a redeploy reloads the page once per build; UI only | - | 2-3 | 6 |
+| v5 | `canvas-clicks` | RM-0103 | Shipped 2026-11-12: Graph and Roadmap's Chain take a short press as a click, Graph's minimap no pointer, Graph centres only on a keyboard focus; a lazy chunk gone after a redeploy reloads the page once per build (`docs/canon/spec-flow-layout.md`, `docs/canon/ui-languages.md` "Size"); UI only | - | 2-3 | 6 |
 | trigger | `code-languages` | RM-0109 | Markers and AST hashes in a second language, once a real project in it exists | one amending ADR-0010, ADR-0018, ADR-0020 | 6-10 | - |
 | pool | `config-proposal` | RM-0110 | A writer's type change as a reviewed config proposal, out of RM-0061; never widening `[team]`, `[zones]`, `[gate]` on a hub | `config-proposal`, on `architecture.md#apply` | 6-9 | RM-0061 |
 
@@ -352,7 +352,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | 12 | `hub-department` | RM-0089 | - |
 | 13 | `delivery-analytics`, part b | RM-0107 | the timeline |
 
-**The UI lane**, beside core slices 1-5, in the same tree: RM-0103 `canvas-clicks` (`docs/features/canvas-clicks.md`), then RM-0099 in two slices, `design-sweep` (a, `docs/features/design-sweep.md`) and `design-sweep-b` (b). It shares only documents with the core lane, so the owner commits each slice on its own.
+**The UI lane**, beside core slices 1-5, in the same tree: RM-0103 `canvas-clicks`, shipped 2026-11-12 (no plugin version; `docs/canon/spec-flow-layout.md` "Layout", `docs/canon/ui-languages.md` "Size"), then RM-0099 in two slices, `design-sweep` (a, `docs/features/design-sweep.md`) and `design-sweep-b` (b). It shares only documents with the core lane, so the owner commits each slice on its own.
 
 **Not taken:** RM-0109 `code-languages` (its trigger), RM-0087, RM-0070, 10c and RM-0110 `config-proposal`. The taken pool items, RM-0103, RM-0035 and RM-0105 to RM-0108, are `release: v5`; their estimates, and those of steps 7-13, are their analyses' of 2026-11-12.
 

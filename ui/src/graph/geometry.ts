@@ -49,6 +49,14 @@ export const FIT_MAX_ZOOM = 1;
 /** A fit never shrinks the boxes' text past this: a bigger graph is panned from its focus. */
 export const FIT_MIN_ZOOM = 0.6;
 
+/**
+ * How far a press may move between down and up and still be a click, in px: past it, it pans. Every
+ * canvas passes it as `paneClickDistance`; a box takes no `nopan`, so a drag that starts on one still
+ * pans. React Flow's own default, 1 px, takes a hand's tremor for a pan
+ * (docs/features/canvas-clicks.md "Acceptance criteria", CK3).
+ */
+export const CLICK_DISTANCE = 5;
+
 export interface FitViewport {
   x: number;
   y: number;
