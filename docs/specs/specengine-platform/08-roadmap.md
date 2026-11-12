@@ -346,7 +346,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | 6 | `delivery-analytics`, part a | RM-0107 | the read and its tables; no MCP tool, no plugin version; shipped 2026-11-12 (`docs/canon/spec-delivery.md`) |
 | 7 | `direction-catalog` | RM-0106 | no MCP tool, no plugin version; shipped 2026-11-12 (`docs/canon/spec-catalog.md`) |
 | 8 | `plain-questions`, the question half | RM-0088 | queue schema 13, backup format 7, plugin 0.43.0; shipped 2026-11-12 (`docs/canon/plain-questions.md`) |
-| 9 | `collision-pass` | RM-0060 | queue schema 14, plugin 0.44.0; two stdio tools, an eighth skill; shipped 2026-11-12 (`docs/canon/collision-pass.md`); follow-up `collision-names` (`docs/features/collision-names.md`) |
+| 9 | `collision-pass` | RM-0060 | queue schema 14, plugin 0.44.0; two stdio tools, an eighth skill; shipped 2026-11-12 (`docs/canon/collision-pass.md`); follow-up `collision-names` shipped 2026-11-13 (`docs/features/collision-names.md`), no plugin change |
 | 10 | `plain-questions`, the pair half | RM-0088 | a served `pair` for a two-target `contradicts`; after 9 |
 | 11 | `department-overview` | RM-0086 | no MCP tool, no plugin version; shipped 2026-11-12, ahead of 8-10 (`docs/canon/card-counts.md`) |
 | 12 | `hub-department` | RM-0089 | - |

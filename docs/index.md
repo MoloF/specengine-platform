@@ -21,7 +21,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/collision-names.md](features/collision-names.md) collision-names: a pair names each side by its canonical reference, never by an ambiguous bare ID · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/features/collision-pairs.md](features/collision-pairs.md) collision-pairs: a two-sided collision shows as two documents side by side under their titles (RM-0088, the pair half) · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, scripts, fixtures · draft
 - [docs/features/delivery-timeline.md](features/delivery-timeline.md) delivery-timeline: when each task was created, taken and accepted, against its due date and its release (RM-0107 b) · crates/specengine-core, crates/specengine-cli, crates/specengine-http, crates/specengine-eval, fixtures, ui · draft
 - [docs/features/hub-department.md](features/hub-department.md) hub-department: a hub login lands on its own department (RM-0089) · crates/specengine-core, crates/specengine-cli, crates/specengine-http, fixtures, ui · draft

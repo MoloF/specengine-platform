@@ -10,9 +10,13 @@
 //! ([`SqliteQueue::collision_marks`], opened with
 //! [`SqliteQueue::open_existing`]: no schema step, nothing written; a queue
 //! at schema 13 or lower reads no mark), then core's
-//! [`collision_pairs`] scores, orders and filters the pairs. No clock is
-//! read: one index and ledger state gives one text and one JSON at any root
-//! and `HOME`.
+//! [`collision_pairs`] names, scores, orders and filters the pairs. A node
+//! is named by its canonical reference (task spec `collision-names`): the
+//! project's `[ids]` and `[paths] features` make a feature document's
+//! feature-scoped or repeated ID `slug/ID`; a node outside feature
+//! documents whose ID repeats is not paired, one note per ID after the
+//! norm-less one. No clock is read: one index and ledger state gives one
+//! text and one JSON at any root and `HOME`.
 //!
 //! ```text
 //! collisions: <n> pair(s) listed, <left> left, <skipped> node(s) skipped
@@ -32,20 +36,22 @@
 //! nothing written: the form (exit 2: `--input` not UTF-8 JSON of the
 //! shape, an unknown key, a verdict but `distinct` or `reported`); core's
 //! caps, then the author (exit 1); each `proposal` in the project's queue;
-//! each name a node of the read's universe; then one `Immediate`
-//! transaction writes one row per pair ([`SqliteQueue::mark_collisions`]),
-//! no event. A side whose norm differs from the index's is a note, never a
-//! refusal. Its text is `marked <n> pair(s), <r> replacing an earlier mark`;
-//! a refusal's reason is `spec: <reason>` on stderr and the JSON's last
-//! note.
+//! each name a node of the read's universe as the read names it (a bare ID
+//! that is feature-scoped or repeated refused naming its canonical forms);
+//! then one `Immediate` transaction writes one row per pair
+//! ([`SqliteQueue::mark_collisions`]), no event. A side whose norm differs
+//! from the index's is a note, never a refusal. Its text is `marked <n>
+//! pair(s), <r> replacing an earlier mark`; a refusal's reason is `spec:
+//! <reason>` on stderr and the JSON's last note.
 
 use std::fs;
 use std::io::Read as _;
 
 use serde::Serialize;
 use specengine_core::collisions::{
-    COLLISIONS_LIMIT_DEFAULT, COLLISIONS_LIMIT_MAX, CollisionList, CollisionPair, CollisionQuery,
-    JudgedPair, PairJudgement, PairJudgements, collision_pairs, judged_notes, judgement_problem,
+    COLLISIONS_LIMIT_DEFAULT, COLLISIONS_LIMIT_MAX, CollisionList, CollisionNaming, CollisionPair,
+    CollisionQuery, JudgedPair, PairJudgement, PairJudgements, collision_pairs, judged_notes,
+    judgement_problem,
 };
 use specengine_core::intake::{AuthorInput, author_problem};
 use specengine_core::proposal::Author;
@@ -57,7 +63,7 @@ use crate::cap::{OUTPUT_CAP_CHARS, lines_within};
 use crate::freshness::step;
 use crate::intake::{INTAKE_INPUT_MAX_BYTES, IntakeSource};
 use crate::location::open_index;
-use crate::project::discover;
+use crate::project::{ProjectRoot, discover};
 use crate::proposals::{escaped_error, queue_cannot, require_root_config};
 use crate::search::notes;
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line, store_error};
@@ -173,8 +179,10 @@ fn run_collisions(
         mut pairs,
         mut left,
         skipped,
+        notes: unnamed,
     } = collision_pairs(
         &rows,
+        &naming(&project),
         &judged,
         &CollisionQuery {
             kinds: &request.kinds,
@@ -187,6 +195,7 @@ fn run_collisions(
             "{skipped} node(s) without a norm_hash not paired: their files do not parse whole"
         )));
     }
+    messages.extend(unnamed.into_iter().map(Message::Note));
     messages.extend(ledger.unreadable.iter().cloned().map(Message::Note));
     // The cap: the head line at its longest, then each pair whole.
     let longest_head = head_line(pairs.len(), left + pairs.len(), skipped);
@@ -211,6 +220,16 @@ fn run_collisions(
         skipped,
         messages,
     })
+}
+
+/// What the pass names a node by: the project's `[ids]` and `[paths]
+/// features`, so a side, a shared target, a mark and the ledger name a node
+/// as intake stores it (task spec `collision-names` CN1 to CN4).
+fn naming(project: &ProjectRoot) -> CollisionNaming<'_> {
+    CollisionNaming {
+        scheme: &project.config.scheme,
+        features: &project.config.paths.features,
+    }
 }
 
 /// `--limit` as given, else the default; outside 1 to
@@ -455,11 +474,12 @@ fn run_mark(
         }
     }
     drop(queue);
-    // 4. Each name a node of the universe, as `spec collisions` names it.
+    // 4. Each name a node of the universe, as `spec collisions` names it
+    // (task spec `collision-names` CN3).
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let messages = step(&mut open.index, &project, &tree)?;
     let rows = open.index.collision_input().map_err(store_error)?;
-    let notes = match judged_notes(&rows, pairs) {
+    let notes = match judged_notes(&rows, &naming(&project), pairs) {
         Ok(notes) => notes,
         Err(problem) => return Ok(PairsMarked::refused(problem.to_string(), messages)),
     };

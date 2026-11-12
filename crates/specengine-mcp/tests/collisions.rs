@@ -21,6 +21,17 @@
 //!   `maybe`, an unknown key in a pair, no `author_role`) is rmcp's argument
 //!   error result, nothing written; a valid mark writes one row, no event.
 //!
+//! docs/features/collision-names.md "Acceptance criteria", the MCP half:
+//!
+//! - CN7: over a copy whose `stamina-tuning.md` gains a `{#AC-01}` section
+//!   and a new feature document `endurance-tuning.md` holds one (both
+//!   `Regen floor holds`), `get_collisions` names the pair
+//!   `endurance-tuning/AC-01` and `stamina-tuning/AC-01` and `mark_pairs`
+//!   refuses a bare `AC-01` (CN3), each `content` byte-equal to its twin's
+//!   `2>&1` and `structuredContent` to its `--json`, nothing written; the
+//!   whole `tools/list` of both eras hashes as at collision-pass (no
+//!   description, schema, annotation or `_meta` byte changed).
+//!
 //! The names (a stamina pool) are the spec's example; every expected value
 //! is the twin's or worked out from the spec.
 
@@ -106,10 +117,15 @@ struct Repo {
 
 impl Repo {
     fn new(label: &str) -> Self {
+        Self::with(label, |root| write(root, ENDURANCE, ENDURANCE_TEXT))
+    }
+
+    /// The copy as `edit` leaves it, committed.
+    fn with(label: &str, edit: impl FnOnce(&Path)) -> Self {
         let scratch = Scratch::new(label);
         let git = Sandbox::new(scratch.path());
         let root = scratch.copy("spec-a", "main");
-        write(&root, ENDURANCE, ENDURANCE_TEXT);
+        edit(&root);
         git.init(&root);
         git.add_all(&root);
         git.commit(&root, "the fixture and the example");
@@ -717,4 +733,206 @@ async fn cp8_a_hub_lists_18_and_knows_neither_tool() {
         "no ledger row written: {ledger:?}"
     );
     assert_eq!(blake3_hex(HUB_INSTRUCTIONS.as_bytes()), HUB_INSTRUCTIONS_B3);
+}
+
+// ------------------------------------------------- collision-names CN7
+
+/// `value` as canonical JSON: object keys in byte order at every depth, no
+/// whitespace, arrays in order (`plugin_files.rs`' `canonical`).
+fn canonical(value: &Value) -> String {
+    match value {
+        Value::Object(object) => {
+            let mut keys: Vec<&String> = object.keys().collect();
+            keys.sort();
+            let fields: Vec<String> = keys
+                .into_iter()
+                .map(|key| {
+                    format!(
+                        "{}:{}",
+                        serde_json::to_string(key).expect("a key"),
+                        canonical(&object[key])
+                    )
+                })
+                .collect();
+            format!("{{{}}}", fields.join(","))
+        }
+        Value::Array(items) => format!(
+            "[{}]",
+            items.iter().map(canonical).collect::<Vec<_>>().join(",")
+        ),
+        scalar => serde_json::to_string(scalar).expect("a scalar"),
+    }
+}
+
+/// The whole `tools/list` result a fresh stdio server gives in each era
+/// (every tool's name, description, schemas, annotations and `_meta`), as
+/// collision-pass shipped it at 8f04ae24: collision-names changes no byte
+/// of it.
+const TOOLS_LIST_B3: [(Era, &str); 2] = [
+    (
+        Era::Legacy,
+        "ce3aabdec5915c109e8c04c14620c7fc056d3f612616c50bdb95122fe29da1f3",
+    ),
+    (
+        Era::Stateless,
+        "c59811a2f6e1aac18349256f547dd648e110805d08a3d0c3f3f7a5c0e7005b38",
+    ),
+];
+
+/// docs/features/collision-names.md CN7, the listing half: the stdio
+/// `tools/list` of both eras hashes as at 8f04ae24 (no description, schema,
+/// annotation or `_meta` byte changed), and `INSTRUCTIONS` and
+/// `HUB_INSTRUCTIONS` as collision-pass pinned them.
+#[test]
+fn cn7_the_tools_list_is_byte_equal_to_collision_pass() {
+    assert_eq!(TOOLS_LIST_B3.map(|(era, _)| era), ERAS);
+    for (era, pinned) in TOOLS_LIST_B3 {
+        let mut session = Session::open(era, &[], None, Home::Fresh);
+        let list = session.tools();
+        assert_eq!(
+            blake3_hex(canonical(&list).as_bytes()),
+            pinned,
+            "{era:?}: tools/list changed"
+        );
+        drop(session.finish());
+    }
+    assert_eq!(blake3_hex(INSTRUCTIONS.as_bytes()), INSTRUCTIONS_B3);
+    assert_eq!(blake3_hex(HUB_INSTRUCTIONS.as_bytes()), HUB_INSTRUCTIONS_B3);
+}
+
+// ------------------------------------------------- collision-names CN7, twins
+
+const STAMINA_TUNING: &str = "docs/features/stamina-tuning.md";
+const ENDURANCE_TUNING: &str = "docs/features/endurance-tuning.md";
+const STAMINA_AC: &str = "stamina-tuning/AC-01";
+const ENDURANCE_AC: &str = "endurance-tuning/AC-01";
+
+/// spec-a whose `stamina-tuning.md` gains a `{#AC-01}` section and whose
+/// new feature document `endurance-tuning.md` holds one, both `Regen floor
+/// holds`.
+fn floors(label: &str) -> Repo {
+    Repo::with(label, |root| {
+        let stamina = std::fs::read_to_string(root.join(STAMINA_TUNING)).expect("the feature");
+        write(
+            root,
+            STAMINA_TUNING,
+            format!(
+                "{stamina}\n### Regen floor holds {{#AC-01}}\n\nAt zero stamina the pool still \
+                 regains one point a second.\n"
+            ),
+        );
+        write(
+            root,
+            ENDURANCE_TUNING,
+            "---\nclass: spec\nstatus: draft\nscope: [movement]\nref: owner request, endurance \
+             tuning\n---\n\n# Endurance tuning\n\nWhat the tuning measures.\n\n## Acceptance \
+             criteria {#acceptance}\n\n### Regen floor holds {#AC-01}\n\nA keeper resting on a \
+             landing never drops below ten points.\n",
+        );
+    })
+}
+
+/// CN7 over CN1 and CN3: `get_collisions {kinds: [criterion]}` names the
+/// one pair by its canonical names; `mark_pairs` naming `AC-01` bare is
+/// refused (`isError`, the resolver's reason the document's last note),
+/// nothing written, no event; the canonical names mark (one row keyed by
+/// them) and the read hides the pair; every call its twin's content and
+/// document, conforming; both eras.
+#[test]
+fn cn7_canonical_names_answer_as_their_twins() {
+    let reason = format!(
+        "pairs[0].a: `AC-01` is feature-scoped: cite it as `{ENDURANCE_AC}` or `{STAMINA_AC}`"
+    );
+    for era in ERAS {
+        let repo = floors(&format!("mcp-cn7-{era:?}"));
+        let mut session = repo.session(era);
+        let schemas = output_schemas(&session.tools());
+        let called = |session: &mut Session, tool: &str, args: Value| -> Value {
+            let reply = session.call(tool, args.clone());
+            let want = repo.twin(tool, &args);
+            assert_twin(&reply, &want, &format!("{era:?} {tool} {args}"));
+            let got = result(&reply);
+            if let Some(document) = got.get("structuredContent") {
+                conforms(&schemas[tool], document, tool)
+                    .unwrap_or_else(|problem| panic!("{era:?} {tool}: {problem}"));
+            }
+            got.clone()
+        };
+        // A question first: the queue and its events exist.
+        let asked = session.call(
+            "ask_question",
+            json!({"node_ids": ["MEC-STAMINA"], "text": "Does the regen floor hold on stairs?",
+                "working_answer": "Yes.", "price_of_other": "One scene.", "author_role": "writer",
+                "distinct_from": ["Q-031", "A-101", "DEC-0023", "DEC-0007", "Q-032", "A-102"]}),
+        );
+        assert_ne!(result(&asked)["isError"], json!(true), "{asked}");
+
+        let read = called(
+            &mut session,
+            "get_collisions",
+            json!({"kinds": ["criterion"]}),
+        );
+        let document = read["structuredContent"].clone();
+        let names: Vec<(&Value, &Value)> = document["pairs"]
+            .as_array()
+            .expect("pairs")
+            .iter()
+            .map(|pair| (&pair["a"]["id"], &pair["b"]["id"]))
+            .collect();
+        assert_eq!(
+            names,
+            [(&json!(ENDURANCE_AC), &json!(STAMINA_AC))],
+            "{era:?}: {document}"
+        );
+        assert!(
+            content_text(&read).contains(&format!("1000 | {ENDURANCE_AC} | {STAMINA_AC} | ")),
+            "{era:?}: {read}"
+        );
+        let e = norm_in(&document, ENDURANCE_AC);
+        let s = norm_in(&document, STAMINA_AC);
+
+        let before = repo.state();
+        let bare = json!({"pairs": [{"a": "AC-01", "a_norm": e, "b": STAMINA_AC, "b_norm": s,
+            "verdict": "distinct", "proposal": null}], "author_role": "reviewer"});
+        let refused = called(&mut session, "mark_pairs", bare);
+        assert_eq!(refused["isError"], json!(true), "{era:?}: {refused}");
+        let notes = &refused["structuredContent"]["notes"];
+        assert_eq!(
+            notes.as_array().and_then(|notes| notes.last()),
+            Some(&json!(reason)),
+            "{era:?}: {refused}"
+        );
+        assert_eq!(refused["structuredContent"]["marked"], json!(0));
+        assert_eq!(repo.state(), before, "{era:?}: nothing written, no event");
+
+        let marked = called(
+            &mut session,
+            "mark_pairs",
+            json!({"pairs": [{"a": ENDURANCE_AC, "a_norm": e, "b": STAMINA_AC, "b_norm": s,
+                "verdict": "distinct", "proposal": null}], "author_role": "reviewer"}),
+        );
+        assert_eq!(
+            marked["structuredContent"],
+            json!({"marked": 1, "replaced": 0, "notes": []})
+        );
+        assert_eq!(
+            repo.state(),
+            (
+                Some(format!("{ENDURANCE_AC}|{STAMINA_AC}|distinct")),
+                before.1.clone()
+            ),
+            "{era:?}: one row by the canonical names, no event"
+        );
+        let after = called(
+            &mut session,
+            "get_collisions",
+            json!({"kinds": ["criterion"]}),
+        );
+        assert_eq!(
+            after["structuredContent"]["pairs"],
+            json!([]),
+            "{era:?}: the pair hidden"
+        );
+        drop(session.finish());
+    }
 }

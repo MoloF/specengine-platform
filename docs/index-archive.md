@@ -36,6 +36,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/citation-sweep.md](features/citation-sweep.md) shipped
 - [docs/features/code-refs.md](features/code-refs.md) shipped
 - [docs/features/code-tools.md](features/code-tools.md) shipped
+- [docs/features/collision-names.md](features/collision-names.md) shipped
 - [docs/features/collision-pass.md](features/collision-pass.md) shipped
 - [docs/features/constant-census.md](features/constant-census.md) shipped
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped

@@ -35,7 +35,32 @@
 //!   dump at 13 imports; a 15 dump and a 15 queue are refused; `spec
 //!   collisions` over a schema 13 queue reads no marks. M: the ledger dumped.
 //! - Edge data: a node without a `norm_hash` is skipped with its note; two
-//!   holders of one ID never pair.
+//!   holders of one ID outside feature documents are left out with theirs.
+//!
+//! docs/features/collision-names.md "Acceptance criteria", the CLI half,
+//! over the same copies whose `stamina-tuning.md` gains a `{#AC-01}`
+//! section and a new feature document `endurance-tuning.md` holds one, both
+//! `Regen floor holds`:
+//!
+//! - CN1: one pair, `endurance-tuning/AC-01` and `stamina-tuning/AC-01`;
+//!   `spec bundle` of the two names holds those two nodes. M: the bare ID
+//!   kept as the name; the never-paired rule comparing bare IDs.
+//! - CN2: a mark by the canonical names hides that pair alone, a third
+//!   feature's `AC-01` pairs stay listed unmarked. M: the ledger matched by
+//!   bare ID.
+//! - CN3: a mark naming `AC-01` bare exits 1 with the resolver's reason
+//!   naming both forms, nothing written. M: a bare name accepted as any
+//!   holder.
+//! - CN4: two gauges `uses: [stamina-tuning/AC-01]` share that name. M:
+//!   `end_name` left bare.
+//! - CN5: a row keyed by the bare `AC-01` leaves its pair listed, `marked`
+//!   null.
+//! - CN6: `R-01` defined twice outside feature documents is left out with
+//!   one note, the notes after the norm-less one in ID order; `R-12` in a
+//!   feature document and outside: the feature's is `slug/R-12` and pairs,
+//!   the other left out, the note counting 1. M: the note dropped.
+//! - Determinism: the names and the note byte-equal at another root and
+//!   `HOME`.
 //!
 //! The names the tests add (a lamp's wick, hood, chimney, oil) are invented
 //! here. Every expected value is worked out from the spec, never read back
@@ -1907,8 +1932,9 @@ fn cp6_a_newer_queue_is_refused_and_a_13_queue_reads_no_marks() {
 /// A document whose front-matter carries `frontmatter-type` (`rev: "3"`)
 /// has no `norm_hash`: it is never paired (its title is MEC-STAMINA's) and
 /// counts in `skipped`, with the one note; the text's head line and its
-/// `note:` line say so. Two holders of one ID (`duplicate-id`) never pair with each
-/// other. Nothing panics.
+/// `note:` line say so. Two holders of one ID outside feature documents
+/// (`spec check` errs) are left out (collision-names W1): neither is paired,
+/// and their note follows the norm-less one. Nothing panics.
 #[test]
 fn edge_a_node_without_a_norm_is_skipped_and_twins_by_id_never_pair() {
     let scene = example("cp-edge");
@@ -1928,14 +1954,17 @@ fn edge_a_node_without_a_norm_is_skipped_and_twins_by_id_never_pair() {
     );
     let document = scene.collisions(&["--kind", "mechanic"]);
     assert_eq!(document["skipped"], json!(1), "{document}");
-    assert_eq!(document["notes"], json!([SKIPPED_NOTE]), "{document}");
+    let twins = held_note(2, "MEC-TWIN");
+    assert_eq!(
+        document["notes"],
+        json!([SKIPPED_NOTE, twins]),
+        "{document}"
+    );
     for (a, b) in names(&document) {
-        assert_ne!(a, "MEC-LANTERN", "{document}");
-        assert_ne!(b, "MEC-LANTERN", "{document}");
-        assert!(
-            !(a == "MEC-TWIN" && b == "MEC-TWIN"),
-            "twins by ID: {document}"
-        );
+        for name in [&a, &b] {
+            assert_ne!(name, "MEC-LANTERN", "{document}");
+            assert_ne!(name, "MEC-TWIN", "left out: {document}");
+        }
     }
     let text = scene.collisions_run(&["--kind", "mechanic"], false);
     let head = text.stdout.lines().next().expect("a head line");
@@ -1946,6 +1975,13 @@ fn edge_a_node_without_a_norm_is_skipped_and_twins_by_id_never_pair() {
         text.stderr
             .lines()
             .any(|line| line == format!("note: {SKIPPED_NOTE}")),
+        "{}",
+        text.show()
+    );
+    assert!(
+        text.stderr
+            .lines()
+            .any(|line| line == format!("note: {twins}")),
         "{}",
         text.show()
     );
@@ -2017,4 +2053,828 @@ fn edge_the_read_cuts_at_the_cap_and_counts_the_cut_in_left() {
         "a note names the cap: {notes:?}"
     );
     assert!(text.stderr.contains("40000"), "{}", text.show());
+}
+
+// ------------------------------------------------ collision-names CN1-CN6
+
+// docs/features/collision-names.md "Acceptance criteria": every name the
+// pass prints or takes is the node's canonical reference. The scene is
+// spec-a (`AC` feature-scoped) whose `stamina-tuning.md` gains a `{#AC-01}`
+// section and a new feature document `endurance-tuning.md` holding one,
+// both titled `Regen floor holds`.
+
+const STAMINA_TUNING: &str = "docs/features/stamina-tuning.md";
+const ENDURANCE_TUNING: &str = "docs/features/endurance-tuning.md";
+/// CN2's third feature document holding an `AC-01`.
+const CLIMB_TUNING: &str = "docs/features/climb-tuning.md";
+/// The `AC-01`s' one title. ` regen floor holds ` holds 17 trigrams;
+/// stamina-tuning's AC-07 (`Regeneration starts 1.5 s after the last
+/// sprint`, 47) shares 4: floor(2000 * 4 / 64) = 125, under 500, and no
+/// target: AC-07 pairs with neither.
+const FLOOR: &str = "Regen floor holds";
+const CRITERION: &str = "criterion";
+/// CN4's new kind.
+const GAUGE: &str = "lamp-gauge";
+
+/// The canonical names: `slug/ID` for a feature-scoped ID in a feature
+/// document.
+const STAMINA_AC: &str = "stamina-tuning/AC-01";
+const ENDURANCE_AC: &str = "endurance-tuning/AC-01";
+const CLIMB_AC: &str = "climb-tuning/AC-01";
+
+/// A `{#AC-01}` section titled [`FLOOR`] with `body`, a blank line before.
+fn floor_section(body: &str) -> String {
+    format!("\n### {FLOOR} {{#AC-01}}\n\n{body}\n")
+}
+
+/// A feature document titled `title` whose criteria are `criteria`.
+fn feature(title: &str, criteria: &str) -> String {
+    format!(
+        "---\nclass: spec\nstatus: draft\nscope: [movement]\nref: owner request, \
+         {title}\n---\n\n# {title}\n\nWhat the tuning measures.\n\n## Acceptance criteria \
+         {{#acceptance}}\n{criteria}"
+    )
+}
+
+/// The CN scene: stamina-tuning's `AC-01` (ord 2, after AC-07) and
+/// endurance-tuning's (ord 1), committed.
+fn floors(label: &str) -> Scene {
+    let scene = Scene::new(label);
+    let stamina = fs::read_to_string(scene.root().join(STAMINA_TUNING)).expect("stamina-tuning.md");
+    scene.write(
+        STAMINA_TUNING,
+        &format!(
+            "{stamina}{}",
+            floor_section("At zero stamina the pool still regains one point a second.")
+        ),
+    );
+    scene.write(
+        ENDURANCE_TUNING,
+        &feature(
+            "Endurance tuning",
+            &floor_section("A keeper resting on a landing never drops below ten points."),
+        ),
+    );
+    scene.commit("Two features' regen floor criteria");
+    scene
+}
+
+/// The CN scene with a third feature document's `AC-01` of the same title.
+fn three_floors(label: &str) -> Scene {
+    let scene = floors(label);
+    scene.put(
+        CLIMB_TUNING,
+        &feature(
+            "Climb tuning",
+            &floor_section("Halfway up the tower the floor still holds."),
+        ),
+    );
+    scene
+}
+
+/// A criterion side named `id` at `path` and `ord`.
+fn floor_side(id: &str, path: &str, ord: usize, norm: &str) -> Value {
+    json!({"id": id, "path": path, "ord": ord, "kind": CRITERION, "title": FLOOR,
+        "norm_hash": norm})
+}
+
+/// A pair of two `FLOOR` criteria: titles equal, Dice 1000, no target.
+fn floor_pair(a: Value, b: Value) -> Value {
+    json!({"a": a, "b": b, "score": 1000, "titles": 1000, "shared": 0,
+        "shared_targets": [], "marked": null, "reason": "titles alike 1.000"})
+}
+
+/// `spec bundle refs… --json`: its targets' `(path, line)`s, and the
+/// stderr.
+fn bundle_targets(scene: &Scene, refs: &[&str]) -> (Vec<String>, String) {
+    let mut args = vec!["bundle"];
+    args.extend_from_slice(refs);
+    args.push("--json");
+    let run = scene.spec(&args, b"");
+    run.code(0);
+    let targets = run.json()["layers"]["targets"]
+        .as_array()
+        .unwrap_or_else(|| panic!("targets: {}", run.show()))
+        .iter()
+        .map(|target| {
+            format!(
+                "{} {}",
+                target["path"].as_str().expect("a path"),
+                target["title"].as_str().unwrap_or("<none>")
+            )
+        })
+        .collect();
+    (targets, run.stderr.clone())
+}
+
+/// CN1: the two `AC-01`s pair as `endurance-tuning/AC-01` (first by path,
+/// ord 1) and `stamina-tuning/AC-01` (ord 2: the document is 0, AC-07 1),
+/// titles equal (1000), no shared target, the text naming both; the two
+/// names fed to `spec bundle` select exactly those two nodes. M: the bare ID
+/// kept as the name (no pair: one name); the never-paired rule comparing
+/// bare IDs.
+#[test]
+fn cn1_two_features_alike_criteria_pair_by_their_canonical_names() {
+    let scene = floors("cn1-names");
+    let endurance = scene.norm(ENDURANCE_AC);
+    let stamina = scene.norm(STAMINA_AC);
+    let run = scene.collisions_run(&["--kind", CRITERION], true);
+    assert_document_keys(&run.stdout);
+    let expected = json!({
+        "project": "lantern-keep",
+        "kinds": [CRITERION],
+        "any_kind": false,
+        "limit": LIMIT_DEFAULT,
+        "pairs": [floor_pair(
+            floor_side(ENDURANCE_AC, ENDURANCE_TUNING, 1, &endurance),
+            floor_side(STAMINA_AC, STAMINA_TUNING, 2, &stamina),
+        )],
+        "left": 0,
+        "skipped": 0,
+        "notes": []
+    });
+    assert_eq!(run.json(), expected, "{}", run.show());
+
+    let text = scene.collisions_run(&["--kind", CRITERION], false);
+    assert_eq!(
+        text.stdout,
+        format!(
+            "collisions: 1 pair(s) listed, 0 left, 0 node(s) skipped\n\
+             1000 | {ENDURANCE_AC} | {STAMINA_AC} | criterion | titles alike 1.000\n"
+        ),
+        "{}",
+        text.show()
+    );
+    assert_eq!(text.stderr, "", "no note");
+
+    // The names as the read gives them, fed to `get_context_bundle`'s
+    // command: those two nodes, no other holder warned of.
+    let document = run.json();
+    let pair = &pairs(&document)[0];
+    let (a, b) = (
+        pair["a"]["id"].as_str().expect("a's id"),
+        pair["b"]["id"].as_str().expect("b's id"),
+    );
+    let (targets, stderr) = bundle_targets(&scene, &[a, b]);
+    assert_eq!(
+        targets,
+        [
+            format!("{ENDURANCE_TUNING} {FLOOR}"),
+            format!("{STAMINA_TUNING} {FLOOR}")
+        ]
+    );
+    assert!(!stderr.contains("holders"), "{stderr}");
+}
+
+/// CN2: with a third feature's `AC-01` the three pair (climb-endurance,
+/// climb-stamina, endurance-stamina: all 1000, by `a`'s path, then `b`'s);
+/// marking endurance-stamina `distinct` by its canonical names stores them
+/// and hides that pair alone: the two climb pairs stay listed, `marked`
+/// null, their reason unchanged. The two names bundle two of the three
+/// holders. M: the ledger matched by bare ID.
+#[test]
+fn cn2_a_mark_by_canonical_names_hides_that_pair_alone() {
+    let scene = three_floors("cn2-mark");
+    let climb = scene.norm(CLIMB_AC);
+    let endurance = scene.norm(ENDURANCE_AC);
+    let stamina = scene.norm(STAMINA_AC);
+    let climb_side = floor_side(CLIMB_AC, CLIMB_TUNING, 1, &climb);
+    let endurance_side = floor_side(ENDURANCE_AC, ENDURANCE_TUNING, 1, &endurance);
+    let stamina_side = floor_side(STAMINA_AC, STAMINA_TUNING, 2, &stamina);
+    let before = scene.collisions(&["--kind", CRITERION]);
+    assert_eq!(
+        before["pairs"],
+        json!([
+            floor_pair(climb_side.clone(), endurance_side.clone()),
+            floor_pair(climb_side.clone(), stamina_side.clone()),
+            floor_pair(endurance_side, stamina_side.clone()),
+        ]),
+        "{before}"
+    );
+
+    let run = scene.mark(
+        &batch(vec![item(
+            ENDURANCE_AC,
+            &endurance,
+            STAMINA_AC,
+            &stamina,
+            "distinct",
+            None,
+        )]),
+        &[],
+    );
+    run.code(0);
+    assert_eq!(
+        mark_document(&run),
+        json!({"marked": 1, "replaced": 0, "notes": []})
+    );
+    let rows = scene.ledger();
+    assert!(
+        rows.starts_with(&format!(
+            "lantern-keep|{ENDURANCE_AC}|{endurance}|{STAMINA_AC}|{stamina}|distinct|<null>|{HUMAN}|"
+        )),
+        "the ledger keyed by the canonical names: {rows}"
+    );
+    assert_eq!(rows.lines().count(), 1, "{rows}");
+
+    let after = scene.collisions(&["--kind", CRITERION]);
+    assert_eq!(
+        after["pairs"],
+        json!([
+            floor_pair(
+                climb_side.clone(),
+                floor_side(ENDURANCE_AC, ENDURANCE_TUNING, 1, &endurance)
+            ),
+            floor_pair(climb_side, stamina_side),
+        ]),
+        "the marked pair alone hidden, the others unmarked: {after}"
+    );
+    assert_eq!(after["left"], json!(0));
+    assert_eq!(after["notes"], json!([]));
+
+    let (targets, _) = bundle_targets(&scene, &[ENDURANCE_AC, STAMINA_AC]);
+    assert_eq!(
+        targets,
+        [
+            format!("{ENDURANCE_TUNING} {FLOOR}"),
+            format!("{STAMINA_TUNING} {FLOOR}")
+        ],
+        "two of the three holders"
+    );
+    let (bare, _) = bundle_targets(&scene, &["AC-01"]);
+    assert_eq!(bare.len(), 3, "premise: the bare ID pulls in every holder");
+}
+
+/// The reason a bare `AC-01` is refused in the CN scene, `pairs[i].<side>`
+/// before it.
+fn floor_refusal(field: &str) -> String {
+    format!("{field}: `AC-01` is feature-scoped: cite it as `{ENDURANCE_AC}` or `{STAMINA_AC}`")
+}
+
+/// CN3: a mark naming `AC-01` bare (as `a`, then as `b`) exits 1 with the
+/// resolver's reason naming both canonical forms in path order, `spec: `
+/// on stderr and the JSON's last note, the ledger and the last event `seq`
+/// unchanged; a feature-scoped ID held once (`AC-07`) is refused alike with
+/// its one form; an unknown `slug/ID` keeps `no live node`; the canonical
+/// names mark. M: a bare name accepted as any holder.
+#[test]
+fn cn3_a_bare_feature_scoped_name_is_refused_with_its_canonical_forms() {
+    let scene = floors("cn3-bare");
+    scene.question(
+        "MEC-STAMINA",
+        "Does the regen floor hold on the tower stairs?",
+    );
+    let endurance = scene.norm(ENDURANCE_AC);
+    let stamina = scene.norm(STAMINA_AC);
+    let regen = scene.norm("stamina-tuning/AC-07");
+    let ledger = scene.ledger();
+    let seq = scene.last_seq();
+    assert_ne!(seq, "0", "premise: the queue holds an event");
+
+    let refusals = [
+        (
+            item("AC-01", &endurance, STAMINA_AC, &stamina, "distinct", None),
+            floor_refusal("pairs[0].a"),
+        ),
+        (
+            item(
+                ENDURANCE_AC,
+                &endurance,
+                "AC-01",
+                &stamina,
+                "distinct",
+                None,
+            ),
+            floor_refusal("pairs[0].b"),
+        ),
+        (
+            item("AC-07", &regen, STAMINA_AC, &stamina, "distinct", None),
+            "pairs[0].a: `AC-07` is feature-scoped: cite it as `stamina-tuning/AC-07`".to_owned(),
+        ),
+        (
+            item(
+                "nowhere-tuning/AC-01",
+                &endurance,
+                STAMINA_AC,
+                &stamina,
+                "distinct",
+                None,
+            ),
+            "pairs[0].a: no live node `nowhere-tuning/AC-01`".to_owned(),
+        ),
+    ];
+    for (pair, reason) in refusals {
+        let run = scene.mark(&batch(vec![pair.clone()]), &[]);
+        assert_eq!(run.code, 1, "{pair}: {}", run.show());
+        let document = mark_document(&run);
+        assert_eq!(document["marked"], json!(0), "{pair}: {document}");
+        assert_eq!(
+            document["notes"].as_array().and_then(|notes| notes.last()),
+            Some(&json!(reason)),
+            "{pair}: {document}"
+        );
+        assert!(
+            run.stderr
+                .lines()
+                .any(|line| line == format!("spec: {reason}")),
+            "{pair}: {}",
+            run.show()
+        );
+        assert_eq!(scene.ledger(), ledger, "{pair}: the ledger unchanged");
+        assert_eq!(scene.last_seq(), seq, "{pair}: no event");
+    }
+
+    let run = scene.mark(
+        &batch(vec![item(
+            ENDURANCE_AC,
+            &endurance,
+            STAMINA_AC,
+            &stamina,
+            "distinct",
+            None,
+        )]),
+        &[],
+    );
+    run.code(0);
+    assert_eq!(mark_document(&run)["marked"], json!(1));
+    assert_eq!(scene.last_seq(), seq, "a mark adds no event");
+}
+
+const LAMP_TUNING: &str = "docs/features/lamp-tuning.md";
+const WICK_TUNING: &str = "docs/features/wick-tuning.md";
+
+/// CN3 and the canon's "Mark" rule 4 for a project-scoped ID: `R-97` defined
+/// in two feature documents pairs as `lamp-tuning/R-97` and
+/// `wick-tuning/R-97`; a mark naming `R-97` bare is refused naming both
+/// forms in path order; `R-01`, defined twice outside feature documents (no
+/// canonical form, W1), is refused too (the developer's wording: the spec
+/// names no resolver reason for a project-scoped ID); nothing is written,
+/// no event; the canonical names mark.
+#[test]
+fn cn3_a_bare_repeated_project_id_is_refused() {
+    let scene = Scene::new("cn3-repeated");
+    let wick = |title: &str, body: &str| {
+        feature(title, &format!("\n### Wick height {{#R-97}}\n\n{body}\n"))
+    };
+    scene.write(LAMP_TUNING, &wick("Lamp tuning", "A finger's breadth."));
+    scene.write(WICK_TUNING, &wick("Wick tuning", "Two fingers' breadth."));
+    scene.write(
+        OIL_RECORD,
+        &requirement("R-01", "A full lamp burns from dusk to dawn."),
+    );
+    scene.write(
+        OIL_RULE,
+        &requirement("R-01", "The keeper fills it once at dusk."),
+    );
+    scene.commit("R-97 in two features, R-01 twice outside");
+    scene.question(
+        "MEC-STAMINA",
+        "Is the wick trimmed before the oil is poured?",
+    );
+    let lamp = scene.norm("lamp-tuning/R-97");
+    let wick_norm = scene.norm("wick-tuning/R-97");
+    let document = scene.collisions(&["--kind", "requirement"]);
+    assert_eq!(
+        names(&document),
+        [("lamp-tuning/R-97".to_owned(), "wick-tuning/R-97".to_owned())],
+        "{document}"
+    );
+    assert_eq!(
+        document["notes"],
+        json!([held_note(2, "R-01")]),
+        "{document}"
+    );
+
+    let ledger = scene.ledger();
+    let seq = scene.last_seq();
+    let record = format!("b3:{}", "0".repeat(64));
+    for (pair, reason) in [
+        (
+            item(
+                "R-97",
+                &lamp,
+                "wick-tuning/R-97",
+                &wick_norm,
+                "distinct",
+                None,
+            ),
+            "pairs[0].a: `R-97` is held by more than one node: cite it as `lamp-tuning/R-97` \
+             or `wick-tuning/R-97`",
+        ),
+        (
+            item(
+                "R-01",
+                &record,
+                "wick-tuning/R-97",
+                &wick_norm,
+                "distinct",
+                None,
+            ),
+            "pairs[0].a: `R-01` is held by more than one node outside feature documents, \
+             never paired (`spec check` reports it)",
+        ),
+    ] {
+        let run = scene.mark(&batch(vec![pair.clone()]), &[]);
+        assert_eq!(run.code, 1, "{pair}: {}", run.show());
+        assert_eq!(
+            mark_document(&run)["notes"]
+                .as_array()
+                .and_then(|notes| notes.last()),
+            Some(&json!(reason)),
+            "{pair}: {}",
+            run.show()
+        );
+        assert_eq!(scene.ledger(), ledger, "{pair}: the ledger unchanged");
+        assert_eq!(scene.last_seq(), seq, "{pair}: no event");
+    }
+    let run = scene.mark(
+        &batch(vec![item(
+            "lamp-tuning/R-97",
+            &lamp,
+            "wick-tuning/R-97",
+            &wick_norm,
+            "distinct",
+            None,
+        )]),
+        &[],
+    );
+    run.code(0);
+    assert!(
+        scene.collisions(&["--kind", "requirement"])["pairs"]
+            .as_array()
+            .is_some_and(Vec::is_empty),
+        "the pair hidden"
+    );
+}
+
+const DIAL: &str = "docs/spec/gauge/dial.md";
+const NEEDLE: &str = "docs/spec/gauge/needle.md";
+const GEAR: &str = "docs/spec/gauge/gear.md";
+
+/// CN4: two gauges (` dial `, ` needle `: no trigram in common) both `uses:
+/// [stamina-tuning/AC-01]` pair at 200, `shared_targets`
+/// `["stamina-tuning/AC-01"]`, the reason and the text line naming it; a
+/// third gauge (` gear `, sharing no trigram with either) using
+/// endurance-tuning's `AC-01`, another end of the same bare ID, pairs with
+/// neither. M: `end_name` left bare.
+#[test]
+fn cn4_a_shared_target_is_named_canonically() {
+    let scene = floors("cn4-target");
+    scene.write(
+        DIAL,
+        &doc(GAUGE, None, &uses(STAMINA_AC), "Dial", "A brass dial."),
+    );
+    scene.write(
+        NEEDLE,
+        &doc(GAUGE, None, &uses(STAMINA_AC), "Needle", "A thin pointer."),
+    );
+    scene.write(
+        GEAR,
+        &doc(GAUGE, None, &uses(ENDURANCE_AC), "Gear", "A toothed wheel."),
+    );
+    scene.commit("Three gauges");
+    let dial = scene.norm(DIAL);
+    let needle = scene.norm(NEEDLE);
+    let reason = format!("1 link target(s) shared: `{STAMINA_AC}`");
+    let document = scene.collisions(&["--kind", GAUGE]);
+    assert_eq!(
+        document["pairs"],
+        json!([{
+            "a": path_side(DIAL, GAUGE, "Dial", &dial),
+            "b": path_side(NEEDLE, GAUGE, "Needle", &needle),
+            "score": 200, "titles": 0, "shared": 1, "shared_targets": [STAMINA_AC],
+            "marked": null, "reason": reason
+        }]),
+        "{document}"
+    );
+    let text = scene.collisions_run(&["--kind", GAUGE], false);
+    assert_eq!(
+        text.stdout,
+        format!(
+            "collisions: 1 pair(s) listed, 0 left, 0 node(s) skipped\n\
+             200 | {DIAL} | {NEEDLE} | {GAUGE} | {reason}\n"
+        ),
+        "{}",
+        text.show()
+    );
+}
+
+const FLOOR_DOC: &str = "docs/spec/lamp/floor.md";
+
+/// CN5: a ledger row an earlier build wrote for the pair of stamina-tuning's
+/// `AC-01` (then named `AC-01`) and an ID-less criterion document of the
+/// same title, both norms current: the pair, now `stamina-tuning/AC-01`, is
+/// listed with `marked` null and no note; the row stays, unread. Every pair
+/// of the three is listed (1000 each, by `a`'s path, then `b`'s).
+#[test]
+fn cn5_a_row_keyed_by_a_bare_name_no_longer_hides_its_pair() {
+    let scene = floors("cn5-old-row");
+    scene.put(
+        FLOOR_DOC,
+        &doc(
+            CRITERION,
+            None,
+            "",
+            FLOOR,
+            "Below the floor no keeper falls asleep.",
+        ),
+    );
+    // The queue's tables exist once a question is stored.
+    scene.question("MEC-STAMINA", "Is the floor the same on every map?");
+    let endurance = scene.norm(ENDURANCE_AC);
+    let stamina = scene.norm(STAMINA_AC);
+    let floor = scene.norm(FLOOR_DOC);
+    // `AC-01` < `docs/…` byte-wise: a readable row, as collision-pass wrote
+    // it.
+    let row = format!(
+        "lantern-keep|AC-01|{stamina}|{FLOOR_DOC}|{floor}|distinct|<null>|{HUMAN}|\
+         2026-11-12T09:00:00Z"
+    );
+    scene.pair.sql(&format!(
+        "INSERT INTO collision_marks (project, a, a_norm, b, b_norm, verdict, proposal, \
+         author, at) VALUES ('lantern-keep', 'AC-01', '{stamina}', '{FLOOR_DOC}', '{floor}', \
+         'distinct', NULL, '{HUMAN}', '2026-11-12T09:00:00Z');"
+    ));
+    assert_eq!(scene.ledger().trim_end(), row, "premise: the old row");
+
+    let endurance_side = floor_side(ENDURANCE_AC, ENDURANCE_TUNING, 1, &endurance);
+    let stamina_side = floor_side(STAMINA_AC, STAMINA_TUNING, 2, &stamina);
+    let doc_side = path_side(FLOOR_DOC, CRITERION, FLOOR, &floor);
+    let document = scene.collisions(&["--kind", CRITERION]);
+    assert_eq!(
+        document["pairs"],
+        json!([
+            floor_pair(endurance_side.clone(), stamina_side.clone()),
+            floor_pair(endurance_side, doc_side.clone()),
+            floor_pair(stamina_side, doc_side),
+        ]),
+        "the old row hides nothing: {document}"
+    );
+    assert_eq!(document["notes"], json!([]), "the row is read as no mark");
+    assert_eq!(scene.ledger().trim_end(), row, "the row stays");
+}
+
+const OIL_RECORD: &str = "docs/records/R/R-01.md";
+const OIL_RULE: &str = "docs/spec/lamp/oil-rule.md";
+const OIL_NEXT: &str = "docs/records/R/R-02.md";
+const ONE_NIGHT: &str = "Lamp oil lasts one night";
+
+/// A requirement record `id` titled [`ONE_NIGHT`].
+fn requirement(id: &str, body: &str) -> String {
+    format!(
+        "---\nid: {id}\nclass: canon\nstatus: accepted\nowner: owner\nreviewed: \
+         2026-11-01\n---\n\n# {ONE_NIGHT}\n\n{body}\n"
+    )
+}
+
+/// The left-out note for `count` holders of `id` outside feature documents
+/// (the orchestrator's iteration 2 wording, true in the mixed case too).
+fn held_note(count: usize, id: &str) -> String {
+    format!(
+        "{count} node(s) outside feature documents not paired: their ID `{id}` is held by \
+         more than one node (`spec check` reports it)"
+    )
+}
+
+/// CN6: `R-01` defined by a record and by a spec document (neither a
+/// feature document: `spec check`'s `id-taken`), and `R-02` of the same
+/// title: no pair at all (R-02 would pair with each at 1000), `skipped` 0,
+/// the one note; the text's head line and its `note:` line on stderr. The
+/// first run and a rerun byte-equal. M: the note dropped.
+#[test]
+fn cn6_an_id_held_twice_outside_features_is_left_out_with_one_note() {
+    let scene = Scene::new("cn6-left-out");
+    scene.write(
+        OIL_RECORD,
+        &requirement("R-01", "A full lamp burns from dusk to dawn."),
+    );
+    scene.write(
+        OIL_RULE,
+        &requirement("R-01", "The keeper fills it once at dusk."),
+    );
+    scene.write(OIL_NEXT, &requirement("R-02", "No refill before dawn."));
+    scene.commit("R-01 twice and R-02");
+    let check = scene.spec(&["check"], b"");
+    let both = format!("{}{}", check.stdout, check.stderr);
+    assert!(
+        both.lines().any(|line| line.contains(OIL_RULE)
+            && line.contains("id-taken")
+            && line.contains("`R-01`")),
+        "premise: spec check reports it: {}",
+        check.show()
+    );
+
+    let note = held_note(2, "R-01");
+    let document = scene.collisions(&["--kind", "requirement"]);
+    assert_eq!(document["pairs"], json!([]), "{document}");
+    assert_eq!(document["left"], json!(0));
+    assert_eq!(document["skipped"], json!(0), "skipped keeps its meaning");
+    assert_eq!(document["notes"], json!([note]), "{document}");
+
+    let text = scene.collisions_run(&["--kind", "requirement"], false);
+    assert_eq!(
+        text.stdout,
+        "collisions: 0 pair(s) listed, 0 left, 0 node(s) skipped\n",
+        "{}",
+        text.show()
+    );
+    assert_eq!(text.stderr, format!("note: {note}\n"), "{}", text.show());
+    let again = scene.collisions_run(&["--kind", "requirement"], false);
+    assert_eq!(
+        (again.stdout, again.stderr),
+        (text.stdout, text.stderr),
+        "a rerun"
+    );
+}
+
+/// CN6, the notes' order: a norm-less node's note first, then one note per
+/// repeated ID in byte order (`R-01` twice, `R-03` three times), each
+/// counting its holders; a feature document's own `R-03` section is named
+/// `slug/R-03` and still pairs (with R-02, the one node of that title
+/// left).
+#[test]
+fn cn6_the_notes_follow_the_norm_less_one_in_id_order() {
+    let scene = Scene::new("cn6-order");
+    scene.write(
+        OIL_RECORD,
+        &requirement("R-01", "A full lamp burns from dusk to dawn."),
+    );
+    scene.write(
+        OIL_RULE,
+        &requirement("R-01", "The keeper fills it once at dusk."),
+    );
+    scene.write(OIL_NEXT, &requirement("R-02", "No refill before dawn."));
+    for (n, path) in [
+        "docs/records/R/R-03.md",
+        "docs/spec/lamp/wick-rule.md",
+        "docs/spec/lamp/hood-rule.md",
+    ]
+    .iter()
+    .enumerate()
+    {
+        scene.write(path, &requirement("R-03", &format!("Holder {n}.")));
+    }
+    // A requirement whose front-matter does not parse whole: no norm.
+    scene.write(
+        "docs/spec/lamp/broken-rule.md",
+        "---\nid: R-04\nrev: \"3\"\nclass: canon\nstatus: accepted\nowner: owner\nreviewed: \
+         2026-11-01\n---\n\n# Lamp oil lasts one night\n\nA second gauge.\n",
+    );
+    scene.write(
+        "docs/features/oil-tuning.md",
+        &feature(
+            "Oil tuning",
+            &format!("\n### {ONE_NIGHT} {{#R-03}}\n\nThe feature's own count.\n"),
+        ),
+    );
+    scene.commit("Repeated requirements");
+    let document = scene.collisions(&["--kind", "requirement"]);
+    assert_eq!(document["skipped"], json!(1), "{document}");
+    assert_eq!(
+        document["notes"],
+        json!([SKIPPED_NOTE, held_note(2, "R-01"), held_note(3, "R-03")]),
+        "{document}"
+    );
+    // The feature document's path sorts before the records'.
+    assert_eq!(
+        names(&document),
+        [("oil-tuning/R-03".to_owned(), "R-02".to_owned())],
+        "{document}"
+    );
+    assert_eq!(pairs(&document)[0]["titles"], json!(1000), "{document}");
+}
+
+const REST_TUNING: &str = "docs/features/rest-tuning.md";
+/// spec-a's `R-12` title.
+const AT_REST: &str = "Stamina regenerates only at rest";
+
+/// CN6, the mixed case (W1 as iteration 2 words it): `R-12` defined by
+/// spec-a's record and by a feature document's section (`spec check`'s
+/// `id-taken`): the section is `rest-tuning/R-12` and pairs with `R-02` of
+/// the same title (1000); the record, the one holder outside feature
+/// documents, is left out with the note counting 1; a bare `R-12` mark is
+/// refused naming the one canonical form, nothing written.
+#[test]
+fn cn6_a_feature_and_an_outside_holder_name_the_feature_one_only() {
+    let scene = Scene::new("cn6-mixed");
+    scene.write(
+        REST_TUNING,
+        &feature(
+            "Rest tuning",
+            &format!("\n### {AT_REST} {{#R-12}}\n\nThe feature restates it.\n"),
+        ),
+    );
+    scene.write(
+        OIL_NEXT,
+        &format!(
+            "---\nid: R-02\nclass: canon\nstatus: accepted\nowner: owner\nreviewed: \
+             2026-11-01\n---\n\n# {AT_REST}\n\nA second statement of it.\n"
+        ),
+    );
+    scene.commit("R-12 in a feature, R-02 alike");
+    let check = scene.spec(&["check"], b"");
+    let both = format!("{}{}", check.stdout, check.stderr);
+    assert!(
+        both.lines()
+            .any(|line| line.contains("id-taken") && line.contains("`R-12`")),
+        "premise: spec check reports it: {}",
+        check.show()
+    );
+
+    let note = held_note(1, "R-12");
+    let document = scene.collisions(&["--kind", "requirement"]);
+    assert_eq!(
+        names(&document),
+        [("rest-tuning/R-12".to_owned(), "R-02".to_owned())],
+        "{document}"
+    );
+    assert_eq!(pairs(&document)[0]["titles"], json!(1000), "{document}");
+    assert_eq!(document["notes"], json!([note]), "{document}");
+    assert_eq!(document["skipped"], json!(0));
+    let text = scene.collisions_run(&["--kind", "requirement"], false);
+    assert_eq!(text.stderr, format!("note: {note}\n"), "{}", text.show());
+
+    let ledger = scene.ledger();
+    let seq = scene.last_seq();
+    let rest = scene.norm("rest-tuning/R-12");
+    let next = scene.norm("R-02");
+    let run = scene.mark(
+        &batch(vec![item("R-12", &rest, "R-02", &next, "distinct", None)]),
+        &[],
+    );
+    assert_eq!(run.code, 1, "{}", run.show());
+    assert_eq!(
+        mark_document(&run)["notes"]
+            .as_array()
+            .and_then(|notes| notes.last()),
+        Some(&json!(
+            "pairs[0].a: `R-12` is held by more than one node: cite it as `rest-tuning/R-12`"
+        )),
+        "{}",
+        run.show()
+    );
+    assert_eq!(scene.ledger(), ledger, "the ledger unchanged");
+    assert_eq!(scene.last_seq(), seq, "no event");
+}
+
+/// The rule's determinism: the CN scenes' text and JSON (canonical names,
+/// the left-out note) byte-equal on a rerun and at a clone at another root
+/// with another `HOME`.
+#[test]
+fn cn_names_are_byte_equal_at_another_root_and_home() {
+    let scene = three_floors("cn-equal");
+    scene.write(
+        OIL_RECORD,
+        &requirement("R-01", "A full lamp burns from dusk to dawn."),
+    );
+    scene.write(
+        OIL_RULE,
+        &requirement("R-01", "The keeper fills it once at dusk."),
+    );
+    scene.commit("R-01 twice");
+    let args_json = ["collisions", "--any-kind", "--json"];
+    let args_text = ["collisions", "--any-kind"];
+    let first_json = scene.spec(&args_json, b"");
+    first_json.code(0);
+    let first_text = scene.spec(&args_text, b"");
+    first_text.code(0);
+    assert!(
+        first_text
+            .stdout
+            .contains(&format!("1000 | {CLIMB_AC} | {ENDURANCE_AC} |")),
+        "{}",
+        first_text.show()
+    );
+    assert!(
+        first_text.stderr.contains(&held_note(2, "R-01")),
+        "{}",
+        first_text.show()
+    );
+    let other: PathBuf = scene.pair.scratch.join("elsewhere");
+    scene.pair.git.git(
+        scene.pair.scratch.path(),
+        &[
+            "clone",
+            "-q",
+            scene.root().to_str().expect("UTF-8"),
+            other.to_str().expect("UTF-8"),
+        ],
+    );
+    let home = scene.pair.scratch.home("other-home");
+    let timeout = Duration::from_secs(120);
+    for (args, first) in [(&args_json[..], &first_json), (&args_text[..], &first_text)] {
+        let again = scene.spec(args, b"");
+        assert_eq!(
+            (&again.stdout, &again.stderr),
+            (&first.stdout, &first.stderr),
+            "a rerun"
+        );
+        let there = run_spec(&scene.pair, &other, &home, args, b"", timeout);
+        there.code(0);
+        assert_eq!(
+            (&there.stdout, &there.stderr),
+            (&first.stdout, &first.stderr),
+            "{args:?} at another root and HOME"
+        );
+    }
 }

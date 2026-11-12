@@ -20,8 +20,16 @@
 //!   candidate whose sizes cannot reach [`COLLISION_TITLES_MIN`] is never
 //!   intersected. In a group where no trigram exceeds the cap, the pairs are
 //!   those of every shared trigram.
-//! - **Never paired**: two holders of one name (a duplicate ID), and a
-//!   document with its own sections.
+//! - **Names** (task spec `collision-names` CN1 to CN6, [`CollisionNaming`]):
+//!   `slug/ID` in a feature document for a feature-scoped ID (the form
+//!   intake stores, `canonical_id`'s) and for an ID more than one node of
+//!   the universe holds (where `canonical_id` keeps a project-scoped one
+//!   bare); else its bare ID, when it names that one node; else, ID-less,
+//!   its path. A node outside feature documents whose ID more than one node
+//!   holds has no such name: it is not paired, and one note per ID says so.
+//!   A side, a shared target, a mark and the ledger all use these names.
+//! - **Never paired**: two holders of one name (a duplicate ID inside one
+//!   feature document), and a document with its own sections.
 //! - **Order**: score descending, then `a`'s `(path, ord)`, then `b`'s;
 //!   `a` is the side first by `(path, ord)`. Only the best `limit` pairs are
 //!   kept, in a bounded heap; the rest are counted. No hash or map order
@@ -37,7 +45,10 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
 
 use serde::{Deserialize, Serialize};
+use specengine_model::IdScheme;
 
+use crate::check::feature_scoped;
+use crate::check::resolve::feature_stem;
 use crate::drift::is_drift_hash;
 use crate::intake::{FieldProblem, normalized_summary};
 use crate::proposal::proposal_number;
@@ -70,7 +81,8 @@ pub struct CollisionNode {
     pub path: String,
     /// 0 the document, then its sections in source order.
     pub ord: usize,
-    /// Its canonical ID; `None` for an ID-less document.
+    /// Its ID as written; `None` for an ID-less document. What a pair names
+    /// it by is [`CollisionNaming`]'s.
     pub id: Option<String>,
     pub kind: String,
     pub title: Option<String>,
@@ -79,11 +91,6 @@ pub struct CollisionNode {
 }
 
 impl CollisionNode {
-    /// What a pair and a mark name it by: its ID, else its path.
-    pub fn name(&self) -> &str {
-        self.id.as_deref().unwrap_or(&self.path)
-    }
-
     fn key(&self) -> (&str, usize) {
         (self.path.as_str(), self.ord)
     }
@@ -97,8 +104,25 @@ pub struct CollisionTarget {
     pub holder_ord: usize,
     pub end_path: String,
     pub end_ord: usize,
-    /// The end's name: its ID, else its path.
+    /// The end's ID as written, else its path; a pair names it as
+    /// [`CollisionNaming`] names a node.
     pub end_name: String,
+}
+
+/// What the pass names a node by (task spec `collision-names`): the
+/// project's ID scheme and its features directory, read through
+/// [`feature_stem`] and [`feature_scoped`]. A name is `canonical_id`'s form
+/// (`slug/ID` for a feature-scoped ID in a feature document), plus `slug/ID`
+/// for any ID more than one node holds when this holder is a feature
+/// document: a project-scoped `R-97` repeated there is `feat/R-97`, where
+/// `canonical_id` gives the bare `R-97`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CollisionNaming<'a> {
+    /// `[ids]`: which IDs are feature-scoped.
+    pub scheme: &'a IdScheme,
+    /// `[paths] features`: a document directly under it is a feature
+    /// document, its stem the slug.
+    pub features: &'a str,
 }
 
 /// The index's universe in one snapshot, by `(path, ord)`.
@@ -157,6 +181,8 @@ pub struct JudgedPair {
 /// One side of a listed pair.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PairSide {
+    /// Its canonical reference ([`CollisionNaming`]); `None` for an ID-less
+    /// document.
     pub id: Option<String>,
     pub path: String,
     pub ord: usize,
@@ -166,7 +192,7 @@ pub struct PairSide {
 }
 
 impl PairSide {
-    /// Its name: its ID, else its path.
+    /// Its name: its canonical reference, else its path.
     pub fn name(&self) -> &str {
         self.id.as_deref().unwrap_or(&self.path)
     }
@@ -212,13 +238,20 @@ pub struct CollisionQuery<'a> {
     pub limit: usize,
 }
 
-/// The pairs listed, how many qualifying pairs lie past them, and how many
-/// nodes of the kinds kept have no `norm_hash`.
+/// The pairs listed, how many qualifying pairs lie past them, how many
+/// nodes of the kinds kept have no `norm_hash`, and the nodes left out for
+/// want of a name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CollisionList {
     pub pairs: Vec<CollisionPair>,
     pub left: usize,
     pub skipped: usize,
+    /// One per ID that more than one node holds and that leaves out a node
+    /// outside feature documents, IDs byte-wise: ``<n> node(s) outside
+    /// feature documents not paired: their ID `<ID>` is held by more than
+    /// one node (`spec check` reports it)``, `n` the nodes of the kinds
+    /// kept, with a norm, it leaves out.
+    pub notes: Vec<String>,
 }
 
 /// The caps one pass runs under: [`CollisionCaps::ENGINE`], core's; a unit
@@ -238,15 +271,17 @@ impl CollisionCaps {
     };
 }
 
-/// The pairs of `rows` that may collide, as `query` asks, the verdicts of
-/// `judged` applied: at most `query.limit`, in order, and how many
-/// qualifying pairs are left past them.
+/// The pairs of `rows` that may collide, each side named as `naming` names
+/// it, as `query` asks, the verdicts of `judged` applied: at most
+/// `query.limit`, in order, and how many qualifying pairs are left past
+/// them.
 pub fn collision_pairs(
     rows: &CollisionRows,
+    naming: &CollisionNaming<'_>,
     judged: &[JudgedPair],
     query: &CollisionQuery<'_>,
 ) -> CollisionList {
-    collision_pairs_capped(rows, judged, query, &CollisionCaps::ENGINE)
+    collision_pairs_capped(rows, naming, judged, query, &CollisionCaps::ENGINE)
 }
 
 /// A qualifying pair before its texts: global node indices, `x` first.
@@ -289,26 +324,54 @@ impl Eq for Candidate {}
 /// [`collision_pairs`] under `caps`.
 pub(crate) fn collision_pairs_capped(
     rows: &CollisionRows,
+    naming: &CollisionNaming<'_>,
     judged: &[JudgedPair],
     query: &CollisionQuery<'_>,
     caps: &CollisionCaps,
 ) -> CollisionList {
-    // The paired nodes, by `(path, ord)`: a kept kind, and a norm.
-    let kept = |node: &&CollisionNode| query.kinds.is_empty() || query.kinds.contains(&node.kind);
+    // Every node's name over the whole universe, so `--kind` changes none.
+    let named = Names::of(rows, naming);
+    // The paired nodes, by `(path, ord)`: a kept kind, a norm and a name.
+    let kept = |node: &CollisionNode| query.kinds.is_empty() || query.kinds.contains(&node.kind);
     let skipped = rows
         .nodes
         .iter()
-        .filter(kept)
+        .filter(|node| kept(node))
         .filter(|node| node.norm_hash.is_none())
         .count();
-    let mut nodes: Vec<&CollisionNode> = rows
-        .nodes
-        .iter()
-        .filter(kept)
-        .filter(|node| node.norm_hash.is_some())
+    let mut pool: Vec<usize> = (0..rows.nodes.len())
+        .filter(|&index| {
+            let node = &rows.nodes[index];
+            kept(node) && node.norm_hash.is_some()
+        })
         .collect();
-    nodes.sort_by(|a, b| a.key().cmp(&b.key()));
-    nodes.dedup_by(|a, b| a.key() == b.key());
+    pool.sort_by(|&x, &y| rows.nodes[x].key().cmp(&rows.nodes[y].key()));
+    pool.dedup_by(|x, y| rows.nodes[*x].key() == rows.nodes[*y].key());
+    // W1: a node with no unambiguous name is left out, counted by its ID.
+    let mut unnamed: BTreeMap<&str, usize> = BTreeMap::new();
+    pool.retain(|&index| {
+        if named.of[index].is_some() {
+            return true;
+        }
+        if let Some(id) = rows.nodes[index].id.as_deref() {
+            *unnamed.entry(id).or_default() += 1;
+        }
+        false
+    });
+    let notes = unnamed
+        .into_iter()
+        .map(|(id, count)| {
+            format!(
+                "{count} node(s) outside feature documents not paired: their ID `{id}` is held by \
+                 more than one node (`spec check` reports it)"
+            )
+        })
+        .collect();
+    let nodes: Vec<&CollisionNode> = pool.iter().map(|&index| &rows.nodes[index]).collect();
+    let node_names: Vec<&str> = pool
+        .iter()
+        .map(|&index| named.of[index].as_deref().unwrap_or_default())
+        .collect();
 
     // The groups, each its members' global indices in order.
     let mut groups: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
@@ -330,17 +393,17 @@ pub(crate) fn collision_pairs_capped(
 
     // Every target's name once, by `(path, ord)`, and each group's holders
     // of it.
-    let mut ends: BTreeMap<(&str, usize), &str> = BTreeMap::new();
+    let mut ends: BTreeMap<(&str, usize), String> = BTreeMap::new();
     for target in &rows.targets {
         ends.entry((target.end_path.as_str(), target.end_ord))
-            .or_insert(target.end_name.as_str());
+            .or_insert_with(|| named.end(rows, naming, target));
     }
     let end_rank: HashMap<(&str, usize), usize> = ends
         .keys()
         .enumerate()
         .map(|(rank, key)| (*key, rank))
         .collect();
-    let names: Vec<&str> = ends.values().copied().collect();
+    let end_names: Vec<String> = ends.into_values().collect();
     let mut held: Vec<BTreeMap<usize, BTreeSet<usize>>> = vec![BTreeMap::new(); groups.len()];
     for target in &rows.targets {
         let Some(&holder) = index_of.get(&(target.holder_path.as_str(), target.holder_ord)) else {
@@ -410,10 +473,11 @@ pub(crate) fn collision_pairs_capped(
                 }
                 let (gx, gy) = (members[x], members[y]);
                 let (a, b) = (nodes[gx], nodes[gy]);
-                if a.name() == b.name() || (a.path == b.path && (a.ord == 0 || b.ord == 0)) {
+                let (a_name, b_name) = (node_names[gx], node_names[gy]);
+                if a_name == b_name || (a.path == b.path && (a.ord == 0 || b.ord == 0)) {
                     continue;
                 }
-                let marked = match verdict_on(&ledger, a, b) {
+                let marked = match verdict_on(&ledger, (a_name, a), (b_name, b)) {
                     Verdict::Holds => continue,
                     Verdict::Changed(marked) => Some(marked),
                     Verdict::None => None,
@@ -449,7 +513,7 @@ pub(crate) fn collision_pairs_capped(
                 .shared
                 .iter()
                 .take(COLLISION_SHARED_LISTED_MAX)
-                .map(|&rank| names[rank].to_owned())
+                .map(|&rank| end_names[rank].clone())
                 .collect();
             let reason = pair_reason(
                 candidate.titles,
@@ -458,8 +522,8 @@ pub(crate) fn collision_pairs_capped(
                 candidate.marked.as_ref(),
             );
             CollisionPair {
-                a: side(nodes[candidate.x]),
-                b: side(nodes[candidate.y]),
+                a: side(nodes[candidate.x], node_names[candidate.x]),
+                b: side(nodes[candidate.y], node_names[candidate.y]),
                 score: candidate.score,
                 titles: candidate.titles,
                 shared: candidate.shared.len(),
@@ -473,6 +537,7 @@ pub(crate) fn collision_pairs_capped(
         pairs,
         left,
         skipped,
+        notes,
     }
 }
 
@@ -485,14 +550,15 @@ enum Verdict {
     None,
 }
 
-/// The verdict stored for the names of `x` and `y`, byte-wise ordered.
+/// The verdict stored for the names of `x` and `y` (each a name and its
+/// node), byte-wise ordered.
 fn verdict_on(
     ledger: &HashMap<(&str, &str), &JudgedPair>,
-    x: &CollisionNode,
-    y: &CollisionNode,
+    x: (&str, &CollisionNode),
+    y: (&str, &CollisionNode),
 ) -> Verdict {
-    let (low, high) = if x.name() <= y.name() { (x, y) } else { (y, x) };
-    let Some(row) = ledger.get(&(low.name(), high.name())) else {
+    let ((low_name, low), (high_name, high)) = if x.0 <= y.0 { (x, y) } else { (y, x) };
+    let Some(row) = ledger.get(&(low_name, high_name)) else {
         return Verdict::None;
     };
     if low.norm_hash.as_deref() == Some(row.a_norm.as_str())
@@ -507,14 +573,120 @@ fn verdict_on(
     })
 }
 
-fn side(node: &CollisionNode) -> PairSide {
+/// `node` as a side, `name` its name: its `id` the name, `None` ID-less.
+fn side(node: &CollisionNode, name: &str) -> PairSide {
     PairSide {
-        id: node.id.clone(),
+        id: node.id.as_ref().map(|_| name.to_owned()),
         path: node.path.clone(),
         ord: node.ord,
         kind: node.kind.clone(),
         title: node.title.clone(),
         norm_hash: node.norm_hash.clone().unwrap_or_default(),
+    }
+}
+
+/// The names of a universe's nodes (task spec `collision-names`), over
+/// every node of `rows`, whatever kinds a call keeps.
+struct Names<'r> {
+    /// Parallel to the rows' nodes: its canonical reference, else its path
+    /// (ID-less); `None` when its ID more than one node holds and it lies
+    /// outside feature documents (W1).
+    of: Vec<Option<String>>,
+    /// Each ID's holders, indices into the rows' nodes, each `(path, ord)`
+    /// once, by `(path, ord)`.
+    holders: HashMap<&'r str, Vec<usize>>,
+    /// Each `(path, ord)`'s first index into the rows' nodes.
+    at: HashMap<(&'r str, usize), usize>,
+}
+
+impl<'r> Names<'r> {
+    fn of(rows: &'r CollisionRows, naming: &CollisionNaming<'_>) -> Self {
+        let mut at: HashMap<(&str, usize), usize> = HashMap::with_capacity(rows.nodes.len());
+        let mut holders: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (index, node) in rows.nodes.iter().enumerate() {
+            if at.contains_key(&node.key()) {
+                continue;
+            }
+            at.insert(node.key(), index);
+            if let Some(id) = node.id.as_deref() {
+                holders.entry(id).or_default().push(index);
+            }
+        }
+        for held in holders.values_mut() {
+            held.sort_by(|&x, &y| rows.nodes[x].key().cmp(&rows.nodes[y].key()));
+        }
+        let of = rows
+            .nodes
+            .iter()
+            .map(|node| {
+                let Some(id) = node.id.as_deref() else {
+                    return Some(node.path.clone());
+                };
+                let shared = holders.get(id).is_some_and(|held| held.len() > 1);
+                match feature_stem(naming.features, &node.path) {
+                    Some(slug) if shared || feature_scoped(naming.scheme, id) => {
+                        Some(format!("{slug}/{id}"))
+                    }
+                    Some(_) => Some(id.to_owned()),
+                    None if shared => None,
+                    None => Some(id.to_owned()),
+                }
+            })
+            .collect();
+        Self { of, holders, at }
+    }
+
+    /// A link target's name: its node's when the universe holds it (a W1
+    /// node's bare ID); else its ID named as a node's, the universe's
+    /// holders of it counted with it; else (ID-less) its path.
+    fn end(
+        &self,
+        rows: &CollisionRows,
+        naming: &CollisionNaming<'_>,
+        target: &CollisionTarget,
+    ) -> String {
+        if let Some(&index) = self.at.get(&(target.end_path.as_str(), target.end_ord)) {
+            let node = &rows.nodes[index];
+            return self.of[index]
+                .clone()
+                .unwrap_or_else(|| node.id.clone().unwrap_or_else(|| node.path.clone()));
+        }
+        let id = &target.end_name;
+        if *id == target.end_path {
+            return id.clone();
+        }
+        let shared = self.holders.contains_key(id.as_str());
+        match feature_stem(naming.features, &target.end_path) {
+            Some(slug) if shared || feature_scoped(naming.scheme, id) => format!("{slug}/{id}"),
+            _ => id.clone(),
+        }
+    }
+
+    /// Why a mark's `name` names no node: a bare ID that is feature-scoped,
+    /// or more than one node holds, in the resolver's words, naming each
+    /// canonical form in path order; else no live node.
+    fn unknown(&self, name: &str, naming: &CollisionNaming<'_>) -> String {
+        let Some(held) = self.holders.get(name) else {
+            return format!("no live node `{name}`");
+        };
+        let mut cited: Vec<String> = held
+            .iter()
+            .filter_map(|&index| self.of[index].as_deref())
+            .map(|canonical| format!("`{canonical}`"))
+            .collect();
+        cited.dedup();
+        let cited = cited.join(" or ");
+        match (feature_scoped(naming.scheme, name), cited.is_empty()) {
+            (true, false) => format!("`{name}` is feature-scoped: cite it as {cited}"),
+            (true, true) => {
+                format!("`{name}` is feature-scoped and no feature document defines it")
+            }
+            (false, false) => format!("`{name}` is held by more than one node: cite it as {cited}"),
+            (false, true) => format!(
+                "`{name}` is held by more than one node outside feature documents, never paired \
+                 (`spec check` reports it)"
+            ),
+        }
     }
 }
 
@@ -832,19 +1004,26 @@ pub fn proposal_problem(verdict: CollisionVerdict, proposal: Option<&str>) -> Op
 }
 
 /// Each pair's names against the universe of `rows`, as `spec collisions`
-/// names its nodes (no alias), in input order: the first name no node holds
-/// is `pairs[i].a: no live node `X``; a side whose norm no node of that name
-/// holds now adds a note, never a refusal.
+/// names its nodes with `naming` (no alias), in input order. The first name
+/// no node is named by is refused: a bare ID that is feature-scoped or more
+/// than one node holds as ``pairs[i].a: `AC-01` is feature-scoped: cite it
+/// as `one/AC-01` or `two/AC-01` `` (task spec `collision-names` CN3), any
+/// other as ``pairs[i].a: no live node `X` ``. A side whose norm no node of
+/// that name holds now adds a note, never a refusal.
 pub fn judged_notes(
     rows: &CollisionRows,
+    naming: &CollisionNaming<'_>,
     pairs: &[PairJudgement],
 ) -> Result<Vec<String>, FieldProblem> {
+    let named = Names::of(rows, naming);
     let mut norms: HashMap<&str, Vec<Option<&str>>> = HashMap::new();
-    for node in &rows.nodes {
-        norms
-            .entry(node.name())
-            .or_default()
-            .push(node.norm_hash.as_deref());
+    for (node, name) in rows.nodes.iter().zip(&named.of) {
+        if let Some(name) = name.as_deref() {
+            norms
+                .entry(name)
+                .or_default()
+                .push(node.norm_hash.as_deref());
+        }
     }
     let mut notes = Vec::new();
     for (index, pair) in pairs.iter().enumerate() {
@@ -852,7 +1031,7 @@ pub fn judged_notes(
             let Some(held) = norms.get(name.as_str()) else {
                 return Err(problem(
                     format!("pairs[{index}].{field}"),
-                    format!("no live node `{name}`"),
+                    named.unknown(name, naming),
                 ));
             };
             if !held.contains(&Some(norm.as_str())) {
@@ -882,15 +1061,45 @@ mod tests {
     //! eight named, the never-paired rules, the verdicts, `left`, the order
     //! and its independence of the input's order, and the marks' caps. Every
     //! name is invented here (neutral words, no project's prefix or kind).
+    //!
+    //! docs/features/collision-names.md "Acceptance criteria" CN1 to CN6,
+    //! the core's units, under a scheme whose `SEG` is feature-scoped and
+    //! whose features lie in `notes/features`: a feature document's `SEG`
+    //! sections are named `slug/ID` and pair; a side, a shared target, a mark
+    //! and the ledger use that name; an ID two nodes hold outside feature
+    //! documents is left out with one note per ID; a bare `SEG` mark is
+    //! refused naming its canonical forms.
+
+    use specengine_model::IdScheme;
 
     use super::{
         COLLISION_MARKS_MAX, COLLISION_SHARED_LISTED_MAX, COLLISION_TARGET_DEGREE_MAX,
-        COLLISION_TRIGRAM_DF_MAX, CollisionCaps, CollisionList, CollisionNode, CollisionQuery,
-        CollisionRows, CollisionTarget, CollisionVerdict, JudgedPair, PairJudgement,
-        collision_pairs, collision_pairs_capped, judged_notes, judgement_problem,
+        COLLISION_TRIGRAM_DF_MAX, CollisionCaps, CollisionList, CollisionNaming, CollisionNode,
+        CollisionQuery, CollisionRows, CollisionTarget, CollisionVerdict, JudgedPair,
+        PairJudgement, collision_pairs, collision_pairs_capped, judged_notes, judgement_problem,
     };
+    use crate::scheme_toml::scheme_from_toml;
 
     const KIND: &str = "plot";
+    /// The features directory of every naming here.
+    const FEATURES: &str = "notes/features";
+
+    /// `PLT` project-scoped (`shape = "name"`), `SEG` feature-scoped.
+    fn scheme() -> IdScheme {
+        scheme_from_toml(
+            "[ids]\nPLT = { kind = \"plot\", shape = \"name\" }\n\
+             SEG = { kind = \"plot\", width = 2, scope = \"feature\" }\n",
+        )
+        .expect("the scheme")
+    }
+
+    /// [`scheme`] with features in [`FEATURES`].
+    fn naming(scheme: &IdScheme) -> CollisionNaming<'_> {
+        CollisionNaming {
+            scheme,
+            features: FEATURES,
+        }
+    }
 
     fn norm(n: usize) -> String {
         format!("b3:{n:064x}")
@@ -918,8 +1127,10 @@ mod tests {
     }
 
     fn pairs_of(rows: &CollisionRows, judged: &[JudgedPair], limit: usize) -> CollisionList {
+        let scheme = scheme();
         collision_pairs(
             rows,
+            &naming(&scheme),
             judged,
             &CollisionQuery {
                 kinds: &[],
@@ -983,8 +1194,10 @@ mod tests {
             kind: "braid".to_owned(),
             ..node(&format!("s{n:03}.md"), 0, None, Some("Lamp oil"))
         }));
+        let scheme = scheme();
         let only = collision_pairs(
             &mixed,
+            &naming(&scheme),
             &[],
             &CollisionQuery {
                 kinds: &[KIND.to_owned()],
@@ -1010,8 +1223,10 @@ mod tests {
             targets: Vec::new(),
             skipped: 0,
         };
+        let scheme = scheme();
         collision_pairs_capped(
             &rows,
+            &naming(&scheme),
             &[],
             &CollisionQuery {
                 kinds: &[],
@@ -1093,8 +1308,10 @@ mod tests {
         assert_eq!(listed.pairs.len(), 1);
         assert_eq!((listed.pairs[0].titles, listed.pairs[0].score), (500, 500));
         assert_eq!(listed.pairs[0].reason, "titles alike 0.500");
+        let scheme = scheme();
         let raised = collision_pairs_capped(
             &rows("ABCX"),
+            &naming(&scheme),
             &[],
             &CollisionQuery {
                 kinds: &[],
@@ -1140,9 +1357,10 @@ mod tests {
     }
 
     /// W10 and the duplicate ID: a document and its own section with one
-    /// title never pair, two sections of it do; two holders of one ID never
-    /// pair; a node without a norm is never paired and counts in `skipped`
-    /// (its kind's only).
+    /// title never pair, two sections of it do; two holders of one ID
+    /// outside feature documents are left out (collision-names W1), one
+    /// note; a node without a norm is never paired and counts in `skipped`
+    /// (its kind's only), in no note.
     #[test]
     fn the_never_paired_rules() {
         let rows = CollisionRows {
@@ -1172,8 +1390,11 @@ mod tests {
             .map(|pair| (pair.a.name(), pair.b.name()))
             .collect();
         assert_eq!(names, [("PLT-ONE", "PLT-TWO")], "{list:?}");
+        assert_eq!(list.notes, [held(2, "PLT-TWIN")], "{list:?}");
+        let scheme = scheme();
         let only = collision_pairs(
             &rows,
+            &naming(&scheme),
             &[],
             &CollisionQuery {
                 kinds: &[KIND.to_owned()],
@@ -1377,17 +1598,366 @@ mod tests {
             targets: Vec::new(),
             skipped: 0,
         };
+        let scheme = scheme();
+        let naming = naming(&scheme);
         assert_eq!(
-            judged_notes(&rows, &[judgement("PLT-Y", "PLT-Z")]),
+            judged_notes(&rows, &naming, &[judgement("PLT-Y", "PLT-Z")]),
             Ok(vec![
                 "pairs[0]: PLT-Z changed since it was listed; the pair will be listed again"
                     .to_owned()
             ])
         );
-        let unknown = judged_notes(&rows, &[judgement("PLT-Y", "PLT-W")]).expect_err("unknown");
+        let unknown =
+            judged_notes(&rows, &naming, &[judgement("PLT-Y", "PLT-W")]).expect_err("unknown");
         assert_eq!(
             (unknown.field.as_str(), unknown.problem.as_str()),
             ("pairs[0].b", "no live node `PLT-W`")
         );
+    }
+
+    // ------------------------------------------------ collision-names
+
+    /// The W1 note for `count` nodes outside feature documents holding
+    /// `id` (iteration 2's wording).
+    fn held(count: usize, id: &str) -> String {
+        format!(
+            "{count} node(s) outside feature documents not paired: their ID `{id}` is held by \
+             more than one node (`spec check` reports it)"
+        )
+    }
+
+    /// W1, the mixed case: `PLT-M` held by a feature document's section and
+    /// by one node outside: the section is `one/PLT-M` and pairs with
+    /// `PLT-Y` of its title; the outside one is left out, the note counting
+    /// 1; a bare `PLT-M` mark is refused naming `one/PLT-M` alone.
+    #[test]
+    fn a_feature_and_an_outside_holder_leave_the_outside_one_out() {
+        let hood = Some("Brass hood");
+        let rows = CollisionRows {
+            nodes: vec![
+                node(&format!("{FEATURES}/one.md"), 1, Some("PLT-M"), hood),
+                node("plots/m.md", 0, Some("PLT-M"), hood),
+                node("plots/y.md", 0, Some("PLT-Y"), hood),
+            ],
+            targets: Vec::new(),
+            skipped: 0,
+        };
+        let list = pairs_of(&rows, &[], 50);
+        assert_eq!(named(&list), owned(&[("one/PLT-M", "PLT-Y")]), "{list:?}");
+        assert_eq!(list.notes, [held(1, "PLT-M")]);
+        let scheme = scheme();
+        let refused = judged_notes(&rows, &naming(&scheme), &[judgement("PLT-M", "PLT-Y")])
+            .expect_err("a bare repeated ID");
+        assert_eq!(
+            (refused.field.as_str(), refused.problem.as_str()),
+            (
+                "pairs[0].a",
+                "`PLT-M` is held by more than one node: cite it as `one/PLT-M`"
+            )
+        );
+    }
+
+    /// A `SEG-01` section titled `Floor holds` of feature document `slug`
+    /// at `ord`.
+    fn floor(slug: &str, ord: usize) -> CollisionNode {
+        node(
+            &format!("{FEATURES}/{slug}.md"),
+            ord,
+            Some("SEG-01"),
+            Some("Floor holds"),
+        )
+    }
+
+    /// The names of a list's pairs.
+    fn named(list: &CollisionList) -> Vec<(String, String)> {
+        list.pairs
+            .iter()
+            .map(|pair| (pair.a.name().to_owned(), pair.b.name().to_owned()))
+            .collect()
+    }
+
+    fn owned(names: &[(&str, &str)]) -> Vec<(String, String)> {
+        names
+            .iter()
+            .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+            .collect()
+    }
+
+    /// CN1: two feature documents' `SEG-01` pair as `one/SEG-01` and
+    /// `two/SEG-01`, each side's `id` the name; a project-scoped ID held once
+    /// in a feature document keeps its bare ID; an ID-less node its path
+    /// (`id` null); one feature document's two holders of `SEG-01` (one
+    /// name) never pair with each other. M: the bare ID kept as the name;
+    /// the never-paired rule comparing bare IDs.
+    #[test]
+    fn feature_scoped_ids_pair_by_slug_and_id() {
+        let rows = CollisionRows {
+            nodes: vec![
+                floor("one", 1),
+                floor("two", 1),
+                node(
+                    &format!("{FEATURES}/two.md"),
+                    2,
+                    Some("PLT-ONCE"),
+                    Some("Floor hold"),
+                ),
+            ],
+            targets: Vec::new(),
+            skipped: 0,
+        };
+        let list = pairs_of(&rows, &[], 50);
+        // ` floor holds ` and ` floor hold `: 9 of 11 + 10 trigrams,
+        // floor(18 000 / 21) = 857.
+        assert_eq!(
+            named(&list),
+            owned(&[
+                ("one/SEG-01", "two/SEG-01"),
+                ("one/SEG-01", "PLT-ONCE"),
+                ("two/SEG-01", "PLT-ONCE"),
+            ]),
+            "{list:?}"
+        );
+        assert_eq!(list.pairs[0].a.id.as_deref(), Some("one/SEG-01"));
+        assert_eq!(list.pairs[0].b.id.as_deref(), Some("two/SEG-01"));
+        assert_eq!(list.pairs[0].a.path, format!("{FEATURES}/one.md"));
+        assert_eq!(list.pairs[0].titles, 1000);
+        assert_eq!(list.pairs[1].titles, 857);
+        assert!(list.notes.is_empty(), "{list:?}");
+
+        let idless = CollisionRows {
+            nodes: vec![
+                node("loose.md", 0, None, Some("Floor holds")),
+                floor("one", 1),
+                floor("one", 2),
+            ],
+            targets: Vec::new(),
+            skipped: 0,
+        };
+        let list = pairs_of(&idless, &[], 50);
+        // `loose.md` sorts before `notes/…`: it is `a`.
+        assert_eq!(
+            named(&list),
+            owned(&[("loose.md", "one/SEG-01"), ("loose.md", "one/SEG-01")]),
+            "the two `one/SEG-01`s never pair: {list:?}"
+        );
+        assert_eq!(list.pairs[0].a.id, None, "ID-less: id null");
+        assert_eq!(
+            (list.pairs[0].b.ord, list.pairs[1].b.ord),
+            (1, 2),
+            "{list:?}"
+        );
+    }
+
+    /// CN2: three feature documents' `SEG-01`; a verdict on `one/SEG-01`
+    /// and `two/SEG-01` holding both norms hides that pair alone, the two
+    /// others listed unmarked; a verdict keyed by the bare `SEG-01` hides
+    /// nothing. M: the ledger matched by bare ID.
+    #[test]
+    fn a_verdict_by_canonical_names_hides_that_pair_alone() {
+        let (one, two, three) = (floor("one", 1), floor("two", 1), floor("three", 1));
+        let (n1, n2) = (
+            one.norm_hash.clone().unwrap(),
+            two.norm_hash.clone().unwrap(),
+        );
+        let rows = CollisionRows {
+            nodes: vec![one, two, three],
+            targets: Vec::new(),
+            skipped: 0,
+        };
+        assert_eq!(
+            named(&pairs_of(&rows, &[], 50)),
+            owned(&[
+                ("one/SEG-01", "three/SEG-01"),
+                ("one/SEG-01", "two/SEG-01"),
+                ("three/SEG-01", "two/SEG-01"),
+            ])
+        );
+        let held = [judged("one/SEG-01", n1.clone(), "two/SEG-01", n2.clone())];
+        let list = pairs_of(&rows, &held, 50);
+        assert_eq!(
+            named(&list),
+            owned(&[
+                ("one/SEG-01", "three/SEG-01"),
+                ("three/SEG-01", "two/SEG-01"),
+            ]),
+            "{list:?}"
+        );
+        assert!(
+            list.pairs.iter().all(|pair| pair.marked.is_none()),
+            "{list:?}"
+        );
+        let bare = [judged("SEG-01", n1, "two/SEG-01", n2)];
+        assert_eq!(pairs_of(&rows, &bare, 50).pairs.len(), 3, "an old bare row");
+    }
+
+    /// CN4: a target end in a feature document is named as its node is
+    /// (`one/SEG-01`), in the universe or not (`two/SEG-05`, a kind-less
+    /// end); a project-scoped end held once keeps its bare ID; an ID-less
+    /// end its path. M: `end_name` left bare.
+    #[test]
+    fn a_shared_target_is_named_as_its_node() {
+        let (x, y) = (node("x.md", 0, None, None), node("y.md", 0, None, None));
+        let one = floor("one", 1);
+        let end = |holder: &CollisionNode, path: &str, ord: usize, name: &str| CollisionTarget {
+            holder_path: holder.path.clone(),
+            holder_ord: holder.ord,
+            end_path: path.to_owned(),
+            end_ord: ord,
+            end_name: name.to_owned(),
+        };
+        let two = format!("{FEATURES}/two.md");
+        let one_path = format!("{FEATURES}/one.md");
+        let mut targets = Vec::new();
+        for holder in [&x, &y] {
+            targets.push(end(holder, &one_path, 1, "SEG-01"));
+            targets.push(end(holder, &two, 3, "SEG-05"));
+            targets.push(end(holder, "ends/rule.md", 0, "PLT-RULE"));
+            targets.push(end(holder, "ends/plain.md", 0, "ends/plain.md"));
+        }
+        let rows = CollisionRows {
+            nodes: vec![x, y, one],
+            targets,
+            skipped: 0,
+        };
+        let list = pairs_of(&rows, &[], 50);
+        let pair = list
+            .pairs
+            .iter()
+            .find(|pair| (pair.a.name(), pair.b.name()) == ("x.md", "y.md"))
+            .unwrap_or_else(|| panic!("x and y: {list:?}"));
+        assert_eq!(
+            pair.shared_targets,
+            ["ends/plain.md", "PLT-RULE", "one/SEG-01", "two/SEG-05"]
+        );
+        assert_eq!(
+            pair.reason,
+            "4 link target(s) shared: `ends/plain.md`, `PLT-RULE`, `one/SEG-01`, `two/SEG-05`"
+        );
+    }
+
+    /// CN6 (W1): `PLT-X` held by two nodes outside feature documents and
+    /// `PLT-W` by three are left out (no pair, though `PLT-Y` shares their
+    /// title), one note per ID in byte order, each counting its normed
+    /// holders of the kinds kept; a norm-less holder counts in `skipped`
+    /// only; a feature document's own `PLT-X` is named `one/PLT-X` and
+    /// pairs. `--kind` changes no name: a braid holder of `PLT-Z` keeps the
+    /// plot one out (it would pair with `PLT-Y`). M: the note dropped.
+    #[test]
+    fn an_id_held_twice_outside_features_is_left_out_with_one_note() {
+        let hood = Some("Brass hood");
+        let rows = CollisionRows {
+            nodes: vec![
+                node("plots/a.md", 0, Some("PLT-X"), hood),
+                node("plots/b.md", 0, Some("PLT-X"), hood),
+                CollisionNode {
+                    norm_hash: None,
+                    ..node("plots/c.md", 0, Some("PLT-X"), hood)
+                },
+                node("plots/w1.md", 0, Some("PLT-W"), hood),
+                node("plots/w2.md", 0, Some("PLT-W"), hood),
+                node("plots/w3.md", 0, Some("PLT-W"), hood),
+                node("plots/y.md", 0, Some("PLT-Y"), hood),
+            ],
+            targets: Vec::new(),
+            skipped: 1,
+        };
+        let list = pairs_of(&rows, &[], 50);
+        assert_eq!(list.pairs, Vec::new(), "{list:?}");
+        assert_eq!(list.skipped, 1);
+        assert_eq!(list.notes, [held(3, "PLT-W"), held(2, "PLT-X")]);
+
+        let mut with_feature = rows.clone();
+        with_feature
+            .nodes
+            .push(node(&format!("{FEATURES}/one.md"), 1, Some("PLT-X"), hood));
+        let list = pairs_of(&with_feature, &[], 50);
+        assert_eq!(named(&list), owned(&[("one/PLT-X", "PLT-Y")]), "{list:?}");
+        assert_eq!(list.notes, [held(3, "PLT-W"), held(2, "PLT-X")]);
+
+        let mixed = CollisionRows {
+            nodes: vec![
+                node("plots/z1.md", 0, Some("PLT-Z"), hood),
+                CollisionNode {
+                    kind: "braid".to_owned(),
+                    ..node("plots/z2.md", 0, Some("PLT-Z"), hood)
+                },
+                node("plots/y.md", 0, Some("PLT-Y"), hood),
+            ],
+            targets: Vec::new(),
+            skipped: 0,
+        };
+        let scheme = scheme();
+        let only = collision_pairs(
+            &mixed,
+            &naming(&scheme),
+            &[],
+            &CollisionQuery {
+                kinds: &[KIND.to_owned()],
+                any_kind: false,
+                limit: 50,
+            },
+        );
+        assert_eq!(only.pairs, Vec::new(), "{only:?}");
+        assert_eq!(only.notes, [held(1, "PLT-Z")]);
+        let every = pairs_of(&mixed, &[], 50);
+        assert_eq!(every.pairs, Vec::new(), "{every:?}");
+        assert_eq!(every.notes, [held(2, "PLT-Z")]);
+    }
+
+    /// CN3: a mark naming `SEG-01` bare, as `a` or `b`, is refused with the
+    /// resolver's reason naming both canonical forms in path order; `SEG-02`,
+    /// held once, with its one form; an unknown `slug/ID` keeps `no live
+    /// node`; the canonical names pass. M: a bare name accepted as any
+    /// holder.
+    #[test]
+    fn a_bare_feature_scoped_mark_is_refused_with_its_forms() {
+        let rows = CollisionRows {
+            nodes: vec![
+                floor("two", 1),
+                floor("one", 1),
+                node(
+                    &format!("{FEATURES}/one.md"),
+                    2,
+                    Some("SEG-02"),
+                    Some("Ceiling"),
+                ),
+            ],
+            targets: Vec::new(),
+            skipped: 0,
+        };
+        let scheme = scheme();
+        let naming = naming(&scheme);
+        let mut good = judgement("one/SEG-01", "two/SEG-01");
+        good.a_norm = rows.nodes[1].norm_hash.clone().unwrap();
+        good.b_norm = rows.nodes[0].norm_hash.clone().unwrap();
+        assert_eq!(judged_notes(&rows, &naming, &[good]), Ok(Vec::new()));
+        for (pair, field, problem) in [
+            (
+                judgement("SEG-01", "two/SEG-01"),
+                "pairs[0].a",
+                "`SEG-01` is feature-scoped: cite it as `one/SEG-01` or `two/SEG-01`",
+            ),
+            (
+                judgement("one/SEG-01", "SEG-01"),
+                "pairs[0].b",
+                "`SEG-01` is feature-scoped: cite it as `one/SEG-01` or `two/SEG-01`",
+            ),
+            (
+                judgement("SEG-02", "two/SEG-01"),
+                "pairs[0].a",
+                "`SEG-02` is feature-scoped: cite it as `one/SEG-02`",
+            ),
+            (
+                judgement("nine/SEG-01", "two/SEG-01"),
+                "pairs[0].a",
+                "no live node `nine/SEG-01`",
+            ),
+        ] {
+            let refused = judged_notes(&rows, &naming, &[pair]).expect_err("refused");
+            assert_eq!(
+                (refused.field.as_str(), refused.problem.as_str()),
+                (field, problem)
+            );
+        }
     }
 }
