@@ -43,6 +43,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/department-split.md](features/department-split.md) shipped
 - [docs/features/departments.md](features/departments.md) shipped
 - [docs/features/design-foundation.md](features/design-foundation.md) shipped
+- [docs/features/design-sweep.md](features/design-sweep.md) shipped
 - [docs/features/doc-modal.md](features/doc-modal.md) shipped
 - [docs/features/drift-follow-up.md](features/drift-follow-up.md) shipped
 - [docs/features/drift-queue.md](features/drift-queue.md) shipped

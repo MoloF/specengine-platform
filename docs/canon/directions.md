@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # Directions: a module chosen by node kind
 
-A direction is a `[[module]]` that lists node kinds instead of naming a root: the mechanics, the models, the scenes, so a person sees what an object consists of (`workspaces.md` "The lens"). ADR-0076, built by `departments` (RM-0096, v5 step 4). It adds no table, read, route, tool or store column. Code: core `workspace_toml.rs`; CLI `workspace.rs`; UI `src/workspace/{choice.ts,ModuleBar.tsx}`, `src/tree/TreeView.tsx`, `src/doc/{inside.ts,DocInside.tsx}`, `src/flow/FlowView.tsx`.
+A direction is a `[[module]]` that lists node kinds instead of naming a root: the mechanics, the models, the scenes, so a person sees what an object consists of (`workspaces.md` "The lens"). ADR-0076, built by `departments` (RM-0096, v5 step 4). It adds no table, read, route, tool or store column. Code: core `workspace_toml.rs`; CLI `workspace.rs`; UI `src/workspace/{choice.ts,ModuleBar.tsx}`, `src/tree/{TreeView,SpecTree,RowContent,NodePane,Facts}.tsx`, `src/doc/{inside.ts,DocInside.tsx}`, `src/flow/FlowView.tsx`.
 
 ## Config
 
@@ -50,7 +50,8 @@ The config read reads no node. The kinds are applied by the reads that take a ki
 ## Tree
 
 - **The bar** (`ModuleBar.tsx`). It holds two groups, each a `role="group"`; the bar's own element is not one. Group "Modules" holds All modules and then the rooted modules' titles. Group "Directions" (`workspace.directionsLabel`) holds each direction's title and is drawn only when a direction is served. One choice spans both groups, shown by `aria-pressed`, and it is stored in `specengine.module.<p>` as any module is. With directions only, Modules holds All modules alone.
-- **The list.** `TreeView` takes a `moduleKinds` prop beside `moduleRoot`. While the view's root is the module's start and a direction is chosen, it reads `getTree({kinds, archive})` with no root: the read `spec tree --kind` serves. That read's `depth` and `parent` are the whole tree's (`spec-cli-graph.md`), so the rows are drawn flat, in served order. Each row's depth is taken as 0 before `buildRows`, so every row is `aria-level="1"` and none has `aria-expanded`. Flatness is read from the answer (no root, kinds given), so a placeholder answer is drawn as it was read.
+- **The list.** `TreeView` takes a `moduleKinds` prop beside `moduleRoot`. While the view's root is the module's start and a direction is chosen, it reads `getTree({kinds, archive})` with no root: the read `spec tree --kind` serves. That read's `depth` and `parent` are the whole tree's (`spec-cli-graph.md`), so the rows are drawn flat, in served order. Each row's depth is taken as 0 before `buildRows`, so every row is `aria-level="1"` and none has `aria-expanded`. Flatness is read from the answer (no root, kinds given), so a placeholder answer is drawn as it was read. A flat tree is `tree tree-flat`: no chevron's column, no `.tree-toggle`. With one kind in the answer's `kinds` (`oneKind`, read as flatness is), `RowContent` draws no kind chip; two or more keep it. A rooted read keeps `tree`, the chevrons and the indent, 16 px a level.
+- **The pane** (all of the Tree, not only a direction). The tree pane holds an sr-only `h2` (`app.sections.tree.label`) before the node's `h1`, so the view's outline opens with it, skips no level and keeps one `h1` (`ui-tree-node.md` AC-14, relaxed: the `h1` no longer leads); its empty states are `h3`. The node (`NodePane.tsx`) is an `IssueView` pane (`ui-design.md` "The work item"): Breadcrumbs Project (`useProjectName`), Spec tree, the REF current; one holder's raw `status:` a neutral `Lozenge`, `lang="en"`; Open document and Show in graph, subtle compact; Details, `tree/Facts.tsx` `factsOf(holder, t)`'s rows in a `PropertyList` with `foldEmpty` (a section's Status and Rev under More fields), several holders' each under its `h2`, labelled "Details at <path:line>"; main the notes, `CardsBlock`, the tabs. No node open: the view's `h1` and an `EmptyState`, level 2; none found: one in the pane's main, the empty side gone.
 - **Moving.** Show as root on a row leaves the list for a rooted read. Whole tree returns to the start, which is the direction's list. All modules reads the whole tree. Kinds that match no node show the read's empty answer.
 
 ## Inside
@@ -77,7 +78,7 @@ Flow draws from a root, so it takes rooted modules only (`spec-flow-place.md` "T
 
 - **Older binaries.** A build before `departments` reads `kinds` as an unknown key. It then drops every module with one note, and each workspace naming a module gets its own note. ADR-0073's upgrade rule holds (`workspaces.md` "Known limits").
 - Flow draws no direction (RM-0102). A direction is chosen by kind alone, never by status, path or tag.
-- For the RM-0099 sweep: a direction's rows repeat its kind chip, and the Tree's flat rows keep the chevron's indent.
+- `oneKind` follows the drawn answer, not `moduleKinds`: while another direction's read is pending, the last answer's chips stand. The mock serves no two-kind direction, so its chips are seen in `TreeView.test.tsx` alone.
 
 ## Tests
 
@@ -85,4 +86,4 @@ Flow draws from a root, so it takes rooted modules only (`spec-flow-place.md` "T
 - CLI `departments.rs` (`spec tree --kind scene`: `SCN-ARRIVAL`, `SCN-STORM`), `workspace_cli.rs`;
 - http `workspaces.rs`, `daemon_keys.rs`, `no_domain.rs`; eval `workspace_names.rs`;
 - `fixtures/studio-lamp`, whose third module is `scenes`;
-- UI `tree/TreeView.test.tsx`, `mocks/workspaces.smoke.test.tsx` (harbor-sim's `mechanics`), `doc/inside.test.ts`, `doc/DocBody.test.tsx` (`docStub`'s "Records", "Asked"), `flow/FlowView.test.tsx`, `policy.test.ts`.
+- UI `tree/{TreeView,NodePane,Facts}.test.tsx`, `mocks/workspaces.smoke.test.tsx` (harbor-sim's `mechanics`), `doc/inside.test.ts`, `doc/DocBody.test.tsx` (`docStub`'s "Records", "Asked"), `flow/FlowView.test.tsx`, `policy.test.ts`.

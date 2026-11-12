@@ -12,13 +12,13 @@ Built by `design-foundation` (RM-0093), no ADR, on the owner's answers of 2026-1
 
 ## The rule
 
-One file, `src/styles/tokens.css`, holds every colour literal, in both themes, and every size step. Any other CSS or component takes one `var()` of a token, or a listed exception. Screens build from `src/ui/`'s primitives. A status is a label and an icon, never colour alone. Other screens keep the legacy names until RM-0099.
+One file, `src/styles/tokens.css`, holds every colour literal, in both themes, and every size step. Any other CSS or component takes one `var()` of a token, or a listed exception. Screens build from `src/ui/`'s primitives. A status is a label and an icon, never colour alone.
 
 ## Themes
 
 - **Roles.** A colour role is declared once in `:root` as `light-dark(<light>, <dark>)`, each side six-digit hex or a `var()`; an alias `var(--role)` is theme-free; `light-dark(` stands in no other file. The alpha roles, by name: `--scrim`, `--shadow-key`, `--shadow-ambient`, `--graph-minimap-mask`, `--graph-selection-surface`.
 - **System.** `:root` has `color-scheme: light dark`: with no choice the page follows `prefers-color-scheme`, light when it states none, with no script; a change applies at once.
-- **Choice.** The header's Theme select (System, Light, Dark) writes `localStorage` `specengine.theme`, `light` or `dark` (System removes it), and sets `<html data-theme>`; `:root[data-theme="light"|"dark"]` pins `color-scheme`. Another value, or a throwing storage, reads System silently. Per browser profile; a hub keeps none. `src/app/theme.ts`: `THEMES = ["system", "light", "dark"]`, `THEME_KEY`, `isTheme`, `storedTheme(): Theme`, `applyTheme(theme)`, `chooseTheme(theme)` (store, then apply); keys `app.theme.{label,system,light,dark}`.
+- **Choice.** The header's Theme select (System, Light, Dark) writes `localStorage` `specengine.theme`, `light` or `dark` (System removes it), and sets `<html data-theme>`; `:root[data-theme="light"|"dark"]` pins `color-scheme`. Another value, or a throwing storage, reads System silently. Per browser profile; a hub keeps none.
 - **First paint.** `src/main.tsx` runs `applyTheme(storedTheme())` before `createRoot`; `index.html` has `<meta name="color-scheme" content="light dark">`, no inline script.
 - **Palette.** Neutral grey surfaces in both themes: canvas, sunken (board columns, wells), panel (header, nav), raised (tiles, `--shadow-raised`), overlay (dialogs, menus, `--shadow-overlay`), hovered, selected. Accent indigo `#4f46e5` / `#a5b4fc`, not the information blue. Six lozenge pairs `--lozenge-<a>-surface`, `-text`: neutral, information, success, warning, danger, discovery.
 - **Canvases.** Flow's, Graph's and Roadmap's `--xy-*` resolve to `light-dark()` roles; `@xyflow/react`'s `colorMode` is never set.
@@ -29,32 +29,31 @@ One file, `src/styles/tokens.css`, holds every colour literal, in both themes, a
 
 ## Type, space and size
 
-- **Type.** `--font-sans` is `"Inter"`, then the system stack; `--font-mono` unchanged. Steps, size/line in rem, as `--font-size-<step>` and `--line-height-<step>`: small 12/16 (labels, lozenges, badges, kbd), body 14/20 (the chrome), document 16/24 (a document's or a task's text, at most `--reading-width` 68ch), heading-s 16/20, heading-m 20/24 (`h2`), heading-l 24/28 (`h1`), code 12/20. Weights 400, 500, 600, 700.
+- **Type.** `--font-sans` is `"Inter"`, then the system stack; `--font-mono` unchanged. Steps, size/line in rem, as `--font-size-<step>` and `--line-height-<step>`: small 12/16 (labels, lozenges, badges, kbd), body 14/20 (the chrome), document 16/24 (a document's or a task's text, at most `--reading-width` 68ch), heading-s 16/20, heading-m 20/24 (`h2`), heading-l 24/28 (`h1`), code 12/20. Weights `--font-weight-regular|medium|semibold|bold`, 400 to 700.
 - **Space.** `--space-025` to `--space-600`: 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48 px. Radii `--radius-xs|s|control|m|l|xl` 2, 4, 6, 8, 12, 16 px and `--radius-full` 999 px; borders 1 px, focus and selection 2 px.
 - **Size.** Controls `--control-height` 32 px, compact 24 px; `--target-min` 24 px; `--nav-height` 48 px; `--issue-side-width` 360 px beside `--issue-main-min` 320 px; `--modal-width-s|m|xl` 600, 800, 1200 px; `--empty-state-width` 464 px; `--lozenge-height` 20 px, `--lozenge-max-width` 200 px.
-- **Legacy aliases**, until RM-0099: `--font-size-s|m|l|xl` onto body, heading-s, -m, -l; `--line-height-tight` 1.25, the one ratio; `--space-1..6` onto 050, 100, 150, 200, 300, 400.
 
 ## Guards and exceptions
 
-`src/styles/scale.test.ts` reads every CSS file under `src` but `tokens.css`: `font-size`, `line-height`, `padding*`, `margin*`, gaps and radii take one `var()` of their family (spacing also `0`, `auto`, `calc()` of tokens); `font` only `inherit`; a last declaration with no `;`, a raw length in a custom property outside `tokens.css` and a `var()` fallback count. Every token resolves into the scale's sets. `.button` and `.field` are `var(--control-height)` tall, `.button-compact` the compact one. No non-test `.tsx` sets a size, space or radius inline.
+`src/styles/scale.test.ts` reads every CSS file under `src` but `tokens.css`: `font-size`, `line-height`, `padding*`, `margin*`, gaps and radii take one `var()` of their family (spacing also `0`, `auto`, `calc()` of tokens); `font` only `inherit`; G2: `font-weight`, outside `@font-face`, one `--font-weight-*` or `inherit`; a last declaration with no `;`, a raw length in a custom property outside `tokens.css` and a `var()` fallback count. G1: no legacy name (`--space-1..6`, `--font-size-s|m|l|xl`, `--line-height-tight`) in any `src` CSS, `tokens.css` too, or non-test TS or TSX. Each family is exactly its steps (space 11, size and line 7, weight 4). `.button` and `.field` are `var(--control-height)` tall, `.button-compact` the compact one. No non-test `.tsx` sets a size, space, radius or weight inline.
 
-`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0099" | null}` matching a declaration. 13: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), 11 other screens' (RM-0099). A new one names its reason and the item emptying it.
+`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0099" | null}` matching a declaration. 10: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), 8 for RM-0099 b. A new one names its reason and the item emptying it.
 
 ## Primitives
 
 In `src/ui/`, each with its test:
-- `Button(props: ButtonProps)`: `appearance?: "default" | "primary" | "subtle" | "warning" | "danger"`, `spacing?: "default" | "compact"`, `icon?: IconName`, `className?` (layout only), `ref?`, the rest `<button>`'s; `type` is `button` unless given. Classes `button` plus `button-primary`, `button-quiet`, `button-warning`, `button-danger`, `button-compact`; `buttonClasses(appearance?, spacing?, className?)` gives them to a link or a menu trigger. At most one primary per dialog, view header acts or side column.
-- `Lozenge({appearance, icon, label, lang}: LozengeLook & { lang?: "en" })`, `LozengeLook {appearance: LozengeAppearance; icon: IconName; label: string}`, `LOZENGE_APPEARANCES`: 20 px, 12/16 at 500, padding 2 px 4 px, radius 4; at most 200 px, a longer label wrapping by whole 16 px lines, never cut.
+- `Button(props: ButtonProps)`: `appearance?: "default" | "primary" | "subtle" | "warning" | "danger"`, `spacing?: "default" | "compact"`, `icon?: IconName`, `className?` (layout only), `ref?`, the rest `<button>`'s; `type` is `button` unless given. Classes `button` plus `button-primary`, `button-quiet`, `button-warning`, `button-danger`, `button-compact`; `buttonClasses(appearance?, spacing?, className?)` gives them to a link or a menu trigger. At most one primary per dialog, item's acts or side column; a staged choice's Confirm takes it (`hub-confirm.md` "Screen").
+- `Lozenge({appearance, icon, label, lang}: LozengeLook & { lang?: "en" })`: 12/16 medium, padding 2 px 4 px, radius 4; a longer label wrapping by whole 16 px lines, never cut. A proposal's status has one table, `inbox/labels.ts` `statusLozenge` (`proposal-review.md` "Inbox").
 - `PropertyList({label, items, foldEmpty?})`, `Property {key; label; value: ReactNode | null}`: a `dl`, labels small and secondary. With `foldEmpty`, `null` rows stand in order under one "More fields (n)" disclosure, collapsed, each "None".
-- `Breadcrumbs({items})`, `Crumb {key; label; href?; mono?; onFollow?}`: a `nav` "Breadcrumbs" around an `ol`; all but the last link from `routes.ts`, at least 24 px; the last `aria-current="page"`, no `href`; `/` separators `aria-hidden`; `onFollow` takes a plain click in place.
-- `IssueView({breadcrumbs, tools?, title, meta?, actions?, main, side})`: "The work item".
-- `EmptyState({title, level: 2 | 3 | 4, description?, primary?, secondary?})`: at most 464 px, sentence case, never a failure, one primary at most.
+- `Breadcrumbs({items})`, `Crumb {key; label; href?; mono?; onFollow?}`: a `nav` "Breadcrumbs" around an `ol`; all but the last link from `routes.ts`, at least 24 px; the last `aria-current="page"`, no `href`; `/` separators `aria-hidden`; `onFollow` takes a plain click in place. A pane's Project: `useProjectName` (`proposal-review.md` "Inbox").
+- `IssueView({breadcrumbs, tools?, title, meta?, actions?, main, side, layout?: "item" | "pane"})`: "The work item".
+- `EmptyState({title, level: 2 | 3 | 4, description?, primary?, secondary?})`: sentence case, never a failure, one primary at most.
 - `Disclosure({summary, regionLabel?, className?, children})`: a button with `aria-expanded`, `aria-controls`; its region `hidden` while collapsed, a `section` landmark with `regionLabel`; focus stays on the button; only the chevron turns, by the duration tokens.
 - `.badge` and tags take the lozenge's metrics, the label `--text-primary`, the tone on icon and 1 px border. Icons are hand-drawn at 16 px.
 
 ## Status categories
 
-`src/board/category.ts` `categoryOf(flow: CardFlow | undefined, column: string): StatusCategory` (`todo`, `doing`, `done`, `returned`, `stranded`): the column's place in its served flow, first match winning: unserved or not in `columns` stranded; `accept.to` done; `return` returned; `columns[0]` to do; else in progress. `statusLook(flow, column): LozengeLook` joins `labels.ts` `categoryMark(category)` (neutral `unknown`, success `taskAccepted`, warning `cardReturned`, neutral `open`, information `taskInProgress`) to the served title, the raw ID when stranded; `outsideLook(t)` is "Not in the flow". Cancellation keeps the category. `policy.test.ts` bans in `src/board/` the mock's column IDs and flow names quoted, and a bare `column`, `to` or `from` compared with a quoted word, `edit` (the Board's own act) exempt. Shown on column heads, Parent lane heads (after the flow title), the side Status and Subtasks rows; tiles carry none.
+`src/board/category.ts` `categoryOf(flow, column)` (`todo`, `doing`, `done`, `returned`, `stranded`): the column's place in its served flow, first match winning: unserved or not in `columns` stranded; `accept.to` done; `return` returned; `columns[0]` to do; else in progress. `statusLook(flow, column)` joins `labels.ts` `categoryMark(category)` (stranded and to do neutral, done success, returned warning, in progress information) to the served title, the raw ID when stranded; `outsideLook(t)` is "Not in the flow". Cancellation keeps the category. `policy.test.ts` bans in `src/board/` the mock's column IDs and flow names quoted, and `column`, `to` or `from` compared with a quoted word but `edit`. Shown on column heads, Parent lane heads (after the flow title), the side Status and Subtasks rows; tiles carry none.
 
 ## The work item
 
@@ -62,7 +61,7 @@ In `src/ui/`, each with its test:
 - **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Ask a question…, Record a decision…, Edit, Assign, Cancel task (subtle, last), a mandate moving some after Accept (`card-mandate.md`).
 - **Main.** Mark and Clear, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (`card-progress.md`), Decisions from subtasks; Evidence; Activity (`card-questions.md` "Screen").
 - **Side**, at most 360 px. Status: the lozenge, then Move, compact, none on a closed card. Details: Assignee, Reviewer, Mandate, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Agent tasks, collapsed: `card-tasks.md` "Screen".
-- **Width.** One column, main first, under 44.5rem of its own width (`@container issue-view`); DOM order main, side. The modal: 1200 px or the viewport less 2rem, its head still; at two columns Main and the side scroll apart (`overscroll-behavior: contain`, each padded for focus rings), at one the body; under 36rem the screen, scrolling as one. The page, 1200 px at most, scrolls the window.
+- **Width.** One column, main first, under 44.5rem of its own width (`@container issue-view`); DOM order main, side. The modal: 1200 px or the viewport less 2rem, its head still; at two columns Main and the side scroll apart (`overscroll-behavior: contain`, each padded for focus rings), at one the body; under 36rem the screen, scrolling as one. The page, 1200 px at most, scrolls the window. A pane (`layout="pane"`: Inbox's proposal, the Spec tree's node): DOM order side, main; one column until 60rem, then main left; an `:empty` side hidden, the pane one column by `:has()`.
 
 ## The focus trap
 
@@ -86,4 +85,4 @@ Inter 4.001 from `@fontsource-variable/inter` 5.3.0, committed in `ui/fonts/inte
 
 ## Tests
 
-UI `src/styles/*.test.ts`, `src/ui/*.test.tsx`, `src/board/{category,workItem}.test.*`, `src/app/{theme,header}.test.tsx`, `graph/styles.test.ts`, `policy.test.ts`.
+UI `src/styles/*.test.ts`, `src/ui/*.test.*`, `src/board/{category,workItem}.test.*`, `src/app/{theme,header}.test.tsx`, `graph/styles.test.ts`, `policy.test.ts`.

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-12
 ---
 
 # Round routes and screen
@@ -56,6 +56,7 @@ The Questions section (`#/<project>/questions`), over `getRound` and `stageRound
 - A staged item: "Staged", `Staged <at>`, `StagedChoice`, Unstage (the DELETE). One panel above the list: ``Confirm on a terminal in <root>: `spec round answer --staged`; each answer is asked again there, one at a time``; Copy copies exactly the command, never the root; `spec approve|reject <ID>` only for `^PR-[0-9]{4,}$`.
 - Live: the sheet read again on every `proposal.*`, `task.*` event of the project and on a gap, a superseded read aborted. One `startOwnWrite` per answer before the POST, ended by its outcome; an Unstage here is tracked from the stage the sheet shows (`useStageDecision`'s `shown`).
 - Agent text verbatim, not Markdown, wrapped, in `<bdi>`, controls and bidi characters written `\u{..}` (`shownSlot`; option labels too on the Inbox card, the decision dialog, `StagedChoice`).
+- Primitives (`ui-design.md`): every button a `Button`, "Stage <k> answers" the sheet's one primary, the dropped notice's Dismiss subtle, the rest default. An empty sheet is an `EmptyState`, level 2 (`round.emptyTitle`), its description the notes, `round.emptyWhy` and the next step with its Inbox and Agent tasks links.
 - Mock: both routes; `?scenario=conflict`: the first POST refuses one answer as changed since read.
 
 ## Known limits
