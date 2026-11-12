@@ -13,7 +13,9 @@
 //! `…/cards/<id>/items` among them
 //! (`docs/canon/card-questions.md` "The rule"); `…/cards/split` a write,
 //! `Allow: POST` (`docs/canon/card-split.md` "The rule").
-//! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
+//! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md);
+//! `…/catalog` a read, its last changes cached per `HEAD` in [`App`]
+//! (docs/features/direction-catalog.md).
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `…/workspaces` a read of the config
 //! alone, no turn, locally and on a hub alike
@@ -73,12 +75,12 @@ use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest,
     CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest, CardSplitBody,
-    CheckRequest, CliError, DeliveryRequest, FlowRequest, GraphRequest, HealthRequest,
-    InboxRequest, IndexTrust, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest,
-    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
-    StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest,
-    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, team_read,
-    utc_now,
+    CatalogRequest, CheckRequest, CliError, DeliveryRequest, FlowRequest, GraphRequest,
+    HealthRequest, InboxRequest, IndexTrust, LastChangeCache, LockDiffRequest, Outcome,
+    ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
+    SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow,
+    TraceRequest, TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags,
+    round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -107,6 +109,10 @@ pub(crate) struct App {
     /// A stream's maximum life: `Some(STREAM_LIFE)` on a hub, `None` locally,
     /// where no stream ends for its age ([`hub::lived`]).
     pub life: Option<Duration>,
+    /// `…/catalog`'s last changes per (git common dir, `HEAD`), in memory
+    /// alone, shared by every project served
+    /// (`docs/features/direction-catalog.md` "Acceptance criteria", DC-8).
+    pub catalogs: LastChangeCache,
 }
 
 pub(crate) type Shared = Arc<App>;
@@ -143,6 +149,7 @@ impl App {
             syncs,
             mcp,
             life,
+            catalogs: LastChangeCache::default(),
         }
     }
 
@@ -209,6 +216,7 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/health", read(health))
         .route("/api/projects/{p}/roadmap", read(roadmap))
         .route("/api/projects/{p}/delivery", read(delivery))
+        .route("/api/projects/{p}/catalog", read(catalog))
         .route("/api/projects/{p}/lock-diff", read(lock_diff))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
@@ -486,7 +494,7 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events, \
-             delivery, workspaces}}, \
+             delivery, catalog, workspaces}}, \
              /api/identity; the web UI: / and /assets/<file>",
             uri.path()
         ),
@@ -836,6 +844,38 @@ async fn delivery(State(app): State<Shared>, uri: Uri) -> Result<Response, Refus
         let request = DeliveryRequest { as_of };
         specengine_cli::delivery_with_view(env, globals, &request, View::Browser)
             .map(|outcome| Outcome::Delivery(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/catalog`: `spec catalog --kind K… [--archive] --json`, the
+/// browser view (no row cut), with the daemon's last-change cache; in the
+/// project's turn, walking as `trace` does, since its rows show the trace's
+/// state (`docs/features/direction-catalog.md` "Acceptance criteria",
+/// DC-8, DC-9). `kinds` repeats and is required: none is a 400 naming it,
+/// nothing run, as is a name other than `kinds` and `archive`; an empty
+/// value is a kind with no node, as the CLI reads it. An index or a queue
+/// that cannot be read is the CLI's exit 2, a 503.
+async fn catalog(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("catalog", &["kinds", "archive"], &uri)?;
+    let request = (|| {
+        Ok::<_, String>(CatalogRequest {
+            kinds: args.required_texts("kinds")?,
+            archive: args.boolean("archive")?.unwrap_or(false),
+        })
+    })()
+    .map_err(Refusal::bad_request)?;
+    let shared = Arc::clone(&app);
+    Ok(run(project, move |env, globals| {
+        specengine_cli::catalog_with_view(
+            env,
+            globals,
+            &request,
+            View::Browser,
+            Some(&shared.catalogs),
+        )
+        .map(|outcome| Outcome::Catalog(Box::new(outcome)))
     })
     .await)
 }

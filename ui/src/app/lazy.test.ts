@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import roadmapSource from "../roadmap/RoadmapView.tsx?raw";
+import treeSource from "../tree/TreeView.tsx?raw";
 import shellSource from "./Shell.tsx?raw";
 
 // docs/features/handoff-progress.md "Acceptance criteria", S-1: the Roadmap and the Graph leave
@@ -46,5 +47,26 @@ describe("the Roadmap's lazy tabs (DA-7 of delivery-analytics)", () => {
 
   it("stands the Delivery tab in a Suspense whose fallback is its skeleton", () => {
     expect(roadmapSource).toMatch(/<Suspense fallback=\{<Skeleton label=\{t\("roadmap\.delivery\.loading", \{ project \}\)\} lines=\{4\} \/>\}>\s*<RoadmapDelivery project=\{project\} \/>/);
+  });
+});
+
+// docs/features/direction-catalog.md "Acceptance criteria", DC-10: a direction's table is a chunk of
+// its own, reached from the Spec tree by a dynamic import alone, standing in a Suspense whose fallback
+// is its skeleton, inside the node column's pane so the view's heading never waits for it.
+describe("the Spec tree's lazy table (DC-10 of direction-catalog)", () => {
+  it("TreeView reaches ./DirectionCatalog by lazy(() => import(...)) only, never by a value import", () => {
+    const fromIt = importLines(treeSource).filter((line) => line.endsWith('"./DirectionCatalog";'));
+    for (const line of fromIt) {
+      expect(line.startsWith("import type ")).toBe(true);
+    }
+    expect(treeSource).toContain('const DirectionCatalog = lazy(() => import("./DirectionCatalog").then((module) => ({ default: module.DirectionCatalog })));');
+    // M: `import { DirectionCatalog } from "./DirectionCatalog";` beside the lazy one.
+    expect(treeSource).not.toMatch(/^import \{[^}]*\bDirectionCatalog\b[^}]*\} from "\.\/DirectionCatalog";$/m);
+  });
+
+  it("stands the table in a Suspense whose fallback is its skeleton, inside NoNodePane", () => {
+    expect(treeSource).toMatch(
+      /<NoNodePane>\s*<Suspense fallback=\{<Skeleton label=\{t\("tree\.catalog\.loading", \{ direction \}\)\} lines=\{6\} \/>\}>\s*<DirectionCatalog key=\{JSON\.stringify\(listing\)\} project=\{project\} kinds=\{listing\}/,
+    );
   });
 });

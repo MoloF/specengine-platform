@@ -1432,13 +1432,21 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// department and the late tasks' reasons, keyed by card, item and
 /// department, never by person: no served key names an assignee, a reviewer
 /// or an actor (DA-6), which every login may read.
-const GET_ROUTES: [&str; 29] = [
+///
+/// docs/features/direction-catalog.md (RM-0106) judged
+/// `/api/projects/{p}/catalog`, the 30th: the spec has the hub serve the same
+/// route over its checkout and its own queue (DC-9); a read of a direction's
+/// rows, each a node's title, version, state, open items, tasks and its
+/// file's last commit, the tree's, the trace's and git's history a login
+/// already reads, so every login may read it.
+const GET_ROUTES: [&str; 30] = [
     "/",
     "/api/identity",
     "/api/projects",
     "/api/projects/{p}/bundle",
     "/api/projects/{p}/cards",
     "/api/projects/{p}/cards/{id}",
+    "/api/projects/{p}/catalog",
     "/api/projects/{p}/check",
     "/api/projects/{p}/delivery",
     "/api/projects/{p}/events",
@@ -2236,8 +2244,9 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
         cards, CARD_ROUTES,
         "M23: the card routes as Routes lists them"
     );
-    // 29 since docs/features/delivery-analytics.md DA-11 (`delivery`).
-    assert_eq!(GET_ROUTES.len(), 29);
+    // 29 since docs/features/delivery-analytics.md DA-11 (`delivery`); 30
+    // since docs/features/direction-catalog.md DC-9 (`catalog`).
+    assert_eq!(GET_ROUTES.len(), 30);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

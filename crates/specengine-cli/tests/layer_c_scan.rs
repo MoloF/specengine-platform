@@ -166,6 +166,10 @@ const LATER: &[&str] = &[
     // docs/features/delivery-analytics.md DA-9: a plan place at the root is
     // named `.` in its note; no SCIP descriptor.
     "crates/specengine-cli/src/delivery.rs",
+    // docs/features/direction-catalog.md DC-4: a root below its worktree's
+    // top joins its place to the rows' paths with `/`, as lock-diff's does;
+    // no SCIP descriptor.
+    "crates/specengine-cli/src/catalog.rs",
 ];
 
 /// R10's Cargo words: no literal of the store, core or CLI holds one.

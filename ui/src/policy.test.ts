@@ -971,6 +971,40 @@ describe("source policy", () => {
     }
   });
 
+  // DC-10 of docs/features/direction-catalog.md "Acceptance criteria": a catalog row's state is
+  // ordered in src/tree/catalog.ts alone and looked up in src/flow/labels.ts alone; no other Spec tree
+  // module spells a rollup word, and the table's two modules branch on no `state`. LinksPanel's link
+  // states are another table, compared where they always were.
+  it("compares a catalog state in src/tree/catalog.ts alone: no other Spec tree module spells a rollup word; the table's modules branch on no state (DC-10 of direction-catalog)", () => {
+    const treeApp = (path: string) => path.startsWith("/src/tree/") && !/\.test\.tsx?$/.test(path);
+    const words = ["no card", "in work", "confirmed", "suspect", "departed"].join("|");
+    const spelled = new RegExp(`["'\`](${words})["'\`]`);
+    expect(offending(spelled, (path) => !treeApp(path) || path === "/src/tree/catalog.ts")).toEqual([]);
+    const tableModules = new Set(["/src/tree/DirectionCatalog.tsx", "/src/tree/TreeView.tsx"]);
+    expect(Object.keys(sources).filter((path) => tableModules.has(path))).toHaveLength(2);
+    const field = "\\.state\\b";
+    const compared = new RegExp(
+      [
+        `${field}\\s*[!=]==?`,
+        `[!=]==?\\s*[\\w.?]*${field}`,
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `${field}\\s*(&&|\\|\\|)`,
+        `\\[\\s*[\\w?.]*${field}\\s*\\]`,
+        `\\.(includes|has|indexOf|startsWith|endsWith|test)\\([^)]*${field}`,
+      ].join("|"),
+    );
+    expect(offending(compared, (path) => !tableModules.has(path))).toEqual([]);
+    // The detector itself: a branch on a state or a rollup word spelled is caught; the look's call is not.
+    for (const line of ['if (row.state === "no card") {', "switch (row.state) {", "const rank = ORDER[row.state];", "ROLLUP_WORDS.indexOf(row.state)", "const known = row.state ? a : b;"]) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    expect(spelled.test('const none = "in work";')).toBe(true);
+    for (const line of ["<Badge look={rollupLook(row.state, t)} />", "const state = row.state;"]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
   it("compares no column, flow, discipline or event word in the Board, labels.ts the one map; reads no clock but in due.ts, never a UTC date there (AC-06, AC-08 of board-ui)", () => {
     const boardSources = (path: string) => path.startsWith("/src/board/") && !/\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter(boardSources)).toEqual(

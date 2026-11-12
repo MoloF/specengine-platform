@@ -336,6 +336,13 @@
 //! .../delivery?as_of=2026-11-20` over the spec's scenario (the shared scene
 //! of `specengine-cli`'s `tests/delivery_scene`) on a daemon of its own. M:
 //! a set left out of the fixture.
+//!
+//! docs/features/direction-catalog.md (RM-0106) "Acceptance criteria",
+//! DC-9: three sets more, 140 in all, last, in the document's order:
+//! `Catalog` (6), `CatalogRow` (13), `CatalogChange` (6), from `GET
+//! .../catalog?kinds=scene` over the copy (the shared scene of
+//! `specengine-cli`'s `tests/catalog_scene`: both rows hold a last change)
+//! on a daemon of its own. M: a set left out of the fixture.
 
 mod common;
 mod task_state;
@@ -345,6 +352,9 @@ mod git;
 
 #[path = "../../specengine-cli/tests/delivery_scene/mod.rs"]
 mod delivery_scene;
+
+#[path = "../../specengine-cli/tests/catalog_scene/mod.rs"]
+mod catalog_scene;
 
 use std::ffi::OsStr;
 use std::fmt;
@@ -682,6 +692,23 @@ fn delivery_document() -> String {
         .to_owned()
 }
 
+/// docs/features/direction-catalog.md DC-9: `GET .../catalog?kinds=scene`
+/// over the copy on a daemon of its own, its body raw (the keys' order
+/// kept).
+fn catalog_document() -> String {
+    let pinned = catalog_scene::Lamp::pinned("daemon-keys");
+    let copy = &pinned.copy;
+    let server = Server::serve(&copy.home, &copy.root, &[&copy.root]);
+    server
+        .get(&format!(
+            "/api/projects/{}/catalog?kinds=scene",
+            catalog_scene::SLUG
+        ))
+        .status(200)
+        .text()
+        .to_owned()
+}
+
 /// The raw late row of `id` in a delivery body.
 fn delivery_late(body: &str, id: &str) -> String {
     raw_items(body, "late")
@@ -695,6 +722,13 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     // one of each reason.
     let delivery = delivery_document();
     let late = delivery_late(&delivery, "C-0001");
+    // docs/features/direction-catalog.md DC-9: both rows hold a last change.
+    let catalog = catalog_document();
+    let catalog_rows = raw_items(&catalog, "rows");
+    let catalog_changes: Vec<String> = catalog_rows
+        .iter()
+        .map(|row| raw_object(row, "last_change"))
+        .collect();
     let scratch = Scratch::new("daemon-keys");
     let a = scratch.repo("spec-a", "a", "main");
     let home = scratch.home("h");
@@ -2170,6 +2204,19 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 keys_of,
             ),
         ),
+        // docs/features/direction-catalog.md DC-9, sets 138 to 140.
+        (
+            "Catalog",
+            one_key_set("Catalog", std::slice::from_ref(&catalog), keys_of),
+        ),
+        (
+            "CatalogRow",
+            one_key_set("CatalogRow", &catalog_rows, keys_of),
+        ),
+        (
+            "CatalogChange",
+            one_key_set("CatalogChange", &catalog_changes, keys_of),
+        ),
     ]
 }
 
@@ -2503,14 +2550,15 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        137,
+        140,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
          board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108; \
          hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114; \
          flow-scenario: 115; card-questions: 118; department-split: 121; task-mandate: 122; \
-         node-history: 124; upstream-signal: 126; delivery-analytics: 137)"
+         node-history: 124; upstream-signal: 126; delivery-analytics: 137; \
+         direction-catalog: 140)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -3316,10 +3364,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "seq", "at", "source", "by", "fields", "item", "kind", "record", "on"
         ]
     );
-    // docs/features/delivery-analytics.md DA-11: sets 127 to 137, last, in
-    // the document's order, each the spec's keys in its order. M: a set left out
+    // docs/features/delivery-analytics.md DA-11: sets 127 to 137, in the
+    // document's order, each the spec's keys in its order. M: a set left out
     // of the fixture.
-    let delivery: Vec<(&str, Vec<&str>)> = sets[126..]
+    let delivery: Vec<(&str, Vec<&str>)> = sets[126..137]
         .iter()
         .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
         .collect();
@@ -3390,6 +3438,44 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ),
         ]
     );
+    // docs/features/direction-catalog.md DC-9: sets 138 to 140, last, in the
+    // document's order, each the spec's keys in its order: a row the tree's
+    // eight keys, then its five. M: a set left out of the fixture.
+    let catalog: Vec<(&str, Vec<&str>)> = sets[137..]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        catalog,
+        [
+            (
+                "Catalog",
+                vec!["kinds", "archive", "notes", "rows", "truncated", "omitted"]
+            ),
+            (
+                "CatalogRow",
+                vec![
+                    "id",
+                    "kind",
+                    "title",
+                    "path",
+                    "line",
+                    "rev",
+                    "status",
+                    "archived",
+                    "state",
+                    "open_items",
+                    "tasks",
+                    "tasks_open",
+                    "last_change"
+                ]
+            ),
+            (
+                "CatalogChange",
+                vec!["at", "by", "by_name", "commit", "proposal", "of_file"]
+            ),
+        ]
+    );
     assert_eq!(sets[91].0, "Card");
     // docs/features/card-context.md CC10: 35, `context` right after
     // `history`; docs/features/upstream-signal.md US-12: 36, `upstream`
@@ -3450,7 +3536,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 137 sets (41 until
+/// unchanged, no new key): the fixture holds 140 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3477,7 +3563,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/task-mandate.md its `CardSubtaskItem`, and
 /// docs/features/node-history.md its two, NH12, and
 /// docs/features/upstream-signal.md its two, US-12, and
-/// docs/features/delivery-analytics.md its eleven, DA-11); a decision
+/// docs/features/delivery-analytics.md its eleven, DA-11, and
+/// docs/features/direction-catalog.md its three, DC-9); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -3491,8 +3578,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        137,
-        "137 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        140,
+        "140 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3503,7 +3590,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
          task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
-         upstream-signal's two (US-12) and delivery-analytics' eleven (DA-11)"
+         upstream-signal's two (US-12), delivery-analytics' eleven (DA-11) and \
+         direction-catalog's three (DC-9)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -3619,7 +3707,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 137 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 140 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3644,7 +3732,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/task-mandate.md its `CardSubtaskItem`, and
 /// docs/features/node-history.md its two, NH12, and
 /// docs/features/upstream-signal.md its two, US-12, and
-/// docs/features/delivery-analytics.md its eleven, DA-11); the amendment of
+/// docs/features/delivery-analytics.md its eleven, DA-11, and
+/// docs/features/direction-catalog.md its three, DC-9); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -3661,8 +3750,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        137,
-        "137 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        140,
+        "140 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3673,7 +3762,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
          task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
-         upstream-signal's two (US-12) and delivery-analytics' eleven (DA-11)"
+         upstream-signal's two (US-12), delivery-analytics' eleven (DA-11) and \
+         direction-catalog's three (DC-9)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { aFlowView } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import {
+  aCatalog,
+  aCatalogRow,
   aCheckFinding,
   aDelivery,
   aCheckReport,
@@ -164,6 +166,43 @@ describe("the delivery read (DA-11, DA-12 of delivery-analytics)", () => {
   it("is judged: a 404 that is no error body rejects too, never read as a document", async () => {
     stubFetch(() => jsonAnswer(404, served));
     expect((await rejection(new HttpClient().getDelivery("alpha", { asOf: "2026-11-20" }))).status).toBe(404);
+  });
+});
+
+// docs/features/direction-catalog.md "Acceptance criteria", DC-9 and DC-10: the catalog read GETs its
+// one path, each kind a repeated `kinds` in the order given, `archive` only as true, with its query's
+// AbortSignal; its 200 resolves as sent; it is judged, so no kind's 400, an older daemon's 404 and a
+// 503 reject in the daemon's words, and a 404 that is no error body is never read as a document.
+describe("the catalog read (DC-9 of direction-catalog)", () => {
+  const served = aCatalog([aCatalogRow({ id: "SCN-ARRIVAL", state: "in work" })], { kinds: ["scene", "cue"] });
+
+  it("asks `?kinds=K&kinds=K2`, no archive when false, its answer resolved as sent, with the caller's AbortSignal", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    const controller = new AbortController();
+    expect(await new HttpClient().getCatalog("my project", { kinds: ["scene", "cue"], archive: false }, controller.signal)).toEqual(served);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/my%20project/catalog?kinds=scene&kinds=cue"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it("sends `archive=true` when asked, a kind encoded once (M: archive not passed through)", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    await new HttpClient().getCatalog("alpha", { kinds: ["sound fx"], archive: true });
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/catalog?kinds=sound%20fx&archive=true"]);
+  });
+
+  it.each([
+    [400, "query `kinds` is required: give at least one kind"],
+    [404, "no route /api/projects/alpha/catalog: the routes are /api/projects and the web UI"],
+    [503, "spec catalog: the queue's schema 14 is newer than this binary's 13"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getCatalog("alpha", { kinds: ["scene"], archive: false })))).toEqual({ status, message });
+  });
+
+  it("is judged: a 404 that is no error body rejects too, never read as a document", async () => {
+    stubFetch(() => jsonAnswer(404, served));
+    expect((await rejection(new HttpClient().getCatalog("alpha", { kinds: ["scene"], archive: false }))).status).toBe(404);
   });
 });
 

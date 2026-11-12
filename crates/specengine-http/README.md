@@ -10,7 +10,7 @@ reviewed: 2026-11-12
 
 An HTTP adapter over the CLI library: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The daemon, one per data directory, `spec serve` launches (`serve.md`), serving the web UI compiled in (`serve-ui.md`); not ADR-0019's: no sole writer, socket bridge, auto-start, gate or watcher. A staged decision is confirmed on a terminal (ADR-0035) or, on a hub, `hub-confirm.md`; no hook consults it (ADR-0039).
 
-Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `specengine-mcp` and `rmcp` (`transport-streamable-http-server`), named in `src/mcp.rs` alone, `axum` (`http1`, `tokio` only), `rust-embed` (`debug-embed`), others `Cargo.toml`'s; a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
+Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `specengine-mcp` and `rmcp`, named in `src/mcp.rs` alone, `axum`, `rust-embed`, others `Cargo.toml`'s; a std-only build script `src/build.rs`; a default member; features: `stack.md`; pins, licences: eval `build_graph.rs`.
 
 ## Binary
 
@@ -30,21 +30,19 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 |---|---|---|
 | GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order (CLI `project_entry`): `name` or `null`, `root` canonical, `branch` current or `null` (detached, no git) |
 | GET `/api/identity`, `.../workspaces`; a hub's `.../team`, GET, POST `.../proposals/:id/confirm`; a `--push` hub's `.../sync` | -- | `hub.md`, `workspaces.md`, `hub-team.md`, `hub-git.md` |
-| GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json`, browser view |
-| GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json`, browser view |
-| GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
+| GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json` |
+| GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json` |
+| GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json` |
 | GET `.../bundle` | `node_ids`, `budget` | `spec bundle --json` |
-| GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json`, browser view |
-| GET `.../flow` | `spec-flow.md`'s | `spec flow --json`, browser view |
-| GET `.../check` | -- | `spec check --json`, the plain run |
-| GET `.../health` | -- | `spec health --json` (`health*.md`) |
-| GET `.../roadmap` | `release`, `pool` | `spec roadmap --json`, browser view |
-| GET `.../delivery` | `as_of` | `spec delivery --json`, browser view, `spec-delivery.md` |
+| GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json` |
+| GET `.../flow` | `spec-flow.md`'s | `spec flow --json` |
+| GET `.../check`, `.../health` | -- | the plain `spec check --json`; `spec health --json` (`health*.md`) |
+| GET `.../roadmap` | `release`, `pool` | `spec roadmap --json` |
+| GET `.../delivery` | `as_of` | `spec delivery --json`, `spec-delivery.md` |
+| GET `.../catalog` | `kinds`, `archive` | `spec catalog --json`, `App.catalogs` caching per `HEAD`, `spec-catalog.md` |
 | GET `.../lock-diff` | `ref` | `spec lock diff REF --json` |
-| GET `.../inbox` | -- | `spec inbox --json` |
-| GET `.../proposals/:id` | -- | `spec review PR --json` (not `--brief`) |
-| GET `.../tasks` | `status` | `spec task list --json` |
-| GET `.../tasks/:id` | -- | `spec task show T --json`, uncut |
+| GET `.../inbox`, `.../proposals/:id` | -- | `spec inbox --json`; `spec review PR --json` (not `--brief`) |
+| GET `.../tasks`, `.../tasks/:id` | `status`; -- | `spec task list --json`; `spec task show T --json`, uncut |
 | GET `.../round`; POST `.../round/answers` | `limit`; -- | `spec round new --json`, uncut; stage answers (`round-ui.md`) |
 | GET `.../events` | header `Last-Event-ID` | the live tail (SSE) |
 | POST, DELETE `.../proposals/:id/decision` | -- | stage, unstage |
@@ -54,7 +52,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 **Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` `links`, `bindings`, `history`, `status` by `TaskStatus::parse`. 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `health`, `tasks/:id` take none), a scalar repeated, a bad value, `release` with `pool=true`, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent`; an empty REF is an unknown route.
 
-**Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`): no `OUTPUT_CAP_CHARS` cut, `graph`, `roadmap`, `delivery`, `flow`, `trace` too (`truncated` false, `omitted` null, `roadmap`'s 0, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty.
+**Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`) of `tree`, `nodes`, `search`, `graph`, `flow`, `roadmap`, `delivery`, `catalog`, `trace`: no `OUTPUT_CAP_CHARS` cut (`truncated` false, `omitted` null, `roadmap`'s 0, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty.
 
 ## Answers and statuses
 
@@ -62,7 +60,7 @@ One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {ro
 
 **One door.** The write routes stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps, or write a card (`board-ui.md`). No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`, any `card_` outside `CARD_CALLS` (12), `confirm_*` outside `src/confirm.rs`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and six more names. A departing accept's proposal stands inside `card_accept` (ADR-0057), a card's question or decision inside `card_raise` (ADR-0077); a hub's `/mcp` raises proposals and writes cards through `specengine-mcp`'s hub server (`hub-mcp.md`). No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind, a workspace or module name or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, but a hub's confirm, in the data directory: stages and cards in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`).
 
-**Worktrees**: the corpus reads read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, `check` no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
+**Worktrees**: the corpus reads read the root's files on disk (uncommitted edits too, never `HEAD` but `catalog`'s last change; `check`, `health` untracked and ignored ones, `check` no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
 
 ## Live tail
 
@@ -80,4 +78,4 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]` edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,delivery,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]` edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,delivery,catalog,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

@@ -12,7 +12,7 @@ Built by `node-history` (RM-0035, plugin 0.40.0) on accepted decisions alone: th
 
 ## The rule
 
-`spec show REF [--links] [--bindings] [--history] [--archive]`, MCP `get_node {id, with: ["history"]}`, the daemon's `GET …/nodes/<REF>?with=history`. Opt-in: unasked, each node's `history` is `null` and the read runs no git command and reads no queue row for it. Asked, each shown node's `history` is `{entries, truncated, omitted}`, or `null` with a note; exits are unchanged. Writes: the index's own refresh alone; no queue row, no event, nothing under the root. One corpus, git and queue state gives one text and one JSON, byte-equal across roots and `HOME`s: every date is stored data.
+`spec show REF [--links] [--bindings] [--history] [--archive]`, MCP `get_node {id, with: ["history"]}`, the daemon's `GET …/nodes/<REF>?with=history`. Opt-in: unasked, each node's `history` is `null` and the read runs no git command and reads no queue row for it. Asked, each shown node's `history` is `{entries, truncated, omitted}`, or `null` with a note; exits are unchanged. Writes: the index's own refresh alone; no queue row, no event, nothing under the root. One corpus, git and queue state gives one text and one JSON, byte-equal across roots and `HOME`s: every date is stored data. The catalog reads a file's newest commit as this commit entry (`spec-catalog.md`).
 
 ## Sources
 

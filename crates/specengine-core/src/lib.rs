@@ -112,7 +112,11 @@
 //!   against one `as_of` day, no clock, computed per read and never stored;
 //! - [`similar`] — a create's similar step, the pure half (task spec
 //!   `intake-similar`): its five sources, the entry, the search terms, the
-//!   `keywords` check and the caps.
+//!   `keywords` check and the caps;
+//! - [`catalog`] — a direction's catalog, the pure half (task spec
+//!   `direction-catalog`): a row's last change read from one commit as
+//!   node-history's entry, and each node's open items, computed per read
+//!   and never stored.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -120,6 +124,7 @@ pub mod anchor;
 pub mod card;
 pub mod card_split;
 pub mod card_toml;
+pub mod catalog;
 pub mod check;
 pub mod code_toml;
 pub mod create;

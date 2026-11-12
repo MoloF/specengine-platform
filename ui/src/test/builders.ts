@@ -15,6 +15,9 @@ import type {
   CheckCounts,
   CheckFinding,
   CheckReport,
+  CatalogChange,
+  CatalogDocument,
+  CatalogRow,
   DeliveryCounts,
   DeliveryDocument,
   DeliveryLate,
@@ -1058,6 +1061,35 @@ export function aDeliveryLate(fields: Partial<DeliveryLate> & Pick<DeliveryLate,
     cancelled_subtasks: [],
     items: [],
     more: { returns: 0, reestimates: 0, cancelled_subtasks: 0, items: 0 },
+    ...fields,
+  };
+}
+
+/** A direction's table: the rows given, of the kind `scene`, uncut, unless given (docs/features/direction-catalog.md "Acceptance criteria", DC-9). */
+export function aCatalog(rows: CatalogRow[], fields: Partial<CatalogDocument> = {}): CatalogDocument {
+  return { kinds: ["scene"], archive: false, notes: [], rows, truncated: false, omitted: null, ...fields };
+}
+
+/** A last change: a hand commit by Ann Owner at `at`, of the row's own document, unless given. */
+export function aCatalogChange(fields: Partial<CatalogChange> = {}): CatalogChange {
+  return { at: "2026-01-02T10:00:00Z", by: "Ann Owner <ann@example.org>", by_name: "Ann Owner", commit: "a".repeat(40), proposal: null, of_file: false, ...fields };
+}
+
+/** A row of the kind `scene`: its document at line 1, version 1, no card, nothing open, no change read, unless given. */
+export function aCatalogRow(fields: Partial<CatalogRow> & Pick<CatalogRow, "id">): CatalogRow {
+  return {
+    kind: "scene",
+    title: `Title of ${fields.id ?? "the node"}`,
+    path: `docs/spec/${(fields.id ?? "node").toLowerCase()}.md`,
+    line: 1,
+    rev: 1,
+    status: null,
+    archived: false,
+    state: "no card",
+    open_items: 0,
+    tasks: 0,
+    tasks_open: 0,
+    last_change: null,
     ...fields,
   };
 }

@@ -2084,6 +2084,70 @@ export interface DeliveryMore {
   items: number;
 }
 
+// A kinds direction as a table of its documents (RM-0106): `spec catalog --kind K… [--archive]
+// --json` as the daemon's browser view sends it, uncut, every key present, absent null. The rows are
+// the tree's for those kinds, in its order; the state, the counts and the last change are the
+// core's, per read. The UI lays them out and sorts the served rows by a press; it never counts,
+// judges or reads git. A title, a kind, a status and a person's name are project data, shown as
+// written.
+
+/** A node's work state as `spec trace` prints its rollup; its look told in `src/flow/labels.ts`, its order in `src/tree/catalog.ts`. Source: `docs/features/direction-catalog.md` "Acceptance criteria", DC-9. */
+export type KnownRollup = "no card" | "departed" | "suspect" | "in work" | "confirmed";
+
+/**
+ * `spec catalog --kind K… [--archive] --json`, the answer of `GET .../catalog?kinds=K&archive=true`:
+ * `kinds` and `archive` as asked; `rows` one per node of the direction, in the tree's order; `omitted`
+ * null uncut, as the daemon always serves it.
+ * Source: `docs/features/direction-catalog.md` "Acceptance criteria", DC-9.
+ */
+export interface CatalogDocument {
+  kinds: string[];
+  archive: boolean;
+  notes: string[];
+  rows: CatalogRow[];
+  truncated: boolean;
+  omitted: number | null;
+}
+
+/**
+ * One node of a direction: the tree's eight keys as `spec tree` serves them, `rev` null where none
+ * is written; then `state` the trace's rollup for this node alone, another word kept and shown raw;
+ * `open_items` the open proposals of this repository naming it; `tasks` its cards but cancelled ones,
+ * `tasks_open` of them open; `last_change` its file's newest commit on `HEAD`'s first-parent line,
+ * null when none is read. Source: `docs/features/direction-catalog.md` "Acceptance criteria", DC-9.
+ */
+export interface CatalogRow {
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  rev: number | null;
+  status: string | null;
+  archived: boolean;
+  state: KnownRollup | Unlisted;
+  open_items: number;
+  tasks: number;
+  tasks_open: number;
+  last_change: CatalogChange | null;
+}
+
+/**
+ * A row's last change: `at` the commit's time in UTC; `by` raw as the commit or its `Decided-by`
+ * trailer writes it, an email in it, never drawn; `by_name` the name alone, the one drawn; `commit`
+ * the full OID and `proposal` its `Proposal:` trailer, null on a hand commit, neither drawn;
+ * `of_file` true on a section's row, whose change is its file's.
+ * Source: `docs/features/direction-catalog.md` "Acceptance criteria", DC-9.
+ */
+export interface CatalogChange {
+  at: string;
+  by: string;
+  by_name: string;
+  commit: string;
+  proposal: string | null;
+  of_file: boolean;
+}
+
 /** A column of a flow: `id` its name, `title` any script, default the ID. Source: `docs/canon/cards.md` "Documents and events". */
 export interface CardColumn {
   id: string;

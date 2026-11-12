@@ -35,10 +35,10 @@ use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveOpenRequest, ApproveRequest, BumpRequest, BundleRequest,
     CardAcceptRequest, CardAssignRequest, CardCancelRequest, CardClearGroupRequest,
     CardClearOutcome, CardClearRequest, CardEditRequest, CardListRequest, CardMoveRequest,
-    CardNewRequest, CardShowRequest, CardSplitRequest, CheckRequest, CheckedTree, CliError,
-    CreateRequest, DecisionRequest, DeliveryRequest, DiscrepancyRequest, DriftRequest, Env, Exit,
-    ExportIndexRequest, ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput,
-    GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
+    CardNewRequest, CardShowRequest, CardSplitRequest, CatalogRequest, CheckRequest, CheckedTree,
+    CliError, CreateRequest, DecisionRequest, DeliveryRequest, DiscrepancyRequest, DriftRequest,
+    Env, Exit, ExportIndexRequest, ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE,
+    GateInput, GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
     INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
     InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
     LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Mandate, Outcome,
@@ -249,6 +249,15 @@ enum Command {
         /// The day open tasks are judged at, YYYY-MM-DD (default: today, UTC).
         #[arg(long = "as-of", value_name = "D")]
         as_of: Option<String>,
+    },
+    /// Print a kinds direction as a table: one row per node `tree --kind` lists with no ROOT, in its order, with its version, work state (the trace's rollup), open items of this repository, tasks and open tasks, and its file's last commit on HEAD's first-parent line (when and who); computed per read, never stored; read-only, exit 0 whatever is listed, 2 when it cannot run (no --kind, no project, an index or a queue that cannot be read).
+    Catalog {
+        /// The direction's kinds (repeatable; at least one).
+        #[arg(long = "kind", value_name = "K")]
+        kinds: Vec<String>,
+        /// Include Tier 3 (archived) documents.
+        #[arg(long)]
+        archive: bool,
     },
     /// List what in the code names REF: the markers (`@implements`, `@verifies`, `@configures`, `@assumes`) and comment mentions under `[code]`, each with its state and binding; read-only, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run (no `[code]`, a config error, an incomplete walk).
     Refs {
@@ -1353,6 +1362,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             env,
             globals,
             &DeliveryRequest { as_of },
+        )?)),
+        Command::Catalog { kinds, archive } => Outcome::Catalog(Box::new(specengine_cli::catalog(
+            env,
+            globals,
+            &CatalogRequest { kinds, archive },
         )?)),
         Command::Refs { reference } => Outcome::Refs(Box::new(specengine_cli::refs(
             env,

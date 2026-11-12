@@ -135,5 +135,8 @@
   "DeliveryReestimate": ["at", "old", "new", "reason"],
   "DeliveryCancelled": ["id", "title", "at", "reason"],
   "DeliveryItem": ["id", "kind", "status"],
-  "DeliveryMore": ["returns", "reestimates", "cancelled_subtasks", "items"]
+  "DeliveryMore": ["returns", "reestimates", "cancelled_subtasks", "items"],
+  "Catalog": ["kinds", "archive", "notes", "rows", "truncated", "omitted"],
+  "CatalogRow": ["id", "kind", "title", "path", "line", "rev", "status", "archived", "state", "open_items", "tasks", "tasks_open", "last_change"],
+  "CatalogChange": ["at", "by", "by_name", "commit", "proposal", "of_file"]
 }

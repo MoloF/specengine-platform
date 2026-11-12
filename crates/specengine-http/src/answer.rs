@@ -40,7 +40,7 @@
 //! `lock-diff`, `roadmap`, `delivery`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`,
 //! `cards` (GET) without `marks`, and `cards/<id>` (no marks). Not on it,
 //! so walking: trace data wherever it is shown (`trace`, `flow?trace=true`,
-//! `cards?marks=true`: the rollups and marks a person accepts a card on,
+//! `cards?marks=true`, `catalog`: the rollups and marks a person accepts a card on,
 //! judged on the files as they are now); the round's sheet (it writes a
 //! round), the stage, the round's answers, every card write, the trace's
 //! clear and a confirm's read and write.

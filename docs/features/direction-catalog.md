@@ -1,6 +1,7 @@
 ---
 class: spec
-status: draft
+status: shipped
+shipped: 2026-11-12
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, crates/specengine-eval, fixtures, ui]
 ref: RM-0106, v5 core slice 7 (08 s2 Phase 7, "Owner's word, 2026-11-12"); the owner's vision of 2026-11-11; the analyst's analysis of 2026-11-12 (section 2, DC-1 to DC-6); the orchestrator's working answers, the owner's review open
 adrs: []
@@ -10,87 +11,19 @@ adrs: []
 
 ## Why
 
-The owner's vision of 2026-11-11 asks for a game's catalog of mechanics, items, sound and maps, each with its version and its fixes (`08-roadmap.md` Phase 7). A direction today is a flat list of names in the Spec tree (`docs/canon/directions.md` "Tree"): to learn a document's state, its open questions, its tasks or who changed it last, a person opens each one. The browser cannot build the table itself: at 100k nodes the whole trace takes about a second and its JSON runs to tens of megabytes.
+The owner's vision of 2026-11-11 asks for a game's catalog of mechanics, items, sound and maps, each with its version and its fixes (`08-roadmap.md` Phase 7). A direction was a flat list of names in the Spec tree: to learn a document's state, its open questions, its tasks or who changed it last, a person opened each one. The browser cannot build the table itself: at 100k nodes the whole trace takes about a second and its JSON runs to tens of megabytes.
 
-After this slice `spec catalog --kind K… [--archive] [--json]` and the daemon's `GET …/catalog` serve one row per node of a kinds direction: title, version, work state, open items, tasks and last change (when and who). In the Spec tree, choosing a direction shows that table where the node pane stands, 50 rows then Show more, sortable by column, a title opening the document modal. Computed per read, never stored; it moves, refuses and gates nothing (ADR-0012). No ADR: it rests on ADR-0076 (a direction is a module the kind reads apply), ADR-0073 (a lens hiding no work), ADR-0056, ADR-0005 (the decision history is readable from git), ADR-0008 and ADR-0012.
+`spec catalog --kind K… [--archive] [--json]` and the daemon's `GET …/catalog` serve one row per node of a kinds direction: title, version, work state, open items, tasks and last change (when and who). In the Spec tree, choosing a direction shows that table where the node pane stands, 50 rows then Show more, sortable by column, a title opening the document modal. Computed per read, never stored; it moves, refuses and gates nothing (ADR-0012). No ADR: it rests on ADR-0076, ADR-0073, ADR-0056, ADR-0005, ADR-0008 and ADR-0012.
 
 ## Description and interactions
 
-### Decisions
+Each decision is canon now, in `docs/canon/spec-catalog.md`: D1 the tree's rows, D3 the version, D4 state and tasks, D5 open items, D6 the last change per file: "The rule"; D2 four reads in one call: "The rule", "The walk"; D7 the cache: "The cache"; D8 no MCP tool: "Daemon, hub". D9 the table: `docs/canon/directions.md` "Tree".
 
-- **D1. Kinds directions only** (Q2): the rows are exactly `spec tree --kind K… [--archive]`'s nodes with no root, in its order, sections included. A rooted module keeps the tree; no kind is named in code (ADR-0008).
-- **D2. Four reads, one call.** The tree (rows, title, `rev`); the trace's reading (each row's `rollup` and its cards, `docs/canon/spec-trace.md` "Marks and rollup"), built once as `spec trace` builds it; the queue's open proposals of this repository, once; git, once.
-- **D3. Version N openly** (Q1): the row's `rev` (`docs/canon/node-revision.md`, none written is 1), shown as "Version N"; hashes stay out.
-- **D4. State** is the trace's `rollup` for the row's node: `no card`, `departed`, `suspect`, `in work`, `confirmed`, its own cards only. **Tasks** are that node's cards, cancelled ones ignored, and how many are open.
-- **D5. Open items** are `open` proposals of this repository (staged ones included) whose `target_id` is the row's ID or whose `node_ids` holds it. A document row does not count its sections' items.
-- **D6. Last change per file**, from one walk of `HEAD`'s first-parent line: the newest commit whose diff against its first parent names the row's path, read as node-history's commit entry (`docs/features/node-history.md` D3, D6: `applied_trailers`, `identity_name`). A section row's change is its file's, marked `of_file`. Hand commits count, `proposal` `null`.
-- **D7. Cached per `HEAD` in the daemon**: a path's last commit at one `HEAD` never changes, so the daemon keeps them and walks only for paths it has not seen. The CLI keeps none.
-- **D8. A served read, no MCP tool**, no plugin bump, no config key, no schema step.
-- **D9. The table** fills the node column at a direction's start while no node is open, in a lazy chunk; no table library.
-
-"Data" fixes every name, so the Rust and UI lanes never wait on each other.
+The owner's questions, open, their working answers built: **Q1** "Version N" shown openly, hashes out; **Q2** kinds directions only (rooted modules: 1-2 more hours and a rule for depth); **Q3** the last change per file, node-history's commit reading on `HEAD`'s first-parent line, cached per `HEAD` in the daemon; **Q4** open items are open proposals naming the node as target or in `node_ids`, a document not counting its sections'. The spec-writer's: W1 per file (`of_file`); W2 a merge is the change on the first-parent line; W3 the table in the node column, the list keeping its keyboard path and Show as root; W4 `rev-parse` per call; W5 keys under `tree.catalog`.
 
 ## Data
 
-### Command, core, store, CLI library
-
-`spec catalog --kind K… [--archive] [--json]`, at least one `--kind` (free, repeatable, as `tree`'s). Exits: 0 answered, a note included, no row too; 2 on no `--kind` (`` spec catalog: give at least one `--kind` ``), no project, an index that cannot be read, a queue that cannot be read (a newer schema). No REF and no depth: a direction has no root.
-
-Core, `crates/specengine-core/src/catalog.rs`, pure:
-
-```rust
-pub const LAST_CHANGE_SCAN_MAX: usize = 20_000;  // first-parent commits walked at most
-pub struct CommitFacts<'a> { pub oid: &'a str, pub author_name: &'a str, pub author_email: &'a str,
-    pub committed_at: i64, pub message: &'a str }
-pub fn last_change(commit: &CommitFacts<'_>, of_file: bool) -> LastChange;
-pub struct LastChange { pub at: String, pub by: String, pub by_name: String, pub commit: String,
-    pub proposal: Option<String>, pub of_file: bool }
-pub struct OpenItem<'a> { pub target_id: Option<&'a str>, pub node_ids: &'a [String] }
-pub fn open_items_by_node(items: &[OpenItem<'_>]) -> BTreeMap<String, u64>; // an item once per node it names
-```
-
-`last_change`: `at` `utc_timestamp(committed_at)`; `by` the `Decided-by` trailer as written when `applied_trailers` reads the message, else `<author_name> <<author_email>>`; `by_name` `identity_name(by)`; `commit` the full OID; `proposal` the `Proposal:` trailer, `null` on a hand commit. One commit gives one value, exactly node-history's commit entry's `at`, `by`, `by_name`, `id`, `proposal`.
-
-Store, `WorktreeGit`, beside `file_log`:
-
-```rust
-/// The newest commit of HEAD's first-parent line whose diff against its first parent names
-/// each path, at most `max` commits walked; paths absent at HEAD are never walked for.
-pub fn last_commits(&self, paths: &BTreeSet<String>, max: usize) -> Result<LastCommits, GitError>;
-pub struct LastCommits { pub found: BTreeMap<String, LoggedCommit>, pub absent: BTreeSet<String>,
-    pub unreached: BTreeSet<String>, pub walked: usize }
-```
-
-1. One `cat-file --batch-check` session asks `HEAD:<path>` for each path: missing ones go to `absent`.
-2. One `log --first-parent --diff-merges=first-parent --no-renames --name-only -z --format=%x01%H HEAD`, read as a stream and stopped (the child killed) once every present path is found or `max` commits are read; the rest go to `unreached`.
-3. One `log --no-walk=unsorted --stdin -z` with `file_log`'s format over the distinct found OIDs, `change` `None`.
-
-Each call runs with `GIT_NO_LAZY_FETCH=1`. An unborn `HEAD`: every path `absent`, no git log run.
-
-CLI library, new `crates/specengine-cli/src/catalog.rs`: `CatalogRequest {kinds: Vec<String>, archive: bool}`; `catalog(env, globals, request)` and `catalog_with_view(env, globals, request, view, cache: Option<&LastChangeCache>)`. `LastChangeCache` (`Default`, `Sync`): per (git common dir, `HEAD` OID), each path's `Option<LastChange>`, `absent` and `unreached` as `None`, at most `LAST_CHANGE_HEADS` (4) heads, the oldest dropped. A call reads `HEAD` once (`rev-parse`), takes the cached paths and walks only for the rest, then stores them. The daemon's `AppState` holds one; the CLI passes `None`.
-
-### JSON (`--json`, the daemon's route)
-
-On a git copy of `fixtures/studio-lamp` with two commits on top of its first (`Ann Owner <ann@example.org>` applying PR-0001 to `docs/spec/scn-arrival.md`, then `Bob Hand <bob@example.org>` editing `scn-storm.md` by hand), C-0001 open on `SCN-ARRIVAL`, PR-0040 an open question naming it:
-
-```json
-{"kinds": ["scene"], "archive": false, "notes": [], "rows": [
-  {"id": "SCN-ARRIVAL", "kind": "scene", "title": "Arrival", "path": "docs/spec/scn-arrival.md", "line": 1,
-   "rev": 1, "status": null, "archived": false, "state": "in work", "open_items": 1, "tasks": 1, "tasks_open": 1,
-   "last_change": {"at": "2026-01-02T10:00:00Z", "by": "Ann Owner <ann@example.org>", "by_name": "Ann Owner",
-     "commit": "<40 or 64 hex>", "proposal": "PR-0001", "of_file": false}},
-  {"id": "SCN-STORM", "kind": "scene", "title": "The storm", "path": "docs/spec/scn-storm.md", "line": 1,
-   "rev": 1, "status": null, "archived": false, "state": "no card", "open_items": 0, "tasks": 0, "tasks_open": 0,
-   "last_change": {"at": "2026-01-03T10:00:00Z", "by": "Bob Hand <bob@example.org>", "by_name": "Bob Hand",
-     "commit": "<40 or 64 hex>", "proposal": null, "of_file": false}}],
- "truncated": false, "omitted": null}
-```
-
-- A row keeps `spec tree`'s `id`, `kind`, `title`, `path`, `line`, `rev`, `status`, `archived`, as served there, then `state` (the rollup as `spec trace` prints it), `open_items`, `tasks`, `tasks_open`, `last_change`.
-- `last_change` is `null` for a path absent at `HEAD` (uncommitted), not reached within `LAST_CHANGE_SCAN_MAX`, or when git is not read; `of_file` is `true` on a section row. `by` is raw, as node-history's CLI and MCP show it; the UI draws `by_name` alone.
-- `omitted` counts the rows cut, `null` uncut. The daemon (`View::Browser`) never cuts.
-
-### Text
+In the canon: `spec-catalog.md` "The walk", "The cache", "Text and JSON", "Notes and exits", "Daemon, hub". **The copy**, the criteria's scenario (CLI `tests/catalog_scene/mod.rs`, `PINNED_TEXT`, `pinned_json`): a git copy of `fixtures/studio-lamp`, then `Ann Owner <ann@example.org>` applying PR-0001 to `docs/spec/scn-arrival.md` at 2026-01-02T10:00:00Z and `Bob Hand <bob@example.org>` editing `scn-storm.md` by hand at 2026-01-03T10:00:00Z; C-0001 open on `SCN-ARRIVAL`, PR-0040 an open question naming it:
 
 ```text
 catalog scene | rows 2
@@ -98,61 +31,29 @@ SCN-ARRIVAL | version 1 | in work | open items 1 | tasks 1, open 1 | 2026-01-02T
 SCN-STORM | version 1 | no card | open items 0 | tasks 0, open 0 | 2026-01-03T10:00:00Z | Bob Hand <bob@example.org> | hand | The storm
 ```
 
-- Header `catalog <kinds joined ", "> | rows <n>`, `[archive]` appended with `--archive`. A row: `<id> | version <rev or -> | <state> | open items <n> | tasks <t>, open <o> | <at>[ (file)] | <by> | <proposal or hand> | <title>`; `last_change` `null` prints `- | - | -` for the three.
-- Values pass `one_line`. The cut at `OUTPUT_CAP_CHARS`: rows whole while they fit, then `[truncated: <k> of <n> rows not shown]`.
-- Notes, `note: <n>` on stderr and JSON `notes`, sorted, each once: `catalog: last change not read: <cause>` (git missing, not a repository, git's first stderr line), every `last_change` `null`; `catalog: a shallow clone: <k> files its history does not reach read no last change`; `catalog: <k> files not reached in the last 20000 commits read no last change`; `catalog: no queue yet: no open item or task read`; the tree's and trace's own notes as they print them.
-
-### Daemon, hub
-
-- **Route**: `GET /api/projects/:p/catalog`, query `kinds` (repeated, required), `archive`; `spec catalog --json`, browser view, in the project's turn, the daemon's `LastChangeCache` passed. No `kinds` is a 400 naming it; an unknown parameter the 400 listing `kinds`, `archive`. `tests/door.rs` and `no_domain.rs` hold.
-- **Keys**, `fixtures/daemon-keys.json`, 3 new sets in "JSON"'s order: `Catalog` (6), `CatalogRow` (13), `CatalogChange` (6).
-- **The hub** serves the same route over its checkout (its `--push` clone is neither shallow nor partial, `docs/canon/hub-git.md`) and its own queue. No MCP tool; `HUB_TOOLS` and the plugin version unchanged.
-
-### The UI line
-
-- **Types** (`provisional.ts`, citing DC-9): `CatalogDocument {kinds; archive; notes; rows: CatalogRow[]; truncated; omitted}`, `CatalogRow` the 13 keys, `state` `KnownRollup | Unlisted`, `CatalogChange` the 6. `client.ts` `getCatalog(project, {kinds, archive}, signal)`, `http.ts` the repeated `kinds`. The mock (`src/mocks/catalog.ts`): harbor-sim's direction with 130 rows in every shape (each state, an unknown state, `rev` null, a section row `of_file`, `last_change` null, open items and tasks above 0), and an empty direction.
-- **The read** (`queries.ts`): `useCatalog(project, kinds, archive)`, key `["catalog", p, kinds, archive]`; `catalogsOf(p)` joins `READS_OF_THE_SPEC` and is re-read on every `card.*` event and every `proposal.*` but a stage, a read in flight aborted.
-- **Where**: `TreeView` at a direction's start (`listing !== null`), with no node open, renders `DirectionCatalog` in the node column in place of `NoNodePane`, through `const DirectionCatalog = lazy(() => import("./DirectionCatalog")…)` in a `Suspense` with a skeleton; `lazy.test.ts` pins it. The flat list on the left stays as design-sweep leaves it; opening a node shows its pane as today; leaving the node returns the table.
-- **The table** (`src/tree/DirectionCatalog.tsx`; labels, sort keys and the one compare of a state word in `src/tree/catalog.ts`, the state's look `src/flow/labels.ts` `rollupLook`):
-  - a `<table>` captioned by the direction's title (a `bdi`) and its row count; columns Title, Version, State, Open items, Tasks, Last change;
-  - a row: the title (else the ID) as a `DocLink` opening the document modal, the ID below it in `mono`; "Version N", or "No version"; a `Badge` of `rollupLook`, an unknown state raw `lang="en"`; the open items' count; `{{count}}, {{open}} open`; a `<time>` (`src/ui/time.ts` `formatUtc`), "by" and `by_name` in a `bdi`, "(file)" on `of_file` with its hint, "Not committed" on `null`; no OID, email or proposal drawn;
-  - **sort**: each `<th>` holds a subtle compact `Button` and carries `aria-sort`; Title (`Intl.Collator` in the viewer's language) and State (`ROLLUP_WORDS`' order, unknown last) sort ascending first, Version, Open items, Tasks and Last change (the `at` text, `null` last) descending first; a second press reverses; ties keep served order; the served order stands until a press, and a new direction resets it. Sorting is presentation of served values, no core logic (`docs/canon/architecture.md#ui`);
-  - **Show more**: the first `CATALOG_SHOWN` (50) rows of the current order, then a `Button` "Show {{count}} more" (the next 50 or fewer), focus moving to the first newly shown row's title link; a sort keeps the count shown;
-  - loading a skeleton; a failure `ErrorPanel` with the daemon's words and Retry; no row an `EmptyState` (level 3); `notes` a note list `lang="en"`.
-- **Strings** (`en.ts`, `ru.ts`, the Russian a draft with plural forms), under `tree.catalog`: `caption_one|_other`, `loading`, `failed`, `column.{title,version,state,open,tasks,changed}`, `version`, `noVersion`, `tasks`, `changed`, `ofFile`, `ofFileHint`, `noChange`, `more`, `empty`, `emptyText`, `notes`.
-- **CSS**: scale-step tokens only, no legacy alias, no `SCALE_EXCEPTIONS` entry; `.catalog-*` in `app.css`. The primitives as design-sweep leaves them (`Button`, `Badge`, `EmptyState`).
+**Corrected at ship.** A row's `rev` is the revision number, none written 1, an unreadable one `null` (the pinned `"rev": 1`, D3, DC-7); the draft's "keeps `spec tree`'s … `rev` … as served there" was wrong, the tree serving `null` when none is written. The header is pinned as `catalog <kinds joined ", "> | rows <n>`, with a literal ` [archive]` appended under `--archive`.
 
 ## Rules and edge cases
 
-- WHEN no `--kind` is given, the command SHALL exit 2 and read nothing; WHEN the kinds match no node, it SHALL answer `rows 0`, exit 0.
-- WHEN a row's file has uncommitted edits, its last change SHALL be `HEAD`'s, never the working tree's; a new uncommitted file SHALL read `null`.
-- WHEN a merge brought a file's change from another branch, the merge SHALL be its last change (its committer time and trailers, its author when none), where node-history may list the side commit (W2).
-- WHEN the same `HEAD` is read twice by one daemon, the second read SHALL run `rev-parse` alone of git, and its answer SHALL be byte-equal to the CLI's at that state.
-- Determinism: one corpus, queue and git state gives one text and JSON at any root and `HOME`; every date is stored data, no clock read.
-- The trace's reading needs the index: an index that cannot be read is exit 2, the daemon's 503, never a clean row (`spec-trace.md` "The read").
-- Writes: the index's own refresh only; the cache lives in the daemon's memory.
-
-**Rollout.** No schema step, backup format, config key or tool. A daemon or hub before this slice answers the route 404, and the UI then shows the failure with Retry. The hub takes it at its next upgrade, the owner's call.
-
-**Test churn.** The daemon's 404 route listing and its pins; `daemon_keys.rs` and `daemonKeys.test.ts` (3 sets); the CLI usage golden if it lists commands; `TreeView.test.tsx`'s direction cases (the node column holds the table).
+In the canon: `spec-catalog.md` "The rule", "Known limits". **Rollout**: no schema step, backup format, config key or tool; a daemon or hub before this slice answers the route 404, the table showing it with Retry; a hub takes it at its next upgrade, the owner's call.
 
 ## Acceptance criteria
 
-A browser look is marked **[look]**, a timed or counted run **[measure]**. Every other criterion is a test that the named mutation turns red. Test repositories are built at run time with invented names; "the copy" is "JSON"'s git copy of `fixtures/studio-lamp`.
+A browser look is marked **[look]**, a timed or counted run **[measure]**. Every other criterion is a test that the named mutation turns red. Test repositories are built at run time with invented names; "the copy" is "Data"'s.
 
-- [ ] DC-1 — **Rows are the tree's.** On the copy, `spec catalog --kind scene --json`'s row IDs equal `spec tree --kind scene --json`'s node IDs in order (`SCN-ARRIVAL`, `SCN-STORM`); with a section of kind `scene` added, it is listed where the tree lists it; `--archive` matches `tree --archive`. Mutation, red: rows taken from the whole tree.
-- [ ] DC-2 — **State and tasks are the trace's.** For each row, `state` equals `spec trace <ID> --json`'s first node's `rollup`, and `tasks` its card count; after `spec card accept`, `in work` becomes `confirmed`, `tasks_open` 0; a cancelled card is in neither. Mutations, each red: `state` always `no card`; cancelled cards counted.
-- [ ] DC-3 — **Open items.** On `SCN-ARRIVAL`: an open question naming it in `node_ids` and an open update targeting it count 2; one staged counts; an applied, a rejected, one naming `SCN-STORM`, one of another repository's worktree do not; an item naming both scenes counts once on each. Mutations, each red: applied items counted; the repository filter dropped.
-- [ ] DC-4 — **Last change.** On a linear temp repository, each document row's `last_change` equals `spec show <ID> --history --json`'s newest `source: commit` entry (`at`, `by`, `by_name`, `id`, `proposal`), a hand commit included; touching the file's mtime changes nothing; a section row carries its file's with `of_file: true`; an uncommitted new file reads `null`; on a merged branch the merge is the change. Mutations, each red: the file's mtime used; the oldest commit taken; `--first-parent` dropped (the merge case).
-- [ ] DC-5 — **No kind in code.** `workspace_names.rs` and http `no_domain.rs` stay green. Mutation, red: `"scene"` planted in `catalog.rs`; the guard names it.
-- [ ] DC-6 — **50, then Show more**, on the mock. 130 rows show 50; Show more shows 100 and moves focus to row 51's title link; again, 130 and the button gone. Mutation, red: every row rendered at once.
-- [ ] DC-7 — **Text and JSON as pinned.** On the copy, "Text"'s lines byte for byte and "JSON"'s document (OIDs matched by shape); no `--kind`: exit 2, nothing read; `--kind nothing`: `rows 0`, exit 0; git absent from `PATH`: every `last_change` `null`, the note, exit 0. Mutation, red: `by_name` printed for `by`.
-- [ ] DC-8 — **One walk, then the cache.** A seam counts git commands, trace readings and proposal reads: one CLI call over 40 rows in 12 files runs one `cat-file --batch-check`, one walking `log`, one `--no-walk` `log` and `rev-parse`, one trace reading, one proposal read. The daemon's second request at the same `HEAD` runs `rev-parse` alone; after a new commit, the walk again; a request with one more kind walks only for the new paths. Every answer byte-equals the CLI's. Mutations, each red: a `file_log` per path; the cache keyed without `HEAD`.
-- [ ] DC-9 — **The daemon serves it, the UI types it.** `GET …/catalog?kinds=scene` byte-equals `spec catalog --kind scene --json`; no `kinds` and an unknown parameter are 400s. The fixture holds the 3 sets; `provisional.ts` types them, `daemonKeys.test.ts` green, `AHEAD_OF_FIXTURE` empty at the end. Mutation, red: `archive` not passed through.
-- [ ] DC-10 — **The table**, on the mock. A direction chosen, no node open: the table, captioned, in the node column; a rooted module or an open node: none. Pressing Version sorts descending (`aria-sort="descending"`), again ascending; Title by the viewer's collation; ties in served order. A title opens the document modal, its anchor the opener. An unknown state is raw under `lang="en"`; no email or OID is in the DOM. The keys in `en.ts`, the Russian forms in `ru.ts`; `policy.test.ts` and `scale.test.ts` pass, the slice's CSS naming no legacy alias. After `pnpm build`, the table's chunk is not in first load, first-load JS grows at most 2 kB, ≤ 845 kB. Mutations, each red: a static import of `DirectionCatalog`; a state word compared outside `catalog.ts`; `by` drawn.
-- [ ] DC-11 — **[measure] At scale.** `specengine-eval scale --corpus-only` trees committed into git with a seeded history (`crates/specengine-eval/tests/catalog_scale.rs`, `#[ignore]`: the eval writes a `git fast-import` stream of 10 000 commits, each editing 1 to 5 seeded part files): `spec catalog --kind node --json`, warm, release, at 1k and 10k nodes, the git half timed by DC-8's seam, at 100k reported. Bars: the git half ≤ 1 s at 10k, the whole ≤ 2 s at 10k; times in "Implementation". Past a bar, "Known limits" names the next step (a per-`HEAD` index of last changes).
-- [ ] DC-12 — **[look]** The orchestrator's, in Chrome, both themes and languages, 1440x900 and 1100x800: the mock's direction table, a sort, Show more, a section row's "(file)", a title's modal, an empty direction.
-- [ ] DC-13 — **Gates.** `cargo nextest run` for `specengine-core`, `-store`, `-cli` and `-http` is green, then the full run once. The eval tests (`doc_pointers`, `ui_policy`, `anonymity`, `workspace_names`) and `spec check` pass. UI lint, `tsc`, `pnpm test` and `pnpm build` pass.
+- [x] DC-1 — **Rows are the tree's.** On the copy, `spec catalog --kind scene --json`'s row IDs equal `spec tree --kind scene --json`'s node IDs in order (`SCN-ARRIVAL`, `SCN-STORM`); with a section of kind `scene` added, it is listed where the tree lists it; `--archive` matches `tree --archive`. Mutation, red: rows taken from the whole tree.
+- [x] DC-2 — **State and tasks are the trace's.** For each row, `state` equals `spec trace <ID> --json`'s first node's `rollup`, and `tasks` its card count; after `spec card accept`, `in work` becomes `confirmed`, `tasks_open` 0; a cancelled card is in neither. Mutations, each red: `state` always `no card`; cancelled cards counted.
+- [x] DC-3 — **Open items.** On `SCN-ARRIVAL`: an open question naming it in `node_ids` and an open update targeting it count 2; one staged counts; an applied, a rejected, one naming `SCN-STORM`, one of another repository's worktree do not; an item naming both scenes counts once on each. Mutations, each red: applied items counted; the repository filter dropped.
+- [x] DC-4 — **Last change.** On a linear temp repository, each document row's `last_change` equals `spec show <ID> --history --json`'s newest `source: commit` entry (`at`, `by`, `by_name`, `id`, `proposal`), a hand commit included; touching the file's mtime changes nothing; a section row carries its file's with `of_file: true`; an uncommitted new file reads `null`; on a merged branch the merge is the change. Mutations, each red: the file's mtime used; the oldest commit taken; `--first-parent` dropped (the merge case).
+- [x] DC-5 — **No kind in code.** `workspace_names.rs` and http `no_domain.rs` stay green. Mutation, red: `"scene"` planted in `catalog.rs`; the guard names it.
+- [x] DC-6 — **50, then Show more**, on the mock. 130 rows show 50; Show more shows 100 and moves focus to row 51's title link; again, 130 and the button gone. Mutation, red: every row rendered at once.
+- [x] DC-7 — **Text and JSON as pinned.** On the copy, "Data"'s text byte for byte and the scene's `pinned_json` (OIDs matched by shape); no `--kind`: exit 2, nothing read; `--kind nothing`: `rows 0`, exit 0; git absent from `PATH`: every `last_change` `null`, the note, exit 0. Mutation, red: `by_name` printed for `by`.
+- [x] DC-8 — **One walk, then the cache.** A seam counts git commands, trace readings and proposal reads: one CLI call over 40 rows in 12 files runs one presence read, `ls-tree -r --name-only <oid>`, one walking `log`, one `--no-walk` `log` and `rev-parse`, one trace reading, one proposal read. The daemon's second request at the same `HEAD` runs `rev-parse` alone; after a new commit, the walk again; a request with one more kind walks only for the new paths. Every answer byte-equals the CLI's. Mutations, each red: a `file_log` per path; the cache keyed without `HEAD`.
+- [x] DC-9 — **The daemon serves it, the UI types it.** `GET …/catalog?kinds=scene` byte-equals `spec catalog --kind scene --json`; no `kinds` and an unknown parameter are 400s. The fixture holds the 3 sets; `provisional.ts` types them, `daemonKeys.test.ts` green, `AHEAD_OF_FIXTURE` empty at the end. Mutation, red: `archive` not passed through.
+- [x] DC-10 — **The table**, on the mock. A direction chosen, no node open: the table, captioned, in the node column; a rooted module or an open node: none. Pressing Version sorts descending (`aria-sort="descending"`), again ascending; Title by the viewer's collation; ties in served order. A title opens the document modal, its anchor the opener. An unknown state is raw under `lang="en"`; no email or OID is in the DOM. The keys in `en.ts`, the Russian forms in `ru.ts`; `policy.test.ts` and `scale.test.ts` pass, the slice's CSS naming no legacy alias. After `pnpm build`, the table's chunk is not in first load, first-load JS grows at most 2 kB, ≤ 845 kB. Mutations, each red: a static import of `DirectionCatalog`; a state word compared outside `catalog.ts`; `by` drawn.
+- [x] DC-11 — **[measure] At scale.** `specengine-eval scale --corpus-only` trees committed into git with a seeded history (`crates/specengine-eval/tests/catalog_scale.rs`, `#[ignore]`: the eval writes a `git fast-import` stream of 10 000 commits, each editing 1 to 5 seeded part files): `spec catalog --kind node --json`, warm, release, at 1k and 10k nodes, the git half timed by DC-8's seam, at 100k reported. Bars: the git half ≤ 1 s at 10k, the whole ≤ 2 s at 10k; times in "Implementation". Past a bar, "Known limits" names the next step (a per-`HEAD` index of last changes).
+- [x] DC-12 — **[look]** The orchestrator's, in Chrome, both themes and languages, 1440x900 and 1100x800: the mock's direction table, a sort, Show more, a section row's "(file)", a title's modal, an empty direction.
+- [x] DC-13 — **Gates.** `cargo nextest run` for `specengine-core`, `-store`, `-cli` and `-http` is green, then the full run once. The eval tests (`doc_pointers`, `ui_policy`, `anonymity`, `workspace_names`) and `spec check` pass. UI lint, `tsc`, `pnpm test` and `pnpm build` pass.
 
 ## Out of scope
 
@@ -160,62 +61,49 @@ Rooted modules (Q2); a new nav section (`SECTIONS` untouched); an MCP tool; per-
 
 ## Implementation
 
-To be filled in after implementation. The plan follows.
+The UI lane built ahead in a worktree at `1d78b5e2`, merged onto `main`; the Rust lane on `main`, reviewed (ACCEPT) and given iteration 2. DC-1 to DC-10 ticked at ship, DC-11 to DC-13 on the orchestrator's word.
 
-### Roles and files
-
-| Role | Files |
+| Module | Does |
 |---|---|
-| rust-developer | `crates/specengine-core/src/{catalog,lib}.rs`; `crates/specengine-store/src/worktree.rs` (`last_commits`); `crates/specengine-cli/src/{main,lib}.rs` and a new `catalog.rs` (and `trace.rs` if its reading needs a shared entry); `crates/specengine-http/src/{app,args}.rs` (the route, `AppState`'s cache) |
-| test-engineer, Rust | `catalog.rs` in core `tests/`, CLI and http (new); store `worktree` tests of `last_commits`; DC-8's seam; `crates/specengine-eval/tests/catalog_scale.rs`; `daemon_keys.rs`; `fixtures/daemon-keys.json` (`SPECENGINE_WRITE_DAEMON_KEYS=1`) with, in the same change, `daemonKeys.test.ts`'s 3 sets, names and count, the catalog entries out of `AHEAD_OF_FIXTURE`; the churn |
-| ui-developer | "The UI line": `provisional.ts`, `client.ts`, `http.ts`, the mock, `queries.ts`, `src/tree/{TreeView,DirectionCatalog}.tsx`, `src/tree/catalog.ts`, `src/app/lazy.test.ts`, `src/styles/app.css`, `en.ts`, `ru.ts`. The 3 sets in `AHEAD_OF_FIXTURE` until the fixture lands |
-| test-engineer, UI | the UI gates, DC-6's and DC-10's mutations, the first-load figure |
+| core `catalog.rs` (new), `lib.rs` | `LAST_CHANGE_SCAN_MAX`, `CommitFacts`, `LastChange` (6 keys), `last_change`, `OpenItem`, `open_items_by_node` |
+| store `worktree.rs`, `lib.rs` | `last_commits`, `last_commits_at`, `LastCommits` (`found`, `absent`, `unreached`, `walked`, `capped`, `shallow`): the tree read, the streaming walk (an early stop kills and reaps the child), the boundary read, the commit read by OID; the re-export |
+| cli `catalog.rs` (new), `tree.rs`, `trace.rs`, `history.rs`, `subset.rs`, `lib.rs`, `main.rs` | `CatalogRequest`, `CatalogRow`, `CatalogOutcome`, `LastChangeCache`, `LAST_CHANGE_HEADS`, `catalog`, `catalog_with_view`, text, JSON; `lines_of` extracted, `direction_lines` (tree output unchanged); `NodeWork`, `node_work`; `git_cause` `pub(crate)`; seams `CatalogTrace`, `CatalogItems`, `CatalogWalk(&[String])` and their counters; `Outcome::Catalog`; the subcommand |
+| http `app.rs`, `answer.rs` | the route, `App.catalogs`, the handler (`run`), `catalog` in the 404 list; doc |
+| ui `api/{provisional,client,http,queries}.ts`, `tree/{DirectionCatalog.tsx,catalog.ts,TreeView.tsx,NodePane.tsx}`, `app/Shell.tsx`, `i18n/{en,ru}.ts`, `styles/app.css`, `mocks/{catalog,MockClient}.ts`, `test/{catalogStub,stubClient,builders}.ts` | `CatalogDocument`, `CatalogRow`, `CatalogChange`, `KnownRollup`; `getCatalog`, `useCatalog`, the re-read; the lazy table, `moduleTitle`; `tree.catalog.*`; `.catalog-*`; the 130-row mock |
 
-Comments cite `docs/features/direction-catalog.md` "Acceptance criteria" with a criterion ID, or a canon heading, never "Data", which compaction drops (`doc_pointers`).
+**Rust departures**, as settled after iteration 2, canon now (`spec-catalog.md`): (1) `rev`, corrected under "Data"; (2) the store adds `last_commits_at(commit, paths, max)`, `last_commits` its call from `HEAD`, the CLI walking from the OID it read, so a commit during a read cannot mix two `HEAD`s or poison the cache; (3) the walk's flags beyond the draft's, `--root --no-relative --no-color --no-ext-diff --no-textconv --no-show-signature --end-of-options <commit> --`, format `%x01%H%x02%P` (the parents, for 4); (4) the shallow boundary: a parentless commit names every file it holds, a boundary's go to `unreached`, judged by the raw commit since iteration 2, not the shallow file; (5) the cache keeps three answers per path, not `Option<LastChange>`, so a cached answer's notes byte-equal the CLI's, and since iteration 2 no shallow one; (6) the notes scoped to the rows shown, "no queue yet" meaning schema 0; (7) git not read: every repository's open items counted, no note: the orchestrator's ruling, accepted, a Known limit; (8) the unreadable-row note; (9) paths no `cat-file` batch line could ask, `unreached` before iteration 2, are now absent or found like any other (`ls-tree -z`); (10) the handler walks (`run`, not `run_read`), the trace's state shown; the struct is `App`, field `catalogs`, not `AppState`; (11) an empty kind is a kind with no node, rows 0, as `tree`; (12) the index read with bytes, as `spec tree` reads it, so rows equal the tree's; DC-11 measures that cost.
 
-### Work order
+**UI departures**, canon now (`directions.md` "Tree", "Known limits"): (1) the table replaces `NoNodePane`'s empty state, not the pane, its `h1` outside the lazy chunk for the Shell's focus; (2) the empty state at level 2, under that `h1`; (3) `tasks` and `more` plural (`_one|_other`, four Russian forms), `catalog.test` forbidding `{{count}}` outside one; (4) the "(file)" hint once under the table; (5) `aria-sort` on the sorted column alone; (6) missing values last both ways, titles by `Intl.Collator(language, {numeric: true})`; (7) the mock's 130 rows, harbor-sim's real mechanics and invented `MEC-CAT-*` ones; (8) the empty direction `?scenario=empty`, the pinned scenario only in stub tests; (9) "Not committed" also for not reached and git not read, an open wording question.
 
-1. Start after `delivery-analytics` part a ships (one Rust slice at a time), with `node-history` shipped (its core `applied_trailers`, `identity_name`, store `file_log`'s record parser) and `design-sweep` part a merged (the Spec tree on the primitives, the pane).
-2. The ui-developer lands the UI line behind `AHEAD_OF_FIXTURE`; the rust-developer goes core, store, CLI, http.
-3. The Rust test-engineer overlaps: core and store (DC-4's halves), CLI (DC-1 to DC-3, DC-7, DC-8), http (DC-9), DC-11. Then the Rust and UI reviews.
-4. The orchestrator's look (DC-12). Ship: the spec-writer ("Canon at ship").
+**Polish after the look**, in `directions.md` "The catalog": a row's tasks cell reads `0` when both counts are 0, else `{{count}} · {{open}} open` (the Russian puts the word before the open count); the state lozenge and the ID never wrap; titles hold at least 18ch and break only between words; the last change is small text, the name below it; on a narrow pane the table scrolls sideways inside its labelled region.
 
-At most three iterations a lane.
+**DC-12**, the orchestrator's look: a pilot clone, 67 mechanics: the caption, 50 rows and "Show 17 more", the columns as specified; dates right on a clean build (an earlier wrong date came from a daemon built while a mutation was in place). Before the polish the layout crushed at 1440; after it the rows are clean (the UI developer's screenshots).
 
-### Risks
+**Review.** Rust ACCEPT, asking iteration 2: presence from trees, not `cat-file` (a blobless partial clone read "uncommitted"); no cached shallow answer; the boundary by the raw commit; the store saying why the walk stopped (the cap or its natural end); no absolute path in the root-outside note. Verified: the walk's arguments (`--end-of-options`, `-z`, the cleared environment, `GIT_NO_LAZY_FETCH`, `GIT_OPTIONAL_LOCKS=0`), the early stop killing and waiting, merges, shallow depths, a root in a subdirectory through a symlink, one `HEAD` per request in the cache, the refactors verbatim, the counts (open only, target and `node_ids`, once per node, another clone out, a linked worktree in). Known limit: the FIFO of four heads shared by every project, about 3.5 MB a head at 10k files. No UI review is recorded.
 
-- **A long history**: the walk ends at the oldest last change among the rows; a file untouched since the root walks to the root, so `LAST_CHANGE_SCAN_MAX` bounds it and DC-11 measures it.
-- **10k rows in the browser**: only the shown rows render; the sort runs over served values once per press.
-- **A killed walk**: stopping `git log` early must not leave a zombie or a stalled pipe; the store's tests cover it.
+**Iteration 2** built them: one `ls-tree` per walk; shallow answers not cached; the boundary by `rev-parse --is-shallow-repository`, then `cat-file commit` only when shallow; `LastCommits.capped`, `.shallow`; the root-outside cause in fixed words. Store 9, CLI 22 + 2, http 9 tests green; clippy clean.
 
-### Canon at ship
+**The notes**, exact: `catalog: last change not read: <cause>` (`git missing`, `not a repository`, git's first stderr line, `the project root is not in its git worktree`); `catalog: a shallow clone: <k> files its history does not reach read no last change`; `catalog: <k> files not reached in the last 20000 commits read no last change`; `catalog: no queue yet: no open item or task read`; `catalog: <id>: its row does not read (<column>: <reason>); not counted`. The refusals: `` spec catalog: give at least one `--kind` `` (exit 2); the daemon's 400s `` `kinds` is required (repeat it for more) `` and `` `<name>` is no query name of catalog: it takes kinds, archive ``.
 
-Free bytes now in brackets; "net" means trimmed in the same file to fit.
+**Git**, per call: `rev-parse --local-env-vars`, `--show-toplevel`, `--git-common-dir`, `--verify -q --end-of-options HEAD^{commit}`; `ls-tree -r -z --full-tree --name-only --end-of-options <oid>`; `log --first-parent --diff-merges=first-parent --no-renames --name-only -z --root --no-relative --no-color --no-ext-diff --no-textconv --no-show-signature --format=%x01%H%x02%P --end-of-options <oid> --`; `log --no-walk=unsorted --stdin -z --no-show-signature --no-color --encoding=UTF-8 --format=%H%n%an%n%ae%n%ct%n%B --`; when a walk reaches a parentless commit an answer depends on, `rev-parse --is-shallow-repository`, then in a shallow clone `cat-file --end-of-options commit <oid>`. The second daemon request at one `HEAD`: the four `rev-parse` alone.
 
-| File | Edit |
-|---|---|
-| `docs/canon/spec-catalog.md` (new, Tier 2, `spec-*` shard) | the rule: rows, state, tasks, open items, last change and its walk, the cache; JSON and text; daemon, hub; the table; "Known limits" (per-file change, merges, the scan cap, the measured cost); "Tests" |
-| `docs/canon/directions.md` [4 504] | "Tree": the table at a direction's start; "Rules": the read; drop "It adds no … read, route" |
-| `docs/canon/spec-history.md` (node-history's) | a pointer: the catalog reads its commit entry |
-| `docs/canon/ui-languages.md` [9] | "Size": the first-load figure. Net |
-| READMEs: core [9], store [3], cli [1], http [4], ui [2 049] | a pointer; store's `last_commits`; http's route row and the cache. Net |
-| `CLAUDE.md`; 08 "Owner's word, 2026-11-12" row 7; RM-0106 | shipped |
-| this spec | compacted to at most 3 KB |
+**Pins moved**: http `tests/hub.rs` `GET_ROUTES` 29 to 30 (`/api/projects/{p}/catalog`, every login); `kind_amendment`'s set count 137 to 140; `daemonKeys.test.ts` `ALL` 140, `AHEAD_OF_FIXTURE` empty.
 
-### Working answers and the owner's questions
+**Numbers.** First load 835.33 kB, +1.87 from 833.46 measured in the worktree, gzip 242.83; `DirectionCatalog-*.js` 5.28 kB (2.08 gzip), outside it; `ru-*.js` 158.82 kB. UI 197 files, 5 544 tests after the merge; the UI's 15 mutations red.
 
-**The orchestrator's**, the analyst's recommendations; the owner has not answered:
+**DC-11**, release, median of 5 warm runs, the worst case reading all 10 001 commits (`catalog_scale.rs`: one check by default, three measures `#[ignore]`):
 
-| Question | Working answer | Cost of the other answer |
-|---|---|---|
-| Q1. Show "Version N" openly, though v5 folds revisions? | Yes, in the catalog as in History; hashes stay out | Folding it hides the very version he asked for |
-| Q2. Rooted modules as well as kinds directions? | Kinds directions only, for now | 1-2 more hours, and a rule for how deep a subtree's rows go |
-| Q3. Last change from where? | node-history's commit reading, per file, the newest commit of `HEAD`'s first-parent line, cached per `HEAD` in the daemon | Per node (span bytes judged per commit): a blob parse per row per commit, the cost node-history pays for one node |
-| Q4. What counts as an open item? | Open proposals naming the node, as target or in `node_ids` | Including its sections' items needs `within` per row, and a document's count would repeat its sections' |
+| Nodes | Load | Whole read | Git half | Peak |
+|---|---|---|---|---|
+| 1k | ~2.3 | 209 ms | 167 ms | 71 MB |
+| 1k | 8–15 | 314 ms | 248 ms | 71 MB |
+| 10k | ~2.3 | 410 ms | 312 ms | 146 MB |
+| 10k | 8–15 | 588 ms | 375 ms | 146 MB |
+| 100k | ~2.3 | 1 691 ms | 927 ms | 619 MB |
+| 100k | 8–15 | 2 390 ms | 579 ms | 614 MB |
 
-**The spec-writer's:**
-- W1: per file, since a section's own change needs a parse of every version; `of_file` says so, and History has the exact answer.
-- W2: the first-parent line makes a merge the change on the line the reader is on; node-history follows `--follow`'s simplification. Both are named, DC-4 pins both.
-- W3: the table stands in the node column, so the flat list keeps its keyboard path and Show as root; the table never hides work (ADR-0073).
-- W4: `rev-parse` per call keeps the cache honest after a commit, a checkout or a hub's pull.
-- W5: keys under `tree.catalog`, the screen's namespace.
+Both bars hold at 10k in both runs (git half ≤ 1 s, whole ≤ 2 s). The git half is the store's `last_commits` plus the library's uncached-minus-cached delta: DC-8's seam is `#[cfg(test)]`, out of the eval crate's reach.
+
+**DC-13.** The workspace, 5 795 tests: 4 failures, churn (`layer_c_scan` gaining `catalog.rs`, green now) and 3 http `ui t3_*` hit while another lane rebuilt `ui/dist` (5 of 5 on rerun); clippy clean; the eval guards 58 of 58; `shards_repo`, `layer_c_scan`, `kind_amendment`, `genre` 35 of 35; `daemonKeys` 429 of 429; the UI after the polish 5 549 of 5 550, one load flake passing alone; first load 835.33 kB. The orchestrator's light gate runs before the commit.
+
+**Test differences**, the test-engineer's: (1) DC-11's command lists nothing on the generated tree as written, which has no `[paths] spec`: the test adds `spec = "areas"`, about a quarter of the generated documents archived; (2) the git half timed as above; (3) presence is `ls-tree`, not the draft's `cat-file --batch-check`; (4) `rev` as corrected; (5) the header as pinned; (6) "no queue yet" pinned as no `proposals` or `cards` table, the read creating `<slug>.db`; (7) an empty kind `rows 0`; (8) departure 7 exercised only on a single-repository copy. **Uncovered**: the root-outside note (not reachable), the unreadable-row note, hub-mode requests (only `GET_ROUTES` at 30). **Mutations**: 14, named and extra, all red; a first batch restored files with old mtimes and left mutant builds, caught, every result from clean runs.

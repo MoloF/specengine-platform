@@ -12,6 +12,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 
 ## Canon
 
+- [docs/canon/spec-catalog.md](canon/spec-catalog.md) spec catalog: a direction as a table of its documents · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
 - [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-check-graph.md](canon/spec-check-graph.md) spec check: index render, generators, graph warnings · crates/specengine-core · tier 2

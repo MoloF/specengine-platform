@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNode, useProjectName, type InboxQuery } from "../api/queries";
 import { openDocFrom } from "../app/location";
@@ -37,8 +37,13 @@ const REF_FORMS = { slug: "slug/ID", section: "ID#SECTION", md: ".md" } as const
 /** How the pane came to show its node, for where focus goes (docs/features/ui-tree-node.md "Implementation", Keys). */
 export type Arrival = "start" | "follow" | "change";
 
-/** The node pane with no node chosen: the view's heading and where to start. */
-export function NoNodePane() {
+/**
+ * The node pane with no node chosen: the view's heading, then where to start; at a direction's
+ * start `children`, its table, in place of that
+ * (docs/features/direction-catalog.md "Acceptance criteria", DC-10), the heading kept outside the
+ * table's chunk so a new view still focuses it.
+ */
+export function NoNodePane({ children }: { children?: ReactNode }) {
   const t = useTranslate();
   return (
     <article className="node-pane" aria-labelledby="tree-title">
@@ -48,16 +53,18 @@ export function NoNodePane() {
         </h1>
         <p className="view-about">{t("tree.node.about")}</p>
       </header>
-      <EmptyState
-        level={2}
-        title={t("tree.node.noneOpen")}
-        description={
-          <>
-            <p>{t("tree.node.pick")}</p>
-            <p className="muted">{t("tree.node.keysHint")}</p>
-          </>
-        }
-      />
+      {children ?? (
+        <EmptyState
+          level={2}
+          title={t("tree.node.noneOpen")}
+          description={
+            <>
+              <p>{t("tree.node.pick")}</p>
+              <p className="muted">{t("tree.node.keysHint")}</p>
+            </>
+          }
+        />
+      )}
     </article>
   );
 }

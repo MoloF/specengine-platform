@@ -189,18 +189,18 @@ pub fn tree_with_view(
         )
     };
 
-    let mut listed = Vec::new();
-    for (at, level, parent) in walked(&graph, &admission, &roots, depth, &mut outcome.left_out) {
-        messages.extend(parent_warning(&graph, at));
-        listed.push(line_of(&graph, at, level, parent));
-    }
-    if !request.kinds.is_empty() {
-        listed.retain(|node: &TreeNode| {
-            node.kind
-                .as_deref()
-                .is_some_and(|kind| request.kinds.iter().any(|wanted| wanted == kind))
-        });
-    }
+    let listed: Vec<TreeNode> = lines_of(
+        &graph,
+        &admission,
+        &roots,
+        depth,
+        &request.kinds,
+        &mut outcome.left_out,
+        &mut messages,
+    )
+    .into_iter()
+    .map(|(_, line)| line)
+    .collect();
     outcome.roots = listed.iter().filter(|node| node.depth == 0).count();
     outcome.nodes = listed;
     outcome.messages = messages;
@@ -214,6 +214,58 @@ pub fn tree_with_view(
         View::Browser => outcome.nodes.len(),
     };
     Ok(outcome)
+}
+
+/// The lines of the walk from `roots` ([`walked`]), each with its node, a
+/// warning per node met into `messages`; `kinds` keeps the lines of those
+/// kinds after the walk (none given: every line).
+fn lines_of(
+    graph: &SpecGraph<'_>,
+    admission: &Admission<'_, '_>,
+    roots: &[NodeAt],
+    depth: Option<usize>,
+    kinds: &[String],
+    left_out: &mut LeftOut,
+    messages: &mut Vec<Message>,
+) -> Vec<(NodeAt, TreeNode)> {
+    let mut listed = Vec::new();
+    for (at, level, parent) in walked(graph, admission, roots, depth, left_out) {
+        messages.extend(parent_warning(graph, at));
+        listed.push((at, line_of(graph, at, level, parent)));
+    }
+    if !kinds.is_empty() {
+        listed.retain(|(_, node)| {
+            node.kind
+                .as_deref()
+                .is_some_and(|kind| kinds.iter().any(|wanted| wanted == kind))
+        });
+    }
+    listed
+}
+
+/// `spec tree --kind K… [--archive]`'s lines, no `ROOT` and no depth, each
+/// with its node, over `graph`: a kinds direction's rows, in the tree's
+/// order, sections included (task spec `direction-catalog` DC-1). The
+/// tree's notes and warnings into `messages`, as `spec tree` gives them.
+pub(crate) fn direction_lines(
+    graph: &SpecGraph<'_>,
+    spec: &str,
+    kinds: &[String],
+    archive: bool,
+    messages: &mut Vec<Message>,
+) -> Vec<(NodeAt, TreeNode)> {
+    let admission = Admission::new(graph, archive, Vec::new());
+    let mut left_out = LeftOut::default();
+    let roots = default_roots(graph, &admission, spec, &mut left_out, messages);
+    lines_of(
+        graph,
+        &admission,
+        &roots,
+        None,
+        kinds,
+        &mut left_out,
+        messages,
+    )
 }
 
 /// The tree's walk from `roots`, pre-order: a node's nested sections by

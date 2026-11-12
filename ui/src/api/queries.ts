@@ -108,6 +108,8 @@ export const queryKeys = {
   roadmap: (project: string) => ["roadmap", project] as const,
   /** What was delivered and what is overdue at a day, `spec delivery --as-of D --json` (`docs/features/delivery-analytics.md` "Acceptance criteria", DA-12): each day its own entry. */
   delivery: (project: string, asOf: string) => ["delivery", project, asOf] as const,
+  /** A kinds direction as a table of its nodes, `spec catalog --kind K… [--archive] --json` (`docs/features/direction-catalog.md` "Acceptance criteria", DC-10): each kinds and archive its own entry. */
+  catalog: (project: string, kinds: readonly string[], archive: boolean) => ["catalog", project, kinds, archive] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
   /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does; `parent` is never asked here. */
@@ -169,6 +171,11 @@ export function flowsOf(project: string) {
 /** Every delivery read of a project, whatever its day. */
 export function deliveryOf(project: string) {
   return ["delivery", project] as const;
+}
+
+/** Every catalog read of a project, whatever its kinds. */
+export function catalogsOf(project: string) {
+  return ["catalog", project] as const;
 }
 
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
@@ -387,9 +394,10 @@ function eventId(payload: unknown): string | null {
  * `docs/features/roadmap-screen.md`: an item's file is a spec file; `docs/features/lock-diff-ui.md`:
  * a lock diff's spec side is the node's text against its entry's; `docs/features/card-trace.md`: a
  * mark is a card against the node's text, which `docs/features/trace-views.md` puts on each row of
- * the card list).
+ * the card list; `docs/features/direction-catalog.md` "Acceptance criteria", DC-10: a direction's
+ * table lists the tree's nodes with their versions, states and last changes).
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards", "catalog"] as const;
 
 /** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
@@ -478,7 +486,10 @@ const CARD_EVENT = "card.";
  * departure, so `.approved`, `.rejected` and `.apply_failed` read the trace, the flows and the card
  * lists too (`docs/features/card-trace.md` "Rollup"). The delivery reads, at every day asked, are
  * read again on a `card.*` event, every `proposal.*` event but a stage and a gap, a read in flight
- * aborted (docs/features/delivery-analytics.md "Acceptance criteria", DA-12). No
+ * aborted (docs/features/delivery-analytics.md "Acceptance criteria", DA-12). A direction's
+ * catalog, whatever its kinds, is read again on a `card.*` event and every `proposal.*` event but a
+ * stage, an apply and a gap as a read of the spec, a read in flight aborted
+ * (docs/features/direction-catalog.md "Acceptance criteria", DC-10). No
  * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads, the round sheets and the cards of the project again. Only the reads on screen are fetched, once each
@@ -560,6 +571,13 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     const readDeliveryAgain = () => {
       void queryClient.invalidateQueries({ queryKey: deliveryOf(project) });
     };
+    // A direction's catalog serves each node's state and tasks from the cards, and its open items
+    // from the queue: a card event and any proposal event but a stage read it again, a read in
+    // flight aborted; an apply and a gap read it as a read of the spec, once
+    // (docs/features/direction-catalog.md "Acceptance criteria", DC-10). A task event changes none of it.
+    const readCatalogAgain = () => {
+      void queryClient.invalidateQueries({ queryKey: catalogsOf(project) });
+    };
     /** Marks and rollups: a read of the project's cards against its spec, wherever they show. */
     const readMarksAgain = () => {
       void queryClient.invalidateQueries({ queryKey: tracesOf(project) });
@@ -580,6 +598,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
           }
           readMarksAgain();
           readDeliveryAgain();
+          readCatalogAgain();
           return;
         }
         if (event.type.startsWith(TASK_EVENT) || event.type.startsWith(PROPOSAL_EVENT)) {
@@ -621,6 +640,8 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         if (event.type === APPLIED) {
           // An apply may move a linked task's `stale` too, which the card read above serves as read now.
           readSpecAgain();
+        } else {
+          readCatalogAgain();
         }
         if (HEALTH_EVENTS.has(event.type)) {
           readHealthAgain();
@@ -1179,6 +1200,23 @@ export function useRoadmap(project: string) {
 
 /** The plan's read as the Roadmap shares it among its parts. */
 export type RoadmapQuery = ReturnType<typeof useRoadmap>;
+
+/**
+ * A kinds direction as a table of its nodes
+ * (docs/features/direction-catalog.md "Acceptance criteria", DC-10): `spec catalog --kind K…
+ * [--archive] --json`, each kinds and archive its own entry, its query's AbortSignal taken. Read while the table is on screen; read again on a `card.*`
+ * event, a `proposal.*` event but a stage, an apply or a gap (useLiveQueue); never on window focus.
+ * While Include archive is read again the last table stays up. The rows, states, counts and last
+ * changes are the daemon's: nothing here recounts them.
+ */
+export function useCatalog(project: string, kinds: readonly string[], archive: boolean) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.catalog(project, kinds, archive),
+    queryFn: ({ signal }) => client.getCatalog(project, { kinds: [...kinds], archive }, signal),
+    placeholderData: keepPreviousData,
+  });
+}
 
 /**
  * What was delivered, what is overdue and why, judged at `asOf` (docs/features/delivery-analytics.md

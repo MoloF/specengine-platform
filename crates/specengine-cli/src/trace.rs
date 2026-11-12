@@ -646,6 +646,54 @@ impl<'a> Reading<'a> {
     }
 }
 
+/// One node's work as `spec trace <its ID>` reads it: its state, over its
+/// own cards (a target in `within(node)`, cancelled ones never read), and
+/// how many of them are not accepted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NodeWork {
+    pub rollup: Rollup,
+    pub cards: usize,
+    pub open: usize,
+}
+
+/// `spec trace`'s reading of `nodes` over `graph`, built once as `spec
+/// trace` builds it (task spec `direction-catalog` DC-2): `read`'s cards
+/// placed on their targets' nodes, each node's [`NodeWork`] in order; into
+/// `messages` the read's notes and the mark notes of every card on a node,
+/// as `spec trace` gives them.
+pub(crate) fn node_work(
+    graph: &SpecGraph<'_>,
+    read: &QueueRead,
+    stored: &[NodeNorm],
+    nodes: &[NodeAt],
+    messages: &mut Vec<Message>,
+) -> Vec<NodeWork> {
+    let places = target_places(graph, read.cards.iter().flat_map(|card| &card.targets));
+    let norms = target_norms(graph, stored, &places);
+    messages.extend(read.notes.iter().cloned().map(Message::Note));
+    let reading = Reading::new(graph, read, &norms, &places);
+    let mut held = BTreeSet::new();
+    let work = nodes
+        .iter()
+        .map(|&at| {
+            let (rollup, marked) = reading.state(at);
+            held.extend(marked.iter().map(|(card, _)| card.id.clone()));
+            NodeWork {
+                rollup,
+                cards: marked.len(),
+                open: marked
+                    .iter()
+                    .filter(|(card, _)| card.acceptance.is_none())
+                    .count(),
+            }
+        })
+        .collect();
+    for card in read.cards.iter().filter(|card| held.contains(&card.id)) {
+        messages.extend(mark_notes(card, &norms).into_iter().map(Message::Note));
+    }
+    work
+}
+
 /// What a read of `roots` says of each card, by ID: its mark on every row
 /// holding it, the rows and the marks `spec trace` gives. A group's clear
 /// takes these words, so what a page counts and what the act clears agree.

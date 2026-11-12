@@ -17,7 +17,9 @@
 //! `HEAD`'s ([`WorktreeGit::reset_path`]), the name-status of a commit
 //! ([`WorktreeGit::name_status`]), and whether a path is skip-worktree
 //! ([`WorktreeGit::is_skip_worktree`]: an index output a sparse checkout
-//! leaves out is never written, task spec `apply-outputs`).
+//! leaves out is never written, task spec `apply-outputs`), and each
+//! file's newest commit on `HEAD`'s first-parent line from one walk
+//! ([`WorktreeGit::last_commits`], task spec `direction-catalog`).
 //! `crate::git` stays the read side of `spec check`, resolving `GIT_*`
 //! against the caller; here nothing of the caller's repository is used.
 //!
@@ -1339,6 +1341,248 @@ impl WorktreeGit {
         file_log_records(&output).ok_or(GitError::Unreadable { command: COMMAND })
     }
 
+    /// The newest commit of HEAD's first-parent line whose diff against its
+    /// first parent names each path, at most `max` commits walked; paths
+    /// absent at HEAD are never walked for (task spec `direction-catalog`
+    /// DC-4, DC-8): `HEAD` read once (`rev-parse`), then
+    /// [`Self::last_commits_at`] of its commit. An unborn `HEAD` holds no
+    /// path: every path `absent`, nothing else run.
+    pub fn last_commits(
+        &self,
+        paths: &BTreeSet<String>,
+        max: usize,
+    ) -> Result<LastCommits, GitError> {
+        match self.head()? {
+            Some(head) => self.last_commits_at(&head, paths, max),
+            None => Ok(LastCommits {
+                absent: paths.clone(),
+                ..LastCommits::default()
+            }),
+        }
+    }
+
+    /// [`Self::last_commits`] from `commit`, which must name a commit (a
+    /// caller that read `HEAD`'s OID once walks from it, so a commit made
+    /// meanwhile cannot mix two `HEAD`s in one answer). `paths` are
+    /// relative to the worktree's top, as git prints them. Every command is
+    /// read-only with `GIT_NO_LAZY_FETCH=1` and reads commits and trees
+    /// alone, never a blob, so a blobless partial clone answers as a full
+    /// one:
+    ///
+    /// 1. one `ls-tree -r -z --full-tree --name-only <commit>`: a path it
+    ///    does not list is `absent`;
+    /// 2. one `log --first-parent --diff-merges=first-parent --no-renames
+    ///    --name-only -z --root --format=%x01%H%x02%P <commit>`, read as a
+    ///    stream and stopped (the child killed and reaped) once every
+    ///    present path is found, or when a commit past `max` comes
+    ///    (`capped`); the paths not found are `unreached`. A merge's names
+    ///    are its diff against its first parent, so the merge is the change
+    ///    on this line. A commit with no parent names every file it holds:
+    ///    a true root's are found there; a shallow clone's boundary's are
+    ///    `unreached` and the walk `shallow`, its history not here. Whether
+    ///    it is a boundary is read only when an answer depends on it:
+    ///    `rev-parse --is-shallow-repository`, then, in a shallow clone,
+    ///    `cat-file commit <oid>`, whose raw object names a `parent` on a
+    ///    boundary and none on a true root;
+    /// 3. one `log --no-walk=unsorted --stdin -z` with [`Self::file_log`]'s
+    ///    format over the distinct found OIDs, `change` `None`.
+    ///
+    /// No present path: no log runs; none found: the second log does not.
+    /// The handle's deadline bounds every command but the walk.
+    pub fn last_commits_at(
+        &self,
+        commit: &str,
+        paths: &BTreeSet<String>,
+        max: usize,
+    ) -> Result<LastCommits, GitError> {
+        let mut answer = LastCommits::default();
+        if paths.is_empty() {
+            return Ok(answer);
+        }
+        let held = self.held_paths(commit)?;
+        let (present, absent): (BTreeSet<String>, BTreeSet<String>) = paths
+            .iter()
+            .cloned()
+            .partition(|path| held.contains(path.as_bytes()));
+        answer.absent = absent;
+        if present.is_empty() {
+            return Ok(answer);
+        }
+        let walk = self.first_parent_walk(commit, present, max)?;
+        answer.walked = walk.walked;
+        answer.capped = walk.capped;
+        answer.unreached.extend(walk.wanted.iter().cloned());
+        let mut found_at = walk.found;
+        if let Some(root) = walk.parentless {
+            // The answer depends on it: names found only there, or a walk
+            // that ended there with paths not found.
+            if (!walk.pending.is_empty() || !walk.wanted.is_empty()) && self.is_boundary(&root)? {
+                answer.shallow = true;
+                answer.unreached.extend(walk.pending);
+            } else {
+                found_at.extend(walk.pending.into_iter().map(|name| (name, root.clone())));
+            }
+        }
+        if found_at.is_empty() {
+            return Ok(answer);
+        }
+        let commits = self.commits_by_oid(found_at.values())?;
+        for (path, oid) in found_at {
+            let logged = commits
+                .get(&oid)
+                .ok_or(GitError::Unreadable { command: "log" })?;
+            answer.found.insert(path, logged.clone());
+        }
+        Ok(answer)
+    }
+
+    /// Every file path `commit`'s tree holds, top-relative (`ls-tree -r -z
+    /// --full-tree --name-only`): trees alone are read.
+    fn held_paths(&self, commit: &str) -> Result<BTreeSet<Vec<u8>>, GitError> {
+        const COMMAND: &str = "ls-tree";
+        let output = self.read(
+            COMMAND,
+            &[
+                "ls-tree",
+                "-r",
+                "-z",
+                "--full-tree",
+                "--name-only",
+                "--end-of-options",
+                commit,
+            ],
+        )?;
+        Ok(output
+            .split(|&byte| byte == 0)
+            .filter(|name| !name.is_empty())
+            .map(<[u8]>::to_vec)
+            .collect())
+    }
+
+    /// Step 2 of [`Self::last_commits_at`]: the walk from `commit` for
+    /// `wanted`, stopped once each is named or `max` commits are read.
+    fn first_parent_walk(
+        &self,
+        commit: &str,
+        wanted: BTreeSet<String>,
+        max: usize,
+    ) -> Result<Walk, GitError> {
+        const COMMAND: &str = "log";
+        let args = [
+            "log",
+            "--first-parent",
+            "--diff-merges=first-parent",
+            "--no-renames",
+            "--name-only",
+            "-z",
+            "--root",
+            "--no-relative",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-show-signature",
+            "--format=%x01%H%x02%P",
+            "--end-of-options",
+            commit,
+            "--",
+        ];
+        let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+        let mut child = self
+            .command(&args, true)
+            .spawn()
+            .map_err(GitError::NotRunnable)?;
+        let stderr = child.stderr.take().map(|mut pipe| {
+            thread::spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = io::Read::read_to_end(&mut pipe, &mut bytes);
+                bytes
+            })
+        });
+        let read = match child.stdout.take() {
+            Some(stdout) => read_walk(io::BufReader::new(stdout), wanted, max),
+            None => Err(GitError::Unreadable { command: COMMAND }),
+        };
+        let stopped = read.as_ref().map_or(true, |(_, stopped)| *stopped);
+        if stopped {
+            // Every path found, `max` read, or the output broke its form:
+            // git is not waited for.
+            let _ = child.kill();
+        }
+        let status = child.wait().map_err(GitError::NotRunnable);
+        let stderr = stderr
+            .and_then(|reader| reader.join().ok())
+            .unwrap_or_default();
+        let (walk, stopped) = read?;
+        let status = status?;
+        if !stopped && !status.success() {
+            return Err(failed(
+                COMMAND,
+                &Output {
+                    status,
+                    stdout: Vec::new(),
+                    stderr,
+                },
+            ));
+        }
+        Ok(walk)
+    }
+
+    /// Whether the commit `oid`, which the walk read with no parent, is a
+    /// shallow clone's boundary: the repository is shallow (`rev-parse
+    /// --is-shallow-repository`) and the raw commit object (`cat-file
+    /// commit`, never its grafted view) names a `parent`. A true root, in a
+    /// shallow clone or not, is none.
+    fn is_boundary(&self, oid: &str) -> Result<bool, GitError> {
+        if !self.is_shallow()? {
+            return Ok(false);
+        }
+        let object = self.read("cat-file", &["cat-file", "--end-of-options", "commit", oid])?;
+        Ok(object
+            .split(|&byte| byte == b'\n')
+            .take_while(|line| !line.is_empty())
+            .any(|line| line.starts_with(b"parent ")))
+    }
+
+    /// Step 3 of [`Self::last_commits_at`]: each distinct commit of `oids`
+    /// read once, by OID.
+    fn commits_by_oid<'o>(
+        &self,
+        oids: impl IntoIterator<Item = &'o String>,
+    ) -> Result<BTreeMap<String, LoggedCommit>, GitError> {
+        const COMMAND: &str = "log";
+        let distinct: BTreeSet<&String> = oids.into_iter().collect();
+        let input: String = distinct.iter().map(|oid| format!("{oid}\n")).collect();
+        let output = self.output_with_input(
+            &[
+                OsStr::new("log"),
+                OsStr::new("--no-walk=unsorted"),
+                OsStr::new("--stdin"),
+                OsStr::new("-z"),
+                OsStr::new("--no-show-signature"),
+                OsStr::new("--no-color"),
+                OsStr::new("--encoding=UTF-8"),
+                OsStr::new("--format=%H%n%an%n%ae%n%ct%n%B"),
+                OsStr::new("--"),
+            ],
+            true,
+            input.as_bytes(),
+        )?;
+        let output = success(COMMAND, output)?;
+        let mut commits = BTreeMap::new();
+        for token in output.split(|&byte| byte == 0) {
+            let token = token.strip_prefix(b"\n").unwrap_or(token);
+            if token.is_empty() {
+                continue;
+            }
+            let commit = log_header(token).ok_or(GitError::Unreadable { command: COMMAND })?;
+            commits.insert(commit.oid.clone(), commit);
+        }
+        if distinct.iter().any(|oid| !commits.contains_key(*oid)) {
+            return Err(GitError::Unreadable { command: COMMAND });
+        }
+        Ok(commits)
+    }
+
     /// One `cat-file --batch` session of this handle ([`BlobBatch`]): blobs
     /// by OID, in lockstep, `GIT_NO_LAZY_FETCH=1` so a partial clone never
     /// fetches; the handle's deadline does not reach it.
@@ -1407,6 +1651,124 @@ pub struct LoggedCommit {
     /// The file's record against the first parent; `None` when the log
     /// printed none (a merge whose file is its first parent's).
     pub change: Option<FileChange>,
+}
+
+/// What [`WorktreeGit::last_commits`] read (task spec `direction-catalog`
+/// DC-4): each path asked in exactly one of `found`, `absent` and
+/// `unreached`, and why the walk ended short of a path.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LastCommits {
+    /// Each path's newest commit on the first-parent line naming it,
+    /// `change` `None`.
+    pub found: BTreeMap<String, LoggedCommit>,
+    /// The paths the walk's start does not hold (never committed, or gone):
+    /// never walked for.
+    pub absent: BTreeSet<String>,
+    /// The paths present but not named within the commits walked: `max`
+    /// came first (`capped`), or the history of a shallow clone ends first
+    /// (`shallow`).
+    pub unreached: BTreeSet<String>,
+    /// The first-parent commits read, at most `max`.
+    pub walked: usize,
+    /// The walk stopped at `max` with commits left on the line: a history
+    /// of exactly `max` commits that ends is not capped.
+    pub capped: bool,
+    /// The walk ended at a shallow clone's boundary, which an answer
+    /// depended on.
+    pub shallow: bool,
+}
+
+/// What the walk of [`WorktreeGit::last_commits_at`] read.
+#[derive(Debug, Default)]
+struct Walk {
+    /// Each path named, by the OID of its newest commit with a parent.
+    found: BTreeMap<String, String>,
+    /// The commit with no parent the walk read (on a first-parent line,
+    /// its last): a root or a shallow boundary, judged after the walk.
+    parentless: Option<String>,
+    /// The wanted paths it alone named.
+    pending: Vec<String>,
+    /// The paths not named.
+    wanted: BTreeSet<String>,
+    walked: usize,
+    /// A commit past `max` came.
+    capped: bool,
+}
+
+/// Reads the walk's output (`\x01<H>\x02<P>` NUL-ended per commit, then
+/// its names, each NUL-ended, the first after a LF) until every `wanted`
+/// path is named, a commit past `max` comes, or the output ends; `true`
+/// with it when the read stopped before the end (git is then killed). The
+/// output breaking that form is [`GitError::Unreadable`].
+fn read_walk(
+    mut stdout: impl io::BufRead,
+    mut wanted: BTreeSet<String>,
+    max: usize,
+) -> Result<(Walk, bool), GitError> {
+    let unreadable = || GitError::Unreadable { command: "log" };
+    let mut walk = Walk::default();
+    // The commit whose names are being read: its OID and whether it has
+    // no parent; then whether its first name is still to come.
+    let mut current: Option<(String, bool)> = None;
+    let mut first_name = false;
+    let mut token = Vec::new();
+    loop {
+        if wanted.is_empty() {
+            walk.wanted = wanted;
+            return Ok((walk, true));
+        }
+        token.clear();
+        let read = stdout.read_until(0, &mut token).map_err(|_| unreadable())?;
+        if read == 0 {
+            walk.wanted = wanted;
+            return Ok((walk, false));
+        }
+        let token = token.strip_suffix(b"\0").unwrap_or(&token);
+        if let Some(header) = token.strip_prefix(b"\x01") {
+            if walk.walked >= max {
+                walk.capped = true;
+                walk.wanted = wanted;
+                return Ok((walk, true));
+            }
+            let (oid, parents) = header
+                .iter()
+                .position(|&byte| byte == 0x02)
+                .map(|at| (&header[..at], &header[at + 1..]))
+                .ok_or_else(unreadable)?;
+            if !is_oid(oid) {
+                return Err(unreadable());
+            }
+            let oid = String::from_utf8(oid.to_vec()).map_err(|_| unreadable())?;
+            if parents.is_empty() {
+                walk.parentless = Some(oid.clone());
+            }
+            current = Some((oid, parents.is_empty()));
+            first_name = true;
+            walk.walked += 1;
+            continue;
+        }
+        let name = if first_name {
+            token.strip_prefix(b"\n").unwrap_or(token)
+        } else {
+            token
+        };
+        first_name = false;
+        if name.is_empty() {
+            continue;
+        }
+        let (oid, parentless) = current.as_ref().ok_or_else(unreadable)?;
+        let Ok(name) = std::str::from_utf8(name) else {
+            continue;
+        };
+        if !wanted.remove(name) {
+            continue;
+        }
+        if *parentless {
+            walk.pending.push(name.to_owned());
+        } else {
+            walk.found.insert(name.to_owned(), oid.clone());
+        }
+    }
 }
 
 /// What one commit did to the followed file: its blob OIDs before (in the

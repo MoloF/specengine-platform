@@ -17,6 +17,7 @@ import type {
   CardSplit,
   CardSplitBody,
   CardWrite,
+  CatalogDocument,
   CheckReport,
   ConfirmBody,
   ConfirmRead,
@@ -133,6 +134,16 @@ export interface DeliveryOptions {
 }
 
 /**
+ * `spec catalog --kind K… [--archive]`: a kinds direction's kinds as served, each a repeated `kinds`,
+ * at least one; `archive` sent only as true, the Spec tree's Include archive
+ * (`docs/features/direction-catalog.md` "Acceptance criteria", DC-9, DC-10).
+ */
+export interface CatalogOptions {
+  kinds: string[];
+  archive: boolean;
+}
+
+/**
  * `spec card list`: `--with-cancelled`, `--marks`, each sent only as true. The Board reads every card
  * of the project once and filters that answer, so no other flag is sent
  * (`docs/features/board-ui.md` "Board"), and always asks the marks, so a tile is never drawn without
@@ -163,7 +174,7 @@ export interface TraceOptions {
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
  * "Route", the flow's `docs/features/flow-canvas.md` "Data", the cards' `docs/features/board-ui.md`
  * "Routes", the identity's `docs/canon/hub.md` "Routes", the team's `docs/features/hub-team.md` "Data",
- * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog's `docs/features/direction-catalog.md` "Acceptance criteria", DC-9; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
  * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
@@ -232,6 +243,12 @@ export interface SpecEngineClient {
    * a bad day's 400 and an older daemon's 404 reject in the daemon's words.
    */
   getDelivery(project: string, options: DeliveryOptions, signal?: AbortSignal): Promise<DeliveryDocument>;
+  /**
+   * GET /api/projects/:p/catalog?kinds=K…[&archive=true] (docs/features/direction-catalog.md
+   * "Acceptance criteria", DC-9; = spec catalog --kind K… --json, the browser view, uncut): judged,
+   * so only a 200 resolves; no kind's 400, an older daemon's 404 and a 503 reject in the daemon's words.
+   */
+  getCatalog(project: string, options: CatalogOptions, signal?: AbortSignal): Promise<CatalogDocument>;
   /** GET /api/projects/:p/lock-diff (docs/features/lock-diff.md "Route"; = spec lock diff REF --json, uncut; 404 the exit-1 document) */
   getLockDiff(project: string, ref: string, signal?: AbortSignal): Promise<LockDiffView>;
   // The stage's two writes: `stage` replaces any staged choice, the body exactly `stage` plus

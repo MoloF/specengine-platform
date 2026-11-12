@@ -636,7 +636,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
       />
     );
   } else if (route.section === "tree") {
-    view = <TreeView key={route.project} project={route.project} nodeRef={route.id} moduleRoot={moduleRoot ?? null} moduleKinds={moduleKinds} moduleKnown={moduleRoot !== undefined} />;
+    view = (
+      <TreeView
+        key={route.project}
+        project={route.project}
+        nodeRef={route.id}
+        moduleRoot={moduleRoot ?? null}
+        moduleKinds={moduleKinds}
+        moduleTitle={moduleKinds === null ? null : (choice.module?.title ?? null)}
+        moduleKnown={moduleRoot !== undefined}
+      />
+    );
   } else if (route.section === "graph") {
     view = (
       <Suspense key={route.project} fallback={<Skeleton label={t("app.lazy.graph")} lines={6} />}>

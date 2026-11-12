@@ -169,6 +169,11 @@
 //!   read once as it is, the config and the plan's groups from the walked
 //!   files; no git, no index, no write; `as_of` an input, today's UTC date
 //!   by default; [`delivery_as_of`] its usage check, for the daemon;
+//! - [`catalog()`]: `spec catalog --kind K… [--archive]` (task spec
+//!   `direction-catalog`), a kinds direction as a table of its nodes, each
+//!   with its version, the trace's state, open items, tasks and its file's
+//!   last change on `HEAD`'s first-parent line, computed per read and never
+//!   stored; [`catalog_with_view`] takes the daemon's [`LastChangeCache`];
 //! - [`flow()`]: `spec flow [ROOT] [--depth N] [--stage S] [--in-flow]
 //!   [--trace]` (task specs `flow-read`, `trace-views`, `flow-scope`), the
 //!   typed edges, lifted edges, gap rows and in-flow marks core's
@@ -223,6 +228,9 @@ mod bump;
 mod bundle;
 mod cap;
 mod card;
+mod catalog;
+#[cfg(test)]
+mod catalog_tests;
 mod check;
 mod code_delta;
 mod code_index;
@@ -341,6 +349,10 @@ pub use card::{
     CardSplitBody, CardSplitChild, CardSplitOutcome, CardSplitParent, CardSplitRequest,
     CardSubtaskItem, TOOL_ACTOR, card_accept, card_assign, card_cancel, card_clear,
     card_clear_group, card_edit, card_list, card_move, card_new, card_raise, card_show, card_split,
+};
+pub use catalog::{
+    CatalogOutcome, CatalogRequest, CatalogRow, LAST_CHANGE_HEADS, LastChangeCache, catalog,
+    catalog_with_view,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
@@ -688,6 +700,8 @@ pub enum Outcome {
     Roadmap(Box<RoadmapOutcome>),
     /// `delivery`: what was delivered, what is overdue and why.
     Delivery(Box<DeliveryOutcome>),
+    /// `catalog`: a kinds direction's nodes, their work and last change.
+    Catalog(Box<CatalogOutcome>),
     /// `flow`: typed edges, lifted edges and gap rows.
     Flow(Box<FlowOutcome>),
     /// `trace`: each node's state against its cards.
@@ -832,6 +846,8 @@ impl Outcome {
             Self::Roadmap(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             // The notes, escaped, as JSON `notes` holds them raw.
             Self::Delivery(outcome) => return outcome.stderr_lines(),
+            // The notes, then the tree's warnings, escaped.
+            Self::Catalog(outcome) => return outcome.stderr_lines(),
             Self::Flow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Impact(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
@@ -963,6 +979,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
         Outcome::Delivery(outcome) => delivery::render_text(outcome),
+        Outcome::Catalog(outcome) => catalog::render_text(outcome),
         Outcome::Flow(outcome) => flow::render_text(outcome),
         Outcome::Impact(outcome) => impact::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
@@ -1024,6 +1041,7 @@ impl serde::Serialize for Outcome {
             Self::Health(outcome) => outcome.serialize(serializer),
             Self::Roadmap(outcome) => outcome.serialize(serializer),
             Self::Delivery(outcome) => outcome.serialize(serializer),
+            Self::Catalog(outcome) => outcome.serialize(serializer),
             Self::Flow(outcome) => outcome.serialize(serializer),
             Self::Impact(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),

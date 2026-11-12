@@ -204,8 +204,8 @@ pub use verify_git::{
 };
 pub use worktree::{
     BatchBlob, BlobBatch, ChangedPath, CreateFileError, CreatedFile, DiskName, FileChange,
-    GitError, ListedWorktree, LoggedCommit, Merge, Operation, PlaceError, STDERR_MAX, StatusEntry,
-    WorktreeGit, create_file, disk_name, replace_file, same_repository,
+    GitError, LastCommits, ListedWorktree, LoggedCommit, Merge, Operation, PlaceError, STDERR_MAX,
+    StatusEntry, WorktreeGit, create_file, disk_name, replace_file, same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change

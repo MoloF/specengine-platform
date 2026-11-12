@@ -4910,6 +4910,124 @@ mark {
   color: var(--text-secondary);
 }
 
+/* A direction's table in the Spec tree's node column (docs/features/direction-catalog.md
+   "Acceptance criteria", DC-10): the daemon's rows, a header's press ordering them. Titles in any
+   script wrap between words; a state's lozenge, an ID, a version, a count and a time keep one line;
+   figures line up in tabular digits; the last change, a row's detail, is small. Each column holds
+   its minimum width: a table wider than the column scrolls in its own focusable region, never the
+   page, and no column is crushed to a word a line. */
+.catalog {
+  display: grid;
+  gap: var(--space-150);
+  justify-items: start;
+  min-width: 0;
+}
+
+.catalog > .error-panel,
+.catalog > .catalog-table-wrap {
+  justify-self: stretch;
+}
+
+.catalog-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.catalog-table caption {
+  padding: var(--space-150) var(--space-100) var(--space-100);
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.catalog-table th,
+.catalog-table td {
+  padding: var(--space-075) var(--space-100);
+  border-top: 1px solid var(--border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+/* A header's button stands where the cells' words start, its own padding theirs; a name of two
+   words may take two lines rather than widen a column of figures. Headers sit on the bottom line. */
+.catalog-table thead th {
+  padding: var(--space-025) 0;
+  vertical-align: bottom;
+  overflow-wrap: break-word;
+}
+
+.catalog-table thead .button {
+  text-align: start;
+}
+
+/* The title's column keeps room for a few words a line, and no word is broken: the longest one
+   widens the column, the region scrolling. */
+.catalog-table tbody th {
+  min-width: 18ch;
+  font-weight: var(--font-weight-regular);
+  overflow-wrap: break-word;
+}
+
+.catalog-link {
+  font-weight: var(--font-weight-medium);
+}
+
+/* The ID on its own line below the title, whole: never broken at a hyphen. */
+.catalog-id {
+  display: block;
+  padding-top: var(--space-025);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  white-space: nowrap;
+}
+
+/* The state's lozenge on one line: the badge's own `white-space: normal` set back for the table. */
+.catalog-state .badge {
+  white-space: nowrap;
+}
+
+.catalog-version,
+.catalog-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.catalog-changed {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  overflow-wrap: anywhere;
+}
+
+.catalog-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.catalog-of-file,
+.catalog-none,
+.catalog-hint {
+  color: var(--text-secondary);
+}
+
+.catalog-hint {
+  max-width: 72ch;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
 /* The chain canvas: lanes' names as text above their boxes, the cut's rule down the gap. */
 .chain-lane {
   display: grid;

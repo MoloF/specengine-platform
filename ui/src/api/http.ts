@@ -2,6 +2,7 @@ import {
   ClientError,
   type BundleOptions,
   type CardsOptions,
+  type CatalogOptions,
   type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
@@ -35,6 +36,7 @@ import type {
   CheckReport,
   ConfirmBody,
   ConfirmRead,
+  CatalogDocument,
   DeliveryDocument,
   FlowView,
   GraphView,
@@ -74,7 +76,8 @@ import type {
 // "The rule"), the identity `docs/canon/hub.md` "Routes",
 // the confirm `docs/features/hub-confirm.md` "Data", the sync `docs/features/hub-git.md` "Data",
 // the workspaces `docs/features/workspaces.md` "Data", the delivery
-// `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11):
+// `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog
+// `docs/features/direction-catalog.md` "Acceptance criteria", DC-9):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -481,6 +484,20 @@ export class HttpClient implements SpecEngineClient {
   async getDelivery(project: string, options: DeliveryOptions, signal?: AbortSignal): Promise<DeliveryDocument> {
     const query = queryOf([["as_of", options.asOf]]);
     return (await request("GET", `${projectPath(project)}/delivery${query}`, { signal, judged: true })) as DeliveryDocument;
+  }
+
+  /**
+   * `spec catalog --kind K… [--archive] --json` as the browser view, uncut
+   * (`docs/features/direction-catalog.md` "Acceptance criteria", DC-9): each kind a repeated `kinds`,
+   * in the order given; `archive` sent only as true. Judged, so only a 200 resolves: no kind (400),
+   * an older daemon's 404 and a 503 reject in the daemon's words. Takes its query's AbortSignal.
+   */
+  async getCatalog(project: string, options: CatalogOptions, signal?: AbortSignal): Promise<CatalogDocument> {
+    const query = queryOf([
+      ["kinds", options.kinds],
+      ["archive", options.archive ? true : undefined],
+    ]);
+    return (await request("GET", `${projectPath(project)}/catalog${query}`, { signal, judged: true })) as CatalogDocument;
   }
 
   /**

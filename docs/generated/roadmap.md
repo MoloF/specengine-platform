@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 41 open, 69 done; current mvp; to mvp 2-3 days; total 13-21 days, 7 unestimated
+roadmap: 40 open, 70 done; current mvp; to mvp 2-3 days; total 13-21 days, 6 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,14 +29,13 @@ roadmap: 41 open, 69 done; current mvp; to mvp 2-3 days; total 13-21 days, 7 une
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 6 open, 17 done | 0 days, 6 unestimated
+## release v5 | 5 open, 18 done | 0 days, 5 unestimated
 
 1. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | -
 2. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0060
-3. [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, v5): a direction as a table of its documents | draft | should | -
-4. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | in-progress | should | -
-5. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
-6. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+3. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | in-progress | should | -
+4. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
+5. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
 
 ## pool | 28 open, 1 done | 7-12 days, 24 unestimated
 

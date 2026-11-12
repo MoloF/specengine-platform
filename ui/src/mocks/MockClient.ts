@@ -4,6 +4,7 @@ import {
   STAGE_REFUSED,
   type BundleOptions,
   type CardsOptions,
+  type CatalogOptions,
   type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
@@ -36,6 +37,7 @@ import type {
   CheckReport,
   ConfirmBody,
   ConfirmRead,
+  CatalogDocument,
   DeliveryDocument,
   FlowView,
   GraphView,
@@ -100,6 +102,7 @@ import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { lockDiffOf } from "./lockDiff";
 import { deliveryOf } from "./delivery";
+import { catalogOf } from "./catalog";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
@@ -374,6 +377,20 @@ export class MockClient implements SpecEngineClient {
     await this.read();
     this.project(project);
     return structuredClone(deliveryOf(project, this.scenario, this.at, options.asOf));
+  }
+
+  /**
+   * A kinds direction's table for the scenario (src/mocks/catalog.ts), read only; the daemon serves
+   * its own (`docs/features/direction-catalog.md` "Acceptance criteria", DC-9). No kind is refused 400
+   * in the daemon's words, nothing read.
+   */
+  async getCatalog(project: string, options: CatalogOptions): Promise<CatalogDocument> {
+    await this.read();
+    const entry = this.project(project);
+    if (options.kinds.length === 0) {
+      throw new ClientError({ status: 400, message: "`kinds`: give at least one kind (mock)" });
+    }
+    return structuredClone(catalogOf(entry.corpus, project, this.scenario, options.kinds, options.archive));
   }
 
   /**

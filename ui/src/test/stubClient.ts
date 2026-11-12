@@ -3,6 +3,7 @@ import {
   ClientError,
   type BundleOptions,
   type CardsOptions,
+  type CatalogOptions,
   type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
@@ -35,6 +36,7 @@ import type {
   CheckReport,
   ConfirmBody,
   ConfirmRead,
+  CatalogDocument,
   DeliveryDocument,
   FlowView,
   GraphView,
@@ -67,6 +69,7 @@ import {
   aCardList,
   aCheckReport,
   aCardWrite,
+  aCatalog,
   aDelivery,
   aFlowView,
   aGraphNode,
@@ -211,6 +214,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     ),
     // What was delivered (docs/features/delivery-analytics.md "Acceptance criteria", DA-11): no task, at the day asked; a test overriding what it answers.
     getDelivery: vi.fn<(project: string, options: DeliveryOptions, signal?: AbortSignal) => Promise<DeliveryDocument>>((_project, options) => Promise.resolve(aDelivery(options.asOf))),
+    // A direction's table (docs/features/direction-catalog.md "Acceptance criteria", DC-9): no row, the kinds asked; a test overriding what it answers.
+    getCatalog: vi.fn<(project: string, options: CatalogOptions, signal?: AbortSignal) => Promise<CatalogDocument>>((_project, options) => Promise.resolve(aCatalog([], { kinds: [...options.kinds], archive: options.archive }))),
     // The lock diff (docs/features/lock-diff.md "Data"): the REF's one holder, no drifted row with a lock entry.
     getLockDiff: vi.fn<(project: string, ref: string, signal?: AbortSignal) => Promise<LockDiffView>>((_project, ref) =>
       Promise.resolve({ ref, reason: null, notes: [], nodes: [{ id: ref, path: "docs/spec/doc-1.md", line: 5, rows: [] }] }),

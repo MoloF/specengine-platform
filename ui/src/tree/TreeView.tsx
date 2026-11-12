@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type Ref, type SubmitEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type Ref, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useHealth, useInbox, useNode, useSearch, useTree } from "../api/queries";
 import type { DriftRow, SearchHit, TreeView as TreeDocument } from "../api/types";
@@ -26,6 +26,10 @@ import { NoNodePane, NodePane, type Arrival } from "./NodePane";
 import { buildRows, rowName, rowsForRef, type TreeRow } from "./rows";
 import { hitCount, SearchResultsList } from "./SearchResults";
 import { SpecTree } from "./SpecTree";
+
+// A direction's table, a chunk of its own, reached by a dynamic import alone: first load never
+// carries it (docs/features/direction-catalog.md "Acceptance criteria", DC-10).
+const DirectionCatalog = lazy(() => import("./DirectionCatalog").then((module) => ({ default: module.DirectionCatalog })));
 
 /** Below the tree: the daemon's notes, what was left out, a cut and how to narrow it. */
 function TreeFooter({
@@ -192,13 +196,17 @@ function SearchField({
  * this view's root alone (docs/features/workspaces.md "The UI"). A direction starts it at a flat
  * list of its kinds' nodes, in served order, one level: the read's depths and parents are the whole
  * tree's, so no row hangs under another (docs/features/departments.md "Acceptance criteria", DP-11).
- * Show as root leaves the list for a rooted read; Whole tree goes back to the list.
+ * Show as root leaves the list for a rooted read; Whole tree goes back to the list. At a direction's
+ * start, with no node open, the node column holds the direction's table in place of where to start
+ * (docs/features/direction-catalog.md "Acceptance criteria", DC-10); opening a node shows its pane,
+ * leaving it the table again.
  */
 export function TreeView({
   project,
   nodeRef,
   moduleRoot = null,
   moduleKinds = null,
+  moduleTitle = null,
   moduleKnown = true,
 }: {
   project: string;
@@ -207,6 +215,8 @@ export function TreeView({
   moduleRoot?: string | null;
   /** The chosen direction's kinds, as served; null with no direction chosen. */
   moduleKinds?: readonly string[] | null;
+  /** The chosen direction's title, as served; null with none chosen. */
+  moduleTitle?: string | null;
   /** False while the workspaces are read: the tree waits for its root (docs/features/workspaces.md WS-9). */
   moduleKnown?: boolean;
 }) {
@@ -235,6 +245,8 @@ export function TreeView({
   }
   /** At a direction's start: its kinds' nodes, listed flat. */
   const listing = root === null && moduleKinds !== null ? moduleKinds : null;
+  /** The direction's name in its table's caption: its title, else its kinds as served. */
+  const direction = moduleTitle ?? (moduleKinds ?? []).join(", ");
 
   const tree = useTree(project, listing !== null ? { kinds: [...listing], archive } : root === null ? { archive } : { root, archive }, moduleKnown);
   const treeFailure = useRetainedFailure(tree.error, tree.isFetching);
@@ -527,7 +539,15 @@ export function TreeView({
       <div className="node-column">
         <RegionBoundary key={nodeRef ?? ""} name={t("tree.view.boundary.node")}>
           {nodeRef === null ? (
-            <NoNodePane />
+            listing === null ? (
+              <NoNodePane />
+            ) : (
+              <NoNodePane>
+                <Suspense fallback={<Skeleton label={t("tree.catalog.loading", { direction })} lines={6} />}>
+                  <DirectionCatalog key={JSON.stringify(listing)} project={project} kinds={listing} direction={direction} archive={archive} />
+                </Suspense>
+              </NoNodePane>
+            )
           ) : (
             <NodePane
               key={`${project}/${nodeRef}`}

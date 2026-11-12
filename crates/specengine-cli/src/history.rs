@@ -171,8 +171,8 @@ fn not_read(path: &str, cause: &str) -> String {
 }
 
 /// A git failure's cause, one line: git missing, else git's first stderr
-/// line, else the failure.
-fn git_cause(error: &GitError) -> String {
+/// line, else the failure (`spec catalog`'s too).
+pub(crate) fn git_cause(error: &GitError) -> String {
     match error {
         GitError::NotRunnable(error) if error.kind() == std::io::ErrorKind::NotFound => {
             "git missing".to_owned()

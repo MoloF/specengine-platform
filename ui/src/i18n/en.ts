@@ -1955,6 +1955,28 @@ export const en = {
       readOnly: "Read-only: text changes reach the spec only through a proposal you accept. {{link}}",
       openInbox: "Open the Inbox",
     },
+    // A kinds direction as a table of its nodes in the node column (DirectionCatalog.tsx;
+    // docs/features/direction-catalog.md "Acceptance criteria", DC-10): the daemon's rows, sorted by a press.
+    catalog: {
+      caption_one: "{{direction}}: {{count}} node",
+      caption_other: "{{direction}}: {{count}} nodes",
+      loading: "Loading the table of {{direction}}",
+      failed: "The table of {{direction}} could not be read",
+      column: { title: "Title", version: "Version", state: "State", open: "Open items", tasks: "Tasks", changed: "Last change" },
+      version: "Version {{rev}}",
+      noVersion: "No version",
+      tasks_one: "{{count}} · {{open}} open",
+      tasks_other: "{{count}} · {{open}} open",
+      changed: "{{at}} by {{name}}",
+      ofFile: "(file)",
+      ofFileHint: "(file): a section shows its file’s last change; its own is in the document’s History.",
+      noChange: "Not committed",
+      more_one: "Show {{count}} more",
+      more_other: "Show {{count}} more",
+      empty: "No node in this direction",
+      emptyText: "Nothing of its kinds is in the spec yet. Next: write one; the table shows it on the next read.",
+      notes: "Notes from the daemon",
+    },
     // The Text tab (TextPanel.tsx).
     text: {
       at: "Text at {{range}}",
