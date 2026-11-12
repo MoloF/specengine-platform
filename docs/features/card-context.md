@@ -42,7 +42,7 @@ A browser look is marked **[look]**, a timed or counted run **[measure]**. Every
   - (a) T2's file deleted: `context.bundle` `null`, `context.notes` `["no bundle: <spec bundle's reason naming T2>"]`, stderr `note: context: no bundle: …`, and `get_card` not `isError`;
   - (b) `--budget 1`: the note names the minimum;
   - (c) `[budgets] bundle_task = 0`: a note naming its line, and with `--budget 3000` the bundle is made;
-  - (d) a manual card: `no bundle: no targets and no recorded decisions`.
+  - (d) a manual card: `no bundle: no targets and no recorded decision`.
 
   These exit 2 with nothing read: `--budget 0`, `--budget 4294967296` and `--budget 5` without `--context`; MCP `budget` without `context` is `isError` with the library's line. Mutations, each red: the bundle's exit passed through ((a), (b)); the config error exit 2 ((c)).
 - [x] CC5 — **The parent's goal.**

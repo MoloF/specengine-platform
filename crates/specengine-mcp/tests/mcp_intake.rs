@@ -1157,7 +1157,9 @@ fn ac13_each_queue_tool_answers_as_its_twin() {
 /// "after `distinct_from`" is the source's alone); the descriptions are "Data"'s bytes
 /// (`ask_question` 2 033, `report_decision` 1 810, `report_discrepancy`
 /// 1 736, `get_card` 1 411, `get_proposal` 1 150; `get_card` 1 541 since
-/// docs/features/task-mandate.md M7, its mandate sentence added), ASCII,
+/// docs/features/task-mandate.md M7, its mandate sentence added, 1 987
+/// since docs/features/card-context.md CC9, its head naming `--context`
+/// and its context sentence added), ASCII,
 /// each raise's naming `card_id`, holding "Data"'s new sentences and not the dropped
 /// ones. M: the question text left untrimmed (over 2 048).
 #[test]
@@ -1211,8 +1213,11 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
             ("report_discrepancy", 1736, vec!["card_id"], vec![]),
             (
                 "get_card",
-                1541,
+                1987,
                 vec![
+                    "One card: the same as `spec card show C --marks [--history] [--context \
+                     [--budget N]]`.",
+                    "budget needs context. Without context: null.",
                     "mandate: binding, open or null. subtask_items: the items naming one of its \
                      subtasks, each with card_id first, by ID, in one read.",
                     "items: the questions, discrepancies and decisions that name it {id, kind, \
@@ -1221,7 +1226,7 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
                      record_title}, by ID, read now; with history, their last 64 proposal.* \
                      events join it by seq.",
                 ],
-                vec![],
+                vec!["`spec card show C --marks [--history]`."],
             ),
             (
                 "get_proposal",

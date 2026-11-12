@@ -50,7 +50,7 @@ The notes, in this order; from the fourth row on, `bundle` is `null`:
 | the parent does not read | `parent C-0001 not read: no card C-0001`, or the queue's corrupt-row line |
 | its goal over 4 096 B | `parent C-0001's goal cut at 4096 bytes` |
 | more than 64 records | `not bundled: <k> more records, from <first left out>` |
-| no targets, no records | `no bundle: no targets and no recorded decisions` |
+| no targets, no records | `no bundle: no targets and no recorded decision` |
 | `U ≥ 40 000` | `no bundle: the card's lines leave no room under the 40000-character ceiling` |
 | a bad `bundle_task` | `no bundle: <the config error, at its line>` |
 | `spec bundle` exit 1 | `no bundle: <its reason>`: a gone REF, named |

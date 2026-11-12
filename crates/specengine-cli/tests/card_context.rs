@@ -95,7 +95,7 @@ const G2: &str = "The keeper's voice reads the foreword aloud.";
 
 /// The notes of CC3 (b) and CC4 (d), as the spec writes them.
 const NO_ROOM: &str = "no bundle: the card's lines leave no room under the 40000-character ceiling";
-const NOTHING: &str = "no bundle: no targets and no recorded decisions";
+const NOTHING: &str = "no bundle: no targets and no recorded decision";
 
 // ------------------------------------------------------------- helpers
 
@@ -1152,7 +1152,8 @@ fn cc4_a_bad_bundle_task_is_a_note_at_its_line() {
 }
 
 /// CC4 (d): a manual card with no records: `no bundle: no targets and no
-/// recorded decisions`.
+/// recorded decision` (the spec's "decisions" made singular for the CLI's
+/// genre scan, `proposal_genre.rs`).
 #[test]
 fn cc4_a_manual_card_has_nothing_to_bundle() {
     let pair = foreword("cc4-manual");

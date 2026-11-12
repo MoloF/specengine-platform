@@ -2800,7 +2800,7 @@ fn context_bundle(
 ) -> (Result<BundleOutcome, String>, Vec<Message>) {
     if refs.is_empty() {
         return (
-            Err("no targets and no recorded decisions".to_owned()),
+            Err("no targets and no recorded decision".to_owned()),
             Vec::new(),
         );
     }
@@ -4790,7 +4790,7 @@ mod context_tests {
             decided_by: None,
             decided_at: None,
             decision_note: None,
-            record_path: record.as_ref().map(|id| format!("records/{id}.md")),
+            record_path: record.as_ref().map(|id| format!("notes/{id}.md")),
             record_title: record.as_ref().map(|id| format!("Record {id}")),
             record_id: record,
         }
