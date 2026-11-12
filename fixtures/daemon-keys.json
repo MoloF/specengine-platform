@@ -138,5 +138,8 @@
   "DeliveryMore": ["returns", "reestimates", "cancelled_subtasks", "items"],
   "Catalog": ["kinds", "archive", "notes", "rows", "truncated", "omitted"],
   "CatalogRow": ["id", "kind", "title", "path", "line", "rev", "status", "archived", "state", "open_items", "tasks", "tasks_open", "last_change"],
-  "CatalogChange": ["at", "by", "by_name", "commit", "proposal", "of_file"]
+  "CatalogChange": ["at", "by", "by_name", "commit", "proposal", "of_file"],
+  "CardCounts": ["flows", "columns", "by_flow", "agent_tasks", "notes", "truncated", "omitted"],
+  "CardColumnCount": ["flow", "column", "open", "accepted", "cancelled", "open_subtasks"],
+  "CardFlowCount": ["flow", "open_items", "oldest_open_item", "ready_parents", "review_agent_tasks"]
 }

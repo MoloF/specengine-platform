@@ -128,6 +128,9 @@
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
 mod cards;
+// docs/features/department-overview.md DO11: the statement-count seam.
+#[cfg(test)]
+mod card_counts_seam;
 mod gate;
 mod stage;
 mod state;

@@ -592,7 +592,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
   } else if (projects.data !== undefined && !projects.data.some((project) => project.slug === route.project)) {
     view = <NotFound reason={t("app.notFound.noProject", { project: route.project })} inboxHref={inboxHref} />;
   } else if (route.type === "project") {
-    view = <HomeView key={route.project} project={route.project} />;
+    // The chosen department's Overview (docs/features/department-overview.md "Acceptance criteria",
+    // DO12): its departments null while their read is out, none when it failed.
+    view = (
+      <HomeView
+        key={route.project}
+        project={route.project}
+        workspace={choice.workspace}
+        module={choice.module}
+        workspaces={workspaces.data?.workspaces ?? (workspacesFailed ? [] : null)}
+      />
+    );
   } else if (route.section === "inbox") {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {

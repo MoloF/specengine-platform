@@ -92,7 +92,7 @@ describe("Health over the mock", () => {
     const home = renderMock("normal", "#/harbor-sim");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
     await waitFor(() => {
-      expect(document.querySelectorAll('.home-region[aria-busy="false"]')).toHaveLength(2);
+      expect(document.querySelectorAll('.department-overview[aria-busy="false"]')).toHaveLength(1);
     });
     expect(calls(home.spies).getCheck).toBeUndefined();
     expect(calls(home.spies).getHealth).toBeUndefined();

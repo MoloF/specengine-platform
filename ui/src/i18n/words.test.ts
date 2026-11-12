@@ -27,10 +27,10 @@ function wordsOf(value: string): string {
 
 /**
  * The groups that speak of `T-` tasks alone, whatever leaf a later change adds to them: the Tasks
- * screen, its nav entry, the Overview's Tasks region, the Tasks screen's keys, and a card's linked
- * agent tasks.
+ * screen, its nav entry, the Tasks screen's keys, and a card's linked agent tasks. The Overview's
+ * Tasks region left with docs/features/department-overview.md; its agent task row is listed below.
  */
-const AGENT_TASK_GROUPS: readonly string[] = ["tasks.", "app.sections.tasks.", "home.tasks.", "app.shortcuts.tasks.", "board.tasks."];
+const AGENT_TASK_GROUPS: readonly string[] = ["tasks.", "app.sections.tasks.", "app.shortcuts.tasks.", "board.tasks."];
 
 /**
  * The leaves outside those groups that named a `T-` task before this change, the sweep's list: each
@@ -44,7 +44,9 @@ const AGENT_TASK_KEYS: readonly string[] = [
   "palette.inputLabel",
   "palette.placeholder",
   "palette.groups.tasks",
-  "home.inbox.nextLink",
+  "home.department.agentTasks",
+  "home.department.agentTasksLocal",
+  "home.department.openTasks",
   "board.item.development",
   "board.item.agentTasks_one",
   "board.item.agentTasks_other",

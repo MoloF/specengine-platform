@@ -1226,7 +1226,7 @@ describe("source policy", () => {
         }
       }
     }
-    expect([...names].sort()).toEqual(["berths", "foundry", "galley", "mechanic", "mechanics", "waters"]);
+    expect([...names].sort()).toEqual(["berths", "foundry", "galley", "harbourmaster", "mechanic", "mechanics", "waters"]);
     const appCode = (path: string) =>
       path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
     const quoted = new RegExp(`["'\`](${[...names].join("|")})["'\`]`);

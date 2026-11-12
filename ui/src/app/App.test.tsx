@@ -153,7 +153,8 @@ describe("the shell (AC-11)", () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/");
     expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
     expect(window.location.hash).toBe("#/alpha");
-    await screen.findByRole("link", { name: /^PR-1: / });
+    // The Overview's blocks have come (docs/features/department-overview.md "Acceptance criteria", DO12): the stub serves no flow.
+    await screen.findByRole("heading", { level: 2, name: "No task flow yet" });
     expect(document.activeElement).toBe(document.body);
   });
 

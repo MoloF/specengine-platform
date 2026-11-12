@@ -3,7 +3,7 @@ import type { HealthQuery } from "../api/queries";
 import type { BindingPlace, DriftCounts, DriftLevels, DriftLock, DriftMarker, DriftRow, StoredDriftRow, TestedRow } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
-import { Notes } from "../overview/parts";
+import { Notes } from "../ui/served";
 import { bindingOf } from "../tree/BindingLine";
 import { syncLook } from "../tree/labels";
 import { Badge } from "../ui/Badge";

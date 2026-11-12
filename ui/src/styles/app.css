@@ -3608,179 +3608,146 @@ mark {
   margin: 0;
 }
 
-/* Home: what waits for the owner; the Tasks region beside the Inbox, stacked when narrow or zoomed. */
-.home-regions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
-  gap: var(--space-300);
-  align-items: start;
-}
-
-.home-region {
-  display: grid;
-  gap: var(--space-200);
-  min-width: 0;
-  padding: var(--space-200);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
-  background: var(--surface-panel);
-}
-
-.home-region-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-100) var(--space-150);
-}
-
-.home-open {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-050);
-  min-height: var(--target-min);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
-}
-
-.home-block {
-  display: grid;
-  gap: var(--space-100);
-  min-width: 0;
-}
-
-.home-block-waiting {
-  padding: var(--space-150);
-  border: 1px solid var(--accent);
-  border-left-width: 4px;
-  border-radius: var(--radius-m);
-  background: var(--surface-raised);
-}
-
-.home-block-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-100);
-  color: var(--text-secondary);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.home-block-waiting .home-block-title {
-  color: var(--text-primary);
-}
-
-.home-block-waiting .home-block-title .icon {
-  color: var(--accent);
-}
-
-.home-count {
-  min-width: 1.75em;
-  padding: 0 var(--space-100);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-full);
-  color: var(--text-primary);
-  font-size: var(--font-size-body);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-  text-align: center;
-}
-
-.home-list {
-  display: grid;
-  gap: var(--space-100);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.home-row {
-  display: grid;
-  gap: var(--space-050);
-  min-width: 0;
-  padding: var(--space-100) var(--space-150);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
-  background: var(--surface-panel);
-}
-
-.home-row-link {
-  display: inline-block;
-  min-height: var(--target-min);
-  color: var(--text-primary);
-  font-weight: var(--font-weight-medium);
-  text-decoration-color: var(--accent);
-}
-
-.home-row-link .mono {
-  color: var(--accent);
-  font-weight: var(--font-weight-semibold);
-}
-
-.home-row-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-050) var(--space-100);
-}
-
-.home-row-time {
+/* A stored time exactly as stored (src/ui/served.tsx): Health's queue rows end on it. */
+.stored-time {
   margin-left: auto;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--font-size-body);
 }
 
-.home-more {
-  font-size: var(--font-size-body);
+/* The Overview (docs/features/department-overview.md "Acceptance criteria", DO12): the chosen
+   department's numbers in blocks, each a heading, its numbers and the way to its page. Titles in any
+   script wrap; figures line up in tabular digits; a table wider than the page scrolls in its own
+   focusable region, never the page. Every count is a pointer: no control moves a task here. */
+.department-overview {
+  display: grid;
+  gap: var(--space-300);
+  min-width: 0;
 }
 
-.home-tally {
+.department-block {
   display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+.department-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+  min-height: var(--target-min);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.department-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.department-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.department-table caption {
+  padding: var(--space-150) var(--space-200) var(--space-100);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  font-weight: var(--font-weight-medium);
+  text-align: start;
+}
+
+.department-table th,
+.department-table td {
+  padding: var(--space-075) var(--space-200);
+  border-top: 1px solid var(--border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.department-table thead th {
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.department-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+}
+
+.department-table tbody th {
+  min-width: 10ch;
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.department-table td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.department-table tfoot th,
+.department-table tfoot td {
+  border-top: 2px solid var(--border-control);
+  font-weight: var(--font-weight-semibold);
+}
+
+.department-aside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050) var(--space-200);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.department-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-050) var(--space-150);
+}
+
+.department-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+}
+
+.department-oldest,
+.department-gaps-line {
+  color: var(--text-secondary);
+}
+
+.department-gaps-list {
+  display: grid;
+  gap: var(--space-100);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.home-tally li {
+.department-gap {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-050) var(--space-150);
-  min-height: max(var(--target-min), 2rem);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.home-tally li:last-child {
-  border-bottom: 0;
-}
-
-.home-total {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-100);
-  color: var(--text-secondary);
-}
-
-.home-total strong {
-  color: var(--text-primary);
-  font-size: var(--font-size-heading-l);
-  font-variant-numeric: tabular-nums;
-}
-
-.home-split {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: var(--space-200);
-}
-
-.home-empty {
-  display: grid;
-  gap: var(--space-100);
-  justify-items: start;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* The jump palette: near the top so the field stays put while the list changes. */

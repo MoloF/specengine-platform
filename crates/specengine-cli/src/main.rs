@@ -34,21 +34,21 @@ use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveOpenRequest, ApproveRequest, BumpRequest, BundleRequest,
     CardAcceptRequest, CardAssignRequest, CardCancelRequest, CardClearGroupRequest,
-    CardClearOutcome, CardClearRequest, CardEditRequest, CardListRequest, CardMoveRequest,
-    CardNewRequest, CardShowRequest, CardSplitRequest, CatalogRequest, CheckRequest, CheckedTree,
-    CliError, CreateRequest, DecisionRequest, DeliveryRequest, DiscrepancyRequest, DriftRequest,
-    Env, Exit, ExportIndexRequest, ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE,
-    GateInput, GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
-    INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
-    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
-    LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Mandate, Outcome,
-    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest,
-    ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
-    SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES,
-    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
-    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest,
-    UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json,
-    render_text,
+    CardClearOutcome, CardClearRequest, CardCountsRequest, CardEditRequest, CardListRequest,
+    CardMoveRequest, CardNewRequest, CardShowRequest, CardSplitRequest, CatalogRequest,
+    CheckRequest, CheckedTree, CliError, CreateRequest, DecisionRequest, DeliveryRequest,
+    DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest, ExportStateRequest,
+    FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
+    GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest,
+    InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
+    LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Mandate,
+    Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest,
+    ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest,
+    RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest,
+    TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
+    TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest,
+    TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest,
+    render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -683,6 +683,8 @@ enum CardCommand {
         #[arg(long, value_name = "C")]
         parent: Option<String>,
     },
+    /// Count the cards per flow and column (open, accepted, cancelled, open subtasks) and per flow (open items and the oldest one's time, parents ready to accept, the agent tasks in review its open cards link), every card counted, none listed; read-only, exit 0 whatever is counted, 2 when it cannot run (a bad [card], no project, a queue that cannot be read).
+    Counts,
     /// Print a card as `key: value` lines.
     Show {
         #[arg(value_name = "C")]
@@ -2485,6 +2487,13 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 marks,
                 parent,
             },
+        )?))),
+        // The agent tasks are read on the terminal (task spec
+        // `department-overview` DO9); a hub's route reads none.
+        CardCommand::Counts => Ok(Outcome::CardCounts(Box::new(specengine_cli::card_counts(
+            env,
+            globals,
+            &CardCountsRequest { tasks_here: true },
         )?))),
         CardCommand::Show {
             id,

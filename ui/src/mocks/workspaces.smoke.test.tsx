@@ -190,7 +190,7 @@ describe("choosing a workspace (WS-3)", () => {
     renderMock("normal", "#/harbor-sim/board");
     await navIs(GALLEY_NAV);
     expect(switcher().value).toBe("galley");
-    expect(within(switcher()).getAllByRole("option").map((option) => option.textContent)).toEqual(["Galley", "Foundry"]);
+    expect(within(switcher()).getAllByRole("option").map((option) => option.textContent)).toEqual(["Galley", "Foundry", "Harbourmaster"]);
     // Named Workspace, its hint the description: a lens, no right (D6).
     expect(document.getElementById(switcher().getAttribute("aria-describedby") ?? "")?.textContent).toBe(en.workspace.workspaceHint);
     expect(switcher().title).toBe(en.workspace.workspaceHint);

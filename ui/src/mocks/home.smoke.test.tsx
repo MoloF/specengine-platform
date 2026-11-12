@@ -1,13 +1,16 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
-// The home and the palette over the real mock, as `pnpm dev` shows them (docs/features/ui-home.md
-// "Data", AC-02, AC-03, AC-04, AC-06, AC-13; "Owner's manual check" for `large`).
+// The Overview and the palette over the real mock, as `pnpm dev` shows them
+// (docs/features/department-overview.md "Acceptance criteria", DO3, DO4, DO6, DO12; docs/features/ui-home.md
+// "Owner's manual check" for `large`). harbor-sim serves three departments: galley (copy, its sections
+// list Flow), foundry (plates, Health and no Flow) and the harbourmaster (every flow): each shows its
+// blocks by config alone, and the harbourmaster sets them side by side.
 
-const METHODS = ["getProjects", "getInbox", "getTree", "getNode", "search", "getBundle", "getGraph", "getTasks", "getTask", "stageDecision", "unstageDecision"] as const;
+const METHODS = ["getProjects", "getInbox", "getTree", "getNode", "search", "getBundle", "getGraph", "getTasks", "getTask", "stageDecision", "unstageDecision", "getCardCounts", "getFlow", "getHealth"] as const;
 
 function renderMock(scenario: Scenario, hash: string, delayMs = 0) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
@@ -21,98 +24,112 @@ function calls(spies: Record<string, { mock: { calls: unknown[] } }>): Record<st
   return Object.fromEntries(Object.entries(spies).flatMap(([name, spy]) => (spy.mock.calls.length > 0 ? [[name, spy.mock.calls.length]] : [])));
 }
 
-function region(name: "Agent tasks" | "Inbox"): HTMLElement {
-  return screen.getByRole("region", { name });
+/** The Overview's blocks, settled: the counts and any Gaps read answered. */
+async function settled() {
+  await waitFor(() => {
+    expect(document.querySelectorAll('.department-overview[aria-busy="false"]')).toHaveLength(1);
+    expect(document.querySelectorAll('.department-block[aria-busy="true"]')).toHaveLength(0);
+  });
 }
 
-async function loadedHome(scenario: Scenario = "normal", hash = "#/harbor-sim") {
+/** harbor-sim's Overview in a department (galley, the first, when none is chosen). */
+async function loadedHome(scenario: Scenario = "normal", hash = "#/harbor-sim", department: string | null = null) {
+  if (department !== null) {
+    window.localStorage.setItem("specengine.workspace.harbor-sim", department);
+  }
   const rendered = renderMock(scenario, hash);
   await screen.findByRole("heading", { level: 1, name: "Overview" });
-  await waitFor(() => {
-    expect(document.querySelectorAll('.home-region[aria-busy="false"]')).toHaveLength(2);
-  });
+  await settled();
   return rendered;
 }
 
-function tally(element: HTMLElement, heading: string): string[] {
-  const block = within(element).getByRole("heading", { level: 3, name: heading }).parentElement;
-  return Array.from(block?.querySelectorAll(".home-tally > li") ?? [], (item) => item.textContent);
+function blocks(): string[] {
+  return Array.from(document.querySelectorAll(".department-overview h2"), (heading) => heading.textContent);
 }
 
-function sum(lines: string[]): number {
-  return lines.reduce((total, line) => total + Number(/(\d+)$/.exec(line)?.[1] ?? Number.NaN), 0);
+function rowsOf(name: string): string[][] {
+  const table = screen.getByRole("table", { name });
+  return Array.from(table.querySelectorAll("tr"), (row) => Array.from(row.children, (cell) => cell.textContent));
 }
 
-describe("the home over the mock", () => {
-  it("#/ lands on harbor-sim's home in a workspace landing on the Overview; #/harbor-sim reads the projects, the inbox and the tasks once each (AC-02)", async () => {
+describe("the Overview over the mock (DO12)", () => {
+  it("#/ lands on harbor-sim's home in foundry, which lands on the Overview: the counts read once, no inbox, no agent tasks, no flow, no health (DO3)", async () => {
     // foundry lands on the Overview; galley, the first, on the Flow (docs/features/workspaces.md WS-11).
     window.localStorage.setItem("specengine.workspace.harbor-sim", "foundry");
     const { spies } = renderMock("normal", "#/");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
     expect(window.location.hash).toBe("#/harbor-sim");
-    await waitFor(() => {
-      expect(document.querySelectorAll('.home-region[aria-busy="false"]')).toHaveLength(2);
-    });
-    expect(calls(spies)).toEqual({ getProjects: 1, getInbox: 1, getTasks: 1 });
+    await settled();
+    expect(calls(spies)).toEqual({ getProjects: 1, getCardCounts: 1 });
   });
 
-  it("shows harbor-sim's Tasks region as the spec's Data says (AC-03)", async () => {
+  it.each([
+    ["galley", ["Work", "Waiting on this department", "Gaps in the flow"]],
+    ["foundry", ["Work", "Waiting on this department"]],
+    ["harbourmaster", ["Work", "Waiting on this department", "Gaps in the flow", "Departments side by side"]],
+  ])("%s shows its blocks by its sections and flows alone (DO6)", async (department, expected) => {
+    await loadedHome("normal", "#/harbor-sim", department);
+    expect(blocks()).toEqual(expected);
+  });
+
+  it("galley's Work: the copy desk by status as the Board heads its columns; what waits on it, each to its page", async () => {
     await loadedHome();
-    const tasks = region("Agent tasks");
-    const rows = Array.from(tasks.querySelectorAll(".home-block-waiting .home-row"));
-    expect(rows.map((row) => [row.querySelector("a")?.getAttribute("href"), row.querySelector(".badge")?.textContent])).toEqual([
-      ["#/harbor-sim/tasks/T-0107", "State: Plan review"],
-      ["#/harbor-sim/tasks/T-0108", "State: Ready"],
+    expect(rowsOf("Tasks by status, per flow")).toEqual([
+      ["Flow", "To do", "In progress", "Waiting for review", "Returned", "Done"],
+      ["Copy desk", "3", "3", "1", "0", "4"],
     ]);
-    expect(rows.map((row) => row.textContent.includes("Spec changed"))).toEqual([false, true]);
-    expect(tally(tasks, "Other open agent tasks")).toEqual(["Draft: 1", "Changes requested: 1", "Ready: 2", "In progress: 1"]);
-    const notes = Array.from(within(tasks).getByRole("list", { name: "Notes from the daemon on the agent task list" }).querySelectorAll("li"), (item) => item.textContent);
-    expect(notes).toContain("T-0106: unreadable row (bad JSON in criteria); skipped");
+    expect(Array.from(document.querySelectorAll(".department-aside li"), (item) => item.textContent)).toEqual(["1 cancelled"]);
+    const waiting = screen.getByRole("region", { name: "Waiting on this department" });
+    expect(Array.from(waiting.querySelectorAll(".property-row"), (row) => [row.querySelector("dt")?.textContent, row.querySelector(".department-count")?.textContent ?? null])).toEqual([
+      ["Waiting for review", "1"],
+      ["Returned subtasks", "0"],
+      ["Ready to accept", "1"],
+      ["Open questions", "1"],
+      ["Agent tasks awaiting you", "1"],
+    ]);
+    expect(within(waiting).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["#/harbor-sim/board", "#/harbor-sim/board", "#/harbor-sim/board", "#/harbor-sim/inbox", "#/harbor-sim/tasks"]);
+    expect(within(screen.getByRole("region", { name: "Gaps in the flow" })).getByRole("link", { name: "Open Flow" }).getAttribute("href")).toBe("#/harbor-sim/flow");
   });
 
-  it.each(["harbor-sim", "ledger-api"])("counts %s's queue as the Inbox lists it (AC-04)", async (slug) => {
-    renderMock("normal", `#/${slug}/inbox`);
-    const list = await screen.findByRole("listbox", { name: "Proposals by severity, then age" });
-    const queue = within(list)
-      .getAllByRole("option")
-      .map((option) => option.dataset.proposal ?? "");
-    cleanup();
-    await loadedHome("normal", `#/${slug}`);
-    const inbox = region("Inbox");
-    expect(inbox.querySelector(".home-total")?.textContent).toBe(`${String(queue.length)} ${queue.length === 1 ? "proposal" : "proposals"} in the queue`);
-    const first = Array.from(inbox.querySelectorAll(".home-row a"), (link) => /^(\S+):/.exec(link.textContent)?.[1]);
-    expect(first).toEqual(queue.slice(0, 5));
-    expect(sum(tally(inbox, "By status"))).toBe(queue.length);
-    expect(sum(tally(inbox, "By kind"))).toBe(queue.length);
+  it("the harbourmaster's side table: a row per department in served order, then All flows, each flow once", async () => {
+    await loadedHome("normal", "#/harbor-sim", "harbourmaster");
+    const rows = rowsOf("Tasks by status, per department");
+    expect(rows.map((row) => row[0])).toEqual(["Department", "Galley", "Foundry", "Harbourmaster", "All flows"]);
+    expect(rows[1]?.slice(1, 6)).toEqual(["3", "3", "1", "0", "4"]);
+    // The lead's every flow is All flows.
+    expect(rows[3]?.slice(1)).toEqual(rows[4]?.slice(1));
   });
 
-  it("slow: both regions busy with a skeleton until their reads answer (AC-06)", async () => {
+  it("local-only: the hub's line, no digit in the agent task row (DO4)", async () => {
+    await loadedHome("local-only");
+    const row = Array.from(screen.getByRole("region", { name: "Waiting on this department" }).querySelectorAll(".property-row")).at(-1);
+    expect(row?.querySelector("dd")?.textContent).toBe("Local only: agent tasks live on each terminalOpen Agent tasks");
+  });
+
+  it("slow: busy with a skeleton until the counts answer", async () => {
     window.history.replaceState(null, "", "/?scenario=slow#/harbor-sim");
     render(<App client={new MockClient("slow", { delayMs: 50 })} scenario="slow" />);
     await screen.findByRole("heading", { level: 1, name: "Overview" });
-    for (const name of ["Agent tasks", "Inbox"] as const) {
-      expect(region(name).getAttribute("aria-busy")).toBe("true");
-      expect(within(region(name)).getByRole("status").getAttribute("aria-busy")).toBe("true");
-    }
     await waitFor(() => {
-      expect(document.querySelectorAll('.home-region[aria-busy="false"]')).toHaveLength(2);
+      expect(document.querySelector('.department-overview[aria-busy="true"] [role="status"]')).not.toBeNull();
     });
+    await settled();
+    expect(blocks()).toEqual(["Work", "Waiting on this department", "Gaps in the flow"]);
   });
 
-  it("empty: both regions say so with their next step (AC-06)", async () => {
+  it("empty: no flow, so the empty state and its next steps", async () => {
     await loadedHome("empty");
-    expect(within(region("Agent tasks")).getByText("No agent tasks yet.")).toBeTruthy();
-    expect(within(region("Inbox")).getByText("The queue is clear: no proposal waits for your decision.")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "No task flow yet" })).toBeTruthy();
+    expect(blocks()[0]).toBe("No task flow yet");
   });
 
-  it("error: each region in the daemon's words with its own Retry (AC-06)", async () => {
+  it("error: the counts in the daemon's words with their own Retry", async () => {
     renderMock("error", "#/harbor-sim");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
-    // The projects fail too: the route's project cannot be checked, so its home is shown.
-    for (const name of ["Agent tasks", "Inbox"] as const) {
-      expect(await within(region(name)).findByText(/^spec index unavailable/)).toBeTruthy();
-      expect(within(region(name)).getByRole("button", { name: "Retry" })).toBeTruthy();
-    }
+    const title = await screen.findByText("The task counts could not be read");
+    const panel = title.closest<HTMLElement>(".error-panel");
+    expect(panel?.querySelector(".error-message")?.textContent).toMatch(/^spec index unavailable/);
+    expect(within(panel as HTMLElement).getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
 
@@ -129,6 +146,11 @@ describe("the palette over the mock (AC-13)", () => {
   it("jumps to T-0108 on Enter", async () => {
     await loadedHome();
     await open();
+    // The palette reads the agent tasks on opening: the Overview reads none (DO3).
+    fireEvent.change(combobox(), { target: { value: "T-010" } });
+    await waitFor(() => {
+      expect(screen.getAllByRole("option").some((option) => option.textContent.startsWith("T-0108"))).toBe(true);
+    });
     fireEvent.change(combobox(), { target: { value: "T-0108" } });
     fireEvent.keyDown(combobox(), { key: "Enter" });
     await waitFor(() => {

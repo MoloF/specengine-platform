@@ -431,9 +431,10 @@ fn an_unknown_path_is_a_404_for_every_method() {
                 "{context}: the list names flow: {message}"
             );
             // docs/features/board-ui.md: the board's two reads beside the
-            // tasks'.
+            // tasks'; docs/features/department-overview.md DO10: the counts
+            // after them.
             assert!(
-                message.contains(" tasks/<id>, cards, cards/<id>, round, "),
+                message.contains(" tasks/<id>, cards, cards/<id>, cards/counts, round, "),
                 "{context}: the list names cards: {message}"
             );
         }

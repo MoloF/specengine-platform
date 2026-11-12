@@ -101,7 +101,7 @@ async function home(stub = client(), hash = "#/alpha") {
   renderApp(stub, hash);
   await screen.findByRole("heading", { level: 1, name: "Overview" });
   await waitFor(() => {
-    expect(document.querySelectorAll('.home-region[aria-busy="false"]')).toHaveLength(2);
+    expect(document.querySelectorAll('.department-overview[aria-busy="false"]')).toHaveLength(1);
   });
   return stub;
 }
@@ -441,16 +441,19 @@ describe("the dialog and its combobox (AC-11)", () => {
 });
 
 describe("what the palette reads (AC-12)", () => {
-  it("reads nothing on the home when opened or typed in", async () => {
+  // The Overview reads neither the agent tasks nor the inbox (docs/features/department-overview.md
+  // "Acceptance criteria", DO3): opened on the home, the palette reads each once, as elsewhere.
+  it("reads the tasks and the inbox once when opened on the home, nothing more when typed in", async () => {
     const stub = await home();
     const before = callsOf(stub);
+    expect([before.getTasks, before.getInbox]).toEqual([undefined, undefined]);
     await openPalette();
     for (const text of "a long query typed!!".split("").map((_, index, all) => all.slice(0, index + 1).join(""))) {
       type(text);
     }
     expect(combobox().value).toBe("a long query typed!!");
     await settle();
-    expect(callsOf(stub)).toEqual(before);
+    expect(callsOf(stub)).toEqual({ ...before, getTasks: 1, getInbox: 1 });
   });
 
   it("reads at most the tasks and the inbox once when opened elsewhere, nothing when opened again", async () => {
@@ -510,6 +513,11 @@ describe("matching and jumps (AC-13)", () => {
   it("puts T-0108 first for t-0108, its group first; Enter jumps with one history entry and focuses its heading", async () => {
     await home();
     await openPalette();
+    // The palette reads the agent tasks on opening, the Overview having read none (DO3 of department-overview).
+    type("t-010");
+    await waitFor(() => {
+      expect(groups()[0]?.[0]).toBe("Agent tasks");
+    });
     type("t-0108");
     expect(groups().map(([label]) => label)).toEqual(["Agent tasks", "Inbox", "Spec tree"]);
     expect(activeOption()?.textContent).toBe("T-0108: Speed limit on night passagesState: Ready");
@@ -576,7 +584,8 @@ describe("matching and jumps (AC-13)", () => {
     fireEvent.click(within(listbox()).getByRole("option", { name: "Open document 'MEC-TIDES#RULE-TIDE-WINDOW'" }));
     await hashIs("#/alpha?doc=MEC-TIDES%23RULE-TIDE-WINDOW");
     expect(callsOf(stub).search).toBeUndefined();
-    expect(callsOf(stub).getTasks).toBe(before.getTasks);
+    // The palette's own read of the agent tasks on opening, and no other (the Overview reads none).
+    expect([before.getTasks, callsOf(stub).getTasks]).toEqual([undefined, 1]);
   });
 
   // DM-16 of docs/features/doc-modal.md: a ref and a hit open the modal over the current screen, one
@@ -659,16 +668,17 @@ describe("failures in their group (AC-14)", () => {
   it("says the tasks could not be read and keeps Sections and the Inbox", async () => {
     const stub = client();
     stub.getTasks.mockRejectedValue(new ClientError({ status: 503, message: "t" }));
-    renderApp(stub, "#/alpha");
-    await within(await screen.findByRole("region", { name: "Agent tasks" })).findByText("t");
-    await within(screen.getByRole("region", { name: "Inbox" })).findByRole("link", { name: /^PR-0041/ });
+    await home(stub);
     await openPalette();
     type("in");
     await waitFor(() => {
       expect(within(palette() ?? document.body).getByRole("alert").textContent).toBe("Agent tasks could not be read: t");
     });
-    expect(groups().map(([label]) => label)).toEqual(["Sections", "Inbox", "Spec tree"]);
-    expect(stub.getTasks).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(groups().map(([label]) => label)).toEqual(["Sections", "Inbox", "Spec tree"]);
+    });
+    // The palette's one read on opening: the Overview reads no agent task (docs/features/department-overview.md DO3).
+    expect(stub.getTasks).toHaveBeenCalledTimes(1);
     expect(combobox().value).toBe("in");
   });
 
@@ -676,9 +686,7 @@ describe("failures in their group (AC-14)", () => {
     const stub = client();
     const message = "Not served by the daemon yet: GET /api/projects/alpha/tasks is a missing endpoint";
     stub.getTasks.mockRejectedValue(new ClientError({ status: 501, message }, { notServed: true }));
-    renderApp(stub, "#/alpha");
-    await within(await screen.findByRole("region", { name: "Agent tasks" })).findByText(message);
-    await within(screen.getByRole("region", { name: "Inbox" })).findByRole("link", { name: /^PR-0041/ });
+    await home(stub);
     await openPalette();
     type("in");
     const dialog = palette() ?? document.body;
@@ -687,7 +695,9 @@ describe("failures in their group (AC-14)", () => {
     });
     expect(within(dialog).getByText(message).closest("p")?.getAttribute("role")).toBe("status");
     expect(within(dialog).queryByRole("alert")).toBeNull();
-    expect(groups().map(([label]) => label)).toEqual(["Sections", "Inbox", "Spec tree"]);
+    await waitFor(() => {
+      expect(groups().map(([label]) => label)).toEqual(["Sections", "Inbox", "Spec tree"]);
+    });
   });
 
   it("says the search could not be read, stays open and keeps the text", async () => {

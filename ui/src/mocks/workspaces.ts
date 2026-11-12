@@ -3,7 +3,10 @@ import type { Scenario } from "./scenario";
 
 // The mock projects' workspaces and modules (docs/features/workspaces.md "The UI", Mocks): `spec
 // workspace --json` as the daemon serves it, read from each project's invented config.
-// harbor-sim configures two trades, `galley` and `foundry`, two rooted modules, `berths` and
+// harbor-sim configures three departments, the trades `galley` and `foundry` and the lead's
+// `harbourmaster`, whose `flows` is null (every flow, so the Overview sets the departments side by
+// side: docs/features/department-overview.md "Acceptance criteria", DO12) and who takes no hand-off
+// (`disciplines` empty), two rooted modules, `berths` and
 // `waters`, and one direction, `mechanics`, by the kind `mechanic` (docs/features/departments.md
 // "Acceptance criteria", DP-11); their names are no repository's and no preset's (the spec's
 // "Disjoint names"), and no app code spells one (policy.test.ts). Each department serves the
@@ -28,7 +31,7 @@ function implicit(notes: string[]): WorkspaceDocument {
   };
 }
 
-/** harbor-sim's two trades, two rooted modules and a direction, the notes as the scenario leaves them. */
+/** harbor-sim's two trades and its lead, two rooted modules and a direction, the notes as the scenario leaves them. */
 function harbor(notes: string[]): WorkspaceDocument {
   return {
     source: "config",
@@ -36,6 +39,7 @@ function harbor(notes: string[]): WorkspaceDocument {
     workspaces: [
       { name: "galley", title: "Galley", landing: "flow", sections: ["board", "flow", "tree", "inbox"], flows: ["copy"], disciplines: ["copy", "captions"], module: "berths" },
       { name: "foundry", title: "Foundry", landing: "overview", sections: ["board", "health", "graph", "tree"], flows: ["plates"], disciplines: ["plates"], module: null },
+      { name: "harbourmaster", title: "Harbourmaster", landing: "overview", sections: ["inbox", "board", "roadmap", "flow"], flows: null, disciplines: [], module: null },
     ],
     modules: [
       { name: "berths", title: "Berths", root: "DOM-BERTHS", kinds: null },

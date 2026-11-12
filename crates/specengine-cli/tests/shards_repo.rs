@@ -326,17 +326,19 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
             .filter(|f| !f.parsed.as_ref().is_some_and(is_tier3_file))
             .map(|f| f.path.clone())
             .collect();
-        // The `card*` shard holds the nine card canons (card-tasks,
+        // The `card*` shard holds the ten card canons (card-tasks,
         // RM-0092; card-questions, RM-0097; card-progress, RM-0098;
         // card-split, RM-0100, written with ADR-0078 at spec time;
         // card-mandate, RM-0104, written with ADR-0079 at spec time;
         // card-context, RM-0108, written at ship; card-upstream, RM-0105,
-        // written at ship); every other more than five.
+        // written at ship; card-counts, RM-0086, written at ship as
+        // docs/canon/card-counts.md); every other more than five.
         if claim == "docs/canon/card*.md" {
             assert_eq!(
                 claimed_live,
                 [
                     "docs/canon/card-context.md",
+                    "docs/canon/card-counts.md",
                     "docs/canon/card-flows.md",
                     "docs/canon/card-mandate.md",
                     "docs/canon/card-progress.md",

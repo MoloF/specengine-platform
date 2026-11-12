@@ -24,6 +24,7 @@ import type {
   CardClearBody,
   CardClearGroupBody,
   CardClearGroupWrite,
+  CardCounts,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -77,7 +78,8 @@ import type {
 // the confirm `docs/features/hub-confirm.md` "Data", the sync `docs/features/hub-git.md` "Data",
 // the workspaces `docs/features/workspaces.md` "Data", the delivery
 // `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog
-// `docs/features/direction-catalog.md` "Acceptance criteria", DC-9):
+// `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the counts
+// `docs/features/department-overview.md` "Acceptance criteria", DO10):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -595,6 +597,16 @@ export class HttpClient implements SpecEngineClient {
       ["parent", options.parent],
     ]);
     return (await request("GET", `${cardsPath(project)}${query}`, { signal })) as CardList;
+  }
+
+  /**
+   * `spec card counts --json` as the browser view, uncut (`docs/features/department-overview.md`
+   * "Acceptance criteria", DO10): no query. Judged, so only a 200 resolves: an older daemon, which
+   * reads `counts` as a card's ID, and its 404 reject in its own words, never as a document, as do
+   * a bad `[card]`'s 503 and a query's 400. Takes its query's AbortSignal.
+   */
+  async getCardCounts(project: string, signal?: AbortSignal): Promise<CardCounts> {
+    return (await request("GET", `${cardsPath(project)}/counts`, { signal, judged: true })) as CardCounts;
   }
 
   /**

@@ -8,7 +8,10 @@ import type {
   BundleLayers,
   BundleView,
   Card,
+  CardColumnCount,
+  CardCounts,
   CardFlow,
+  CardFlowCount,
   CardList,
   CardRow,
   CardWrite,
@@ -1092,4 +1095,19 @@ export function aCatalogRow(fields: Partial<CatalogRow> & Pick<CatalogRow, "id">
     last_change: null,
     ...fields,
   };
+}
+
+/** A project's task counts: no flow, no row, agent tasks counted, uncut, unless given (docs/features/department-overview.md "Acceptance criteria", DO10). */
+export function aCardCounts(fields: Partial<CardCounts> = {}): CardCounts {
+  return { flows: [], columns: [], by_flow: [], agent_tasks: "counted", notes: [], truncated: false, omitted: null, ...fields };
+}
+
+/** One column's counts: every one 0, unless given. */
+export function aColumnCount(fields: Partial<CardColumnCount> & Pick<CardColumnCount, "flow" | "column">): CardColumnCount {
+  return { open: 0, accepted: 0, cancelled: 0, open_subtasks: 0, ...fields };
+}
+
+/** One flow's counts: no open item, no ready parent, no agent task in review, unless given. */
+export function aFlowCount(fields: Partial<CardFlowCount> & Pick<CardFlowCount, "flow">): CardFlowCount {
+  return { open_items: 0, oldest_open_item: null, ready_parents: 0, review_agent_tasks: [], ...fields };
 }

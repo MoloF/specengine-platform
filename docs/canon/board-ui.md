@@ -18,6 +18,7 @@ ADR-0056, ADR-0057, built by `board-ui` (RM-0046): an ordinary kanban on the loc
 |---|---|---|
 | GET `.../cards` | `flow`, `column`, `discipline`, `assignee`, `no_target`, `with_cancelled`, `marks`, `parent` | `spec card list [--marks] --json`, every row |
 | GET `.../cards/:id` | -- | `spec card show C --history --json`, with `upstream` alone of `--marks`' keys (`card-upstream.md`) |
+| GET `.../cards/counts` | -- | `spec card counts --json`, uncut, a hub's `local_only` (`card-counts.md`) |
 | POST `.../cards` | `CardNewBody` | `card_new` |
 | POST `.../cards/split` | `CardSplitBody` | `card_split`: the split document (`card-split.md` "Route and hub") |
 | POST `.../cards/:id/move` | `CardMoveBody` | `card_move` |
@@ -30,7 +31,7 @@ ADR-0056, ADR-0057, built by `board-ui` (RM-0046): an ordinary kanban on the loc
 | POST `.../trace/clear` | `CardClearGroupBody` `{group, reason, as, count?}` | `card_clear_group`: `{group, cleared, notes}` |
 | GET `.../trace` | `ref`, `stage`, `summary` | `spec trace --json`, browser view: every kept node, `truncated` false |
 
-`card_list` keeps its signature; `CardListOutcome::in_view(View::Browser)` shows every row (`truncated` false, `omitted` null), so list parity with the CLI holds below the cap, and past it the daemon serves what the CLI cuts. `show` holds past it. Filters stay exact and untrimmed; each key at most once, a second a 400; a `parent` off the card-ID grammar a 503 (`card-flows.md` "Children"). **Methods**: `.../cards` `Allow: GET, POST`, `HEAD` a 405; `.../cards/:id`, `.../trace` reads; the seven, `.../cards/split` and `.../trace/clear` `Allow: POST`.
+`card_list` keeps its signature; `CardListOutcome::in_view(View::Browser)` shows every row (`truncated` false, `omitted` null), so list parity with the CLI holds below the cap, and past it the daemon serves what the CLI cuts. `show` holds past it. Filters stay exact and untrimmed; each key at most once, a second a 400; a `parent` off the card-ID grammar a 503 (`card-flows.md` "Children"). **Methods**: `.../cards` `Allow: GET, POST`, `HEAD` a 405; `.../cards/:id`, `.../cards/counts`, `.../trace` reads; the seven, `.../cards/split` and `.../trace/clear` `Allow: POST`.
 
 ## The door
 
@@ -52,7 +53,7 @@ The local fence does not change: the `127.0.0.1` bind, `Host` and `Origin` namin
 
 **A convention until the hub's named login** (ADR-0057). Locally the name is typed and nothing verifies it. `fence()` is the only guard, and any local process can send these headers, so an agent with a shell can post here under any name: `assign` a reviewer, then `accept` as that name, `clear` a mark, or ask a question on a card. `reviewer` and `by` stop slips only. No MCP tool reaches a route, and `specengine-mcp` holds no HTTP client. Only `spec card accept` and `spec card clear` ask on a terminal.
 
-`tests/door.rs`: `CARD_CALLS` lists the twelve `card_` calls and any other `card_` name is forbidden, beside `approve`, `reject`, `propose*`, `round_answer`, `import_state`, `export_*`, `init`, `index` and every `task_` writer. Handlers avoid the prefix (`new_card`, `move_card`, ...). The two GETs join the endpoints that change nothing. `card_writes_touch_only_the_queue`: a POST leaves `git status`, `HEAD`, refs, files and proposals alone and adds one `card.*` event, a refused one none. Three exceptions, no handler naming `propose*`, git and the files as they were: a departing accept (ADR-0057), `card_accept` making its discrepancy inside the library's accept, adds `proposal.created` then `card.accepted`; a card's raise (ADR-0077), `card_raise`, adds the item's one `proposal.created`, its `as` trailing; a split (ADR-0078), `card_split`, adds one `card.created` per card it makes, a dry run none. `no_domain.rs` stays: `with_cancelled` is one word, and `accept`, `cancel` are no task state.
+`tests/door.rs`: `CARD_CALLS` lists the thirteen `card_` calls and any other `card_` name is forbidden, beside `approve`, `reject`, `propose*`, `round_answer`, `import_state`, `export_*`, `init`, `index` and every `task_` writer. Handlers avoid the prefix (`new_card`, `move_card`, ...). The three GETs join the endpoints that change nothing. `card_writes_touch_only_the_queue`: a POST leaves `git status`, `HEAD`, refs, files and proposals alone and adds one `card.*` event, a refused one none. Three exceptions, no handler naming `propose*`, git and the files as they were: a departing accept (ADR-0057), `card_accept` making its discrepancy inside the library's accept, adds `proposal.created` then `card.accepted`; a card's raise (ADR-0077), `card_raise`, adds the item's one `proposal.created`, its `as` trailing; a split (ADR-0078), `card_split`, adds one `card.created` per card it makes, a dry run none. `no_domain.rs` stays: `with_cancelled` is one word, and `accept`, `cancel` are no task state.
 
 ## Screen
 
@@ -60,7 +61,7 @@ The Board's screen, the card modal and page, lanes, the hand-off and return dial
 
 ## Types
 
-`provisional.ts`; `CardFlow.return` a column or `null`; `CardCreateBody.reviewer`, `CardMoveBody.note`, `CardsOptions.parent`, the create, edit and split bodies' `mandate` optional; `Card.mandate`, `CardRow.mandate` a `Mandate` or `null`; `Card.upstream` a `CardUpstream` or `null`, `CardRow.upstream` a flag or `null`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 126 sets, among them `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`, `Identity`, `CardSplit`, `CardSplitParent`, `CardSplitChild`, `CardSubtaskItem`, `CardUpstream`, `CardUpstreamChange`; `CardRow` 23 keys, `Card` 36. `QUEUE_EVENT_TYPES` 25.
+`provisional.ts`; `CardFlow.return` a column or `null`; `CardCreateBody.reviewer`, `CardMoveBody.note`, `CardsOptions.parent`, the create, edit and split bodies' `mandate` optional; `Card.mandate`, `CardRow.mandate` a `Mandate` or `null`; `Card.upstream` a `CardUpstream` or `null`, `CardRow.upstream` a flag or `null`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 143 sets, among them `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`, `Identity`, `CardSplit`, `CardSplitParent`, `CardSplitChild`, `CardSubtaskItem`, `CardUpstream`, `CardUpstreamChange`, `CardCounts`, `CardColumnCount`, `CardFlowCount`; `CardRow` 23 keys, `Card` 36. `QUEUE_EVENT_TYPES` 25.
 
 ## Known limits
 
@@ -68,4 +69,4 @@ Drag: `board-screen.md` "Known limits". Not tested through the daemon: a corrupt
 
 ## Tests
 
-http `tests/cards.rs`, `card_split.rs`, `trace.rs`, `door.rs`, `fence.rs`, `methods.rs`, `query.rs`, `parity.rs`, `round.rs`, `stage.rs`, `daemon_keys.rs`; UI `src/board/*.test.*`, `src/trace/*.test.*`, `mocks/board.smoke.test.tsx`, `policy.test.ts`.
+http `tests/cards.rs`, `card_split.rs`, `card_counts.rs`, `trace.rs`, `door.rs`, `fence.rs`, `methods.rs`, `query.rs`, `parity.rs`, `round.rs`, `stage.rs`, `daemon_keys.rs`; UI `src/board/*.test.*`, `src/trace/*.test.*`, `mocks/board.smoke.test.tsx`, `policy.test.ts`.

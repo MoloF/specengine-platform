@@ -4,7 +4,7 @@ import type { HealthQuery } from "../api/queries";
 import type { HealthReport, ShownLink, UnappliedAmendment } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { DocLink } from "../doc/DocLink";
-import { Notes } from "../overview/parts";
+import { Notes } from "../ui/served";
 import { linkStateLook } from "../tree/labels";
 import { writtenAs } from "../tree/LinksPanel";
 import { Badge } from "../ui/Badge";

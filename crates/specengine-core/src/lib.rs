@@ -116,12 +116,17 @@
 //! - [`catalog`] — a direction's catalog, the pure half (task spec
 //!   `direction-catalog`): a row's last change read from one commit as
 //!   node-history's entry, and each node's open items, computed per read
-//!   and never stored.
+//!   and never stored;
+//! - [`card_counts`] — a project's card counts, the pure half (task spec
+//!   `department-overview`): the store's grouped rows per (flow, column)
+//!   and per flow, ordered by `[card]`, no clock, computed per read and
+//!   never stored.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod anchor;
 pub mod card;
+pub mod card_counts;
 pub mod card_split;
 pub mod card_toml;
 pub mod catalog;

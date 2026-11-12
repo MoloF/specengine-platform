@@ -95,6 +95,11 @@
 //! exactly its three `card.created` and nothing else, git, the files and the
 //! open question unchanged, and a dry run adding none. M: an unlisted
 //! `card_split_all` caught.
+//!
+//! docs/features/department-overview.md (RM-0086) "Acceptance criteria",
+//! DO10, the door: `CARD_CALLS` is thirteen with `card_counts`, a read, and
+//! `GET .../cards/counts` joins the endpoints that change nothing. M: an
+//! unlisted `card_counts_all` caught.
 
 mod common;
 
@@ -261,6 +266,8 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         format!("{p}/cards"),
         format!("{p}/cards?with_cancelled=true&flow=plain&no_target=true"),
         format!("{p}/cards/C-0001"),
+        // docs/features/department-overview.md DO10: the counts.
+        format!("{p}/cards/counts"),
     ] {
         let reply = server.get(&path);
         assert!(
@@ -269,6 +276,8 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
             reply.text()
         );
     }
+    // department-overview DO10: the counts are served, not a 404.
+    server.get(&format!("{p}/cards/counts")).status(200);
     // The tail, from the start: the one stored event, then nothing.
     let mut stream = Stream::open(
         server.port,
@@ -516,7 +525,7 @@ const TASK_READS: [&str; 2] = ["task_list", "task_show"];
 /// The CLI library's card calls a handler may make, reads and writes: a
 /// card is the one record the daemon writes beyond a stage (ADR-0056,
 /// docs/features/board-ui.md "The fence stays").
-const CARD_CALLS: [&str; 12] = [
+const CARD_CALLS: [&str; 13] = [
     "card_list",
     "card_show",
     "card_new",
@@ -532,6 +541,9 @@ const CARD_CALLS: [&str; 12] = [
     // docs/features/department-split.md "Acceptance criteria", S7: a split,
     // the twelfth.
     "card_split",
+    // docs/features/department-overview.md "Acceptance criteria", DO10: the
+    // counts, a read, the thirteenth.
+    "card_counts",
 ];
 
 /// The names no handler may call: the CLI's deciding, storing, exporting,
@@ -1096,6 +1108,10 @@ fn board_ui_ac02_the_scan_admits_the_card_calls_and_no_other_card_name() {
                    specengine_cli::card_reopen(env, globals, &reopen)\n\
                    }).await }";
     assert_eq!(caught(handler), ["task_claim", "card_reopen"], "{handler}");
+    // department-overview DO10: a counts name the list does not hold is
+    // caught.
+    let by_path = "fn f() { let _ = specengine_cli::card_counts_all(&env, &globals, &r); }";
+    assert_eq!(caught(by_path), ["card_counts_all"], "{by_path}");
     // department-split S7: a split's name the list does not hold is caught.
     let by_path = "fn f() { let _ = specengine_cli::card_split_all(&env, &globals, &r); }";
     assert_eq!(caught(by_path), ["card_split_all"], "{by_path}");
@@ -1106,7 +1122,7 @@ fn board_ui_ac02_the_scan_admits_the_card_calls_and_no_other_card_name() {
         caught("fn f() { card_ask(&env, &globals, &r)?; }"),
         ["card_ask"]
     );
-    // Negative controls: the twelve, by path and bare; the handler of the
+    // Negative controls: the thirteen, by path and bare; the handler of the
     // slice with its yes; the types, the outcome's variant, the body's cap;
     // a method of something else; a name in a string or a comment.
     for name in CARD_CALLS {
@@ -1483,8 +1499,9 @@ fn board_handoff_bh20_a_hand_off_and_a_return_touch_only_the_queue() {
         );
     }
     // card-questions D6 added the eleventh, `card_raise`; department-split
-    // S7 the twelfth, `card_split`; no hand-off call.
-    assert_eq!(CARD_CALLS.len(), 12, "the twelve card calls");
+    // S7 the twelfth, `card_split`; department-overview DO10 the
+    // thirteenth, `card_counts`; no hand-off call.
+    assert_eq!(CARD_CALLS.len(), 13, "the thirteen card calls");
     for name in ["card_return", "card_hand_off", "card_handoff"] {
         let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
         assert_eq!(caught(&by_path), [name], "{by_path}");

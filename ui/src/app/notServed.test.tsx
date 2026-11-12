@@ -49,7 +49,7 @@ describe("a read the daemon does not serve yet (R-n7)", () => {
     ["Agent tasks", "#/alpha/tasks", ["GET /api/projects/alpha/tasks"]],
     // The list beside the task reads too: each region says it on its own.
     ["a task", "#/alpha/tasks/T-0001", ["GET /api/projects/alpha/tasks", "GET /api/projects/alpha/tasks/T-0001"]],
-    ["the home's Tasks region", "#/alpha", ["GET /api/projects/alpha/tasks"]],
+    // The home's Tasks region left the Overview (docs/features/department-overview.md "Acceptance criteria", DO12): the home reads no agent task.
   ])("%s: not built, the client's message verbatim, no Retry, no alert", async (_name, hash, endpoints) => {
     renderApp(notServingTasks(), hash);
     const notes = await notBuilt(endpoints.length);

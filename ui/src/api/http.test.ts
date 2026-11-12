@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { aFlowView } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import {
+  aCardCounts,
   aCatalog,
   aCatalogRow,
   aCheckFinding,
@@ -203,6 +204,37 @@ describe("the catalog read (DC-9 of direction-catalog)", () => {
   it("is judged: a 404 that is no error body rejects too, never read as a document", async () => {
     stubFetch(() => jsonAnswer(404, served));
     expect((await rejection(new HttpClient().getCatalog("alpha", { kinds: ["scene"], archive: false }))).status).toBe(404);
+  });
+});
+
+// docs/features/department-overview.md "Acceptance criteria", DO10: the counts read GETs its one
+// path, no query, with its query's AbortSignal; its 200 resolves as sent; it is judged, so a bad
+// `[card]`'s 503, a query's 400 and an older daemon's 404 reject in the daemon's words, and an older
+// daemon's card document for an ID `counts` is never read as the counts.
+describe("the counts read (DO10 of department-overview)", () => {
+  const served = aCardCounts({ notes: ["C-0009: its `tasks` does not read; its agent tasks are not counted"] });
+
+  it("asks `/cards/counts` with no query, its answer resolved as sent, with the caller's AbortSignal", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    const controller = new AbortController();
+    expect(await new HttpClient().getCardCounts("my project", controller.signal)).toEqual(served);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/my%20project/cards/counts"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it.each([
+    [400, "query `flow`: the counts take no query"],
+    [404, "no route /api/projects/alpha/cards/counts: the routes are /api/projects and the web UI"],
+    [503, "specengine.toml:12: [card]: flow `copy`: no column `review`"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getCardCounts("alpha")))).toEqual({ status, message });
+  });
+
+  it("is judged: an older daemon's 404 card document for `counts` rejects, never read as the counts", async () => {
+    stubFetch(() => jsonAnswer(404, { id: "counts", reason: "no card counts" }));
+    expect((await rejection(new HttpClient().getCardCounts("alpha"))).status).toBe(404);
   });
 });
 

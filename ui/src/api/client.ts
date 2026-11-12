@@ -8,6 +8,7 @@ import type {
   CardClearBody,
   CardClearGroupBody,
   CardClearGroupWrite,
+  CardCounts,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -287,6 +288,12 @@ export interface SpecEngineClient {
   stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome>;
   /** GET /api/projects/:p/cards (docs/features/board-ui.md "Routes"; = spec card list [--with-cancelled] [--marks] --json, the browser view) */
   getCards(project: string, options?: CardsOptions, signal?: AbortSignal): Promise<CardList>;
+  /**
+   * GET /api/projects/:p/cards/counts (docs/features/department-overview.md "Acceptance criteria",
+   * DO10; = spec card counts --json, the browser view, uncut): judged, so only a 200 resolves; a
+   * query's 400, an older daemon's 404 and a bad `[card]`'s 503 reject in the daemon's words.
+   */
+  getCardCounts(project: string, signal?: AbortSignal): Promise<CardCounts>;
   /** GET /api/projects/:p/cards/:id (docs/features/board-ui.md "Routes"; = spec card show C --history --json, uncut; 404 the exit-1 document) */
   getCard(project: string, id: string, signal?: AbortSignal): Promise<Card | CardNotFound>;
   // The card writes (docs/features/board-ui.md "Routes"): no AbortSignal, a write's answer is always taken.

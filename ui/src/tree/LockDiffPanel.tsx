@@ -6,7 +6,7 @@ import { CodeRowList, oneLine } from "../health/codeRows";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { DriftLine } from "../health/DriftPart";
-import { Notes } from "../overview/parts";
+import { Notes } from "../ui/served";
 import { useAnnounce } from "../ui/announcer";
 import { Button } from "../ui/Button";
 import { DiffView } from "../ui/DiffView";

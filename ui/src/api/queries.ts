@@ -119,6 +119,12 @@ export const queryKeys = {
    * "Acceptance criteria", HP-1): under the project's card lists, so whatever reads them again reads it again.
    */
   children: (project: string, id: string) => ["cards", project, { parent: id, with_cancelled: true }] as const,
+  /**
+   * The project's tasks counted per flow and column (docs/features/department-overview.md
+   * "Acceptance criteria", DO10): under the project's card lists, so a `card.*` event, a write's
+   * settle and a gap read it again with them.
+   */
+  cardCounts: (project: string) => ["cards", project, "counts"] as const,
   /** One card, its history with it. */
   card: (project: string, id: string) => ["card", project, id] as const,
   /** Marks and rollups, joined per read; `ref` null: the whole project (`docs/features/card-trace.md`); a lane's rows or the lanes alone (`docs/features/trace-views.md` "Timeline"). */
@@ -489,7 +495,10 @@ const CARD_EVENT = "card.";
  * aborted (docs/features/delivery-analytics.md "Acceptance criteria", DA-12). A direction's
  * catalog, whatever its kinds, is read again on a `card.*` event and every `proposal.*` event but a
  * stage, an apply and a gap as a read of the spec, a read in flight aborted
- * (docs/features/direction-catalog.md "Acceptance criteria", DC-10). No
+ * (docs/features/direction-catalog.md "Acceptance criteria", DC-10). The task counts, under the card
+ * lists, are read again with them, and on every `proposal.*` event but a stage and every `task.*`
+ * event too, a read in flight aborted (docs/features/department-overview.md "Acceptance criteria",
+ * DO10: a count of open items and of agent tasks in review). No
  * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads, the round sheets and the cards of the project again. Only the reads on screen are fetched, once each
@@ -584,6 +593,13 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
       void queryClient.invalidateQueries({ queryKey: flowsOf(project) });
       void queryClient.invalidateQueries({ queryKey: cardListsOf(project) });
     };
+    // The task counts serve each flow's open items and the agent tasks its open tasks link whose plan
+    // waits for review: a proposal event but a stage, and a task event, read them again, a read in
+    // flight aborted; a card event, a write and a gap read them with the card lists, which hold them
+    // (docs/features/department-overview.md "Acceptance criteria", DO10).
+    const readCountsAgain = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cardCounts(project), exact: true });
+    };
     const unsubscribe = client.subscribe(
       project,
       (event) => {
@@ -615,6 +631,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
           // A card reads each task it links now: the card on screen is read again, whichever task
           // this is (no read names which cards link it); the list shows no task and stays.
           void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+          readCountsAgain();
           return;
         }
         if (!event.type.startsWith(PROPOSAL_EVENT)) {
@@ -646,6 +663,9 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         if (HEALTH_EVENTS.has(event.type)) {
           readHealthAgain();
           readMarksAgain();
+        } else if (event.type !== APPLIED) {
+          // An apply and a decision read the card lists above, the counts among them: once each.
+          readCountsAgain();
         }
       },
       () => {
@@ -1249,6 +1269,18 @@ export function useCards(project: string, options: BoardCardsOptions = {}) {
 
 /** The card list's read as the Board shares it. */
 export type CardsQuery = ReturnType<typeof useCards>;
+
+/**
+ * The project's tasks counted per flow and column, uncut (docs/features/department-overview.md
+ * "Acceptance criteria", DO10): `spec card counts --json`, its query's AbortSignal taken. Read while
+ * the Overview shows; read again with the card lists (a `card.*` event, a write's settle, a gap), on
+ * a `proposal.*` event but a stage and on a `task.*` event (useLiveQueue), a read in flight aborted;
+ * never on window focus. The counts are the daemon's; the Overview folds them, never recounts.
+ */
+export function useCardCounts(project: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.cardCounts(project), queryFn: ({ signal }) => client.getCardCounts(project, signal) });
+}
 
 /**
  * A work item's children, cancelled ones too (docs/features/handoff-progress.md

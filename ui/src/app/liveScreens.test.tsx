@@ -26,7 +26,7 @@ import { renderApp } from "../test/render";
 // AC-13 of docs/features/ui-live.md: Health and Graph over HttpClient, the daemon a stubbed
 // `fetch`. Each shows the daemon's answer as data (every check verdict a 200 report, the graph's
 // 404 the exit-1 document) or its refusal in its own words with Retry; never "Not built yet".
-// AC-11 of docs/features/ui-live-tasks.md: Tasks, a task, Home's task panel and the palette's
+// AC-11 of docs/features/ui-live-tasks.md: Tasks, a task and the palette's
 // tasks the same way, from `/tasks` and `/tasks/:id`; AC-12: the Inbox card's Task fact from the
 // served review document. UI-6 of docs/features/roadmap-screen.md: the Roadmap from `/roadmap`, its
 // refusals in the daemon's words with Retry and the fixed line.
@@ -347,16 +347,19 @@ describe("Tasks over the daemon (AC-11 of ui-live-tasks)", () => {
     expect(screen.queryByText(NOT_BUILT)).toBeNull();
   });
 
-  it("Home's task panel lists what waits for you from `/tasks`", async () => {
+  // The Overview reads no `/tasks` since docs/features/department-overview.md (DO3): the daemon counts
+  // the agent tasks awaiting review in `/cards/counts`. A daemon older than the route answers it 404,
+  // and the Overview says so in its words with Retry (the spec's "Rollout").
+  it("Home reads no `/tasks`; a daemon without `/cards/counts` is refused in its own words, with Retry", async () => {
     const fetchStub = taskDaemon();
     renderApp(new HttpClient(), "#/harbor-sim");
-    const tasks = await screen.findByRole("region", { name: "Agent tasks" });
-    await waitFor(() => {
-      expect(tasks.getAttribute("aria-busy")).toBe("false");
-    });
-    const rows = Array.from(tasks.querySelectorAll(".home-block-waiting .home-row"), (row) => row.querySelector("a")?.getAttribute("href"));
-    expect(rows).toEqual(["#/harbor-sim/tasks/T-0107", "#/harbor-sim/tasks/T-0108"]);
-    expect(taskReads(fetchStub)).toEqual(["/api/projects/harbor-sim/tasks"]);
+    await screen.findByRole("heading", { level: 1, name: "Overview" });
+    const title = await screen.findByText("The task counts could not be read");
+    const panel = title.closest<HTMLElement>(".error-panel");
+    expect(within(panel as HTMLElement).getByRole("alert").textContent).toBe("The task counts could not be readno route /api/projects/harbor-sim/cards/counts");
+    expect(within(panel as HTMLElement).getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(taskReads(fetchStub)).toEqual([]);
+    expect(urlsOf(fetchStub).filter((url) => url.includes("/cards"))).toEqual(["/api/projects/harbor-sim/cards/counts"]);
     expect(screen.queryByText(NOT_BUILT)).toBeNull();
   });
 

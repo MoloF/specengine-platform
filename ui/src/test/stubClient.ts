@@ -24,6 +24,7 @@ import type {
   CardClearBody,
   CardClearGroupBody,
   CardClearGroupWrite,
+  CardCounts,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -66,6 +67,7 @@ import type {
 } from "../api/types";
 import {
   aBundle,
+  aCardCounts,
   aCardList,
   aCheckReport,
   aCardWrite,
@@ -243,6 +245,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     }),
     // The cards (docs/features/board-ui.md "Routes"): none; each write answers its card's document, a test overriding what it stores.
     getCards: vi.fn<(project: string, options?: CardsOptions, signal?: AbortSignal) => Promise<CardList>>(() => Promise.resolve(aCardList([]))),
+    // The task counts (docs/features/department-overview.md "Acceptance criteria", DO10): no flow, agent tasks counted; a test overriding what it answers.
+    getCardCounts: vi.fn<(project: string, signal?: AbortSignal) => Promise<CardCounts>>(() => Promise.resolve(aCardCounts())),
     getCard: vi.fn<(project: string, id: string, signal?: AbortSignal) => Promise<Card | CardNotFound>>((_project, id) =>
       Promise.resolve({ id, reason: `no card ${id}` }),
     ),

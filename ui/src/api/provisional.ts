@@ -2230,6 +2230,64 @@ export interface CardList {
   omitted: number | null;
 }
 
+// A project's tasks counted, never listed (RM-0086): `spec card counts --json` as the daemon's
+// browser view sends it, uncut, every key present, absent null. The daemon counts per flow and
+// column and knows no department and no category; the Overview folds them (`src/overview/
+// department.ts`). No count holds an age: the daemon reads no clock, and the page computes ages
+// from the stored times against the viewer's day.
+
+/** Whether a counts read counted agent tasks: `counted` on a local daemon, `local_only` on a hub, which reads none. Source: `docs/features/department-overview.md` "Acceptance criteria", DO10. */
+export type KnownAgentTasks = "counted" | "local_only";
+
+/**
+ * `spec card counts --json`, the answer of `GET .../cards/counts`: `flows` byte-equal to the card
+ * list's; `columns` one row per flow and column, the configured flows in config order with every
+ * configured column, zeros too, then each flow's stranded columns by name, then the flows no
+ * `[card]` lists; `by_flow` one row per flow in that order, zeros too; `agent_tasks` another word
+ * kept and shown raw; `notes` the daemon's lines verbatim; `omitted` null uncut, as the daemon
+ * always serves it. Source: `docs/features/department-overview.md` "Acceptance criteria", DO10.
+ */
+export interface CardCounts {
+  flows: CardFlow[];
+  columns: CardColumnCount[];
+  by_flow: CardFlowCount[];
+  agent_tasks: KnownAgentTasks | Unlisted;
+  notes: string[];
+  truncated: boolean;
+  omitted: number | null;
+}
+
+/**
+ * One column of one flow: a task counts in exactly one of its first three counts, a cancelled one
+ * as cancelled, else an accepted one as accepted, else as open; `open_subtasks` the open ones of
+ * them with a parent. A column
+ * the flow no longer lists carries no mark: the flow's columns tell it.
+ * Source: `docs/features/department-overview.md` "Acceptance criteria", DO10.
+ */
+export interface CardColumnCount {
+  flow: string;
+  column: string;
+  open: number;
+  accepted: number;
+  cancelled: number;
+  open_subtasks: number;
+}
+
+/**
+ * One flow: `open_items` the open questions, discrepancies and decisions on its tasks, whatever
+ * their state, `oldest_open_item` the least `created_at` of them, null with none; `ready_parents`
+ * its open parents with a child and none open; `review_agent_tasks` the distinct `T-` IDs its open
+ * tasks link whose plan waits for review, by number, null when `agent_tasks` is `local_only`.
+ * Source: `docs/features/department-overview.md` "Acceptance criteria", DO10.
+ */
+export interface CardFlowCount {
+  flow: string;
+  open_items: number;
+  oldest_open_item: string | null;
+  ready_parents: number;
+  review_agent_tasks: string[] | null;
+}
+
 /** One entry of `allowed`, per read: moves only, `by` empty: anyone. Source: `docs/canon/cards.md` "Documents and events". */
 export interface CardAllowed {
   to: string;

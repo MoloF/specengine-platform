@@ -4,7 +4,7 @@ import { useNodeBindings } from "../api/queries";
 import type { ShownBindings, ShownNode, TestedRow } from "../api/types";
 import { CodeRowList, oneLine } from "../health/codeRows";
 import { TestedLine } from "../health/DriftPart";
-import { Notes } from "../overview/parts";
+import { Notes } from "../ui/served";
 import { useAnnounce } from "../ui/announcer";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";

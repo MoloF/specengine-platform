@@ -1,39 +1,92 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import { App } from "../app/App";
-import type { Inbox, Proposal, TaskList } from "../api/types";
-import { aProposal, aTaskEntry } from "../test/builders";
-import { callsOf, homeClient } from "../test/homeStub";
+import type { CardCounts, QueueEvent, WorkspaceDocument } from "../api/types";
+import { aColumnCount, aFlowCount, aFlowGap, aFlowView, aModule, aProposal, aWorkspaces, tenGapRows } from "../test/builders";
+import { PINNED_WORKSPACES, pinnedCountsJson, pinnedHubCountsJson, pinnedWorkspace } from "../test/countsStub";
+import { callsOf } from "../test/homeStub";
 import { renderApp } from "../test/render";
+import { argsOf, stubClient, type StubClient } from "../test/stubClient";
 import { SOME_TASKS } from "../test/taskStub";
-import { argsOf } from "../test/stubClient";
 
-// docs/features/ui-home.md on a stub client: AC-01 (the route, `#/`), AC-02 (what the home reads),
-// AC-03 (the Tasks region), AC-04 (the Inbox region's counts), AC-05 (only the daemon's keys),
-// AC-06 (states per region), AC-07 (text as data, times as stored), AC-08 (nav, switcher, keys).
+// docs/features/department-overview.md "Acceptance criteria" on a stub client: what the Overview
+// reads and never reads (DO3), the hub's agent tasks (DO4), ages against the viewer's day with no
+// read (DO5), the blocks by `sections` and `flows` alone (DO6), the Overview's states and live reads
+// (DO10, DO12); with docs/features/ui-home.md's route (AC-01) and its nav and keys (AC-08), which
+// still hold.
 
 /** Markup an author pasted; shown as text, never parsed (escaped so no source line spells a dialog call). */
 const HOSTILE = "<img src=x onerror=\u0061lert(1)>";
 
-const QUEUE: Proposal[] = [
-  aProposal({ id: "PR-1", severity: "low", kind: "update", status: "open", summary: "Low and old", created_at: "2026-10-01T08:00:00Z" }),
-  aProposal({ id: "PR-2", severity: "high", kind: "question", status: "deferred", summary: "High", created_at: "2026-10-03T09:30:00Z" }),
-  aProposal({ id: "PR-3", severity: "normal", kind: "update", status: "open", summary: null, rationale: "First line\nsecond", created_at: "2026-10-02T10:00:00Z" }),
-];
-
-function region(name: "Agent tasks" | "Inbox"): HTMLElement {
-  return screen.getByRole("region", { name });
+/** The scenario's departments, `words` rooted at DOC-1 by its module `chapters`. */
+function scenarioWorkspaces(): WorkspaceDocument {
+  return aWorkspaces(
+    PINNED_WORKSPACES.map((workspace) => (workspace.name === "words" ? { ...workspace, module: "chapters" } : workspace)),
+    [aModule({ name: "chapters", root: "DOC-1" })],
+  );
 }
 
-async function openHome(client = homeClient(SOME_TASKS, QUEUE), hash = "#/alpha") {
+/** A stub serving the spec's scenario, `chosen` the viewer's department; the Flow read's gaps all measured at 0. */
+function homeClient(chosen: string | null = "words", counts: CardCounts = pinnedCountsJson()): StubClient {
+  const client = stubClient();
+  client.getWorkspaces.mockResolvedValue(scenarioWorkspaces());
+  client.getCardCounts.mockResolvedValue(counts);
+  if (chosen !== null) {
+    window.localStorage.setItem("specengine.workspace.alpha", chosen);
+  }
+  return client;
+}
+
+function overview(): HTMLElement {
+  const found = document.querySelector<HTMLElement>(".department-overview");
+  if (found === null) {
+    throw new Error("no Overview blocks");
+  }
+  return found;
+}
+
+/** The Overview of `#/alpha`, its counts and its Gaps read settled. */
+async function openHome(client: StubClient = homeClient(), hash = "#/alpha") {
   renderApp(client, hash);
   await screen.findByRole("heading", { level: 1, name: "Overview" });
   await waitFor(() => {
-    expect(region("Agent tasks").getAttribute("aria-busy")).toBe("false");
-    expect(region("Inbox").getAttribute("aria-busy")).toBe("false");
+    expect(overview().getAttribute("aria-busy")).toBe("false");
+    expect(document.querySelectorAll('.department-block[aria-busy="true"]')).toHaveLength(0);
   });
   return client;
+}
+
+/** The blocks' headings, in order. */
+function blocks(): string[] {
+  return within(overview())
+    .getAllByRole("heading", { level: 2 })
+    .map((heading) => heading.textContent);
+}
+
+/** A table's rows, each its header and cells' text. */
+function rowsOf(name: string): string[][] {
+  const table = screen.getByRole("table", { name });
+  return Array.from(table.querySelectorAll("tr"), (row) => Array.from(row.children, (cell) => cell.textContent));
+}
+
+/** The Waiting block's rows, each its label and its value's text. */
+function waiting(): [string, string][] {
+  const list = screen.getByRole("region", { name: "Waiting on this department" }).querySelector(".property-rows");
+  return Array.from(list?.querySelectorAll(".property-row") ?? [], (row) => [row.querySelector("dt")?.textContent ?? "", row.querySelector("dd")?.textContent ?? ""]);
+}
+
+/** A stub whose live tail the test drives: the returned function emits one event. */
+function live(client: StubClient): (event: QueueEvent) => void {
+  let emit: (event: QueueEvent) => void = () => undefined;
+  client.subscribe = (_project, onEvent) => {
+    emit = onEvent;
+    return () => undefined;
+  };
+  return (event) => {
+    act(() => {
+      emit(event);
+    });
+  };
 }
 
 /** Runs the tasks jsdom queued: a hashchange, a late answer. */
@@ -41,11 +94,6 @@ async function settle() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function tally(element: HTMLElement, heading: string): string[] {
-  const block = within(element).getByRole("heading", { level: 3, name: heading }).parentElement;
-  return Array.from(block?.querySelectorAll(".home-tally > li") ?? [], (item) => item.textContent);
 }
 
 function hold<T>() {
@@ -56,10 +104,11 @@ function hold<T>() {
   return { promise, release };
 }
 
-describe("the home route (AC-01)", () => {
+describe("the home route (AC-01 of ui-home)", () => {
   it("lands #/ on the first project's home without a history entry, focus at the top", async () => {
     const before = window.history.length;
-    renderApp(homeClient(SOME_TASKS, QUEUE), "#/");
+    // The scenario's first department, words, lands on the Overview.
+    renderApp(homeClient(null), "#/");
     expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
     expect(window.location.hash).toBe("#/alpha");
     expect(window.history.length).toBe(before);
@@ -73,269 +122,352 @@ describe("the home route (AC-01)", () => {
   });
 
   it("says there is no project gamma for #/gamma", async () => {
-    renderApp(homeClient([]), "#/gamma");
+    renderApp(homeClient(), "#/gamma");
     expect(await screen.findByRole("heading", { level: 1, name: "Not found" })).toBeTruthy();
     expect(screen.getByText("There is no project gamma.")).toBeTruthy();
   });
 });
 
-describe("what the home reads (AC-02)", () => {
-  it("reads the projects, the inbox and the tasks once each, nothing else but the shell's identity", async () => {
-    const client = await openHome();
+describe("what the Overview reads (DO3)", () => {
+  it("with the implicit department: the counts and Flow's top read once each, never the inbox, the agent tasks or health", async () => {
+    const client = await openHome(stubClient());
     await settle();
     // The shell's one identity read: a local page's `{login: null}`, so no sync read follows (docs/features/hub-git.md "Status and the screen").
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 1, getTasks: 1 });
-    expect(argsOf(client.getInbox)).toEqual([["alpha"]]);
-    expect(argsOf(client.getTasks)).toEqual([["alpha"]]);
-  });
-});
-
-describe("the Tasks region (AC-03)", () => {
-  it("lists what waits for you, the other open groups but Closed, the notes verbatim", async () => {
-    const note = "T-0010: unreadable row (bad JSON in criteria); skipped";
-    await openHome(homeClient(SOME_TASKS, QUEUE, { taskNotes: [note, "  spaced  note "] }));
-    const tasks = region("Agent tasks");
-    expect(within(tasks).getByRole("heading", { level: 3, name: "Waiting for you: 2" })).toBeTruthy();
-    expect(within(tasks).getByRole("heading", { level: 3, name: "Waiting for you: 2" }).parentElement?.className).toBe(
-      "home-block home-block-waiting",
-    );
-    const rows = Array.from(tasks.querySelectorAll(".home-block-waiting .home-row"));
-    expect(rows.map((row) => row.querySelector("a")?.textContent)).toEqual(["T-0002: Plan to read", "T-0003: Changed under it"]);
-    expect(rows.map((row) => row.querySelector("a")?.getAttribute("href"))).toEqual(["#/alpha/tasks/T-0002", "#/alpha/tasks/T-0003"]);
-    expect(rows.map((row) => Array.from(row.querySelectorAll(".badge"), (badge) => badge.textContent))).toEqual([
-      ["State: Plan review"],
-      ["State: Ready", "Spec changed"],
-    ]);
-    expect(tally(tasks, "Other open agent tasks")).toEqual(["Draft: 1", "Changes requested: 1", "Ready: 1", "In progress: 1", "Other states: 1"]);
-    expect(tasks.textContent).not.toMatch(/Closed/);
-    const notes = within(tasks).getByRole("list", { name: "Notes from the daemon on the agent task list" });
-    expect(Array.from(notes.querySelectorAll("li"), (item) => item.textContent)).toEqual([note, "  spaced  note "]);
-    expect(within(tasks).getByRole("link", { name: "Open Agent tasks" }).getAttribute("href")).toBe("#/alpha/tasks");
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 1, getFlow: 1 });
+    expect(argsOf(client.getCardCounts)).toEqual([["alpha"]]);
+    expect(argsOf(client.getFlow)).toEqual([["alpha", { depth: 0, in_flow: true, trace: true }]]);
   });
 
-  it("shows the first five of seven waiting and says so", async () => {
-    const waiting = Array.from({ length: 7 }, (_, index) => aTaskEntry({ id: `T-${String(index + 1).padStart(4, "0")}`, status: "review" }));
-    await openHome(homeClient(waiting));
-    const tasks = region("Agent tasks");
-    expect(tasks.querySelectorAll(".home-block-waiting .home-row")).toHaveLength(5);
-    expect(within(tasks).getByText("5 of 7 shown")).toBeTruthy();
-    expect(within(tasks).getByText("No other open agent task.")).toBeTruthy();
+  it("print, whose sections list Health and not Flow: no health read and no flow read (M: a health read on the Overview; the flow read made whatever the sections)", async () => {
+    const client = await openHome(homeClient("print"));
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(0);
+    expect(client.getFlow).toHaveBeenCalledTimes(0);
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 1 });
   });
 
-  it("says nothing waits when no plan is in review and no approved spec changed", async () => {
-    await openHome(homeClient([aTaskEntry({ id: "T-1", status: "ready", stale: false })]));
-    expect(within(region("Agent tasks")).getByText("Nothing waits for you: no plan to review, no approved spec changed.")).toBeTruthy();
-    expect(tally(region("Agent tasks"), "Other open agent tasks")).toEqual(["Ready: 1"]);
-    // The block is emphasised only while something waits.
-    const block = within(region("Agent tasks")).getByRole("heading", { level: 3, name: "Waiting for you: 0" }).parentElement;
-    expect(block?.className).toBe("home-block");
-    expect(region("Agent tasks").querySelector(".home-block-waiting")).toBeNull();
+  it("words, whose sections list Flow: one flow read, at its rooted module's root", async () => {
+    const client = await openHome(homeClient("words"));
+    await settle();
+    expect(argsOf(client.getFlow)).toEqual([["alpha", { root: "DOC-1", depth: 1, in_flow: true, trace: true }]]);
+    expect(client.getHealth).toHaveBeenCalledTimes(0);
   });
 
-  it("marks Spec changed only where stale is true, not on null or false", async () => {
-    await openHome(
-      homeClient([
-        aTaskEntry({ id: "T-1", status: "review", stale: null }),
-        aTaskEntry({ id: "T-2", status: "review", stale: false }),
-        aTaskEntry({ id: "T-3", status: "ready", stale: true }),
-      ]),
-    );
-    const rows = Array.from(region("Agent tasks").querySelectorAll(".home-row"));
-    expect(rows.map((row) => row.textContent.includes("Spec changed"))).toEqual([false, false, true]);
-  });
-});
-
-describe("the Inbox region (AC-04)", () => {
-  it("counts the queue by status and by raw kind, each summing to the total, and lists the first five in queue order", async () => {
-    const queue = [
-      ...QUEUE,
-      aProposal({ id: "PR-4", kind: "widget", status: "escalated", severity: "normal", created_at: "2026-10-04T00:00:00Z" }),
-      aProposal({ id: "PR-5", kind: "update", status: "approved", severity: null }),
-      aProposal({ id: "PR-6", kind: "question", status: "open", severity: "high", created_at: "2026-10-05T00:00:00Z" }),
-    ];
-    await openHome(homeClient([], queue, { inboxNotes: ["one note"] }));
-    const inbox = region("Inbox");
-    expect(inbox.querySelector(".home-total")?.textContent).toBe("6 proposals in the queue");
-    expect(tally(inbox, "By status")).toEqual(["Open: 3", "Approved: 1", "Deferred: 1", "escalated: 1"]);
-    const statuses = Array.from(within(inbox).getByRole("heading", { name: "By status" }).parentElement?.querySelectorAll(".badge") ?? []);
-    expect(statuses.map((badge) => [badge.getAttribute("data-tone"), badge.querySelector("svg") !== null])).toEqual([
-      ["proposal-open", true],
-      ["proposal-approved", true],
-      ["proposal-deferred", true],
-      ["proposal-unknown", true],
-    ]);
-    expect(tally(inbox, "By kind")).toEqual(["update: 3", "question: 2", "widget: 1"]);
-    const first = Array.from(inbox.querySelectorAll(".home-row a"), (link) => link.textContent);
-    expect(first).toEqual(["PR-2: High", "PR-6: Summary of PR-6", "PR-3: First line", "PR-4: Summary of PR-4", "PR-1: Low and old"]);
-    expect(within(inbox).getByRole("link", { name: "PR-2: High" }).getAttribute("href")).toBe("#/alpha/inbox/PR-2");
-    expect(within(inbox).getByRole("list", { name: "Notes from the daemon on the queue" }).textContent).toBe("one note");
-    expect(within(inbox).getByRole("link", { name: "Open Inbox" }).getAttribute("href")).toBe("#/alpha/inbox");
+  it("press, its module none: the top read", async () => {
+    const client = await openHome(homeClient("press"));
+    expect(argsOf(client.getFlow)).toEqual([["alpha", { depth: 0, in_flow: true, trace: true }]]);
   });
 
-  it("says 1 proposal for one", async () => {
-    await openHome(homeClient([], [aProposal({ id: "PR-1" })]));
-    expect(region("Inbox").querySelector(".home-total")?.textContent).toBe("1 proposal in the queue");
-  });
-});
-
-describe("only the daemon's InboxEntry keys (AC-05)", () => {
-  /** A review document keeping only what its inbox entry carries; every other key as absent. */
-  function bare(proposal: Proposal): Proposal {
-    return aProposal({
-      id: proposal.id ?? "",
-      kind: proposal.kind,
-      status: proposal.status,
-      target_id: proposal.target_id,
-      target_ids: proposal.target_ids,
-      branch: proposal.branch,
-      created_at: proposal.created_at,
-      rationale: proposal.rationale,
-      severity: proposal.severity,
-      summary: proposal.summary,
-      record_id: proposal.record_id,
-    });
-  }
-
-  /** The region's markup without the ids React generates per render. */
-  function markup(): string {
-    return new XMLSerializer().serializeToString(region("Inbox")).replace(/\s(id|aria-labelledby)="[^"]*"/g, "");
-  }
-
-  it("renders the region from the entry's keys exactly as from full review documents", async () => {
-    const evidence = [{ file: "src/a.rs", qpath: null, lines: "1-2", observed: "T-0009 seen", documented: "doc" }];
-    const full = [
-      aProposal({ id: "PR-7", evidence, summary: null, rationale: null, target_id: "R-1", working_answer: "T-0001 first" }),
-      ...QUEUE.map((proposal) => ({ ...proposal, working_answer: "T-0002 first", evidence })),
-    ];
-    await openHome(homeClient([], full));
-    const fromFull = markup();
-    cleanup();
-    await openHome(homeClient([], full.map(bare)));
-    expect(markup()).toBe(fromFull);
-    const fromEntries = region("Inbox");
-    expect(within(fromEntries).getByRole("link", { name: "PR-7: update on R-1" })).toBeTruthy();
-    expect(fromEntries.textContent).not.toMatch(/T-000/);
-  });
-});
-
-describe("each region's states (AC-06)", () => {
-  it("shows a skeleton and aria-busy in both while their reads are on the way", async () => {
-    const client = homeClient([]);
-    const tasks = hold<TaskList>();
-    const inbox = hold<Inbox>();
-    client.getTasks.mockReturnValue(tasks.promise);
-    client.getInbox.mockReturnValue(inbox.promise);
+  it("reads no flow and shows no block while the departments are out, then the chosen one's", async () => {
+    const client = homeClient("print");
+    const read = hold<WorkspaceDocument>();
+    client.getWorkspaces.mockReturnValue(read.promise);
     renderApp(client, "#/alpha");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
     await waitFor(() => {
-      expect(client.getInbox).toHaveBeenCalledTimes(1);
+      expect(within(overview()).getByRole("status", { name: "Loading the numbers of alpha" })).toBeTruthy();
     });
-    for (const name of ["Agent tasks", "Inbox"] as const) {
-      expect(region(name).getAttribute("aria-busy")).toBe("true");
-      expect(within(region(name)).getByRole("status").getAttribute("aria-busy")).toBe("true");
-    }
+    await settle();
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
+    expect(client.getFlow).toHaveBeenCalledTimes(0);
     await act(async () => {
-      tasks.release({ tasks: [], notes: [] });
-      inbox.release({ proposals: [], notes: [] });
+      read.release(scenarioWorkspaces());
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(region("Agent tasks").getAttribute("aria-busy")).toBe("false");
+      expect(blocks()).toEqual(["Work", "Waiting on this department"]);
     });
+    expect(client.getFlow).toHaveBeenCalledTimes(0);
   });
 
-  it("says what an empty project means and the next step in each region", async () => {
-    await openHome(homeClient([], []));
-    const tasks = region("Agent tasks");
-    expect(within(tasks).getByText("No agent tasks yet.")).toBeTruthy();
-    expect(within(tasks).getByText("spec task new --nodes REF...").tagName).toBe("CODE");
-    const inbox = region("Inbox");
-    expect(within(inbox).getByText("The queue is clear: no proposal waits for your decision.")).toBeTruthy();
-    const next = within(inbox).getByRole("link", { name: "approve the agent tasks that are ready for development" });
-    expect(next.closest("p")?.textContent).toBe("Next: approve the agent tasks that are ready for development.");
-    expect(next.getAttribute("href")).toBe("#/alpha/tasks");
+  it("with the departments' read failed: every flow, Gaps shown, no side table", async () => {
+    const client = homeClient(null);
+    client.getWorkspaces.mockRejectedValue(new ClientError({ status: 503, message: "workspaces: bad config" }));
+    await openHome(client);
+    expect(blocks()).toEqual(["Work", "Waiting on this department", "Gaps in the flow"]);
+    expect(rowsOf("Tasks by status, per flow").map((row) => row[0])).toEqual(["Flow", "Copy", "Plates", "Sound", "All flows"]);
+  });
+});
+
+describe("the blocks by config alone (DO6, DO12)", () => {
+  it("words: Work, Waiting and Gaps, no side table; its name under the heading", async () => {
+    await openHome(homeClient("words"));
+    expect(blocks()).toEqual(["Work", "Waiting on this department", "Gaps in the flow"]);
+    expect(screen.queryByRole("table", { name: "Tasks by status, per department" })).toBeNull();
+    expect(document.querySelectorAll(".home-view .view-about")[1]?.textContent).toBe("Department: Words");
   });
 
-  it("fails the Tasks region alone in the daemon's words; its Retry reads the tasks again, never the inbox", async () => {
-    const client = homeClient(SOME_TASKS, QUEUE);
-    client.getTasks.mockRejectedValueOnce(new ClientError({ status: 503, message: "x" }));
+  it("print: Work and Waiting alone (M: the side table shown for a department with flows set)", async () => {
+    await openHome(homeClient("print"));
+    expect(blocks()).toEqual(["Work", "Waiting on this department"]);
+  });
+
+  it("press: every block, the side table one row per department in served order, then All flows, each flow once", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 10, 12, 12, 0) });
+    await openHome(homeClient("press"));
+    expect(blocks()).toEqual(["Work", "Waiting on this department", "Gaps in the flow", "Departments side by side"]);
+    expect(rowsOf("Tasks by status, per department")).toEqual([
+      ["Department", "To do", "In progress", "Waiting for review", "Returned", "Done", "Open questions", "Oldest question", "Ready to accept"],
+      ["Words", "0", "1", "1", "1", "0", "3", "oldest 10 days", "1"],
+      ["Print", "1", "1", "1", "1", "1", "3", "oldest 10 days", "1"],
+      ["Press room", "2", "1", "1", "1", "1", "3", "oldest 10 days", "1"],
+      ["All flows", "2", "1", "1", "1", "1", "3", "oldest 10 days", "1"],
+    ]);
+    const table = screen.getByRole("table", { name: "Tasks by status, per department" });
+    expect(Array.from(table.querySelectorAll("tbody th bdi"), (title) => title.textContent)).toEqual(["Words", "Print", "Press room"]);
+  });
+
+  it("one department alone: no side table, and no name under the heading", async () => {
+    const client = homeClient(null);
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([pinnedWorkspace("press")]));
+    await openHome(client);
+    expect(blocks()).toEqual(["Work", "Waiting on this department", "Gaps in the flow"]);
+    expect(document.querySelectorAll(".home-view .view-about")).toHaveLength(1);
+  });
+});
+
+describe("Work and what waits (DO2, DO12)", () => {
+  it("print's Work: a row per flow by its served title, each head with its category's icon, All flows, then not in the flow and cancelled", async () => {
+    await openHome(homeClient("print"));
+    expect(rowsOf("Tasks by status, per flow")).toEqual([
+      ["Flow", "To do", "In progress", "Waiting for review", "Returned", "Done"],
+      ["Copy", "0", "1", "1", "1", "0"],
+      ["Plates", "1", "0", "0", "0", "1"],
+      ["All flows", "1", "1", "1", "1", "1"],
+    ]);
+    const heads = screen.getByRole("table", { name: "Tasks by status, per flow" }).querySelectorAll("thead th");
+    expect(Array.from(heads, (head) => head.querySelector("svg") !== null)).toEqual([false, true, true, true, true, true]);
+    expect(Array.from(document.querySelectorAll(".department-aside li"), (item) => item.textContent)).toEqual(["1 not in the flow", "1 cancelled"]);
+  });
+
+  it("words' Work: one flow, no All flows", async () => {
+    await openHome(homeClient("words"));
+    expect(rowsOf("Tasks by status, per flow")).toEqual([
+      ["Flow", "To do", "In progress", "Waiting for review", "Returned", "Done"],
+      ["Copy", "0", "1", "1", "1", "0"],
+    ]);
+  });
+
+  it("words' Waiting: each row a count and the page that lists it; Ready to accept in the owner's word; the oldest question's age", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 10, 12, 12, 0) });
+    await openHome(homeClient("words"));
+    expect(waiting()).toEqual([
+      ["Waiting for review", "1Open Board"],
+      ["Returned subtasks", "1Open Board"],
+      ["Ready to accept", "1Open Board"],
+      ["Open questions", "3oldest 10 daysOpen Inbox"],
+      ["Agent tasks awaiting you", "1Open Agent tasks"],
+    ]);
+    const region = screen.getByRole("region", { name: "Waiting on this department" });
+    expect(within(region).getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Open Board", "#/alpha/board"],
+      ["Open Board", "#/alpha/board"],
+      ["Open Board", "#/alpha/board"],
+      ["Open Inbox", "#/alpha/inbox"],
+      ["Open Agent tasks", "#/alpha/tasks"],
+    ]);
+    // Every count is a pointer: no control on the Overview but its links.
+    expect(within(overview()).queryAllByRole("button")).toEqual([]);
+  });
+
+  it("names a flow no [card] lists by its name raw, tagged English, under a department whose flows is null", async () => {
+    const counts = pinnedCountsJson();
+    counts.columns.push(aColumnCount({ flow: "ink", column: "mixing", open: 2 }));
+    counts.by_flow.push(aFlowCount({ flow: "ink" }));
+    await openHome(homeClient("press", counts));
+    const ink = screen.getByRole("table", { name: "Tasks by status, per flow" }).querySelector('tr[data-flow="ink"] th bdi');
+    expect([ink?.textContent, ink?.getAttribute("lang")]).toEqual(["ink", "en"]);
+    expect(Array.from(document.querySelectorAll(".department-aside li"), (item) => item.textContent)).toEqual(["3 not in the flow", "1 cancelled"]);
+  });
+
+  it("shows a hostile title as text", async () => {
+    const counts = pinnedCountsJson();
+    counts.flows = counts.flows.map((flow) => (flow.name === "copy" ? { ...flow, title: HOSTILE } : flow));
+    await openHome(homeClient("words", counts));
+    expect(document.querySelector(".department-overview img")).toBeNull();
+    expect(screen.getByRole("table", { name: "Tasks by status, per flow" }).textContent).toContain(HOSTILE);
+  });
+});
+
+describe("agent tasks on a hub (DO4)", () => {
+  it("says local only in words, no digit in its row (M: null shown as 0)", async () => {
+    await openHome(homeClient("words", pinnedHubCountsJson()));
+    const row = waiting().find(([label]) => label === "Agent tasks awaiting you");
+    expect(row).toEqual(["Agent tasks awaiting you", "Local only: agent tasks live on each terminalOpen Agent tasks"]);
+    expect(row?.[1]).not.toMatch(/\d/);
+  });
+
+  it("shows a word the page does not know raw, tagged English", async () => {
+    await openHome(homeClient("words", { ...pinnedCountsJson(), agent_tasks: "sampled" }));
+    expect(screen.getByText("sampled").getAttribute("lang")).toBe("en");
+  });
+});
+
+describe("no clock (DO5)", () => {
+  it("turns oldest 10 days into oldest 12 days when the viewer's day moves from 11-12 to 11-14, with no read (M: the age from Date.now())", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"], now: new Date(2026, 10, 12, 12, 0) });
+    const client = await openHome(homeClient("words"));
+    expect(screen.getByText("oldest 10 days")).toBeTruthy();
+    vi.setSystemTime(new Date(2026, 10, 14, 12, 0));
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(screen.getByText("oldest 12 days")).toBeTruthy();
+    expect(client.getCardCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it("says oldest today on the day the question was asked", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 10, 2, 18, 0) });
+    await openHome(homeClient("words"));
+    expect(screen.getByText("oldest today")).toBeTruthy();
+  });
+});
+
+describe("Gaps (DO3, DO12)", () => {
+  it("lists each row that found something, in its words, then the rows not measured, then Open Flow", async () => {
+    const client = homeClient("words");
+    client.getFlow.mockResolvedValue(
+      aFlowView([], [], {
+        gaps: tenGapRows([aFlowGap("unreachable", [["DOC-2"], ["DOC-3"]]), aFlowGap("trap-cycle", [], { state: "not_configured", count: null }), aFlowGap("supply-unfed", [], { state: "cannot", count: null })]),
+      }),
+    );
+    await openHome(client);
+    const region = screen.getByRole("region", { name: "Gaps in the flow" });
+    expect(Array.from(region.querySelectorAll(".department-gap"), (row) => row.textContent)).toEqual(["2 foundSteps no path from a start reaches."]);
+    expect(within(region).getByText("2 rows not measured")).toBeTruthy();
+    expect(within(region).queryByText("No gap found.")).toBeNull();
+  });
+
+  it("says no gap found when every row is at 0, and links Flow", async () => {
+    await openHome(homeClient("words"));
+    const region = screen.getByRole("region", { name: "Gaps in the flow" });
+    expect(within(region).getByText("No gap found.")).toBeTruthy();
+    expect(within(region).queryByText(/not measured/)).toBeNull();
+    expect(within(region).getByRole("link", { name: "Open Flow" }).getAttribute("href")).toBe("#/alpha/flow");
+  });
+
+  it("fails alone with its own Retry, which reads the flow again and nothing else", async () => {
+    const client = homeClient("words");
+    client.getFlow.mockRejectedValueOnce(new ClientError({ status: 503, message: "flow: the index is locked" }));
     renderApp(client, "#/alpha");
-    const tasks = await screen.findByRole("region", { name: "Agent tasks" });
-    expect(await within(tasks).findByText("x")).toBeTruthy();
-    expect(within(tasks).getByRole("alert").textContent).toBe("The agent tasks could not be loadedx");
-    await within(region("Inbox")).findByRole("link", { name: "PR-2: High" });
-    const retry = within(tasks).getByRole("button", { name: "Retry" });
+    const region = await screen.findByRole("region", { name: "Gaps in the flow" });
+    expect(await within(region).findByText("flow: the index is locked")).toBeTruthy();
+    expect(await screen.findByRole("table", { name: "Tasks by status, per flow" })).toBeTruthy();
+    fireEvent.click(within(region).getByRole("button", { name: "Retry" }));
+    await within(region).findByText("No gap found.");
+    expect([client.getFlow.mock.calls.length, client.getCardCounts.mock.calls.length]).toEqual([2, 1]);
+  });
+});
+
+describe("the Overview's states (DO12)", () => {
+  it("shows a skeleton and aria-busy while the counts are on the way, Gaps its own", async () => {
+    const client = homeClient("words");
+    const counts = hold<CardCounts>();
+    client.getCardCounts.mockReturnValue(counts.promise);
+    renderApp(client, "#/alpha");
+    await waitFor(() => {
+      expect(overview().getAttribute("aria-busy")).toBe("true");
+    });
+    expect(within(overview()).getByRole("status", { name: "Loading the numbers of alpha" })).toBeTruthy();
+    await within(overview()).findByText("No gap found.");
+    await act(async () => {
+      counts.release(pinnedCountsJson());
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(overview().getAttribute("aria-busy")).toBe("false");
+    });
+    expect(blocks()).toEqual(["Work", "Waiting on this department", "Gaps in the flow"]);
+  });
+
+  it("with no flow and no column served: an empty state linking Agent tasks and the Inbox", async () => {
+    await openHome(homeClient("words", { ...pinnedCountsJson(), flows: [], columns: [], by_flow: [] }));
+    const title = screen.getByRole("heading", { level: 2, name: "No task flow yet" });
+    const box = title.closest(".empty-state-box");
+    expect(box?.textContent).toBe("No task flow yetTasks are counted once the project configures a flow. Meanwhile, Agent tasks and Inbox hold what waits for you.");
+    expect(Array.from(box?.querySelectorAll("a") ?? [], (link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Agent tasks", "#/alpha/tasks"],
+      ["Inbox", "#/alpha/inbox"],
+    ]);
+    expect(blocks()).toEqual(["No task flow yet", "Gaps in the flow"]);
+  });
+
+  it("fails in the daemon's words, tagged English; Retry reads the counts again and nothing else, then focus to Work", async () => {
+    const client = homeClient("print");
+    const message = "no route /api/projects/alpha/cards/counts: the routes are /api/projects and the web UI";
+    client.getCardCounts.mockRejectedValueOnce(new ClientError({ status: 404, message }));
+    renderApp(client, "#/alpha");
+    const shown = await screen.findByText(message);
+    expect(shown.getAttribute("lang")).toBe("en");
+    expect(screen.getByRole("alert").textContent).toBe(`The task counts could not be read${message}`);
+    const retry = screen.getByRole("button", { name: "Retry" });
     retry.focus();
     fireEvent.click(retry);
-    await within(tasks).findByRole("link", { name: "T-0002: Plan to read" });
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 1, getTasks: 2 });
+    await screen.findByRole("table", { name: "Tasks by status, per flow" });
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 2 });
     await waitFor(() => {
-      expect(document.activeElement).toBe(within(tasks).getByRole("heading", { level: 2, name: "Agent tasks" }));
+      expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "Work" }));
     });
   });
 
-  it("fails the Inbox region alone in the daemon's words; its Retry reads the inbox again, never the tasks", async () => {
-    const client = homeClient(SOME_TASKS, QUEUE);
-    client.getInbox.mockRejectedValueOnce(new ClientError({ status: 503, message: "y" }));
-    renderApp(client, "#/alpha");
-    const inbox = await screen.findByRole("region", { name: "Inbox" });
-    expect(await within(inbox).findByText("y")).toBeTruthy();
-    await within(region("Agent tasks")).findByRole("link", { name: "T-0002: Plan to read" });
-    fireEvent.click(within(inbox).getByRole("button", { name: "Retry" }));
-    await within(inbox).findByRole("link", { name: "PR-2: High" });
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 2, getTasks: 1 });
+  it("keeps the last numbers under the panel when a read again fails", async () => {
+    const client = homeClient("print");
+    const emit = live(client);
+    await openHome(client);
+    client.getCardCounts.mockRejectedValueOnce(new ClientError({ status: 503, message: "spec card counts: a bad [card] table" }));
+    // A task event reads the counts again (useLiveQueue).
+    emit({ seq: 1, type: "task.updated", payload: { id: "T-0001" } });
+    expect(await screen.findByText("spec card counts: a bad [card] table")).toBeTruthy();
+    expect(rowsOf("Tasks by status, per flow")[1]).toEqual(["Copy", "0", "1", "1", "1", "0"]);
+    expect(client.getCardCounts).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps a region's render failure in that region", async () => {
-    const client = homeClient(SOME_TASKS);
-    client.getInbox.mockResolvedValue({ proposals: null, notes: [] } as unknown as Inbox);
-    window.history.replaceState(null, "", "/#/alpha");
-    const caught: unknown[] = [];
-    render(<App client={client} scenario={null} />, {
-      onCaughtError: (error: unknown) => {
-        caught.push(error);
-      },
-    });
-    const inbox = await screen.findByRole("region", { name: "Inbox" });
-    expect(await within(inbox).findByText("The inbox overview could not be shown; the rest of the page still works.")).toBeTruthy();
-    expect(await within(region("Agent tasks")).findByRole("link", { name: "T-0002: Plan to read" })).toBeTruthy();
-    expect(caught.length).toBeGreaterThan(0);
-  });
-});
-
-describe("text as data (AC-07)", () => {
-  it("shows hostile titles and summaries as text, times exactly as stored, one h1, no hold wording", async () => {
-    const stamp = "2026-10-04T16:10:00Z";
-    const odd = "yesterday-ish";
-    await openHome(
-      homeClient(
-        [aTaskEntry({ id: "T-1", status: "review", title: HOSTILE, updated_at: stamp }), aTaskEntry({ id: "T-2", status: "review", updated_at: odd })],
-        [aProposal({ id: "PR-1", summary: HOSTILE, created_at: stamp })],
-      ),
-    );
-    expect(document.querySelector("img")).toBeNull();
-    expect(within(region("Agent tasks")).getByRole("link", { name: `T-1: ${HOSTILE}` })).toBeTruthy();
-    expect(within(region("Inbox")).getByRole("link", { name: `PR-1: ${HOSTILE}` })).toBeTruthy();
-    const times = Array.from(document.querySelectorAll(".home-view time"), (time) => [time.textContent, time.getAttribute("datetime")]);
-    expect(times).toEqual([
-      [stamp, stamp],
-      [odd, odd],
-      [stamp, stamp],
+  it("lists the daemon's notes verbatim, tagged English", async () => {
+    const note = "C-0009: its `tasks` does not read; its agent tasks are not counted";
+    await openHome(homeClient("words", { ...pinnedCountsJson(), notes: [note, "  spaced  note "] }));
+    const notes = screen.getByRole("list", { name: "Notes from the daemon on the counts" });
+    expect(Array.from(notes.querySelectorAll("li"), (item) => [item.textContent, item.getAttribute("lang")])).toEqual([
+      [note, "en"],
+      ["  spaced  note ", "en"],
     ]);
-    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    const view = document.querySelector(".home-view");
-    expect(view?.textContent).not.toMatch(/block/i);
-    expect(view?.textContent).not.toMatch(/\bago\b|just now/);
   });
 });
 
-describe("nav, switcher and keys (AC-08)", () => {
+describe("live reads (DO10)", () => {
+  it.each([
+    ["proposal.created", "PR-0001", 2],
+    ["proposal.applied", "PR-0001", 2],
+    ["proposal.approved", "PR-0001", 2],
+    ["proposal.deferred", "PR-0001", 2],
+    ["task.updated", "T-0001", 2],
+    ["card.moved", "C-0001", 2],
+    ["proposal.staged", "PR-0001", 1],
+    ["proposal.unstaged", "PR-0001", 1],
+  ])("on %s reads the counts %i time(s) in all", async (type, id, reads) => {
+    const client = homeClient("print");
+    const emit = live(client);
+    await openHome(client);
+    emit({ seq: 1, type, payload: { id } });
+    await settle();
+    await settle();
+    expect([type, client.getCardCounts.mock.calls.length]).toEqual([type, reads]);
+  });
+});
+
+describe("nav, switcher and keys (AC-08 of ui-home)", () => {
   function navLinks(): HTMLElement[] {
     return within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link");
   }
 
+  /** The implicit department over a queue and agent tasks: every screen has something to focus. */
+  function busyClient(): StubClient {
+    const client = stubClient([aProposal({ id: "PR-1" })]);
+    client.getTasks.mockResolvedValue({ tasks: SOME_TASKS, notes: [] });
+    return client;
+  }
+
   it("lists nine entries, Overview first to the home, current only there; Tasks off the nav (docs/features/workspaces.md WS-1)", async () => {
-    await openHome();
+    await openHome(stubClient());
     await waitFor(() => {
       expect(navLinks()).toHaveLength(9);
     });
@@ -353,7 +485,7 @@ describe("nav, switcher and keys (AC-08)", () => {
   });
 
   it("switches the home to the other project's home", async () => {
-    await openHome();
+    await openHome(stubClient());
     const select = screen.getByLabelText("Project");
     await waitFor(() => {
       expect((select as HTMLSelectElement).disabled).toBe(false);
@@ -369,7 +501,10 @@ describe("nav, switcher and keys (AC-08)", () => {
 
   it("lists the chord, ? and Esc on ? pressed on a home link, never the Inbox's keys", async () => {
     await openHome();
-    const link = within(region("Agent tasks")).getByRole("link", { name: "T-0002: Plan to read" });
+    const [link] = within(screen.getByRole("region", { name: "Waiting on this department" })).getAllByRole("link", { name: "Open Board" });
+    if (link === undefined) {
+      throw new Error("no Open Board link");
+    }
     link.focus();
     fireEvent.keyDown(link, { key: "?" });
     const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
@@ -383,7 +518,7 @@ describe("nav, switcher and keys (AC-08)", () => {
 
   it("opens nothing for ? with Ctrl, Alt or Cmd held", async () => {
     await openHome();
-    const link = within(region("Agent tasks")).getByRole("link", { name: "Open Agent tasks" });
+    const link = within(screen.getByRole("region", { name: "Gaps in the flow" })).getByRole("link", { name: "Open Flow" });
     expect(fireEvent.keyDown(link, { key: "?", ctrlKey: true })).toBe(true);
     expect(fireEvent.keyDown(link, { key: "?", altKey: true })).toBe(true);
     expect(fireEvent.keyDown(link, { key: "?", metaKey: true })).toBe(true);
@@ -392,13 +527,13 @@ describe("nav, switcher and keys (AC-08)", () => {
   });
 
   it.each([
-    ["#/alpha", "a home link", ".home-row a"],
+    ["#/alpha", "a home link", ".department-open"],
     ["#/alpha/inbox", "the queue", '[role="option"][aria-selected="true"]'],
     ["#/alpha/tasks", "the task list", '[role="option"][tabindex="0"]'],
     ["#/alpha/tree", "the tree", '[role="treeitem"][tabindex="0"]'],
     ["#/alpha/graph", "the view's heading", "main h1"],
   ])("lists the chord on %s (? on %s)", async (hash, _where, selector) => {
-    renderApp(homeClient(SOME_TASKS, QUEUE), hash);
+    renderApp(busyClient(), hash);
     await waitFor(() => {
       expect(document.querySelector(selector)).not.toBeNull();
     });

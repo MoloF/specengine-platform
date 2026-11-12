@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-11-12
 ---
 
 # The lock diff panel: "Changes since the lock" in the Bindings tab
@@ -38,7 +38,7 @@ Every daemon word goes through `health/oneLine.ts` `oneLine` (the notes, a side'
 | disclosure | "Changes since the lock" | `<h2>` `<button aria-expanded aria-controls>` |
 | about | "For each drifted binding with a lock entry, what moved in the node's text and in its code since the lock, as git's hunks against the working tree. Read when first opened; a code edit shows after Read again." | `.lock-diff-about` |
 | re-read | "Read again", "Reading" meanwhile | `aria-describedby` the disclosure |
-| notes | label "Notes from the daemon on the changes since the lock" | `overview/parts` `Notes` |
+| notes | label "Notes from the daemon on the changes since the lock" | `ui/served` `Notes` |
 | rows | the count; list label "Changes since the lock of <ID or path>, in spec verify's order" | `CodeRowList` |
 | spec side | "Node text since the lock: <path> at <commit>" | `.lock-diff-side-title`; the figure's label |
 | code side | "Code since the lock: <file>, blob <blob>" | idem |

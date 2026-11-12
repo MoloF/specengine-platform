@@ -4,7 +4,24 @@ import { ClientError } from "../api/client";
 import { LANGUAGE_KEY, languageName, startLanguage, switchLanguage } from "../i18n";
 import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
-import { aCardList, aCardRow, aProposal, aTaskEntry, aTreeNode, aTreeView, aWorkspace, aWorkspaces, IMPLICIT_SECTIONS } from "../test/builders";
+import {
+  aCardCounts,
+  aCardFlow,
+  aCardList,
+  aCardRow,
+  aColumnCount,
+  aFlowCount,
+  aFlowGap,
+  aFlowView,
+  aProposal,
+  aTaskEntry,
+  aTreeNode,
+  aTreeView,
+  aWorkspace,
+  aWorkspaces,
+  IMPLICIT_SECTIONS,
+  tenGapRows,
+} from "../test/builders";
 import { renderApp } from "../test/render";
 import { ALL_SECTIONS } from "./routes";
 import { isSectionId } from "./sections";
@@ -19,14 +36,27 @@ import { enT, ruT } from "../test/text";
 const INBOX_NOTE = "queue: 1 proposal skipped: its file is not valid TOML";
 const TASK_NOTE = "task list: T-0009 is unreadable and left out";
 const CONFIG_NOTE = "specengine.toml:3: workspace `code`: `stage` is no section: left out";
+const COUNTS_NOTE = "C-0009: its `tasks` does not read; its agent tasks are not counted";
 
-/** Two workspaces (so the select shows), a note on each read, a task waiting, a proposal open. */
+/**
+ * Two workspaces (so the select shows), a note on each read, a task waiting, a proposal open; one
+ * flow counted on the Overview, and one gap found in the flow.
+ */
 function languageClient(): StubClient {
   const client = stubClient([aProposal({ id: "PR-0001", status: "open" })], [INBOX_NOTE]);
   client.getWorkspaces.mockResolvedValue(
     aWorkspaces([aWorkspace({ name: "writers", title: "Writers" }), aWorkspace({ name: "code", title: "Code", sections: ["tasks", "board", "tree"] })], [], { notes: [CONFIG_NOTE] }),
   );
   client.getTasks.mockResolvedValue({ tasks: [aTaskEntry({ id: "T-0001", status: "review" }), aTaskEntry({ id: "T-0002", status: "paused" })], notes: [TASK_NOTE] });
+  client.getCardCounts.mockResolvedValue(
+    aCardCounts({
+      flows: [aCardFlow()],
+      columns: [aColumnCount({ flow: "work", column: "todo", open: 2 })],
+      by_flow: [aFlowCount({ flow: "work", open_items: 1, oldest_open_item: "2026-11-02T09:00:00Z", review_agent_tasks: ["T-0001"] })],
+      notes: [COUNTS_NOTE],
+    }),
+  );
+  client.getFlow.mockResolvedValue(aFlowView([], [], { gaps: tenGapRows([aFlowGap("unreachable", [["DOC-1"]])]) }));
   return client;
 }
 
@@ -55,6 +85,7 @@ function shownIn(catalog: typeof en | typeof ru) {
     lang: document.documentElement.lang,
     nav: navLabels(catalog.app.navLabel),
     regions: screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
+    named: document.querySelectorAll(".home-view .view-about")[1]?.textContent,
     heading: screen.getByRole("heading", { level: 1 }).textContent,
     workspace: screen.getAllByRole("combobox", { name: catalog.workspace.workspaceLabel }).length,
     badges: [...document.querySelectorAll(".home-view .badge-label")].map((badge) => badge.textContent),
@@ -71,18 +102,20 @@ function expectedIn(catalog: typeof en | typeof ru, lang: string) {
   return {
     lang,
     nav: navIn(catalog, IMPLICIT_SECTIONS),
-    regions: [catalog.home.tasks.title, catalog.home.inbox.title],
+    // The Overview of `writers`, whose `flows` is null and whose sections list Flow: every block (docs/features/department-overview.md "Acceptance criteria", DO12).
+    regions: [catalog.home.department.work, catalog.home.department.waiting, catalog.home.department.gaps, catalog.home.department.side],
+    named: catalog.home.department.named.replace("{{department}}", "Writers"),
     heading: catalog.home.title,
     workspace: 1,
-    badges: [catalog.tasks.status.review, catalog.inbox.status.open, catalog.inbox.status.open],
+    badges: [(catalog === en ? enT : ruT)("flow.gap.found", { count: 1 })],
   };
 }
 
 async function homeShown(client: StubClient, catalog: typeof en | typeof ru = en) {
   renderApp(client, "#/alpha");
   await screen.findByRole("combobox", { name: catalog.workspace.workspaceLabel });
-  await screen.findByText("T-0001");
-  await screen.findByText("PR-0001");
+  await screen.findByRole("table", { name: catalog.home.department.workCaption });
+  await screen.findByText((catalog === en ? enT : ruT)("flow.gap.found", { count: 1 }));
 }
 
 async function settle() {
@@ -121,13 +154,18 @@ describe("the switch (LG-2)", () => {
     // Every section, whatever the nav lists.
     expect(within(sections).getAllByRole("option").map((option) => option.textContent)).toEqual(navIn(ru, ALL_SECTIONS));
     fireEvent.keyDown(screen.getByRole("combobox", { name: ru.palette.inputLabel }), { key: "Escape" });
+    await settle();
+    // The palette read the agent tasks and the inbox once, which the Overview no longer reads
+    // (docs/features/department-overview.md "Acceptance criteria", DO3); the switch back reads nothing.
+    expect(callsOf(client)).toBe(before + 2);
+    const opened = callsOf(client);
 
     // English again: every string checked above back to its base text.
     fireEvent.change(languageSelect(ru.language.label), { target: { value: "en" } });
     await settle();
     expect(shownIn(en)).toEqual(expectedIn(en, "en"));
     expect(window.localStorage.getItem(LANGUAGE_KEY)).toBe("en");
-    expect(callsOf(client)).toBe(before);
+    expect(callsOf(client)).toBe(opened);
   });
 
   it("starts a fresh render, as after a reload, in the stored language", async () => {
@@ -162,6 +200,8 @@ describe("the switch (LG-2)", () => {
 
   it("labels one known badge per labels.ts in Russian, and in English again", async () => {
     const client = languageClient();
+    // Flow's gap rows each at None, as the stub serves them.
+    client.getFlow.mockResolvedValue(aFlowView([], []));
     client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-1", accepted: true })]));
     client.getTree.mockResolvedValue(aTreeView([aTreeNode({ id: "W-1", depth: 0, mark: "dangling-parent" })]));
     renderApp(client, "#/alpha/board");
@@ -193,12 +233,12 @@ function itemsOf(list: HTMLElement): [string, string][] {
 
 describe("served text verbatim (LG-5)", () => {
   it("shows the daemon's message byte for byte under lang=en, the panel's title and Retry in Russian", async () => {
-    const message = "inbox: the index is locked by another `spec` process (pid 4711); try again";
+    const message = "spec card counts: the queue's schema 14 is newer than this binary's 13";
     const client = languageClient();
-    client.getInbox.mockRejectedValue(new ClientError({ status: 503, message }));
+    client.getCardCounts.mockRejectedValue(new ClientError({ status: 503, message }));
     switchLanguage("ru");
     renderApp(client, "#/alpha");
-    const title = await screen.findByText(ru.home.inbox.failed);
+    const title = await screen.findByText(ru.home.department.failed);
     const panel = title.closest<HTMLElement>(".error-panel");
     const shown = panel?.querySelector<HTMLElement>(".error-message");
     expect(shown?.textContent).toBe(message);
@@ -209,10 +249,8 @@ describe("served text verbatim (LG-5)", () => {
   it("lists the daemon's notes and the config notes verbatim under lang=en", async () => {
     switchLanguage("ru");
     renderApp(languageClient(), "#/alpha");
-    const inboxNotes = await screen.findByRole("list", { name: ru.home.inbox.notes });
-    expect(itemsOf(inboxNotes)).toEqual([["en", INBOX_NOTE]]);
-    const taskNotes = await screen.findByRole("list", { name: ru.home.tasks.notes });
-    expect(itemsOf(taskNotes)).toEqual([["en", TASK_NOTE]]);
+    const countsNotes = await screen.findByRole("list", { name: ru.home.department.notes });
+    expect(itemsOf(countsNotes)).toEqual([["en", COUNTS_NOTE]]);
     fireEvent.click(await screen.findByRole("button", { name: ru.workspace.notesButton.replace("{{n}}", "1") }));
     const configNotes = screen.getByRole("list", { name: ru.workspace.notesTitle });
     expect(itemsOf(configNotes)).toEqual([["en", CONFIG_NOTE]]);
@@ -222,21 +260,21 @@ describe("served text verbatim (LG-5)", () => {
     const name = "a&b <c> {{n}} $t(x)";
     const client = languageClient();
     client.getProjects.mockResolvedValue([{ slug: name, name: null, root: "/work/x", branch: null }]);
-    client.getTasks.mockReturnValue(new Promise(() => undefined));
+    client.getCardCounts.mockReturnValue(new Promise(() => undefined));
     client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "writers" })]));
     switchLanguage("ru");
     renderApp(client, `#/${encodeURIComponent(name)}`);
-    const skeleton = await screen.findByRole("status", { name: ru.home.tasks.loading.replace("{{project}}", name) });
-    expect(skeleton.getAttribute("aria-label")).toBe(ru.home.tasks.loading.replace("{{project}}", name));
+    const skeleton = await screen.findByRole("status", { name: ru.home.department.loading.replace("{{project}}", name) });
+    expect(skeleton.getAttribute("aria-label")).toBe(ru.home.department.loading.replace("{{project}}", name));
     switchLanguage("en");
     await settle();
-    expect(screen.getByRole("status", { name: `Loading the agent tasks of ${name}` })).toBeTruthy();
+    expect(screen.getByRole("status", { name: `Loading the numbers of ${name}` })).toBeTruthy();
   });
 
   it("shows an unknown task status raw beside a known one in Russian", async () => {
     switchLanguage("ru");
     renderApp(languageClient(), "#/alpha");
-    await screen.findByText("T-0001");
+    await screen.findByRole("table", { name: ru.home.department.workCaption });
     fireEvent.click(screen.getByRole("button", { name: ru.app.jumpTo }));
     const input = await screen.findByRole("combobox", { name: ru.palette.inputLabel });
     fireEvent.change(input, { target: { value: "T-000" } });

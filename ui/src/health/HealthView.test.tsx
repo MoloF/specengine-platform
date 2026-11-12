@@ -160,7 +160,7 @@ describe("what the route reads (AC-01; its counting stub adds getHealth, AC-U5 a
     renderApp(client, "#/alpha");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
     await waitFor(() => {
-      expect(document.querySelectorAll('.home-region[aria-busy="false"]')).toHaveLength(2);
+      expect(document.querySelectorAll('.department-overview[aria-busy="false"]')).toHaveLength(1);
     });
     await settle();
     expect(client.getCheck).not.toHaveBeenCalled();

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import homeSource from "../overview/HomeView.tsx?raw";
 import roadmapSource from "../roadmap/RoadmapView.tsx?raw";
 import treeSource from "../tree/TreeView.tsx?raw";
 import shellSource from "./Shell.tsx?raw";
@@ -68,5 +69,29 @@ describe("the Spec tree's lazy table (DC-10 of direction-catalog)", () => {
     expect(treeSource).toMatch(
       /<NoNodePane>\s*<Suspense fallback=\{<Skeleton label=\{t\("tree\.catalog\.loading", \{ direction \}\)\} lines=\{6\} \/>\}>\s*<DirectionCatalog key=\{JSON\.stringify\(listing\)\} project=\{project\} kinds=\{listing\}/,
     );
+  });
+});
+
+// docs/features/department-overview.md "Acceptance criteria", DO7: the Overview's blocks are a chunk
+// of their own, reached from HomeView by a dynamic import alone, standing in a Suspense whose fallback
+// is their skeleton under the view's heading, so first load never holds them.
+describe("the Overview's lazy blocks (DO7 of department-overview)", () => {
+  it("HomeView reaches ./DepartmentOverview by lazy(() => import(...)) only, never by a value import", () => {
+    const fromIt = importLines(homeSource).filter((line) => line.endsWith('"./DepartmentOverview";'));
+    for (const line of fromIt) {
+      expect(line.startsWith("import type ")).toBe(true);
+    }
+    expect(homeSource).toContain('const DepartmentOverview = lazy(() => import("./DepartmentOverview").then((module) => ({ default: module.DepartmentOverview })));');
+    // M: `import { DepartmentOverview } from "./DepartmentOverview";` beside the lazy one.
+    expect(homeSource).not.toMatch(/^import \{[^}]*\bDepartmentOverview\b[^}]*\} from "\.\/DepartmentOverview";$/m);
+    // The Shell reaches the blocks only through HomeView.
+    expect(importLines(shellSource).filter((line) => line.includes("DepartmentOverview"))).toEqual([]);
+  });
+
+  it("stands the blocks in a Suspense whose fallback is their skeleton, after the view's heading", () => {
+    expect(homeSource).toMatch(
+      /<Suspense fallback=\{<Skeleton label=\{t\("home\.department\.loading", \{ project \}\)\} lines=\{6\} \/>\}>\s*<DepartmentOverview project=\{project\} workspace=\{workspace\} module=\{module\} workspaces=\{workspaces\} \/>/,
+    );
+    expect(homeSource.indexOf("<Suspense")).toBeGreaterThan(homeSource.indexOf('t("home.title")'));
   });
 });

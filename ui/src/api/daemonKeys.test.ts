@@ -12,10 +12,13 @@ import type {
   CardAcceptance,
   CardCancellation,
   CardColumn,
+  CardColumnCount,
+  CardCounts,
   CardEvent,
   CardClearGroupWrite,
   CardEvidence,
   CardFlow,
+  CardFlowCount,
   CardFrozen,
   CardItem,
   CardList,
@@ -222,11 +225,13 @@ import type {
 // cancelled subtask, an item and the cut's counts, sets 127 to 137), written by its Rust test; and
 // direction-catalog's three
 // (docs/features/direction-catalog.md "Acceptance criteria", DC-9: the catalog document, a row and
-// its last change, sets 138 to 140, the last), written by its Rust test.
+// its last change, sets 138 to 140), written by its Rust test; and department-overview's three
+// (docs/features/department-overview.md "Acceptance criteria", DO10: the counts document, a column's
+// counts and a flow's, sets 141 to 143, the last), written by its Rust test.
 // A key the types carry ahead of the file
 // is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already
 // names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all one hundred and forty written so far, in the slices' order.
+// names all one hundred and forty-three written so far, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -1061,6 +1066,11 @@ const KEYS = {
     last_change: true,
   } satisfies Record<keyof CatalogRow, true>,
   CatalogChange: { at: true, by: true, by_name: true, commit: true, proposal: true, of_file: true } satisfies Record<keyof CatalogChange, true>,
+  // docs/features/department-overview.md "Acceptance criteria" (DO10): the three sets in "JSON"'s
+  // order, sets 141 to 143, the fixture's names; the document's `flows` reuses CardFlow.
+  CardCounts: { flows: true, columns: true, by_flow: true, agent_tasks: true, notes: true, truncated: true, omitted: true } satisfies Record<keyof CardCounts, true>,
+  CardColumnCount: { flow: true, column: true, open: true, accepted: true, cancelled: true, open_subtasks: true } satisfies Record<keyof CardColumnCount, true>,
+  CardFlowCount: { flow: true, open_items: true, oldest_open_item: true, ready_parents: true, review_agent_tasks: true } satisfies Record<keyof CardFlowCount, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1222,6 +1232,9 @@ const CITED: Record<Named, string> = {
   Catalog: "kinds, archive, notes, rows, truncated, omitted",
   CatalogRow: "id, kind, title, path, line, rev, status, archived, state, open_items, tasks, tasks_open, last_change",
   CatalogChange: "at, by, by_name, commit, proposal, of_file",
+  CardCounts: "flows, columns, by_flow, agent_tasks, notes, truncated, omitted",
+  CardColumnCount: "flow, column, open, accepted, cancelled, open_subtasks",
+  CardFlowCount: "flow, open_items, oldest_open_item, ready_parents, review_agent_tasks",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1480,11 +1493,17 @@ const BEFORE_DIRECTION_CATALOG: readonly Named[] = [...BEFORE_DELIVERY_ANALYTICS
 /** direction-catalog's three, sets 138 to 140 in "JSON"'s order (docs/features/direction-catalog.md "Acceptance criteria", DC-9). */
 const DIRECTION_CATALOG: readonly Named[] = ["Catalog", "CatalogRow", "CatalogChange"];
 
+/** The hundred and forty types the fixture names before department-overview. */
+const BEFORE_DEPARTMENT_OVERVIEW: readonly Named[] = [...BEFORE_DIRECTION_CATALOG, ...DIRECTION_CATALOG];
+
+/** department-overview's three, sets 141 to 143 in "JSON"'s order (docs/features/department-overview.md "Acceptance criteria", DO10). */
+const DEPARTMENT_OVERVIEW: readonly Named[] = ["CardCounts", "CardColumnCount", "CardFlowCount"];
+
 /** The types each set names in `provisional.ts`, where the fixture's name is not the type's own. */
 const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument" };
 
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_DIRECTION_CATALOG, ...DIRECTION_CATALOG];
+const ALL: readonly Named[] = [...BEFORE_DEPARTMENT_OVERVIEW, ...DEPARTMENT_OVERVIEW];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1534,7 +1553,9 @@ function served(name: Named): string[] {
  * delivery-analytics' eleven sets, every key of each, until its Rust test wrote them
  * (docs/features/delivery-analytics.md "Acceptance criteria", DA-11), then empty again; and
  * direction-catalog's three sets, every key of each, until its Rust test wrote them
- * (docs/features/direction-catalog.md "Acceptance criteria", DC-9), then empty again.
+ * (docs/features/direction-catalog.md "Acceptance criteria", DC-9), then empty again; and
+ * department-overview's three sets, every key of each, until its Rust test wrote them
+ * (docs/features/department-overview.md "Acceptance criteria", DO10), then empty again.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1592,7 +1613,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_UPSTREAM_SIGNAL.at(-1)).toBe("HistoryEntry");
     expect(BEFORE_DELIVERY_ANALYTICS.at(-1)).toBe("CardUpstreamChange");
     expect(BEFORE_DIRECTION_CATALOG.at(-1)).toBe("DeliveryMore");
-    expect(ALL.at(-1)).toBe("CatalogChange");
+    expect(BEFORE_DEPARTMENT_OVERVIEW.at(-1)).toBe("CatalogChange");
+    expect(ALL.at(-1)).toBe("CardFlowCount");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1621,7 +1643,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(140);
+    expect(ALL).toHaveLength(143);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1632,7 +1654,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three, nor since department-overview's Rust test wrote its three (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog, DO10 of department-overview)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1641,9 +1663,11 @@ describe("the daemon's document types (AC-09)", () => {
     // upstream-signal's two until its Rust test wrote them, then empty again (docs/features/upstream-signal.md "Acceptance criteria", US-12);
     // intake-similar's review document's `similar` until its Rust test wrote it, then empty again (docs/features/intake-similar.md "Acceptance criteria", IS10);
     // delivery-analytics' eleven sets, every key, until its Rust test wrote them, then empty again (docs/features/delivery-analytics.md "Acceptance criteria", DA-11);
-    // direction-catalog's three sets, every key, until its Rust test wrote them, then empty again (docs/features/direction-catalog.md "Acceptance criteria", DC-9).
+    // direction-catalog's three sets, every key, until its Rust test wrote them, then empty again (docs/features/direction-catalog.md "Acceptance criteria", DC-9);
+    // department-overview's three sets, every key, until its Rust test wrote them, then empty again (docs/features/department-overview.md "Acceptance criteria", DO10).
     expect(AHEAD_OF_FIXTURE.filter(([name]) => DELIVERY_ANALYTICS.includes(name))).toHaveLength(0);
     expect(AHEAD_OF_FIXTURE.filter(([name]) => DIRECTION_CATALOG.includes(name))).toHaveLength(0);
+    expect(AHEAD_OF_FIXTURE.filter(([name]) => DEPARTMENT_OVERVIEW.includes(name))).toHaveLength(0);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -1836,7 +1860,7 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it('types direction-catalog\'s three as the spec writes them: 6, 13, 6 keys in "JSON"\'s order, every one present, a row eight of the tree\'s keys then its five, a state kept whatever its word, each citing `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, none ahead of the file since its Rust test wrote them (DC-9 of direction-catalog)', () => {
-    expect(ALL.slice(BEFORE_DIRECTION_CATALOG.length)).toEqual([...DIRECTION_CATALOG]);
+    expect(ALL.slice(BEFORE_DIRECTION_CATALOG.length, BEFORE_DEPARTMENT_OVERVIEW.length)).toEqual([...DIRECTION_CATALOG]);
     expect(DIRECTION_CATALOG.map((name) => served(name).length)).toEqual([6, 13, 6]);
     for (const name of DIRECTION_CATALOG) {
       const type = DECLARED_AS[name] ?? name;
@@ -1855,6 +1879,27 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^ {2}by_name: string;\n {2}commit: string;\n {2}proposal: string \| null;\n {2}of_file: boolean;\n\}$/m);
     const at = source.indexOf("export type KnownRollup ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/direction-catalog.md` "Acceptance criteria", DC-9');
+  });
+
+  it('types department-overview\'s three as the spec writes them: 7, 6, 5 keys in "JSON"\'s order, every one present, the document\'s `flows` the card list\'s, a word for agent tasks kept whatever it is, the agent tasks in review a list or null, no age anywhere, each citing `docs/features/department-overview.md` "Acceptance criteria", DO10, none ahead of the file since its Rust test wrote them (DO5, DO10 of department-overview)', () => {
+    expect(ALL.slice(BEFORE_DEPARTMENT_OVERVIEW.length)).toEqual([...DEPARTMENT_OVERVIEW]);
+    expect(DEPARTMENT_OVERVIEW.map((name) => served(name).length)).toEqual([7, 6, 5]);
+    for (const name of DEPARTMENT_OVERVIEW) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} {`);
+      expect([name, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/department-overview.md` "Acceptance criteria", DO10')]).toEqual([name, true]);
+      // Ahead of the file until its Rust test wrote the set: no key of it now.
+      expect([name, served(name).filter((key) => isAhead(name, key))]).toEqual([name, []]);
+    }
+    // The document's `flows` is the card list's own type; its tail as every cut document's.
+    expect(source).toMatch(/^export interface CardCounts \{\n {2}flows: CardFlow\[\];\n {2}columns: CardColumnCount\[\];\n {2}by_flow: CardFlowCount\[\];\n {2}agent_tasks: KnownAgentTasks \| Unlisted;\n {2}notes: string\[\];\n {2}truncated: boolean;\n {2}omitted: number \| null;\n\}$/m);
+    expect(source).toMatch(/^export type KnownAgentTasks = "counted" \| "local_only";$/m);
+    expect(source).toMatch(/^ {2}oldest_open_item: string \| null;\n {2}ready_parents: number;\n {2}review_agent_tasks: string\[\] \| null;\n\}$/m);
+    const at = source.indexOf("export type KnownAgentTasks ");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/department-overview.md` "Acceptance criteria", DO10');
+    // No clock: the sets hold stored times and counts, never an age (DO5; M: an `oldest_open_item_days` key).
+    const keys = DEPARTMENT_OVERVIEW.flatMap((name) => served(name));
+    expect(keys.filter((key) => /(^|_)(age|days?)(_|$)/.test(key))).toEqual([]);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -2013,8 +2058,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_UPSTREAM_SIGNAL).toHaveLength(124);
     expect(BEFORE_DELIVERY_ANALYTICS).toHaveLength(126);
     expect(BEFORE_DIRECTION_CATALOG).toHaveLength(137);
-    expect(ALL).toHaveLength(140);
-    expect(new Set(ALL).size).toBe(140);
+    expect(BEFORE_DEPARTMENT_OVERVIEW).toHaveLength(140);
+    expect(ALL).toHaveLength(143);
+    expect(new Set(ALL).size).toBe(143);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -2268,13 +2314,14 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and forty types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two, upstream-signal's two, delivery-analytics' eleven, direction-catalog's three", () => {
+  it("names exactly the one hundred and forty-three types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two, upstream-signal's two, delivery-analytics' eleven, direction-catalog's three, department-overview's three", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
     // delivery-analytics' eleven since its Rust test wrote them (DA-11); direction-catalog's three
-    // since its own did (DC-9): it names all one hundred and forty, in the slices' order.
+    // since its own did (DC-9); department-overview's three since its own did (DO10): it names
+    // all one hundred and forty-three, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(140);
+    expect(Object.keys(sets)).toHaveLength(143);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -2475,14 +2522,24 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(DELIVERY_ANALYTICS.map((name) => sets[name]?.length)).toEqual([8, 9, 9, 7, 2, 20, 3, 4, 4, 3, 4]);
   });
 
-  it("names direction-catalog's three last, after DeliveryMore, sets 138 to 140: 6, 13, 6 keys in the types' order, `Catalog` typed by `CatalogDocument` (DC-9 of direction-catalog)", () => {
-    expect(Object.keys(sets).slice(BEFORE_DIRECTION_CATALOG.length)).toEqual([...DIRECTION_CATALOG]);
+  it("names direction-catalog's three after DeliveryMore, sets 138 to 140: 6, 13, 6 keys in the types' order, `Catalog` typed by `CatalogDocument` (DC-9 of direction-catalog)", () => {
+    expect(Object.keys(sets).slice(BEFORE_DIRECTION_CATALOG.length, BEFORE_DEPARTMENT_OVERVIEW.length)).toEqual([...DIRECTION_CATALOG]);
     expect(Object.keys(sets).indexOf("Catalog")).toBe(137);
     expect(Object.keys(sets).at(BEFORE_DIRECTION_CATALOG.length - 1)).toBe("DeliveryMore");
-    expect(Object.keys(sets).at(-1)).toBe("CatalogChange");
+    expect(Object.keys(sets).at(BEFORE_DEPARTMENT_OVERVIEW.length - 1)).toBe("CatalogChange");
     expect(DIRECTION_CATALOG.map((name) => sets[name])).toEqual(DIRECTION_CATALOG.map((name) => served(name)));
     expect(DIRECTION_CATALOG.map((name) => sets[name])).toEqual(DIRECTION_CATALOG.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
     expect(DIRECTION_CATALOG.map((name) => sets[name]?.length)).toEqual([6, 13, 6]);
+  });
+
+  it("names department-overview's three last, after CatalogChange, sets 141 to 143: 7, 6, 5 keys in the types' order (DO10 of department-overview)", () => {
+    expect(Object.keys(sets).slice(BEFORE_DEPARTMENT_OVERVIEW.length)).toEqual([...DEPARTMENT_OVERVIEW]);
+    expect(Object.keys(sets).indexOf("CardCounts")).toBe(140);
+    expect(Object.keys(sets).at(BEFORE_DEPARTMENT_OVERVIEW.length - 1)).toBe("CatalogChange");
+    expect(Object.keys(sets).at(-1)).toBe("CardFlowCount");
+    expect(DEPARTMENT_OVERVIEW.map((name) => sets[name])).toEqual(DEPARTMENT_OVERVIEW.map((name) => served(name)));
+    expect(DEPARTMENT_OVERVIEW.map((name) => sets[name])).toEqual(DEPARTMENT_OVERVIEW.map((name) => declaredKeys(name)));
+    expect(DEPARTMENT_OVERVIEW.map((name) => sets[name]?.length)).toEqual([7, 6, 5]);
   });
 
   it("names lock-diff's five after ShownBindings, before flow-read's five: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {

@@ -70,13 +70,14 @@ describe("the normal scenario", () => {
     expect((await rejection(new MockClient("normal", { now: clock }).getTeam())).status).toBe(404);
   });
 
-  it("serves harbor-sim's two workspaces, two rooted modules and a direction, ledger-api the implicit one; config-notes their notes (docs/features/workspaces.md \"The UI\"; DP-11, DP-14 of departments)", async () => {
+  it("serves harbor-sim's three workspaces, two rooted modules and a direction, ledger-api the implicit one; config-notes their notes (docs/features/workspaces.md \"The UI\"; DP-11, DP-14 of departments; the lead's, every flow: DO12 of department-overview)", async () => {
     const client = new MockClient("normal", { now: clock });
     const harbor = await client.getWorkspaces("harbor-sim");
     expect(harbor.source).toBe("config");
     expect(harbor.workspaces.map(({ name, landing, sections, flows, disciplines, module }) => [name, landing, sections, flows, disciplines, module])).toEqual([
       ["galley", "flow", ["board", "flow", "tree", "inbox"], ["copy"], ["copy", "captions"], "berths"],
       ["foundry", "overview", ["board", "health", "graph", "tree"], ["plates"], ["plates"], null],
+      ["harbourmaster", "overview", ["inbox", "board", "roadmap", "flow"], null, [], null],
     ]);
     expect(harbor.modules.map(({ name, title, root, kinds }) => [name, title, root, kinds])).toEqual([
       ["berths", "Berths", "DOM-BERTHS", null],

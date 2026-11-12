@@ -25,6 +25,7 @@ import type {
   CardClearBody,
   CardClearGroupBody,
   CardClearGroupWrite,
+  CardCounts,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -68,6 +69,7 @@ import type {
 } from "../api/types";
 import { mockCode } from "./bindings";
 import { fakeHex, inboxEntryOf, noReview, proposal, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
+import { cardCountsOf } from "./cardCounts";
 import { checkReportOf } from "./check";
 import {
   acceptCardIn,
@@ -644,6 +646,16 @@ export class MockClient implements SpecEngineClient {
   async getCards(project: string, options: CardsOptions = {}): Promise<CardList> {
     await this.read();
     return structuredClone(cardListOf(this.board(project), options, this.settled(project)));
+  }
+
+  /**
+   * The project's tasks counted per flow and column over this mock's cards, queue and tasks now
+   * (src/mocks/cardCounts.ts); the daemon counts its own (`docs/features/department-overview.md`
+   * "Acceptance criteria", DO10). `local-only` and `hub` serve a hub's shape; `empty` no flow.
+   */
+  async getCardCounts(project: string): Promise<CardCounts> {
+    await this.read();
+    return structuredClone(cardCountsOf(this.board(project), this.taskStore(project), this.project(project).proposals, this.scenario));
   }
 
   /** One card with its history and its items, read from this mock's queue now; an unknown C answers the exit-1 document, as data. */

@@ -186,6 +186,11 @@
 //!   the daemon decodes its routes' bodies as [`CardNewBody`] and its kin,
 //!   and reads the list uncut by [`CardListOutcome::in_view`] (task spec
 //!   `board-ui`);
+//! - [`card_counts()`]: `spec card counts` (task spec `department-overview`
+//!   DO9), the cards counted per (flow, column) and per flow by the store's
+//!   grouped statements, never from the cut list; `[card]` and the queue
+//!   read once as it is, no git, no index, no lock, no write, no clock; the
+//!   daemon reads it uncut by [`CardCountsOutcome::in_view`];
 //! - [`trace()`]: `spec trace [REF]` (task spec `card-trace`), each node's
 //!   computed state against its cards, the marks core's `trace` reads per
 //!   read and never stores; exit 0 whatever is listed;
@@ -228,6 +233,7 @@ mod bump;
 mod bundle;
 mod cap;
 mod card;
+mod card_counts;
 mod catalog;
 #[cfg(test)]
 mod catalog_tests;
@@ -350,6 +356,7 @@ pub use card::{
     CardSubtaskItem, TOOL_ACTOR, card_accept, card_assign, card_cancel, card_clear,
     card_clear_group, card_edit, card_list, card_move, card_new, card_raise, card_show, card_split,
 };
+pub use card_counts::{CardCountsOutcome, CardCountsRequest, card_counts};
 pub use catalog::{
     CatalogOutcome, CatalogRequest, CatalogRow, LAST_CHANGE_HEADS, LastChangeCache, catalog,
     catalog_with_view,
@@ -766,6 +773,8 @@ pub enum Outcome {
     CardSplit(Box<CardSplitOutcome>),
     /// `card list`: the flows and the cards.
     CardList(Box<CardListOutcome>),
+    /// `card counts`: the cards counted per (flow, column) and per flow.
+    CardCounts(Box<CardCountsOutcome>),
     /// `approve --open`: what the walk applied and left.
     OpenWalk(OpenWalk),
     /// `round new`: the sheet.
@@ -890,6 +899,8 @@ impl Outcome {
             },
             Self::CardSplit(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::CardList(outcome) => (&outcome.messages, None),
+            // The notes, escaped, as JSON `notes` holds them raw.
+            Self::CardCounts(outcome) => return outcome.stderr_lines(),
             Self::RoundSheet(outcome) => (&outcome.messages, None),
             Self::Round(outcome) => (&outcome.messages, None),
             Self::RoundAnswers(outcome) => (&outcome.messages, None),
@@ -1015,6 +1026,7 @@ pub fn render_text(outcome: &Outcome) -> String {
             .map_or_else(String::new, intake::render_text),
         Outcome::CardSplit(outcome) => card::render_split_text(outcome),
         Outcome::CardList(outcome) => card::render_list_text(outcome),
+        Outcome::CardCounts(outcome) => card_counts::render_text(outcome),
         Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
         Outcome::Round(outcome) => round::render_text(outcome),
         Outcome::RoundAnswers(outcome) => round::answers_outcome_text(outcome),
@@ -1074,6 +1086,7 @@ impl serde::Serialize for Outcome {
             Self::CardRaise(outcome) => outcome.serialize(serializer),
             Self::CardSplit(outcome) => outcome.serialize(serializer),
             Self::CardList(outcome) => outcome.serialize(serializer),
+            Self::CardCounts(outcome) => outcome.serialize(serializer),
             Self::RoundSheet(outcome) => outcome.serialize(serializer),
             Self::Round(outcome) => outcome.serialize(serializer),
             Self::RoundAnswers(outcome) => outcome.serialize(serializer),

@@ -1439,12 +1439,22 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// rows, each a node's title, version, state, open items, tasks and its
 /// file's last commit, the tree's, the trace's and git's history a login
 /// already reads, so every login may read it.
-const GET_ROUTES: [&str; 30] = [
+///
+/// docs/features/department-overview.md (RM-0086) judged
+/// `/api/projects/{p}/cards/counts`, the 31st: mounted for every login, a
+/// read of the hub's own queue alone, never `[team]`: per flow and column the
+/// open, accepted and cancelled tasks and open subtasks, per flow the open
+/// items' count and oldest time and the parents ready to accept, keyed by
+/// flow and column, never by person; agent tasks `local_only`, every
+/// `review_agent_tasks` `null` (DO4), so it names no task. The Board's list,
+/// which every login reads, holds every card it counts.
+const GET_ROUTES: [&str; 31] = [
     "/",
     "/api/identity",
     "/api/projects",
     "/api/projects/{p}/bundle",
     "/api/projects/{p}/cards",
+    "/api/projects/{p}/cards/counts",
     "/api/projects/{p}/cards/{id}",
     "/api/projects/{p}/catalog",
     "/api/projects/{p}/check",
@@ -2210,8 +2220,11 @@ fn every_route_in(source: &str) -> Vec<String> {
 /// The card routes of docs/canon/board-ui.md "Routes", the two reads and the
 /// six writes: a hand-off is `POST .../cards`, a return `POST .../move`; and
 /// since docs/features/card-questions.md L3 a card's raise, `POST .../items`.
-const CARD_ROUTES: [&str; 10] = [
+const CARD_ROUTES: [&str; 11] = [
     "/api/projects/{p}/cards",
+    // docs/features/department-overview.md "Acceptance criteria", DO10: the
+    // counts, a read, a static segment beside `{id}`.
+    "/api/projects/{p}/cards/counts",
     // docs/features/department-split.md "Acceptance criteria", S7: a split,
     // a static segment beside `{id}`.
     "/api/projects/{p}/cards/split",
@@ -2245,8 +2258,9 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
         "M23: the card routes as Routes lists them"
     );
     // 29 since docs/features/delivery-analytics.md DA-11 (`delivery`); 30
-    // since docs/features/direction-catalog.md DC-9 (`catalog`).
-    assert_eq!(GET_ROUTES.len(), 30);
+    // since docs/features/direction-catalog.md DC-9 (`catalog`); 31 since
+    // docs/features/department-overview.md DO10 (`cards/counts`).
+    assert_eq!(GET_ROUTES.len(), 31);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

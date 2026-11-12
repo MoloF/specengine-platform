@@ -52,6 +52,7 @@ Every new word is a `board.progress.*` key, counts plural (`plural.test.ts`). "R
 - **Shared key.** While a parent is open its reason reads run again on every `task.*`, `proposal.*` and gap event, which read every `["card", p]` key again.
 - The children read is sent before the card read answers.
 - One level: no grandchild; the tile shows no bar, no Ready.
+- **The Overview's Ready to accept** counts `ready`'s rule again, in the store's SQL (`card-counts.md` "Counts"); only tests tie the two.
 
 ## Tests
 

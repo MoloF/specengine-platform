@@ -20,9 +20,12 @@
  * copied 40 times, 5 680 of them (`docs/canon/spec-flow-screen.md` "Mock"; RM-0094; src/mocks/harbor-sim/aside.ts).
  * `hub`: as `normal` behind a hub's login, `mira`, whose `[team]` row allows every act and Confirm, so
  * a staged choice is confirmed from the page as a hub does (`docs/canon/hub-confirm.md` "Routes";
- * the card's Answer..., docs/features/card-questions.md "Acceptance criteria", U4).
+ * the card's Answer..., docs/features/card-questions.md "Acceptance criteria", U4); its task counts as
+ * a hub serves them. `local-only`: as `normal` but the task counts in a hub's shape, agent tasks
+ * `local_only` and no list (docs/features/department-overview.md "Acceptance criteria", DO4;
+ * src/mocks/cardCounts.ts).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

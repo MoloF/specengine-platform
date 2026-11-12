@@ -7,7 +7,7 @@ import { sectionHash } from "../app/routes";
 import { severityLook } from "../inbox/labels";
 import { queueOrder } from "../inbox/order";
 import { summaryOf } from "../inbox/summary";
-import { Notes, Stored } from "../overview/parts";
+import { Notes, Stored } from "../ui/served";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { ReadFailure, Skeleton } from "../ui/states";

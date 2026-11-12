@@ -12,7 +12,9 @@
 //! `Allow: GET, POST`; `…/cards/<id>` a read; its seven writes `Allow: POST`,
 //! `…/cards/<id>/items` among them
 //! (`docs/canon/card-questions.md` "The rule"); `…/cards/split` a write,
-//! `Allow: POST` (`docs/canon/card-split.md` "The rule").
+//! `Allow: POST` (`docs/canon/card-split.md` "The rule"); `…/cards/counts`
+//! a read, the counts, never a card, on a hub too, any login's (task spec
+//! `department-overview` DO10).
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md);
 //! `…/catalog` a read, its last changes cached per `HEAD` in [`App`]
 //! (docs/features/direction-catalog.md).
@@ -73,11 +75,11 @@ use axum::routing::{MethodRouter, any, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
-    CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest,
-    CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest, CardSplitBody,
-    CatalogRequest, CheckRequest, CliError, DeliveryRequest, FlowRequest, GraphRequest,
-    HealthRequest, InboxRequest, IndexTrust, LastChangeCache, LockDiffRequest, Outcome,
-    ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
+    CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardCountsRequest, CardEditBody,
+    CardListRequest, CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest,
+    CardSplitBody, CatalogRequest, CheckRequest, CliError, DeliveryRequest, FlowRequest,
+    GraphRequest, HealthRequest, InboxRequest, IndexTrust, LastChangeCache, LockDiffRequest,
+    Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
     SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow,
     TraceRequest, TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags,
     round_limit, team_read, utc_now,
@@ -230,6 +232,10 @@ pub(crate) fn router(app: Shared) -> Router {
                 .fallback(only_cards),
         )
         .route("/api/projects/{p}/cards/{id}", read(card))
+        // A static segment beside `{id}`: the router matches it ahead of
+        // `{id}` whatever the order the routes are added in, so the counts
+        // are never read as a card (task spec `department-overview` DO10).
+        .route("/api/projects/{p}/cards/counts", read(counts))
         // A static segment beside `{id}`, which no card ID spells
         // (`docs/features/department-split.md` "Acceptance criteria", S7).
         .route(
@@ -493,8 +499,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
-             inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events, \
-             delivery, catalog, workspaces}}, \
+             inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, cards/counts, round, \
+             events, delivery, catalog, workspaces}}, \
              /api/identity; the web UI: / and /assets/<file>",
             uri.path()
         ),
@@ -1175,6 +1181,23 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
     Ok(run_as(project, freshness, move |env, globals| {
         specengine_cli::card_list(env, globals, &request)
             .map(|outcome| Outcome::CardList(Box::new(outcome.in_view(View::Browser))))
+    })
+    .await)
+}
+
+/// `GET …/cards/counts`: `spec card counts --json`, the browser view (every
+/// row, nothing cut), in the project's turn as `GET …/cards` without marks
+/// (task spec `department-overview` DO10). No query: any name is a 400,
+/// nothing run. The agent tasks are read locally; a hub reads none and
+/// serves `local_only`, every `review_agent_tasks` `null` (DO4). A bad
+/// `[card]`, a newer schema or a corrupt queue is the CLI's exit 2, a 503.
+async fn counts(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    args("cards/counts", &[], &uri)?;
+    let tasks_here = app.hub.is_none();
+    Ok(run_read(project, move |env, globals| {
+        specengine_cli::card_counts(env, globals, &CardCountsRequest { tasks_here })
+            .map(|outcome| Outcome::CardCounts(Box::new(outcome.in_view(View::Browser))))
     })
     .await)
 }

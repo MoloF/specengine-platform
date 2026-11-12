@@ -44,6 +44,7 @@ use specengine_core::card::{
     EVIDENCE_ENTRIES_MAX, accept_refusal, card_id, card_move, card_number, closed_refusal,
     mandate_change_problem, mandate_problem, reviewer_problem, stale_refusal, task_links_problem,
 };
+use specengine_core::card_counts::{CardCountRows, UnreadName};
 use specengine_core::card_toml::CardFlow;
 use specengine_core::intake::{DISTINCT_MAX, distinct_entry_fits};
 use specengine_core::task::task_number;
@@ -53,15 +54,15 @@ use specengine_core::trace::{
 };
 use specengine_model::{
     Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, CardVerdict, EvidenceKind,
-    Mandate,
+    Mandate, TaskStatus,
 };
 
 use super::state::{TASK_LINKS_SCHEMA, stored_text};
 use super::{
     CARD_COLUMNS, CARD_ITEMS_SCHEMA, COLUMNS, EVENT_CREATED, Event, ID_ORDER, IntakeResult,
-    MANDATE_SCHEMA, NewIntake, Proposal, ProposalKind, QueueError, RawRow, SqliteQueue,
-    UnreadableRow, check_time, created_payload, existing, index_only, insert_intake, link_problem,
-    log, log_text, queue_matches, to_json, user_version,
+    MANDATE_SCHEMA, NewIntake, Proposal, ProposalKind, ProposalStatus, QueueError, RawRow,
+    SqliteQueue, UnreadableRow, check_time, created_payload, existing, index_only, insert_intake,
+    link_problem, log, log_text, queue_matches, to_json, user_version,
 };
 use crate::error::{Db, StoreError};
 use crate::floor::read_floor;
@@ -518,6 +519,48 @@ impl SqliteQueue {
         };
         tx.commit().db()?;
         Ok(list)
+    }
+
+    /// The project's card counts (task spec `department-overview` DO1, DO8,
+    /// DO9, DO11), in one read transaction of grouped statements over the
+    /// stored columns, no row decoded: a row [`Self::list_cards`] would skip
+    /// as corrupt still counts where it stands, and nothing is cut. Per
+    /// (`flow`, `col`) the open, accepted and cancelled cards and the open
+    /// ones with a parent (`COUNT_COLUMNS`), a `flow` or `col` that is no
+    /// text counted under the name it reads as and its card named
+    /// (`COUNT_UNNAMED`); per parent's flow the open parents with a child
+    /// and none open (`COUNT_READY`); per card's flow the open items on its
+    /// cards and their least `created_at` (`COUNT_ITEMS`); with
+    /// `tasks_here`, per flow the distinct `T-` IDs its open cards link
+    /// whose task, in any repository of the slug, is in review
+    /// (`COUNT_LINKS`, `COUNT_REVIEW`), an open card's `tasks` that does not
+    /// read as a card's decoder reads it passed over and named. The
+    /// statements are these six whatever the rows: none runs per card. A
+    /// handle of
+    /// [`Self::open_existing`] works: a table or column a queue's schema
+    /// does not hold yet counts none, and nothing is written; a newer
+    /// build's queue is [`QueueError::SchemaTooNew`].
+    pub fn card_counts(&self, tasks_here: bool) -> Result<CardCountRows, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let version = user_version(&tx)?;
+        if version > super::QUEUE_SCHEMA_VERSION {
+            return Err(QueueError::SchemaTooNew { found: version });
+        }
+        let mut rows = CardCountRows::default();
+        if schema::has_table(&tx, "cards")? {
+            let project = self.project.as_str();
+            count_columns(&tx, project, &mut rows)?;
+            count_unnamed(&tx, project, &mut rows)?;
+            count_ready(&tx, project, &mut rows)?;
+            if version >= CARD_ITEMS_SCHEMA && schema::has_table(&tx, "proposals")? {
+                count_items(&tx, project, &mut rows)?;
+            }
+            if tasks_here && version >= TASK_LINKS_SCHEMA && schema::has_table(&tx, "tasks")? {
+                count_review_links(&tx, project, &mut rows)?;
+            }
+        }
+        tx.commit().db()?;
+        Ok(rows)
     }
 
     /// The last `limit` `card.*` events of the card `id`, oldest first. A
@@ -977,6 +1020,227 @@ fn listed_from(tx: &Transaction<'_>, project: &str, select: &str) -> Result<Card
         }
     }
     Ok(list)
+}
+
+/// [`SqliteQueue::card_counts`]' first statement: per stored (`flow`,
+/// `col`), the open, accepted and cancelled cards, each card in exactly one
+/// (a cancellation set first, then an acceptance), and the open ones with a
+/// parent, a card naming itself no child of its own, as in `COUNT_READY`.
+const COUNT_COLUMNS: &str = "SELECT flow, col, \
+     sum(cancellation IS NULL AND acceptance IS NULL), \
+     sum(cancellation IS NULL AND acceptance IS NOT NULL), \
+     sum(cancellation IS NOT NULL), \
+     sum(cancellation IS NULL AND acceptance IS NULL AND parent IS NOT NULL \
+     AND parent IS NOT id) \
+     FROM main.cards WHERE project = ?1 GROUP BY flow, col";
+
+/// The second: per parent's `flow`, the open parents with a child and no
+/// open child, the children grouped over `parent` once, never per card; a
+/// grandchild is no child, and a card naming itself is no child of its own,
+/// as the board's rollup reads one
+/// (`docs/canon/card-progress.md` "The model").
+const COUNT_READY: &str = "SELECT parents.flow, count(*) FROM main.cards AS parents \
+     JOIN (SELECT parent, sum(cancellation IS NULL AND acceptance IS NULL) AS open_children \
+     FROM main.cards WHERE project = ?1 AND parent IS NOT NULL AND parent IS NOT id \
+     GROUP BY parent) AS children ON children.parent = parents.id \
+     WHERE parents.project = ?1 AND parents.cancellation IS NULL \
+     AND parents.acceptance IS NULL AND children.open_children = 0 \
+     GROUP BY parents.flow";
+
+/// The third: per card's `flow`, the open items whose `card_id` names one
+/// of its cards, in any state, and their least `created_at`; `?2` the open
+/// status.
+const COUNT_ITEMS: &str = "SELECT cards.flow, count(*), min(items.created_at) \
+     FROM main.proposals AS items JOIN main.cards AS cards ON cards.id = items.card_id \
+     WHERE items.project = ?1 AND cards.project = ?1 AND items.status = ?2 \
+     GROUP BY cards.flow";
+
+/// The fourth, with agent tasks counted: the open cards' links as stored.
+const COUNT_LINKS: &str = "SELECT id, flow, tasks FROM main.cards \
+     WHERE project = ?1 AND tasks IS NOT NULL AND cancellation IS NULL AND acceptance IS NULL";
+
+/// The fifth, beside it: the tasks in review, of any repository of the
+/// slug; `?2` the review status.
+const COUNT_REVIEW: &str = "SELECT DISTINCT id FROM main.tasks WHERE project = ?1 AND status = ?2";
+
+/// The sixth, beside the first: the cards whose stored `flow` or `col` is
+/// no text, each named where it counts.
+const COUNT_UNNAMED: &str = "SELECT id, flow, col FROM main.cards \
+     WHERE project = ?1 AND (typeof(flow) IS NOT 'text' OR typeof(col) IS NOT 'text')";
+
+/// Why a stored name is no text, as `card list` says it of a row; `None`
+/// for text.
+fn unread_why(value: ValueRef<'_>) -> Option<&'static str> {
+    match value {
+        ValueRef::Text(_) => None,
+        ValueRef::Null => Some("it is NULL"),
+        ValueRef::Integer(_) | ValueRef::Real(_) => Some("it is a number, not text"),
+        ValueRef::Blob(_) => Some("it is a BLOB, not text"),
+    }
+}
+
+/// A stored name as a count groups it: its text, an invalid byte replaced;
+/// `NULL` when there is none, which no `[card]` name spells
+/// (`COUNT_UNNAMED` names each such card).
+fn stored_name(value: ValueRef<'_>) -> String {
+    match value {
+        ValueRef::Text(bytes) | ValueRef::Blob(bytes) => {
+            String::from_utf8_lossy(bytes).into_owned()
+        }
+        ValueRef::Integer(number) => number.to_string(),
+        ValueRef::Real(number) => number.to_string(),
+        ValueRef::Null => "NULL".to_owned(),
+    }
+}
+
+/// The count at `index` of a grouped row: a sum or a `count(*)`, never
+/// below 0.
+fn count_at(row: &Row<'_>, index: usize) -> Result<u64, QueueError> {
+    let value: Option<i64> = row.get(index).db()?;
+    Ok(value
+        .and_then(|value| u64::try_from(value).ok())
+        .unwrap_or(0))
+}
+
+/// [`COUNT_COLUMNS`] into `rows`: two names read as one (an invalid byte
+/// replaced in each) add up.
+fn count_columns(
+    tx: &Transaction<'_>,
+    project: &str,
+    rows: &mut CardCountRows,
+) -> Result<(), QueueError> {
+    let mut statement = tx.prepare(COUNT_COLUMNS).db()?;
+    let mut found = statement.query([project]).db()?;
+    while let Some(row) = found.next().db()? {
+        let key = (
+            stored_name(row.get_ref(0).db()?),
+            stored_name(row.get_ref(1).db()?),
+        );
+        let tally = rows.columns.entry(key).or_default();
+        tally.open += count_at(row, 2)?;
+        tally.accepted += count_at(row, 3)?;
+        tally.cancelled += count_at(row, 4)?;
+        tally.open_subtasks += count_at(row, 5)?;
+    }
+    Ok(())
+}
+
+/// [`COUNT_UNNAMED`] into `rows`: each card's `flow`, then its `col`, that
+/// is no text, with why and the name it counts under ([`stored_name`]).
+fn count_unnamed(
+    tx: &Transaction<'_>,
+    project: &str,
+    rows: &mut CardCountRows,
+) -> Result<(), QueueError> {
+    let mut statement = tx.prepare(COUNT_UNNAMED).db()?;
+    let mut found = statement.query([project]).db()?;
+    while let Some(row) = found.next().db()? {
+        let card = stored_name(row.get_ref(0).db()?);
+        for (index, column) in [(1, "flow"), (2, "col")] {
+            let value = row.get_ref(index).db()?;
+            if let Some(reason) = unread_why(value) {
+                rows.unread_names.push(UnreadName {
+                    card: card.clone(),
+                    column: column.to_owned(),
+                    reason: reason.to_owned(),
+                    counted_as: stored_name(value),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// [`COUNT_READY`] into `rows`.
+fn count_ready(
+    tx: &Transaction<'_>,
+    project: &str,
+    rows: &mut CardCountRows,
+) -> Result<(), QueueError> {
+    let mut statement = tx.prepare(COUNT_READY).db()?;
+    let mut found = statement.query([project]).db()?;
+    while let Some(row) = found.next().db()? {
+        let flow = stored_name(row.get_ref(0).db()?);
+        *rows.ready_parents.entry(flow).or_default() += count_at(row, 1)?;
+    }
+    Ok(())
+}
+
+/// [`COUNT_ITEMS`] into `rows`: a `created_at` that is no text is none.
+fn count_items(
+    tx: &Transaction<'_>,
+    project: &str,
+    rows: &mut CardCountRows,
+) -> Result<(), QueueError> {
+    let mut statement = tx.prepare(COUNT_ITEMS).db()?;
+    let mut found = statement
+        .query([project, ProposalStatus::Open.as_str()])
+        .db()?;
+    while let Some(row) = found.next().db()? {
+        let flow = stored_name(row.get_ref(0).db()?);
+        let oldest = match row.get_ref(2).db()? {
+            ValueRef::Text(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
+            _ => None,
+        };
+        let items = rows.open_items.entry(flow).or_default();
+        items.count += count_at(row, 1)?;
+        items.oldest = match (items.oldest.take(), oldest) {
+            (Some(held), Some(read)) => Some(held.min(read)),
+            (held, read) => held.or(read),
+        };
+    }
+    Ok(())
+}
+
+/// [`COUNT_REVIEW`] and [`COUNT_LINKS`] into `rows`: each open card's
+/// linked IDs whose task is in review, per its flow, once; a `tasks` that
+/// does not read ([`task_links`]) passed over whole and its card named.
+fn count_review_links(
+    tx: &Transaction<'_>,
+    project: &str,
+    rows: &mut CardCountRows,
+) -> Result<(), QueueError> {
+    let mut review = BTreeSet::new();
+    {
+        let mut statement = tx.prepare(COUNT_REVIEW).db()?;
+        let mut found = statement
+            .query([project, TaskStatus::Review.as_str()])
+            .db()?;
+        while let Some(row) = found.next().db()? {
+            review.insert(stored_name(row.get_ref(0).db()?));
+        }
+    }
+    let mut statement = tx.prepare(COUNT_LINKS).db()?;
+    let mut found = statement.query([project]).db()?;
+    while let Some(row) = found.next().db()? {
+        let card = stored_name(row.get_ref(0).db()?);
+        let flow = stored_name(row.get_ref(1).db()?);
+        let Some(links) = task_links(row.get_ref(2).db()?) else {
+            rows.unread_tasks.insert(card);
+            continue;
+        };
+        for link in links.into_iter().filter(|link| review.contains(link)) {
+            rows.review_tasks
+                .entry(flow.clone())
+                .or_default()
+                .insert(link);
+        }
+    }
+    Ok(())
+}
+
+/// A stored `tasks`' IDs, read as a card's decoder reads them: `None`, so
+/// passed over and named, when it is no JSON list of text or an entry is no
+/// task ID; no entry is ever dropped (ADR-0047).
+fn task_links(value: ValueRef<'_>) -> Option<Vec<String>> {
+    let ValueRef::Text(bytes) = value else {
+        return None;
+    };
+    let links: Vec<String> = serde_json::from_slice(bytes).ok()?;
+    links
+        .iter()
+        .all(|link| task_number(link).is_some())
+        .then_some(links)
 }
 
 /// What an accept records of its verdict.
