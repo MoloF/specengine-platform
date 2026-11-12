@@ -119,7 +119,7 @@ describe("loading, empty, error (U-01)", () => {
     const note = "1 open change proposal(s) not on this sheet: PR-0002; spec inbox lists them";
     const { client } = serving(aRoundSheet([], { notes: [note] }));
     await openQuestions(client);
-    const empty = (await screen.findByRole("heading", { level: 2, name: "No open questions or discrepancies." })).closest(".empty-state");
+    const empty = (await screen.findByRole("heading", { level: 2, name: "No open questions or discrepancies." })).closest(".empty-state-box");
     expect(empty).not.toBeNull();
     const notes = within(empty as HTMLElement).getByRole("list", { name: "Notes from the daemon" });
     expect(within(notes).getAllByRole("listitem").map((item) => item.textContent)).toEqual([note]);
@@ -779,7 +779,7 @@ describe("the sticky Stage bar (review minor 3)", () => {
     const cap = /max-height: (\d+(?:\.\d+)?)rem;/.exec(bar)?.[1];
     expect(cap).toBeDefined();
     expect(bar).toContain("overflow-y: auto;");
-    const padding = /scroll-padding-bottom: calc\((\d+(?:\.\d+)?)rem \+ var\(--space-\d\)\);/.exec(rule(":root:has(.round-stage)"))?.[1];
+    const padding = /scroll-padding-bottom: calc\((\d+(?:\.\d+)?)rem \+ var\(--space-\d{3}\)\);/.exec(rule(":root:has(.round-stage)"))?.[1];
     expect(Number(padding)).toBeGreaterThanOrEqual(Number(cap));
   });
 
@@ -985,5 +985,31 @@ describe("what a POST that settles after its screen left says (review iteration 
     const alert = await within(await screen.findByRole("region", { name: "The answers to stage" })).findByRole("alert");
     expect(alert.textContent).toContain(message);
     expect(document.querySelector('[aria-live="assertive"]')?.textContent).toBe("");
+  });
+});
+
+// DS6 of docs/features/design-sweep.md "Acceptance criteria": Stage is the sheet's one primary, a
+// staged item's Confirm on a hub included; the empty sheet is an EmptyState whose description holds
+// the next step's links.
+describe("the sheet on the primitives (DS6 of design-sweep)", () => {
+  it("holds one primary, Stage, with an item staged and confirmable here", async () => {
+    const staged = aRoundItem({ id: "PR-0003", staged: { decision: "reject", reason: "x" }, staged_at: STAGED_AT });
+    const { client } = serving(aRoundSheet([staged, aRoundItem({ id: "PR-0004" })]));
+    client.getIdentity.mockResolvedValue({ login: "mira" });
+    client.getTeam.mockResolvedValue({ login: "mira", name: null, allowed: ["stage", "confirm"] });
+    await openQuestions(client);
+    const confirm = await within(await screen.findByRole("article", { name: "PR-0003" })).findByRole("button", { name: /^Confirm/ });
+    expect(confirm.classList.contains("button-primary")).toBe(false);
+    expect(Array.from(document.querySelectorAll(".button-primary"))).toEqual([stageButton()]);
+  });
+
+  it("draws the empty sheet as an EmptyState, the Inbox and Agent tasks links in its description", async () => {
+    const { client } = serving(aRoundSheet([]));
+    await openQuestions(client);
+    const title = await screen.findByRole("heading", { level: 2, name: "No open questions or discrepancies." });
+    // M: the empty sheet as plain text.
+    const description = title.closest(".empty-state-box")?.querySelector(".empty-state-description");
+    expect(Array.from(description?.querySelectorAll("a") ?? [], (link) => link.getAttribute("href"))).toEqual(["#/alpha/inbox", "#/alpha/tasks"]);
+    expect(document.querySelector(".round .empty-state")).toBeNull();
   });
 });

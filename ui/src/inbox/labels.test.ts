@@ -58,3 +58,42 @@ describe("the Inbox tables in Russian (LG-3)", () => {
     expect([inbox.severityLook("urgent", ruT).label, inbox.statusLook("parked", ruT).label, inbox.gapLabel("odd", ruT), inbox.previewLabel("later", ruT)]).toEqual(["urgent", "parked", "odd", "later"]);
   });
 });
+
+// DS5 of docs/features/design-sweep.md "Acceptance criteria": a proposal's status as a lozenge, one
+// table the Inbox's head and a task's items share; an unknown word raw, neutral, under lang="en".
+describe("statusLozenge (DS5 of design-sweep)", () => {
+  const boardLabels = import.meta.glob<string>("/src/board/labels.ts", { query: "?raw", import: "default", eager: true })["/src/board/labels.ts"] ?? "";
+
+  it("looks each of the seven up, every one with its own icon", () => {
+    expect(inbox.KNOWN_PROPOSAL_STATUSES.map((status) => [status, inbox.statusLozenge(status, enT).appearance])).toEqual([
+      ["open", "neutral"],
+      ["changes_requested", "warning"],
+      ["approved", "information"],
+      ["applied", "success"],
+      ["rejected", "danger"],
+      ["deferred", "neutral"],
+      ["superseded", "neutral"],
+    ]);
+    expect(inbox.statusLozenge("changes_requested", enT)).toEqual({ appearance: "warning", icon: "changes", label: "Changes requested" });
+    const icons = inbox.KNOWN_PROPOSAL_STATUSES.map((status) => inbox.statusLozenge(status, enT).icon);
+    expect(new Set([...icons, inbox.statusLozenge("weird", enT).icon]).size).toBe(8);
+    for (const status of inbox.KNOWN_PROPOSAL_STATUSES) {
+      expect([status, inbox.statusLozenge(status, ruT).label, inbox.statusLozenge(status, ruT).lang]).toEqual([status, ru.inbox.status[status], undefined]);
+    }
+  });
+
+  it("shows a word it does not know raw and neutral under lang=en, never a known one", () => {
+    expect(inbox.statusLozenge("weird", enT)).toEqual({ appearance: "neutral", icon: "unknown", label: "weird", lang: "en" });
+    expect(inbox.statusLozenge("constructor", ruT)).toEqual({ appearance: "neutral", icon: "unknown", label: "constructor", lang: "en" });
+  });
+
+  it("is the Board's item status too: board/labels.ts delegates and holds no table of its own", async () => {
+    const board = await import("../board/labels");
+    for (const status of [...inbox.KNOWN_PROPOSAL_STATUSES, "weird"]) {
+      expect([status, board.itemStatusLook(status, enT)]).toEqual([status, inbox.statusLozenge(status, enT)]);
+    }
+    // M: a second status table in board/labels.ts.
+    expect(boardLabels).toContain("return statusLozenge(status, t);");
+    expect(boardLabels).not.toMatch(/changes_requested\s*:/);
+  });
+});

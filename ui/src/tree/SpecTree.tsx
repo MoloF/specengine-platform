@@ -26,7 +26,9 @@ const ShownContent = memo(RowContent);
  * (one history entry) and keeps focus here. Keys act only with focus on a row, never with Ctrl,
  * Alt or Cmd. The rows the route opens are marked current and revealed. Memoised: with stable
  * props from the view, a search renders no row again; an inbox or health answer renders again only
- * the lines whose count changed (ShownContent).
+ * the lines whose count changed (ShownContent). A direction's flat list (`flat`) draws no chevron's
+ * column, and with one kind (`oneKind`) no kind chip on a row: every row's would say the same
+ * (docs/features/design-sweep.md "Acceptance criteria", DS8).
  */
 export const SpecTree = memo(function SpecTree({
   rows,
@@ -35,6 +37,8 @@ export const SpecTree = memo(function SpecTree({
   drift,
   onOpen,
   activeRef,
+  flat = false,
+  oneKind = false,
 }: {
   rows: readonly TreeRow[];
   /** The rows the route's node is, by key. */
@@ -46,6 +50,10 @@ export const SpecTree = memo(function SpecTree({
   onOpen: (row: TreeRow) => void;
   /** Receives the row that has the tab stop, so the view can focus it (Back to tree). */
   activeRef: (element: HTMLElement | null) => void;
+  /** A direction's list, one level read with no root: no chevron's column. */
+  flat?: boolean;
+  /** That list's direction names one kind: no kind chip on a row. */
+  oneKind?: boolean;
 }) {
   const t = useTranslate();
   const container = useRef<HTMLDivElement>(null);
@@ -184,7 +192,7 @@ export const SpecTree = memo(function SpecTree({
   }
 
   return (
-    <div ref={container} role="tree" aria-label={t("tree.label")} className="tree" onKeyDown={onKeyDown}>
+    <div ref={container} role="tree" aria-label={t("tree.label")} className={flat ? "tree tree-flat" : "tree"} onKeyDown={onKeyDown}>
       {shown.map((row) => {
         const node = row.node;
         const parent = row.children.length > 0;
@@ -213,10 +221,12 @@ export const SpecTree = memo(function SpecTree({
               onRowClick(row, event);
             }}
           >
-            <span className="tree-toggle" data-toggle={parent ? "" : undefined} aria-hidden="true">
-              {parent && <Icon name={isOpen ? "chevronDown" : "chevronRight"} />}
-            </span>
-            <ShownContent node={node} count={counts?.get(row.key) ?? null} drift={drift?.get(row.key) ?? null} />
+            {!flat && (
+              <span className="tree-toggle" data-toggle={parent ? "" : undefined} aria-hidden="true">
+                {parent && <Icon name={isOpen ? "chevronDown" : "chevronRight"} />}
+              </span>
+            )}
+            <ShownContent node={node} count={counts?.get(row.key) ?? null} drift={drift?.get(row.key) ?? null} oneKind={oneKind} />
           </div>
         );
       })}

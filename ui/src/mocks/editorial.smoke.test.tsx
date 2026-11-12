@@ -38,7 +38,7 @@ function renderOver(client: SpecEngineClient, hash: string, scenario: string | n
 /** The Inbox card of `id`, its review read. */
 async function cardOf(id: string): Promise<HTMLElement> {
   await waitFor(() => {
-    expect(screen.getByRole("article").querySelector(".card-id")?.textContent).toBe(id);
+    expect(screen.getByRole("article").querySelector(".breadcrumbs-current")?.textContent).toBe(id);
   });
   const card = screen.getByRole("article");
   await within(card).findByRole("heading", { level: 3, name: "Provenance" });

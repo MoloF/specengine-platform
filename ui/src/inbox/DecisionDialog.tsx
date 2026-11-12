@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import type { Proposal, StageChoice } from "../api/types";
+import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -50,9 +51,9 @@ function NotStaged({ id, proposal, kind, onCancel }: { id: string; proposal: Pro
         <p>{t("inbox.dialog.notSent")}</p>
       </div>
       <div className="dialog-actions">
-        <button type="button" className="button" data-autofocus="" onClick={onCancel}>
+        <Button data-autofocus="" onClick={onCancel}>
           {t("inbox.dialog.close")}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );
@@ -330,16 +331,12 @@ function StageDialog({
           </div>
         )}
         <div className="dialog-actions">
-          <button
-            type="submit"
-            className={kind === "reject" ? "button button-danger" : "button button-primary"}
-            aria-disabled={pending}
-          >
+          <Button type="submit" appearance={kind === "reject" ? "danger" : "primary"} aria-disabled={pending}>
             {pending ? t("inbox.staging") : wording.submit}
-          </button>
-          <button type="button" className="button" aria-disabled={pending} onClick={cancel}>
+          </Button>
+          <Button aria-disabled={pending} onClick={cancel}>
             {t("inbox.dialog.cancel")}
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>

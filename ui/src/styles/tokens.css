@@ -8,8 +8,7 @@
  * status colours their own roles. Contrast (WCAG 2.2 AA) is checked in both themes by
  * src/styles/tokens.test.ts on the resolved values: text at least 4.5:1 on every surface, focus
  * ring, control border and every status colour at least 3:1. The scale (type, space, radii,
- * controls) is the guard's of src/styles/scale.test.ts; the legacy names stand as aliases until
- * RM-0099.
+ * controls) is the guard's of src/styles/scale.test.ts.
  */
 :root {
   color-scheme: light dark;
@@ -326,20 +325,6 @@
   --modal-width-s: 37.5rem;
   --modal-width-m: 50rem;
   --modal-width-xl: 75rem;
-
-  /* The legacy names, aliases onto the scale until RM-0099 renames their uses: 13 px reads 14,
-     15 reads 16, 18 reads 20 (W10). */
-  --font-size-s: var(--font-size-body);
-  --font-size-m: var(--font-size-heading-s);
-  --font-size-l: var(--font-size-heading-m);
-  --font-size-xl: var(--font-size-heading-l);
-  --line-height-tight: 1.25;
-  --space-1: var(--space-050);
-  --space-2: var(--space-100);
-  --space-3: var(--space-150);
-  --space-4: var(--space-200);
-  --space-5: var(--space-300);
-  --space-6: var(--space-400);
 
   /* Motion and layers. */
   --duration-fast: 120ms;

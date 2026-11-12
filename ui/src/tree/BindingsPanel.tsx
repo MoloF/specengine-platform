@@ -6,6 +6,7 @@ import { CodeRowList, oneLine } from "../health/codeRows";
 import { TestedLine } from "../health/DriftPart";
 import { Notes } from "../overview/parts";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -257,10 +258,9 @@ export function BindingsPanel({ project, nodeRef, onFollow }: { project: string;
     <div ref={region} tabIndex={-1} className="bindings-panel" aria-busy={query.isFetching}>
       <div className="bindings-head">
         <p className="muted">{fill(t("tree.bindings.about", { ref: nodeRef, command: slot("command") }), { command: <code>{VERIFY_NODE_COMMAND}</code> })}</p>
-        <button type="button" className="button" aria-disabled={query.isFetching} onClick={readAgain}>
-          <Icon name="retry" />
+        <Button icon="retry" aria-disabled={query.isFetching} onClick={readAgain}>
           <span>{query.isFetching ? t("tree.bindings.reading") : t("tree.bindings.readAgain")}</span>
-        </button>
+        </Button>
       </div>
       {view.reason !== null && (
         <p className="verbatim" lang="en">

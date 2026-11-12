@@ -159,3 +159,41 @@ describe("the proposal card's task and why (U5 of card-questions)", () => {
     expect(card.textContent).not.toContain("Pilots read");
   });
 });
+
+// DS5 of docs/features/design-sweep.md "Acceptance criteria", its rule of one primary per item: on a
+// hub whose login may confirm, a staged choice's Confirm is the primary and Accept stands default, as
+// a task's Answer dialog does once staged; with nothing staged Accept is the one primary.
+describe("one primary in the proposal's head (DS5 of design-sweep)", () => {
+  const STAGED = aProposal({
+    id: "PR-0061",
+    target_id: "R-1",
+    target_ids: ["R-1"],
+    summary: "Rename the basin",
+    staged: { decision: "reject", reason: "dup" },
+    staged_at: "2026-11-03T09:00:00Z",
+  });
+
+  function confirmer(proposals: Proposal[]): StubClient {
+    const client = stubClient(proposals);
+    client.getIdentity.mockResolvedValue({ login: "mira" });
+    client.getTeam.mockResolvedValue({ login: "mira", name: null, allowed: ["stage", "confirm"] });
+    return client;
+  }
+
+  it("gives Confirm the one primary while a staged choice can be confirmed here", async () => {
+    renderApp(confirmer([STAGED]), "#/alpha/inbox/PR-0061");
+    const card = await screen.findByRole("article");
+    const confirm = await within(card).findByRole("button", { name: /^Confirm/ });
+    const head = card.querySelector(".issue-view-head");
+    expect(Array.from(head?.querySelectorAll(".button-primary") ?? [], (button) => button)).toEqual([confirm]);
+    expect(within(card).getByRole("button", { name: "Accept" }).classList.contains("button-primary")).toBe(false);
+  });
+
+  it("keeps Accept the one primary with nothing staged", async () => {
+    renderApp(confirmer([{ ...STAGED, staged: null, staged_at: null }]), "#/alpha/inbox/PR-0061");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    const head = card.querySelector(".issue-view-head");
+    expect(Array.from(head?.querySelectorAll(".button-primary") ?? [], (button) => button.textContent)).toEqual(["Accepta"]);
+  });
+});

@@ -2,6 +2,8 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit, SearchResults as Results, Snippet } from "../api/types";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { useFocusLater } from "../ui/useFocusLater";
@@ -133,16 +135,12 @@ export function SearchResultsList({
     <div className="search-results" onKeyDown={onKeyDown}>
       <div className="search-results-head">
         <p className="search-query">{fill(t("tree.search.hitsFor", { query: slot("query") }), { query: <span className="verbatim">{results.query}</span> })}</p>
-        <button type="button" className="button button-quiet" onClick={onBack}>
-          <Icon name="back" />
+        <Button appearance="subtle" icon="back" onClick={onBack}>
           <span>{t("tree.search.back")}</span>
-        </button>
+        </Button>
       </div>
       {hits.length === 0 ? (
-        <div className="empty-state">
-          <p>{fill(t("tree.search.none", { query: slot("query") }), { query: <span className="verbatim">{results.query}</span> })}</p>
-          <p className="muted">{archive ? t("tree.search.next") : t("tree.search.nextArchive")}</p>
-        </div>
+        <EmptyState level={3} title={t("tree.search.none", { query: results.query })} description={<p>{archive ? t("tree.search.next") : t("tree.search.nextArchive")}</p>} />
       ) : (
         <div ref={list} role="listbox" aria-label={t("tree.search.label", { query: results.query })} className="hit-list" onKeyDown={onListKeyDown}>
           {hits.map((hit, index) => (

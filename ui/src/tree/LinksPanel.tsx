@@ -4,6 +4,7 @@ import type { NodeQuery } from "../api/queries";
 import type { ShownLink, ShownLinks, ShownNode } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -176,10 +177,8 @@ function HolderLinks({
         </h2>
       )}
       {none ? (
-        <div className="empty-state">
-          <p>{t("tree.links.none")}</p>
-          <p className="muted">{archive ? t("tree.links.next") : t("tree.links.nextArchive")}</p>
-        </div>
+        // One level below its part's heading: the holder's h2 when several answer, else the node's h1.
+        <EmptyState level={many ? 3 : 2} title={t("tree.links.none")} description={<p>{archive ? t("tree.links.next") : t("tree.links.nextArchive")}</p>} />
       ) : (
         <>
           <LinkList title={t("tree.links.outgoing")} links={links.outgoing} empty={t("tree.links.noneOut")} outgoing {...common} />

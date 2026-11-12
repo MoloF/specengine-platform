@@ -11,19 +11,23 @@ import { useTranslate } from "../i18n";
  * One tree line's content: its name, title, kind, status, rev, archived, mark, the inbox count,
  * and with "Show drift" on the node's own row 6 rows by class (docs/features/ui-tree-drift.md
  * "Badges"), each a badge with its icon and `<label> <count>`, never colour alone, never a 0. The
- * tree memoises it (SpecTree.tsx): an answer renders again only the lines whose values changed.
+ * tree memoises it (SpecTree.tsx): an answer renders again only the lines whose values changed. In a
+ * direction's list of one kind the kind chip is left out, every row's being the same (DS8 of
+ * docs/features/design-sweep.md "Acceptance criteria").
  */
-export function RowContent({ node, count, drift }: { node: TreeNode; count: number | null; drift: NodeDrift | null }) {
+export function RowContent({ node, count, drift, oneKind = false }: { node: TreeNode; count: number | null; drift: NodeDrift | null; oneKind?: boolean }) {
   const t = useTranslate();
   return (
     <span className="tree-row-content">
       <span className="tree-row-name mono">{rowName(node)}</span>
       {node.title !== null && <span className="tree-row-title">{node.title}</span>}
       <span className="tree-row-meta">
-        <span className="kind-tag">
-          <span className="sr-only">{t("tree.row.kind")}</span>
-          {node.kind ?? "-"}
-        </span>
+        {!oneKind && (
+          <span className="kind-tag">
+            <span className="sr-only">{t("tree.row.kind")}</span>
+            {node.kind ?? "-"}
+          </span>
+        )}
         {node.status !== null && (
           <span className="status-tag">
             <span className="sr-only">{t("tree.row.status")}</span>

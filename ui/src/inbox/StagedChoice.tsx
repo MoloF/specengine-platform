@@ -1,5 +1,6 @@
 import { useId } from "react";
 import type { ProposalOption, Stage } from "../api/types";
+import { Button } from "../ui/Button";
 import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
@@ -44,6 +45,7 @@ export function StagedChoice({
   onUnstage,
   onConfirm,
   confirmBusy = false,
+  confirmLook = "primary",
 }: {
   id: string;
   review: StagedOf;
@@ -56,6 +58,8 @@ export function StagedChoice({
   onConfirm?: (() => void) | undefined;
   /** A write is being sent: Confirm stays focusable but does nothing. */
   confirmBusy?: boolean;
+  /** Confirm's look: the primary, but where the screen's one primary is another act (Questions' Stage: DS6 of docs/features/design-sweep.md "Acceptance criteria"). */
+  confirmLook?: "primary" | "default";
 }) {
   const t = useTranslate();
   const headingId = useId();
@@ -132,9 +136,8 @@ export function StagedChoice({
       </dl>
       <div className="staged-actions">
         {onConfirm !== undefined && (
-          <button
-            type="button"
-            className="button button-primary"
+          <Button
+            appearance={confirmLook}
             aria-disabled={confirmBusy}
             onClick={() => {
               if (!confirmBusy) {
@@ -143,11 +146,9 @@ export function StagedChoice({
             }}
           >
             {fill(t("inbox.staged.confirm", { id: slot("id") }), { id: <span className="sr-only">{id}</span> })}
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className="button"
+        <Button
           aria-disabled={busy}
           onClick={() => {
             if (!busy) {
@@ -156,7 +157,7 @@ export function StagedChoice({
           }}
         >
           {fill(t("inbox.staged.unstage", { id: slot("id") }), { id: <span className="sr-only">{id}</span> })}
-        </button>
+        </Button>
       </div>
       {refusal !== null && (
         <div className="refusal" role="alert">

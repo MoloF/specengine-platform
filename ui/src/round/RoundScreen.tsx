@@ -9,7 +9,9 @@ import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { confirmedLine } from "../inbox/decisions";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
 import { CopyButton } from "../ui/CopyButton";
+import { EmptyState } from "../ui/EmptyState";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
@@ -360,16 +362,15 @@ export function RoundScreen({ project, round, memory }: { project: string; round
           <span>{dropped.length === 1 ? t("round.droppedOne", { ids: listed(dropped, t) }) : t("round.droppedMany", { ids: listed(dropped, t) })}</span>
         </p>
         <p>{t("round.droppedWhy")}</p>
-        <button
-          type="button"
-          className="button button-quiet"
+        <Button
+          appearance="subtle"
           onClick={() => {
             update((current) => ({ ...current, dropped: [] }));
             focusLater(() => top.current);
           }}
         >
           {t("round.dismiss")}
-        </button>
+        </Button>
       </div>
     );
   const rereadFailure =
@@ -384,17 +385,22 @@ export function RoundScreen({ project, round, memory }: { project: string; round
       <div className="round" ref={top} tabIndex={-1}>
         {confirmedResult}
         {droppedNotice}
-        <div className="empty-state">
-          <h2>{t("round.emptyTitle")}</h2>
-          {notes}
-          <p>{t("round.emptyWhy")}</p>
-          <p>
-            {fill(t("round.emptyNext", { inbox: slot("inbox"), tasks: slot("tasks") }), {
-              inbox: <a href={sectionHash(project, "inbox")}>{t("round.emptyInbox")}</a>,
-              tasks: <a href={sectionHash(project, "tasks")}>{t("round.emptyTasks")}</a>,
-            })}
-          </p>
-        </div>
+        <EmptyState
+          level={2}
+          title={t("round.emptyTitle")}
+          description={
+            <>
+              {notes}
+              <p>{t("round.emptyWhy")}</p>
+              <p>
+                {fill(t("round.emptyNext", { inbox: slot("inbox"), tasks: slot("tasks") }), {
+                  inbox: <a href={sectionHash(project, "inbox")}>{t("round.emptyInbox")}</a>,
+                  tasks: <a href={sectionHash(project, "tasks")}>{t("round.emptyTasks")}</a>,
+                })}
+              </p>
+            </>
+          }
+        />
         {rereadFailure}
         {confirmDialog}
       </div>
@@ -410,9 +416,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
         <p className="round-count">{t("round.itemCount", { count: items.length, minutes: sheet.minutes })}</p>
         {notes}
         {sheet.more > 0 && all > items.length && all !== limit && (
-          <button
-            type="button"
-            className="button"
+          <Button
             aria-disabled={round.isFetching}
             onClick={() => {
               if (!round.isFetching) {
@@ -421,7 +425,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
             }}
           >
             {all === items.length + sheet.more ? t("round.showAll", { count: all }) : t("round.showMost", { count: all })}
-          </button>
+          </Button>
         )}
         <p className="note">
           <Icon name="info" />
@@ -519,16 +523,15 @@ export function RoundScreen({ project, round, memory }: { project: string; round
           </p>
         )}
         {!canStage && <ActOff act="stage" />}
-        <button
-          type="button"
-          className="button button-primary"
+        <Button
+          appearance="primary"
           aria-disabled={busy || !canStage || answered === 0}
           onClick={() => {
             void submit();
           }}
         >
           {posting ? t("round.staging") : t("round.stage", { count: answered })}
-        </button>
+        </Button>
       </section>
       {confirmDialog}
     </div>

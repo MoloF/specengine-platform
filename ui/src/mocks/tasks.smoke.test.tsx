@@ -197,7 +197,7 @@ describe("proposals and the Inbox (AC-08)", () => {
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     const task = within(card).getByRole("link", { name: "T-0107" });
     expect(task.getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
-    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Agent task");
+    expect(task.closest(".property-row")?.querySelector("dt")?.textContent).toBe("Agent task");
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog", { name: "Reject PR-0041" });
     fireEvent.change(within(dialog).getByLabelText("Reason (required)"), { target: { value: "The window stays." } });

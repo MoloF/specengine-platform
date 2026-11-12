@@ -575,11 +575,12 @@ describe("source policy", () => {
   // but where the Spec tree is meant: these calls of `sectionHash(…, "tree", …)`, by file and count.
   it("links the Spec tree only where it is meant: the tree's own navigation, explicit acts, the `o` key, the ID-less records and the tree branches of Markdown and DriftPart (DM-8 of doc-modal)", () => {
     const TREE_LINKS: Readonly<Record<string, number>> = {
-      // The tree's own navigation.
+      // The tree's own navigation, the node's trail among it (DS7 of docs/features/design-sweep.md "Acceptance criteria").
       "/src/tree/TextPanel.tsx": 1,
       "/src/tree/LinksPanel.tsx": 1,
       "/src/tree/TreeView.tsx": 2,
       "/src/tree/BundlePanel.tsx": 2,
+      "/src/tree/NodePane.tsx": 1,
       // Explicit acts: the Roadmap's Open in Spec tree, the Graph's, Flow's lost name; the `o` key in Graph and Flow.
       "/src/roadmap/RoadmapView.tsx": 1,
       "/src/graph/GraphDetails.tsx": 1,
@@ -613,7 +614,7 @@ describe("source policy", () => {
       walk(file);
     }
     expect(counted).toEqual(TREE_LINKS);
-    expect(Object.values(TREE_LINKS).reduce((sum, count) => sum + count, 0)).toBe(16);
+    expect(Object.values(TREE_LINKS).reduce((sum, count) => sum + count, 0)).toBe(17);
   });
 
   it("renders markdown only in src/markdown, raw HTML never interpreted (AC-02 of ui-markdown)", () => {

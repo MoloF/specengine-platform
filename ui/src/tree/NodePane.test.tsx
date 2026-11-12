@@ -63,13 +63,17 @@ function headingLevels(): number[] {
   return screen.getAllByRole("heading").map((heading) => Number(heading.tagName.slice(1)));
 }
 
-/** One h1 first, and no level deeper than one below the heading before it. */
+/**
+ * The tree pane's own h2 first (it stands before the node column; docs/features/design-sweep.md
+ * "Acceptance criteria", DS7), one h1, and no level deeper than one below the heading before it.
+ */
 function expectNoSkippedLevel() {
+  const first = screen.getAllByRole("heading")[0];
+  expect([first?.tagName, first?.textContent, first?.closest(".tree-pane") !== null]).toEqual(["H2", "Spec tree", true]);
   const levels = headingLevels();
-  expect(levels[0]).toBe(1);
   expect(levels.filter((level) => level === 1)).toHaveLength(1);
   levels.forEach((level, at) => {
-    expect(level, `heading ${String(at)} of ${levels.join(",")}`).toBeLessThanOrEqual((levels[at - 1] ?? 0) + 1);
+    expect(level, `heading ${String(at)} of ${levels.join(",")}`).toBeLessThanOrEqual((levels[at - 1] ?? 1) + 1);
   });
 }
 
@@ -139,11 +143,20 @@ describe("the node's heading and text (AC-05, AC-06, AC-14)", () => {
       }),
     );
     await openNode(client);
-    const head = screen.getByRole("article").querySelector(".node-head");
-    const text = head?.textContent ?? "";
-    for (const part of ["DOC-A", "The A document", "widget", "docs/spec/a.md:1-40", "alpha-live", "7", "321 tokens", "b3:abc123", "archived", "not UTF-8", "a note from show"]) {
-      expect([part, text.includes(part)]).toEqual([part, true]);
-    }
+    // The facts beside the text, a Details list (DS7 of docs/features/design-sweep.md "Acceptance criteria").
+    const details = screen.getByRole("region", { name: "Details" });
+    expect(Array.from(details.querySelectorAll(".property-row"), (row) => [row.querySelector("dt")?.textContent, row.querySelector("dd")?.textContent])).toEqual([
+      ["Kind", "widget"],
+      ["Where", "docs/spec/a.md:1-40"],
+      ["Status", "alpha-live"],
+      ["Rev", "7"],
+      ["Size", "321 tokens"],
+      ["Span hash", "b3:abc123"],
+      ["Flags", "archivednot UTF-8"],
+    ]);
+    const article = screen.getByRole("article");
+    expect(article.querySelector(".node-heading")?.textContent).toBe("DOC-AThe A document");
+    expect(article.querySelector(".issue-view-main")?.textContent).toContain("a note from show");
   });
 
   it("holds two holders under one h1, the REF, an h2 and a text each", async () => {
@@ -151,8 +164,8 @@ describe("the node's heading and text (AC-05, AC-06, AC-14)", () => {
     showSource();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("SEC-DUP");
-    const header = document.querySelector<HTMLElement>(".node-head");
-    expect(header === null ? [] : within(header).getAllByRole("heading", { level: 2 })).toHaveLength(2);
+    const side = document.querySelector<HTMLElement>(".issue-view-side");
+    expect(side === null ? [] : within(side).getAllByRole("heading", { level: 2 })).toHaveLength(2);
     const holders = TREE.filter((row) => row.id === "SEC-DUP");
     expect(textLines()).toBe(holders.map(textOf).join(""));
     expect(document.querySelectorAll(".holder-text")).toHaveLength(2);
@@ -1291,5 +1304,104 @@ describe("the Bindings tab's commands (UI-5 of ui-node-bindings)", () => {
       expect(panel.querySelectorAll(".command-text")).toHaveLength(0);
       cleanup();
     }
+  });
+});
+
+// DS7 of docs/features/design-sweep.md "Acceptance criteria": the node is a work item beside the tree,
+// its trail, its raw status a neutral lozenge, its facts a Details list folding the empty ones; several
+// holders each under an h2 with a list; the document view's Technical details keep `dl.facts` from the
+// same rows; a node nothing answers is an EmptyState.
+describe("the node as a pane (DS7 of design-sweep)", () => {
+  /** One holder, a section with no status and no rev. */
+  function sectionClient() {
+    const client = treeClient();
+    client.getNode.mockImplementation(nodeOnly({ ref: "SEC-A1", reason: null, notes: [], nodes: [aNode({ id: "SEC-A1", kind: "section", status: null, rev: null, title: "One" })] }));
+    return client;
+  }
+
+  it("leads with the trail: Project, Spec tree, its REF current", async () => {
+    await openNode(treeClient());
+    const trail = within(screen.getByRole("article")).getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(trail).getAllByRole("listitem").map((item) => item.textContent.replace("/", ""))).toEqual(["Alpha", "Spec tree", "DOC-A"]);
+    expect(within(trail).getByRole("link", { name: "Spec tree" }).getAttribute("href")).toBe("#/alpha/tree");
+    const current = trail.querySelector('[aria-current="page"]');
+    expect([current?.textContent, current?.querySelector(".mono") !== null]).toEqual(["DOC-A", true]);
+    expect(screen.getByRole("article").querySelector(".issue-view")?.classList.contains("issue-view-pane")).toBe(true);
+    expectNoSkippedLevel();
+  });
+
+  it("shows one holder's raw status as a neutral lozenge under lang=en", async () => {
+    const client = treeClient();
+    client.getNode.mockImplementation(nodeOnly({ ref: "DOC-A", reason: null, notes: [], nodes: [aNode({ id: "DOC-A", status: "alpha-live" })] }));
+    await openNode(client);
+    const lozenge = screen.getByRole("article").querySelector(".issue-view-meta .lozenge");
+    expect([lozenge?.getAttribute("data-appearance"), lozenge?.textContent, lozenge?.querySelector(".lozenge-label")?.getAttribute("lang")]).toEqual(["neutral", "alpha-live", "en"]);
+  });
+
+  it("folds a section's Status and Rev under More fields, and draws no status lozenge", async () => {
+    await openNode(sectionClient(), "SEC-A1");
+    const details = screen.getByRole("region", { name: "Details" });
+    // M: the node's facts back in dl.facts.
+    expect(screen.getByRole("article").querySelector(".issue-view-side dl.facts")).toBeNull();
+    const shown = Array.from(details.querySelectorAll(".property-row"), (row) => [row.querySelector("dt")?.textContent, row.closest("[hidden]") === null]);
+    expect(shown).toEqual([
+      ["Kind", true],
+      ["Where", true],
+      ["Size", true],
+      ["Span hash", true],
+      ["Status", false],
+      ["Rev", false],
+      ["Flags", false],
+    ]);
+    expect(within(details).getByRole("button", { name: "More fields (3)" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("article").querySelector(".issue-view-meta")).toBeNull();
+  });
+
+  it("lays its acts as compact subtle buttons: Open document and Show in Graph, a link", async () => {
+    await openNode(treeClient());
+    const article = screen.getByRole("article");
+    const open = within(article).getByRole("button", { name: "Open document" });
+    const graph = within(article).getByRole("link", { name: "Show in graph" });
+    expect([open.className, graph.className]).toEqual(["button button-quiet button-compact", "button button-quiet button-compact"]);
+    expect(graph.getAttribute("href")).toBe("#/alpha/graph/DOC-A");
+    expect(article.querySelectorAll(".button-primary")).toHaveLength(0);
+  });
+
+  it("puts the side before main in the DOM, the cards and tabs in main", async () => {
+    await openNode(treeClient());
+    const body = screen.getByRole("article").querySelector(".issue-view-body");
+    expect(Array.from(body?.children ?? [], (child) => child.className)).toEqual(["issue-view-side", "issue-view-main"]);
+    expect(body?.querySelector(".issue-view-main [role=tablist]")).not.toBeNull();
+  });
+
+  it("gives each of several holders its h2 and its Details list", async () => {
+    await openNode(treeClient(), "SEC-DUP");
+    const side = screen.getByRole("article").querySelector<HTMLElement>(".issue-view-side");
+    expect(side?.querySelector(".muted")?.textContent).toMatch(/SEC-DUP/);
+    const holders = Array.from(side?.querySelectorAll(".holder") ?? []);
+    expect(holders.map((holder) => [holder.querySelector("h2") !== null, holder.querySelectorAll(".property-list").length])).toEqual([
+      [true, 1],
+      [true, 1],
+    ]);
+    // Each list named by its holder's place, never two regions of one name.
+    expect(holders.map((holder) => holder.querySelector(".property-list")?.getAttribute("aria-label"))).toEqual(["Details at docs/spec/a.md:30", "Details at docs/spec/b.md:9"]);
+    expect(screen.getByRole("article").querySelector(".issue-view-meta")).toBeNull();
+  });
+
+  it("draws a REF nothing answers as an EmptyState under the h1, the reason verbatim", async () => {
+    const client = treeClient();
+    client.getNode.mockImplementation(nodeOnly({ ref: "NOPE", reason: "no node or alias NOPE", notes: [], nodes: [] }));
+    renderApp(client, "#/alpha/tree/NOPE");
+    const title = await screen.findByRole("heading", { level: 2, name: "Nothing answers this REF" });
+    const box = title.closest(".empty-state-box");
+    expect(box?.querySelector(".verbatim")?.textContent).toBe("no node or alias NOPE");
+    expect(screen.getByRole("article").querySelector(".issue-view-side")?.childElementCount).toBe(0);
+  });
+
+  it("draws no node open as an EmptyState under the view's h1", async () => {
+    renderApp(treeClient(), "#/alpha/tree");
+    const title = await screen.findByRole("heading", { level: 2, name: "No node open" });
+    expect(title.closest(".empty-state-box")).not.toBeNull();
+    expect(document.querySelector(".node-pane .empty-state")).toBeNull();
   });
 });

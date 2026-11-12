@@ -1306,3 +1306,108 @@ describe("a read pending between a direction and a root (R1 of departments' revi
     expect(screen.getByText("Rooted at").textContent).toBe("Rooted at SCN-A");
   });
 });
+
+// DS8 of docs/features/design-sweep.md "Acceptance criteria", the limit docs/canon/directions.md names
+// for the sweep: a direction's flat list has no chevron's column, and with one kind no kind chip on a
+// row; two kinds keep the chips, and a rooted read keeps the chevrons.
+describe("a direction's list without the repeated chip (DS8 of design-sweep)", () => {
+  const SCENES = [
+    aTreeNode({ id: "SCN-A", depth: 1, parent: "CHP-1", kind: "scene", title: "Arrival", path: "a.md" }),
+    aTreeNode({ id: "SCN-B", depth: 2, parent: "SCN-A", kind: "scene", title: "Storm", path: "b.md" }),
+  ];
+  const MIXED = [...SCENES, aTreeNode({ id: "CUE-A", depth: 1, parent: "CHP-1", kind: "cue", title: "Bell", path: "c.md" })];
+
+  /** A client whose direction `scenes` lists `kinds`, answering with `nodes`. */
+  function directionOf(kinds: string[], nodes: ReturnType<typeof aTreeNode>[]): StubClient {
+    const client = treeClient();
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "writing" })], [aDirection({ name: "scenes", title: "Scenes", kinds })]));
+    const read = client.getTree.getMockImplementation();
+    client.getTree.mockImplementation((project, options, signal) =>
+      options?.kinds !== undefined ? Promise.resolve(aTreeView(nodes, { kinds: options.kinds })) : (read?.(project, options, signal) ?? Promise.resolve(aTreeView([]))),
+    );
+    return client;
+  }
+
+  function chips(): (string | null)[] {
+    return rows().map((item) => item.querySelector(".kind-tag")?.lastChild?.textContent ?? null);
+  }
+
+  it("draws a one-kind list flat: tree-flat, no chevron's slot, no kind chip on a row", async () => {
+    window.localStorage.setItem("specengine.module.alpha", "scenes");
+    renderApp(directionOf(["scene"], SCENES), "#/alpha/tree");
+    await waitFor(() => {
+      expect(rows().map(nameOf)).toEqual(["SCN-A", "SCN-B"]);
+    });
+    expect(screen.getByRole("tree").className).toBe("tree tree-flat");
+    expect(rows().map((item) => item.querySelector(".tree-toggle"))).toEqual([null, null]);
+    // M: the chip drawn with one kind.
+    expect(chips()).toEqual([null, null]);
+  });
+
+  it("keeps each row's kind chip with two kinds, the list still flat", async () => {
+    window.localStorage.setItem("specengine.module.alpha", "scenes");
+    renderApp(directionOf(["scene", "cue"], MIXED), "#/alpha/tree");
+    await waitFor(() => {
+      expect(rows()).toHaveLength(3);
+    });
+    expect(screen.getByRole("tree").className).toBe("tree tree-flat");
+    expect(chips()).toEqual(["scene", "scene", "cue"]);
+  });
+
+  it("keeps a rooted read's chevrons, its class tree alone, and its chips", async () => {
+    renderApp(treeClient(), "#/alpha/tree");
+    await waitFor(() => {
+      expect(rows().length).toBeGreaterThan(1);
+    });
+    expect(screen.getByRole("tree").className).toBe("tree");
+    expect(rows().every((item) => item.querySelector(".tree-toggle") !== null)).toBe(true);
+    expect(chips().every((chip) => chip !== null)).toBe(true);
+  });
+});
+
+// The review of design-sweep (iteration 2): the tree pane stands before the node column's h1 and
+// holds its own sr-only h2, so its empty states are h3 under it and the outline skips no level.
+describe("the tree pane's outline (design-sweep's review)", () => {
+  /** Every heading in document order; the tree pane's first, its h2 then the empty state's h3. */
+  function expectPaneOutline(empty: string) {
+    const headings = screen.getAllByRole("heading");
+    const pane = headings.filter((heading) => heading.closest(".tree-pane") !== null).map((heading) => [heading.tagName, heading.textContent]);
+    // M: the empty state back at level 2, or the pane's h2 dropped.
+    expect(pane).toEqual([
+      ["H2", "Spec tree"],
+      ["H3", empty],
+    ]);
+    expect(headings[0]?.closest(".tree-pane")).not.toBeNull();
+    const levels = headings.map((heading) => Number(heading.tagName.slice(1)));
+    expect(levels.filter((level) => level === 1)).toHaveLength(1);
+    levels.forEach((level, at) => {
+      expect(level, `heading ${String(at)} of ${levels.join(",")}`).toBeLessThanOrEqual((levels[at - 1] ?? 1) + 1);
+    });
+  }
+
+  it("a search with no hit", async () => {
+    const client = treeClient();
+    client.search.mockResolvedValue(aSearchResults([], { query: "zzz" }));
+    await openTree(client);
+    fireEvent.change(screen.getByLabelText("Search the spec"), { target: { value: "zzz" } });
+    fireEvent.submit(screen.getByRole("search"));
+    await screen.findByText(/No node matches/);
+    expectPaneOutline("No node matches “zzz”.");
+  });
+
+  it("an empty tree", async () => {
+    const client = treeClient();
+    client.getTree.mockResolvedValue(aTreeView([], { notes: ["no document under [paths] spec"] }));
+    renderApp(client, "#/alpha/tree");
+    await screen.findByText("No document in the tree");
+    expectPaneOutline("No document in the tree");
+  });
+
+  it("a root that names nothing", async () => {
+    const client = treeClient();
+    client.getTree.mockResolvedValue(aTreeView([], { ref: "NOPE", reason: "no node or alias NOPE" }));
+    renderApp(client, "#/alpha/tree");
+    await screen.findByText("no node or alias NOPE");
+    expectPaneOutline("No tree from that root:");
+  });
+});

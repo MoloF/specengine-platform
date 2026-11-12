@@ -6,6 +6,7 @@ import { sectionHash } from "../app/routes";
 import { severityLook, statusLook } from "../inbox/labels";
 import { summaryOf } from "../inbox/summary";
 import { Badge } from "../ui/Badge";
+import { EmptyState } from "../ui/EmptyState";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { formatAge, formatUtc } from "../ui/time";
 import { useNow } from "../ui/useNow";
@@ -58,10 +59,11 @@ export function ProposalsPanel({
     <div ref={region} tabIndex={-1} className="proposals-panel">
       <p className="muted">{t("tree.proposals.note")}</p>
       {matching.length === 0 ? (
-        <div className="empty-state">
-          <p>{t("tree.proposals.none")}</p>
-          <p>{fill(t("tree.proposals.next", { link: slot("link") }), { link: <a href={sectionHash(project, "inbox")}>{t("tree.proposals.nextLink")}</a> })}</p>
-        </div>
+        <EmptyState
+          level={2}
+          title={t("tree.proposals.none")}
+          description={<p>{fill(t("tree.proposals.next", { link: slot("link") }), { link: <a href={sectionHash(project, "inbox")}>{t("tree.proposals.nextLink")}</a> })}</p>}
+        />
       ) : (
         <ul className="node-proposals">
           {matching.map((proposal) => (

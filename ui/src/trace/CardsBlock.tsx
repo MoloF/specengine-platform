@@ -14,6 +14,7 @@ import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { shownSlot } from "../ui/text";
@@ -76,9 +77,7 @@ function CardLine({ project, card, clears, onClear }: { project: string; card: T
         <bdi>{shownSlot(`${card.flow}/${card.column}`)}</bdi>
       </span>
       {canClear(card) && (
-        <button
-          type="button"
-          className="button"
+        <Button
           aria-disabled={!clears}
           onClick={(event) => {
             if (clears) {
@@ -87,7 +86,7 @@ function CardLine({ project, card, clears, onClear }: { project: string; card: T
           }}
         >
           {fill(t("trace.clear", { id: slot("id") }), { id: <span className="sr-only">{card.id}</span> })}
-        </button>
+        </Button>
       )}
     </li>
   );
@@ -227,10 +226,9 @@ export function CardsBlock({
                 {lastReadWords(t)}
               </span>
             </p>
-            <button type="button" className="button" aria-disabled={read.isFetching} onClick={read.isFetching ? undefined : retry}>
-              <Icon name="retry" />
+            <Button icon="retry" aria-disabled={read.isFetching} onClick={read.isFetching ? undefined : retry}>
               <span>{read.isFetching ? t("ui.retrying") : t("ui.retry")}</span>
-            </button>
+            </Button>
           </div>
         )}
         {cards.length === 0 && row !== undefined && <p className="muted">{t("trace.none")}</p>}
@@ -275,10 +273,8 @@ export function CardsBlock({
         )}
         {group && clearable > 0 && (
           <p className="cards-actions">
-            <button
+            <Button
               ref={allButton}
-              type="button"
-              className="button"
               aria-haspopup="dialog"
               aria-disabled={!clearsAll}
               onClick={() => {
@@ -288,7 +284,7 @@ export function CardsBlock({
               }}
             >
               {t("trace.clearAll")}
-            </button>
+            </Button>
           </p>
         )}
         {group && clearable > 0 && !clearsAll && <ActOff act="group_clear" />}
@@ -322,18 +318,17 @@ export function CardsBlock({
           {t("trace.title")}
         </Heading>
         {newCard && (
-          <button
+          <Button
             ref={newButton}
-            type="button"
-            className="button button-quiet"
+            appearance="subtle"
+            icon="cardNew"
             aria-haspopup="dialog"
             onClick={() => {
               setCreating(true);
             }}
           >
-            <Icon name="cardNew" />
             <span>{t("trace.newCard")}</span>
-          </button>
+          </Button>
         )}
       </div>
       {body}

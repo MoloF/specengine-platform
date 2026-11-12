@@ -5,6 +5,7 @@ import type { ApiError, Proposal, Team } from "../api/types";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { DiffView } from "../ui/DiffView";
 import { Icon } from "../ui/Icon";
@@ -239,9 +240,9 @@ export function ConfirmDialog({
           </ul>
         </div>
         <div className="dialog-actions">
-          <button ref={closeButton} type="button" className="button" data-autofocus="" aria-describedby={doneId} onClick={cancel}>
+          <Button ref={closeButton} data-autofocus="" aria-describedby={doneId} onClick={cancel}>
             {t("inbox.dialog.close")}
-          </button>
+          </Button>
         </div>
       </Dialog>
     );
@@ -309,24 +310,19 @@ export function ConfirmDialog({
         </div>
       )}
       <div className="dialog-actions">
-        <button
-          type="button"
-          className={review?.staged?.decision === "reject" ? "button button-danger" : "button button-primary"}
+        <Button
+          appearance={review?.staged?.decision === "reject" ? "danger" : "primary"}
           aria-disabled={!ready}
           onClick={() => {
             void submit();
           }}
         >
           {fill(t(pending ? "inbox.confirm.confirming" : "inbox.confirm.confirm", { id: slot("id") }), { id: <span className="sr-only">{id}</span> })}
-        </button>
-        {stale && (
-          <button type="button" className="button" onClick={readAgain}>
-            {t("inbox.confirm.readAgain")}
-          </button>
-        )}
-        <button ref={cancelButton} type="button" className="button" data-autofocus="" aria-disabled={pending} onClick={cancel}>
+        </Button>
+        {stale && <Button onClick={readAgain}>{t("inbox.confirm.readAgain")}</Button>}
+        <Button ref={cancelButton} data-autofocus="" aria-disabled={pending} onClick={cancel}>
           {t("inbox.dialog.cancel")}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );

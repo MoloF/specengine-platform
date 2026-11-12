@@ -134,10 +134,10 @@ kbd {
 /* Skip link: off screen until focused. */
 .skip-link {
   position: absolute;
-  left: var(--space-2);
-  top: var(--space-2);
+  left: var(--space-100);
+  top: var(--space-100);
   z-index: var(--z-dialog);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border-radius: var(--radius-s);
   background: var(--accent);
   color: var(--text-on-accent);
@@ -220,7 +220,7 @@ kbd {
 .project-switcher {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
 }
 
@@ -232,9 +232,9 @@ kbd {
 .project-switcher-error {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .project-switcher-error .icon {
@@ -289,17 +289,17 @@ kbd {
 /* Open, the notes hang under their button; each line wraps, the panel scrolls, nothing is cut. */
 .config-notes-panel {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  top: calc(100% + var(--space-050));
   left: 0;
   z-index: var(--z-header);
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   width: max-content;
   min-width: 16rem;
-  max-width: min(40rem, calc(100vw - 2 * var(--space-4)));
+  max-width: min(40rem, calc(100vw - 2 * var(--space-200)));
   max-height: 60vh;
   overflow: auto;
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-overlay);
@@ -309,7 +309,7 @@ kbd {
 
 .config-notes-list {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   font-family: var(--font-mono);
 }
 
@@ -318,8 +318,8 @@ kbd {
   .config-notes-panel {
     position: fixed;
     top: auto;
-    left: var(--space-3);
-    right: var(--space-3);
+    left: var(--space-150);
+    right: var(--space-150);
     width: auto;
     min-width: 0;
     max-width: none;
@@ -417,7 +417,7 @@ kbd {
 }
 
 .app-nav {
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-200) var(--space-150);
   border-right: 1px solid var(--border-subtle);
   background: var(--surface-panel);
 }
@@ -427,7 +427,7 @@ kbd {
   padding: 0;
   margin: 0;
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 /* The nav's items are 32 px, 14/20; the current one is accent text on the selected surface, in a
@@ -459,7 +459,7 @@ kbd {
 
 .app-main {
   min-width: 0;
-  padding: var(--space-5) var(--space-5) var(--space-6);
+  padding: var(--space-300) var(--space-300) var(--space-400);
 }
 
 @media (max-width: 48rem) {
@@ -470,7 +470,7 @@ kbd {
   .app-nav {
     border-right: 0;
     border-bottom: 1px solid var(--border-subtle);
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-100) var(--space-150);
   }
 
   .app-nav ul {
@@ -479,7 +479,7 @@ kbd {
   }
 
   .app-main {
-    padding: var(--space-4) var(--space-3) var(--space-5);
+    padding: var(--space-200) var(--space-150) var(--space-300);
   }
 }
 
@@ -492,7 +492,7 @@ kbd {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-100) var(--space-300);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-200);
   min-width: 0;
 }
 
@@ -506,22 +506,22 @@ kbd {
 }
 
 .module-bar-label {
-  margin-right: var(--space-1);
+  margin-right: var(--space-050);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
 }
 
 .module-option {
   max-width: 100%;
   min-height: max(var(--target-min), 2.25rem);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-050) var(--space-150);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   text-align: start;
   overflow-wrap: anywhere;
   cursor: pointer;
@@ -538,20 +538,20 @@ kbd {
   border-color: var(--accent);
   background: var(--surface-raised);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 /* Views. */
 .view {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
 }
 
 .view-head {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   max-width: 72ch;
 }
 
@@ -600,7 +600,7 @@ textarea.field {
 
 .field-error {
   color: var(--severity-high);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* A button (src/ui/Button.tsx): default, primary, subtle (`button-quiet`), warning and danger, at 32 px
@@ -892,17 +892,17 @@ textarea.field {
 .recommended-mark {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  margin-left: var(--space-2);
+  gap: var(--space-050);
+  margin-left: var(--space-100);
   color: var(--accent);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Loading, errors, notices. */
 .skeleton {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .skeleton-bar {
@@ -930,9 +930,9 @@ textarea.field {
 .notice,
 .refusal {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--severity-high);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -940,7 +940,7 @@ textarea.field {
 
 .error-text {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .error-title,
@@ -948,8 +948,8 @@ textarea.field {
 .notice-title {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-weight: 600;
+  gap: var(--space-100);
+  font-weight: var(--font-weight-semibold);
 }
 
 .error-title .icon,
@@ -961,27 +961,27 @@ textarea.field {
 .error-message,
 .verbatim {
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   white-space: pre-wrap;
 }
 
 .note {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .note-list {
-  padding-left: var(--space-4);
+  padding-left: var(--space-200);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* A stage's result: staged, not applied, so never the colour of an applied proposal. */
 .decision-result {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border-left: 3px solid var(--attention);
   border-radius: var(--radius-s);
   background: var(--surface-panel);
@@ -990,10 +990,10 @@ textarea.field {
 .empty-state,
 .empty-filter {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
   max-width: 72ch;
-  padding: var(--space-5);
+  padding: var(--space-300);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -1003,7 +1003,7 @@ textarea.field {
 .queue {
   display: grid;
   grid-template-columns: minmax(16rem, 24rem) minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-200);
   align-items: start;
 }
 
@@ -1015,26 +1015,26 @@ textarea.field {
 
 .queue-pane {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
 .queue-summary {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .queue-list {
   display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
+  gap: var(--space-100);
+  margin-top: var(--space-100);
 }
 
 .queue-item {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -1056,77 +1056,67 @@ textarea.field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .queue-item-age {
   margin-left: auto;
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .queue-item-summary {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .queue-item-meta {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
+/* The selected proposal (ProposalCard.tsx): a panel around its work item, laid out as a pane. */
 .card {
   display: grid;
   min-width: 0;
+  padding: var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
 }
 
-.card-head {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.card-id {
-  color: var(--text-secondary);
-}
-
 .facts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
+  gap: var(--space-100) var(--space-300);
 }
 
 .fact dt {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .decision-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .card-body {
   display: grid;
-  gap: var(--space-5);
-  padding: var(--space-4);
+  gap: var(--space-300);
   min-width: 0;
 }
 
 .card-section {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
 .card-section-title {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1138,15 +1128,15 @@ textarea.field {
   list-style: none;
   padding: 0;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .target,
 .evidence,
 .option {
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3);
+  gap: var(--space-050);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-raised);
@@ -1157,24 +1147,24 @@ textarea.field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .target-title {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .target-path,
 .target-label {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .node-text {
-  padding: var(--space-3);
+  padding: var(--space-150);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1182,7 +1172,7 @@ textarea.field {
 .pairs {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--space-1) var(--space-4);
+  gap: var(--space-050) var(--space-200);
 }
 
 .pairs dt {
@@ -1199,7 +1189,7 @@ textarea.field {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .option-recommended {
@@ -1207,7 +1197,7 @@ textarea.field {
 }
 
 .option-label {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .price-label {
@@ -1217,20 +1207,20 @@ textarea.field {
 /* An interpretation: the decision, then the agent's two texts, each label above its value. */
 .interpretation {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .interpretation-part,
 .decision-ref {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
 .interpretation dt {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 .interpretation dd {
@@ -1241,7 +1231,7 @@ textarea.field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 /* Section diff: signs kept, lines styled, wrapped. */
@@ -1250,18 +1240,18 @@ textarea.field {
 }
 
 .diff {
-  padding: var(--space-2) 0;
+  padding: var(--space-100) 0;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .diff-line {
   display: block;
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-150);
 }
 
 .diff-added {
@@ -1288,7 +1278,7 @@ textarea.field {
   z-index: var(--z-dialog);
   display: grid;
   place-items: center;
-  padding: var(--space-4);
+  padding: var(--space-200);
   overflow-y: auto;
 }
 
@@ -1301,11 +1291,11 @@ textarea.field {
 .dialog {
   position: relative;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   width: min(var(--modal-width-s), 100%);
-  max-height: calc(100vh - 2 * var(--space-4));
+  max-height: calc(100vh - 2 * var(--space-200));
   overflow-y: auto;
-  padding: var(--space-5);
+  padding: var(--space-300);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-l);
   background: var(--surface-overlay);
@@ -1317,17 +1307,17 @@ textarea.field {
 }
 
 .dialog-effect {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .decision-form {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .option-choice {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   padding: 0;
   border: 0;
   min-width: 0;
@@ -1335,18 +1325,18 @@ textarea.field {
 
 .option-choice legend {
   padding: 0;
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-050);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
 }
 
 .option-radio {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
+  gap: var(--space-100);
   align-items: start;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   cursor: pointer;
@@ -1361,16 +1351,16 @@ textarea.field {
 
 .option-radio-body {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .option-radio-label {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .option-radio-detail {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* Accept's "Editorial: keep the revision" (docs/features/rev-discipline.md "UI"): laid out as an
@@ -1378,9 +1368,9 @@ textarea.field {
 .editorial-choice {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
+  gap: var(--space-100);
   align-items: start;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
 }
@@ -1394,7 +1384,7 @@ textarea.field {
 
 .editorial-body {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
@@ -1404,14 +1394,14 @@ textarea.field {
 
 .editorial-body .option-radio-detail {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 /* The review's `revisions`, one node per line as `spec review` writes them. */
 .revision-list {
   display: grid;
-  gap: var(--space-1);
-  padding-left: var(--space-4);
+  gap: var(--space-050);
+  padding-left: var(--space-200);
   overflow-wrap: anywhere;
 }
 
@@ -1419,11 +1409,11 @@ textarea.field {
    needing attention, never in a status colour. */
 .revision-refused {
   display: block;
-  margin-top: var(--space-1);
-  padding-left: var(--space-2);
+  margin-top: var(--space-050);
+  padding-left: var(--space-100);
   border-left: 3px solid var(--attention);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   white-space: pre-wrap;
 }
 
@@ -1432,7 +1422,7 @@ textarea.field {
    anywhere, never widening the card. */
 .drift-rows {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1440,12 +1430,12 @@ textarea.field {
 
 .drift-raw {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px dashed var(--border-control);
   border-radius: var(--radius-m);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   overflow-wrap: anywhere;
 }
 
@@ -1460,31 +1450,31 @@ textarea.field {
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
+  gap: var(--space-100);
+  margin-top: var(--space-100);
 }
 
 .shortcut-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .shortcut {
   display: grid;
   grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 /* Inbox card: a target opens in the spec tree. */
 .target-open {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* Spec tree view: the tree and search beside the node; stacked below 48em. */
 .tree-view {
   display: grid;
   grid-template-columns: minmax(17rem, 26rem) minmax(0, 1fr);
-  gap: var(--space-5);
+  gap: var(--space-300);
   align-items: start;
   min-width: 0;
 }
@@ -1493,12 +1483,12 @@ textarea.field {
   position: sticky;
   top: 4.5rem;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   align-content: start;
   min-width: 0;
   max-height: calc(100vh - 5.5rem);
   overflow-y: auto;
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -1521,12 +1511,12 @@ textarea.field {
 
 .tree-search {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .search-row {
   display: flex;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .search-row .field {
@@ -1537,10 +1527,10 @@ textarea.field {
 .archive-toggle {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-height: var(--target-min);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .archive-toggle input {
@@ -1557,7 +1547,7 @@ textarea.field {
 /* Show drift (docs/features/ui-tree-drift.md): its state above the tree, one line each; badges in a line's meta. */
 .tree-drift {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
@@ -1583,32 +1573,37 @@ textarea.field {
 .tree-region,
 .search-region {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
 }
 
 .tree-rooted {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .tree {
   display: grid;
-  gap: 1px;
+  gap: var(--space-025);
   min-width: 0;
 }
 
 .tree-row {
   display: grid;
   grid-template-columns: 1.25rem minmax(0, 1fr);
-  gap: var(--space-1);
+  gap: var(--space-050);
   align-items: start;
   min-height: var(--target-min);
-  padding: var(--space-1) var(--space-2) var(--space-1) calc(var(--space-1) + var(--depth, 0) * 1.1rem);
+  padding: var(--space-050) var(--space-100) var(--space-050) calc(var(--space-050) + var(--depth, 0) * var(--space-200));
   border-left: 3px solid transparent;
   border-radius: var(--radius-s);
   cursor: pointer;
   transition: background-color var(--duration-fast) ease-out;
+}
+
+/* A direction's flat list: one level, no chevron's column (docs/features/design-sweep.md "Acceptance criteria", DS8). */
+.tree-flat .tree-row {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .tree-row:hover {
@@ -1636,37 +1631,37 @@ textarea.field {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0 var(--space-2);
+  gap: 0 var(--space-100);
   min-width: 0;
 }
 
 .tree-row-name {
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 .tree-row-meta {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .tree-row-rev {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .tree-foot {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
 }
 
 /* Search hits replace the tree until Back. */
 .search-results {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .search-results-head {
@@ -1674,12 +1669,12 @@ textarea.field {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .search-query {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .search-query .verbatim {
@@ -1688,24 +1683,24 @@ textarea.field {
 
 .search-foot {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .search-count {
-  font-weight: 600;
-  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-body);
 }
 
 .hit-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .hit {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-canvas);
@@ -1727,23 +1722,23 @@ textarea.field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .hit-name {
-  font-weight: 600;
-  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-body);
 }
 
 .hit-meta {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .snippet {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1752,7 +1747,7 @@ mark {
   border-radius: var(--radius-xs);
   background: var(--highlight-surface);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-decoration: underline;
   text-decoration-color: var(--highlight-line);
   text-underline-offset: 0.2em;
@@ -1761,13 +1756,14 @@ mark {
 /* The node: heading, facts, tabs. */
 .node-pane {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
 }
 
+/* No node open: the view's heading and what it is for. */
 .node-head {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
 }
 
@@ -1775,13 +1771,13 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
 }
 
 .node-name {
   color: var(--text-secondary);
-  font-size: var(--font-size-l);
-  font-weight: 600;
+  font-size: var(--font-size-heading-m);
+  font-weight: var(--font-weight-semibold);
 }
 
 .node-facts .fact dd {
@@ -1796,20 +1792,20 @@ mark {
 .flags {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .holder-list {
   list-style: none;
   padding: 0;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .holder {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  gap: var(--space-100);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -1820,18 +1816,18 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-1) var(--space-2);
-  font-size: var(--font-size-m);
+  gap: var(--space-050) var(--space-100);
+  font-size: var(--font-size-heading-s);
 }
 
 .node-foot {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: var(--space-050);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -1865,7 +1861,7 @@ mark {
 
 .tab-count {
   min-width: 1.6em;
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-full);
   font-size: var(--font-size-small);
@@ -1885,28 +1881,28 @@ mark {
 .holder-text,
 .holder-links {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
 }
 
 .holder-text-title {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 .section-jumps {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  font-size: var(--font-size-s);
+  gap: var(--space-050) var(--space-150);
+  font-size: var(--font-size-body);
 }
 
 .section-jumps ul {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1914,7 +1910,7 @@ mark {
 
 .section-jumps-label {
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1935,12 +1931,12 @@ mark {
 
 .text-view {
   margin: 0;
-  padding: var(--space-2) 0;
+  padding: var(--space-100) 0;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
-  font-size: var(--font-size-s);
-  line-height: 1.6;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
   tab-size: 4;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1948,11 +1944,11 @@ mark {
 
 .text-line {
   display: grid;
-  grid-template-columns: calc(var(--line-digits, 3) * 1ch + var(--space-5)) minmax(0, 1fr);
+  grid-template-columns: calc(var(--line-digits, 3) * 1ch + var(--space-300)) minmax(0, 1fr);
 }
 
 .text-line-number {
-  padding-right: var(--space-3);
+  padding-right: var(--space-150);
   color: var(--text-secondary);
   text-align: right;
   user-select: none;
@@ -1960,7 +1956,7 @@ mark {
 
 .text-line-content {
   min-width: 0;
-  padding-right: var(--space-3);
+  padding-right: var(--space-150);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -1973,7 +1969,7 @@ mark {
 /* Links. */
 .link-group {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .link-list,
@@ -1981,7 +1977,7 @@ mark {
 .bundle-tail,
 .node-proposals {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1991,9 +1987,9 @@ mark {
 .bundle-item,
 .node-proposal {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -2007,17 +2003,17 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .link-row-meta,
 .bundle-item-meta {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .link-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .link-reason {
@@ -2029,12 +2025,12 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-100) var(--space-150);
 }
 
 .bundle-field {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .bundle-field .field {
@@ -2047,21 +2043,21 @@ mark {
 
 .bundle-summary {
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .bundle-hash {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   overflow-wrap: anywhere;
 }
 
 .bundle-layer {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .bundle-tail li {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .bundle-body summary {
@@ -2071,7 +2067,7 @@ mark {
 }
 
 .bundle-body pre {
-  margin-top: var(--space-2);
+  margin-top: var(--space-100);
 }
 
 /* The Bindings tab (docs/features/ui-node-bindings.md): Read again beside the tab's line, then
@@ -2080,13 +2076,13 @@ mark {
 .bindings-panel,
 .holder-bindings {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
 }
 
 .bindings-part {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
@@ -2095,7 +2091,7 @@ mark {
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-100) var(--space-200);
 }
 
 .bindings-head p {
@@ -2106,13 +2102,13 @@ mark {
 .bindings-count,
 .bindings-state {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .bindings-not-read {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .binding-line .mono {
@@ -2128,32 +2124,32 @@ mark {
 .lock-diff-body,
 .lock-diff-holder {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
 .lock-diff-body {
-  gap: var(--space-4);
+  gap: var(--space-200);
 }
 
 .lock-diff-title {
-  font-size: var(--font-size-m);
+  font-size: var(--font-size-heading-s);
 }
 
 .lock-diff-toggle {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .lock-diff-about {
   max-width: 72ch;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .lock-diff-sides {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2) var(--space-3);
-  margin-top: var(--space-1);
+  gap: var(--space-100) var(--space-150);
+  margin-top: var(--space-050);
 }
 
 @media (max-width: 48em) {
@@ -2165,7 +2161,7 @@ mark {
 .lock-diff-side {
   display: grid;
   align-content: start;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
@@ -2175,28 +2171,26 @@ mark {
 
 .lock-diff-side-title {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   overflow-wrap: anywhere;
 }
 
 .lock-diff-commands {
-  margin-top: var(--space-1);
+  margin-top: var(--space-050);
   min-width: 0;
 }
 
-/* Tree node pane: the way to the graph. */
+/* Tree node pane: Open document and the way to the graph, both compact buttons in a row; its raw status in the head. */
 .node-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  font-size: var(--font-size-s);
+  gap: var(--space-050) var(--space-200);
+  font-size: var(--font-size-body);
 }
 
-.node-action {
+.node-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  min-height: var(--target-min);
 }
 
 /* Graph: the options, the answer (Canvas | List), details beside the canvas, stacked below 48em. */
@@ -2204,8 +2198,8 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--space-3) var(--space-5);
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-150) var(--space-300);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -2213,7 +2207,7 @@ mark {
 
 .graph-ref {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   flex: 1 1 22rem;
   min-width: min(100%, 16rem);
 }
@@ -2226,7 +2220,7 @@ mark {
 .graph-mode,
 .graph-types {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -2235,7 +2229,7 @@ mark {
 
 .graph-mode legend,
 .graph-types legend {
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-050);
   padding: 0;
 }
 
@@ -2246,9 +2240,9 @@ mark {
 .graph-radio {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
-  margin-right: var(--space-3);
+  margin-right: var(--space-150);
   cursor: pointer;
 }
 
@@ -2261,7 +2255,7 @@ mark {
 
 .graph-depth {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .graph-depth .field {
@@ -2276,21 +2270,21 @@ mark {
 .graph-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .graph-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: max(var(--target-min), 2rem);
-  padding: 0 var(--space-3) 0 var(--space-2);
+  padding: 0 var(--space-150) 0 var(--space-100);
   border: 1px dashed var(--border-control);
   border-radius: var(--radius-full);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition: background-color var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out;
 }
@@ -2325,12 +2319,12 @@ mark {
 
 .graph-types-pending,
 .graph-types-note {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .graph-results {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
 }
 
@@ -2342,30 +2336,30 @@ mark {
 
 .graph-summary {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
 }
 
 .graph-count {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .graph-next {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .graph-canvas-panel {
   display: grid;
-  gap: var(--space-3);
-  padding-top: var(--space-3);
+  gap: var(--space-150);
+  padding-top: var(--space-150);
 }
 
 .graph-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-200);
   align-items: start;
 }
 
@@ -2442,13 +2436,13 @@ mark {
   gap: var(--space-025);
   width: 100%;
   height: 100%;
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-050) var(--space-150);
   overflow: hidden;
   border: var(--xy-node-border);
   border-radius: var(--radius-m);
   background: var(--graph-box-surface);
   color: var(--xy-node-color);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   line-height: 1.3;
   cursor: pointer;
   transition: border-color var(--duration-fast) ease-out;
@@ -2457,7 +2451,7 @@ mark {
 .graph-box p {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -2489,7 +2483,7 @@ mark {
 .graph-box-name {
   min-width: 0;
   overflow: hidden;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
 }
 
@@ -2515,7 +2509,7 @@ mark {
 }
 
 .graph-more-count {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .graph-mark,
@@ -2529,7 +2523,7 @@ mark {
 .graph-mark {
   color: var(--text-primary);
   font-size: var(--font-size-small);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .graph-mark-focus .icon,
@@ -2544,7 +2538,7 @@ mark {
 
 .graph-edge-label {
   position: absolute;
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
@@ -2612,12 +2606,12 @@ mark {
 
 .graph-details {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   align-content: start;
   min-width: 0;
   max-height: clamp(22rem, 68vh, 46rem);
   overflow-y: auto;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -2627,12 +2621,12 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .graph-details-title {
   flex: 1 1 100%;
-  font-size: var(--font-size-m);
+  font-size: var(--font-size-heading-s);
   overflow-wrap: anywhere;
 }
 
@@ -2645,12 +2639,12 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .graph-details-section {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .graph-holders,
@@ -2666,11 +2660,11 @@ mark {
 .graph-edge-lines,
 .graph-list-nodes {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .graph-holder {
-  padding-bottom: var(--space-2);
+  padding-bottom: var(--space-100);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -2681,7 +2675,7 @@ mark {
 .graph-details-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .graph-details-actions .button {
@@ -2690,8 +2684,8 @@ mark {
 
 .graph-legend {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-100);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -2700,15 +2694,15 @@ mark {
 .graph-legend-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
-  font-size: var(--font-size-s);
+  gap: var(--space-100) var(--space-300);
+  font-size: var(--font-size-body);
 }
 
 .graph-legend-item {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .graph-pattern line {
@@ -2717,7 +2711,7 @@ mark {
 }
 
 .graph-legend-stub {
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border: 1px dashed var(--border-control);
   border-radius: var(--radius-s);
 }
@@ -2725,25 +2719,25 @@ mark {
 .graph-legend-about,
 .graph-legend-credit {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .graph-list {
   display: grid;
-  gap: var(--space-5);
-  padding-top: var(--space-3);
+  gap: var(--space-300);
+  padding-top: var(--space-150);
 }
 
 .graph-list-group {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .graph-list-node {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -2754,23 +2748,23 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .graph-list-node-meta {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .graph-list-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Tasks: the list beside the task, stacked below 48em (200 % zoom included). */
 .tasks-view {
   display: grid;
   grid-template-columns: minmax(18rem, 27rem) minmax(0, 1fr);
-  gap: var(--space-5);
+  gap: var(--space-300);
   align-items: start;
   min-width: 0;
 }
@@ -2781,7 +2775,7 @@ mark {
   min-width: 0;
   max-height: calc(100vh - 5.5rem);
   overflow-y: auto;
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -2790,7 +2784,7 @@ mark {
 .tasks-region,
 .tasks-list-region {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
 }
 
@@ -2817,13 +2811,13 @@ mark {
 .tasks-summary {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
 }
 
 .tasks-summary strong {
   color: var(--text-primary);
-  font-size: var(--font-size-l);
+  font-size: var(--font-size-heading-m);
 }
 
 .verbatim-note {
@@ -2833,27 +2827,27 @@ mark {
 /* Filters: chips over the one answer, a text field. */
 .task-filters {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .task-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: max(var(--target-min), 2rem);
-  padding: 0 var(--space-3) 0 var(--space-2);
+  padding: 0 var(--space-150) 0 var(--space-100);
   border: 1px dashed var(--border-control);
   border-radius: var(--radius-full);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition: background-color var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out;
 }
@@ -2877,7 +2871,7 @@ mark {
 
 .chip-count {
   min-width: 1.5em;
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border-radius: var(--radius-full);
   background: var(--surface-canvas);
   font-variant-numeric: tabular-nums;
@@ -2887,16 +2881,16 @@ mark {
 /* The list: groups, what waits for the owner first and marked. */
 .task-list {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .task-group {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .task-group-waiting {
-  padding: var(--space-2);
+  padding: var(--space-100);
   border: 1px solid var(--accent);
   border-left-width: 4px;
   border-radius: var(--radius-m);
@@ -2906,10 +2900,10 @@ mark {
 .task-group-title {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -2924,7 +2918,7 @@ mark {
 
 .task-group-count {
   min-width: 1.6em;
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-full);
   letter-spacing: 0;
@@ -2933,9 +2927,9 @@ mark {
 
 .task-row {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -2956,38 +2950,38 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .task-row-id {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .task-row-age {
   margin-left: auto;
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .task-row-title {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .task-row-targets {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* One task. */
 .task-pane {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
 }
 
 .task-head {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
 }
 
@@ -2995,35 +2989,35 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
 }
 
 .task-name {
   color: var(--text-secondary);
-  font-size: var(--font-size-l);
-  font-weight: 600;
+  font-size: var(--font-size-heading-m);
+  font-weight: var(--font-weight-semibold);
 }
 
 .region-heading {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-150);
 }
 
 .task-badges {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .frozen-note {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .waiting-note {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-100);
+  padding: var(--space-100) var(--space-150);
   border-left: 4px solid var(--accent);
   border-radius: var(--radius-s);
   background: var(--surface-raised);
@@ -3062,16 +3056,16 @@ mark {
 .back-link {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 /* A staged decision (docs/canon/decision-staging.md "UI"): confirmed only on a terminal, so it
    draws attention, never the colour of a done state. */
 .staged-choice {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--attention);
   border-radius: var(--radius-m);
   background: var(--surface-raised);
@@ -3085,10 +3079,10 @@ mark {
 .staged-title {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -3113,15 +3107,15 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-100) var(--space-200);
 }
 
 .staged-mark {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* A Confirm (docs/features/hub-confirm.md): the text scrolls, the refusal and the actions stay in view,
@@ -3135,7 +3129,7 @@ mark {
 
 .confirm-body {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -3149,9 +3143,9 @@ mark {
 .confirm-done {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* A hub's push status (docs/features/hub-git.md "Status and the screen"): above the view, no
@@ -3159,19 +3153,19 @@ mark {
    live region, so a dialog's inert page holds nothing that speaks. */
 .sync-line {
   display: grid;
-  gap: var(--space-1);
-  margin-bottom: var(--space-4);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-050);
+  margin-bottom: var(--space-200);
+  padding: var(--space-100) var(--space-150);
   border-left: 3px solid var(--attention);
   border-radius: var(--radius-s);
   background: var(--surface-panel);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .sync-part {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
@@ -3190,7 +3184,7 @@ mark {
 
 /* A stage changed outside this tab: above the view, until dismissed. */
 .notice-outside-stage {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-200);
   border-color: var(--attention);
 }
 
@@ -3203,7 +3197,7 @@ mark {
    direction, so Cyrillic or right-to-left text wraps and reads in place; nothing is cut. */
 .round {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
 }
 
@@ -3213,18 +3207,18 @@ mark {
 
 .round-intro {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
   max-width: 72ch;
 }
 
 .round-count {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .round-list {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   padding: 0;
   margin: 0;
   list-style: none;
@@ -3233,9 +3227,9 @@ mark {
 
 .round-card {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -3245,17 +3239,17 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   min-width: 0;
 }
 
 .round-id {
-  font-size: var(--font-size-l);
+  font-size: var(--font-size-heading-m);
 }
 
 .round-open {
   margin-left: auto;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* Agent text verbatim, on the Questions screen and in an interpretation: wrapped, never cut, each line taking its own direction. */
@@ -3269,19 +3263,19 @@ mark {
 
 .round-part {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .round-label,
 .round-links dt {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 .round-links {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .round-links dd {
@@ -3291,7 +3285,7 @@ mark {
 .round-link-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
+  gap: var(--space-050) var(--space-200);
   padding: 0;
   list-style: none;
 }
@@ -3306,7 +3300,7 @@ mark {
 
 .round-field {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   max-width: 72ch;
 }
 
@@ -3318,9 +3312,9 @@ mark {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .byte-count-value {
@@ -3337,7 +3331,7 @@ mark {
 
 .byte-count-over .byte-count-value {
   color: var(--severity-high);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .round-changed,
@@ -3361,7 +3355,7 @@ mark {
    clear of it, never hidden behind it (WCAG 2.2 2.4.11). What it would say at length (what a
    Stage replaces or leaves out, the outcome) sits above it, out of the sticky part. */
 :root:has(.round-stage) {
-  scroll-padding-bottom: calc(6rem + var(--space-4));
+  scroll-padding-bottom: calc(6rem + var(--space-200));
 }
 
 .round-stage {
@@ -3371,32 +3365,32 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-100) var(--space-200);
   max-height: 6rem;
   overflow-y: auto;
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-100) var(--space-200);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-m);
   background: var(--surface-raised);
 }
 
 .round-stage-count {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .round-stage-details {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
 }
 
 .round-stage-outcome {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .round-stage-note {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   max-width: 72ch;
   overflow-wrap: anywhere;
 }
@@ -3404,8 +3398,8 @@ mark {
 /* Owner commands: words, the command, Copy. */
 .owner-commands {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-100);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -3415,23 +3409,23 @@ mark {
 .task-part-title {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .owner-commands-note {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   max-width: 72ch;
 }
 
 .command-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   padding: 0;
   list-style: none;
 }
@@ -3439,7 +3433,7 @@ mark {
 .command {
   display: grid;
   grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr) auto;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   align-items: center;
 }
 
@@ -3452,15 +3446,15 @@ mark {
 
 .command-meaning {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .command-text {
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-050) var(--space-100);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   user-select: all;
   overflow-wrap: anywhere;
 }
@@ -3469,21 +3463,21 @@ mark {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .button-copy {
   min-height: var(--target-min);
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-s);
+  padding: 0 var(--space-100);
+  font-size: var(--font-size-body);
 }
 
 .copy-status {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   color: var(--stale-unchanged);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .copy-failed {
@@ -3493,20 +3487,20 @@ mark {
 /* Tabs' content. */
 .task-panel {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-300);
   min-width: 0;
-  padding-top: var(--space-2);
+  padding-top: var(--space-100);
 }
 
 .task-part {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
 .task-part-count {
   min-width: 1.6em;
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-full);
   letter-spacing: 0;
@@ -3520,11 +3514,11 @@ mark {
 
 .task-plan,
 .task-json {
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -3537,7 +3531,7 @@ mark {
 .task-runs,
 .snapshot-diffs {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   padding: 0;
   list-style: none;
 }
@@ -3550,9 +3544,9 @@ mark {
 .task-run,
 .snapshot-diff {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -3565,39 +3559,39 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .task-run-title {
-  font-size: var(--font-size-m);
+  font-size: var(--font-size-heading-s);
 }
 
 .task-target-title {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .task-target-path,
 .task-note-at {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .task-target-links {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  font-size: var(--font-size-s);
+  gap: var(--space-050) var(--space-200);
+  font-size: var(--font-size-body);
 }
 
 .task-names {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   padding: 0;
   list-style: none;
 }
 
 .hash {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   overflow-wrap: anywhere;
 }
 
@@ -3611,10 +3605,10 @@ mark {
 .snapshot-node-list,
 .run-file-list {
   display: grid;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
-  padding-left: var(--space-4);
-  font-size: var(--font-size-s);
+  gap: var(--space-050);
+  margin-top: var(--space-100);
+  padding-left: var(--space-200);
+  font-size: var(--font-size-body);
 }
 
 .running-tag {
@@ -3638,15 +3632,15 @@ mark {
 .home-regions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
-  gap: var(--space-5);
+  gap: var(--space-300);
   align-items: start;
 }
 
 .home-region {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -3657,26 +3651,26 @@ mark {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-100) var(--space-150);
 }
 
 .home-open {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
-  font-size: var(--font-size-s);
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
 }
 
 .home-block {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
 .home-block-waiting {
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--accent);
   border-left-width: 4px;
   border-radius: var(--radius-m);
@@ -3686,10 +3680,10 @@ mark {
 .home-block-title {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -3704,11 +3698,11 @@ mark {
 
 .home-count {
   min-width: 1.75em;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-100);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-full);
   color: var(--text-primary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   text-align: center;
@@ -3716,7 +3710,7 @@ mark {
 
 .home-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3724,9 +3718,9 @@ mark {
 
 .home-row {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -3736,31 +3730,31 @@ mark {
   display: inline-block;
   min-height: var(--target-min);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   text-decoration-color: var(--accent);
 }
 
 .home-row-link .mono {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .home-row-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .home-row-time {
   margin-left: auto;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .home-more {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .home-tally {
@@ -3775,7 +3769,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   min-height: max(var(--target-min), 2rem);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -3787,25 +3781,25 @@ mark {
 .home-total {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
 }
 
 .home-total strong {
   color: var(--text-primary);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-heading-l);
   font-variant-numeric: tabular-nums;
 }
 
 .home-split {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: var(--space-4);
+  gap: var(--space-200);
 }
 
 .home-empty {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
 }
 
@@ -3814,32 +3808,32 @@ mark {
   align-self: start;
   width: min(40rem, 100%);
   margin-top: min(10vh, 5rem);
-  gap: var(--space-2);
-  padding: var(--space-4);
+  gap: var(--space-100);
+  padding: var(--space-200);
 }
 
 .palette-input {
-  font-size: var(--font-size-l);
+  font-size: var(--font-size-heading-m);
 }
 
 .palette-list {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   max-height: min(55vh, 30rem);
   overflow-y: auto;
-  padding: var(--space-1) 0;
+  padding: var(--space-050) 0;
 }
 
 .palette-group {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .palette-group-label {
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-100);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -3853,9 +3847,9 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
   min-height: max(var(--target-min), 2.25rem);
-  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  padding: var(--space-050) var(--space-100) var(--space-050) var(--space-150);
   border: 1px solid transparent;
   border-left-width: 3px;
   border-radius: var(--radius-s);
@@ -3877,7 +3871,7 @@ mark {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0 var(--space-1);
+  gap: 0 var(--space-050);
   min-width: 0;
 }
 
@@ -3887,13 +3881,13 @@ mark {
 }
 
 .palette-option-main .mono {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .palette-error {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .palette-error .icon {
@@ -3906,7 +3900,7 @@ mark {
 }
 
 .palette-hint {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* The keys' hint and a quiet Close for the pointer, on one line while it fits. */
@@ -3915,7 +3909,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 /*
@@ -3938,7 +3932,7 @@ mark {
 .markdown li > *,
 .markdown blockquote > *,
 .markdown .md-footnote > * {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-100);
 }
 
 .markdown > :last-child,
@@ -3950,54 +3944,57 @@ mark {
 
 .markdown ul,
 .markdown ol {
-  padding-left: var(--space-5);
+  padding-left: var(--space-300);
 }
 
 .markdown .md-heading {
-  margin-top: var(--space-3);
-  line-height: var(--line-height-tight);
-  font-weight: 600;
+  margin-top: var(--space-150);
+  font-weight: var(--font-weight-semibold);
 }
 
 .markdown > .md-heading:first-child {
   margin-top: 0;
 }
 
+/* Each level takes its step's pair (docs/features/design-sweep.md "Acceptance criteria", DS3). */
 .markdown h2.md-heading {
-  font-size: var(--font-size-l);
+  font-size: var(--font-size-heading-m);
+  line-height: var(--line-height-heading-m);
 }
 
 .markdown h3.md-heading,
 .markdown h4.md-heading {
-  font-size: var(--font-size-m);
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
 }
 
 .markdown h5.md-heading,
 .markdown h6.md-heading {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
 }
 
 .md-heading-id {
   display: inline-block;
-  margin-left: var(--space-1);
-  padding: 0 var(--space-2);
+  margin-left: var(--space-050);
+  padding: 0 var(--space-100);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-s);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
-  font-weight: 400;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
   vertical-align: middle;
 }
 
 .markdown blockquote,
 .md-footnote {
-  padding-left: var(--space-3);
+  padding-left: var(--space-150);
   border-left: 3px solid var(--border-control);
 }
 
 .md-footnote {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .md-footnote-label {
@@ -4020,16 +4017,16 @@ mark {
 .md-code-info {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .md-code-block,
 .md-front-matter {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   tab-size: 4;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -4042,7 +4039,7 @@ mark {
 .md-raw-html {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -4055,13 +4052,13 @@ mark {
 
 .md-table {
   border-collapse: collapse;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .md-table th,
 .md-table td {
   min-width: 8ch;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-050) var(--space-100);
   border: 1px solid var(--border-subtle);
   text-align: left;
   vertical-align: top;
@@ -4070,7 +4067,7 @@ mark {
 
 .md-table th {
   background: var(--surface-raised);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .markdown .task-list-item {
@@ -4080,10 +4077,10 @@ mark {
 .md-task-state {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  margin-right: var(--space-1);
+  gap: var(--space-050);
+  margin-right: var(--space-050);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   vertical-align: middle;
 }
 
@@ -4100,7 +4097,7 @@ mark {
 }
 
 .md-link-unresolved .badge {
-  margin-left: var(--space-1);
+  margin-left: var(--space-050);
   vertical-align: middle;
 }
 
@@ -4112,19 +4109,19 @@ mark {
 /* Rendered or Source: two toggle buttons, one pressed. */
 .text-mode {
   display: inline-flex;
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-100);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-s);
 }
 
 .text-mode-option {
   min-height: var(--target-min);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-150);
   border: 0;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   cursor: pointer;
 }
 
@@ -4143,7 +4140,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .target-label-row .text-mode {
@@ -4154,7 +4151,7 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 /* Health (docs/features/ui-health.md): four regions in two columns, stacked when narrow or zoomed
@@ -4162,15 +4159,15 @@ mark {
 .health-regions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
-  gap: var(--space-5);
+  gap: var(--space-300);
   align-items: start;
 }
 
 .health-region {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
-  padding: var(--space-4);
+  padding: var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -4186,20 +4183,20 @@ mark {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-100) var(--space-150);
 }
 
 .health-part {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
 .health-part-title,
 .health-subtitle {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -4211,17 +4208,17 @@ mark {
 .health-open {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
-  font-size: var(--font-size-s);
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
 }
 
 .check-verdict .badge {
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--font-size-m);
+  padding: var(--space-050) var(--space-150);
+  font-size: var(--font-size-heading-s);
   line-height: var(--line-height-heading-s);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .check-line-label {
@@ -4231,13 +4228,13 @@ mark {
 .check-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .check-count {
   display: grid;
   min-width: 7rem;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-raised);
@@ -4245,11 +4242,11 @@ mark {
 
 .check-count dt {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .check-count dd {
-  font-size: var(--font-size-l);
+  font-size: var(--font-size-heading-m);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4260,22 +4257,22 @@ mark {
 .stale-list,
 .budget-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .check-causes li {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px dotted var(--check-cannot-check);
   border-radius: var(--radius-s);
 }
 
 .health-clean {
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3);
+  gap: var(--space-050);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-raised);
@@ -4284,7 +4281,7 @@ mark {
 .health-tally {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-100) var(--space-200);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -4295,17 +4292,17 @@ mark {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .health-tally-count,
 .health-count {
   min-width: 1.75em;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-100);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-full);
   color: var(--text-primary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -4316,9 +4313,9 @@ mark {
 .stale-row,
 .budget-row {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -4329,14 +4326,14 @@ mark {
   display: inline-block;
   min-height: var(--target-min);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   text-decoration-color: var(--accent);
 }
 
 .health-left-link .mono,
 .health-amendment-path .mono {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .health-value {
@@ -4356,7 +4353,7 @@ mark {
 .health-measured {
   color: var(--text-primary);
   font-style: normal;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4364,17 +4361,17 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   min-width: 0;
 }
 
 .health-amendment-facts {
-  gap: var(--space-1) var(--space-4);
+  gap: var(--space-050) var(--space-200);
 }
 
 .health-amendment-links {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -4382,9 +4379,9 @@ mark {
 
 .health-amendment-link {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding-left: var(--space-3);
+  padding-left: var(--space-150);
   border-left: 2px solid var(--border-subtle);
 }
 
@@ -4396,14 +4393,14 @@ mark {
 
 .health-amendments-scope {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .health-amendments-more {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-100) var(--space-150);
 }
 
 /* Rows 4 to 6 (docs/features/health-code-ui.md, docs/features/health-drift-ui.md): each line's
@@ -4417,7 +4414,7 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
   min-width: 0;
 }
 
@@ -4425,14 +4422,14 @@ mark {
 .health-code-marker,
 .health-code-tail {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .health-code-id {
   display: inline-flex;
   align-items: center;
   min-height: var(--target-min);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .health-code-id,
@@ -4454,24 +4451,24 @@ mark {
 
 .health-code-markers {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
-  padding: 0 0 0 var(--space-3);
+  padding: 0 0 0 var(--space-150);
   border-left: 2px solid var(--border-subtle);
   list-style: none;
 }
 
 .health-code-cannot {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
 }
 
 .health-code-cannot-title {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-weight: 600;
+  gap: var(--space-100);
+  font-weight: var(--font-weight-semibold);
 }
 
 .health-code-cannot-title .icon {
@@ -4484,57 +4481,57 @@ mark {
 
 .health-pointer {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .health-pointer-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .finding-filters {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .finding-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .finding-total {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .finding-groups {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .finding-group {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
 .finding-group-head {
-  font-size: var(--font-size-m);
+  font-size: var(--font-size-heading-s);
 }
 
 .finding-group-toggle {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-height: var(--target-min);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-050) var(--space-100);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-s);
   background: var(--surface-raised);
   color: var(--text-primary);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
 }
 
@@ -4554,12 +4551,12 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
   min-width: 0;
 }
 
 .finding-place {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .finding-subject-text {
@@ -4573,9 +4570,9 @@ mark {
 .finding-debt {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .finding-debt-expired {
@@ -4588,7 +4585,7 @@ mark {
 
 .finding-fix {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .finding-fix-text {
@@ -4597,13 +4594,13 @@ mark {
 
 .budget-slot {
   display: inline-flex;
-  gap: var(--space-1);
+  gap: var(--space-050);
   align-items: baseline;
 }
 
 .budget-slot-label {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* The Roadmap (docs/features/roadmap-screen.md): the header line, the lanes and their cards, the
@@ -4611,7 +4608,7 @@ mark {
    icon); long and non-Latin titles wrap. */
 .roadmap-results {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-200);
   min-width: 0;
 }
 
@@ -4620,23 +4617,23 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-100) var(--space-200);
 }
 
 .roadmap-line {
   font-family: var(--font-mono);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   overflow-wrap: anywhere;
 }
 
 .roadmap-failure {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .roadmap-empty {
   max-width: 72ch;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -4648,24 +4645,24 @@ mark {
 
 .roadmap-lanes {
   display: grid;
-  gap: var(--space-4);
-  padding-top: var(--space-3);
+  gap: var(--space-200);
+  padding-top: var(--space-150);
   min-width: 0;
 }
 
 .roadmap-jumps ul {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
+  gap: var(--space-050) var(--space-200);
   padding: 0;
   list-style: none;
 }
 
 .roadmap-lane {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -4675,7 +4672,7 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-100) var(--space-150);
 }
 
 .roadmap-lane-name {
@@ -4685,14 +4682,14 @@ mark {
 .roadmap-lane-counts,
 .roadmap-lane-sum {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .roadmap-lane-sum {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .roadmap-bar {
@@ -4716,23 +4713,23 @@ mark {
 .roadmap-items {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-3);
+  gap: var(--space-150);
   padding: 0;
   list-style: none;
 }
 
 .roadmap-card {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   align-content: start;
   height: 100%;
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-raised);
   overflow-wrap: anywhere;
-  scroll-margin-top: var(--space-6);
+  scroll-margin-top: var(--space-400);
 }
 
 .roadmap-card[aria-current="true"] {
@@ -4744,9 +4741,9 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-1) var(--space-2);
-  font-size: var(--font-size-m);
-  font-weight: 600;
+  gap: var(--space-050) var(--space-100);
+  font-size: var(--font-size-heading-s);
+  font-weight: var(--font-weight-semibold);
 }
 
 .roadmap-position {
@@ -4759,14 +4756,14 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
-  font-size: var(--font-size-s);
+  gap: var(--space-050) var(--space-100);
+  font-size: var(--font-size-body);
 }
 
 .roadmap-tasks,
 .roadmap-pool-task-list {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   padding: 0;
   list-style: none;
 }
@@ -4775,27 +4772,27 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-s);
+  gap: var(--space-100);
+  font-size: var(--font-size-body);
 }
 
 .roadmap-path,
 .roadmap-pool-task-targets {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .roadmap-pool-tasks {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .roadmap-cut-rule {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--roadmap-cut);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .roadmap-cut-rule::before,
@@ -4813,7 +4810,7 @@ mark {
 
 .roadmap-notes {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 /* The chain canvas: lanes' names as text above their boxes, the cut's rule down the gap. */
@@ -4822,23 +4819,23 @@ mark {
   gap: var(--space-025);
   width: 100%;
   height: 100%;
-  padding: var(--space-1) 0;
+  padding: var(--space-050) 0;
   overflow: hidden;
   border-bottom: 1px solid var(--border-control);
   color: var(--text-primary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .chain-lane p {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
   min-width: 0;
 }
 
 .chain-lane-name {
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .chain-lane-marks {
@@ -4860,16 +4857,16 @@ mark {
 .chain-cut-label {
   position: absolute;
   top: 0;
-  left: var(--space-1);
+  left: var(--space-050);
   display: inline-flex;
   align-items: center;
   gap: var(--space-025);
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
   color: var(--roadmap-cut);
   font-size: var(--font-size-small);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   white-space: nowrap;
 }
 
@@ -4917,7 +4914,7 @@ mark {
   min-width: 0;
   overflow: hidden;
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4982,7 +4979,7 @@ mark {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .flow-places-body ul,
@@ -5016,7 +5013,7 @@ mark {
 .flow-places-body a[aria-current] {
   border-left-color: var(--accent);
   background: var(--surface-raised);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .flow-places-body .module-option {
@@ -5081,7 +5078,7 @@ mark {
 .flow-places-score {
   color: var(--text-secondary);
   font-size: var(--font-size-body);
-  font-weight: 400;
+  font-weight: var(--font-weight-regular);
 }
 
 /* Records for the AI, at the pane's foot. */
@@ -5239,7 +5236,7 @@ mark {
   display: grid;
   gap: var(--space-050);
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .flow-panel-inner {
@@ -5420,7 +5417,7 @@ mark {
 
 .flow-gap-code {
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
 }
 
@@ -5524,7 +5521,7 @@ mark {
 }
 
 .flow-gap-item .link-button[aria-current="true"] {
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* The canvas fills its region: the picture is panned, never the page (D9). */
@@ -5667,7 +5664,7 @@ mark {
   display: block;
   color: var(--text-primary);
   font-size: var(--font-size-small);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-small);
   text-overflow: ellipsis;
 }
@@ -5708,7 +5705,7 @@ mark {
 .flow-mark-end,
 .flow-mark-marked {
   color: var(--text-primary);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .flow-mark-start .icon,
@@ -5718,7 +5715,7 @@ mark {
 
 .flow-mark-gap {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .flow-mark-gap .icon {
@@ -5731,7 +5728,7 @@ mark {
 
 .flow-mark-selected {
   color: var(--text-primary);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .flow-mark-selected .icon {
@@ -5954,7 +5951,7 @@ mark {
 }
 
 .flow-list-edges li[aria-current="true"] a {
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* A bar drawn from served counts: its words always stand beside it; each part keeps a width to be seen at. */
@@ -5981,30 +5978,30 @@ mark {
 /* A node's cards (docs/features/trace-views.md "A node's cards"): the Flow's panel and the tree's pane. */
 .cards-block {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
-.node-pane > .cards-block {
-  padding-block: var(--space-2);
+.node-pane .issue-view-main > .cards-block {
+  padding-block: var(--space-100);
 }
 
 .cards-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .cards-state {
   color: var(--text-primary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
 }
 
 .cards-lines {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -6014,8 +6011,8 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
-  padding: var(--space-1) 0;
+  gap: var(--space-050) var(--space-100);
+  padding: var(--space-050) 0;
   border-bottom: 1px solid var(--border-subtle);
   overflow-wrap: anywhere;
 }
@@ -6031,11 +6028,11 @@ mark {
 
 .cards-line-id {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .cards-line-place {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .cards-actions {
@@ -6076,12 +6073,12 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-100) var(--space-150);
 }
 
 .board-tool {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   flex: 0 1 11rem;
   min-width: 8rem;
 }
@@ -6089,7 +6086,7 @@ mark {
 .board-tool-check {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   flex: 0 0 auto;
   min-width: 0;
   min-height: var(--control-height);
@@ -6111,12 +6108,12 @@ mark {
 
 .board-acting .field-error {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  top: calc(100% + var(--space-050));
   right: 0;
   z-index: 4;
   width: max-content;
   max-width: min(28rem, 90vw);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-overlay);
@@ -6128,7 +6125,7 @@ mark {
 .board-frame {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
 }
 
@@ -6150,17 +6147,17 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
 }
 
 /* One grid: the header row, then each lane's head and its cells, so a cell stands under its column. */
 .board-grid {
   display: grid;
   grid-template-columns: repeat(var(--board-columns, 1), minmax(14rem, 1fr));
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-100) var(--space-150);
   align-content: start;
   min-height: 100%;
-  padding-bottom: var(--space-2);
+  padding-bottom: var(--space-100);
 }
 
 /* With no lanes the one row of cells stands over the region's free height, so a drop anywhere in a column lands. */
@@ -6212,7 +6209,7 @@ mark {
 .board-lane-head {
   grid-column: 1 / -1;
   min-width: 0;
-  padding-top: var(--space-2);
+  padding-top: var(--space-100);
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -6222,7 +6219,7 @@ mark {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   max-width: min(100%, 60rem);
 }
 
@@ -6267,17 +6264,17 @@ mark {
 }
 
 .board-lane-count {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* Starts its rows at the top: else they share the cell's stretch, and the list grows. */
 .board-cell {
   display: grid;
   align-content: start;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
   min-height: 6rem;
-  padding: var(--space-2);
+  padding: var(--space-100);
   border: 1px solid transparent;
   border-radius: var(--radius-m);
   background: var(--surface-sunken);
@@ -6298,13 +6295,13 @@ mark {
 }
 
 .board-cell-count {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .board-list {
   display: grid;
-  gap: var(--space-2);
-  min-height: var(--space-4);
+  gap: var(--space-100);
+  min-height: var(--space-200);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -6315,7 +6312,7 @@ mark {
 }
 
 .board-slot-drop {
-  padding-top: var(--space-1);
+  padding-top: var(--space-050);
   border-top: 2px solid var(--card-drop);
 }
 
@@ -6326,12 +6323,12 @@ mark {
 /* Over the board's bottom edge, wrapping whole; each can be dismissed. */
 .board-notices {
   position: absolute;
-  right: var(--space-3);
-  bottom: var(--space-3);
-  left: var(--space-3);
+  right: var(--space-150);
+  bottom: var(--space-150);
+  left: var(--space-150);
   z-index: 3;
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   max-height: 50%;
   overflow: auto;
   pointer-events: none;
@@ -6339,9 +6336,9 @@ mark {
 
 .board-notice {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   justify-items: start;
-  padding: var(--space-3);
+  padding: var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-overlay);
@@ -6352,7 +6349,7 @@ mark {
 
 .board-notice-dismiss {
   min-height: var(--target-min);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 /* The title's link is stretched over the tile: a click anywhere is the link's; buttons and links stand above it. */
@@ -6360,8 +6357,8 @@ mark {
 .board-card {
   position: relative;
   display: grid;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-050);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid transparent;
   border-radius: var(--radius-m);
   background: var(--surface-raised);
@@ -6386,8 +6383,8 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
-  font-size: var(--font-size-s);
+  gap: var(--space-050) var(--space-100);
+  font-size: var(--font-size-body);
 }
 
 .board-card:hover {
@@ -6411,13 +6408,13 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
   margin: 0;
 }
 
 .board-card-marked {
   min-width: 0;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   overflow-wrap: anywhere;
 }
 
@@ -6425,7 +6422,7 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .board-card-id {
@@ -6457,8 +6454,8 @@ mark {
 .board-card-when {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 var(--space-3);
-  font-size: var(--font-size-s);
+  gap: 0 var(--space-150);
+  font-size: var(--font-size-body);
 }
 
 .board-card-when {
@@ -6478,7 +6475,7 @@ mark {
 .board-card-source {
   flex: 1 1 8rem;
   min-width: 0;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .board-card-source a {
@@ -6493,7 +6490,7 @@ mark {
 }
 
 .board-hint {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .move-menu-scrim {
@@ -6508,8 +6505,8 @@ mark {
   display: grid;
   width: max-content;
   min-width: 13rem;
-  max-width: calc(100vw - var(--space-4));
-  padding: var(--space-1);
+  max-width: calc(100vw - var(--space-200));
+  padding: var(--space-050);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-overlay);
@@ -6519,10 +6516,10 @@ mark {
 .move-menu-item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
   width: 100%;
   min-height: var(--control-height);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-050) var(--space-100);
   border: 0;
   border-radius: var(--radius-s);
   background: none;
@@ -6540,13 +6537,13 @@ mark {
 
 .move-menu-detail {
   margin-inline-start: auto;
-  padding-inline-start: var(--space-4);
+  padding-inline-start: var(--space-200);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .move-menu-empty {
-  padding: var(--space-2);
+  padding: var(--space-100);
   color: var(--text-secondary);
 }
 
@@ -6554,7 +6551,7 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 /* The card over the board (docs/features/design-foundation.md "The work item: the task modal and page"):
@@ -6863,19 +6860,19 @@ mark {
 .board-mandate {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 /* Both classes: a later `.board-panel-list` rule, one class, would else set its own gap. */
 .board-panel-list.board-from-subtasks {
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .board-from-subtask {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
@@ -6901,7 +6898,7 @@ mark {
    copy and the daemon's notes under it, all inside the modal's scrolling body. */
 .card-task {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
@@ -6909,7 +6906,7 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   min-width: 0;
 }
 
@@ -6928,24 +6925,24 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .board-panel-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .board-panel-part {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
 .board-panel-list {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -6960,12 +6957,12 @@ mark {
   display: grid;
   justify-items: start;
   gap: 0;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .board-history-line {
   display: grid;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .board-history-line time {
@@ -6978,27 +6975,27 @@ mark {
 .board-activity-earlier {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
 }
 
 .board-item {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  margin-top: var(--space-1);
-  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-050);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-sunken);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .board-item-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
   margin: 0;
 }
 
@@ -7021,7 +7018,7 @@ mark {
 .board-item-staged {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
   color: var(--text-secondary);
 }
@@ -7029,21 +7026,21 @@ mark {
 /* What a raise not stored leaves in its dialog (CardDialogs.tsx RaiseNotice): the hits as listed. */
 .raise-part .disclosure-region {
   display: grid;
-  gap: var(--space-3);
-  padding-top: var(--space-2);
+  gap: var(--space-150);
+  padding-top: var(--space-100);
 }
 
 .raise-targets .raise-target {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
   overflow-wrap: anywhere;
 }
 
 .raise-notice {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
@@ -7054,7 +7051,7 @@ mark {
 
 .raise-hits {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -7064,20 +7061,9 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-050) var(--space-2);
+  gap: var(--space-050) var(--space-100);
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-/* A proposal's task on its card (ProposalCard.tsx), a link at the target's height. */
-.card-task-link {
-  margin: 0;
-}
-
-.card-task-link a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target-min);
 }
 
 .card-dialog {
@@ -7086,39 +7072,39 @@ mark {
 
 .card-form {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .card-form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-150);
 }
 
 .card-field {
   display: grid;
   align-content: start;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
 .card-field-hint {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .card-evidence-field {
   min-width: 0;
-  padding: var(--space-2) var(--space-3) var(--space-3);
+  padding: var(--space-100) var(--space-150) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
 }
 
 .card-evidence-field legend {
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
 }
 
 /* Above 36rem the Board fills the viewport below the shell and only its region scrolls, both ways,
@@ -7131,7 +7117,7 @@ mark {
   .board-view {
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - var(--board-top, 8rem) - var(--space-6));
+    height: calc(100dvh - var(--board-top, 8rem) - var(--space-400));
     overflow: hidden;
   }
 
@@ -7202,8 +7188,8 @@ mark {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--space-2);
-    font-weight: 600;
+    gap: var(--space-100);
+    font-weight: var(--font-weight-semibold);
   }
 
   .board-cell {
@@ -7500,6 +7486,39 @@ mark {
   }
 }
 
+/* A pane, one item beside a list (Inbox's proposal, the Spec tree's node): the side first in the DOM,
+   one column until the pane itself is 60rem wide, then main drawn left and the side right; this rule
+   outranks the 44.5rem one (docs/features/design-sweep.md "Acceptance criteria", DS4). */
+.issue-view-pane > .issue-view-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A pane with nothing beside its main (its node still read, failed or not found) draws no side column
+   at any width: no empty track, no gap. */
+.issue-view-pane > .issue-view-body > .issue-view-side:empty {
+  display: none;
+}
+
+@container issue-view (min-width: 60rem) {
+  .issue-view-pane > .issue-view-body {
+    grid-template-columns: minmax(var(--issue-main-min), 1fr) minmax(0, var(--issue-side-width));
+  }
+
+  .issue-view-pane > .issue-view-body > .issue-view-main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .issue-view-pane > .issue-view-body > .issue-view-side {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .issue-view-pane > .issue-view-body:has(> .issue-view-side:empty) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .issue-view-main {
   display: grid;
   align-content: start;
@@ -7620,7 +7639,7 @@ mark {
 .split-subtasks,
 .split-department {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -7630,21 +7649,21 @@ mark {
 .split-subtasks > legend,
 .split-department > legend {
   padding: 0;
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-050);
   font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
 }
 
 .split-department > legend {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .split-rows,
 .split-target-list,
 .split-existing-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -7652,9 +7671,9 @@ mark {
 
 .split-row {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
 }
@@ -7662,7 +7681,7 @@ mark {
 .split-choice {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-height: var(--target-min);
   min-width: 0;
 }
@@ -7684,7 +7703,7 @@ mark {
 .split-discipline,
 .split-targets-line {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .split-targets-line {
@@ -7692,8 +7711,8 @@ mark {
 }
 
 .split-target-list {
-  gap: var(--space-1);
-  padding-top: var(--space-1);
+  gap: var(--space-050);
+  padding-top: var(--space-050);
 }
 
 .split-target-list a,
@@ -7706,7 +7725,7 @@ mark {
 
 .split-existing {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 /* A split's note under the document's acts takes a line of its own. */

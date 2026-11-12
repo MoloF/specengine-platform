@@ -5,6 +5,7 @@ import type { IconName } from "../ui/Icon";
 import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
 import type { StatusCategory } from "./category";
 import type { ProgressWord } from "./rollup";
+import { statusLozenge } from "../inbox/labels";
 
 // The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"), each from the
 // catalog's `board` group: columns, flows and disciplines are project vocabulary, shown as stored; an
@@ -166,24 +167,9 @@ export function itemEventWords(type: string, t: Translate): string {
   return word !== null && Object.hasOwn(ITEM_EVENT_WORDS, word) ? t(`board.activity.${word as ItemEventWord}`) : type;
 }
 
-/** How an item's state looks as a lozenge: a proposal's seven, each with its icon; any other raw and neutral. */
-const ITEM_STATUSES: Readonly<Record<KnownProposalStatus, { appearance: LozengeAppearance; icon: IconName }>> = {
-  open: { appearance: "neutral", icon: "open" },
-  changes_requested: { appearance: "warning", icon: "changes" },
-  approved: { appearance: "information", icon: "approved" },
-  applied: { appearance: "success", icon: "applied" },
-  rejected: { appearance: "danger", icon: "rejected" },
-  deferred: { appearance: "neutral", icon: "deferred" },
-  superseded: { appearance: "neutral", icon: "superseded" },
-};
-
-/** An item's state: its lozenge, labelled as the Inbox labels it; a word this build does not know raw, under `lang="en"`. */
+/** An item's state: its lozenge from the Inbox's one table (`inbox/labels.ts` `statusLozenge`); a word this build does not know raw, under `lang="en"`. */
 export function itemStatusLook(status: string, t: Translate): LozengeLook & { lang?: "en" } {
-  if (!Object.hasOwn(ITEM_STATUSES, status)) {
-    return { appearance: "neutral", icon: "unknown", label: status, lang: "en" };
-  }
-  const known = status as KnownProposalStatus;
-  return { ...ITEM_STATUSES[known], label: t(`inbox.status.${known}`) };
+  return statusLozenge(status, t);
 }
 
 /** The state an item is answered in: the one Answer… stages on (`docs/canon/decision-staging.md` "Rule"). */

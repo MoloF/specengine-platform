@@ -4,6 +4,8 @@ import { useBundle } from "../api/queries";
 import type { BundleBindingRow, BundleItem, BundleLayers, BundleView, TailEntry } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
@@ -142,12 +144,15 @@ function BundleBody({ project, bundle, onFollow }: { project: string; bundle: Bu
   const t = useTranslate();
   if (bundle.reason !== null) {
     return (
-      <div className="empty-state">
-        <p>{t("tree.bundle.none")}</p>
-        <p className="verbatim" lang="en">
-          {bundle.reason}
-        </p>
-      </div>
+      <EmptyState
+        level={2}
+        title={t("tree.bundle.none")}
+        description={
+          <p className="verbatim" lang="en">
+            {bundle.reason}
+          </p>
+        }
+      />
     );
   }
   const tail = bundle.tail ?? [];
@@ -303,9 +308,7 @@ export function BundlePanel({ project, nodeRef, onFollow }: { project: string; n
             }}
           />
         </div>
-        <button type="submit" className="button">
-          {t("tree.bundle.get")}
-        </button>
+        <Button type="submit">{t("tree.bundle.get")}</Button>
         {fieldError !== null && (
           <p id={errorId} className="field-error" role="alert">
             {fieldError === "digits" ? t("tree.bundle.digits") : t("tree.bundle.tooLarge", { max: MAX_BUDGET })}

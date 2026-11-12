@@ -1,15 +1,20 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useNode, type InboxQuery } from "../api/queries";
+import { useNode, useProjectName, type InboxQuery } from "../api/queries";
 import { openDocFrom } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
-import { sectionHash } from "../app/routes";
+import { homeHash, sectionHash } from "../app/routes";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { CardsBlock } from "../trace/CardsBlock";
-import { Button } from "../ui/Button";
+import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
+import { Button, buttonClasses } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
+import { IssueView } from "../ui/IssueView";
+import { Lozenge } from "../ui/Lozenge";
+import { PropertyList } from "../ui/PropertyList";
 import type { TextMode } from "../markdown/TextMode";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
@@ -17,7 +22,7 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { BindingsPanel } from "./BindingsPanel";
 import { BundlePanel } from "./BundlePanel";
-import { Facts } from "./Facts";
+import { factsOf } from "./Facts";
 import { LinksPanel } from "./LinksPanel";
 import { proposalsFor } from "./matching";
 import { ProposalsPanel } from "./ProposalsPanel";
@@ -43,18 +48,25 @@ export function NoNodePane() {
         </h1>
         <p className="view-about">{t("tree.node.about")}</p>
       </header>
-      <div className="empty-state">
-        <h2>{t("tree.node.noneOpen")}</h2>
-        <p>{t("tree.node.pick")}</p>
-        <p className="muted">{t("tree.node.keysHint")}</p>
-      </div>
+      <EmptyState
+        level={2}
+        title={t("tree.node.noneOpen")}
+        description={
+          <>
+            <p>{t("tree.node.pick")}</p>
+            <p className="muted">{t("tree.node.keysHint")}</p>
+          </>
+        }
+      />
     </article>
   );
 }
 
 /**
- * One node by REF: its heading (the REF when several holders answer it, each holder then under
- * its own h2), the header facts, the daemon's notes, its cards and five tabs. The Text tab shows at once,
+ * One node by REF, a work item beside the tree (docs/features/design-sweep.md "Acceptance criteria",
+ * DS7): the trail, its heading (the REF when several holders answer it), one holder's status, the
+ * acts; the facts beside it (each holder's under its own h2 when several answer); then the daemon's
+ * notes, its cards and five tabs. The Text tab shows at once,
  * rendered or as its source; the node's links read starts beside it (the rendered text's anchors,
  * the Links tab), the text never waiting for it. The Bindings and Bundle tabs each read on first
  * open (docs/features/ui-node-bindings.md); Proposals reads the Inbox's query.
@@ -84,6 +96,7 @@ export function NodePane({
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   const t = useTranslate();
+  const projectName = useProjectName(project);
   const view = useNode(project, nodeRef);
   // One observer of the links read: the Links tab shows this same read, and adds none.
   const links = useNode(project, nodeRef, { with: ["links"], archive });
@@ -159,21 +172,26 @@ export function NodePane({
       );
   } else if (holders.length === 0) {
     body = (
-      <div className="empty-state">
-        <h2>{t("tree.node.nothing")}</h2>
-        {data.reason !== null && (
-          <p className="verbatim" lang="en">
-            {data.reason}
-          </p>
-        )}
-        <p>
-          {fill(t("tree.node.nothingNext", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
-            slug: <span className="mono">{REF_FORMS.slug}</span>,
-            section: <span className="mono">{REF_FORMS.section}</span>,
-            md: <span className="mono">{REF_FORMS.md}</span>,
-          })}
-        </p>
-      </div>
+      <EmptyState
+        level={2}
+        title={t("tree.node.nothing")}
+        description={
+          <>
+            {data.reason !== null && (
+              <p className="verbatim" lang="en">
+                {data.reason}
+              </p>
+            )}
+            <p>
+              {fill(t("tree.node.nothingNext", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
+                slug: <span className="mono">{REF_FORMS.slug}</span>,
+                section: <span className="mono">{REF_FORMS.section}</span>,
+                md: <span className="mono">{REF_FORMS.md}</span>,
+              })}
+            </p>
+          </>
+        }
+      />
     );
   } else {
     const count = inbox.data === undefined ? null : proposalsFor(inbox.data.proposals, holders).length;
@@ -252,73 +270,100 @@ export function NodePane({
     );
   }
 
+  const crumbs: Crumb[] = [
+    { key: "project", label: projectName, href: homeHash(project) },
+    { key: "tree", label: t("app.sections.tree.label"), href: sectionHash(project, "tree") },
+    { key: "ref", label: nodeRef, mono: true },
+  ];
+
   return (
     <article className="node-pane" aria-labelledby={titleId} aria-busy={data === undefined && failure === null}>
-      <header className="node-head">
-        <h1 id={titleId} ref={heading} tabIndex={-1} className="node-heading">
-          {title}
-        </h1>
-        {holders.length > 0 && (
-          <div className="node-actions">
-            {/* The document view over the tree, its own links there taking the modal (docs/features/doc-modal.md "Acceptance criteria", DM-16). */}
-            <Button
-              appearance="subtle"
-              spacing="compact"
-              icon="document"
-              aria-haspopup="dialog"
-              onClick={(event) => {
-                openDocFrom(nodeRef, event.currentTarget);
-              }}
-            >
-              {t("tree.node.openDoc")}
-            </Button>
-            <a className="node-action" href={sectionHash(project, "graph", nodeRef)}>
-              <Icon name="graph" />
-              {t("tree.node.showInGraph")}
-            </a>
-          </div>
-        )}
-        {single !== undefined && <Facts holder={single} />}
-        {holders.length > 1 && (
+      <IssueView
+        layout="pane"
+        breadcrumbs={<Breadcrumbs items={crumbs} />}
+        title={
+          <h1 id={titleId} ref={heading} tabIndex={-1} className="node-heading">
+            {title}
+          </h1>
+        }
+        meta={
+          single === undefined || single.status === null ? null : (
+            <span className="node-meta-item">
+              <span className="sr-only">{t("tree.node.status")}</span>
+              <Lozenge appearance="neutral" icon="document" label={single.status} lang="en" />
+            </span>
+          )
+        }
+        actions={
+          holders.length === 0 ? null : (
+            <div className="node-actions">
+              {/* The document view over the tree, its own links there taking the modal (docs/features/doc-modal.md "Acceptance criteria", DM-16). */}
+              <Button
+                appearance="subtle"
+                spacing="compact"
+                icon="document"
+                aria-haspopup="dialog"
+                onClick={(event) => {
+                  openDocFrom(nodeRef, event.currentTarget);
+                }}
+              >
+                {t("tree.node.openDoc")}
+              </Button>
+              <a className={buttonClasses("subtle", "compact")} href={sectionHash(project, "graph", nodeRef)}>
+                <Icon name="graph" />
+                {t("tree.node.showInGraph")}
+              </a>
+            </div>
+          )
+        }
+        side={
+          single !== undefined ? (
+            <PropertyList label={t("tree.node.details")} items={factsOf(single, t)} foldEmpty />
+          ) : holders.length > 1 ? (
+            <>
+              <p className="muted">{t("tree.node.holders", { count: holders.length, ref: nodeRef })}</p>
+              <ul className="holder-list">
+                {holders.map((holder) => (
+                  <li key={`${holder.path}:${String(holder.line)}`} className="holder">
+                    <h2 className="holder-heading">
+                      <span className="mono">{rowName(holder)}</span>
+                      {holder.title !== null && <span className="node-title-text">{holder.title}</span>}
+                    </h2>
+                    <PropertyList label={t("tree.node.detailsAt", { place: `${holder.path}:${String(holder.line)}` })} items={factsOf(holder, t)} foldEmpty />
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null
+        }
+        main={
           <>
-            <p className="muted">{t("tree.node.holders", { count: holders.length, ref: nodeRef })}</p>
-            <ul className="holder-list">
-              {holders.map((holder) => (
-                <li key={`${holder.path}:${String(holder.line)}`} className="holder">
-                  <h2 className="holder-heading">
-                    <span className="mono">{rowName(holder)}</span>
-                    {holder.title !== null && <span className="node-title-text">{holder.title}</span>}
-                  </h2>
-                  <Facts holder={holder} />
-                </li>
-              ))}
-            </ul>
+            {data !== undefined && data.notes.length > 0 && (
+              <ul className="note-list" aria-label={t("tree.node.notes")}>
+                {data.notes.map((note) => (
+                  <li key={note} lang="en">
+                    {note}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {data !== undefined && view.error !== null && (
+              <p className="note" role="alert">
+                {fill(t("tree.node.failedAgain", { ref: nodeRef, message: slot("message") }), { message: <span lang="en">{apiErrorOf(view.error).message}</span> })}
+              </p>
+            )}
+            {holders.length > 0 && (
+              <RegionBoundary name={t("tree.node.boundary.cards")}>
+                <CardsBlock key={nodeRef} project={project} nodeRef={nodeRef} section="tree" heading="h2" />
+              </RegionBoundary>
+            )}
+            {body}
+            {data !== undefined && holders.length > 0 && (
+              <p className="node-foot muted">{fill(t("tree.node.readOnly", { link: slot("link") }), { link: <a href={sectionHash(project, "inbox")}>{t("tree.node.openInbox")}</a> })}</p>
+            )}
           </>
-        )}
-        {data !== undefined && data.notes.length > 0 && (
-          <ul className="note-list" aria-label={t("tree.node.notes")}>
-            {data.notes.map((note) => (
-              <li key={note} lang="en">
-                {note}
-              </li>
-            ))}
-          </ul>
-        )}
-        {data !== undefined && view.error !== null && (
-          <p className="note" role="alert">
-            {fill(t("tree.node.failedAgain", { ref: nodeRef, message: slot("message") }), { message: <span lang="en">{apiErrorOf(view.error).message}</span> })}
-          </p>
-        )}
-      </header>
-      {holders.length > 0 && (
-        <RegionBoundary name={t("tree.node.boundary.cards")}>
-          <CardsBlock key={nodeRef} project={project} nodeRef={nodeRef} section="tree" heading="h2" />
-        </RegionBoundary>
-      )}
-      {body}
-      {data !== undefined && holders.length > 0 && (
-        <p className="node-foot muted">{fill(t("tree.node.readOnly", { link: slot("link") }), { link: <a href={sectionHash(project, "inbox")}>{t("tree.node.openInbox")}</a> })}</p>
-      )}
+        }
+      />
     </article>
   );
 }

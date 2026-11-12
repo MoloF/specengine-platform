@@ -1578,6 +1578,8 @@ export const en = {
       stagedHere: "Staged {{at}}.",
       targets: "Targets",
       noTargets: "No target node named.",
+      // The proposal's facts beside its review (docs/features/design-sweep.md "Acceptance criteria", DS5).
+      details: "Details",
     },
     // A proposal's task and a decision's why on its card (ProposalCard.tsx; docs/features/card-questions.md "Acceptance criteria", U5).
     proposal: {
@@ -1914,6 +1916,9 @@ export const en = {
       spanHash: "Span hash",
       flags: "Flags",
       notUtf8: "not UTF-8",
+      // One holder's facts beside its text, each of several named by its place (docs/features/design-sweep.md "Acceptance criteria", DS7).
+      details: "Details",
+      detailsAt: "Details at {{place}}",
       loading: "Loading {{ref}}",
       failed: "{{ref}} could not be read",
       failedAgain: "{{ref}} could not be read again: {{message}}",

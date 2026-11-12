@@ -31,18 +31,6 @@ export const SCALE_EXCEPTIONS: readonly ScaleException[] = [
   { file: APP, selector: ".sr-only", property: "margin", value: "-1px", reason: "the visually hidden pattern", until: null },
   { file: APP, selector: ".tab", property: "margin-bottom", value: "-1px", reason: "the selected tab's border laid over the list's: a border, not space", until: null },
 
-  // The Spec tree (RM-0099).
-  { file: APP, selector: ".text-view", property: "line-height", value: "1.6", reason: "the verbatim text's numbered lines, the number column set to it", until: "RM-0099" },
-  { file: APP, selector: ".tree", property: "gap", value: "1px", reason: "the tree's rows touch but for a hairline", until: "RM-0099" },
-  {
-    file: APP,
-    selector: ".tree-row",
-    property: "padding",
-    value: "var(--space-1) var(--space-2) var(--space-1) calc(var(--space-1) + var(--depth, 0) * 1.1rem)",
-    reason: "the tree's indent per depth",
-    until: "RM-0099",
-  },
-
   // Icons set in em (RM-0099).
   { file: APP, selector: ".waiting-note .icon", property: "margin-top", value: "0.2em", reason: ICON_ALIGNMENT, until: "RM-0099" },
   { file: APP, selector: ".sync-part .icon", property: "margin-top", value: "0.15em", reason: ICON_ALIGNMENT, until: "RM-0099" },

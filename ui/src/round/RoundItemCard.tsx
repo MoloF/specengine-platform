@@ -5,6 +5,7 @@ import { DocLink } from "../doc/DocLink";
 import { severityLook } from "../inbox/labels";
 import { StagedChoice } from "../inbox/StagedChoice";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { shownSlot, shownText } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
@@ -296,6 +297,7 @@ export const RoundItemCard = memo(function RoundItemCard({
                 : undefined
             }
             confirmBusy={busy}
+            confirmLook="default"
           />
         )}
 
@@ -361,9 +363,7 @@ export const RoundItemCard = memo(function RoundItemCard({
             ) : (
               <>
                 <p>{t("round.changedKept")}</p>
-                <button
-                  type="button"
-                  className="button"
+                <Button
                   onClick={() => {
                     onDraft(item.id, { ...current, updatedAt: item.updated_at });
                     // The notice goes with its button: focus the answer kept.
@@ -371,7 +371,7 @@ export const RoundItemCard = memo(function RoundItemCard({
                   }}
                 >
                   {fill(t("round.keep", { id: slot("id") }), { id: <span className="sr-only">{t("round.keepOf", { id: item.id })}</span> })}
-                </button>
+                </Button>
               </>
             )}
           </div>

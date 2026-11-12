@@ -10,6 +10,8 @@ import type {
 } from "../api/types";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
+import type { IconName } from "../ui/Icon";
+import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
 
 // Closed tables: their known literals get a label from the catalog's `inbox` group, a colour role
 // and an icon; any other string is shown raw in a neutral badge, never mapped to a known value.
@@ -62,6 +64,29 @@ const STATUS: Record<KnownProposalStatus, Mark> = {
 export function statusLook(value: ProposalStatus, t: Translate): Look {
   const mark = lookup(STATUS, value);
   return mark === null ? { label: value, tone: "proposal-unknown", icon: "unknown", served: true } : { label: t(`inbox.status.${value as KnownProposalStatus}`), ...mark };
+}
+
+/**
+ * A proposal's status as a lozenge, the one table the Inbox's head and a task's items share
+ * (docs/features/design-sweep.md "Acceptance criteria", DS5): each of the seven with its icon; a word
+ * this build does not know raw and neutral, under `lang="en"`, never mapped to a known one.
+ */
+const STATUS_LOZENGES: Readonly<Record<KnownProposalStatus, { appearance: LozengeAppearance; icon: IconName }>> = {
+  open: { appearance: "neutral", icon: "open" },
+  changes_requested: { appearance: "warning", icon: "changes" },
+  approved: { appearance: "information", icon: "approved" },
+  applied: { appearance: "success", icon: "applied" },
+  rejected: { appearance: "danger", icon: "rejected" },
+  deferred: { appearance: "neutral", icon: "deferred" },
+  superseded: { appearance: "neutral", icon: "superseded" },
+};
+
+export function statusLozenge(value: ProposalStatus, t: Translate): LozengeLook & { lang?: "en" } {
+  if (!Object.hasOwn(STATUS_LOZENGES, value)) {
+    return { appearance: "neutral", icon: "unknown", label: value, lang: "en" };
+  }
+  const known = value as KnownProposalStatus;
+  return { ...STATUS_LOZENGES[known], label: t(`inbox.status.${known}`) };
 }
 
 const STATUS_ORDER: readonly string[] = Object.keys(STATUS);

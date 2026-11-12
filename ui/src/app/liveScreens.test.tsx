@@ -397,15 +397,15 @@ describe("the Inbox card's Task fact over the daemon (AC-12 of ui-live-tasks)", 
     const card = await screen.findByRole("article");
     const task = await within(card).findByRole("link", { name: "T-0107" });
     expect(task.getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
-    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Agent task");
+    expect(task.closest(".property-row")?.querySelector("dt")?.textContent).toBe("Agent task");
 
     fireEvent.click(within(screen.getByRole("listbox")).getByText("Berth draft"));
     await waitFor(() => {
-      expect(screen.getByRole("article").querySelector(".card-id")?.textContent).toBe("PR-0044");
+      expect(screen.getByRole("article").querySelector(".breadcrumbs-current")?.textContent).toBe("PR-0044");
     });
     const other = screen.getByRole("article");
     await within(other).findByRole("heading", { level: 3, name: "Provenance" });
-    const fact = Array.from(other.querySelectorAll(".fact")).find((item) => item.querySelector("dt")?.textContent === "Agent task");
+    const fact = Array.from(other.querySelectorAll(".property-row")).find((item) => item.querySelector("dt")?.textContent === "Agent task");
     expect(fact?.querySelector("dd")?.textContent).toBe("No agent task");
   });
 });

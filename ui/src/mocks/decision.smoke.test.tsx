@@ -44,16 +44,16 @@ function sectionOf(scope: HTMLElement, title: string): HTMLElement {
   return found;
 }
 
-/** The value a card's facts give a name. */
+/** The value a card's Details give a name. */
 function fact(card: HTMLElement, name: string): string {
-  const term = Array.from(card.querySelectorAll(".facts dt")).find((dt) => dt.textContent === name);
+  const term = Array.from(card.querySelectorAll(".property-list dt")).find((dt) => dt.textContent === name);
   return term?.nextElementSibling?.textContent ?? "";
 }
 
 /** The Inbox card of `id`, its review read. */
 async function cardOf(id: string): Promise<HTMLElement> {
   await waitFor(() => {
-    expect(screen.getByRole("article").querySelector(".card-id")?.textContent).toBe(id);
+    expect(screen.getByRole("article").querySelector(".breadcrumbs-current")?.textContent).toBe(id);
   });
   const card = screen.getByRole("article");
   await within(card).findByRole("heading", { level: 3, name: "Provenance" });

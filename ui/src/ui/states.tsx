@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { apiErrorOf, isNotServed } from "../api/client";
 import { useTranslate } from "../i18n";
+import { Button } from "./Button";
 import { Icon } from "./Icon";
 
 /** A loading placeholder: grey bars, aria-busy, a label for screen readers. */
@@ -50,9 +51,8 @@ export function ErrorPanel({
           {message}
         </p>
       </div>
-      <button
-        type="button"
-        className="button"
+      <Button
+        icon="retry"
         aria-disabled={retrying}
         onClick={() => {
           if (!retrying) {
@@ -60,9 +60,8 @@ export function ErrorPanel({
           }
         }}
       >
-        <Icon name="retry" />
         <span>{retrying ? t("ui.retrying") : t("ui.retry")}</span>
-      </button>
+      </Button>
     </div>
   );
 }

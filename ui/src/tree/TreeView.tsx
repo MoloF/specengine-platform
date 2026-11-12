@@ -10,6 +10,8 @@ import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { DEFAULT_TEXT_MODE, type TextMode } from "../markdown/TextMode";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
@@ -50,28 +52,25 @@ function TreeFooter({
             <span>{t("tree.view.cut", { count: tree.nodes.length })}</span>
           </p>
           {narrowTo !== null && (
-            <button
-              type="button"
-              className="button"
+            <Button
               onClick={() => {
                 onRoot(narrowTo);
               }}
             >
               {fill(t("tree.view.showAsRoot", { name: slot("name") }), { name: <span className="mono">{narrowTo}</span> })}
-            </button>
+            </Button>
           )}
         </div>
       )}
       {rooted && (
-        <button
-          type="button"
-          className="button button-quiet"
+        <Button
+          appearance="subtle"
           onClick={() => {
             onRoot(null);
           }}
         >
           {t("tree.view.wholeTree")}
-        </button>
+        </Button>
       )}
       {tree.notes.length > 0 && (
         <ul className="note-list" aria-label={t("tree.view.notes")}>
@@ -172,10 +171,9 @@ function SearchField({
             }
           }}
         />
-        <button type="submit" className="button">
-          <Icon name="search" />
+        <Button type="submit" icon="search">
           <span>{t("tree.search.submit")}</span>
-        </button>
+        </Button>
       </div>
       {queryError && (
         <p id={`${searchId}-error`} className="field-error" role="alert">
@@ -267,12 +265,13 @@ export function TreeView({
   // A direction's list is one level: each row's depth as 0, so none is a parent and every row is
   // aria-level 1. Flatness is the answer's own, a kinds read with no root, never the request's: while a
   // new read is out the last answer stays up (`keepPreviousData`) and is drawn as it was read.
+  const flat = tree.data !== undefined && tree.data.ref === null && tree.data.kinds.length > 0;
+  // One kind listed: no row's chip tells it from another (DS8 of docs/features/design-sweep.md "Acceptance criteria").
+  const oneKind = flat && tree.data.kinds.length === 1;
   const rows = useMemo(() => {
-    const answer = tree.data;
-    const nodes = answer?.nodes ?? [];
-    const flat = answer !== undefined && answer.ref === null && answer.kinds.length > 0;
+    const nodes = tree.data?.nodes ?? [];
     return buildRows(flat ? nodes.map((node) => ({ ...node, depth: 0 })) : nodes);
-  }, [tree.data]);
+  }, [tree.data, flat]);
   // The holders of the route's node once read; a previous node's answer kept up meanwhile is not it.
   const holders = nodeRef === null || node.data === undefined || node.isPlaceholderData ? null : node.data.nodes;
   const currentRows = useMemo(() => (nodeRef === null ? [] : rowsForRef(rows, nodeRef, holders)), [rows, nodeRef, holders]);
@@ -379,26 +378,38 @@ export function TreeView({
       );
   } else if (tree.data.reason !== null) {
     treeBody = (
-      <div className="empty-state">
-        <p>{t("tree.view.noRoot")}</p>
-        <p className="verbatim" lang="en">
-          {tree.data.reason}
-        </p>
+      <>
+        <EmptyState
+          level={3}
+          title={t("tree.view.noRoot")}
+          description={
+            <p className="verbatim" lang="en">
+              {tree.data.reason}
+            </p>
+          }
+        />
         <TreeFooter tree={tree.data} archive={archive} rooted={root !== null} narrowTo={null} onRoot={setRoot} />
-      </div>
+      </>
     );
   } else if (rows.length === 0) {
     treeBody = (
-      <div className="empty-state">
-        <h2>{t("tree.view.empty")}</h2>
-        {tree.data.notes.map((note) => (
-          <p key={note} className="verbatim" lang="en">
-            {note}
-          </p>
-        ))}
-        <p className="muted">{!archive && tree.data.left_out.tier3 > 0 ? t("tree.view.emptyNextArchive") : t("tree.view.emptyNext")}</p>
+      <>
+        <EmptyState
+          level={3}
+          title={t("tree.view.empty")}
+          description={
+            <>
+              {tree.data.notes.map((note) => (
+                <p key={note} className="verbatim" lang="en">
+                  {note}
+                </p>
+              ))}
+              <p>{!archive && tree.data.left_out.tier3 > 0 ? t("tree.view.emptyNextArchive") : t("tree.view.emptyNext")}</p>
+            </>
+          }
+        />
         {root !== null && <TreeFooter tree={{ ...tree.data, notes: [] }} archive={archive} rooted narrowTo={null} onRoot={setRoot} />}
-      </div>
+      </>
     );
   } else {
     treeBody = (
@@ -406,7 +417,7 @@ export function TreeView({
         {root !== null && (
           <p className="tree-rooted">{fill(t("tree.view.rooted", { root: slot("root") }), { root: <span className="mono">{root}</span> })}</p>
         )}
-        <SpecTree rows={rows} current={current} counts={counts} drift={drift?.byRow ?? null} onOpen={openRow} activeRef={setActiveRow} />
+        <SpecTree rows={rows} current={current} counts={counts} drift={drift?.byRow ?? null} onOpen={openRow} activeRef={setActiveRow} flat={flat} oneKind={oneKind} />
         <TreeFooter
           tree={tree.data}
           archive={archive}
@@ -464,6 +475,8 @@ export function TreeView({
   return (
     <div className="tree-view" onKeyDown={onViewKeyDown}>
       <div className="tree-pane">
+        {/* The pane's own heading, before the node's h1: its empty states stand one level below it. */}
+        <h2 className="sr-only">{t("app.sections.tree.label")}</h2>
         <SearchField inputRef={searchField} showHits={showHits} onSearch={runSearch} onBack={backToTree} />
         <div className="archive-toggle">
           <input

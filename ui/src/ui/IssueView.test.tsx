@@ -26,6 +26,22 @@ describe("IssueView", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Title" })).toBeTruthy();
   });
 
+  it("keeps the default item: main before side, no pane class (DS4 of design-sweep)", () => {
+    const { container } = render(<IssueView breadcrumbs={null} title={<h2>T</h2>} main={<p>Main</p>} side={<p>Side</p>} />);
+    expect(container.firstElementChild?.className).toBe("issue-view");
+    expect(Array.from(container.querySelector(".issue-view-body")?.children ?? [], (child) => child.className)).toEqual(["issue-view-main", "issue-view-side"]);
+  });
+
+  it("lays a pane out side before main in the DOM, its root issue-view-pane (DS4 of design-sweep)", () => {
+    const { container } = render(<IssueView layout="pane" breadcrumbs={null} title={<h2>T</h2>} main={<p>Main</p>} side={<p>Side</p>} />);
+    expect(container.firstElementChild?.className).toBe("issue-view issue-view-pane");
+    // M: main before side in a pane.
+    expect(Array.from(container.querySelector(".issue-view-body")?.children ?? [], (child) => [child.className, child.textContent])).toEqual([
+      ["issue-view-side", "Side"],
+      ["issue-view-main", "Main"],
+    ]);
+  });
+
   it("draws no meta line without one, nor for null", () => {
     const { container, rerender } = render(<IssueView breadcrumbs={null} title={<h1>T</h1>} main={null} side={null} />);
     expect(container.querySelector(".issue-view-meta")).toBeNull();
@@ -103,6 +119,39 @@ function outsideAtRules(css: string): string {
   }
   return out + css.slice(at);
 }
+
+// docs/features/design-sweep.md "Acceptance criteria", DS4: a pane stays one column until it is 60rem
+// wide, then main is drawn left and the side right; the work item's 44.5rem rule is unchanged.
+describe("the pane's columns", () => {
+  const uncommented = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const ANY = uncommented(outsideAtRules(appCss));
+  const ITEM = uncommented(containerBlocks("min-width: 44.5rem").join("\n"));
+  const PANE = uncommented(containerBlocks("min-width: 60rem").join("\n"));
+  const TWO = /grid-template-columns:\s*minmax\(var\(--issue-main-min\), 1fr\) minmax\(0, var\(--issue-side-width\)\);/;
+
+  it("holds a pane at one column at any width, a rule that outranks the item's", () => {
+    expect(rulesHolding(".issue-view-pane > .issue-view-body", ANY).join("")).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\);/);
+    // M: the pane's two columns at 44.5rem.
+    expect(rulesHolding(".issue-view-pane > .issue-view-body", ITEM)).toEqual([]);
+  });
+
+  it("splits a pane at 60rem: two columns, main in the first, the side in the second, both on one row", () => {
+    expect(rulesHolding(".issue-view-pane > .issue-view-body", PANE).join("")).toMatch(TWO);
+    const main = rulesHolding(".issue-view-pane > .issue-view-body > .issue-view-main", PANE).join("");
+    const side = rulesHolding(".issue-view-pane > .issue-view-body > .issue-view-side", PANE).join("");
+    expect([/grid-column:\s*1;/.test(main), /grid-row:\s*1;/.test(main), /grid-column:\s*2;/.test(side), /grid-row:\s*1;/.test(side)]).toEqual([true, true, true, true]);
+  });
+
+  it("draws no side column for a pane whose side is empty, at any width", () => {
+    expect(rulesHolding(".issue-view-pane > .issue-view-body > .issue-view-side:empty", ANY).join("")).toMatch(/display:\s*none;/);
+    expect(rulesHolding(".issue-view-pane > .issue-view-body:has(> .issue-view-side:empty)", PANE).join("")).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\);/);
+  });
+
+  it("leaves the work item's 44.5rem rule as it was, the side at most 360 px", () => {
+    expect(rulesHolding(".issue-view-body", ITEM).join("")).toMatch(TWO);
+    expect(rulesHolding(".issue-view-side", ANY).join("")).toMatch(/max-width:\s*var\(--issue-side-width\);/);
+  });
+});
 
 // docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look (the review's L2): the work item
 // in a dialog, a card's or a document's, scrolls its body inside at one column, the head staying; under

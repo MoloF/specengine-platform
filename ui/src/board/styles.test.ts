@@ -69,7 +69,7 @@ describe("the columns hold still (BH-1)", () => {
     expect(ruleWith(".board-acting", /position/)).toMatch(/position:\s*relative;/);
     const line = ruleWith(".board-acting .field-error", /position/);
     expect(line).toMatch(/position:\s*absolute;/);
-    expect(line).toMatch(/top:\s*calc\(100% \+ var\(--space-1\)\);/);
+    expect(line).toMatch(/top:\s*calc\(100% \+ var\(--space-050\)\);/);
   });
 
   it("starts a cell's rows at its top and gives an empty cell height to take a drop", () => {
@@ -92,7 +92,7 @@ describe("the header stays; the page never scrolls sideways (BH-2)", () => {
   it("above 36rem: the view fills the viewport below the shell, measured, and the region scrolls both ways", () => {
     expect(WIDE).not.toBe("");
     const view = ruleWith(".board-view", /height/, WIDE);
-    expect(view).toMatch(/height:\s*calc\(100dvh - var\(--board-top, 8rem\) - var\(--space-6\)\);/);
+    expect(view).toMatch(/height:\s*calc\(100dvh - var\(--board-top, 8rem\) - var\(--space-400\)\);/);
     expect(view).toMatch(/overflow:\s*hidden;/);
     const region = ruleWith(".board-region", /overflow/, WIDE);
     expect(region).toMatch(/overflow:\s*auto;/);
@@ -152,11 +152,11 @@ function cascaded(classes: readonly string[], property: string): string | null {
 }
 
 // A review minor of task-mandate (docs/features/task-mandate.md "Acceptance criteria", V3): a parent's
-// Decisions from subtasks keeps its entries --space-3 apart, though it is a `.board-panel-list` too,
-// whose rule of one class stands later in the sheet with --space-1.
+// Decisions from subtasks keeps its entries --space-150 apart, though it is a `.board-panel-list` too,
+// whose rule of one class stands later in the sheet with --space-050.
 describe("Decisions from subtasks keeps its entries apart (V3 of task-mandate)", () => {
-  it("lays its entries --space-3 apart, over the panel list's --space-1 (M: the gap rule of one class, losing to .board-panel-list)", () => {
-    expect(cascaded(["board-panel-list"], "gap")).toBe("var(--space-1)");
-    expect(cascaded(["board-panel-list", "board-from-subtasks"], "gap")).toBe("var(--space-3)");
+  it("lays its entries --space-150 apart, over the panel list's --space-050 (M: the gap rule of one class, losing to .board-panel-list)", () => {
+    expect(cascaded(["board-panel-list"], "gap")).toBe("var(--space-050)");
+    expect(cascaded(["board-panel-list", "board-from-subtasks"], "gap")).toBe("var(--space-150)");
   });
 });

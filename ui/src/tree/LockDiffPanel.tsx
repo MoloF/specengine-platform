@@ -8,6 +8,7 @@ import { fill, slot } from "../i18n/fill";
 import { DriftLine } from "../health/DriftPart";
 import { Notes } from "../overview/parts";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
 import { DiffView } from "../ui/DiffView";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
@@ -225,10 +226,9 @@ export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string;
       <div ref={region} tabIndex={-1} className="lock-diff-body" aria-busy={query.isFetching}>
         <p>
           {/* Described by the panel's heading: a screen reader tells it from the tab's Read again. */}
-          <button type="button" className="button" aria-disabled={query.isFetching} aria-describedby={titleId} onClick={readAgain}>
-            <Icon name="retry" />
+          <Button icon="retry" aria-disabled={query.isFetching} aria-describedby={titleId} onClick={readAgain}>
             <span>{query.isFetching ? t("tree.bindings.reading") : t("tree.bindings.readAgain")}</span>
-          </button>
+          </Button>
         </p>
         {view.reason !== null ? (
           <p className="verbatim" lang="en">
@@ -254,10 +254,9 @@ export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string;
   return (
     <section className="lock-diff" aria-labelledby={titleId}>
       <h2 className="lock-diff-title">
-        <button id={titleId} type="button" className="button lock-diff-toggle" aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={toggle}>
-          <Icon name={open ? "chevronDown" : "chevronRight"} />
+        <Button id={titleId} className="lock-diff-toggle" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={toggle}>
           <span>{t("tree.lockDiff.title")}</span>
-        </button>
+        </Button>
       </h2>
       <p className="muted lock-diff-about">{t("tree.lockDiff.about")}</p>
       {open && <div id={bodyId}>{body}</div>}

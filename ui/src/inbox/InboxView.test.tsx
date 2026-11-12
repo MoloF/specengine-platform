@@ -160,11 +160,11 @@ describe("the Inbox on a stub client", () => {
     expect(within(list).getAllByRole("option")[1]?.querySelector('[data-tone="severity-normal"]')).not.toBeNull();
   });
 
-  it("shows an unknown status and kind verbatim in a neutral badge (AC-07)", async () => {
+  it("shows an unknown status verbatim in a neutral lozenge under lang=en, and the kind raw (AC-07; DS5 of design-sweep)", async () => {
     await openInbox(QUEUE, "#/alpha/inbox/PR-3");
     const card = await screen.findByRole("article");
-    const status = card.querySelector('[data-tone="proposal-unknown"]');
-    expect(status?.textContent).toContain("escalated");
+    const status = card.querySelector(".issue-view-meta .lozenge");
+    expect([status?.getAttribute("data-appearance"), status?.textContent, status?.querySelector(".lozenge-label")?.getAttribute("lang")]).toEqual(["neutral", "escalated", "en"]);
     expect(within(card).getByText("reconcile")).toBeTruthy();
   });
 
@@ -367,9 +367,10 @@ describe("the card reads the review document (daemon-read \"Data\")", () => {
   });
 });
 
-/** The card's facts as shown: each `dt` with its `dd`'s text. */
+/** The card's facts as shown, its Details list beside the review (DS5 of design-sweep): each label with its value's text. */
 function facts(card: HTMLElement): [string, string][] {
-  return Array.from(card.querySelectorAll(".facts .fact"), (fact) => [fact.querySelector("dt")?.textContent ?? "", fact.querySelector("dd")?.textContent ?? ""]);
+  const details = within(card).getByRole("region", { name: "Details" });
+  return Array.from(details.querySelectorAll(".property-row"), (row) => [row.querySelector("dt")?.textContent ?? "", row.querySelector("dd")?.textContent ?? ""]);
 }
 
 describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks, AC-08 of ui-tasks)", () => {
@@ -380,10 +381,10 @@ describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks
     const { client } = await openInbox([BOUND, UNBOUND], "#/alpha/inbox/PR-0041");
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
-    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Gap type", "Severity", "Agent task", "Status"]);
+    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Gap type", "Severity", "Agent task"]);
     const task = within(card).getByRole("link", { name: "T-0107" });
     expect(task.getAttribute("href")).toBe("#/alpha/tasks/T-0107");
-    expect(task.closest(".fact")?.querySelector("dt")?.textContent).toBe("Agent task");
+    expect(task.closest(".property-row")?.querySelector("dt")?.textContent).toBe("Agent task");
     expect(within(card).queryByRole("link", { name: "T-0999" })).toBeNull();
     // InboxEntry stays the daemon's 12 keys: the task comes only from the review document.
     const inbox = await client.getInbox("alpha");
@@ -416,7 +417,7 @@ describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks
     renderApp(client, "#/alpha/inbox/PR-0041");
     const card = await screen.findByRole("article");
     expect(await within(card).findByLabelText("Loading the review of PR-0041")).toBeTruthy();
-    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Severity", "Status"]);
+    expect(facts(card).map(([name]) => name)).toEqual(["Kind", "Severity"]);
     await act(async () => {
       release();
       await Promise.resolve();
@@ -1458,5 +1459,73 @@ describe("a stage changed outside this tab (AC-14 of decision-staging)", () => {
       await Promise.resolve();
     });
     expect(screen.queryByText(/outside this tab/)).toBeNull();
+  });
+});
+
+// DS5 of docs/features/design-sweep.md "Acceptance criteria": the selected proposal is a work item
+// beside the queue, its trail, its status a lozenge, its decisions Buttons with one primary, its
+// facts a Details list; the queue's empty states are EmptyStates.
+describe("the proposal as a pane (DS5 of design-sweep)", () => {
+  it("leads with the trail: Project, Inbox, its ID current", async () => {
+    await openInbox();
+    const card = await screen.findByRole("article");
+    // M: no Breadcrumbs.
+    const trail = within(card).getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(trail).getAllByRole("listitem").map((item) => item.textContent.replace("/", ""))).toEqual(["Alpha", "Inbox", "PR-1"]);
+    expect(within(trail).getByRole("link", { name: "Alpha" }).getAttribute("href")).toBe("#/alpha");
+    expect(within(trail).getByRole("link", { name: "Inbox" }).getAttribute("href")).toBe("#/alpha/inbox");
+    const current = trail.querySelector('[aria-current="page"]');
+    expect([current?.textContent, current?.querySelector(".mono") !== null, current?.closest("a")]).toEqual(["PR-1", true, null]);
+    expect(card.querySelector(".issue-view")?.classList.contains("issue-view-pane")).toBe(true);
+  });
+
+  it("holds one primary among the decisions, Accept, and Reject as danger", async () => {
+    await openInbox();
+    const card = await screen.findByRole("article");
+    const bar = within(card).getByRole("group", { name: "Decide PR-1" });
+    // M: two primaries.
+    expect(Array.from(bar.querySelectorAll(".button-primary"), (button) => button.textContent)).toEqual(["Accepta"]);
+    expect(within(bar).getByRole("button", { name: "Reject" }).classList.contains("button-danger")).toBe(true);
+    expect(card.querySelector(".issue-view-head")?.querySelectorAll(".button-primary")).toHaveLength(1);
+  });
+
+  it("shows the status as a lozenge of the one table: changes requested a warning", async () => {
+    await openInbox([aProposal({ id: "PR-5", status: "changes_requested", summary: "Asked again" })]);
+    const card = await screen.findByRole("article");
+    const status = card.querySelector(".issue-view-meta .lozenge");
+    expect([status?.getAttribute("data-appearance"), status?.textContent]).toEqual(["warning", "Changes requested"]);
+  });
+
+  it("lays its facts in a Details list in the side column, before the review in the DOM", async () => {
+    await openInbox();
+    const card = await screen.findByRole("article");
+    const details = within(card).getByRole("region", { name: "Details" });
+    expect(details.closest(".issue-view-side")).not.toBeNull();
+    const body = card.querySelector(".issue-view-body");
+    expect(Array.from(body?.children ?? [], (child) => child.className)).toEqual(["issue-view-side", "issue-view-main"]);
+    expect(card.querySelector(".issue-view-main .card-body")?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("draws the empty queue as an EmptyState, its next step in the description", async () => {
+    renderApp(stubClient([]), "#/alpha/inbox");
+    const title = await screen.findByRole("heading", { level: 2, name: "The queue is clear" });
+    // M: the empty queue as a div.empty-state.
+    const box = title.closest(".empty-state-box");
+    expect(box).not.toBeNull();
+    expect(box?.querySelector(".empty-state-description a")?.getAttribute("href")).toBe("#/alpha/tasks");
+    expect(document.querySelector(".empty-state, .empty-filter")).toBeNull();
+  });
+
+  it("draws a filter with no match as an EmptyState whose primary clears it", async () => {
+    const { list } = await openInbox();
+    expect(optionIds(list)).toHaveLength(4);
+    fireEvent.change(screen.getByLabelText("Filter"), { target: { value: "nothing like it" } });
+    const title = await screen.findByRole("heading", { level: 2, name: "No proposal matches “nothing like it”." });
+    const box = title.closest(".empty-state-box");
+    expect(box).not.toBeNull();
+    const clear = within(box as HTMLElement).getByRole("button", { name: "Clear the filter" });
+    expect(clear.classList.contains("button-primary")).toBe(true);
+    fireEvent.click(clear);
+    expect(optionIds(await screen.findByRole("listbox"))).toHaveLength(4);
   });
 });

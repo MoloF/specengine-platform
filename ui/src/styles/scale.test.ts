@@ -8,9 +8,12 @@ import tokensCss from "./tokens.css?raw";
 // space and a radius only through the scale's tokens, or through a listed exception that names why
 // and the item that removes it; the tokens themselves resolve into the scale's sets; the controls are
 // 32 px, or 24 px compact; no component sets a size inline.
+// docs/features/design-sweep.md "Acceptance criteria", DS1 and DS2: no legacy size name anywhere in
+// the sources, tokens.css included, each family exactly its steps; every font weight one token.
 
 const SHEETS = import.meta.glob<string>("/src/**/*.css", { query: "?raw", import: "default", eager: true });
 const COMPONENTS = import.meta.glob<string>(["/src/**/*.tsx", "!/src/**/*.test.tsx"], { query: "?raw", import: "default", eager: true });
+const SCRIPTS = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
 
 /** One declaration of a style file, with its rule's selector (whitespace collapsed) and the at-rule around it. */
 interface Declaration {
@@ -99,8 +102,13 @@ const SIZES = ["0.75rem", "0.875rem", "1rem", "1.25rem", "1.5rem"];
 const LINE_HEIGHTS = ["1rem", "1.25rem", "1.5rem", "1.75rem"];
 const SPACES = ["0.125rem", "0.25rem", "0.375rem", "0.5rem", "0.75rem", "1rem", "1.25rem", "1.5rem", "2rem", "2.5rem", "3rem"];
 const RADII = ["2px", "4px", "6px", "8px", "12px", "16px", "999px"];
-/** The one legacy ratio, `--line-height-tight`, until RM-0099. */
-const LEGACY_RATIO: Readonly<Record<string, string>> = { "--line-height-tight": "1.25" };
+/** Each family's steps, exactly: the type's seven pairs, space's eleven. */
+const TYPE_STEPS = ["small", "body", "document", "heading-s", "heading-m", "heading-l", "code"];
+const SPACE_STEPS = ["025", "050", "075", "100", "150", "200", "250", "300", "400", "500", "600"];
+/** The four weights, each a token. */
+const WEIGHTS: Readonly<Record<string, string>> = { regular: "400", medium: "500", semibold: "600", bold: "700" };
+/** A legacy size name, gone with its alias (G1): `--space-1` to `-6`, `--font-size-s|m|l|xl`, `--line-height-tight`. */
+const LEGACY_NAME = /--(?:space-[1-6]|font-size-(?:s|m|l|xl)|line-height-tight)(?![\w-])/g;
 
 /** The path an exception names, as the glob keys it. */
 function pathOf(exception: ScaleException): string {
@@ -174,14 +182,14 @@ describe("the type scale (DF-1)", () => {
     expect(DECLARATIONS.filter((declaration) => declaration.property === "font" && declaration.value !== "inherit" && !listed(declaration)).map(shown)).toEqual([]);
   });
 
-  it("resolves every size and line-height token into the scale; --line-height-tight the one legacy ratio", () => {
-    expect(family("--font-size-").length).toBeGreaterThanOrEqual(11);
+  it("holds exactly the seven steps in --font-size-* and --line-height-*, each resolving into the scale", () => {
+    expect(family("--font-size-")).toEqual(TYPE_STEPS.map((step) => `--font-size-${step}`));
+    expect(family("--line-height-")).toEqual(TYPE_STEPS.map((step) => `--line-height-${step}`));
     for (const name of family("--font-size-")) {
       expect([name, SIZES.includes(resolved(name))]).toEqual([name, true]);
     }
     for (const name of family("--line-height-")) {
-      const legacy = LEGACY_RATIO[name];
-      expect([name, legacy === undefined ? LINE_HEIGHTS.includes(resolved(name)) : resolved(name) === legacy]).toEqual([name, true]);
+      expect([name, LINE_HEIGHTS.includes(resolved(name))]).toEqual([name, true]);
     }
     // The steps' pairs (docs/features/design-foundation.md "Typography").
     const pairs = ["small", "body", "document", "heading-s", "heading-m", "heading-l", "code"].map((step) => [step, resolved(`--font-size-${step}`), resolved(`--line-height-${step}`)]);
@@ -194,8 +202,6 @@ describe("the type scale (DF-1)", () => {
       ["heading-l", "1.5rem", "1.75rem"],
       ["code", "0.75rem", "1.25rem"],
     ]);
-    // The legacy names land on the scale: 13 px reads 14, 15 reads 16, 18 reads 20 (W10).
-    expect(["s", "m", "l", "xl"].map((size) => resolved(`--font-size-${size}`))).toEqual(["0.875rem", "1rem", "1.25rem", "1.5rem"]);
   });
 
   it("lists no exception that matches nothing, and names each one's reason and its item", () => {
@@ -244,15 +250,15 @@ describe("spacing (DF-2)", () => {
     expect(["var(--space-100, var(--space-050))", "var(--depth, 0)", "var(--board-columns, 1)"].map(holdsRawLength)).toEqual([false, false, false]);
   });
 
-  it("resolves every --space-* into the 8 px scale", () => {
-    expect(family("--space-").length).toBeGreaterThanOrEqual(17);
+  it("holds exactly the eleven --space-* steps, each resolving into the 8 px scale", () => {
+    expect(family("--space-")).toEqual(SPACE_STEPS.map((step) => `--space-${step}`));
     for (const name of family("--space-")) {
       expect([name, SPACES.includes(resolved(name))]).toEqual([name, true]);
     }
   });
 
-  it("sets no font size, line height, padding, margin, gap or radius in a component's inline style", () => {
-    const sizing = /^(fontSize|lineHeight|padding\w*|margin\w*|gap|rowGap|columnGap|borderRadius|border\w*Radius)$/;
+  it("sets no font size, weight, line height, padding, margin, gap or radius in a component's inline style", () => {
+    const sizing = /^(fontSize|fontWeight|lineHeight|padding\w*|margin\w*|gap|rowGap|columnGap|borderRadius|border\w*Radius)$/;
     const found: string[] = [];
     for (const [path, text] of Object.entries(COMPONENTS)) {
       const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -274,6 +280,80 @@ describe("spacing (DF-2)", () => {
     }
     expect(Object.keys(COMPONENTS)).toEqual(expect.arrayContaining(["/src/board/BoardCard.tsx", "/src/ui/Lozenge.tsx"]));
     expect(found).toEqual([]);
+  });
+});
+
+describe("no legacy size name (G1, DS1 of design-sweep)", () => {
+  it("names no legacy size in any style file, tokens.css included, nor in a non-test script", () => {
+    expect(Object.keys(SCRIPTS)).toEqual(expect.arrayContaining(["/src/styles/scale-exceptions.ts", "/src/ui/Button.tsx"]));
+    expect(Object.keys(SCRIPTS).filter((path) => /\.test\.tsx?$/.test(path))).toEqual([]);
+    const found = Object.entries({ ...SHEETS, ...SCRIPTS }).flatMap(([path, text]) => Array.from(text.matchAll(LEGACY_NAME), (match) => `${path}: ${match[0]}`));
+    expect(found).toEqual([]);
+  });
+
+  it("matches each legacy name and no step that starts like one (the detector)", () => {
+    const probe = "var(--space-1) var(--space-6) --font-size-s --font-size-xl --line-height-tight --space-100 --space-050 --font-size-small --font-size-heading-s --line-height-body --space-10";
+    expect(Array.from(probe.matchAll(LEGACY_NAME), (match) => match[0])).toEqual(["--space-1", "--space-6", "--font-size-s", "--font-size-xl", "--line-height-tight"]);
+  });
+});
+
+describe("font weights (G2, DS2 of design-sweep)", () => {
+  const ALL = Object.entries(SHEETS).flatMap(([path, css]) => declarationsOf(path, css));
+  const weights = ALL.filter((declaration) => declaration.property === "font-weight");
+
+  it("sets every font-weight outside @font-face as one var() of the four weight tokens, or inherit", () => {
+    expect(weights.length).toBeGreaterThan(100);
+    const allowed = new Set(["inherit", ...Object.keys(WEIGHTS).map((step) => `var(--font-weight-${step})`)]);
+    expect(weights.filter((declaration) => declaration.selector !== "@font-face" && !allowed.has(declaration.value)).map(shown)).toEqual([]);
+  });
+
+  it("leaves fonts.css's @font-face descriptors as they are", () => {
+    const faces = weights.filter((declaration) => declaration.selector === "@font-face");
+    expect(faces.map((declaration) => [declaration.file, declaration.value])).toEqual(Array.from({ length: 4 }, () => ["/src/styles/fonts.css", "100 900"]));
+  });
+
+  it("holds exactly the four --font-weight-* tokens at 400, 500, 600 and 700", () => {
+    expect(Object.fromEntries(family("--font-weight-").map((name) => [name.slice("--font-weight-".length), TOKENS.get(name)]))).toEqual(WEIGHTS);
+  });
+});
+
+describe("markdown headings carry their step (DS3 of design-sweep)", () => {
+  const at = (selector: string, property: string) =>
+    DECLARATIONS.filter((declaration) => declaration.at === null && declaration.selector === selector && declaration.property === property).map((declaration) => declaration.value);
+
+  it("gives h2 the heading-m pair, h3 and h4 heading-s, h5 and h6 body, and the shared rule no line height", () => {
+    expect([at(".markdown h2.md-heading", "font-size"), at(".markdown h2.md-heading", "line-height")]).toEqual([["var(--font-size-heading-m)"], ["var(--line-height-heading-m)"]]);
+    expect([at(".markdown h3.md-heading, .markdown h4.md-heading", "font-size"), at(".markdown h3.md-heading, .markdown h4.md-heading", "line-height")]).toEqual([
+      ["var(--font-size-heading-s)"],
+      ["var(--line-height-heading-s)"],
+    ]);
+    expect([at(".markdown h5.md-heading, .markdown h6.md-heading", "font-size"), at(".markdown h5.md-heading, .markdown h6.md-heading", "line-height")]).toEqual([
+      ["var(--font-size-body)"],
+      ["var(--line-height-body)"],
+    ]);
+    expect(at(".markdown .md-heading", "line-height")).toEqual([]);
+  });
+
+  it("holds no unitless line height in a .markdown rule", () => {
+    const markdown = DECLARATIONS.filter((declaration) => declaration.selector.includes(".markdown") && declaration.property === "line-height");
+    expect(markdown.filter((declaration) => /^\d*\.?\d+$/.test(declaration.value)).map(shown)).toEqual([]);
+  });
+});
+
+describe("the Spec tree's sizes are tokens (DS8 of design-sweep)", () => {
+  const at = (selector: string, property: string) =>
+    DECLARATIONS.filter((declaration) => declaration.at === null && declaration.selector === selector && declaration.property === property).map((declaration) => declaration.value);
+
+  it("lists no exception for .text-view, .tree or .tree-row, whose rules take tokens", () => {
+    expect(SCALE_EXCEPTIONS.filter((exception) => [".text-view", ".tree", ".tree-row"].includes(exception.selector))).toEqual([]);
+    expect(at(".text-view", "line-height")).toEqual(["var(--line-height-body)"]);
+    expect(at(".tree", "gap")).toEqual(["var(--space-025)"]);
+    // The indent: 16 px a level.
+    expect(at(".tree-row", "padding")).toEqual(["var(--space-050) var(--space-100) var(--space-050) calc(var(--space-050) + var(--depth, 0) * var(--space-200))"]);
+  });
+
+  it("drops the chevron's column from a direction's flat list", () => {
+    expect(at(".tree-flat .tree-row", "grid-template-columns")).toEqual(["minmax(0, 1fr)"]);
   });
 });
 
@@ -311,12 +391,13 @@ describe("radii and control heights (DF-3)", () => {
 });
 
 // DM-19 of docs/features/doc-modal.md: the document view's styles take tokens alone, and its entry
-// leaves the exceptions: 13, none for RM-0095.
+// leaves the exceptions, none for RM-0095; DS8 of docs/features/design-sweep.md: the Spec tree's three
+// leave too, so 10 stand.
 describe("the document view's tokens (DM-19 of doc-modal)", () => {
   const exceptionsSource = import.meta.glob<string>("/src/styles/scale-exceptions.ts", { query: "?raw", import: "default", eager: true })["/src/styles/scale-exceptions.ts"] ?? "";
 
-  it("lists 13 exceptions, none until RM-0095, and the `until` type names it no more", () => {
-    expect(SCALE_EXCEPTIONS).toHaveLength(13);
+  it("lists 10 exceptions, none until RM-0095, and the `until` type names it no more", () => {
+    expect(SCALE_EXCEPTIONS).toHaveLength(10);
     expect(new Set(SCALE_EXCEPTIONS.map((exception) => exception.until))).toEqual(new Set([null, "RM-0099"]));
     expect(exceptionsSource).toMatch(/until: "RM-0099" \| null;/);
     expect(exceptionsSource).not.toContain("RM-0095");

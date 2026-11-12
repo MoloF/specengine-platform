@@ -46,16 +46,16 @@ function sectionOf(scope: HTMLElement, title: string): HTMLElement {
   return found;
 }
 
-/** The value a card's facts give a name. */
+/** The value a card's Details give a name. */
 function fact(card: HTMLElement, name: string): string {
-  const term = Array.from(card.querySelectorAll(".facts dt")).find((dt) => dt.textContent === name);
+  const term = Array.from(card.querySelectorAll(".property-list dt")).find((dt) => dt.textContent === name);
   return term?.nextElementSibling?.textContent ?? "";
 }
 
 /** The Inbox card of `id`, its review read and both targets answered. */
 async function cardOf(id: string): Promise<HTMLElement> {
   await waitFor(() => {
-    expect(screen.getByRole("article").querySelector(".card-id")?.textContent).toBe(id);
+    expect(screen.getByRole("article").querySelector(".breadcrumbs-current")?.textContent).toBe(id);
   });
   const card = screen.getByRole("article");
   await within(card).findByRole("heading", { level: 3, name: "Provenance" });
@@ -265,7 +265,8 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
     expect(fact(card, "Gap type")).toBe("None");
     expect(fact(card, "Severity")).toBe("None");
     expect(fact(card, "Agent task")).toBe("No agent task");
-    expect(fact(card, "Status")).toBe("Open");
+    // The status is the head's lozenge, no fact (DS5 of docs/features/design-sweep.md "Acceptance criteria").
+    expect(card.querySelector(".issue-view-meta .lozenge")?.textContent).toBe("Open");
     expect(Array.from(card.querySelectorAll(".card-body h3"), (heading) => heading.textContent)).toEqual([
       "Targets",
       "Options",
@@ -362,7 +363,7 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
     renderOver(shown, `#/${SLUG}/inbox/${AMENDMENT}`);
     const overMock = await cardOf(AMENDMENT);
     const mockDiff = within(sectionOf(overMock, "Section diff")).getByRole("figure").cloneNode(true);
-    const mockFacts = overMock.querySelector(".facts")?.cloneNode(true);
+    const mockFacts = overMock.querySelector(".property-list")?.cloneNode(true);
     cleanup();
 
     const served = mock();
@@ -376,7 +377,7 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
     expect(fact(card, "Kind")).toBe("amendment");
     // Elements, attributes and text alike, node for node (DOM equality, no serialised markup).
     expect(within(sectionOf(card, "Section diff")).getByRole("figure").isEqualNode(mockDiff)).toBe(true);
-    expect(card.querySelector(".facts")?.isEqualNode(mockFacts ?? null)).toBe(true);
+    expect(card.querySelector(".property-list")?.isEqualNode(mockFacts ?? null)).toBe(true);
 
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const accept = await screen.findByRole("dialog", { name: `Accept ${AMENDMENT}` });

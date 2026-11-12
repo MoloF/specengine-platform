@@ -1647,6 +1647,7 @@ export const ru: Catalog = {
       stagedHere: "Подготовлено {{at}}.",
       targets: "Цели",
       noTargets: "Целевой узел не назван.",
+      details: "Подробности",
     },
     proposal: {
       task: "Задача {{id}}",
@@ -1996,6 +1997,8 @@ export const ru: Catalog = {
       spanHash: "Хеш фрагмента",
       flags: "Отметки",
       notUtf8: "не UTF-8",
+      details: "Подробности",
+      detailsAt: "Подробности в {{place}}",
       loading: "Загружаем {{ref}}",
       failed: "{{ref}} не удалось прочитать",
       failedAgain: "{{ref}} не удалось перечитать: {{message}}",

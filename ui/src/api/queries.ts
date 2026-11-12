@@ -249,6 +249,17 @@ export function useProjects() {
 }
 
 /**
+ * A project's name as the Shell's projects read holds it, its slug until then: a passive observer
+ * that never reads by itself, so a pane's trail adds no read (docs/features/design-sweep.md
+ * "Acceptance criteria", DS5, DS7).
+ */
+export function useProjectName(project: string): string {
+  const client = useClient();
+  const projects = useQuery({ queryKey: queryKeys.projects, queryFn: ({ signal }) => client.getProjects(signal), enabled: false });
+  return projects.data?.find((candidate) => candidate.slug === project)?.name ?? project;
+}
+
+/**
  * Who this page acts as (`docs/canon/hub.md` "Routes"): one read for every field that asks, kept for
  * the page, so opening a dialog reads nothing and a login once resolved never goes back to loading.
  * A failed read keeps no answer: the next field to mount asks again.

@@ -2,6 +2,7 @@ import type { OutsideStage } from "../api/queries";
 import { sectionHash } from "../app/routes";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 
 /**
@@ -25,9 +26,9 @@ export function OutsideStageAlert({ change, onDismiss }: { change: OutsideStage;
       )}
       <p className="notice-actions">
         <a href={sectionHash(change.project, "inbox", change.id)}>{t("inbox.outside.show", { id: change.id })}</a>
-        <button type="button" className="button button-quiet" onClick={onDismiss}>
+        <Button appearance="subtle" onClick={onDismiss}>
           {t("inbox.outside.dismiss")}
-        </button>
+        </Button>
       </p>
     </div>
   );

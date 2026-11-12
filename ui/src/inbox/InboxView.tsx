@@ -10,6 +10,8 @@ import { actOff } from "../board/labels";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField, letterOf } from "../ui/keys";
@@ -342,11 +344,16 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
       );
   } else if (ordered.length === 0) {
     body = (
-      <div className="empty-state">
-        <h2>{t("inbox.clearTitle")}</h2>
-        <p>{t("inbox.clearText", { project })}</p>
-        <p>{fill(t("inbox.clearNext", { link: slot("link") }), { link: <a href={sectionHash(project, "tasks")}>{t("inbox.clearNextLink")}</a> })}</p>
-      </div>
+      <EmptyState
+        level={2}
+        title={t("inbox.clearTitle")}
+        description={
+          <>
+            <p>{t("inbox.clearText", { project })}</p>
+            <p>{fill(t("inbox.clearNext", { link: slot("link") }), { link: <a href={sectionHash(project, "tasks")}>{t("inbox.clearNextLink")}</a> })}</p>
+          </>
+        }
+      />
     );
   } else {
     const high = ordered.filter((proposal) => severityRank(proposal.severity) === 0).length;
@@ -385,18 +392,21 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             </ul>
           )}
           {selected === null ? (
-            <div className="empty-filter">
-              <p>{t("inbox.noMatch", { query })}</p>
-              <button
-                type="button"
-                className="button"
-                onClick={() => {
-                  setQuery("");
-                }}
-              >
-                {t("inbox.clearFilter")}
-              </button>
-            </div>
+            // Under the view's h1: no proposal is shown, so no h2 stands between.
+            <EmptyState
+              level={2}
+              title={t("inbox.noMatch", { query })}
+              primary={
+                <Button
+                  appearance="primary"
+                  onClick={() => {
+                    setQuery("");
+                  }}
+                >
+                  {t("inbox.clearFilter")}
+                </Button>
+              }
+            />
           ) : (
             <ProposalList
               proposals={visible}

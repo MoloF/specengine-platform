@@ -1,16 +1,21 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
-import { useNode, type ProposalQuery } from "../api/queries";
+import { useNode, useProjectName, type ProposalQuery } from "../api/queries";
 import type { Choice, InboxEntry, Proposal, ProposalOption } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { homeHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { ActOff } from "../board/ActOff";
 import { Prose } from "../markdown/Prose";
 import { DEFAULT_TEXT_MODE, TextModeSwitch, type TextMode } from "../markdown/TextMode";
 import { Badge } from "../ui/Badge";
+import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
+import { Button } from "../ui/Button";
 import { DiffView } from "../ui/DiffView";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
+import { IssueView } from "../ui/IssueView";
+import { Lozenge } from "../ui/Lozenge";
+import { PropertyList, type Property } from "../ui/PropertyList";
 import { shownConfirmText, shownSlot } from "../ui/text";
 import { ErrorPanel, Section, Skeleton } from "../ui/states";
 import { formatAge, formatUtc } from "../ui/time";
@@ -18,7 +23,7 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { DECISION_KEYS, isStaged, verbOf, type DecisionKind } from "./decisions";
 import { DriftSection, TerminalDecision } from "./DriftItem";
-import { gapLabel, previewLabel, severityLook, statusLook } from "./labels";
+import { gapLabel, previewLabel, severityLook, statusLook, statusLozenge } from "./labels";
 import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
 import { summaryOf } from "./summary";
@@ -477,6 +482,8 @@ function ReviewBody({
  * (the document's `drift`) offers no decision to stage: its terminal commands stand in their place,
  * and it has no options or section diff to show. Where a hub's `allowed` omits `stage`, the decisions
  * that stage and Unstage stay focusable and do nothing; the two that send nothing stay as they are.
+ * Laid out as a work item beside the queue (docs/features/design-sweep.md "Acceptance criteria", DS5):
+ * the trail, the summary, its status as a lozenge, the decisions; then its facts, then the review.
  */
 export function ProposalCard({
   project,
@@ -512,6 +519,7 @@ export function ProposalCard({
   onSelect: (id: string) => void;
 }) {
   const t = useTranslate();
+  const projectName = useProjectName(project);
   const failure = useRetainedFailure(review.error, review.isFetching);
   const body = useRef<HTMLDivElement>(null);
   const retried = useRetryFocus(review.data, () => body.current);
@@ -562,110 +570,118 @@ export function ProposalCard({
     content = <ReviewBody project={project} review={reviewed} others={others} now={now} onSelect={onSelect} />;
   }
 
+  const staged = reviewed !== undefined && reviewed.id === id && reviewed.staged !== null && reviewed.staged_at !== null ? reviewed : null;
+  // One primary per item: a staged choice confirmed here takes it from Accept, as a task's Answer dialog does.
+  const acceptLook = staged !== null && onConfirm !== undefined ? "default" : "primary";
+  const crumbs: Crumb[] = [
+    { key: "project", label: projectName, href: homeHash(project) },
+    { key: "inbox", label: t("app.sections.inbox.label"), href: sectionHash(project, "inbox") },
+    { key: "proposal", label: id, mono: true },
+  ];
+  const details: Property[] = [
+    { key: "kind", label: t("inbox.card.kind"), value: <span className="mono">{reviewed?.kind ?? entry.kind}</span> },
+    ...(reviewed === undefined ? [] : [{ key: "gap", label: t("inbox.card.gapType"), value: gapLabel(reviewed.gap_type, t) ?? t("inbox.card.none") }]),
+    { key: "severity", label: t("inbox.severityName"), value: <Badge look={severityLook(reviewed === undefined ? entry.severity : reviewed.severity, t)} /> },
+    // Only the review document names the task (an inbox entry has no `task_id`): absent until it is read.
+    ...(reviewed === undefined
+      ? []
+      : [
+          {
+            key: "task",
+            label: t("inbox.card.task"),
+            value: reviewed.task_id === null ? t("inbox.card.noTask") : <a className="mono" href={sectionHash(project, "tasks", reviewed.task_id)}>{reviewed.task_id}</a>,
+          },
+        ]),
+    // The task it was raised for, its card on the board (docs/canon/card-questions.md "The rule"); only the review document names it.
+    ...(reviewed === undefined || reviewed.card_id === null
+      ? []
+      : [
+          {
+            key: "board",
+            label: t("app.sections.board.label"),
+            value: (
+              <a href={sectionHash(project, "board", reviewed.card_id)}>
+                {fill(t("inbox.proposal.task", { id: slot("id") }), { id: <span className="mono">{shownSlot(reviewed.card_id)}</span> })}
+              </a>
+            ),
+          },
+        ]),
+  ];
+
   return (
     <article className="card" aria-labelledby="card-title">
-      <header className="card-head">
-        <p className="card-id mono">{id}</p>
-        <h2 id="card-title" className="card-title">
-          {summaryOf(reviewed ?? entry, t)}
-        </h2>
-        <dl className="facts">
-          <div className="fact">
-            <dt>{t("inbox.card.kind")}</dt>
-            <dd className="mono">{reviewed?.kind ?? entry.kind}</dd>
-          </div>
-          {reviewed !== undefined && (
-            <div className="fact">
-              <dt>{t("inbox.card.gapType")}</dt>
-              <dd>{gapLabel(reviewed.gap_type, t) ?? t("inbox.card.none")}</dd>
-            </div>
-          )}
-          <div className="fact">
-            <dt>{t("inbox.severityName")}</dt>
-            <dd>
-              <Badge look={severityLook(reviewed === undefined ? entry.severity : reviewed.severity, t)} />
-            </dd>
-          </div>
-          {/* Only the review document names the task (an inbox entry has no `task_id`): absent until it is read. */}
-          {reviewed !== undefined && (
-            <div className="fact">
-              <dt>{t("inbox.card.task")}</dt>
-              <dd className="mono">
-                {reviewed.task_id === null ? t("inbox.card.noTask") : <a href={sectionHash(project, "tasks", reviewed.task_id)}>{reviewed.task_id}</a>}
-              </dd>
-            </div>
-          )}
-          <div className="fact">
-            <dt>{t("inbox.statusName")}</dt>
-            <dd>
-              <Badge look={statusLook(reviewed?.status ?? entry.status, t)} />
-            </dd>
-          </div>
-        </dl>
-        {/* The task it was raised for, its card on the board (docs/canon/card-questions.md "The rule"); only the review document names it. */}
-        {reviewed !== undefined && reviewed.card_id !== null && (
-          <p className="card-task-link">
-            <a href={sectionHash(project, "board", reviewed.card_id)}>{fill(t("inbox.proposal.task", { id: slot("id") }), { id: <span className="mono">{shownSlot(reviewed.card_id)}</span> })}</a>
-          </p>
-        )}
-        {reviewed !== undefined && reviewed.drift !== null ? (
-          <TerminalDecision id={id} worktree={reviewed.worktree} />
-        ) : (
+      <IssueView
+        layout="pane"
+        breadcrumbs={<Breadcrumbs items={crumbs} />}
+        title={
+          <h2 id="card-title" className="card-title">
+            {summaryOf(reviewed ?? entry, t)}
+          </h2>
+        }
+        meta={<Lozenge {...statusLozenge(reviewed?.status ?? entry.status, t)} />}
+        actions={
           <>
-            <div className="decision-bar" role="group" aria-label={t("inbox.card.decide", { id })}>
-              {DECISION_KEYS.map(([kind, key]) => {
-                const idle = deciding || !ready || (isStaged(kind) && !canStage);
-                return (
-                  <button
-                    key={kind}
-                    type="button"
-                    className={kind === "accept" ? "button button-primary" : kind === "reject" ? "button button-danger" : "button"}
-                    aria-keyshortcuts={key}
-                    aria-disabled={idle}
-                    onClick={() => {
-                      if (!idle) {
-                        onDecide(kind);
-                      }
-                    }}
-                  >
-                    <span>{verbOf(kind, t)}</span>
-                    <kbd aria-hidden="true">{key}</kbd>
-                  </button>
-                );
-              })}
-            </div>
-            {!canStage && <ActOff act="stage" />}
+            {reviewed !== undefined && reviewed.drift !== null ? (
+              <TerminalDecision id={id} worktree={reviewed.worktree} />
+            ) : (
+              <>
+                <div className="decision-bar" role="group" aria-label={t("inbox.card.decide", { id })}>
+                  {DECISION_KEYS.map(([kind, key]) => {
+                    const idle = deciding || !ready || (isStaged(kind) && !canStage);
+                    return (
+                      <Button
+                        key={kind}
+                        appearance={kind === "accept" ? acceptLook : kind === "reject" ? "danger" : "default"}
+                        aria-keyshortcuts={key}
+                        aria-disabled={idle}
+                        onClick={() => {
+                          if (!idle) {
+                            onDecide(kind);
+                          }
+                        }}
+                      >
+                        <span>{verbOf(kind, t)}</span>
+                        <kbd aria-hidden="true">{key}</kbd>
+                      </Button>
+                    );
+                  })}
+                </div>
+                {!canStage && <ActOff act="stage" />}
+              </>
+            )}
+            {staged !== null && staged.staged_at !== null && (
+              <Suspense
+                fallback={
+                  <p className="staged-pending" aria-busy="true">
+                    {fill(t(onConfirm === undefined ? "inbox.card.stagedTerminal" : "inbox.card.stagedHere", { at: slot("at") }), {
+                      at: <time dateTime={staged.staged_at}>{formatUtc(staged.staged_at, t)}</time>,
+                    })}
+                  </p>
+                }
+              >
+                <StagedChoice id={id} review={staged} busy={deciding || !canStage} refusal={unstageRefusal} onUnstage={onUnstage} onConfirm={onConfirm} confirmBusy={deciding} />
+              </Suspense>
+            )}
           </>
-        )}
-        {reviewed !== undefined && reviewed.id === id && reviewed.staged !== null && reviewed.staged_at !== null && (
-          <Suspense
-            fallback={
-              <p className="staged-pending" aria-busy="true">
-                {fill(t(onConfirm === undefined ? "inbox.card.stagedTerminal" : "inbox.card.stagedHere", { at: slot("at") }), {
-                  at: <time dateTime={reviewed.staged_at}>{formatUtc(reviewed.staged_at, t)}</time>,
-                })}
-              </p>
-            }
-          >
-            <StagedChoice id={id} review={reviewed} busy={deciding || !canStage} refusal={unstageRefusal} onUnstage={onUnstage} onConfirm={onConfirm} confirmBusy={deciding} />
-          </Suspense>
-        )}
-      </header>
-
-      <div className="card-body" ref={body} tabIndex={-1}>
-        <Section title={t("inbox.card.targets")}>
-          {targets.length === 0 ? (
-            <p className="muted">{t("inbox.card.noTargets")}</p>
-          ) : (
-            <ul className="target-list">
-              {targets.map((target) => (
-                <TargetNode key={target} project={project} id={target} mode={textMode} onMode={setTextMode} />
-              ))}
-            </ul>
-          )}
-        </Section>
-        {content}
-      </div>
+        }
+        side={<PropertyList label={t("inbox.card.details")} items={details} />}
+        main={
+          <div className="card-body" ref={body} tabIndex={-1}>
+            <Section title={t("inbox.card.targets")}>
+              {targets.length === 0 ? (
+                <p className="muted">{t("inbox.card.noTargets")}</p>
+              ) : (
+                <ul className="target-list">
+                  {targets.map((target) => (
+                    <TargetNode key={target} project={project} id={target} mode={textMode} onMode={setTextMode} />
+                  ))}
+                </ul>
+              )}
+            </Section>
+            {content}
+          </div>
+        }
+      />
     </article>
   );
 }
