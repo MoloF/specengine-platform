@@ -16,6 +16,7 @@ import {
 import type { Translate } from "../i18n";
 import { syncLook } from "../tree/labels";
 import type { Look } from "../ui/Badge";
+import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
 import { oneLine } from "./oneLine";
 
 // The check's closed tables (`docs/canon/spec-check.md` "Findings, debt, verdict"): a known value
@@ -27,11 +28,12 @@ type Mark = Omit<Look, "label">;
 
 const [CLEAN, OBSERVED, FAILS, CANNOT_CHECK] = KNOWN_CHECK_VERDICTS;
 
-const VERDICT: Record<KnownCheckVerdict, Mark & { key: "clean" | "observed" | "fails" | "cannotCheck" }> = {
-  [CLEAN]: { key: "clean", tone: "check-clean", icon: "checkClean" },
-  [OBSERVED]: { key: "observed", tone: "check-observed", icon: "checkObserved" },
-  [FAILS]: { key: "fails", tone: "check-fails", icon: "checkFails" },
-  [CANNOT_CHECK]: { key: "cannotCheck", tone: "check-cannot-check", icon: "cannotCheck" },
+const VERDICT: Record<KnownCheckVerdict, Mark & { key: "clean" | "observed" | "fails" | "cannotCheck"; appearance: LozengeAppearance }> = {
+  [CLEAN]: { key: "clean", tone: "check-clean", icon: "checkClean", appearance: "success" },
+  [OBSERVED]: { key: "observed", tone: "check-observed", icon: "checkObserved", appearance: "warning" },
+  [FAILS]: { key: "fails", tone: "check-fails", icon: "checkFails", appearance: "danger" },
+  // Never clean's appearance or icon (docs/features/design-sweep-b.md "Acceptance criteria", DB1).
+  [CANNOT_CHECK]: { key: "cannotCheck", tone: "check-cannot-check", icon: "cannotCheck", appearance: "discovery" },
 };
 
 function lookup<K extends string, V>(table: Record<K, V>, value: string): V | null {
@@ -42,6 +44,16 @@ function lookup<K extends string, V>(table: Record<K, V>, value: string): V | nu
 export function verdictLook(value: CheckVerdict, t: Translate): Look {
   const known = lookup(VERDICT, value);
   return known === null ? { label: value, tone: "check-unknown", icon: "unknown", served: true } : { label: t(`health.verdict.${known.key}`), tone: known.tone, icon: known.icon };
+}
+
+/**
+ * The verdict as the check's lozenge (docs/features/design-sweep-b.md "Acceptance criteria", DB1):
+ * each known one with its label and icon; one this build does not know raw and neutral, under
+ * `lang="en"`, never mapped to a known one.
+ */
+export function verdictLozenge(value: CheckVerdict, t: Translate): LozengeLook & { lang?: "en" } {
+  const known = lookup(VERDICT, value);
+  return known === null ? { appearance: "neutral", icon: "unknown", label: value, lang: "en" } : { appearance: known.appearance, icon: known.icon, label: t(`health.verdict.${known.key}`) };
 }
 
 /** The report says the corpus is clean (its own verdict, read, never derived). */

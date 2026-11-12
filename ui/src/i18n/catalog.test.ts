@@ -185,6 +185,25 @@ describe("the legend's selection row (RS-7)", () => {
   });
 });
 
+// docs/features/design-sweep-b.md "Acceptance criteria", DB10: the slice's three keys in both
+// catalogs, each said by a view; the key whose last user went (an item status's `status <raw>`) in
+// neither.
+describe("design-sweep-b's strings (DB10)", () => {
+  const views = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}", "!/src/i18n/**"], { query: "?raw", import: "default", eager: true });
+  const said = (key: string) => Object.values(views).some((text) => text.includes(`t("${key}"`));
+  const english = flat(en);
+  const russian = flat(ru);
+
+  it.each(["graph.details.holder", "tasks.detail.details", "roadmap.emptyNext"])("holds %s in both catalogs, the Russian its own words, and a view says it", (key) => {
+    expect([key, english.has(key), russian.has(key), said(key)]).toEqual([key, true, true, true]);
+    expect(russian.get(key)).not.toBe(english.get(key));
+  });
+
+  it("drops roadmap.status, which no view says any more", () => {
+    expect([english.has("roadmap.status"), russian.has("roadmap.status"), said("roadmap.status")]).toEqual([false, false, false]);
+  });
+});
+
 describe("typed keys (LG-9)", () => {
   it("accepts a key of the catalog and refuses one it lacks at compile time", () => {
     expect(enT("app.mockData")).toBe("Mock data");

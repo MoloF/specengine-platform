@@ -24,7 +24,7 @@ import { arcOver, CLICK_DISTANCE, readableViewport } from "../graph/geometry";
 import { BOX_HANDLES, BOX_HEIGHT, BOX_WIDTH, HANDLE_SIZE } from "../graph/layout";
 import { taskStatusLook } from "../tasks/labels";
 import { Icon } from "../ui/Icon";
-import { chainOf, LANE_HEAD, type ChainBox, type ChainEdge, type ChainLane, type ChainLayout } from "./chain";
+import { CHAIN_TASKS_SHOWN, chainOf, LANE_HEAD, type ChainBox, type ChainEdge, type ChainLane, type ChainLayout } from "./chain";
 import { countsText, currentLook, cutRuleText, inACycleLook, laneName, mvpCutLook, notDrawnText, oneLine } from "./text";
 import { useTranslate, type Translate } from "../i18n";
 
@@ -99,15 +99,21 @@ const ItemBox = memo(function ItemBox({ data }: NodeProps<Node<ItemData, "item">
       <p className="graph-box-title">{item.title === null ? "-" : oneLine(item.title)}</p>
       {item.tasks.length > 0 && (
         <p className="graph-box-meta chain-box-tasks">
-          {item.tasks.map((task) => {
+          {item.tasks.slice(0, CHAIN_TASKS_SHOWN).map((task) => {
             const look = taskStatusLook(task.status, t);
             return (
-              <span key={task.id} className="graph-box-flag" data-task={task.id}>
+              <span key={task.id} className="graph-box-flag chain-box-task" data-task={task.id}>
                 <Icon name={look.icon} />
-                <span className="mono">{task.id}</span> {look.label}
+                <span className="mono">{task.id}</span>
+                <span className="chain-box-task-label">{look.label}</span>
               </span>
             );
           })}
+          {item.tasks.length > CHAIN_TASKS_SHOWN && (
+            <span className="chain-box-more" data-more={item.tasks.length - CHAIN_TASKS_SHOWN}>
+              {t("tree.bundle.more", { count: item.tasks.length - CHAIN_TASKS_SHOWN })}
+            </span>
+          )}
         </p>
       )}
     </div>

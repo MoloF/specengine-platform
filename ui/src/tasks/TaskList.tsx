@@ -5,6 +5,8 @@ import type { TaskListEntry } from "../api/types";
 import { pushHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { ReadFailure, Skeleton } from "../ui/states";
@@ -182,15 +184,17 @@ export function TaskList({
     return (
       <div ref={region} tabIndex={-1} className="tasks-list-region">
         {notes}
-        <div className="empty-state">
-          <p>
-            {fill(t("tasks.none", { none: slot("none"), command: slot("command") }), {
-              none: <strong>{t("tasks.noneYet")}</strong>,
-              command: <code>{NEW_TASK_COMMAND}</code>,
-            })}
-          </p>
-          <p className="muted">{t("tasks.noneAbout")}</p>
-        </div>
+        {/* Under the pane's sr-only h2 (docs/features/design-sweep-b.md "Acceptance criteria", DB5). */}
+        <EmptyState
+          level={3}
+          title={t("tasks.noneYet")}
+          description={
+            <>
+              <p>{fill(t("tasks.none", { command: slot("command") }), { command: <code>{NEW_TASK_COMMAND}</code> })}</p>
+              <p>{t("tasks.noneAbout")}</p>
+            </>
+          }
+        />
       </div>
     );
   }
@@ -319,19 +323,28 @@ export function TaskList({
         />
       </div>
       {order.length === 0 ? (
-        <div className="empty-filter">
-          <p>{t("tasks.noMatch")}</p>
-          {isFiltered(
-            filters,
-            chips.map((chip) => chip.key),
-          ) ? (
-            <button type="button" className="button" onClick={clearFilters}>
-              {t("tasks.clearFilters")}
-            </button>
-          ) : (
-            <p className="muted">{t("tasks.allClosed")}</p>
-          )}
-        </div>
+        <EmptyState
+          level={3}
+          title={t("tasks.noMatch")}
+          description={
+            isFiltered(
+              filters,
+              chips.map((chip) => chip.key),
+            ) ? undefined : (
+              <p>{t("tasks.allClosed")}</p>
+            )
+          }
+          primary={
+            isFiltered(
+              filters,
+              chips.map((chip) => chip.key),
+            ) ? (
+              <Button appearance="primary" onClick={clearFilters}>
+                {t("tasks.clearFilters")}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div ref={listbox} role="listbox" aria-label={t("tasks.listboxLabel")} className="task-list" onKeyDown={onKeyDown}>
           {groups.map((group) => (

@@ -3,6 +3,8 @@ import type { CheckQuery } from "../api/queries";
 import type { CheckReport } from "../api/types";
 import { openDoc } from "../app/location";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { ReadFailure, Skeleton } from "../ui/states";
@@ -128,13 +130,8 @@ function FindingList({ project, report }: { project: string; report: CheckReport
 
   if (rows.length === 0) {
     return (
-      <div className="empty-state">
-        {isCannotCheck(report.verdict) ? (
-          <p>{t("health.findings.noneCannot")}</p>
-        ) : (
-          <p>{t("health.findings.none")}</p>
-        )}
-      </div>
+      // One level below the region's heading (docs/features/design-sweep-b.md "Acceptance criteria", DB1).
+      <EmptyState level={3} title={isCannotCheck(report.verdict) ? t("health.findings.noneCannot") : t("health.findings.none")} />
     );
   }
 
@@ -254,12 +251,15 @@ function FindingList({ project, report }: { project: string; report: CheckReport
         {isFiltered(filters) ? t("health.findings.totalShown", { shown, count: rows.length }) : t("health.findings.total", { count: rows.length })}
       </p>
       {groups.length === 0 ? (
-        <div className="empty-filter">
-          <p>{t("health.findings.noMatch")}</p>
-          <button type="button" className="button" onClick={clearFilters}>
-            {t("health.findings.clearFilters")}
-          </button>
-        </div>
+        <EmptyState
+          level={3}
+          title={t("health.findings.noMatch")}
+          primary={
+            <Button appearance="primary" onClick={clearFilters}>
+              {t("health.findings.clearFilters")}
+            </Button>
+          }
+        />
       ) : (
         <div ref={groupsArea} className="finding-groups" onKeyDown={onKeyDown}>
           {groups.map((group, index) => {

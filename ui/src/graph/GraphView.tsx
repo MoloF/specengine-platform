@@ -9,6 +9,8 @@ import { useOpenShortcuts } from "../app/shortcuts";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { ErrorPanel, ReadFailure, Skeleton } from "../ui/states";
@@ -108,31 +110,42 @@ function NoEdge({
   onArchive: () => void;
 }) {
   const t = useTranslate();
+  // At most two acts, the first shown the primary; a third stays reachable as the control it is
+  // above the canvas: the mode, the type chips, the archive (docs/features/design-sweep-b.md
+  // "Acceptance criteria", DB2).
+  const acts = [
+    settings.impact ? null : { key: "impact", label: t("graph.showImpact"), onClick: onImpact },
+    mentionsChip ? { key: "mentions", label: t("graph.followMentions"), onClick: onMentions } : null,
+    settings.archive ? null : { key: "archive", label: t("graph.includeArchive"), onClick: onArchive },
+  ].filter((act) => act !== null);
+  const [first, second] = acts;
   return (
-    <div className="empty-state">
-      <h2>{t("graph.noEdge")}</h2>
-      <p>
-        {settings.impact ? t("graph.noImpact", { ref: nodeRef }) : t("graph.noOutgoing", { ref: nodeRef })} {t("graph.countLine", { counts: countText(answer, t) })}
-      </p>
-      <p className="muted">{t("graph.noEdgeNext")}</p>
-      <p className="graph-next">
-        {!settings.impact && (
-          <button type="button" className="button" onClick={onImpact}>
-            {t("graph.showImpact")}
-          </button>
-        )}
-        {mentionsChip && (
-          <button type="button" className="button" onClick={onMentions}>
-            {t("graph.followMentions")}
-          </button>
-        )}
-        {!settings.archive && (
-          <button type="button" className="button" onClick={onArchive}>
-            {t("graph.includeArchive")}
-          </button>
-        )}
-      </p>
-    </div>
+    <EmptyState
+      level={2}
+      title={t("graph.noEdge")}
+      description={
+        <>
+          <p>
+            {settings.impact ? t("graph.noImpact", { ref: nodeRef }) : t("graph.noOutgoing", { ref: nodeRef })} {t("graph.countLine", { counts: countText(answer, t) })}
+          </p>
+          <p>{t("graph.noEdgeNext")}</p>
+        </>
+      }
+      primary={
+        first === undefined ? undefined : (
+          <Button key={first.key} appearance="primary" onClick={first.onClick}>
+            {first.label}
+          </Button>
+        )
+      }
+      secondary={
+        second === undefined ? undefined : (
+          <Button key={second.key} onClick={second.onClick}>
+            {second.label}
+          </Button>
+        )
+      }
+    />
   );
 }
 
@@ -304,17 +317,23 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
   let body;
   if (nodeRef === null) {
     body = (
-      <div className="empty-state">
-        <h2 id={emptyId}>{t("graph.empty")}</h2>
-        <p>
-          {fill(t("graph.emptyRef", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
-            slug: <span className="mono">{REF_FORMS.slug}</span>,
-            section: <span className="mono">{REF_FORMS.section}</span>,
-            md: <span className="mono">{REF_FORMS.md}</span>,
-          })}
-        </p>
-        <p className="muted">{t("graph.emptyNext")}</p>
-      </div>
+      <EmptyState
+        level={2}
+        title={t("graph.empty")}
+        titleId={emptyId}
+        description={
+          <>
+            <p>
+              {fill(t("graph.emptyRef", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
+                slug: <span className="mono">{REF_FORMS.slug}</span>,
+                section: <span className="mono">{REF_FORMS.section}</span>,
+                md: <span className="mono">{REF_FORMS.md}</span>,
+              })}
+            </p>
+            <p>{t("graph.emptyNext")}</p>
+          </>
+        }
+      />
     );
   } else if (answer === undefined) {
     body =

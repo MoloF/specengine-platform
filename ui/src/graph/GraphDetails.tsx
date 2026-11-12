@@ -1,14 +1,46 @@
 import { useId, type KeyboardEvent, type Ref } from "react";
-import type { GraphEdge, GraphView } from "../api/types";
+import type { GraphEdge, GraphNode, GraphView } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
+import { Button, buttonClasses } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { hasModifier } from "../ui/keys";
+import { PropertyList, type Property } from "../ui/PropertyList";
 import { linkStateLook } from "../tree/labels";
 import type { BoxContent, LayoutBox } from "./layout";
 import { edgeLine, moreLabel } from "./lines";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
+
+/**
+ * One holder's facts in the details (docs/features/design-sweep-b.md "Acceptance criteria", DB2):
+ * kind, title, place, flags, in that order; null where the holder has none to show.
+ */
+export function graphFactsOf(holder: GraphNode, t: Translate): Property[] {
+  return [
+    { key: "kind", label: t("graph.details.kind"), value: <span className="mono">{holder.kind ?? "-"}</span> },
+    { key: "title", label: t("graph.details.title"), value: holder.title ?? "-" },
+    {
+      key: "where",
+      label: t("graph.details.where"),
+      value: (
+        <span className="mono">
+          {holder.path}:{holder.line}
+        </span>
+      ),
+    },
+    {
+      key: "flags",
+      label: t("graph.details.flags"),
+      value: holder.archived ? (
+        <span className="plain-tag">
+          <Icon name="archived" />
+          {t("graph.archivedWord")}
+        </span>
+      ) : null,
+    },
+  ];
+}
 
 function EdgeLines({ edges }: { edges: readonly GraphEdge[] }) {
   const t = useTranslate();
@@ -69,33 +101,7 @@ export function GraphDetails({
         <ul className="graph-holders">
           {walked.holders.map((holder) => (
             <li key={`${holder.path}:${String(holder.line)}`} className="graph-holder">
-              <dl className="facts">
-                <div className="fact">
-                  <dt>{t("graph.details.kind")}</dt>
-                  <dd className="mono">{holder.kind ?? "-"}</dd>
-                </div>
-                <div className="fact fact-wide">
-                  <dt>{t("graph.details.title")}</dt>
-                  <dd>{holder.title ?? "-"}</dd>
-                </div>
-                <div className="fact fact-wide">
-                  <dt>{t("graph.details.where")}</dt>
-                  <dd className="mono">
-                    {holder.path}:{holder.line}
-                  </dd>
-                </div>
-                {holder.archived && (
-                  <div className="fact">
-                    <dt>{t("graph.details.flags")}</dt>
-                    <dd>
-                      <span className="plain-tag">
-                        <Icon name="archived" />
-                        {t("graph.archivedWord")}
-                      </span>
-                    </dd>
-                  </div>
-                )}
-              </dl>
+              <PropertyList label={t("graph.details.holder")} items={graphFactsOf(holder, t)} foldEmpty />
             </li>
           ))}
         </ul>
@@ -113,10 +119,10 @@ export function GraphDetails({
           <EdgeLines edges={edges} />
         </section>
         <p className="graph-details-actions">
-          <a className="button" href={sectionHash(project, "tree", walked.name)}>
+          <a className={buttonClasses("subtle", "compact")} href={sectionHash(project, "tree", walked.name)}>
             {t("graph.details.openInTree")}
           </a>
-          <a className="button" href={sectionHash(project, "graph", walked.name)}>
+          <a className={buttonClasses("subtle", "compact")} href={sectionHash(project, "graph", walked.name)}>
             <Icon name="focus" />
             {t("graph.details.centre")}
           </a>
@@ -163,15 +169,13 @@ export function GraphDetails({
       <>
         <p>{t("graph.details.moreText", { column: content.column, count: content.hidden })}</p>
         <p>
-          <button
-            type="button"
-            className="button"
+          <Button
             onClick={() => {
               onShowInList(content);
             }}
           >
             {t("graph.details.showInList")}
-          </button>
+          </Button>
         </p>
       </>
     );
@@ -187,9 +191,9 @@ export function GraphDetails({
           <Icon name="selected" />
           {t("graph.selected")}
         </span>
-        <button type="button" className="button button-quiet graph-details-close" onClick={onClose}>
+        <Button appearance="subtle" className="graph-details-close" onClick={onClose}>
           {fill(t("graph.details.close", { what: slot("what") }), { what: <span className="sr-only">{t("graph.details.closeWhat")}</span> })}
-        </button>
+        </Button>
       </header>
       {body}
     </aside>

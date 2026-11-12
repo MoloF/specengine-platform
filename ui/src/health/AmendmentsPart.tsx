@@ -8,6 +8,7 @@ import { Notes } from "../overview/parts";
 import { linkStateLook } from "../tree/labels";
 import { writtenAs } from "../tree/LinksPanel";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { ReadFailure, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetryFocus } from "../ui/useRetryFocus";
@@ -145,16 +146,14 @@ function Amendments({ project, report }: { project: string; report: HealthReport
       {hidden > 0 && (
         <div className="health-amendments-more">
           <p className="health-amendments-scope">{t("health.amendments.firstOf", { shown: shown.length, count })}</p>
-          <button
-            type="button"
-            className="button"
+          <Button
             onClick={() => {
               setAll(true);
               focusLater(() => list.current?.querySelectorAll<HTMLElement>(".health-amendment-path")[AMENDMENTS_SHOWN]);
             }}
           >
             {t("health.amendments.showAll", { count })}
-          </button>
+          </Button>
         </div>
       )}
     </>

@@ -117,13 +117,21 @@ export function choiceOf(draft: Draft): StageChoice | null {
   }
 }
 
-/** One item's answer for the round POST: the choice, then the `updated_at` of the version shown. */
-export function answerOf(item: RoundItem, draft: Draft | undefined): RoundAnswerBody | null {
+/**
+ * One item's answer for the round POST: the choice, the `updated_at` of the version shown, then `as`,
+ * the acting name, as the Inbox's decision dialog sends it; no key when there is none
+ * (docs/features/design-sweep-b.md "Acceptance criteria", DB9).
+ */
+export function answerOf(item: RoundItem, draft: Draft | undefined, as: string | null): RoundAnswerBody | null {
   if (draft === undefined || stateOf(item, draft) !== "ready") {
     return null;
   }
   const choice = choiceOf(draft);
-  return choice === null ? null : { id: item.id, stage: { ...choice, updated_at: item.updated_at } };
+  if (choice === null) {
+    return null;
+  }
+  const stage = { ...choice, updated_at: item.updated_at };
+  return { id: item.id, stage: as === null ? stage : { ...stage, as } };
 }
 
 /** The drafts with the one of `id` replaced, or removed when none is given. */

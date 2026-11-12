@@ -9,6 +9,7 @@ import { summaryOf } from "../inbox/summary";
 import { taskStatusLook } from "../tasks/labels";
 import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Icon } from "../ui/Icon";
 import { groupLabel, groupWords, needleOf, paletteGroups, type Held, type PaletteInput, type PaletteOption } from "./options";
@@ -344,9 +345,9 @@ export function Palette({
             esc: <kbd>{t("palette.keys.esc")}</kbd>,
           })}
         </p>
-        <button type="button" className="button button-quiet" onClick={onClose}>
+        <Button appearance="subtle" onClick={onClose}>
           {t("palette.close")}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );

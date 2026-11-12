@@ -9,6 +9,8 @@ import { aboutOf } from "../app/sections";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { useTranslate } from "../i18n";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
@@ -1104,18 +1106,24 @@ export function BoardView({
             </p>
           )}
           {!boardFailed && list.cards.length === 0 && (
-            <div className="empty-state board-notice">
-              <p>{noCards(t)}</p>
+            // A notice over the grid: the wrapper its surface, the EmptyState its words (docs/features/design-sweep-b.md "Acceptance criteria", DB6).
+            <div className="board-notice">
+              <EmptyState level={2} title={noCards(t)} />
             </div>
           )}
           {!boardFailed && all.length > 0 && visible.length === 0 && (
-            <div className="empty-filter board-notice">
-              <p>{t("board.view.noMatch")}</p>
-              {filtered && (
-                <button type="button" className="button" onClick={clearFilters}>
-                  {t("board.view.clearFilters")}
-                </button>
-              )}
+            <div className="board-notice">
+              <EmptyState
+                level={2}
+                title={t("board.view.noMatch")}
+                primary={
+                  filtered ? (
+                    <Button appearance="primary" onClick={clearFilters}>
+                      {t("board.view.clearFilters")}
+                    </Button>
+                  ) : undefined
+                }
+              />
             </div>
           )}
           {refusal !== null && refusal.place === "board" && (

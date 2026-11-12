@@ -5,12 +5,14 @@ import type { CheckReport } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
-import { Icon } from "../ui/Icon";
+import { Button } from "../ui/Button";
+import { Lozenge } from "../ui/Lozenge";
+import { PropertyList, type Property } from "../ui/PropertyList";
 import { ReadFailure, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { HealthRegion } from "./parts";
-import { isCannotCheck, isClean, isKnownMode, unknownModeLook, verdictLook } from "./labels";
+import { isCannotCheck, isClean, isKnownMode, unknownModeLook, verdictLook, verdictLozenge } from "./labels";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 
@@ -37,16 +39,17 @@ function causeText(path: string, message: string): string {
 function CheckAnswer({ project, report }: { project: string; report: CheckReport }) {
   const t = useTranslate();
   const cannot = isCannotCheck(report.verdict);
-  const verdict = verdictLook(report.verdict, t);
-  const counts = COUNTS.flatMap(([key, label]) => {
+  const counts: Property[] = COUNTS.flatMap(([key, label]) => {
     const value = report.counts[key];
     return value === undefined ? [] : [{ key, label: t(label), value }];
   });
   const clean = isClean(report.verdict) && report.findings.length === 0 && report.stale.length === 0;
   return (
     <>
+      {/* The verdict as a lozenge, cannot-check never clean's (docs/features/design-sweep-b.md "Acceptance criteria", DB1). */}
       <p className="check-verdict">
-        <Badge name={t("health.check.verdict")} look={verdict} />
+        <span className="sr-only">{t("ui.badgeName", { name: t("health.check.verdict") })}</span>
+        <Lozenge {...verdictLozenge(report.verdict, t)} />
       </p>
       {clean && (
         <div className="health-clean">
@@ -81,14 +84,7 @@ function CheckAnswer({ project, report }: { project: string; report: CheckReport
       <div className="health-part">
         <h3 className="health-part-title">{t("health.check.counts")}</h3>
         {cannot && <p className="muted">{t("health.check.countsCannot")}</p>}
-        <dl className="check-counts">
-          {counts.map(({ key, label, value }) => (
-            <div key={key} className="check-count" data-count={key}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <PropertyList label={t("health.check.counts")} items={counts} />
       </div>
     </>
   );
@@ -159,10 +155,9 @@ export function CheckRegion({ project, check, health }: { project: string; check
       className="health-check"
       action={
         check.data === undefined ? null : (
-          <button type="button" className="button" aria-disabled={check.isFetching} onClick={checkAgain}>
-            <Icon name="retry" />
+          <Button icon="retry" aria-disabled={check.isFetching} onClick={checkAgain}>
             <span>{check.isFetching ? t("health.check.checkingButton") : t("health.check.again")}</span>
-          </button>
+          </Button>
         )
       }
     >

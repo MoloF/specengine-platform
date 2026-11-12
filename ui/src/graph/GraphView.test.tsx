@@ -146,6 +146,8 @@ describe("the route and its one read (AC-01)", () => {
     });
     expect(screen.getByText("Give a REF to draw its links")).toBeTruthy();
     expect(field.getAttribute("aria-describedby")).toBe(screen.getByText("Give a REF to draw its links").id);
+    // An EmptyState at h2 (DB2 of design-sweep-b).
+    expect(screen.getByText("Give a REF to draw its links").closest(".empty-state-box")?.querySelector("h2.empty-state-title")?.textContent).toBe("Give a REF to draw its links");
     expect(client.getGraph).not.toHaveBeenCalled();
   });
 
@@ -477,6 +479,39 @@ describe("boxes, stubs, details (AC-06, AC-07)", () => {
     expect(document.querySelectorAll(".react-flow__edge:not(.is-emphasis)")).toHaveLength(6);
     const details = screen.getByRole("complementary");
     expect(within(details).getByText("Selected").querySelector("svg.icon")).not.toBeNull();
+  });
+
+  // docs/features/design-sweep-b.md "Acceptance criteria", DB2: the details' facts, links and Close
+  // on the primitives.
+  it("lists a holder's facts as a PropertyList of graphFactsOf's rows, its links quiet compact buttons, Close a Button (DB2 of design-sweep-b)", async () => {
+    renderApp(graphClient(), "#/alpha/graph/R-0");
+    await drawn();
+    fireEvent.click(box("n:A1"));
+    const details = await screen.findByRole("complementary");
+    expect(details.querySelector("dl.facts")).toBeNull();
+    const facts = within(details).getByRole("region", { name: "Details" });
+    const rows = Array.from(facts.querySelectorAll(":scope > dl > .property-row"), (row) => [row.querySelector("dt")?.textContent, row.querySelector("dd")?.textContent]);
+    expect(rows).toEqual([
+      ["Kind", "gadget"],
+      ["Title", "First gadget"],
+      ["Where", "docs/spec/a1.md:1"],
+    ]);
+    // Flags, none here, folds under More fields.
+    expect(within(facts).getByText("More fields (1)")).toBeTruthy();
+    for (const name of ["Open in spec tree", "Centre here"]) {
+      expect([name, within(details).getByRole("link", { name }).className]).toEqual([name, "button button-quiet button-compact"]);
+    }
+    expect(within(details).getByRole("button", { name: /^Close/ }).className).toBe("button button-quiet graph-details-close");
+  });
+
+  it("shows an archived holder's flag in its facts", async () => {
+    renderApp(graphClient(), "#/alpha/graph/R-0");
+    await drawn();
+    fireEvent.click(box("n:A3"));
+    const details = await screen.findByRole("complementary");
+    const facts = within(details).getByRole("region", { name: "Details" });
+    expect(Array.from(facts.querySelectorAll(":scope > dl > .property-row dt"), (label) => label.textContent)).toEqual(["Kind", "Title", "Where", "Flags"]);
+    expect(within(facts).queryByText(/^More fields/)).toBeNull();
   });
 
   it("opens the spec tree and centres here by their hashes; Centre here reads once, options kept; Back restores", async () => {
@@ -817,10 +852,31 @@ describe("states (AC-11)", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Follow mentions too" })).toBeTruthy();
     });
-    expect(screen.getByRole("button", { name: "Include archive" })).toBeTruthy();
+    // The third act stays reachable as the control above the canvas (DB2 of design-sweep-b).
+    expect(screen.getByRole("checkbox", { name: "Include archive" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show Impact" }));
     await calls(client, 2);
     expect(lastCall(client)).toEqual({ ref: "LONE", impact: true, depth: 2 });
+  });
+
+  // docs/features/design-sweep-b.md "Acceptance criteria", DB2: no edge is an EmptyState of at most
+  // two acts, the first the primary; the rest stand as the controls they are.
+  it("no edge with impact off, mentions offered and archive off: exactly two acts, Show Impact the primary; the chips and the archive toggle still in the controls (DB2 of design-sweep-b)", async () => {
+    renderApp(graphClient(), "#/alpha/graph/LONE");
+    await screen.findByRole("heading", { level: 2, name: "No link to draw" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Follow mentions too" })).toBeTruthy();
+    });
+    const box = document.querySelector(".graph-results .empty-state-box");
+    expect(box?.querySelector("h2.empty-state-title")?.textContent).toBe("No link to draw");
+    expect(Array.from(box?.querySelectorAll(".empty-state-acts button") ?? [], (button) => [button.textContent, button.className])).toEqual([
+      ["Show Impact", "button button-primary"],
+      ["Follow mentions too", "button"],
+    ]);
+    expect(document.querySelector(".graph-results .empty-state")).toBeNull();
+    const controls = screen.getByRole("form", { name: "Graph options" });
+    expect(within(controls).getByRole("checkbox", { name: "Include archive" })).toBeTruthy();
+    expect(within(within(controls).getByRole("group", { name: "Types followed" })).getAllByRole("button").length).toBeGreaterThan(0);
   });
 
   it("shows the same note twice when the daemon says it twice", async () => {

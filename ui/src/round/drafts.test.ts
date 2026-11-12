@@ -19,14 +19,14 @@ function draft(fields: Partial<Draft>): Draft {
 describe("a draft's answer (U-04)", () => {
   it("sends an option as option N, every other flag null, then the updated_at shown, in this key order", () => {
     const item = aRoundItem({ id: "PR-0005", kind: "riddle", options: OPTIONS, recommendation: 1 });
-    expect(JSON.stringify(answerOf(item, draft({ pick: "option", option: 1 })))).toBe(
+    expect(JSON.stringify(answerOf(item, draft({ pick: "option", option: 1 }), null))).toBe(
       '{"id":"PR-0005","stage":{"decision":"approve","option":1,"answer":null,"canon":null,"editorial":null,"note":null,"updated_at":"2026-10-01T10:00:00Z"}}',
     );
   });
 
   it("sends the working answer as an approve with every flag null, an own answer as answer (LF kept, trimmed), a reject with its reason", () => {
     const item = aRoundItem({ id: "PR-0003", working_answer: "yes, 1.5 s" });
-    expect(answerOf(item, draft({ pick: "working" }))?.stage).toEqual({
+    expect(answerOf(item, draft({ pick: "working" }), null)?.stage).toEqual({
       decision: "approve",
       option: null,
       answer: null,
@@ -35,7 +35,7 @@ describe("a draft's answer (U-04)", () => {
       note: null,
       updated_at: "2026-10-01T10:00:00Z",
     });
-    expect(answerOf(item, draft({ pick: "answer", answer: "  no,\n2 s \n" }))?.stage).toEqual({
+    expect(answerOf(item, draft({ pick: "answer", answer: "  no,\n2 s \n" }), null)?.stage).toEqual({
       decision: "approve",
       option: null,
       answer: "no,\n2 s",
@@ -44,7 +44,7 @@ describe("a draft's answer (U-04)", () => {
       note: null,
       updated_at: "2026-10-01T10:00:00Z",
     });
-    expect(JSON.stringify(answerOf(item, draft({ pick: "reject", reason: "dup" })))).toBe(
+    expect(JSON.stringify(answerOf(item, draft({ pick: "reject", reason: "dup" }), null))).toBe(
       '{"id":"PR-0003","stage":{"decision":"reject","reason":"dup","updated_at":"2026-10-01T10:00:00Z"}}',
     );
   });
@@ -52,7 +52,26 @@ describe("a draft's answer (U-04)", () => {
   it("sends a text over its cap all the same: the daemon's refusal decides, nothing is cut", () => {
     const item = aRoundItem({ id: "PR-0003" });
     const long = "x".repeat(5000);
-    expect(answerOf(item, draft({ pick: "answer", answer: long }))?.stage).toMatchObject({ answer: long });
+    expect(answerOf(item, draft({ pick: "answer", answer: long }), null)?.stage).toMatchObject({ answer: long });
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB9: each staged answer carries the acting
+// name as `as`, after `updated_at`; none, no key at all.
+describe("a draft's answer carries the acting name (DB9 of design-sweep-b)", () => {
+  it("adds `as` after updated_at when a name is given", () => {
+    const item = aRoundItem({ id: "PR-0003", working_answer: "yes" });
+    expect(JSON.stringify(answerOf(item, draft({ pick: "reject", reason: "dup" }), "Ann"))).toBe(
+      '{"id":"PR-0003","stage":{"decision":"reject","reason":"dup","updated_at":"2026-10-01T10:00:00Z","as":"Ann"}}',
+    );
+    expect(answerOf(item, draft({ pick: "working" }), "Ann")?.stage).toMatchObject({ decision: "approve", as: "Ann" });
+  });
+
+  it("sends no `as` key at all when there is no name, never `as: null`", () => {
+    const item = aRoundItem({ id: "PR-0003", working_answer: "yes" });
+    const stage = answerOf(item, draft({ pick: "working" }), null)?.stage;
+    expect(stage === undefined ? null : Object.hasOwn(stage, "as")).toBe(false);
+    expect(answerOf(item, draftOf(item), "Ann")).toBeNull();
   });
 });
 
@@ -61,25 +80,25 @@ describe("where a draft stands (U-03, U-05)", () => {
     const item = aRoundItem({ id: "PR-0005", options: OPTIONS, recommendation: 0 });
     expect(draftOf(item)).toEqual(draft({}));
     expect([stateOf(item, undefined), stateOf(item, draftOf(item))]).toEqual(["open", "open"]);
-    expect(answerOf(item, undefined)).toBeNull();
-    expect(answerOf(item, draftOf(item))).toBeNull();
+    expect(answerOf(item, undefined, null)).toBeNull();
+    expect(answerOf(item, draftOf(item), null)).toBeNull();
   });
 
   it("leaves out a draft made on an older version of its item until picked again", () => {
     const item = aRoundItem({ id: "PR-0005", options: OPTIONS, updated_at: "2026-10-02T08:00:00Z" });
     const old = draft({ pick: "option", option: 0 });
     expect(stateOf(item, old)).toBe("changed");
-    expect(answerOf(item, old)).toBeNull();
+    expect(answerOf(item, old, null)).toBeNull();
     const again = { ...old, updatedAt: item.updated_at };
     expect(stateOf(item, again)).toBe("ready");
-    expect(answerOf(item, again)?.stage.updated_at).toBe("2026-10-02T08:00:00Z");
+    expect(answerOf(item, again, null)?.stage.updated_at).toBe("2026-10-02T08:00:00Z");
   });
 
   it("leaves out an own answer or a reject with nothing but white space written", () => {
     const item = aRoundItem({ id: "PR-0003" });
     expect(stateOf(item, draft({ pick: "answer", answer: " \n " }))).toBe("unwritten");
     expect(stateOf(item, draft({ pick: "reject", reason: "" }))).toBe("unwritten");
-    expect(answerOf(item, draft({ pick: "reject", reason: "" }))).toBeNull();
+    expect(answerOf(item, draft({ pick: "reject", reason: "" }), null)).toBeNull();
   });
 
   it("never sends a pick the item shown no longer offers, re-stamped or not: open on its version, changed on an older one", () => {
@@ -96,7 +115,7 @@ describe("where a draft stands (U-03, U-05)", () => {
     for (const [item, fields] of cases) {
       const old = draft(fields);
       const kept = draft({ ...fields, updatedAt: item.updated_at });
-      expect([fields, offers(item, kept), stateOf(item, old), stateOf(item, kept), answerOf(item, old), answerOf(item, kept)]).toEqual([
+      expect([fields, offers(item, kept), stateOf(item, old), stateOf(item, kept), answerOf(item, old, null), answerOf(item, kept, null)]).toEqual([
         fields,
         false,
         "changed",

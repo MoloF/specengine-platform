@@ -6,14 +6,16 @@ import { aRoadmap, aRoadmapGroup, aRoadmapItem } from "../test/builders";
 import { renderApp } from "../test/render";
 import { pressAndMove, viewOf } from "../test/press";
 import { aPlan, roadmapClient } from "../test/roadmapStub";
-import { chainOf } from "./chain";
+import appCss from "../styles/app.css?raw";
+import { CHAIN_TASKS_SHOWN, chainOf } from "./chain";
 
 // UI-4 of docs/features/roadmap-screen.md: the Chain tab's canvas is read only, as the Graph's is
 // (no draggable box, no connectable handle, no key listener but the shell's, no word of deleting,
 // moving, dragging or connecting), and it is the Lanes tab's twin: the same items, the same
 // `waits_on` pairs between two items (across lanes too), the same cycle marks, the same task
-// cells. A box's click selects through the route. Past CANVAS_LIMIT boxes, whole lanes only, the
-// count of those not drawn named.
+// cells, a box drawing its first CHAIN_TASKS_SHOWN and counting the rest on its one meta line
+// (docs/features/design-sweep-b.md "Acceptance criteria", DB3). A box's click selects through the
+// route. Past CANVAS_LIMIT boxes, whole lanes only, the count of those not drawn named.
 
 function boxes(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="i:"]'));
@@ -40,12 +42,13 @@ async function drawn() {
   });
 }
 
-/** What a tab shows of the plan, as text: items, waits between two items, cycle marks, task cells. */
+/** What a tab shows of the plan, as text: items, waits between two items, cycle marks, task cells, each item's task count. */
 interface Twin {
   items: string[];
   waits: string[];
   cycles: string[];
   tasks: string[];
+  taskCounts: Record<string, number>;
 }
 
 function canvasTwin(): Twin {
@@ -59,9 +62,18 @@ function canvasTwin(): Twin {
       .sort(),
     tasks: boxes()
       .flatMap((element) =>
-        Array.from(element.querySelectorAll<HTMLElement>("[data-task]"), (cell) => `${(element.dataset.id ?? "").slice(2)} ${cell.dataset.task ?? ""} ${cell.textContent.replace(cell.dataset.task ?? "", "").trim()}`),
+        Array.from(element.querySelectorAll<HTMLElement>("[data-task]"), (cell) => `${(element.dataset.id ?? "").slice(2)} ${cell.dataset.task ?? ""} ${cell.querySelector(".chain-box-task-label")?.textContent ?? ""}`),
       )
       .sort(),
+    // Drawn and counted: the cells, then the number after them.
+    taskCounts: Object.fromEntries(
+      boxes()
+        .map((element): [string, number] => [
+          (element.dataset.id ?? "").slice(2),
+          element.querySelectorAll("[data-task]").length + Number(element.querySelector<HTMLElement>("[data-more]")?.dataset.more ?? "0"),
+        ])
+        .filter(([, count]) => count > 0),
+    ),
   };
 }
 
@@ -81,11 +93,15 @@ function lanesTwin(): Twin {
       .filter((card) => card.querySelector("[data-cycle]") !== null)
       .map((card) => card.dataset.item ?? "")
       .sort(),
+    // The cells a box draws: each card's first CHAIN_TASKS_SHOWN.
     tasks: cards
       .flatMap((card) =>
-        Array.from(card.querySelectorAll<HTMLElement>("[data-task]"), (cell) => `${card.dataset.item ?? ""} ${cell.dataset.task ?? ""} ${cell.querySelector(".badge-label")?.textContent ?? ""}`),
+        Array.from(card.querySelectorAll<HTMLElement>("[data-task]"), (cell) => `${card.dataset.item ?? ""} ${cell.dataset.task ?? ""} ${cell.querySelector(".badge-label")?.textContent ?? ""}`).slice(0, CHAIN_TASKS_SHOWN),
       )
       .sort(),
+    taskCounts: Object.fromEntries(
+      cards.map((card): [string, number] => [card.dataset.item ?? "", card.querySelectorAll("[data-task]").length]).filter(([, count]) => count > 0),
+    ),
   };
 }
 
@@ -145,7 +161,28 @@ describe("the canvas is the Lanes tab's twin (UI-4)", () => {
     // The pairs that cross a lane: launch to beta, the pool to launch.
     expect(canvas.waits).toEqual(expect.arrayContaining(["RM-0022 waits on RM-0011", "RM-0040 waits on RM-0022"]));
     expect(canvas.items).toHaveLength(13);
-    expect(canvas.tasks).toHaveLength(11);
+    expect(canvas.taskCounts).toEqual({ "RM-0017": 5, "RM-0010": 6 });
+    expect(canvas.tasks).toHaveLength(2 * CHAIN_TASKS_SHOWN);
+  });
+
+  // docs/features/design-sweep-b.md "Acceptance criteria", DB3: a box holds three rows, so its tasks
+  // stand on one line whatever their number: the first cells, then how many more, nothing wrapped.
+  it("puts five tasks on one meta line: the first cells, then 3 more, the line never wrapping", async () => {
+    await openChain();
+    await drawn();
+    const rows = Array.from(box("RM-0017").querySelectorAll(".graph-box > p"));
+    expect(rows.map((row) => row.className)).toEqual(["graph-box-top", "graph-box-title", "graph-box-meta chain-box-tasks"]);
+    const tasks = rows[2];
+    expect(tasks?.querySelectorAll("[data-task]")).toHaveLength(CHAIN_TASKS_SHOWN);
+    expect([tasks?.querySelector("[data-more]")?.textContent, tasks?.lastElementChild?.hasAttribute("data-more")]).toEqual(["3 more", true]);
+    expect(box("RM-0010").querySelector("[data-more]")?.textContent).toBe("4 more");
+    // One line: the row's rule and the graph-box row it builds on hold nowrap, no rule wraps it.
+    const rule = (selector: string) => new RegExp(`(^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(appCss)?.[2] ?? "";
+    expect(rule(".chain-box-tasks")).toMatch(/flex-wrap:\s*nowrap;/);
+    expect(rule(".graph-box p")).toMatch(/white-space:\s*nowrap;/);
+    expect(rule(".graph-box p")).toMatch(/overflow:\s*hidden;/);
+    expect(appCss).not.toMatch(/\.chain-box-tasks[^{]*\{[^}]*flex-wrap:\s*wrap/);
+    expect(rule(".chain-box-more")).toMatch(/flex:\s*none;/);
   });
 
   it("draws no edge for an item waiting on itself; its In a cycle mark carries it", async () => {

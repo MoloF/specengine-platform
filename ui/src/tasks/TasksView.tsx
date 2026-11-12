@@ -5,6 +5,7 @@ import { RegionBoundary } from "../app/RegionBoundary";
 import { aboutOf } from "../app/sections";
 import { useTranslate } from "../i18n";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { waitsForYou } from "./groups";
@@ -36,17 +37,22 @@ function NoTaskPane({ waiting }: { waiting: number | null }) {
         </h1>
         <p className="view-about">{aboutOf("tasks", t)}</p>
       </header>
-      <div className="empty-state">
-        <h2>{t("tasks.noneOpen")}</h2>
-        {waiting !== null && waiting > 0 && (
-          <p className="waiting-note">
-            <Icon name="waiting" />
-            <span>{t("tasks.waiting", { count: waiting })}</span>
-          </p>
-        )}
-        <p>{t("tasks.pick")}</p>
-        <p className="muted">{t("tasks.keysHint")}</p>
-      </div>
+      <EmptyState
+        level={2}
+        title={t("tasks.noneOpen")}
+        description={
+          <>
+            {waiting !== null && waiting > 0 && (
+              <p className="waiting-note">
+                <Icon name="waiting" />
+                <span>{t("tasks.waiting", { count: waiting })}</span>
+              </p>
+            )}
+            <p>{t("tasks.pick")}</p>
+            <p>{t("tasks.keysHint")}</p>
+          </>
+        }
+      />
     </section>
   );
 }
@@ -121,7 +127,11 @@ export function TasksView({ project, taskId }: { project: string; taskId: string
 
   return (
     <div className="tasks-view" onKeyDown={onViewKeyDown}>
-      <section className="tasks-pane" aria-label={t("tasks.listLabel")}>
+      <section className="tasks-pane" aria-labelledby="tasks-list-title">
+        {/* The pane's own heading, before the task's h1: its empty states stand one level below it. */}
+        <h2 id="tasks-list-title" className="sr-only">
+          {t("tasks.listLabel")}
+        </h2>
         <div
           ref={listRegion}
           tabIndex={-1}

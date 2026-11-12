@@ -2,6 +2,7 @@ import type { SnapshotDiff, TaskPackage } from "../api/types";
 import { DocLink } from "../doc/DocLink";
 import { removesAll } from "../ui/diff";
 import { DiffView } from "../ui/DiffView";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { frozenAtApproval } from "./labels";
 import { useTranslate } from "../i18n";
@@ -71,10 +72,7 @@ export function SpecChangesPanel({ project, task }: { project: string; task: Tas
   if (snapshot === null) {
     return (
       <div className="task-panel">
-        <div className="empty-state">
-          <p>{frozenAtApproval(t)}</p>
-          <p className="muted">{t("tasks.changes.noApproval")}</p>
-        </div>
+        <EmptyState level={2} title={frozenAtApproval(t)} description={<p>{t("tasks.changes.noApproval")}</p>} />
       </div>
     );
   }

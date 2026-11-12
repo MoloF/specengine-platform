@@ -176,7 +176,6 @@
   --roadmap-cycle: var(--sync-predated);
   --roadmap-waits: var(--severity-low);
   --roadmap-unestimated: var(--severity-unknown);
-  --roadmap-status: var(--severity-unknown);
   --roadmap-bar: var(--accent);
   --roadmap-bar-track: var(--border-control);
 

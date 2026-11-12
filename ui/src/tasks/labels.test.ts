@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { KnownRunOutcome, KnownTaskStatus } from "../api/types";
-import { runOutcomeLook, stalenessLook, taskStatusLook } from "./labels";
+import { runOutcomeLook, stalenessLook, taskStatusLook, taskStatusLozenge } from "./labels";
 import { enT } from "../test/text";
 import { ru } from "../i18n/ru";
 import { ruT } from "../test/text";
@@ -92,5 +92,33 @@ describe("the Tasks tables in Russian (LG-3)", () => {
       ruT,
     ).map((group) => group.title);
     expect(titles).toEqual([ru.tasks.group.waiting, ru.tasks.status.draft, ru.tasks.group.closed, ru.tasks.group.other]);
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB5: a task's state in its head as a lozenge,
+// the badge's label and icon, each state its appearance; an unknown one neutral, raw, English.
+describe("the state's lozenge (DB5 of design-sweep-b)", () => {
+  it("maps the ten states onto their appearances, with the badge's labels and icons", () => {
+    expect(Object.keys(STATES).map((status) => [status, taskStatusLozenge(status, enT).appearance])).toEqual([
+      ["draft", "neutral"],
+      ["analysis", "neutral"],
+      ["review", "warning"],
+      ["changes_requested", "warning"],
+      ["ready", "information"],
+      ["in_progress", "information"],
+      ["in_review", "information"],
+      ["done", "success"],
+      ["accepted", "success"],
+      ["cancelled", "neutral"],
+    ]);
+    for (const status of Object.keys(STATES)) {
+      const look = taskStatusLook(status, enT);
+      expect([status, taskStatusLozenge(status, enT).label, taskStatusLozenge(status, enT).icon]).toEqual([status, look.label, look.icon]);
+    }
+  });
+
+  it("shows an unknown state raw and neutral under lang=en, never mapped", () => {
+    expect(taskStatusLozenge("weird", enT)).toEqual({ appearance: "neutral", icon: "unknown", label: "weird", lang: "en" });
+    expect(taskStatusLozenge("toString", enT).appearance).toBe("neutral");
   });
 });

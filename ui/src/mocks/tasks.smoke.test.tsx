@@ -54,7 +54,7 @@ async function openTask(id: string, scenario: Scenario = "normal") {
 
 /** The staleness slot of the open task: its badge's text, or the words standing in for one. */
 function staleness(): string {
-  const badges = document.querySelector(".task-badges");
+  const badges = document.querySelector(".task-pane .issue-view-meta");
   const badge = Array.from(badges?.querySelectorAll(".badge") ?? []).find((element) => element.textContent.startsWith("Spec since approval"));
   return badge?.textContent ?? badges?.querySelector(".frozen-note")?.textContent ?? "";
 }
@@ -229,7 +229,8 @@ describe("states over the mock (AC-11)", () => {
 
   it("empty: no tasks yet, for both projects", async () => {
     renderMock("empty", "#/ledger-api/tasks");
-    expect((await screen.findByText(/Create one:/)).textContent).toBe("No agent tasks yet. Create one: spec task new --nodes REF...");
+    expect((await screen.findByText(/Create one:/)).textContent).toBe("Create one: spec task new --nodes REF...");
+    expect(screen.getByRole("heading", { level: 3, name: "No agent tasks yet." }).closest(".empty-state-box")).not.toBeNull();
   });
 
   it("error: the mock's message verbatim and a Retry", async () => {
@@ -281,7 +282,7 @@ describe("the large scenario (AC-14)", () => {
   it("shows a generated task in progress claimed, its run 1 running", async () => {
     renderMock("large", "#/harbor-sim/tasks/T-0207");
     await screen.findByRole("tab", { name: "Overview", selected: true });
-    expect(document.querySelector(".task-badges .badge")?.textContent).toBe("State: In progress");
+    expect(document.querySelector(".task-pane .issue-view-meta .task-meta-status")?.textContent).toBe("State: In progress");
     fireEvent.click(screen.getByRole("tab", { name: /^Runs/ }));
     expect(screen.queryByText("Not claimed")).toBeNull();
     expect(Array.from(document.querySelectorAll(".pairs dd.mono")).map((item) => item.textContent)).toContain("/work/harbor-sim/T-0207");

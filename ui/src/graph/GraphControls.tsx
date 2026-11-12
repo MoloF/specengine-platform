@@ -1,6 +1,7 @@
 import { useId, useState, type Ref, type SubmitEvent } from "react";
 import { pushHash } from "../app/location";
 import { sectionHash } from "../app/routes";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { directionLabel } from "../tree/labels";
 import { directionIcon } from "./lines";
@@ -87,9 +88,9 @@ export function GraphControls({
               setMissing(false);
             }}
           />
-          <button type="submit" className="button button-primary">
+          <Button appearance="primary" type="submit">
             {t("graph.controls.show")}
-          </button>
+          </Button>
         </div>
         {missing && (
           <p id={`${base}-error`} className="field-error" role="alert">

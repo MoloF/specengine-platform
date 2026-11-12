@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import appCss from "../styles/app.css?raw";
 import { ClientError } from "../api/client";
 import type { QueueEvent, RoundAnswerBody, RoundAnswersOutcome, RoundItem, RoundSheet } from "../api/types";
+import { ACTING_KEY } from "../board/acting";
 import { aRoundItem, aRoundSheet } from "../test/builders";
 import { renderApp } from "../test/render";
 import { STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
@@ -985,6 +986,73 @@ describe("what a POST that settles after its screen left says (review iteration 
     const alert = await within(await screen.findByRole("region", { name: "The answers to stage" })).findByRole("alert");
     expect(alert.textContent).toContain(message);
     expect(document.querySelector('[aria-live="assertive"]')?.textContent).toBe("");
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB9: each staged answer carries the acting
+// name as `as`, the Inbox's decision dialog's way: the stored "Acting as" name, or a hub's login;
+// none, no key; Unstage sends no body.
+describe("Stage sends the acting name (DB9 of design-sweep-b)", () => {
+  const sheet = () => aRoundSheet([aRoundItem({ id: "PR-0003", working_answer: "yes" }), aRoundItem({ id: "PR-0005", kind: "discrepancy", options: OPTIONS, recommendation: 0 })]);
+
+  async function stageBoth(client: StubClient): Promise<RoundAnswerBody[]> {
+    await openQuestions(client);
+    fireEvent.click(within(await screen.findByRole("article", { name: "PR-0003" })).getByRole("radio", { name: "Take the working answer" }));
+    fireEvent.click(within(card("PR-0005")).getByRole("radio", { name: "Reject with a reason" }));
+    fireEvent.change(within(card("PR-0005")).getByLabelText("Reason for rejecting PR-0005"), { target: { value: "dup" } });
+    fireEvent.click(stageButton());
+    await waitFor(() => {
+      expect(client.stageRoundAnswers).toHaveBeenCalledTimes(1);
+    });
+    return posted(client)[0] ?? [];
+  }
+
+  it("with Acting as holding Ann, posts each answer's stage with as: Ann, trimmed", async () => {
+    window.localStorage.setItem(ACTING_KEY, "  Ann ");
+    const { client } = serving(sheet());
+    const answers = await stageBoth(client);
+    expect(answers.map((answer) => [answer.id, answer.stage.as])).toEqual([
+      ["PR-0003", "Ann"],
+      ["PR-0005", "Ann"],
+    ]);
+    expect(JSON.stringify(answers[1])).toBe(`{"id":"PR-0005","stage":{"decision":"reject","reason":"dup","updated_at":"${T0}","as":"Ann"}}`);
+  });
+
+  it("with no name, sends no as key at all", async () => {
+    const { client } = serving(sheet());
+    const answers = await stageBoth(client);
+    expect(answers).toHaveLength(2);
+    expect(answers.map((answer) => Object.hasOwn(answer.stage, "as"))).toEqual([false, false]);
+  });
+
+  it("on a hub, sends the login, never the stored name", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const { client } = serving(sheet());
+    client.getIdentity.mockResolvedValue({ login: "mira" });
+    await openQuestions(client);
+    // The team's row is read only once the login has resolved: the screen acts as mira from then on.
+    await waitFor(() => {
+      expect(client.getTeam).toHaveBeenCalledWith("alpha", expect.anything());
+    });
+    fireEvent.click(within(await screen.findByRole("article", { name: "PR-0003" })).getByRole("radio", { name: "Take the working answer" }));
+    fireEvent.click(stageButton());
+    await waitFor(() => {
+      expect(client.stageRoundAnswers).toHaveBeenCalledTimes(1);
+    });
+    expect(posted(client)[0]?.map((answer) => answer.stage.as)).toEqual(["mira"]);
+  });
+
+  it("Unstage sends the item alone, no body and no name", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ann");
+    const item = aRoundItem({ id: "PR-0003", staged: { decision: "reject", reason: "x" }, staged_at: STAGED_AT });
+    const { client } = serving(aRoundSheet([item]));
+    await openQuestions(client);
+    const staged = await within(await screen.findByRole("article", { name: "PR-0003" })).findByRole("region", { name: "Staged decision" });
+    fireEvent.click(within(staged).getByRole("button", { name: "Unstage PR-0003" }));
+    await waitFor(() => {
+      expect(client.unstageDecision).toHaveBeenCalledTimes(1);
+    });
+    expect(client.unstageDecision.mock.calls[0]).toEqual(["alpha", "PR-0003"]);
   });
 });
 

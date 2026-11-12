@@ -2,6 +2,7 @@ import type { KnownRunOutcome, KnownTaskStatus, RunOutcome, TaskStatus } from ".
 import type { Translate } from "../i18n";
 import type { IconName } from "../ui/Icon";
 import type { Look } from "../ui/Badge";
+import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
 
 // The closed tables of the Tasks screen: the ten task states (05 §3.3,
 // `docs/canon/tasks.md` "Transitions") and the four run outcomes
@@ -32,6 +33,34 @@ const STATUS: Record<KnownTaskStatus, Mark> = {
 export function taskStatusLook(status: TaskStatus, t: Translate): Look {
   const mark = lookup(STATUS, status);
   return mark === null ? { label: status, tone: "task-unknown", icon: "unknown", served: true } : { label: t(`tasks.status.${status as KnownTaskStatus}`), ...mark };
+}
+
+/** Each state's lozenge appearance: waiting on the owner warning, under way information, finished success. */
+const STATUS_APPEARANCE: Record<KnownTaskStatus, LozengeAppearance> = {
+  draft: "neutral",
+  analysis: "neutral",
+  review: "warning",
+  changes_requested: "warning",
+  ready: "information",
+  in_progress: "information",
+  in_review: "information",
+  done: "success",
+  accepted: "success",
+  cancelled: "neutral",
+};
+
+/**
+ * A task's state in its head, as a lozenge (docs/features/design-sweep-b.md "Acceptance criteria",
+ * DB5): the badge's label and icon, one of the appearances; a state this build does not know raw
+ * and neutral, under `lang="en"`, never mapped to a known one. The list's rows keep the badge.
+ */
+export function taskStatusLozenge(status: TaskStatus, t: Translate): LozengeLook & { lang?: "en" } {
+  const mark = lookup(STATUS, status);
+  const appearance = lookup(STATUS_APPEARANCE, status);
+  if (mark === null || appearance === null) {
+    return { appearance: "neutral", icon: "unknown", label: status, lang: "en" };
+  }
+  return { appearance, icon: mark.icon, label: t(`tasks.status.${status as KnownTaskStatus}`) };
 }
 
 /** Whether the state is one of the ten. */

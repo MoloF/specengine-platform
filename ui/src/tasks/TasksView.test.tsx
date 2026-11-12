@@ -8,6 +8,7 @@ import { aTaskEntry, aTaskPackage, aTaskProposal, aTaskRun } from "../test/build
 import { renderApp } from "../test/render";
 import { SOME_TASKS, taskClient } from "../test/taskStub";
 import { en } from "../i18n/en";
+import appCss from "../styles/app.css?raw";
 import { argsOf } from "../test/stubClient";
 
 // docs/features/ui-tasks.md on a stub client: AC-01 (what a route reads), AC-03 (an unknown state
@@ -228,6 +229,10 @@ describe("filters (AC-05)", () => {
     fireEvent.click(chip(/^Closed/));
     fireEvent.change(screen.getByLabelText("Filter by ID, title or target"), { target: { value: "nothing like it" } });
     expect(screen.getByText("No agent task matches the filters.")).toBeTruthy();
+    // An EmptyState at h3, Clear filters its primary (DB5 of design-sweep-b).
+    const box = screen.getByText("No agent task matches the filters.").closest(".empty-state-box");
+    expect(box?.querySelector("h3.empty-state-title")?.textContent).toBe("No agent task matches the filters.");
+    expect(Array.from(box?.querySelectorAll(".empty-state-acts button") ?? [], (button) => [button.textContent, button.className])).toEqual([["Clear filters", "button button-primary"]]);
     const clear = screen.getByRole("button", { name: "Clear filters" });
     clear.focus();
     fireEvent.click(clear);
@@ -300,7 +305,7 @@ describe("the task's text and links (AC-07, AC-13)", () => {
   it("links targets, criteria, affected nodes and assumptions from sectionHash; a gone target is text alone", async () => {
     await openTask(pkg);
     const pane = screen.getByRole("article");
-    const hrefs = Array.from(pane.querySelectorAll("a[href]")).map((anchor) => anchor.getAttribute("href"));
+    const hrefs = Array.from(pane.querySelectorAll(".issue-view-main a[href]")).map((anchor) => anchor.getAttribute("href"));
     expect(hrefs).toEqual([
       docPageHash("alpha", "R-1#AC-01"),
       docPageHash("alpha", "R-9"),
@@ -501,7 +506,7 @@ describe("the Package tab and the version guard (AC-10)", () => {
     expect(screen.getByRole("note").textContent).toContain("schema_version 2");
     expect(heading().textContent).toBe("T-0051");
     expect(JSON.parse(document.querySelector(".task-json")?.textContent ?? "")).toStrictEqual(next);
-    expect(document.querySelector(".task-badges")).toBeNull();
+    expect(document.querySelector(".task-pane .issue-view-meta")).toBeNull();
     expect(Array.from(commands().querySelectorAll("code")).map((code) => code.textContent)).toEqual(["spec task show T-0051"]);
   });
 });
@@ -536,11 +541,14 @@ describe("states (AC-11)", () => {
     expect(screen.getByLabelText("Loading T-0004").getAttribute("aria-busy")).toBe("true");
   });
 
-  it("empty: no tasks yet and the command to create one", async () => {
+  it("empty: no tasks yet and the command to create one, an EmptyState at h3 under the pane's h2 (DB5 of design-sweep-b)", async () => {
     renderApp(taskClient([]), "#/alpha/tasks");
     const empty = await screen.findByText(/Create one:/);
-    expect(empty.textContent).toBe("No agent tasks yet. Create one: spec task new --nodes REF...");
+    expect(empty.textContent).toBe("Create one: spec task new --nodes REF...");
     expect(empty.querySelector("code")?.textContent).toBe("spec task new --nodes REF...");
+    const box = empty.closest(".empty-state-box");
+    expect(box?.querySelector("h3.empty-state-title")?.textContent).toBe("No agent tasks yet.");
+    expect(box?.closest(".tasks-pane")?.querySelector("h2.sr-only")?.textContent).toBe("Agent task list");
   });
 
   it("error: the daemon's words, and Retry reads the list once more, focus then on the list", async () => {
@@ -562,6 +570,12 @@ describe("states (AC-11)", () => {
     const client = await openList(taskClient(SOME_TASKS), "#/alpha/tasks/T-0999");
     expect(await screen.findByText("no task T-0999 in this repository")).toBeTruthy();
     expect(heading().textContent).toBe("T-0999");
+    // An EmptyState at h2, the reason verbatim under lang=en and the back link its description (DB5 of design-sweep-b).
+    const box = screen.getByText("no task T-0999 in this repository").closest(".empty-state-box");
+    expect(box?.querySelector("h2.empty-state-title")?.textContent).toBe("No such agent task");
+    expect(screen.getByText("no task T-0999 in this repository").getAttribute("lang")).toBe("en");
+    expect(box?.querySelector(".empty-state-description a.back-link")).not.toBeNull();
+    expect(document.querySelector(".task-pane .empty-state")).toBeNull();
     const back = screen.getByRole("link", { name: "Back to agent tasks" });
     expect(back.getAttribute("href")).toBe("#/alpha/tasks");
     back.focus();
@@ -789,5 +803,74 @@ describe("keyboard (AC-12)", () => {
     });
     expect(window.history.length).toBe(before + 1);
     await focused(row("T-0007"));
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB5: one task beside the list is a
+// work-item pane, as Inbox's proposal and the Spec tree's node are: its trail, its state as a
+// lozenge, its times as a PropertyList; side before main in the DOM.
+describe("the task as a pane (DB5 of design-sweep-b)", () => {
+  it("shows Breadcrumbs: the project, Agent tasks, its T- ID current", async () => {
+    await openTask(aTaskPackage({ id: "T-0042", status: "review", title: "A plan" }));
+    const trail = screen.getByRole("navigation", { name: "Breadcrumbs" });
+    const items = Array.from(trail.querySelectorAll("li"), (item) => [item.querySelector("a")?.getAttribute("href") ?? null, item.textContent.replace("/", "")]);
+    expect(items).toEqual([
+      ["#/alpha", "Alpha"],
+      ["#/alpha/tasks", "Agent tasks"],
+      [null, "T-0042"],
+    ]);
+    const current = trail.querySelector('[aria-current="page"]');
+    expect([current?.textContent, current?.querySelector(".mono") !== null]).toEqual(["T-0042", true]);
+  });
+
+  it("lays the task out as an issue-view pane, side before main", async () => {
+    await openTask(aTaskPackage({ id: "T-0042", status: "review", title: "A plan" }));
+    const pane = screen.getByRole("article").querySelector(":scope > .issue-view");
+    expect(pane?.className).toBe("issue-view issue-view-pane");
+    expect(Array.from(pane?.querySelector(".issue-view-body")?.children ?? [], (column) => column.className)).toEqual(["issue-view-side", "issue-view-main"]);
+    expect(within(pane?.querySelector<HTMLElement>(".issue-view-main") ?? document.body).getByRole("tablist")).toBeTruthy();
+    expect(within(pane?.querySelector<HTMLElement>(".issue-view-actions") ?? document.body).getByRole("region", { name: "Owner commands" })).toBeTruthy();
+  });
+
+  it.each([
+    ["review", "warning", "Plan review", null],
+    ["in_progress", "information", "In progress", null],
+    ["accepted", "success", "Accepted", null],
+    ["weird", "neutral", "weird", "en"],
+  ])("draws the state %s in the head as a %s lozenge, never a badge", async (status, appearance, label, lang) => {
+    await openTask(aTaskPackage({ id: "T-0042", status, title: "A plan" }));
+    const meta = document.querySelector(".task-pane .issue-view-meta");
+    const lozenge = meta?.querySelector(".task-meta-status .lozenge");
+    expect([lozenge?.getAttribute("data-appearance"), lozenge?.querySelector(".lozenge-label")?.textContent, lozenge?.querySelector(".lozenge-label")?.getAttribute("lang") ?? null]).toEqual([appearance, label, lang]);
+    expect(meta?.querySelector(".task-meta-status")?.textContent).toBe(`State: ${label}`);
+    expect(meta?.querySelector(".task-meta-status .badge")).toBeNull();
+  });
+
+  it("lists Created and Updated in a PropertyList labelled Details, no dl.facts", async () => {
+    await openTask(aTaskPackage({ id: "T-0042", status: "review", title: "A plan" }));
+    const details = screen.getByRole("region", { name: "Details" });
+    expect(details.closest(".issue-view-side")).not.toBeNull();
+    expect(Array.from(details.querySelectorAll(".property-label"), (label) => label.textContent)).toEqual(["Created", "Updated"]);
+    expect(document.querySelector(".task-pane dl.facts")).toBeNull();
+  });
+
+  it("draws no task chosen as an EmptyState at h2 under the view's h1, the waiting note in it a call to act in primary text", async () => {
+    await openList();
+    const box = document.querySelector(".task-column .empty-state-box");
+    expect(box?.querySelector("h2.empty-state-title")?.textContent).toBe("No agent task open");
+    expect(box?.querySelector(".empty-state-description")?.textContent).toContain("Pick an agent task in the list");
+    expect(box?.querySelector(".empty-state-description .waiting-note")?.textContent).toMatch(/wait/);
+    expect(document.querySelector(".task-column .empty-state")).toBeNull();
+    // The description is secondary text; the note keeps the primary one.
+    const waitingRule = /\n\.waiting-note\s*\{([^}]*)\}/.exec(appCss)?.[1] ?? "";
+    expect(waitingRule).toMatch(/color:\s*var\(--text-primary\);/);
+  });
+
+  it("draws no spec change, before any approval, as an EmptyState at h2", async () => {
+    await openTask(aTaskPackage({ id: "T-0042", status: "review", title: "A plan" }));
+    showTab(/^Spec changes/);
+    const box = screen.getByRole("tabpanel").querySelector(".empty-state-box");
+    expect(box?.querySelector("h2.empty-state-title")?.textContent).toBe("The spec is frozen at approval.");
+    expect(box?.querySelector(".empty-state-description")?.textContent).toBe("This agent task has no approval yet, so there is nothing to compare.");
   });
 });

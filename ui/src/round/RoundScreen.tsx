@@ -3,7 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useProjects, useRoundPosting, useStageDecision, useStageRoundAnswers, type RoundQuery } from "../api/queries";
 import type { Proposal, RoundAnswersOutcome, RoundItem, RoundSheet, Team } from "../api/types";
 import { sectionHash } from "../app/routes";
-import { useAllowed, useConfirmer } from "../board/acting";
+import { actingName, useActing, useAllowed, useConfirmer } from "../board/acting";
 import { ActOff } from "../board/ActOff";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -102,6 +102,8 @@ export function RoundScreen({ project, round, memory }: { project: string; round
   const posting = useRoundPosting(project);
   const decide = useStageDecision(project);
   const canStage = useAllowed(project)("stage");
+  // The stored "Acting as" name, or a hub's login: sent as each staged answer's `as`.
+  const [acting] = useActing();
   const confirmer = useConfirmer(project);
   const projects = useProjects();
   const announce = useAnnounce();
@@ -178,7 +180,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
 
   const items = sheet?.items ?? [];
   const ready = items.flatMap((item) => {
-    const answer = answerOf(item, drafts.get(item.id));
+    const answer = answerOf(item, drafts.get(item.id), actingName(acting));
     return answer === null ? [] : [{ item, answer }];
   });
   const changed = items.filter((item) => stateOf(item, drafts.get(item.id)) === "changed").map((item) => item.id);

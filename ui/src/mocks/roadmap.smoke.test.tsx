@@ -46,7 +46,7 @@ describe("the Roadmap over the mock (UI-6)", () => {
     expect(card("PLAN-0012").querySelector("[data-task] .badge-label")?.textContent).toBe("Ready");
     expect(card("PLAN-0010").querySelector(".roadmap-card-name")?.textContent).toBe(JAPANESE_TITLE);
     expect(card("PLAN-0013").querySelector(".roadmap-card-name")?.textContent).toBe(GREEK_TITLE);
-    expect(card("PLAN-0010").querySelector(".tone-roadmap-status .badge-label")?.textContent).toBe("status parked");
+    expect(card("PLAN-0010").querySelector(".roadmap-card-facts .lozenge-label")?.textContent).toBe("parked");
     expect(card("PLAN-0031").querySelector(".roadmap-release")?.textContent).toBe("release not a string");
     expect(card("PLAN-0030").querySelector(".roadmap-release")?.textContent).toBe("release someday");
     expect(Array.from(document.querySelectorAll<HTMLElement>("[data-pool-task]"), (row) => row.dataset.poolTask)).toEqual(["T-0107", "T-0108", "T-0110", "T-0111", "T-0113"]);
@@ -84,8 +84,9 @@ describe("the Roadmap over the mock (UI-6)", () => {
   it("empty: no plan items yet, naming the dir and the prefix; the lanes drawn", async () => {
     renderMock("empty", "#/harbor-sim/roadmap");
     await loaded();
-    expect(document.querySelector(".roadmap-empty")?.textContent).toBe("No plan items yet: an item is a file in docs/plan whose id starts with PLAN-");
-    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["keel", "hull", "sails", "Pool", "Unplaced"]);
+    const title = "No plan items yet: an item is a file in docs/plan whose id starts with PLAN-";
+    expect(document.querySelector(".empty-state-box h2")?.textContent).toBe(title);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([title, "keel", "hull", "sails", "Pool", "Unplaced"]);
     expect(document.querySelectorAll("[data-item]")).toHaveLength(0);
   });
 

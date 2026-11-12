@@ -72,7 +72,7 @@ async function openHealth() {
 }
 
 function verdictLabel(): string | undefined {
-  return region("Check").querySelector(".check-verdict .badge .badge-label")?.textContent;
+  return region("Check").querySelector(".check-verdict .lozenge .lozenge-label")?.textContent;
 }
 
 function findingRows(): HTMLElement[] {

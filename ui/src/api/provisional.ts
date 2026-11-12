@@ -620,8 +620,8 @@ export interface RoundSheet {
 
 /**
  * The decision route's body: the stage less `span_hash`, then `updated_at` as read
- * (`StageBody`), then `as`, the acting name, which the card's Answer… and the Inbox's decision
- * dialog send and the Questions screen does not; absent or null, the event is as before. Sources:
+ * (`StageBody`), then `as`, the acting name, which the card's Answer…, the Inbox's decision
+ * dialog and each Questions answer send; absent or null, the event is as before. Sources:
  * `docs/canon/decision-staging.md` "Daemon"; `docs/features/ui-round.md` "Data";
  * `docs/features/card-questions.md` "Acceptance criteria" (L4, U4).
  */

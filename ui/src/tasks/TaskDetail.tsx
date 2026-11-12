@@ -1,19 +1,24 @@
 import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
-import { useTask } from "../api/queries";
+import { useProjectName, useTask } from "../api/queries";
 import type { TaskPackage } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { homeHash, sectionHash } from "../app/routes";
 import { Prose } from "../markdown/Prose";
 import { Badge } from "../ui/Badge";
+import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
+import { IssueView } from "../ui/IssueView";
 import { hasModifier, isTextField } from "../ui/keys";
+import { Lozenge } from "../ui/Lozenge";
+import { PropertyList } from "../ui/PropertyList";
 import { ReadFailure, Skeleton } from "../ui/states";
 import { TabPanel, Tabs, type TabSpec } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { isTaskNotFound, READ_SCHEMA_VERSION } from "./answer";
 import { waitsForYou } from "./groups";
-import { frozenAtApproval, stalenessLook, taskStatusLook } from "./labels";
+import { frozenAtApproval, stalenessLook, taskStatusLozenge } from "./labels";
 import { OverviewPanel } from "./OverviewPanel";
 import { OwnerCommands } from "./OwnerCommands";
 import { PackagePanel } from "./PackagePanel";
@@ -51,45 +56,35 @@ function WaitingNote({ task }: { task: TaskPackage }) {
   );
 }
 
-/** The header facts of a package: state, staleness (four displays), times, the daemon's notes. */
-function Facts({ task }: { task: TaskPackage }) {
+/** What a package stands at, under its title: its state as a lozenge, then its staleness (four displays). */
+function Meta({ task }: { task: TaskPackage }) {
   const t = useTranslate();
   const staleness = stalenessLook(task.stale, task.spec_snapshot !== null, t);
   return (
     <>
-      <div className="task-badges">
-        <Badge name={t("tasks.stateName")} look={taskStatusLook(task.status, t)} />
-        {staleness === null ? (
-          <span className="muted frozen-note">{frozenAtApproval(t)}</span>
-        ) : (
-          <Badge name={t("tasks.detail.specSince")} look={staleness} />
-        )}
-      </div>
-      {task.notes.length > 0 && (
-        <ul className="note-list" aria-label={t("tasks.detail.notes")}>
-          {task.notes.map((note, index) => (
-            <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
-              {note}
-            </li>
-          ))}
-        </ul>
-      )}
-      <dl className="facts">
-        <div className="fact">
-          <dt>{t("tasks.detail.created")}</dt>
-          <dd>
-            <When at={task.created_at} />
-          </dd>
-        </div>
-        <div className="fact">
-          <dt>{t("tasks.detail.updated")}</dt>
-          <dd>
-            <When at={task.updated_at} />
-          </dd>
-        </div>
-      </dl>
-      <WaitingNote task={task} />
+      <span className="task-meta-status">
+        <span className="sr-only">{t("ui.badgeName", { name: t("tasks.stateName") })}</span>
+        <Lozenge {...taskStatusLozenge(task.status, t)} />
+      </span>
+      {staleness === null ? <span className="muted frozen-note">{frozenAtApproval(t)}</span> : <Badge name={t("tasks.detail.specSince")} look={staleness} />}
     </>
+  );
+}
+
+/** The daemon's notes on a package, verbatim. */
+function Notes({ task }: { task: TaskPackage }) {
+  const t = useTranslate();
+  if (task.notes.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="note-list" aria-label={t("tasks.detail.notes")}>
+      {task.notes.map((note, index) => (
+        <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
+          {note}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -163,6 +158,7 @@ export function TaskDetail({
 }) {
   const t = useTranslate();
   const query = useTask(project, taskId);
+  const projectName = useProjectName(project);
   const failure = useRetainedFailure(query.error, query.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(query.data, () => heading.current);
@@ -182,8 +178,10 @@ export function TaskDetail({
   const readable = found !== null && found.schema_version === READ_SCHEMA_VERSION;
   const title = readable ? found.title : null;
 
-  let head: ReactNode = null;
   let body: ReactNode;
+  let meta: ReactNode = null;
+  let actions: ReactNode = null;
+  let side: ReactNode = null;
   if (answer === undefined) {
     body =
       failure === null ? (
@@ -204,41 +202,58 @@ export function TaskDetail({
       );
   } else if (found === null) {
     body = (
-      <div className="empty-state">
-        <h2>{t("tasks.detail.noSuch")}</h2>
-        <p className="verbatim" lang="en">
-          {isTaskNotFound(answer) ? answer.reason : ""}
-        </p>
-        <p>
-          <a className="back-link" href={sectionHash(project, "tasks")} onClick={onBackToList}>
-            <Icon name="back" />
-            {t("tasks.detail.back")}
-          </a>
-        </p>
-      </div>
+      <EmptyState
+        level={2}
+        title={t("tasks.detail.noSuch")}
+        description={
+          <>
+            <p className="verbatim" lang="en">
+              {isTaskNotFound(answer) ? answer.reason : ""}
+            </p>
+            <p>
+              <a className="back-link" href={sectionHash(project, "tasks")} onClick={onBackToList}>
+                <Icon name="back" />
+                {t("tasks.detail.back")}
+              </a>
+            </p>
+          </>
+        }
+      />
     );
   } else {
     const tabs = tabsOf(found, readable, t);
     const shown: TaskTab = readable ? tab : "package";
-    head = readable ? (
-      <>
-        <Facts task={found} />
-        <OwnerCommands id={found.id} status={found.status} />
-      </>
-    ) : (
-      <>
-        <div className="notice notice-version" role="note">
-          <p className="notice-title">
-            <Icon name="info" />
-            <span>{t("tasks.detail.schema", { version: found.schema_version, read: READ_SCHEMA_VERSION })}</span>
-          </p>
-          <p>{t("tasks.detail.packageOnly")}</p>
-        </div>
-        <OwnerCommands id={taskId} status={null} />
-      </>
-    );
+    if (readable) {
+      meta = <Meta task={found} />;
+      actions = <OwnerCommands id={found.id} status={found.status} />;
+      side = (
+        <PropertyList
+          label={t("tasks.detail.details")}
+          items={[
+            { key: "created", label: t("tasks.detail.created"), value: <When at={found.created_at} /> },
+            { key: "updated", label: t("tasks.detail.updated"), value: <When at={found.updated_at} /> },
+          ]}
+        />
+      );
+    } else {
+      actions = <OwnerCommands id={taskId} status={null} />;
+    }
     body = (
       <>
+        {readable ? (
+          <>
+            <Notes task={found} />
+            <WaitingNote task={found} />
+          </>
+        ) : (
+          <div className="notice notice-version" role="note">
+            <p className="notice-title">
+              <Icon name="info" />
+              <span>{t("tasks.detail.schema", { version: found.schema_version, read: READ_SCHEMA_VERSION })}</span>
+            </p>
+            <p>{t("tasks.detail.packageOnly")}</p>
+          </div>
+        )}
         <Tabs label={t("tasks.detail.views", { id: taskId })} base={base} tabs={tabs} selected={shown} onSelect={onTab} />
         {tabs.map(({ id }) => (
           <TabPanel key={id} base={base} id={id} selected={id === shown}>
@@ -249,27 +264,45 @@ export function TaskDetail({
     );
   }
 
+  // One task beside the list is a work-item pane, as Inbox's proposal and the Spec tree's node are
+  // (docs/features/design-sweep-b.md "Acceptance criteria", DB5): side before main in the DOM.
+  const crumbs: Crumb[] = [
+    { key: "project", label: projectName, href: homeHash(project) },
+    { key: "tasks", label: t("app.sections.tasks.label"), href: sectionHash(project, "tasks") },
+    { key: "task", label: taskId, mono: true },
+  ];
+
   return (
     <article className="task-pane" aria-labelledby={titleId} aria-busy={answer === undefined && failure === null} onKeyDown={onKeyDown}>
-      <header className="task-head">
-        <h1 id={titleId} ref={heading} tabIndex={-1} className="task-heading">
-          <span className="task-name mono">{taskId}</span>
-          {readable && (
-            <>
-              {/* Drawn, the flex gap parts them; read aloud, a colon and a space. */}
-              <span className="sr-only">:</span>{" "}
-              <span className={title === null ? "task-title-text muted" : "task-title-text"}>{title ?? t("tasks.untitled")}</span>
-            </>
-          )}
-        </h1>
-        {head}
-        {answer !== undefined && query.error !== null && (
-          <p className="note" role="alert">
-            {fill(t("tasks.detail.failedAgain", { id: taskId, message: slot("message") }), { message: <span lang="en">{apiErrorOf(query.error).message}</span> })}
-          </p>
-        )}
-      </header>
-      {body}
+      <IssueView
+        layout="pane"
+        breadcrumbs={<Breadcrumbs items={crumbs} />}
+        title={
+          <h1 id={titleId} ref={heading} tabIndex={-1} className="task-heading">
+            <span className="task-name mono">{taskId}</span>
+            {readable && (
+              <>
+                {/* Drawn, the flex gap parts them; read aloud, a colon and a space. */}
+                <span className="sr-only">:</span>{" "}
+                <span className={title === null ? "task-title-text muted" : "task-title-text"}>{title ?? t("tasks.untitled")}</span>
+              </>
+            )}
+          </h1>
+        }
+        meta={meta}
+        actions={actions}
+        side={side}
+        main={
+          <>
+            {answer !== undefined && query.error !== null && (
+              <p className="note" role="alert">
+                {fill(t("tasks.detail.failedAgain", { id: taskId, message: slot("message") }), { message: <span lang="en">{apiErrorOf(query.error).message}</span> })}
+              </p>
+            )}
+            {body}
+          </>
+        }
+      />
     </article>
   );
 }

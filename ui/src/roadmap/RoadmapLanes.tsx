@@ -4,7 +4,9 @@ import { sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { taskStatusLook } from "../tasks/labels";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
+import { Lozenge } from "../ui/Lozenge";
 import {
   countsText,
   currentLook,
@@ -14,7 +16,7 @@ import {
   isPool,
   isRelease,
   isUnplaced,
-  itemStatusLook,
+  itemStatusLozenge,
   laneName,
   mvpCutLook,
   oneLine,
@@ -75,7 +77,10 @@ function ItemCard({
         <span className="roadmap-card-name">{item.title === null ? "-" : oneLine(item.title)}</span>
       </h3>
       <p className="roadmap-card-facts">
-        <Badge look={itemStatusLook(item.status, t)} />
+        <span className="roadmap-card-status">
+          <span className="sr-only">{t("ui.badgeName", { name: t("tree.node.status") })}</span>
+          <Lozenge {...itemStatusLozenge(item.status)} />
+        </span>
         <span className="roadmap-priority">{priorityText(item.priority, t)}</span>
         {item.estimate === null ? <Badge look={unestimatedLook(t)} /> : <span className="roadmap-estimate">{estimateText(item.estimate, unit)}</span>}
         {isUnplaced(group) && <span className="roadmap-release">{unplacedReleaseText(item.release, t)}</span>}
@@ -213,28 +218,28 @@ export const RoadmapLanes = memo(function RoadmapLanes({ project, plan, selected
         <ul>
           {plan.groups.map((group, index) => (
             <li key={`${String(index)}-${group.group}`}>
-              <button
-                type="button"
-                className="link-button"
+              <Button
+                appearance="subtle"
+                spacing="compact"
                 onClick={() => {
                   jumpTo(headings.current.get(index));
                 }}
               >
                 {laneName(group, t)}
-              </button>
+              </Button>
             </li>
           ))}
           {plan.notes.length > 0 && (
             <li>
-              <button
-                type="button"
-                className="link-button"
+              <Button
+                appearance="subtle"
+                spacing="compact"
                 onClick={() => {
                   jumpTo(notesHeading.current);
                 }}
               >
                 {t("roadmap.notes")}
-              </button>
+              </Button>
             </li>
           )}
         </ul>

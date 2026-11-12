@@ -4,7 +4,7 @@ import { ru } from "../i18n/ru";
 import { aRoadmap, aRoadmapGroup, aRoadmapItem } from "../test/builders";
 import { aPlan, PLAN_LINE } from "../test/roadmapStub";
 import { enT, ruT } from "../test/text";
-import { countsText, headerLine, laneName } from "./text";
+import { countsText, headerLine, itemStatusLozenge, laneName } from "./text";
 
 // LS-5 of docs/features/ui-languages-sweep.md: the Roadmap's lines in the CLI's form (R7) keep their
 // IDs, numbers and `-`, their words the catalog's, each count its own plural group. The expected
@@ -62,5 +62,17 @@ describe("the Roadmap's lines in Russian (LS-5)", () => {
     expect([alpha, pool, unplaced].map((group) => (group === undefined ? null : laneName(group, enT)))).toEqual(["alpha", en.roadmap.group.pool, en.roadmap.group.unplaced]);
     expect(laneName(aRoadmapGroup("release", null, []), ruT)).toBe(ru.roadmap.group.release);
     expect(laneName(aRoadmapGroup("someday", null, []), ruT)).toBe("someday");
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB4: an item's status is the plan's word,
+// raw and neutral; no word is mapped, a done one neither.
+describe("an item's status lozenge (DB4 of design-sweep-b)", () => {
+  it.each(["done", "shipped", "open", "in-progress", "parked", "\u0413\u043e\u0442\u043e\u0432\u043e"])("draws %s raw and neutral with the info icon, no lang: the project's own word", (status) => {
+    expect(itemStatusLozenge(status)).toEqual({ appearance: "neutral", icon: "info", label: status });
+  });
+
+  it("draws an absent status as `-`, a status of several lines on one", () => {
+    expect([itemStatusLozenge(null).label, itemStatusLozenge("a\r\nb").label]).toEqual(["-", "a b"]);
   });
 });

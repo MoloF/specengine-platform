@@ -65,6 +65,9 @@ describe("the read and the header (UI-3)", () => {
   it("shows the header line as the CLI's first line less `roadmap: `, and Read again reads once more", async () => {
     const client = await openRoadmap();
     expect(document.querySelector(".roadmap-line")?.textContent).toBe(PLAN_LINE);
+    // A Button with its icon (DB4 of design-sweep-b).
+    expect(screen.getByRole("button", { name: "Read again" }).className).toBe("button");
+    expect(screen.getByRole("button", { name: "Read again" }).querySelector("svg.icon")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Read again" }));
     await waitFor(() => {
       expect(client.getRoadmap).toHaveBeenCalledTimes(2);
@@ -162,12 +165,26 @@ describe("marks are text plus an icon, never colour alone (UI-3)", () => {
     expect(cells.map((cell) => cell.querySelector("a")?.getAttribute("href"))).toEqual(EVERY_TASK_STATE.map((task) => `#/alpha/tasks/${task.id}`));
   });
 
-  it("shows an item's status raw in a neutral badge, its priority raw, `-` for either when absent; the item's in-progress is not a task's", async () => {
+  // docs/features/design-sweep-b.md "Acceptance criteria", DB4: the status a neutral lozenge named
+  // Status for a screen reader, the plan's word raw with no lang (the project's own, in any
+  // language), never coloured by its value.
+  it("shows an item's status raw in a neutral lozenge, its priority raw, `-` for either when absent; the item's in-progress is not a task's", async () => {
     await openRoadmap();
-    expect(marked(card("RM-0013").querySelector(".tone-roadmap-status"))).toEqual(["status parked", true]);
-    expect(marked(card("RM-0010").querySelector(".tone-roadmap-status"))).toEqual(["status in-progress", true]);
-    expect(card("RM-0010").querySelector(".tone-roadmap-status")?.className).not.toContain("tone-task");
-    expect(marked(card("RM-0041").querySelector(".tone-roadmap-status"))).toEqual(["status -", true]);
+    const status = (id: string) => {
+      const lozenge = card(id).querySelector(".roadmap-card-facts .lozenge");
+      return [
+        lozenge?.getAttribute("data-appearance"),
+        lozenge?.closest(".roadmap-card-status")?.textContent,
+        lozenge?.querySelector(".lozenge-label")?.getAttribute("lang") ?? null,
+        lozenge?.querySelector("svg.icon") !== null,
+      ];
+    };
+    expect(status("RM-0013")).toEqual(["neutral", "Status: parked", null, true]);
+    expect(status("RM-0010")).toEqual(["neutral", "Status: in-progress", null, true]);
+    expect(status("RM-0041")).toEqual(["neutral", "Status: -", null, true]);
+    expect(card("RM-0010").querySelector(".roadmap-card-facts .badge")).toBeNull();
+    // Every status, a done one too, neutral: no plan word is mapped.
+    expect(new Set(Array.from(document.querySelectorAll(".roadmap-card-facts .lozenge"), (lozenge) => lozenge.getAttribute("data-appearance")))).toEqual(new Set(["neutral"]));
     expect(card("RM-0017").querySelector(".roadmap-priority")?.textContent).toBe("priority must");
     expect(card("RM-0041").querySelector(".roadmap-priority")?.textContent).toBe("priority -");
     expect(card("RM-0041").querySelector(".roadmap-card-name")?.textContent).toBe("-");
@@ -304,19 +321,30 @@ describe("states (UI-3)", () => {
     expect(client.getRoadmap).toHaveBeenCalledTimes(3);
   });
 
-  it("says no plan items yet, naming the dir and the prefix, above the tabs; the lanes still drawn", async () => {
+  // docs/features/design-sweep-b.md "Acceptance criteria", DB4: no item is an EmptyState at h2 where
+  // the line stood, its next step the description, the tabs below it as before.
+  it("says no plan items yet, naming the dir and the prefix, in an EmptyState above the tabs; the lanes still drawn (DB4 of design-sweep-b)", async () => {
     const plan = aRoadmap([aRoadmapGroup("release", "beta", []), aRoadmapGroup("pool", null, []), aRoadmapGroup("unplaced", null, [])], { dir: "docs/roadmap" });
     await openRoadmap("#/alpha/roadmap", roadmapClient(plan));
-    const line = document.querySelector(".roadmap-empty");
-    expect(line?.textContent).toBe("No plan items yet: an item is a file in docs/roadmap whose id starts with RM-");
-    expect(line?.compareDocumentPosition(screen.getByRole("tablist"))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["beta", "Pool", "Unplaced"]);
+    const box = document.querySelector(".roadmap-results .empty-state-box");
+    expect(box?.querySelector("h2.empty-state-title")?.textContent).toBe("No plan items yet: an item is a file in docs/roadmap whose id starts with RM-");
+    expect(box?.querySelector(".empty-state-description")?.textContent).toBe("A plan item is a document your [roadmap] table selects; Read again shows it once it is saved.");
+    expect(document.querySelector(".roadmap-empty")).toBeNull();
+    expect(box?.compareDocumentPosition(screen.getByRole("tablist"))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Lanes", "Chain"]);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      "No plan items yet: an item is a file in docs/roadmap whose id starts with RM-",
+      "beta",
+      "Pool",
+      "Unplaced",
+    ]);
   });
 
   it("says every item is done, with the count, above the tabs; the lanes still drawn", async () => {
     const plan = aRoadmap([aRoadmapGroup("release", "beta", [], { done: 4 }), aRoadmapGroup("pool", null, [], { done: 1 })]);
     await openRoadmap("#/alpha/roadmap", roadmapClient(plan));
     expect(document.querySelector(".roadmap-empty")?.textContent).toBe("Every item is done (5)");
+    expect(document.querySelector(".roadmap-results .empty-state-box")).toBeNull();
     expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["beta", "Pool"]);
   });
 

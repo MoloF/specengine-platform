@@ -22,6 +22,7 @@ import {
   UNBOUND_REASONS,
   unboundReasonLook,
   verdictLook,
+  verdictLozenge,
 } from "./labels";
 import { enT } from "../test/text";
 import { ru } from "../i18n/ru";
@@ -55,6 +56,33 @@ describe("verdicts (AC-03)", () => {
     expect(verdictLook("triage", enT)).toEqual({ label: "triage", tone: "check-unknown", icon: "unknown", served: true });
     expect(verdictLook("Clean", enT).tone).toBe("check-unknown");
     expect(verdictLook("toString", enT).tone).toBe("check-unknown");
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB1: the verdict's lozenge, cannot-check
+// discovery with its own icon, never clean's; an unknown verdict neutral, raw, English.
+describe("the verdict's lozenge (DB1 of design-sweep-b)", () => {
+  it("gives clean success, observed warning, fails danger and cannot-check discovery, each with its badge's icon and label", () => {
+    expect(KNOWN_CHECK_VERDICTS.map((verdict) => verdictLozenge(verdict, enT))).toEqual(
+      KNOWN_CHECK_VERDICTS.map((verdict, index) => ({
+        appearance: ["success", "warning", "danger", "discovery"][index],
+        icon: verdictLook(verdict, enT).icon,
+        label: verdictLook(verdict, enT).label,
+      })),
+    );
+  });
+
+  it("never draws cannot-check in clean's appearance or icon", () => {
+    const cannot = verdictLozenge("cannot-check", enT);
+    const clean = verdictLozenge("clean", enT);
+    expect([cannot.appearance, cannot.icon]).toEqual(["discovery", "cannotCheck"]);
+    expect([cannot.appearance === clean.appearance, cannot.icon === clean.icon]).toEqual([false, false]);
+  });
+
+  it("shows any other verdict raw and neutral, under lang=en, never mapped", () => {
+    expect(verdictLozenge("weird", enT)).toEqual({ appearance: "neutral", icon: "unknown", label: "weird", lang: "en" });
+    expect(verdictLozenge("Clean", enT).appearance).toBe("neutral");
+    expect(verdictLozenge("toString", enT).label).toBe("toString");
   });
 });
 

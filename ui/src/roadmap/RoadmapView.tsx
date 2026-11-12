@@ -8,6 +8,8 @@ import { aboutOf } from "../app/sections";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
@@ -126,16 +128,14 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
       <>
         <div className="roadmap-head">
           <p className="roadmap-line">{headerLine(plan, t)}</p>
-          <button
-            type="button"
-            className="button"
+          <Button
+            icon="retry"
             onClick={() => {
               void roadmap.refetch();
             }}
           >
-            <Icon name="retry" />
             <span>{t("roadmap.readAgain")}</span>
-          </button>
+          </Button>
         </div>
         {roadmap.error !== null && (
           <div className="roadmap-reread-failed">
@@ -143,13 +143,14 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
               <Icon name="alert" />
               <span>{fill(t("roadmap.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(roadmap.error).message}</span> })}</span>
             </p>
-            <button type="button" className="button" aria-disabled={roadmap.isFetching} onClick={roadmap.isFetching ? undefined : retry}>
-              <Icon name="retry" />
+            <Button icon="retry" aria-disabled={roadmap.isFetching} onClick={roadmap.isFetching ? undefined : retry}>
               <span>{roadmap.isFetching ? t("ui.retrying") : t("ui.retry")}</span>
-            </button>
+            </Button>
           </div>
         )}
-        {empty !== null && <p className="roadmap-empty">{empty}</p>}
+        {/* No item is an EmptyState where the line stood, the tabs below it (docs/features/design-sweep-b.md "Acceptance criteria", DB4). */}
+        {empty !== null &&
+          (empty.noItem ? <EmptyState level={2} title={empty.text} description={<p>{t("roadmap.emptyNext")}</p>} /> : <p className="roadmap-empty">{empty.text}</p>)}
         {itemId !== null && !listed && (
           <p className="note roadmap-unlisted">
             <Icon name="info" />

@@ -136,8 +136,9 @@ const FINDING = ["error", "warning", "unknown"];
 // docs/features/health-code-ui.md: row 4's states (`unknown` an item no queue holds, as `missing`) and row 5's reasons.
 const ASSUMED = ["pending", "as-assumed", "otherwise", "applied", "rejected", "missing", "archived", "in-question", "unknown"];
 const UNBOUND = ["homoglyph", "unanchored", "cannot-verify", "relation", "unknown"];
-// docs/features/roadmap-screen.md: the Roadmap's marks, the neutral item status, the range bar and its track.
-const ROADMAP = ["current", "cut", "cycle", "waits", "unestimated", "status", "bar", "bar-track"];
+// docs/features/roadmap-screen.md: the Roadmap's marks, the range bar and its track; the item status is a
+// neutral lozenge (docs/features/design-sweep-b.md "Acceptance criteria", DB4), no role of its own.
+const ROADMAP = ["current", "cut", "cycle", "waits", "unestimated", "bar", "bar-track"];
 // docs/features/flow-canvas.md: an edge's colour by its type's place, the gap rows' states, the walk's marks.
 const FLOW_EDGE = ["0", "1", "2", "3"];
 const FLOW_GAP = ["none", "found", "not-configured", "unknown"];
@@ -337,10 +338,10 @@ describe.each(THEMES)("today's distinctness in the %s theme (AC-09)", (theme) =>
     }
   });
 
-  it("gives the Roadmap's five marks five colours, each at least 3:1 on every surface, the item status a neutral one (roadmap-screen)", () => {
+  it("gives the Roadmap's five marks five colours, each at least 3:1 on every surface, the item status no role (roadmap-screen; DB4 of design-sweep-b)", () => {
     const marks = ["current", "cut", "cycle", "waits", "unestimated"].map((mark) => shade(`--roadmap-${mark}`));
     expect(new Set(marks).size).toBe(5);
-    expect(shade("--roadmap-status")).toBe(shade("--severity-unknown"));
+    expect(tokensCss).not.toContain("--roadmap-status");
     for (const role of ROADMAP) {
       for (const surface of SURFACES) {
         expect([role, surface, contrast(`--roadmap-${role}`, surface, theme) >= 3]).toEqual([role, surface, true]);

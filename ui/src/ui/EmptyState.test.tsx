@@ -29,4 +29,22 @@ describe("EmptyState (DF-7)", () => {
     expect(acts?.querySelectorAll(".button-primary")).toHaveLength(1);
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["New card", "Read how"]);
   });
+
+  // docs/features/design-sweep-b.md "Acceptance criteria", DB2 and DB6: Graph's REF field is described
+  // by the no-REF heading; the Board's no-such-task heading is the daemon's words.
+  it("gives its heading an id and an English tag only when asked", () => {
+    render(
+      <>
+        <EmptyState title="Give a REF" titleId="hint" level={2} />
+        <EmptyState title="no card C-1" titleLang="en" level={3} />
+        <EmptyState title="Plain" level={4} />
+      </>,
+    );
+    const heads = screen.getAllByRole("heading").map((heading) => [heading.textContent, heading.getAttribute("id"), heading.getAttribute("lang")]);
+    expect(heads).toEqual([
+      ["Give a REF", "hint", null],
+      ["no card C-1", null, "en"],
+      ["Plain", null, null],
+    ]);
+  });
 });

@@ -105,7 +105,7 @@ describe("the page holds still (ST-4)", () => {
 
   it("lets the shell's body take its content's height on Flow above 64rem, a wrapped header measured; other screens keep their floor", () => {
     expect(ruleWith(".app-body:has(.flow-studio)", WIDE, /min-height:/).body).toMatch(/min-height:\s*0;/);
-    expect(ruleWith(".app-body", null, /min-height:/).body).toMatch(/min-height:\s*calc\(100vh - 3\.5rem\);/);
+    expect(ruleWith(".app-body", null, /min-height:/).body).toMatch(/min-height:\s*calc\(100vh - var\(--nav-height\)\);/);
   });
 
   it("holds no clamp, no 68vh and no align-items: start in any rule of the Flow (M10)", () => {

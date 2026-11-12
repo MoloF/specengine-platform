@@ -6,12 +6,18 @@ import type { ReactNode } from "react";
 
 export function EmptyState({
   title,
+  titleId,
+  titleLang,
   level,
   description,
   primary,
   secondary,
 }: {
   title: string;
+  /** The heading's id, for a field the empty state describes (Graph's REF). */
+  titleId?: string;
+  /** A title that is the daemon's words, tagged as served text is (docs/canon/ui-languages.md "Served text"). */
+  titleLang?: "en";
   level: 2 | 3 | 4;
   description?: ReactNode;
   /** The one primary act, if any. */
@@ -23,7 +29,9 @@ export function EmptyState({
   const acts = primary !== undefined || secondary !== undefined;
   return (
     <div className="empty-state-box">
-      <Heading className="empty-state-title">{title}</Heading>
+      <Heading id={titleId} className="empty-state-title" lang={titleLang}>
+        {title}
+      </Heading>
       {description !== undefined && <div className="empty-state-description">{description}</div>}
       {acts && (
         <div className="empty-state-acts">

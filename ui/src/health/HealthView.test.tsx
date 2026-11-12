@@ -197,30 +197,46 @@ describe("absent keys and the verdict (AC-02, AC-03)", () => {
     ["observed", "Passes with findings"],
     [FAILS, "Fails the check"],
     ["cannot-check", "Could not check"],
-  ])("labels the verdict %s as %s, with an icon, never its raw text", async (verdict, label) => {
+  ])("labels the verdict %s as %s in a lozenge, with an icon, never its raw text (DB1 of design-sweep-b)", async (verdict, label) => {
     await openHealth(healthClient(aCheckReport({ verdict })));
-    const badge = region("Check").querySelector(".check-verdict .badge");
-    expect(badge?.querySelector(".badge-label")?.textContent).toBe(label);
-    expect(badge?.querySelector("svg")).not.toBeNull();
+    const lozenge = region("Check").querySelector(".check-verdict .lozenge");
+    expect(lozenge?.querySelector(".lozenge-label")?.textContent).toBe(label);
+    expect(lozenge?.querySelector("svg")).not.toBeNull();
+    expect(region("Check").querySelector(".check-verdict .badge")).toBeNull();
+    expect(region("Check").querySelector(".check-verdict")?.textContent).toBe(`Verdict: ${label}`);
     expect(view().textContent).not.toMatch(/block/i);
   });
 
-  it("draws cannot-check in cannot-verify's role, never clean's", async () => {
+  it("draws cannot-check as discovery, clean as success, never the one as the other (DB1 of design-sweep-b)", async () => {
     await openHealth(healthClient(aCheckReport({ verdict: "cannot-check", cannot_check: [{ path: "docs", message: "x" }] })));
-    const tone = region("Check").querySelector(".check-verdict .badge")?.getAttribute("data-tone");
-    expect(tone).toBe("check-cannot-check");
-    expect(tone).not.toBe("check-clean");
+    const appearance = region("Check").querySelector(".check-verdict .lozenge")?.getAttribute("data-appearance");
+    expect(appearance).toBe("discovery");
+    cleanup();
+    await openHealth(healthClient(aCheckReport({ verdict: "clean" })));
+    expect(region("Check").querySelector(".check-verdict .lozenge")?.getAttribute("data-appearance")).toBe("success");
   });
 
-  it("shows another verdict and mode raw in a neutral badge", async () => {
-    await openHealth(healthClient(aCheckReport({ verdict: "triage", mode: "strict" })));
+  it("shows another verdict raw in a neutral lozenge under lang=en, and another mode in a neutral badge", async () => {
+    await openHealth(healthClient(aCheckReport({ verdict: "weird", mode: "strict" })));
+    const lozenge = region("Check").querySelector(".check-verdict .lozenge");
+    expect([lozenge?.getAttribute("data-appearance"), lozenge?.querySelector(".lozenge-label")?.textContent, lozenge?.querySelector(".lozenge-label")?.getAttribute("lang")]).toEqual(["neutral", "weird", "en"]);
     const badges = Array.from(region("Check").querySelectorAll(".badge"), (badge) => [badge.querySelector(".badge-label")?.textContent, badge.getAttribute("data-tone")]);
-    expect(badges).toEqual([
-      ["triage", "check-unknown"],
-      ["strict", "check-unknown"],
-    ]);
+    expect(badges).toEqual([["strict", "check-unknown"]]);
+  });
+
+  it("makes Check again a Button that keeps aria-disabled (DB1 of design-sweep-b)", async () => {
+    await openHealth();
+    const again = within(region("Check")).getByRole("button", { name: "Check again" });
+    expect([again.className, again.getAttribute("type"), again.getAttribute("aria-disabled")]).toEqual(["button", "button", "false"]);
+    expect(again.querySelector("svg")).not.toBeNull();
   });
 });
+
+/** The check's counts, from their PropertyList: each row's label and value. */
+function countRows(): [string | null, string | null][] {
+  const list = within(region("Check")).getByRole("region", { name: "Counts" });
+  return Array.from(list.querySelectorAll(".property-row"), (row) => [row.querySelector(".property-label")?.textContent ?? null, row.querySelector(".property-value")?.textContent ?? null]);
+}
 
 describe("nothing measured is never 0 (AC-04)", () => {
   it("cannot-check: W not measured, no 0 B, the causes verbatim", async () => {
@@ -247,21 +263,16 @@ describe("nothing measured is never 0 (AC-04)", () => {
     await openHealth();
     const check = region("Check");
     expect(check.querySelector(".check-worst-w")?.textContent).toBe("61234 B");
-    expect(Array.from(check.querySelectorAll(".check-count"), (item) => item.getAttribute("data-count"))).toEqual([
-      "documents",
-      "errors",
-      "warnings",
-      "debt",
-      "expired",
-      "stale",
-    ]);
+    // A PropertyList labelled Counts, one row a count, in the report's order (DB1 of design-sweep-b).
+    expect(check.querySelector("dl.check-counts")).toBeNull();
+    expect(countRows().map(([label]) => label)).toEqual(["Documents", "Errors", "Warnings", "In debt", "Expired debt", "Stale debt entries"]);
     expect(check.textContent).not.toMatch(/Introduced|New debt/);
   });
 
   it("shows introduced and new debt only when present", async () => {
     await openHealth(healthClient(aCheckReport({ counts: { introduced: 2, new_debt: 0 } })));
-    expect(Array.from(region("Check").querySelectorAll(".check-count"), (item) => item.textContent)).toContain("Introduced2");
-    expect(Array.from(region("Check").querySelectorAll(".check-count"), (item) => item.textContent)).toContain("New debt0");
+    expect(countRows()).toContainEqual(["Introduced", "2"]);
+    expect(countRows()).toContainEqual(["New debt", "0"]);
   });
 
   it("holds no digit in the value of task W, nor in row 6's while the code layer is off (narrowed from rows 4 to 6 by UI-1 of health-code-ui; row 6 drawn by UI-2 of health-drift-ui)", async () => {
@@ -451,6 +462,8 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
     expect(Array.from(region("What is left").querySelectorAll('[data-row="drift"] .health-value'), (cell) => cell.classList.contains("health-measured"))).toEqual([false]);
     expect(part().textContent).not.toMatch(/nothing left|\b0\b/i);
     expect(amendmentRows()).toHaveLength(0);
+    // A measured zero is a measurement, never an empty state (ADR-0047; DB1 of design-sweep-b).
+    expect(region("What is left").querySelector(".empty-state-box")).toBeNull();
   });
 
   it("counts from the health read alone: amendments waiting in the queue are proposals, row 1's, never row 3's", async () => {
@@ -1750,6 +1763,28 @@ describe("keyboard (AC-10)", () => {
     ].filter(([, type]) => typeof type === "string" && /^key/.test(type));
     expect(keyListeners).toEqual([["document", "keydown", true]]);
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  });
+
+  // docs/features/design-sweep-b.md "Acceptance criteria", DB1: no finding and a filter with no
+  // match are EmptyStates one level below the region's heading, Clear filters the second's primary.
+  it("draws no finding as an EmptyState at h3, the cannot-check line when the check could not vouch (DB1 of design-sweep-b)", async () => {
+    await openHealth(healthClient(aCheckReport({ verdict: "clean", findings: [] })));
+    const none = region("Findings").querySelector(".empty-state-box");
+    expect([none?.querySelector("h3.empty-state-title")?.textContent, none?.querySelector(".empty-state-acts")]).toEqual(["No findings: every document read passes every rule.", null]);
+    expect(region("Findings").querySelector(".empty-state, .empty-filter")).toBeNull();
+    cleanup();
+    await openHealth(healthClient(aCheckReport({ verdict: "cannot-check", findings: [], cannot_check: [{ path: "docs", message: "x" }] })));
+    expect(region("Findings").querySelector(".empty-state-box h3")?.textContent).toBe("No finding was reported, but the check could not read everything: see why under Check.");
+  });
+
+  it("draws a filter with no match as an EmptyState whose primary is Clear filters (DB1 of design-sweep-b)", async () => {
+    await openHealth();
+    fireEvent.change(within(region("Findings")).getByLabelText("Filter by path, subject, message or code"), { target: { value: "nothing matches this" } });
+    const box = region("Findings").querySelector(".empty-state-box");
+    expect(box?.querySelector("h3.empty-state-title")?.textContent).toBe("No finding matches the filters.");
+    const acts = Array.from(box?.querySelectorAll(".empty-state-acts button") ?? [], (button) => [button.textContent, button.className]);
+    expect(acts).toEqual([["Clear filters", "button button-primary"]]);
+    expect(region("Findings").querySelector(".empty-filter")).toBeNull();
   });
 
   it("Clear filters leaves focus on the findings, never on the page's body", async () => {

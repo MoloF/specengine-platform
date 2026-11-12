@@ -9,6 +9,13 @@ import { BOX_HEIGHT, BOX_WIDTH, CANVAS_LIMIT, COLUMN_STEP, ROW_STEP } from "../g
 // cycle" mark carries it). At most CANVAS_LIMIT boxes: whole lanes, left to right, until the next
 // would pass it; then nothing more.
 
+/**
+ * The task cells a box draws on its one meta line, each at least its icon and ID; the rest are
+ * counted after them, never wrapped onto a line the box has no room for (BOX_HEIGHT holds three:
+ * docs/features/design-sweep-b.md "Acceptance criteria", DB3). The Lanes tab lists every one.
+ */
+export const CHAIN_TASKS_SHOWN = 2;
+
 /** Where the first row of boxes starts: room above for the lane's name, marks and counts. */
 export const LANE_HEAD = 96;
 

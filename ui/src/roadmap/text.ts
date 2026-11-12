@@ -1,6 +1,7 @@
 import type { RoadmapDocument, RoadmapEstimate, RoadmapGroup, RoadmapSum } from "../api/types";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
+import type { LozengeLook } from "../ui/Lozenge";
 
 // The Roadmap's words (docs/features/roadmap-screen.md): the plan's lines in the form `spec roadmap`
 // prints them (`docs/canon/spec-roadmap.md` "Command"), presentation only, their words the catalog's
@@ -98,9 +99,14 @@ export function unestimatedLook(t: Translate): Look {
   return { label: t("roadmap.mark.unestimated"), tone: "roadmap-unestimated", icon: "unknown" };
 }
 
-/** An item's status, raw, in a neutral badge: `status <raw>`, `status -` when absent. */
-export function itemStatusLook(status: string | null, t: Translate): Look {
-  return { label: t("roadmap.status", { status: status === null ? "-" : oneLine(status) }), tone: "roadmap-status", icon: "info" };
+/**
+ * An item's status on its lane card: the plan's word raw in a neutral lozenge, `-` when absent; no
+ * word is mapped or coloured by its value (docs/features/design-sweep-b.md "Acceptance criteria",
+ * DB4). The word is the project's own, in any language, so it carries no `lang`
+ * (docs/canon/ui-languages.md "Served text").
+ */
+export function itemStatusLozenge(status: string | null): LozengeLook {
+  return { appearance: "neutral", icon: "info", label: status === null ? "-" : oneLine(status) };
 }
 
 /** An item's priority, raw: `priority <raw>`, `priority -` when absent. */
@@ -123,15 +129,15 @@ export function unlistedText(id: string, t: Translate): string {
   return t("roadmap.unlisted", { id });
 }
 
-/** The line above the tabs for a plan with no open item: none at all, or every one done; null otherwise. */
-export function emptyPlanText(plan: RoadmapDocument, t: Translate): string | null {
+/** What stands above the tabs for a plan with no open item: no item at all, or every one done; null otherwise. */
+export function emptyPlanText(plan: RoadmapDocument, t: Translate): { noItem: boolean; text: string } | null {
   if (plan.counts.open > 0) {
     return null;
   }
   if (plan.counts.done === 0) {
-    return t("roadmap.noItems", { dir: oneLine(plan.dir), prefix: oneLine(plan.prefix) });
+    return { noItem: true, text: t("roadmap.noItems", { dir: oneLine(plan.dir), prefix: oneLine(plan.prefix) }) };
   }
-  return t("roadmap.allDone", { count: plan.counts.done });
+  return { noItem: false, text: t("roadmap.allDone", { count: plan.counts.done }) };
 }
 
 /** The canvas's cap text: `<k> of <n> items not drawn`. */

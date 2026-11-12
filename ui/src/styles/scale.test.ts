@@ -1,5 +1,6 @@
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { BOX_HEIGHT } from "../graph/layout";
 import { SCALE_EXCEPTIONS, type ScaleException } from "./scale-exceptions";
 import tokensCss from "./tokens.css?raw";
 
@@ -204,7 +205,7 @@ describe("the type scale (DF-1)", () => {
     ]);
   });
 
-  it("lists no exception that matches nothing, and names each one's reason and its item", () => {
+  it("lists no exception that matches nothing, and names each one's reason", () => {
     const unmatched = SCALE_EXCEPTIONS.filter(
       (exception) =>
         !DECLARATIONS.some(
@@ -215,8 +216,8 @@ describe("the type scale (DF-1)", () => {
     for (const exception of SCALE_EXCEPTIONS) {
       expect([exception.selector, exception.reason.length > 10]).toEqual([exception.selector, true]);
     }
-    // Kept for good: the visually hidden pattern and a border laid over a border, nothing else.
-    expect(SCALE_EXCEPTIONS.filter((exception) => exception.until === null).map((exception) => exception.selector)).toEqual([".sr-only", ".tab"]);
+    // Kept for good, and the only ones: the visually hidden pattern and a border laid over a border (DB7 of design-sweep-b).
+    expect(SCALE_EXCEPTIONS.map((exception) => exception.selector)).toEqual([".sr-only", ".tab"]);
   });
 });
 
@@ -391,16 +392,17 @@ describe("radii and control heights (DF-3)", () => {
 });
 
 // DM-19 of docs/features/doc-modal.md: the document view's styles take tokens alone, and its entry
-// leaves the exceptions, none for RM-0095; DS8 of docs/features/design-sweep.md: the Spec tree's three
-// leave too, so 10 stand.
+// leaves the exceptions, none for RM-0095; docs/features/design-sweep-b.md "Acceptance criteria",
+// DB7 (G3): two stand, `.sr-only`'s and `.tab`'s, both kept, and the type names no item.
 describe("the document view's tokens (DM-19 of doc-modal)", () => {
   const exceptionsSource = import.meta.glob<string>("/src/styles/scale-exceptions.ts", { query: "?raw", import: "default", eager: true })["/src/styles/scale-exceptions.ts"] ?? "";
 
-  it("lists 10 exceptions, none until RM-0095, and the `until` type names it no more", () => {
-    expect(SCALE_EXCEPTIONS).toHaveLength(10);
-    expect(new Set(SCALE_EXCEPTIONS.map((exception) => exception.until))).toEqual(new Set([null, "RM-0099"]));
-    expect(exceptionsSource).toMatch(/until: "RM-0099" \| null;/);
-    expect(exceptionsSource).not.toContain("RM-0095");
+  it("lists 2 exceptions, both kept, none until an item, and the `until` type names none (G3, DB7 of design-sweep-b)", () => {
+    expect(SCALE_EXCEPTIONS).toHaveLength(2);
+    expect(SCALE_EXCEPTIONS.map((exception) => exception.selector)).toEqual([".sr-only", ".tab"]);
+    expect(new Set(SCALE_EXCEPTIONS.map((exception) => exception.until))).toEqual(new Set([null]));
+    expect(exceptionsSource).toMatch(/until: null;/);
+    expect(exceptionsSource).not.toMatch(/RM-\d{4}/);
   });
 
   it("sets a raw URL's and an image path's size by a type token", () => {
@@ -415,5 +417,106 @@ describe("the document view's tokens (DM-19 of doc-modal)", () => {
     expect(sized.filter((declaration) => !/^(0|var\(--[a-z0-9-]+\)( var\(--[a-z0-9-]+\))*)$/.test(declaration.value)).map(shown)).toEqual([]);
     expect(SCALE_EXCEPTIONS.filter((exception) => exception.selector.includes(".doc-"))).toEqual([]);
     expect(doc.filter(listed).map(shown)).toEqual([]);
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB7: the eight exceptions' rules take tokens;
+// the icons sit 2 px down on their first line, the palette 48 px under the viewport's top.
+describe("the last exceptions take tokens (DB7 of design-sweep-b)", () => {
+  const at = (selector: string, property: string) =>
+    DECLARATIONS.filter((declaration) => declaration.file === "/src/styles/app.css" && declaration.at === null && declaration.selector === selector && declaration.property === property).map(
+      (declaration) => declaration.value,
+    );
+
+  it("sets the four icon offsets by --space-025 and the palette's place by --space-600", () => {
+    for (const selector of [".waiting-note .icon", ".sync-part .icon", ".cut-note .icon", ".palette-error .icon"]) {
+      expect([selector, at(selector, "margin-top")]).toEqual([selector, ["var(--space-025)"]]);
+    }
+    expect(at(".palette", "margin-top")).toEqual(["var(--space-600)"]);
+  });
+
+  it("sets Graph's edge labels in the small pair", () => {
+    expect([at(".graph-edge-label", "font-size"), at(".graph-edge-label", "line-height")]).toEqual([["var(--font-size-small)"], ["var(--line-height-small)"]]);
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB3 (R7): a selected box's three rows fit
+// the layout's box from the tokens: its border twice, its padding top and bottom, two gaps, the name
+// and title rows at the box's line height and the meta row at its own.
+describe("Graph's boxes fit BOX_HEIGHT (R7, DB3 of design-sweep-b)", () => {
+  const APP = "/src/styles/app.css";
+  const at = (selector: string, property: string) =>
+    DECLARATIONS.filter((declaration) => declaration.file === APP && declaration.at === null && declaration.selector === selector && declaration.property === property).map((declaration) => declaration.value);
+  /** A custom property the canvas sets in app.css, else a token. */
+  const roleOf = (name: string): string | undefined => at(".graph-canvas .react-flow", name)[0] ?? TOKENS.get(name);
+  /** A value with every var() replaced by what it names, through the canvas's roles and the tokens. */
+  const expanded = (value: string, depth = 0): string => {
+    const next = value.replace(/var\((--[a-z0-9-]+)\)/g, (_whole, name: string) => roleOf(name) ?? "");
+    return next === value || depth > 8 ? next : expanded(next, depth + 1);
+  };
+  /** The first length of a value, in CSS pixels. */
+  const pixels = (value: string): number => {
+    const match = /(\d*\.?\d+)(px|rem)\b/.exec(expanded(value));
+    if (match === null) {
+      throw new Error(`no length in ${value}`);
+    }
+    return Number(match[1]) * (match[2] === "rem" ? 16 : 1);
+  };
+  /** One property of a rule, which must stand once. */
+  const one = (selector: string, property: string): string => {
+    const values = at(selector, property);
+    expect([selector, property, values.length]).toEqual([selector, property, 1]);
+    return values[0] ?? "";
+  };
+
+  it("adds a selected box's border, padding, two gaps and three rows to at most BOX_HEIGHT", () => {
+    expect(at("*, *::before, *::after", "box-sizing")).toEqual(["border-box"]);
+    const border = pixels(one(".graph-box.is-selected", "border"));
+    const padding = one(".graph-box", "padding").split(/\s+/);
+    const paddingTop = pixels(padding[0] ?? "");
+    const paddingBottom = pixels(padding[2] ?? padding[0] ?? "");
+    const gap = pixels(one(".graph-box", "gap"));
+    const body = pixels(one(".graph-box", "line-height"));
+    // The meta row's own line height, or the box's when it has none.
+    const metaOwn = at(".graph-box-meta", "line-height");
+    const meta = metaOwn.length === 0 ? body : pixels(metaOwn[0] ?? "");
+    expect(at(".graph-box p.graph-box-title", "line-height")).toEqual([]);
+    const height = 2 * border + paddingTop + paddingBottom + 2 * gap + body + body + meta;
+    expect({ border, paddingTop, paddingBottom, gap, body, meta }).toEqual({ border: 2, paddingTop: 4, paddingBottom: 4, gap: 2, body: 20, meta: 16 });
+    expect(height).toBeLessThanOrEqual(BOX_HEIGHT);
+  });
+
+  it("gives the box the body step's line height and its meta row the small step's", () => {
+    expect(at(".graph-box", "line-height")).toEqual(["var(--line-height-body)"]);
+    expect(at(".graph-box-meta", "line-height")).toEqual(["var(--line-height-small)"]);
+    expect(at(".graph-edge-label", "line-height")).toEqual(["var(--line-height-small)"]);
+  });
+});
+
+// docs/features/design-sweep-b.md "Acceptance criteria", DB8 (R8): the shell's body, the two sticky
+// panes and a task's heading under 48em measure the header from --nav-height, never a constant.
+describe("the header heights come from --nav-height (R8, DB8 of design-sweep-b)", () => {
+  const APP = "/src/styles/app.css";
+  const at = (selector: string, property: string, media: string | null = null) =>
+    DECLARATIONS.filter((declaration) => declaration.file === APP && declaration.at === media && declaration.selector === selector && declaration.property === property).map(
+      (declaration) => declaration.value,
+    );
+
+  it("derives the four rules from var(--nav-height)", () => {
+    expect(at(".app-body", "min-height")).toEqual(["calc(100vh - var(--nav-height))"]);
+    for (const selector of [".tree-pane", ".tasks-pane"]) {
+      expect([selector, at(selector, "top"), at(selector, "max-height")]).toEqual([
+        selector,
+        ["calc(var(--nav-height) + var(--space-200))"],
+        ["calc(100vh - var(--nav-height) - var(--space-400))"],
+      ]);
+    }
+    expect(at(".task-column h1", "scroll-margin-top", "@media (max-width: 48em)")).toEqual(["calc(2 * var(--nav-height) + var(--space-100))"]);
+  });
+
+  it("holds no old header constant in a top, min-height, max-height or scroll-margin-top of app.css", () => {
+    const placed = DECLARATIONS.filter((declaration) => declaration.file === APP && ["top", "min-height", "max-height", "scroll-margin-top"].includes(declaration.property));
+    expect(placed.length).toBeGreaterThan(20);
+    expect(placed.filter((declaration) => /(^|[^\d.])(3\.5|4\.5|5\.5|7)rem\b/.test(declaration.value)).map(shown)).toEqual([]);
   });
 });

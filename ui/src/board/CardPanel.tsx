@@ -10,6 +10,7 @@ import { Badge } from "../ui/Badge";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
 import { Button } from "../ui/Button";
 import { Disclosure } from "../ui/Disclosure";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon, type IconName } from "../ui/Icon";
 import { IssueView } from "../ui/IssueView";
 import { Lozenge } from "../ui/Lozenge";
@@ -670,12 +671,13 @@ function CardMain(props: CardViewProps & { subtasks: ChildrenQuery }) {
       );
   } else if (!isCard(answer)) {
     body = (
-      <div className="empty-state">
-        <p className="verbatim" lang="en">
-          {answer.reason}
-        </p>
-        <p>{fill(t("board.panel.next", { link: slot("link") }), { link: <a href={sectionHash(project, "board")}>{t("board.panel.back")}</a> })}</p>
-      </div>
+      // The daemon's words its title, at the parts' level (docs/features/design-sweep-b.md "Acceptance criteria", DB6).
+      <EmptyState
+        level={3}
+        title={answer.reason}
+        titleLang="en"
+        description={<p>{fill(t("board.panel.next", { link: slot("link") }), { link: <a href={sectionHash(project, "board")}>{t("board.panel.back")}</a> })}</p>}
+      />
     );
   } else {
     body = <MainParts {...props} card={answer} flow={flowOf(answer.flow)} />;

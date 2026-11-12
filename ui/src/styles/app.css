@@ -413,7 +413,7 @@ kbd {
 .app-body {
   display: grid;
   grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr);
-  min-height: calc(100vh - 3.5rem);
+  min-height: calc(100vh - var(--nav-height));
 }
 
 .app-nav {
@@ -805,7 +805,6 @@ textarea.field {
 .tone-roadmap-cycle { --badge-color: var(--roadmap-cycle); }
 .tone-roadmap-waits { --badge-color: var(--roadmap-waits); }
 .tone-roadmap-unestimated { --badge-color: var(--roadmap-unestimated); }
-.tone-roadmap-status { --badge-color: var(--roadmap-status); }
 .tone-unbound-relation { --badge-color: var(--unbound-relation); }
 .tone-unbound-unknown { --badge-color: var(--unbound-unknown); }
 /* A binding row's sync (docs/features/bundle-bindings.md): verify's nine states, not judged, unknown. */
@@ -985,18 +984,6 @@ textarea.field {
   padding: var(--space-100) var(--space-150);
   border-left: 3px solid var(--attention);
   border-radius: var(--radius-s);
-  background: var(--surface-panel);
-}
-
-.empty-state,
-.empty-filter {
-  display: grid;
-  gap: var(--space-100);
-  justify-items: start;
-  max-width: 72ch;
-  padding: var(--space-300);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
   background: var(--surface-panel);
 }
 
@@ -1482,12 +1469,12 @@ textarea.field {
 
 .tree-pane {
   position: sticky;
-  top: 4.5rem;
+  top: calc(var(--nav-height) + var(--space-200));
   display: grid;
   gap: var(--space-150);
   align-content: start;
   min-width: 0;
-  max-height: calc(100vh - 5.5rem);
+  max-height: calc(100vh - var(--nav-height) - var(--space-400));
   overflow-y: auto;
   padding: var(--space-150);
   border: 1px solid var(--border-subtle);
@@ -2189,7 +2176,9 @@ mark {
   font-size: var(--font-size-body);
 }
 
-.node-meta-item {
+.node-meta-item,
+.task-meta-status,
+.roadmap-card-status {
   display: inline-flex;
   align-items: center;
 }
@@ -2345,12 +2334,6 @@ mark {
   font-weight: var(--font-weight-semibold);
 }
 
-.graph-next {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-100);
-}
-
 .graph-canvas-panel {
   display: grid;
   gap: var(--space-150);
@@ -2444,7 +2427,7 @@ mark {
   background: var(--graph-box-surface);
   color: var(--xy-node-color);
   font-size: var(--font-size-body);
-  line-height: 1.3;
+  line-height: var(--line-height-body);
   cursor: pointer;
   transition: border-color var(--duration-fast) ease-out;
 }
@@ -2497,6 +2480,7 @@ mark {
 .graph-box-meta {
   color: var(--text-secondary);
   font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
 }
 
 .graph-box-kind {
@@ -2544,8 +2528,8 @@ mark {
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
   color: var(--text-secondary);
-  font-size: 0.6875rem;
-  line-height: 1.5;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -2772,9 +2756,9 @@ mark {
 
 .tasks-pane {
   position: sticky;
-  top: 4.5rem;
+  top: calc(var(--nav-height) + var(--space-200));
   min-width: 0;
-  max-height: calc(100vh - 5.5rem);
+  max-height: calc(100vh - var(--nav-height) - var(--space-400));
   overflow-y: auto;
   padding: var(--space-150);
   border: 1px solid var(--border-subtle);
@@ -2805,7 +2789,7 @@ mark {
 
   /* Opening a task from the list scrolls its heading to the top: clear of the sticky header, two rows when it wraps. */
   .task-column h1 {
-    scroll-margin-top: 7rem;
+    scroll-margin-top: calc(2 * var(--nav-height) + var(--space-100));
   }
 }
 
@@ -3003,17 +2987,11 @@ mark {
   margin-bottom: var(--space-150);
 }
 
-.task-badges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-100);
-}
-
 .frozen-note {
   font-size: var(--font-size-body);
 }
 
+/* A call to act: primary text wherever it stands, an EmptyState's secondary description included. */
 .waiting-note {
   display: flex;
   align-items: flex-start;
@@ -3022,10 +3000,11 @@ mark {
   border-left: 4px solid var(--accent);
   border-radius: var(--radius-s);
   background: var(--surface-raised);
+  color: var(--text-primary);
 }
 
 .waiting-note .icon {
-  margin-top: 0.2em;
+  margin-top: var(--space-025);
   color: var(--accent);
 }
 
@@ -3171,7 +3150,7 @@ mark {
 }
 
 .sync-part .icon {
-  margin-top: 0.15em;
+  margin-top: var(--space-025);
   color: var(--text-secondary);
 }
 
@@ -3622,7 +3601,7 @@ mark {
 }
 
 .cut-note .icon {
-  margin-top: 0.15em;
+  margin-top: var(--space-025);
 }
 
 .package-figure {
@@ -3808,7 +3787,7 @@ mark {
 .palette {
   align-self: start;
   width: min(40rem, 100%);
-  margin-top: min(10vh, 5rem);
+  margin-top: var(--space-600);
   gap: var(--space-100);
   padding: var(--space-200);
 }
@@ -3892,7 +3871,7 @@ mark {
 }
 
 .palette-error .icon {
-  margin-top: 0.2em;
+  margin-top: var(--space-025);
   color: var(--severity-high);
 }
 
@@ -4215,40 +4194,8 @@ mark {
   font-weight: var(--font-weight-medium);
 }
 
-.check-verdict .badge {
-  padding: var(--space-050) var(--space-150);
-  font-size: var(--font-size-heading-s);
-  line-height: var(--line-height-heading-s);
-  font-weight: var(--font-weight-semibold);
-}
-
 .check-line-label {
   color: var(--text-secondary);
-}
-
-.check-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-100);
-}
-
-.check-count {
-  display: grid;
-  min-width: 7rem;
-  padding: var(--space-100) var(--space-150);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-s);
-  background: var(--surface-raised);
-}
-
-.check-count dt {
-  color: var(--text-secondary);
-  font-size: var(--font-size-body);
-}
-
-.check-count dd {
-  font-size: var(--font-size-heading-m);
-  font-variant-numeric: tabular-nums;
 }
 
 .check-causes,
@@ -4876,8 +4823,27 @@ mark {
   outline-offset: 2px;
 }
 
+/* A box's tasks on its one meta line, never wrapped past the box's three rows: the shown cells give
+   up their labels' width first, ellipsized; the IDs and the count of the rest keep theirs
+   (docs/features/design-sweep-b.md "Acceptance criteria", DB3). */
 .chain-box-tasks {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.chain-box-tasks .chain-box-task {
+  flex: 0 1 auto;
+  gap: var(--space-050);
+  min-width: 0;
+}
+
+.chain-box-task-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chain-box-more {
+  flex: none;
 }
 
 /* The Flow studio (docs/features/writer-studio.md D6): places, the canvas and the panel in three

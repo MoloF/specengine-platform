@@ -81,7 +81,7 @@ function amendmentPaths(): (string | undefined)[] {
 }
 
 function verdict(): string {
-  return region("Check").querySelector(".check-verdict .badge-label")?.textContent ?? "";
+  return region("Check").querySelector(".check-verdict .lozenge-label")?.textContent ?? "";
 }
 
 describe("Health over the mock", () => {

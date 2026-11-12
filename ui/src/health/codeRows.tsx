@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import type { HealthQuery } from "../api/queries";
 import type { HealthAssumes, HealthDrift, HealthReport, HealthUnbound } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { ReadFailure, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
@@ -51,9 +52,8 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
           <span>{oneLine(look.label)}</span>
         </p>
         {causes}
-        <button
-          type="button"
-          className="button"
+        <Button
+          icon="retry"
           aria-disabled={retrying}
           onClick={() => {
             if (!retrying) {
@@ -61,9 +61,8 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
             }
           }}
         >
-          <Icon name="retry" />
           <span>{retrying ? t("ui.retrying") : t("ui.retry")}</span>
-        </button>
+        </Button>
       </div>
     );
   }
@@ -102,16 +101,14 @@ export function CodeRowList<T>({ rows, label, order, render }: { rows: readonly 
       {hidden > 0 && (
         <div className="health-amendments-more">
           <p className="health-amendments-scope">{t("health.code.firstOf", { shown: shown.length, count: rows.length, order })}</p>
-          <button
-            type="button"
-            className="button"
+          <Button
             onClick={() => {
               setAll(true);
               focusLater(() => list.current?.querySelectorAll<HTMLElement>(":scope > li")[CODE_ROWS_SHOWN]);
             }}
           >
             {t("health.code.showAll", { count: rows.length })}
-          </button>
+          </Button>
         </div>
       )}
     </>
