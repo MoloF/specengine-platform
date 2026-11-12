@@ -50,7 +50,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0087.md](roadmap/RM-0087.md) roadmap-states (Phase 7, v4 step 5): the owner's states, and views by state and release · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs · crates/specengine-mcp, crates/specengine-cli, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-department (Phase 7, v5 step 13): a hub's per-login default department · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
-- [docs/roadmap/RM-0099.md](roadmap/RM-0099.md) design-sweep (Phase 7, v5 step 7): every other screen on the foundation · ui · in-progress
 - [docs/roadmap/RM-0102.md](roadmap/RM-0102.md) flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0106.md](roadmap/RM-0106.md) direction-catalog (Phase 7, v5): a direction as a table of its documents · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0107.md](roadmap/RM-0107.md) delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft

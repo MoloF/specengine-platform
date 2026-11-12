@@ -18,12 +18,12 @@ The plan drawn read-only, computing nothing (ADR-0052, ADR-0033); `roadmap-scree
 
 Header: `Plan::summary`'s line, Read again; tabs Lanes, Chain (kept per project).
 
-- **Lanes**, the text twin and keyboard path: jump buttons to lane headings; per group in served order its name, Current, MVP cut, counts, a bar (`aria-hidden`, the sum beside it), cards; the cut rule after the `mvp_cut` release; Pool, then its tasks; Unplaced, `release <as written>`; Notes. A card: position, ID a document link (`doc-view.md`), title, `status` and `priority` raw, the estimate with its unit or "unestimated", "Waits on" links, "In a cycle", its tasks' states.
-- **Chain**, lazy `@xyflow/react`: a column per group, a box at (column, item index), no layering; an edge per `waits_on` pair of two drawn items, across lanes, none to itself; at most 200 boxes in whole lanes, then `<k> of <n> items not drawn`. A click, a press moving up to `CLICK_DISTANCE` 5 px (`spec-flow-layout.md` "Layout", Clicks), selects by route, moving no focus; a longer one pans. The Graph's read-only props, handles closed (`isConnectableStart`/`End`, `connectOnClick` false); attribution hidden, credited "Drawn with React Flow (MIT)".
+- **Lanes**, the text twin and keyboard path: jump buttons to lane headings; per group in served order its name, Current, MVP cut, counts, a bar (`aria-hidden`, the sum beside it), cards; the cut rule after the `mvp_cut` release; Pool, then its tasks; Unplaced, `release <as written>`; Notes. A card: position, ID a document link (`doc-view.md`), title, `status` raw in a neutral Lozenge (an sr-only "Status: " name, no `lang`: plan content), `priority` raw, the estimate with its unit or "unestimated", "Waits on" links, "In a cycle", its tasks' states.
+- **Chain**, lazy `@xyflow/react`: a column per group, a box at (column, item index), no layering; an edge per `waits_on` pair of two drawn items, across lanes, none to itself; at most 200 boxes in whole lanes, then `<k> of <n> items not drawn`. A box's tasks are one line: its first `CHAIN_TASKS_SHOWN` (2, `chain.ts`) cells, then "<n> more"; the twin test (`RoadmapChain.test.tsx`) matches them to each card's first two, and cells plus count to its total. A click, a press moving up to `CLICK_DISTANCE` 5 px (`spec-flow-layout.md` "Layout", Clicks), selects by route, moving no focus; a longer one pans. The Graph's read-only props, handles closed (`isConnectableStart`/`End`, `connectOnClick` false); attribution hidden, credited "Drawn with React Flow (MIT)".
 
 ## States and live
 
-Loading a skeleton, `aria-busy`. A refusal or the exit-1 document: `ErrorPanel`, the message verbatim, Retry, `NO_PLAN_LINE`. A failed re-read keeps the plan, its line, Retry. No item, or all done: a line above the tabs. Re-read on screen, a read in flight aborted, on `task.*`, `proposal.applied`, a gap; never a stage, `created`, `approved`, `rejected`, `apply_failed` or focus; off screen marked stale.
+Loading a skeleton, `aria-busy`. A refusal or the exit-1 document: `ErrorPanel`, the message verbatim, Retry, `NO_PLAN_LINE`. A failed re-read keeps the plan, its line, Retry. No item: an `EmptyState` (`h2`, `roadmap.emptyNext`) above the tabs; all done: a line. Re-read on screen, a read in flight aborted, on `task.*`, `proposal.applied`, a gap; never a stage, `created`, `approved`, `rejected`, `apply_failed` or focus; off screen marked stale.
 
 ## Rules
 
@@ -38,4 +38,4 @@ harbor-sim's plan in its own words (`ui/src/mocks/roadmap.ts`), every shape in `
 
 ## Known limits
 
-The join's notes (why a task is missing) are stderr only: `spec roadmap` on a terminal. Hand edits raise no event: Read again. Done items are counted, not listed.
+The join's notes (why a task is missing) are stderr only: `spec roadmap` on a terminal. Hand edits raise no event: Read again. Done items are counted, not listed. On the Chain the MVP cut's label can overlap the next lane's title (harbor-sim's `hull`, 1920x1080, dark, Russian, seen 2026-11-12; likely older than `design-sweep-b`, not fixed).

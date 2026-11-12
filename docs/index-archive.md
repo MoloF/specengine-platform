@@ -43,6 +43,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/department-split.md](features/department-split.md) shipped
 - [docs/features/departments.md](features/departments.md) shipped
 - [docs/features/design-foundation.md](features/design-foundation.md) shipped
+- [docs/features/design-sweep-b.md](features/design-sweep-b.md) shipped
 - [docs/features/design-sweep.md](features/design-sweep.md) shipped
 - [docs/features/doc-modal.md](features/doc-modal.md) shipped
 - [docs/features/drift-follow-up.md](features/drift-follow-up.md) shipped
@@ -242,6 +243,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0096.md](roadmap/RM-0096.md) shipped
 - [docs/roadmap/RM-0097.md](roadmap/RM-0097.md) shipped
 - [docs/roadmap/RM-0098.md](roadmap/RM-0098.md) shipped
+- [docs/roadmap/RM-0099.md](roadmap/RM-0099.md) shipped
 - [docs/roadmap/RM-0100.md](roadmap/RM-0100.md) shipped
 - [docs/roadmap/RM-0101.md](roadmap/RM-0101.md) shipped
 - [docs/roadmap/RM-0103.md](roadmap/RM-0103.md) shipped

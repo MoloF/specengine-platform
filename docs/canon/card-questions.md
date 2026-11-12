@@ -82,7 +82,7 @@ The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh
 - **Who asked.** A local Activity names whoever "Acting as" holds; empty goes out as `local`. Follow-up: default to the hub login, or ask once locally.
 - **Two stores.** A card ID names a card of one queue: a terminal's `--card` never reaches a hub's card. A hub filled from a terminal's dump holds its cards and items as stored.
 - **Dedup.** A card's target linked to an accepted decision makes every question on it a hit: Ask anyway is the way through; over 64 hits nothing is stored (`agent-intake.md` "Dedup").
-- The Questions screen sends no `as` and links no card (RM-0099).
+- The Questions screen links no card: `RoundItem` holds no `card_id`, a core key.
 
 ## Tests
 
