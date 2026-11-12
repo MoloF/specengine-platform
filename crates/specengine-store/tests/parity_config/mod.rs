@@ -31,15 +31,18 @@ pub const INDEX_SHARD: &str = "docs/index-archive.md";
 /// `docs/index-canon-proposal.md`); the `hub*` hub canons third, since
 /// docs/features/hub-ops.md "Canon at ship" (shard `docs/index-canon-hub.md`);
 /// the `card*` card canons fourth, since card-tasks (RM-0092, shard
-/// `docs/index-canon-card.md`). Claims overlap (`docs/canon/spec-*.md`,
-/// `docs/canon/proposal-*.md`, `docs/canon/hub*.md` and `docs/canon/card*.md`
-/// are within `docs/canon/*.md`): the first matching claim wins
+/// `docs/index-canon-card.md`); the `code-*` code-layer canons fifth, since
+/// docs/features/collision-pass.md (shard `docs/index-canon-code.md`).
+/// Claims overlap (`docs/canon/spec-*.md`, `docs/canon/proposal-*.md`,
+/// `docs/canon/hub*.md`, `docs/canon/card*.md` and `docs/canon/code-*.md` are
+/// within `docs/canon/*.md`): the first matching claim wins
 /// ([`claiming_shard`]).
-pub const INDEX_LIVE_SHARDS: [(&str, &str); 8] = [
+pub const INDEX_LIVE_SHARDS: [(&str, &str); 9] = [
     ("docs/index-canon-spec.md", "docs/canon/spec-*.md"),
     ("docs/index-canon-proposal.md", "docs/canon/proposal-*.md"),
     ("docs/index-canon-hub.md", "docs/canon/hub*.md"),
     ("docs/index-canon-card.md", "docs/canon/card*.md"),
+    ("docs/index-canon-code.md", "docs/canon/code-*.md"),
     ("docs/index-canon.md", "docs/canon/*.md"),
     ("docs/index-decisions.md", "docs/decisions/*.md"),
     ("docs/index-crates.md", "crates/*/README.md"),
@@ -54,7 +57,7 @@ pub const VIEW: &str = "docs/generated/roadmap.md";
 /// The outputs of the root config's index entry in config order: the root,
 /// then the shards, then the roadmap view. The index entry's `writes`, the
 /// render's outputs and the export's lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 11] = [
+pub const INDEX_OUTPUTS: [&str; 12] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
@@ -65,6 +68,7 @@ pub const INDEX_OUTPUTS: [&str; 11] = [
     INDEX_LIVE_SHARDS[5].0,
     INDEX_LIVE_SHARDS[6].0,
     INDEX_LIVE_SHARDS[7].0,
+    INDEX_LIVE_SHARDS[8].0,
     VIEW,
 ];
 

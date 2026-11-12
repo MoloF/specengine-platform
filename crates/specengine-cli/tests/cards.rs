@@ -2204,7 +2204,7 @@ fn ac07_cards_round_trip_through_a_format_3_dump() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":7,\"queue_schema\":13,\"project\":\"card-press\",\"proposals\":0,\
+            "{{\"format\":7,\"queue_schema\":14,\"project\":\"card-press\",\"proposals\":0,\
              \"tasks\":1,\"runs\":0,\"cards\":4,\"events\":{event_rows}}}"
         )
     );
@@ -2340,7 +2340,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let v3_lines: Vec<String> = v3.lines().map(str::to_owned).collect();
     assert_eq!(
         v3_lines[0],
-        "{\"format\":7,\"queue_schema\":13,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
+        "{\"format\":7,\"queue_schema\":14,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
          \"runs\":0,\"cards\":0,\"events\":1}"
     );
     let old_header = "{\"format\":2,\"queue_schema\":8,\"project\":\"card-press\",\"proposals\":0,\
@@ -2366,7 +2366,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     pair.sql(
         "ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; \
          ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
-         DROP TABLE cards; PRAGMA user_version = 8;",
+         DROP TABLE cards; DROP TABLE IF EXISTS collision_marks; PRAGMA user_version = 8;",
     );
     let from_8 = dumps.join("from-8.jsonl");
     export(&pair, &pair.home, &from_8);
@@ -2380,7 +2380,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     assert_eq!(ok(&pair, &["card", "list"]), PRESS_BOARD);
     // 12 since docs/features/task-mandate.md M5, 13 since
     // docs/features/plain-questions.md PQ8.
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "13", "stepped");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "14", "stepped");
     assert_eq!(pair.sql("SELECT * FROM tasks; SELECT * FROM events;"), rows);
 
     // The refusals, on a dump holding one card.
@@ -2407,7 +2407,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut format_2_with_a_card = lines.clone();
     format_2_with_a_card[0] = format_2_with_a_card[0]
         .replacen(
-            "\"format\":7,\"queue_schema\":13,",
+            "\"format\":7,\"queue_schema\":14,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
@@ -2423,14 +2423,14 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
         ("format-7-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
         (
             "format-7-of-schema-11",
-            change(0, "\"queue_schema\":13,", "\"queue_schema\":11,"),
+            change(0, "\"queue_schema\":14,", "\"queue_schema\":11,"),
             1,
         ),
         (
             "format-2-of-eight-keys",
             change(
                 0,
-                "\"format\":7,\"queue_schema\":13,",
+                "\"format\":7,\"queue_schema\":14,",
                 "\"format\":2,\"queue_schema\":8,",
             ),
             1,
@@ -2439,8 +2439,8 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
         // plain-questions: 8 over this build's 7, 14 over 13.
         ("format-8", change(0, "\"format\":7,", "\"format\":8,"), 1),
         (
-            "schema-14",
-            change(0, "\"queue_schema\":13,", "\"queue_schema\":14,"),
+            "schema-15",
+            change(0, "\"queue_schema\":14,", "\"queue_schema\":15,"),
             1,
         ),
         ("a-card-in-format-2", format_2_with_a_card, 2),

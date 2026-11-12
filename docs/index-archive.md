@@ -36,6 +36,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/citation-sweep.md](features/citation-sweep.md) shipped
 - [docs/features/code-refs.md](features/code-refs.md) shipped
 - [docs/features/code-tools.md](features/code-tools.md) shipped
+- [docs/features/collision-pass.md](features/collision-pass.md) shipped
 - [docs/features/constant-census.md](features/constant-census.md) shipped
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped
 - [docs/features/decision-apply.md](features/decision-apply.md) shipped
@@ -220,6 +221,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0053.md](roadmap/RM-0053.md) shipped
 - [docs/roadmap/RM-0054.md](roadmap/RM-0054.md) shipped
 - [docs/roadmap/RM-0059.md](roadmap/RM-0059.md) shipped
+- [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) shipped
 - [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) shipped
 - [docs/roadmap/RM-0064.md](roadmap/RM-0064.md) shipped
 - [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) shipped

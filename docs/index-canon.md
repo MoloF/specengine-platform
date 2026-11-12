@@ -18,15 +18,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
 - [docs/canon/board-screen.md](canon/board-screen.md) Board screen: a still grid, the card modal and page, lanes, hand-off and return · ui · tier 2
 - [docs/canon/board-ui.md](canon/board-ui.md) Board: card routes, door and fence · crates/specengine-http, crates/specengine-cli, ui · tier 2
-- [docs/canon/code-bindings.md](canon/code-bindings.md) Code bindings: [code], markers bound to code, spec refs · crates/specengine-code, crates/specengine-cli, crates/specengine-core · tier 2
-- [docs/canon/code-constants.md](canon/code-constants.md) Code constants: string constants carrying record codes · crates/specengine-eval, crates/specengine-code · tier 2
-- [docs/canon/code-hash-eval.md](canon/code-hash-eval.md) Code hash eval: level, fingerprint and RON value figures · crates/specengine-eval · tier 2
-- [docs/canon/code-hash-ron.md](canon/code-hash-ron.md) Code hash: the RON value · crates/specengine-code, crates/specengine-eval · tier 2
-- [docs/canon/code-hash.md](canon/code-hash.md) Code hash: recipe v2 and the v3 levels · crates/specengine-code, crates/specengine-eval · tier 2
-- [docs/canon/code-identity.md](canon/code-identity.md) Layer A identity: target units, markers, RON paths · crates/specengine-code, crates/specengine-eval · tier 2
-- [docs/canon/code-reads.md](canon/code-reads.md) Code in reads: binding rows, their sync, the degrade · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, crates/specengine-model, crates/specengine-store · tier 2
-- [docs/canon/code-roles.md](canon/code-roles.md) Code roles: framework roles of Rust items, [code] frameworks · crates/specengine-code, crates/specengine-store, crates/specengine-cli, crates/specengine-core, crates/specengine-eval · tier 2
-- [docs/canon/code-targets.md](canon/code-targets.md) Layer A targets: cargo runner, layout fallback · crates/specengine-eval, crates/specengine-code · tier 2
+- [docs/canon/collision-pass.md](canon/collision-pass.md) Collision pass: pairs that may collide, an agent's verdicts, a local ledger · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-eval, plugin · tier 2
 - [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a deciding item approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
 - [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2

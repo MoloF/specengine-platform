@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use specengine_core::check::CheckInput;
+use specengine_core::collisions::CollisionRows;
 use specengine_model::IdScheme;
 
 use crate::error::{Db, StoreError};
@@ -227,6 +228,10 @@ impl SpecIndex for SqliteIndex {
 
     fn similar(&self, query: &SimilarQuery) -> Result<Vec<SimilarRow>, StoreError> {
         similar::similar_capped(self, query, &similar::SimilarCaps::ENGINE)
+    }
+
+    fn collision_input(&self) -> Result<CollisionRows, StoreError> {
+        read::collision_input(self)
     }
 }
 

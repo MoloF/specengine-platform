@@ -2357,10 +2357,10 @@ fn ac08_no_card_answers_as_plain_show() {
 /// docs/features/plain-questions.md PQ8) stays, the column holds JSON.
 #[test]
 fn no_queue_step() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     let pair = Pair::new("tt-schema", ALMANAC);
     let id = cut(&pair, "Pages set", &[SET]);
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "13");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "14");
     let raw = pair.sql(&format!("SELECT snapshot FROM cards WHERE id = '{id}';"));
     let stored: Value = serde_json::from_str(raw.trim()).expect("the column holds JSON");
     assert!(stored[0]["within_hash"].is_string(), "{stored}");

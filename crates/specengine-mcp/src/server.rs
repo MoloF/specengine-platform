@@ -41,6 +41,14 @@ list|show|new|split|edit|move; no tool accepts."
     };
 }
 
+/// The `instructions` line of the collision tools (task spec
+/// `collision-pass` CP8).
+macro_rules! collisions_line {
+    () => {
+        "- get_collisions, mark_pairs = spec collisions, collisions mark."
+    };
+}
+
 /// The most bytes of the tasks line, its line end included.
 const TASKS_LINE_LIMIT: usize = 140;
 
@@ -73,7 +81,9 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// bytes) stay in its schema alone; task spec `department-split` adds
 /// `split_card` to the cards line, as a hub's has it (18 bytes), so
 /// `search`'s `limit?, archive?` (18 bytes) stay in its schema alone: 2 048
-/// bytes, the limit.
+/// bytes, the limit; task spec `collision-pass` (CP8) drops the resources
+/// sentence (74 bytes: `resources/list` and `resources/templates/list`
+/// still list them) and adds the collisions line (65 bytes): 2 039 bytes.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
@@ -96,6 +106,9 @@ distinct_from names each; work on your working answer.
 - report_drift = spec propose drift: queues HEAD's lock drift.
 - review_proposal = review --brief after the owner's form; only when the owner asks.
 ",
+    collisions_line!(),
+    "
+",
     tasks_line!(),
     "
 ",
@@ -104,8 +117,7 @@ distinct_from names each; work on your working answer.
 
 REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: --kind \
 is kinds, ROOT is root, --links, --bindings are with items. \
-Answers are cut at 40000 characters. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, \
-percent-encoded>.
+Answers are cut at 40000 characters.
 
 Rules:
 - Deterministic: one state, one result; no LLM inside.
@@ -126,6 +138,7 @@ const _: () = assert!(INSTRUCTIONS.len() <= TEXT_LIMIT);
 const _: () = assert!(tasks_line!().len() < TASKS_LINE_LIMIT);
 const _: () = assert!(holds(INSTRUCTIONS, tasks_line!()));
 const _: () = assert!(holds(INSTRUCTIONS, cards_line!()));
+const _: () = assert!(holds(INSTRUCTIONS, collisions_line!()));
 // The owner's form is named with its twin, and when it may be called
 // (canon `review-form`, "Tool").
 const _: () = assert!(holds(
@@ -194,7 +207,8 @@ impl SpecEngineServer {
             + Self::intake_tools()
             + Self::review_tools()
             + Self::task_tools()
-            + Self::card_tools();
+            + Self::card_tools()
+            + Self::collision_tools();
         #[cfg(feature = "probes")]
         let tool_router = tool_router + Self::probe_tools();
         Self {

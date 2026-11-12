@@ -141,6 +141,9 @@ mod write;
 
 use serde::Serialize;
 use specengine_core::check::CheckInput;
+/// The collision pass's universe (core's), [`SpecIndex::collision_input`]'s
+/// answer.
+pub use specengine_core::collisions::{CollisionNode, CollisionRows, CollisionTarget};
 use specengine_model::{IdScheme, Node, ParsedFile};
 
 pub use check::{
@@ -169,23 +172,24 @@ pub use outputs::{Committed, CommittedTree, HeadFile, committed_tree};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, CARD_COLUMNS, CardAccept, CardAccepted, CardChange, CardClear,
     CardCleared, CardClearing, CardDeparture, CardEdit, CardItems, CardList, CardRefresh, Choice,
-    Decision, DecisionRecord, DriftItem, DriftResult, EVENT_APPLIED, EVENT_APPLY_FAILED,
-    EVENT_APPROVED, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED, EVENT_CARD_CANCELLED,
-    EVENT_CARD_CLEARED, EVENT_CARD_CREATED, EVENT_CARD_EDITED, EVENT_CARD_MOVED,
-    EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, EVENT_COLUMNS, EVENT_CREATED,
+    CollisionMark, CollisionMarks, Decision, DecisionRecord, DriftItem, DriftResult, EVENT_APPLIED,
+    EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
+    EVENT_CARD_CANCELLED, EVENT_CARD_CLEARED, EVENT_CARD_CREATED, EVENT_CARD_EDITED,
+    EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, EVENT_COLUMNS, EVENT_CREATED,
     EVENT_GATE_OBSERVED, EVENT_REJECTED, EVENT_STAGED, EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED,
     EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED, EVENT_TASK_COMPLETED, EVENT_TASK_CREATED,
     EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED, EVENT_TASK_RUN_REPORTED, EVENT_UNSTAGED, Event,
     EventsAfter, GateObserved, GateQueue, Intake, IntakeResult, Interpretation, KindFamily,
-    LiveAdd, NewCard, NewDrift, NewIntake, NewProposal, NewSplit, NewSplitChild, NewTask,
-    PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding, ProposalKind, ProposalList,
-    ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch,
-    RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation, Restore, Run, Seen,
-    SnapshotEntry, SplitCards, SplitParent, SqliteQueue, Stage, StagedChoice, StoredCard,
-    StoredEvent, StoredNote, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
-    TailEvent, Task, TaskChange, TaskList, TaskRefresh, TaskSeen, TaskSnapshot, UnreadableCard,
-    UnreadableRow, UnreadableTask, binding_problem, card_columns, claimed_elsewhere, open_for_gate,
-    patch_hash, proposal_columns, record_gate_observed, task_event,
+    LiveAdd, MarkResult, NewCard, NewCollisionMark, NewDrift, NewIntake, NewProposal, NewSplit,
+    NewSplitChild, NewTask, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding,
+    ProposalKind, ProposalList, ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts,
+    QueueError, QueueMatch, RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation,
+    Restore, Run, Seen, SnapshotEntry, SplitCards, SplitParent, SqliteQueue, Stage, StagedChoice,
+    StoredCard, StoredEvent, StoredNote, StoredProposal, StoredQueue, StoredRun, StoredTask,
+    TASK_COLUMNS, TailEvent, Task, TaskChange, TaskList, TaskRefresh, TaskSeen, TaskSnapshot,
+    UnreadableCard, UnreadableRow, UnreadableTask, binding_problem, card_columns,
+    claimed_elsewhere, open_for_gate, patch_hash, proposal_columns, record_gate_observed,
+    task_event,
 };
 pub use read::{Decoded, IndexSnapshot, NodeNorm};
 pub use roles::{RoleCandidate, StoredRole};
@@ -619,6 +623,13 @@ pub trait SpecIndex {
     /// source, then by each probe's keys; deduplicated, a node found by an
     /// earlier probe never found again; search and neighbours capped.
     fn similar(&self, query: &SimilarQuery) -> Result<Vec<SimilarRow>, StoreError>;
+    /// The collision pass's universe (task spec `collision-pass` CP1, CP2),
+    /// from one snapshot: the documents and ID sections with a kind in live
+    /// files, by `(path, ord)`; the resolved ends of the edges they hold
+    /// (the holder their source, any type but `mentions`) and of their
+    /// documents' `parent:`, each named by its ID, else its path; and how
+    /// many of the nodes have no `norm_hash`. Nothing is written.
+    fn collision_input(&self) -> Result<CollisionRows, StoreError>;
 }
 
 /// Writing the index of the handle's worktree. Parsing runs before the

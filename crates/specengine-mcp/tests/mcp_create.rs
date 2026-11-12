@@ -416,10 +416,12 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // clauses out; the change line untouched); 2 040 since
     // docs/features/card-trace.md (`get_trace` in, the evidence clause out;
     // the change line untouched); 2 048 since docs/features/trace-views.md
-    // (`get_flow`'s `, trace?`; the change line untouched).
+    // (`get_flow`'s `, trace?`; the change line untouched); 2 039 since
+    // docs/features/collision-pass.md (the collisions line in, the
+    // resources sentence out; the change line untouched).
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2039);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(

@@ -18,7 +18,9 @@
 //! flows, columns, disciplines and names free, a history event's `payload`
 //! any object), and of `get_trace` (`spec trace`'s document:
 //! `docs/features/card-trace.md` "Data": a state and a mark closed, IDs, names
-//! and titles free).
+//! and titles free), and of the collision tools (task spec
+//! `collision-pass` CP8: `spec collisions`' document and the mark's; a
+//! verdict closed, `mark_pairs`' items closed, kinds and names free).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -2905,4 +2907,92 @@ pub(crate) struct VerifyKey {
 #[derive(JsonSchema)]
 pub(crate) struct VerifyOmitted {
     pub rows: usize,
+}
+
+// -------------------------------------------------------------- collisions
+
+/// distinct: the two do not collide; reported: filed as a proposal.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CollisionVerdict {
+    Distinct,
+    Reported,
+}
+
+/// One judged pair, as the agent gives it (agent-written data).
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct MarkPair {
+    /// One side's name as get_collisions gives it: its id, else its path.
+    pub a: String,
+    /// That side's norm_hash as listed.
+    pub a_norm: String,
+    /// The other side's name.
+    pub b: String,
+    /// The other side's norm_hash as listed.
+    pub b_norm: String,
+    pub verdict: CollisionVerdict,
+    /// The PR- ID a reported pair was filed as; none for distinct.
+    pub proposal: Option<String>,
+}
+
+/// `spec collisions --json` (task spec `collision-pass` CP8): the verdict
+/// closed, kinds and names free.
+#[derive(JsonSchema)]
+pub(crate) struct CollisionsDocument {
+    pub project: String,
+    pub kinds: Vec<String>,
+    pub any_kind: bool,
+    pub limit: usize,
+    pub pairs: Vec<CollisionPairShape>,
+    /// The qualifying pairs not listed.
+    pub left: usize,
+    /// The nodes without a norm_hash, never paired.
+    pub skipped: usize,
+    pub notes: Vec<String>,
+}
+
+/// One pair that may collide.
+#[derive(JsonSchema)]
+pub(crate) struct CollisionPairShape {
+    /// The side first by (path, ord).
+    pub a: PairSideShape,
+    pub b: PairSideShape,
+    pub score: u32,
+    /// Title likeness, per mille.
+    pub titles: u32,
+    /// The link targets both hold.
+    pub shared: usize,
+    pub shared_targets: Vec<String>,
+    /// The verdict it had before either side changed; `null` when none.
+    pub marked: Option<PairMarkedShape>,
+    pub reason: String,
+}
+
+/// One side of a pair.
+#[derive(JsonSchema)]
+pub(crate) struct PairSideShape {
+    pub id: Option<String>,
+    pub path: String,
+    pub ord: usize,
+    pub kind: String,
+    pub title: Option<String>,
+    pub norm_hash: String,
+}
+
+/// A verdict whose norms no longer hold.
+#[derive(JsonSchema)]
+pub(crate) struct PairMarkedShape {
+    pub verdict: CollisionVerdict,
+    pub proposal: Option<String>,
+    pub at: String,
+}
+
+/// `spec collisions mark --json`: written, or refused (both 0, the reason
+/// the last note).
+#[derive(JsonSchema)]
+pub(crate) struct MarkDocument {
+    pub marked: usize,
+    pub replaced: usize,
+    pub notes: Vec<String>,
 }

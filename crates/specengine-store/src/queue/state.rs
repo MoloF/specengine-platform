@@ -130,8 +130,8 @@ const SCHEMA_8_COLUMNS: usize = 46;
 const SCHEMA_11_COLUMNS: usize = 48;
 
 /// The `proposals` columns of queue schema `schema`, in table order: 1 to
-/// 13 (this build's) are known, a dump of any restores; `None` for any
-/// other.
+/// 14 (this build's; step 14 adds no proposal column) are known, a dump of
+/// any restores; `None` for any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
@@ -550,8 +550,9 @@ impl SqliteQueue {
 
     /// Restores `state` into an empty queue: in one `Immediate`
     /// transaction, every table found empty (any project's rows) under the
-    /// write lock, every row inserted as given, committed; no event of its
-    /// own. Else [`Restore::Occupied`], nothing inserted. The queue's
+    /// write lock, the project's collision ledger emptied, every row
+    /// inserted as given, committed; no event of its own. Else
+    /// [`Restore::Occupied`], nothing inserted. The queue's
     /// schema steps run first (a handle of [`Self::open_existing`] too). A
     /// row of another project than the handle's, or a run of no task of
     /// `state`, is [`QueueError::Invalid`], nothing written.
@@ -615,6 +616,9 @@ impl SqliteQueue {
         if !counts.is_empty() {
             return Ok(Restore::Occupied(counts));
         }
+        // No dump holds the collision ledger: a restore starts it empty
+        // (task spec `collision-pass` CP6).
+        super::collisions::clear_ledger(&tx, &project)?;
         {
             let placeholders: Vec<String> = (1..=PROPOSAL_COLUMNS.len())
                 .map(|number| format!("?{number}"))

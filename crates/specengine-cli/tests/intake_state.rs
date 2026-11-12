@@ -258,7 +258,7 @@ fn ac10_every_kind_round_trips_at_schema_4() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":5,\
+        "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":5,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":6}"
     );
     // 46 since docs/features/drift-queue.md "Queue schema 8", 48 since
@@ -344,7 +344,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let v3_lines = lines(&v3);
     assert!(
-        v3_lines[0].starts_with("{\"format\":7,\"queue_schema\":13,")
+        v3_lines[0].starts_with("{\"format\":7,\"queue_schema\":14,")
             && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,\"cards\":0,"),
         "{}",
         v3_lines[0]
@@ -352,7 +352,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let mut v1_lines = v3_lines.clone();
     v1_lines[0] = v1_lines[0]
         .replacen(
-            "\"format\":7,\"queue_schema\":13,",
+            "\"format\":7,\"queue_schema\":14,",
             "\"format\":1,\"queue_schema\":1,",
             1,
         )
@@ -419,7 +419,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     sql(
         &db,
         &format!(
-            "{} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = 1;",
+            "{} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; PRAGMA user_version = 1;",
             drops.join(" ")
         ),
     );
@@ -444,7 +444,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
     // 12 since docs/features/task-mandate.md M5 (`proposals` unchanged); 13
     // since docs/features/plain-questions.md PQ8 (`gist`, `matters` last).
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "13");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "14");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),

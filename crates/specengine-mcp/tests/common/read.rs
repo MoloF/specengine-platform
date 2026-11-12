@@ -43,13 +43,13 @@ use std::path::Path;
 use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CardEditRequest, CardListRequest, CardMoveRequest, CardNewRequest,
-    CardShowRequest, CardSplitRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput,
-    DiscrepancyRequest, DriftRequest, Env, Exit, FlowRequest, GitEnv, Globals, ImpactRequest,
-    IntakeSeverity, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
-    ReviewRequest, RoadmapRequest, SearchRequest, ShowRequest, SymbolsForm, SymbolsRequest,
-    TOOL_ACTOR, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest, TaskReportRequest,
-    TaskShowRequest, TraceRequest, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest,
-    render_json, render_text,
+    CardShowRequest, CardSplitRequest, CliError, CollisionsRequest, DecisionInput, DecisionRequest,
+    DiscrepancyInput, DiscrepancyRequest, DriftRequest, Env, Exit, FlowRequest, GitEnv, Globals,
+    ImpactRequest, IntakeSeverity, MarkPairsRequest, Outcome, PairJudgements, ProposeRequest,
+    ProposedText, QuestionRequest, RefsRequest, ReviewRequest, RoadmapRequest, SearchRequest,
+    ShowRequest, SymbolsForm, SymbolsRequest, TOOL_ACTOR, TaskClaimRequest, TaskCompleteRequest,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TraceRequest, TreeRequest,
+    UnmappedRequest, VerifiedTree, VerifyRequest, render_json, render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -108,8 +108,9 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// docs/features/flow-read.md (`get_flow`), twenty-eight since
 /// docs/features/card-store.md ([`CARD_TOOLS`]), twenty-nine since
 /// docs/features/card-trace.md (`get_trace`), thirty since
-/// docs/features/department-split.md (`split_card`).
-pub const TOOLS: [&str; 30] = [
+/// docs/features/department-split.md (`split_card`), thirty-two since
+/// docs/features/collision-pass.md (`get_collisions`, `mark_pairs`).
+pub const TOOLS: [&str; 32] = [
     "ask_question",
     "check_binding",
     "claim_task",
@@ -118,6 +119,7 @@ pub const TOOLS: [&str; 30] = [
     "edit_card",
     "find_symbols",
     "get_card",
+    "get_collisions",
     "get_context_bundle",
     "get_flow",
     "get_impact",
@@ -128,6 +130,7 @@ pub const TOOLS: [&str; 30] = [
     "get_trace",
     "get_tree",
     "list_cards",
+    "mark_pairs",
     "move_card",
     "propose_change",
     "refs",
@@ -1028,6 +1031,44 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             },
         )
         .map(|outcome| Outcome::Trace(Box::new(outcome))),
+        // docs/features/collision-pass.md "Acceptance criteria", CP8: `spec
+        // collisions [--kind K]... [--any-kind] [--limit N]`.
+        "get_collisions" => specengine_cli::collisions(
+            env,
+            globals,
+            &CollisionsRequest {
+                kinds: strings(&args["kinds"]),
+                any_kind: flag("any_kind"),
+                limit: number("limit"),
+            },
+        )
+        .map(|outcome| Outcome::Collisions(Box::new(outcome))),
+        // CP8: `spec collisions mark --input - --author-role R …`, the
+        // pairs as given (`proposal` absent read as `null`).
+        "mark_pairs" => specengine_cli::mark_pairs(
+            env,
+            globals,
+            &MarkPairsRequest {
+                input: serde_json::from_value::<PairJudgements>(json!({"pairs": args["pairs"]
+                    .as_array()
+                    .expect("pairs")
+                    .iter()
+                    .map(|pair| {
+                        let mut pair = pair.clone();
+                        if pair.get("proposal").is_none() {
+                            pair["proposal"] = Value::Null;
+                        }
+                        pair
+                    })
+                    .collect::<Vec<_>>()}))
+                .expect("the pairs"),
+                author_role: text("author_role"),
+                author_model: text("author_model"),
+                run: text("run"),
+                now: specengine_cli::utc_now(),
+            },
+        )
+        .map(|outcome| Outcome::PairsMarked(Box::new(outcome))),
         other => panic!("no CLI counterpart for tool {other}"),
     };
     expected(outcome)

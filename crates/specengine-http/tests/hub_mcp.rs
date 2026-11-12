@@ -143,13 +143,17 @@ fn hub_listed() -> Vec<&'static str> {
 }
 
 /// The twelve stdio tools a hub leaves out, sorted.
-const LEFT_OUT: [&str; 12] = [
+const LEFT_OUT: [&str; 14] = [
     "check_binding",
     "claim_task",
     "complete_task",
     "find_symbols",
+    // docs/features/collision-pass.md "Acceptance criteria", CP8 (D3): the
+    // pass keeps a local cache a hub does not serve.
+    "get_collisions",
     "get_impact",
     "get_task",
+    "mark_pairs",
     "refs",
     "report_drift",
     "report_run",
@@ -1553,11 +1557,12 @@ fn h9_nothing_on_a_hub_decides() {
     if !specengine_mcp::HUB_PROBES.is_empty() {
         stdio_names.retain(|name| !name.starts_with("probe_"));
     }
-    // department-split S8: thirty with `split_card`, on both servers.
-    assert_eq!(stdio_names.len(), 30, "{stdio_names:?}");
+    // department-split S8: thirty with `split_card`, on both servers;
+    // thirty-two on stdio since collision-pass CP8, the hub's 18 unchanged.
+    assert_eq!(stdio_names.len(), 32, "{stdio_names:?}");
     let mut union: Vec<&str> = HUB_TOOLS.iter().chain(LEFT_OUT.iter()).copied().collect();
     union.sort_unstable();
-    assert_eq!(stdio_names, union, "the 18 and the 12 are stdio's 30");
+    assert_eq!(stdio_names, union, "the 18 and the 14 are stdio's 32");
 }
 
 // ---------------------------------------------------------------------- H10

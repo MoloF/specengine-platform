@@ -1337,7 +1337,7 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     let lines = dump_lines(&bytes);
     assert!(
         lines[0].starts_with(
-            "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":3,\
+            "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":3,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{}",
@@ -1423,13 +1423,13 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
 \"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null}}";
     let mut v2_lines = v3_lines.clone();
     assert!(
-        v2_lines[0].starts_with("{\"format\":7,\"queue_schema\":13,"),
+        v2_lines[0].starts_with("{\"format\":7,\"queue_schema\":14,"),
         "{}",
         v2_lines[0]
     );
     v2_lines[0] = v2_lines[0]
         .replacen(
-            "\"format\":7,\"queue_schema\":13,",
+            "\"format\":7,\"queue_schema\":14,",
             "\"format\":1,\"queue_schema\":2,",
             1,
         )
@@ -1468,7 +1468,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
         .map(|column| format!("ALTER TABLE proposals DROP COLUMN {column};"))
         .collect();
     pair.sql(&format!(
-        "{} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = 2;",
+        "{} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; PRAGMA user_version = 2;",
         drops.join(" ")
     ));
     assert_eq!(pair.sql("PRAGMA user_version;").trim(), "2");
@@ -1485,7 +1485,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     pair.inbox(&pair.main, true).expect("inbox");
     // 12 since docs/features/task-mandate.md M5 (`proposals` unchanged); 13
     // since docs/features/plain-questions.md PQ8.
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "13");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "14");
     assert_eq!(
         pair.sql("SELECT name FROM pragma_table_info('proposals');")
             .lines()

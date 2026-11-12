@@ -1,13 +1,14 @@
 //! The read side: one deferred (read-only) transaction per call, so a call
 //! sees one snapshot even while another connection writes.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::types::Value;
 use rusqlite::{OptionalExtension, Statement, Transaction, TransactionBehavior, params_from_iter};
 use specengine_core::Paths;
-use specengine_core::check::{CheckFile, CheckInput};
-use specengine_model::{IdScheme, Node};
+use specengine_core::check::{CheckFile, CheckInput, DocClass};
+use specengine_core::collisions::{CollisionNode, CollisionRows, CollisionTarget};
+use specengine_model::{IdScheme, MENTIONS, Node};
 
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
@@ -54,6 +55,118 @@ impl SqliteIndex {
                 .db()
         })
     }
+}
+
+/// The universe of the collision pass, `f` the file and `n` the node: the
+/// worktree `?1`'s documents and ID sections with a kind, in files neither
+/// Tier 3 nor generated (the latter left out by the caller).
+const COLLISION_NODES: &str = "SELECT f.file_id, f.path, n.ord, n.id, n.kind, n.title, n.norm_hash
+     FROM files f JOIN nodes n ON n.file_id = f.file_id
+     WHERE f.wt = ?1 AND f.tier3 = 0 AND n.kind IS NOT NULL AND (n.ord = 0 OR n.id IS NOT NULL)
+     ORDER BY f.path, n.ord";
+
+/// The worktree `?1`'s generated files that are not Tier 3: their document's
+/// front-matter `class` is `?2`.
+const GENERATED_FILES: &str = "SELECT f.file_id FROM files f JOIN nodes d ON d.file_id = f.file_id
+     WHERE f.wt = ?1 AND f.tier3 = 0 AND d.ord = 0
+       AND json_extract(d.node, '$.fields.class') = ?2";
+
+/// The resolved ends of the edges a node of a live file holds, the holder
+/// their source, any type but `?2`, each with its end's ID when it has one.
+const COLLISION_EDGES: &str = "SELECT f.path, e.holder, e.end_path, e.end_ord, tn.id
+     FROM files f CROSS JOIN edges e ON e.file_id = f.file_id
+     LEFT JOIN files tf ON tf.wt = f.wt AND tf.path = e.end_path
+     LEFT JOIN nodes tn ON tn.file_id = tf.file_id AND tn.ord = e.end_ord
+     WHERE f.wt = ?1 AND f.tier3 = 0 AND e.names_source = 0 AND e.type <> ?2
+       AND e.end_path IS NOT NULL AND e.end_ord IS NOT NULL
+     ORDER BY f.path, e.holder, e.end_path, e.end_ord";
+
+/// The resolved `parent:` ends of a live file's document, each with its
+/// end's ID when it has one.
+const COLLISION_PARENTS: &str = "SELECT f.path, p.end_path, p.end_ord, tn.id
+     FROM files f CROSS JOIN edge_parents p ON p.file_id = f.file_id
+     LEFT JOIN files tf ON tf.wt = f.wt AND tf.path = p.end_path
+     LEFT JOIN nodes tn ON tn.file_id = tf.file_id AND tn.ord = p.end_ord
+     WHERE f.wt = ?1 AND f.tier3 = 0 AND p.end_path IS NOT NULL AND p.end_ord IS NOT NULL
+     ORDER BY f.path, p.end_path, p.end_ord";
+
+/// [`crate::SpecIndex::collision_input`]: in live files (neither Tier 3 nor
+/// generated: `docs/canon/spec-cli-graph.md` "Live sources").
+pub(crate) fn collision_input(index: &SqliteIndex) -> Result<CollisionRows, StoreError> {
+    with_worktree(index, |tx, wt| {
+        let generated: BTreeSet<i64> = {
+            let mut statement = tx.prepare(GENERATED_FILES).db()?;
+            statement
+                .query_map((wt, DocClass::Generated.as_str()), |row| row.get(0))
+                .db()?
+                .collect::<Result<_, _>>()
+                .db()?
+        };
+        let mut rows = CollisionRows::default();
+        let mut statement = tx.prepare(COLLISION_NODES).db()?;
+        let mut found = statement.query([wt]).db()?;
+        while let Some(row) = found.next().db()? {
+            if generated.contains(&row.get::<_, i64>(0).db()?) {
+                continue;
+            }
+            let node = CollisionNode {
+                path: row.get(1).db()?,
+                ord: ord_of(row.get(2).db()?),
+                id: row.get(3).db()?,
+                kind: row.get(4).db()?,
+                title: row.get(5).db()?,
+                norm_hash: row.get(6).db()?,
+            };
+            rows.skipped += usize::from(node.norm_hash.is_none());
+            rows.nodes.push(node);
+        }
+        drop(found);
+        let held: BTreeSet<(&str, usize)> = rows
+            .nodes
+            .iter()
+            .map(|node| (node.path.as_str(), node.ord))
+            .collect();
+        let mut targets = Vec::new();
+        let mut statement = tx.prepare(COLLISION_EDGES).db()?;
+        let mut found = statement.query((wt, MENTIONS)).db()?;
+        while let Some(row) = found.next().db()? {
+            let holder_path: String = row.get(0).db()?;
+            let holder_ord = ord_of(row.get(1).db()?);
+            if !held.contains(&(holder_path.as_str(), holder_ord)) {
+                continue;
+            }
+            let end_path: String = row.get(2).db()?;
+            let end_id: Option<String> = row.get(4).db()?;
+            targets.push(CollisionTarget {
+                holder_path,
+                holder_ord,
+                end_name: end_id.unwrap_or_else(|| end_path.clone()),
+                end_path,
+                end_ord: ord_of(row.get(3).db()?),
+            });
+        }
+        drop(found);
+        let mut statement = tx.prepare(COLLISION_PARENTS).db()?;
+        let mut found = statement.query([wt]).db()?;
+        while let Some(row) = found.next().db()? {
+            let holder_path: String = row.get(0).db()?;
+            if !held.contains(&(holder_path.as_str(), 0)) {
+                continue;
+            }
+            let end_path: String = row.get(1).db()?;
+            let end_id: Option<String> = row.get(3).db()?;
+            targets.push(CollisionTarget {
+                holder_path,
+                holder_ord: 0,
+                end_name: end_id.unwrap_or_else(|| end_path.clone()),
+                end_path,
+                end_ord: ord_of(row.get(2).db()?),
+            });
+        }
+        drop(found);
+        rows.targets = targets;
+        Ok(rows)
+    })
 }
 
 impl SqliteIndex {
@@ -602,4 +715,156 @@ impl FileRow {
 
 fn ord_of(ord: i64) -> usize {
     usize::try_from(ord).unwrap_or(usize::MAX)
+}
+
+#[cfg(test)]
+mod collision_input_tests {
+    //! docs/features/collision-pass.md "Acceptance criteria" CP1, CP2, the
+    //! store's unit: [`collision_input`] over a small corpus this module
+    //! writes to a scratch directory (neutral words, no project's prefix or
+    //! kind). The universe is the live documents and ID sections with a
+    //! kind, by `(path, ord)`: an ID-less section, a kindless document, a
+    //! Tier 3 and a generated file are not in it; a node without a
+    //! `norm_hash` is, counted in `skipped`. The targets are a node's
+    //! resolved edges of any type but `mentions` and its document's
+    //! `parent:`, each named by its end's ID, else its path. M: `mentions`
+    //! read; the Tier 3 or generated filter dropped.
+
+    use std::path::PathBuf;
+
+    use specengine_core::{IdSchemeToml, Paths};
+    use specengine_model::IdScheme;
+
+    use super::collision_input;
+    use crate::IndexWriter;
+    use crate::index::SqliteIndex;
+    use crate::source::WorkingTree;
+
+    /// One name-shaped prefix of a neutral kind.
+    const CONFIG: &str = "[project]\nname = \"knots\"\nslug = \"knots\"\n\n[ids]\n\
+                          KNT = { kind = \"knot\", shape = \"name\" }\n";
+
+    /// A scratch directory, removed on drop.
+    struct Scratch(PathBuf);
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// The corpus under `docs/spec/`, indexed.
+    fn indexed(name: &str) -> (Scratch, SqliteIndex) {
+        let dir = std::env::temp_dir().join(format!(
+            "specengine-store-collisions-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = dir.join("wt");
+        let spec = root.join("docs/spec");
+        std::fs::create_dir_all(&spec).expect("scratch");
+        std::fs::write(root.join("specengine.toml"), CONFIG).expect("config");
+        let files = [
+            (
+                "base.md",
+                "---\nid: KNT-BASE\n---\n\n# Base\n\nThe base knot.\n",
+            ),
+            (
+                "bend.md",
+                "---\nid: KNT-BEND\nlinks:\n  uses: [KNT-BASE]\n---\n\n# Bend\n\n\
+                 Tied after KNT-HITCH.\n",
+            ),
+            (
+                "child.md",
+                "---\nkind: knot\nparent: KNT-BASE\n---\n\n# Child\n\nA child knot.\n",
+            ),
+            (
+                "hitch.md",
+                "---\nid: KNT-HITCH\n---\n\n# Hitch\n\nA hitch.\n\n## Round turn {#KNT-ROUND}\n\n\
+                 One turn.\n\n## Notes\n\nNo ID here.\n",
+            ),
+            (
+                "loose.md",
+                "---\ntitle: Loose\n---\n\n# Loose\n\nNo kind.\n",
+            ),
+            (
+                "old.md",
+                "---\nid: KNT-OLD\nclass: decision\nstatus: superseded\nlinks:\n  uses: \
+                 [KNT-BASE]\n---\n\n# Old\n\nGone.\n",
+            ),
+            (
+                "made.md",
+                "---\nid: KNT-MADE\nclass: generated\nlinks:\n  uses: [KNT-BASE]\n---\n\n\
+                 # Made\n\nGenerated.\n",
+            ),
+            (
+                "torn.md",
+                "---\nid: KNT-TORN\nrev: \"3\"\n---\n\n# Torn\n\nA torn knot.\n",
+            ),
+        ];
+        for (file, text) in files {
+            std::fs::write(spec.join(file), text).expect("a document");
+        }
+        let root = root.canonicalize().expect("canonical");
+        let scheme = IdScheme::from_toml(CONFIG).expect("the scheme");
+        let paths = Paths::from_toml(CONFIG).expect("the paths");
+        let mut index = SqliteIndex::open(dir.join("index.db"), "knots", &root).expect("open");
+        index
+            .update(&WorkingTree::new(&root, &paths).expect("a tree"), &scheme)
+            .expect("update");
+        (Scratch(dir), index)
+    }
+
+    #[test]
+    fn the_universe_and_its_targets() {
+        let (_scratch, index) = indexed("input");
+        let rows = collision_input(&index).expect("the input");
+        let nodes: Vec<(&str, usize, Option<&str>, &str, bool)> = rows
+            .nodes
+            .iter()
+            .map(|node| {
+                (
+                    node.path.as_str(),
+                    node.ord,
+                    node.id.as_deref(),
+                    node.kind.as_str(),
+                    node.norm_hash.is_some(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            nodes,
+            [
+                ("docs/spec/base.md", 0, Some("KNT-BASE"), "knot", true),
+                ("docs/spec/bend.md", 0, Some("KNT-BEND"), "knot", true),
+                ("docs/spec/child.md", 0, None, "knot", true),
+                ("docs/spec/hitch.md", 0, Some("KNT-HITCH"), "knot", true),
+                ("docs/spec/hitch.md", 1, Some("KNT-ROUND"), "knot", true),
+                ("docs/spec/torn.md", 0, Some("KNT-TORN"), "knot", false),
+            ]
+        );
+        assert_eq!(rows.skipped, 1);
+        assert_eq!(rows.nodes[1].title.as_deref(), Some("Bend"));
+        let targets: Vec<(&str, usize, &str)> = rows
+            .targets
+            .iter()
+            .map(|target| {
+                (
+                    target.holder_path.as_str(),
+                    target.holder_ord,
+                    target.end_name.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            targets,
+            [
+                ("docs/spec/bend.md", 0, "KNT-BASE"),
+                ("docs/spec/child.md", 0, "KNT-BASE"),
+            ],
+            "uses and parent; no mention, no Tier 3 or generated holder"
+        );
+        assert_eq!(rows.targets[0].end_path, "docs/spec/base.md");
+        assert_eq!(rows.targets[0].end_ord, 0);
+    }
 }

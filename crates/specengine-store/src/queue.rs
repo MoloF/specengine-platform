@@ -124,10 +124,16 @@
 //!   write's lock; a parent reads its subtasks' items in one statement
 //!   ([`SqliteQueue::subtask_items`]). No move, accept, stage, decision or
 //!   gate reads it.
+//! - **The collision ledger** (task spec `collision-pass` CP6): step 14
+//!   adds `collision_marks`, one row per pair of nodes an agent judged, a
+//!   local cache outside the dump ([`SqliteQueue::collision_marks`],
+//!   [`SqliteQueue::mark_collisions`]). A mark logs no event; nothing but
+//!   the pass reads it.
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
 mod cards;
+mod collisions;
 // docs/features/department-overview.md DO11: the statement-count seam.
 #[cfg(test)]
 mod card_counts_seam;
@@ -175,6 +181,7 @@ pub use cards::{
     EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, NewCard, NewSplit,
     NewSplitChild, SplitCards, SplitParent, UnreadableCard,
 };
+pub use collisions::{CollisionMark, CollisionMarks, MarkResult, NewCollisionMark};
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
 pub use state::{
@@ -191,7 +198,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 13;
+pub const QUEUE_SCHEMA_VERSION: i64 = 14;
 
 /// The first queue schema whose `proposals` holds `card_id` and `why`
 /// (step 10 → 11).
@@ -332,6 +339,20 @@ ALTER TABLE cards ADD COLUMN mandate TEXT;
 const STEP_13: &str = "
 ALTER TABLE proposals ADD COLUMN gist TEXT;
 ALTER TABLE proposals ADD COLUMN matters TEXT;
+";
+
+/// Step 13 → 14: the collision ledger, one row per judged pair of the
+/// project, `a` before `b` byte-wise (task spec `collision-pass` CP6); no
+/// proposal, card or event column changes, and no dump reads it.
+const STEP_14: &str = "
+CREATE TABLE collision_marks (
+  project TEXT NOT NULL,
+  a TEXT NOT NULL, a_norm TEXT NOT NULL,
+  b TEXT NOT NULL, b_norm TEXT NOT NULL,
+  verdict TEXT NOT NULL, proposal TEXT,
+  author TEXT NOT NULL, at TEXT NOT NULL,
+  PRIMARY KEY (project, a, b)
+) STRICT;
 ";
 
 /// The record columns, in table order.
@@ -2272,12 +2293,13 @@ enum Hold<'a> {
 /// `why` (`docs/canon/card-questions.md` "The rule"), 11 → 12 a card's
 /// `mandate` (`docs/canon/card-mandate.md` "The rule"), 12 → 13 a
 /// question's `gist` and `matters` (`docs/features/plain-questions.md`
-/// "Acceptance criteria", PQ8; 0 → 13
-/// runs all thirteen, every due step in this one transaction; a schema-5
-/// DB opens as 13, every `interpretation`, `drift`, `drift_hash`,
-/// `card_id`, `why`, `gist`, `matters` `NULL`, no card; a schema-9 card
-/// reads no task, a schema-11 one no mandate); [`QUEUE_SCHEMA_VERSION`] is
-/// left alone; a higher version is refused.
+/// "Acceptance criteria", PQ8), 13 → 14 the collision ledger (task spec
+/// `collision-pass` CP6; 0 → 14
+/// runs all fourteen, every due step in this one transaction; a schema-5
+/// DB opens as 14, every `interpretation`, `drift`, `drift_hash`,
+/// `card_id`, `why`, `gist`, `matters` `NULL`, no card, an empty ledger; a
+/// schema-9 card reads no task, a schema-11 one no mandate);
+/// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
     if version > QUEUE_SCHEMA_VERSION {
@@ -2346,6 +2368,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 12 {
         tx.execute_batch(STEP_13).db()?;
         version = 13;
+    }
+    if version == 13 {
+        tx.execute_batch(STEP_14).db()?;
+        version = 14;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;

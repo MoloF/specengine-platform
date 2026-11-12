@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow` (`spec-flow.md`), `get_trace` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"; `list_cards` `marks?`), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. A hub serves 17 of these at `/mcp/<slug>` (`hub-mcp.md`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow` (`spec-flow.md`), `get_trace` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"; `list_cards` `marks?`), the owner's form (`review-form.md`), the collision tools (`collision-pass.md`) and the resources, 32 tools; feature `probes` (never default) adds `probe_output`, `probe_sleep`. A hub serves 18 of these at `/mcp/<slug>` (`hub-mcp.md`).
 
 ## Tools
 
@@ -29,11 +29,11 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings", "history"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts there and defers tools behind tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, tasks, cards, REF, the cut, resources, rules (`server.rs`), 2 048 B in every build, 1 940 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): none left: `search`'s `limit?`, `archive?` (0.37.0), `get_trace`'s `stage?`, `summary?` and `get_flow`'s `stage?`, `in_flow?` stay in their schemas, `FLOW_DESCRIPTION` at 2 048 with no room for `[--in-flow]`. Each description <= 2 048 (`get_node` 1 909), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts there, deferring tools to tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, the collision tools, tasks, cards, REF, the cut, rules (`server.rs`; no resources line), 2 039 B, 1 931 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): `search`'s `limit?`, `archive?` (0.37.0), `get_trace`'s `stage?`, `summary?` and `get_flow`'s `stage?`, `in_flow?` stay in their schemas, `FLOW_DESCRIPTION` at 2 048 with no room for `[--in-flow]`. Each description <= 2 048 (`get_node` 1 909), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
-Text only, for `@`-mentions; one inserts content with no tool call, so no hook fires (read-only: the gate is moot).
+Text only, for `@`-mentions; one inserts content with no tool call, so no hook fires (read-only: no gate needed).
 
 - `resources/list`: `spec://<slug>/tree` (`name` `tree`, `text/plain`, ≙ `get_tree {}`) first on page 1, then every live document (CLI `documents`: neither `class: generated` nor Tier 3; an unparsed file is live, listed by path) by path in byte order: `{"uri": "spec://lantern-keep/node/docs%2Fspec%2Fgame.md", "name": "DOM-GAME", "title": "Lantern Keep", "mimeType": "text/markdown"}` (`name` the ID, else the path; no title -> omitted; all but RFC 3986 unreserved bytes percent-encoded). 200 entries per page, the tree among page 1's; `nextCursor` = the page's last path, the next page starts after it.
 - Template `{"uriTemplate": "spec://{project}/node/{id}", "name": "node", "mimeType": "text/markdown"}` ≙ `get_node {id}`: `{id}` = everything after `node/`, percent-decoded once as UTF-8 (either hex case, a raw `#` kept), any REF.
@@ -44,7 +44,7 @@ Text only, for `@`-mentions; one inserts content with no tool call, so no hook f
 
 The server starts in both eras with or without a project. **No project** = CLI `locate` fails: an unusable current directory or `--root`, no `specengine.toml` by the walk or in `--root`. Then each tool returns the CLI's exit-2 line (naming `spec init`, or the `--root`), `resources/list` `[]`, a read -32603; an unusable `HOME` likewise (`[]`). Any failure once a project is found -> `resources/list` -32603 with the CLI's line: the config unreadable, not UTF-8 or invalid, no slug, the database busy, corrupt or not writable. The CLI's order holds, config -> slug -> `HOME`: a broken config or a missing slug with `HOME` unset is -32603. By the CLI's split, `--root nope` -> `[]`, `--config nope.toml` -> -32603 (`locate` reads no `--config`).
 
-Each request finds the project anew from the process's current directory and the globals (`Env::from_process`), runs on the blocking pool (`spawn_blocking`) and keeps nothing (outcome, project, config, DB handle): an edit, a deleted DB, a changed `bundle_node` apply on the next call. A cancelled call runs to its end (its only write: the index), its answer dropped; others are answered meanwhile. Writes: where the CLI's reads write (the queue tools: the queue), the data directory (`docs/canon/architecture.md#storage`); nothing under the root; no tool exposes `init`, `index`, `check`, `export index` (08 AC-3, the single door). stdout: JSON-RPC only (README "Binary").
+Each request finds the project anew from the process's current directory and the globals (`Env::from_process`), runs on the blocking pool (`spawn_blocking`) and keeps nothing: an edit, a deleted DB, a changed `bundle_node` apply on the next call. A cancelled call runs to its end (its only write: the index), its answer dropped; others are answered meanwhile. Writes: where the CLI's reads write (the queue tools: the queue), the data directory (`docs/canon/architecture.md#storage`); nothing under the root; no tool exposes `init`, `index`, `check`, `export index` (08 AC-3, the single door). stdout: JSON-RPC only (README "Binary").
 
 ## Size
 
@@ -56,7 +56,7 @@ AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8-28 ms, warm 2-6 ms; 83 docs 
 
 ## Owner's check
 
-AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Recorded 2026-10-03**: Claude Code 2.1.288, `claude --mcp-config fixtures/mcp/mcp.json --strict-mcp-config` from the repository root, `MAX_MCP_OUTPUT_TOKENS` unset.
+AC-16, by hand; re-run on a Claude Code upgrade, noting the version. **Recorded 2026-10-03**: Claude Code 2.1.288, `claude --mcp-config fixtures/mcp/mcp.json --strict-mcp-config` from the repository root, `MAX_MCP_OUTPUT_TOKENS` unset.
 
 - `${…}` expands: the DB landed in the scratch `HOME`, not the owner's data directory. `/mcp`: 7 tools, the `probes` set.
 - cwd = the session's: `get_tree {}` used this repository's.
@@ -74,7 +74,7 @@ AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Rec
 ## Open
 
 - AC-16's "not verified" items (Owner's check); 500 000 stays the working answer (A12).
-- Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` -> `null`), untriggered so far, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
+- Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` -> `null`), untriggered, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
 - `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a CLI/core fix.
 - A panic outside `spawn_blocking` gets no response.
 - The Size residue. `resources/list` over a busy, corrupt or read-only database is untested.

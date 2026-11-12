@@ -59,27 +59,29 @@ use specengine_store::{WorkingTree, check_input};
 
 const SHARD: &str = "docs/index-archive.md";
 const ARCHIVE_HEADING: &str = "## Archive \u{2014} Tier 3, by id only";
-const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`\n- [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`\n- [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`\n- [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n- [docs/index-roadmap.md](index-roadmap.md) `docs/roadmap/*.md`\n";
+const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`\n- [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`\n- [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`\n- [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`\n- [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n- [docs/index-roadmap.md](index-roadmap.md) `docs/roadmap/*.md`\n";
 
 /// The root config's index entry, verbatim: the spec's shipping entry
-/// (the archive shard) with the eight live shards after it, the `spec-*`
+/// (the archive shard) with the nine live shards after it (the `code-*`
+/// one since docs/features/collision-pass.md), the `spec-*`
 /// canon's first (the first matching claim wins), the plan items' last;
 /// since docs/features/roadmap-view.md SW-5, the roadmap view
 /// `docs/generated/roadmap.md` in `writes` and `roadmap`.
 const SHIPPING: &str = "\
 [[generators]]
 command = \"cargo run -q -p specengine-cli -- export index\"
-writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon-spec.md\", \"docs/index-canon-proposal.md\", \"docs/index-canon-hub.md\", \"docs/index-canon-card.md\", \"docs/index-canon.md\",
+writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon-spec.md\", \"docs/index-canon-proposal.md\", \"docs/index-canon-hub.md\", \"docs/index-canon-card.md\", \"docs/index-canon-code.md\", \"docs/index-canon.md\",
            \"docs/index-decisions.md\", \"docs/index-crates.md\", \"docs/index-roadmap.md\", \"docs/generated/roadmap.md\"]
 index   = true
 roadmap = \"docs/generated/roadmap.md\"
 gate    = \"cargo run -q -p specengine-cli -- check\"
-# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons, the `proposal-*` queue canons, the `hub*` hub canons and the `card*` card canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md \"Generated\".
+# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons, the `proposal-*` queue canons, the `hub*` hub canons, the `card*` card canons and the `code-*` code-layer canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md \"Generated\".
 shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
            { path = \"docs/index-canon-spec.md\", claims = [\"docs/canon/spec-*.md\"] },
            { path = \"docs/index-canon-proposal.md\", claims = [\"docs/canon/proposal-*.md\"] },
            { path = \"docs/index-canon-hub.md\", claims = [\"docs/canon/hub*.md\"] },
            { path = \"docs/index-canon-card.md\", claims = [\"docs/canon/card*.md\"] },
+           { path = \"docs/index-canon-code.md\", claims = [\"docs/canon/code-*.md\"] },
            { path = \"docs/index-canon.md\", claims = [\"docs/canon/*.md\"] },
            { path = \"docs/index-decisions.md\", claims = [\"docs/decisions/*.md\"] },
            { path = \"docs/index-crates.md\", claims = [\"crates/*/README.md\"] },

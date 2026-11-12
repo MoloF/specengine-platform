@@ -41,6 +41,12 @@
 //!   the table. M11: the generator writing no `follows` (Top answers no
 //!   node). M12: `stage` chosen per directory (one directory per stage).
 //!
+//! - docs/features/collision-pass.md (RM-0060) "Acceptance criteria" CP10:
+//!   every measured size gains `reads.collisions`, `growth.collisions` and
+//!   `collision_planted {planted, found}`; at 1k 25 of 25 planted title
+//!   twins are found, [`assert_collision_keys`]. M: a key missing from the
+//!   table.
+//!
 //! No test asserts a time (S9) but AC-13's bars, in the release baseline
 //! alone. Nothing here names a pilot.
 
@@ -261,6 +267,13 @@ const SIZE_LEAVES: &[&str] = &[
     "similar_recall/variants/dropped/found",
     "similar_recall/variants/keyword/planted",
     "similar_recall/variants/keyword/found",
+    // docs/features/collision-pass.md "Acceptance criteria" CP10: the
+    // collision read and its growth, and the planted title twins.
+    "reads/collisions/median_us",
+    "reads/collisions/max_us",
+    "growth/collisions",
+    "collision_planted/planted",
+    "collision_planted/found",
     "nondeterministic",
 ];
 
@@ -2170,7 +2183,50 @@ fn se5_se7_se8_one_debug_run_at_1k() {
         }),
         criterion("FS-7", || assert_flow_reads_hold_nodes(&scratch, &run)),
         criterion("IS12", || assert_similar_recall_keys(&run)),
+        criterion("CP10", || assert_collision_keys(&run)),
     ]);
+}
+
+/// docs/features/collision-pass.md "Acceptance criteria" CP10, the run's
+/// half: n1000 holds `reads.collisions` (`median_us`, `max_us`),
+/// `growth.collisions` (`null` at the first size) and `collision_planted`
+/// with 25 planted and 25 found; `size.json` the same; `calls` the read.
+/// No time is asserted (D10: measured, never asserted).
+fn assert_collision_keys(run: &ScaleRun) {
+    let entry = &run.envelope()["result"]["sizes"][0];
+    for key in ["median_us", "max_us"] {
+        assert!(
+            entry["reads"]["collisions"][key].is_u64(),
+            "reads.collisions.{key}: {}",
+            entry["reads"]
+        );
+    }
+    assert!(
+        entry["growth"]
+            .as_object()
+            .is_some_and(|growth| growth.contains_key("collisions")),
+        "growth.collisions: {}",
+        entry["growth"]
+    );
+    assert_eq!(entry["growth"]["collisions"], Value::Null, "the first size");
+    let planted = &entry["collision_planted"];
+    assert_eq!(
+        planted,
+        &serde_json::json!({"planted": 25, "found": 25}),
+        "25 of 25 found at 1k"
+    );
+    let size = run.size_json(1_000);
+    assert_eq!(
+        size["collision_planted"], *planted,
+        "size.json holds the same"
+    );
+    assert!(
+        size["calls"]
+            .as_object()
+            .is_some_and(|calls| calls.keys().any(|read| read.contains("collisions"))),
+        "size.json `calls` times the read: {}",
+        size["calls"]
+    );
 }
 
 /// docs/features/intake-similar.md "Acceptance criteria" IS12, the run's

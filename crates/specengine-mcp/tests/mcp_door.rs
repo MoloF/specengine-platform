@@ -741,6 +741,46 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"id": "MEC-STAMINA", "bogus": true}),
             ],
         ),
+        // docs/features/collision-pass.md "Acceptance criteria", CP8: the
+        // read, a kind, across kinds and a limit out of range (the CLI's
+        // exit-2 line); the mark of one pair (its norms stale: a note; the
+        // ledger is the queue DB's, outside the root) and a pair of one node
+        // (exit 1); a wrong type, an unknown verdict or key and no author are
+        // bad arguments.
+        "get_collisions" => (
+            vec![
+                json!({}),
+                json!({"kinds": ["mechanic"]}),
+                json!({"any_kind": true, "limit": 1}),
+                json!({"limit": 0}),
+            ],
+            vec![
+                json!({"limit": "1"}),
+                json!({"kinds": "mechanic"}),
+                json!({"bogus": true}),
+            ],
+        ),
+        "mark_pairs" => {
+            let pair = |a: &str, b: &str, verdict: &str| {
+                json!({"a": a, "a_norm": format!("b3:{}", "0".repeat(64)), "b": b,
+                    "b_norm": format!("b3:{}", "1".repeat(64)), "verdict": verdict})
+            };
+            (
+                vec![
+                    json!({"pairs": [pair("MEC-SPRINT", "MEC-STAMINA", "distinct")],
+                        "author_role": "writer"}),
+                    json!({"pairs": [pair("MEC-SPRINT", "MEC-SPRINT", "distinct")],
+                        "author_role": "writer"}),
+                ],
+                vec![
+                    json!({"pairs": [pair("MEC-SPRINT", "MEC-STAMINA", "maybe")],
+                        "author_role": "writer"}),
+                    json!({"pairs": "MEC-SPRINT", "author_role": "writer"}),
+                    json!({"pairs": [pair("MEC-SPRINT", "MEC-STAMINA", "distinct")]}),
+                    json!({"pairs": [], "author_role": "writer", "bogus": true}),
+                ],
+            )
+        }
         _ => return None,
     };
     Some(calls)

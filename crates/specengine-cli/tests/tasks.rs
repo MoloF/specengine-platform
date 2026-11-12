@@ -999,7 +999,7 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":5,\"runs\":2,\"cards\":0,\"events\":{events}}}"
         )
     );
@@ -1130,7 +1130,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":1}"
     );
     // Format 1, schema 3: the header's five keys, rows without `task_id`,
@@ -1165,7 +1165,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     // Refused headers and rows: line 1 (the header) or 2 (the row).
     let two = |line: &str| {
         line.replacen(
-            "\"format\":7,\"queue_schema\":13,",
+            "\"format\":7,\"queue_schema\":14,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )

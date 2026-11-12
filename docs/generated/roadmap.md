@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 39 open, 71 done; current mvp; to mvp 2-3 days; total 13-21 days, 5 unestimated
+roadmap: 38 open, 72 done; current mvp; to mvp 2-3 days; total 13-21 days, 4 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,12 +29,11 @@ roadmap: 39 open, 71 done; current mvp; to mvp 2-3 days; total 13-21 days, 5 une
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 4 open, 19 done | 0 days, 4 unestimated
+## release v5 | 3 open, 20 done | 0 days, 3 unestimated
 
-1. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | -
-2. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | in-progress | should | - | waits on RM-0060
-3. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | in-progress | should | -
-4. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+1. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | in-progress | should | -
+2. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | in-progress | should | -
+3. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
 
 ## pool | 28 open, 1 done | 7-12 days, 24 unestimated
 

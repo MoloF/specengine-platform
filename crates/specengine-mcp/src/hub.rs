@@ -25,7 +25,9 @@
 //! tool and a Confirm in place of the owner's terminal; the raising and
 //! card-writing eight, with no `task_id:` line, a Confirm on the hub or a
 //! terminal in place of the owner's terminal commands, and the login in
-//! place of `agent`. The twelve left out need code, a terminal or a task.
+//! place of `agent`. The twelve left out need code, a terminal or a task;
+//! the collision pass's two (task spec `collision-pass` CP8) keep a local
+//! cache a hub does not serve.
 //! The router
 //! is built once per process ([`HUB_ROUTER`], a `static`), and every mount's
 //! servers clone it.
@@ -251,7 +253,7 @@ pub const HUB_PROBES: [&str; 0] = [];
 static HUB_ROUTER: OnceLock<ToolRouter<SpecEngineServer>> = OnceLock::new();
 
 /// The stdio tools a hub leaves out, and the argument no hub text names.
-const LEFT_OUT: [&str; 13] = [
+const LEFT_OUT: [&str; 15] = [
     "get_impact",
     "find_symbols",
     "refs",
@@ -264,6 +266,8 @@ const LEFT_OUT: [&str; 13] = [
     "submit_plan",
     "report_run",
     "complete_task",
+    "get_collisions",
+    "mark_pairs",
     "task_id",
 ];
 

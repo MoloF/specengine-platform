@@ -107,6 +107,15 @@ fn valid_args(tool: &str) -> Value {
             "reviewer": "ana"}),
         // docs/features/card-trace.md: a whole read.
         "get_trace" => json!({}),
+        // docs/features/collision-pass.md "Acceptance criteria", CP8: the
+        // read with no flag; a mark of one pair (no project: its `spec
+        // init` line, no document).
+        "get_collisions" => json!({}),
+        "mark_pairs" => {
+            json!({"pairs": [{"a": "MEC-SPRINT", "a_norm": format!("b3:{}", "0".repeat(64)),
+            "b": "MEC-STAMINA", "b_norm": format!("b3:{}", "1".repeat(64)),
+            "verdict": "distinct"}], "author_role": "writer"})
+        }
         other => panic!("no arguments for {other}"),
     }
 }

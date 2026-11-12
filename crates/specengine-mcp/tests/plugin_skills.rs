@@ -90,7 +90,7 @@ use serde_json::Value;
 const PRECEDENCE: &str = "The project's CLAUDE.md and its roles take precedence over this skill.";
 
 /// AC-11's list: what each skill backticks.
-const NAMES: [(&str, &[&str]); 7] = [
+const NAMES: [(&str, &[&str]); 8] = [
     // docs/features/code-tools.md "Plugin": the three code tools join.
     (
         "read-spec",
@@ -186,6 +186,32 @@ const NAMES: [(&str, &[&str]); 7] = [
     ),
     // docs/features/flow-authoring.md "The skill".
     ("write-flow", &["propose_change", "dry_run", "get_flow"]),
+    // docs/features/collision-pass.md "Acceptance criteria", CP9: the pass,
+    // the report and the mark, with the fields each step names.
+    (
+        "check-collisions",
+        &[
+            "get_collisions",
+            "kinds",
+            "get_context_bundle",
+            "report_discrepancy",
+            "node_ids",
+            "evidence",
+            "file",
+            "lines",
+            "documented",
+            "observed",
+            "options",
+            "recommendation",
+            "working_answer",
+            "mark_pairs",
+            "proposal",
+            "a_norm",
+            "b_norm",
+            "marked",
+            "left",
+        ],
+    ),
 ];
 
 /// The words no file under `plugin/` holds besides P2-3's (AC-08; the root
@@ -218,6 +244,8 @@ fn committed() -> Skills {
         [
             "analyze",
             "ask-owner",
+            // docs/features/collision-pass.md "Acceptance criteria", CP9.
+            "check-collisions",
             "feature",
             "implement",
             "propose-spec-change",
@@ -579,6 +607,9 @@ fn ac07_problems(skills: &Skills, session: &mut Session) -> (Vec<String>, Vec<(S
         ("ask-owner", "ask_question"),
         ("propose-spec-change", "propose_change"),
         ("write-flow", "propose_change"),
+        // docs/features/collision-pass.md "Acceptance criteria", CP9.
+        ("check-collisions", "report_discrepancy"),
+        ("check-collisions", "mark_pairs"),
     ] {
         if !called
             .iter()
@@ -599,8 +630,15 @@ fn ac07_the_examples_are_arguments_the_server_takes() {
     assert_eq!(problems, Vec::<String>::new());
     // docs/features/flow-authoring.md "Data": `write-flow`'s eight `create`
     // blocks after the two examples.
+    // docs/features/collision-pass.md CP9: `check-collisions`' two, the
+    // report then the mark.
     let mut wanted = vec![
         ("ask-owner".to_owned(), "ask_question".to_owned()),
+        (
+            "check-collisions".to_owned(),
+            "report_discrepancy".to_owned(),
+        ),
+        ("check-collisions".to_owned(), "mark_pairs".to_owned()),
         (
             "propose-spec-change".to_owned(),
             "propose_change".to_owned(),
@@ -714,7 +752,8 @@ fn plugin_files() -> BTreeMap<String, String> {
     }
     let mut out = BTreeMap::new();
     walk(&plugin_dir(), &plugin_dir(), &mut out);
-    assert_eq!(out.len(), 17, "{:?}", out.keys());
+    // Eighteen since docs/features/collision-pass.md CP9 (`check-collisions`).
+    assert_eq!(out.len(), 18, "{:?}", out.keys());
     for agent in [
         "analyst",
         "implementer",
@@ -1247,8 +1286,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // 0.42.0 since intake-similar (RM-0059, `propose_change`'s
     // `distinct_from`, `keywords` and `similar`); 0.43.0 since plain-questions
     // (RM-0088, `ask_question`'s `gist`, `matters`, `options`,
-    // `recommendation`).
-    assert_eq!(manifest["version"], "0.43.0");
+    // `recommendation`); 0.44.0 since collision-pass (RM-0060, two tools and
+    // `check-collisions`).
+    assert_eq!(manifest["version"], "0.44.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1363,8 +1403,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // 0.42.0 since intake-similar (RM-0059, `propose_change`'s
     // `distinct_from`, `keywords` and `similar`); 0.43.0 since plain-questions
     // (RM-0088, `ask_question`'s `gist`, `matters`, `options`,
-    // `recommendation`).
-    assert_eq!(manifest["version"], "0.43.0");
+    // `recommendation`); 0.44.0 since collision-pass (RM-0060, two tools and
+    // `check-collisions`).
+    assert_eq!(manifest["version"], "0.44.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1469,7 +1510,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.43.0",
+        manifest["version"], "0.44.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1485,7 +1526,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          card-context (`get_card`'s `context`): 0.39.0; node-history (`get_node`'s \
          `history`): 0.40.0; upstream-signal (`upstream`): 0.41.0; intake-similar (`distinct_from`, `keywords`, `similar`): 0.42.0; \
          plain-questions (`ask_question`'s `gist`, `matters`, `options`, `recommendation`): \
-         0.43.0"
+         0.43.0; collision-pass (`get_collisions`, `mark_pairs`, `check-collisions`): 0.44.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1502,18 +1543,34 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
 
 // ------------------------------------------------- code-tools RD-9
 
-/// `read-spec`'s description as drift-queue (0.8.0) left it:
+/// `read-spec`'s description as drift-queue (0.8.0) left it, to 0.43.0:
 /// docs/features/code-tools.md "Plugin" changes bodies only.
+const READ_SPEC_DESCRIPTION_0_43_0: &str = "Read the project's spec through the SpecEngine tools \
+                                            before reading or changing behaviour the spec \
+                                            describes, or when asked what the spec says. A \
+                                            context bundle first (a search first when no ID is \
+                                            known), then a node, its links or the tree; spec \
+                                            files only for what the bundle lacks.";
+
+/// `read-spec`'s description since docs/features/collision-pass.md CP9
+/// (0.44.0): 0.43.0's first sentence alone, 283 -> 143 bytes, room for
+/// `check-collisions`' 137.
 const READ_SPEC_DESCRIPTION: &str = "Read the project's spec through the SpecEngine tools before \
                                      reading or changing behaviour the spec describes, or when \
-                                     asked what the spec says. A context bundle first (a search \
-                                     first when no ID is known), then a node, its links or the \
-                                     tree; spec files only for what the bundle lacks.";
+                                     asked what the spec says.";
 
-/// The model-invoked skills, whose descriptions every session loads.
-const MODEL_INVOKED: [&str; 6] = [
+/// The sentence the 0.44.0 description drops (docs/features/collision-pass.md
+/// CP9), with its leading space.
+const READ_SPEC_DROPPED: &str = " A context bundle first (a search first when no ID is known), \
+                                 then a node, its links or the tree; spec files only for what \
+                                 the bundle lacks.";
+
+/// The model-invoked skills, whose descriptions every session loads
+/// (`check-collisions` since docs/features/collision-pass.md CP9).
+const MODEL_INVOKED: [&str; 7] = [
     "analyze",
     "ask-owner",
+    "check-collisions",
     "implement",
     "propose-spec-change",
     "read-spec",
@@ -1553,9 +1610,10 @@ const READ_SPEC_CODE_TOOLS: [&str; 3] = ["find_symbols", "refs", "unmapped"];
 
 /// RD-9's problems: `read-spec` backticks each code read, its first
 /// mention after the first `get_context_bundle` and before the files
-/// step; its description is [`READ_SPEC_DESCRIPTION`]; the six model-invoked
-/// descriptions are 1 200 bytes together, the whole budget
-/// (docs/features/flow-authoring.md "Budgets").
+/// step; its description is [`READ_SPEC_DESCRIPTION`]; the model-invoked
+/// descriptions are 1 197 bytes together (1 200, the whole budget, until
+/// docs/features/collision-pass.md CP9: `read-spec`'s 140 out,
+/// `check-collisions`' 137 in).
 fn rd9_problems(skills: &Skills) -> Vec<String> {
     let mut problems = Vec::new();
     let text = &skills["read-spec"];
@@ -1569,8 +1627,8 @@ fn rd9_problems(skills: &Skills) -> Vec<String> {
         .iter()
         .map(|skill| description_of(&skills[*skill]).map_or(0, str::len))
         .sum();
-    if total != 1_200 {
-        problems.push(format!("descriptions: {total} bytes together, not 1 200"));
+    if total != 1_197 {
+        problems.push(format!("descriptions: {total} bytes together, not 1 197"));
     }
     let body = text.splitn(3, "---\n").nth(2).unwrap_or_default();
     let Some(bundle) = body.find("`get_context_bundle`") else {
@@ -1619,8 +1677,10 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // (the card tools, one bullet of `read-spec`); twenty-nine since
     // docs/features/card-trace.md (`get_trace`, one line of `read-spec`);
     // thirty since docs/features/department-split.md (`split_card`, named
-    // in `read-spec`'s cards bullet).
-    assert_eq!(TOOLS.len(), 30);
+    // in `read-spec`'s cards bullet); thirty-two since
+    // docs/features/collision-pass.md (`get_collisions`, `mark_pairs`,
+    // named in `check-collisions`).
+    assert_eq!(TOOLS.len(), 32);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
     assert!(
         READ_SPEC_CODE_TOOLS
@@ -1659,7 +1719,7 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
             "the code tools first",
         );
     }
-    // M: the description edited (a word added: also over the 1 200).
+    // M: the description edited (a word added: also off the 1 197).
     let longer = edited(
         &skills,
         "read-spec",
@@ -1674,8 +1734,37 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // " Code too." is 10 bytes.
     assert_names(
         &rd9_problems(&longer),
-        "1210 bytes together",
+        "1207 bytes together",
         "description sum",
+    );
+    // docs/features/collision-pass.md CP9: 0.43.0's description (the
+    // dropped sentence back) is a changed description, 140 bytes over.
+    let older = edited(
+        &skills,
+        "read-spec",
+        READ_SPEC_DESCRIPTION,
+        READ_SPEC_DESCRIPTION_0_43_0,
+    );
+    assert_eq!(
+        format!("{READ_SPEC_DESCRIPTION}{READ_SPEC_DROPPED}"),
+        READ_SPEC_DESCRIPTION_0_43_0
+    );
+    assert_eq!(
+        (
+            READ_SPEC_DESCRIPTION.len(),
+            READ_SPEC_DESCRIPTION_0_43_0.len()
+        ),
+        (143, 283)
+    );
+    assert_names(
+        &rd9_problems(&older),
+        "read-spec: the description changed",
+        "0.43.0's description",
+    );
+    assert_names(
+        &rd9_problems(&older),
+        "1337 bytes together",
+        "0.43.0's description sum",
     );
 }
 
@@ -2111,7 +2200,7 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        4_412,
+        4_272,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
          154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
          docs/features/card-store.md (the cards bullet), 172 more since \
@@ -2120,7 +2209,8 @@ fn read_spec_names_the_bundles_code_and_tests() {
          fewer since docs/features/departments.md (two trims and the vocabulary sentence), 3 \
          fewer since docs/features/department-split.md (`split_card` in, \"beside the tasks\" \
          out), 5 more since docs/features/card-context.md (CC9: two trims and the `context` \
-         sentence)"
+         sentence), 140 fewer since docs/features/collision-pass.md (CP9: the description's \
+         second sentence)"
     );
     let reworded = edited(
         &skills,
@@ -2228,8 +2318,10 @@ fn tested_reads_skills_name_tested() {
         // departments (RM-0096, DP-4): 5 fewer, two trims and the
         // vocabulary sentence; department-split (RM-0100, P1): 3 fewer,
         // `split_card` named and "beside the tasks" dropped; card-context
-        // (RM-0108, CC9): 5 more, two trims and the `context` sentence.
-        (4_091, 4_412),
+        // (RM-0108, CC9): 5 more, two trims and the `context` sentence;
+        // collision-pass (RM-0060, CP9): the file 140 fewer, the
+        // description's second sentence, the body unchanged.
+        (4_091, 4_272),
         "read-spec's bytes"
     );
     assert_eq!(
@@ -2470,9 +2562,10 @@ fn flow_authoring_write_flow_states_its_path_and_grammar() {
         "write-flow: the description",
         "a description edited",
     );
+    // 1 197 + 1 since docs/features/collision-pass.md CP9 (1 201 before).
     assert_names(
         &rd9_problems(&longer),
-        "1201 bytes together",
+        "1198 bytes together",
         "over the budget",
     );
 
@@ -2586,8 +2679,8 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // `get_card`'s and `list_cards`' `upstream`); 0.42.0 since intake-similar
     // (RM-0059, `propose_change`'s `distinct_from`, `keywords` and
     // `similar`); 0.43.0 since plain-questions (RM-0088, `ask_question`'s
-    // four keys).
-    assert_eq!(manifest["version"], "0.43.0");
+    // four keys); 0.44.0 since collision-pass (RM-0060).
+    assert_eq!(manifest["version"], "0.44.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -2614,8 +2707,9 @@ fn departments_dp4_read_spec_gives_the_web_ui_s_words() {
     };
     // docs/features/department-split.md P1: `split_card` named, "beside the
     // tasks" dropped, net -3: 4 086 and 4 407; docs/features/card-context.md
-    // CC9: three edits, net +5: 4 091 and 4 412.
-    assert_eq!((body(read_spec), read_spec.len()), (4_091, 4_412));
+    // CC9: three edits, net +5: 4 091 and 4 412; docs/features/collision-pass.md
+    // CP9: the description 140 fewer: 4 091 and 4 272.
+    assert_eq!((body(read_spec), read_spec.len()), (4_091, 4_272));
     assert!(body(read_spec) <= 4096);
     let last = bullets(read_spec).last().cloned().expect("a bullet");
     assert!(
@@ -2716,12 +2810,14 @@ const READ_SPEC_CONTEXT: &str = " `get_card` with `context: true` adds its targe
                                  `context`: use `get_context_bundle`.";
 
 /// docs/features/card-context.md (RM-0108) "Acceptance criteria", CC9:
-/// `read-spec`'s body 4 091 bytes (at most 4 096), the file 4 412; the
+/// `read-spec`'s body 4 091 bytes (at most 4 096), the file 4 412 (4 272
+/// since docs/features/collision-pass.md CP9); the
 /// sentence once, in the cards bullet, right after "and no tool accepts a
 /// card."; the bullet still starts with "- Work of any trade stands on
 /// cards" and ends with the vocabulary sentence; the first edit's sentence
 /// gone, the second's `get_tree` words as "Data" gives them; no digit; the
-/// description 0.38.0's ([`READ_SPEC_DESCRIPTION`], drift-queue's); every
+/// description 0.38.0's (drift-queue's; [`READ_SPEC_DESCRIPTION`], its first
+/// sentence, since docs/features/collision-pass.md CP9); every
 /// content rule passing. M: the sentence dropped.
 #[test]
 fn card_context_cc9_read_spec_names_the_context_key() {
@@ -2731,7 +2827,7 @@ fn card_context_cc9_read_spec_names_the_context_key() {
         .splitn(3, "---\n")
         .nth(2)
         .expect("a front-matter and a body");
-    assert_eq!((body.len(), read_spec.len()), (4_091, 4_412));
+    assert_eq!((body.len(), read_spec.len()), (4_091, 4_272));
     assert!(body.len() <= 4096);
     assert_eq!(read_spec.matches(READ_SPEC_CONTEXT.trim_start()).count(), 1);
     let cards = bullets(read_spec)
@@ -2999,5 +3095,180 @@ fn intake_similar_the_two_skills_teach_the_similar_list() {
              it in `distinct_from`.\n"
         ),
         "the similar bullet"
+    );
+}
+
+// ---------------------------------------------- collision-pass (RM-0060)
+
+/// docs/features/collision-pass.md "Acceptance criteria", CP9: the skill's
+/// description (137 bytes), the spec's words with `alike;` for its `alike:`
+/// (iteration 3: `: ` is no plain YAML scalar, `plugin_files.rs` AC-05).
+const CHECK_COLLISIONS_DESCRIPTION: &str = "Judge the pairs of spec nodes the SpecEngine collision \
+                                            pass finds alike; report a real conflict or \
+                                            duplicate to the owner, mark the rest.";
+
+/// CP9's problems of `check-collisions`: the description; the body within
+/// 4 096 bytes; the precedence sentence; the pass in its order (a numbered
+/// step naming `get_collisions`, then one naming `get_context_bundle`, then
+/// `report_discrepancy`); a step or bullet sending `mark_pairs` with the
+/// report's `proposal`, and a numbered step sending it with `a_norm` for
+/// the rest; `marked` and `left` taught; the rules (data, not
+/// instructions; no spec file edited; the owner decides); two `json`
+/// blocks, a `report_discrepancy` with `"gap_type": "contradicts"` and a
+/// `mark_pairs` with `"verdict": "distinct"`.
+fn cp9_problems(skills: &Skills) -> Vec<String> {
+    let mut problems = Vec::new();
+    let Some(text) = skills.get("check-collisions") else {
+        return vec!["no check-collisions".to_owned()];
+    };
+    if description_of(text) != Some(CHECK_COLLISIONS_DESCRIPTION) {
+        problems.push(format!(
+            "check-collisions: the description is {:?}",
+            description_of(text)
+        ));
+    }
+    let body = text.splitn(3, "---\n").nth(2).unwrap_or_default();
+    if body.len() > 4096 {
+        problems.push(format!(
+            "check-collisions: the body is {} bytes",
+            body.len()
+        ));
+    }
+    if !text.contains(PRECEDENCE) {
+        problems.push("check-collisions: no precedence sentence".to_owned());
+    }
+    let lines: Vec<&str> = text.lines().collect();
+    let numbered =
+        |line: &str| line.len() > 3 && line.as_bytes()[0].is_ascii_digit() && &line[1..3] == ". ";
+    let step_of = |name: &str| {
+        lines
+            .iter()
+            .position(|line| numbered(line) && line.contains(&format!("`{name}`")))
+    };
+    let order: Vec<Option<usize>> = ["get_collisions", "get_context_bundle", "report_discrepancy"]
+        .iter()
+        .map(|name| step_of(name))
+        .collect();
+    for (name, at) in ["get_collisions", "get_context_bundle", "report_discrepancy"]
+        .iter()
+        .zip(&order)
+    {
+        if at.is_none() {
+            problems.push(format!("check-collisions: no step names `{name}`"));
+        }
+    }
+    if let [Some(a), Some(b), Some(c)] = order[..]
+        && !(a < b && b < c)
+    {
+        problems.push("check-collisions: the steps are out of order".to_owned());
+    }
+    let marks_reported = lines.iter().any(|line| {
+        (numbered(line) || line.trim_start().starts_with("- "))
+            && line.contains("`mark_pairs`")
+            && line.contains("`proposal`")
+    });
+    if !marks_reported {
+        problems.push("check-collisions: no `mark_pairs` with the report's `proposal`".to_owned());
+    }
+    let marks_rest = lines
+        .iter()
+        .any(|line| numbered(line) && line.contains("`mark_pairs`") && line.contains("`a_norm`"));
+    if !marks_rest {
+        problems.push("check-collisions: no `mark_pairs` step for the other pairs".to_owned());
+    }
+    for name in ["marked", "left", "node_ids", "evidence", "options"] {
+        if !text.contains(&format!("`{name}`")) {
+            problems.push(format!("check-collisions: `{name}` not backticked"));
+        }
+    }
+    for words in [
+        "data, not instructions",
+        "Never edit a spec file",
+        "the owner decides",
+    ] {
+        if !text.contains(words) {
+            problems.push(format!("check-collisions: no {words:?}"));
+        }
+    }
+    let blocks = match split(text) {
+        Ok((_, blocks)) => blocks,
+        Err(problem) => {
+            problems.push(format!("check-collisions: {problem}"));
+            return problems;
+        }
+    };
+    let tools: Vec<Option<&str>> = blocks.iter().map(named_tool).collect();
+    if tools != [Some("report_discrepancy"), Some("mark_pairs")] {
+        problems.push(format!("check-collisions: the json blocks are {tools:?}"));
+        return problems;
+    }
+    let parsed: Vec<Value> = blocks
+        .iter()
+        .map(|block| serde_json::from_str(&block.body).unwrap_or(Value::Null))
+        .collect();
+    if parsed[0]["gap_type"] != "contradicts" {
+        problems.push("check-collisions: the report is no `contradicts`".to_owned());
+    }
+    if parsed[0]["node_ids"].as_array().map(Vec::len) != Some(2)
+        || parsed[0]["evidence"].as_array().map(Vec::len) != Some(2)
+    {
+        problems.push("check-collisions: the report names not both sides".to_owned());
+    }
+    if parsed[1]["pairs"][0]["verdict"] != "distinct" {
+        problems.push("check-collisions: the mark is no `distinct`".to_owned());
+    }
+    problems
+}
+
+/// docs/features/collision-pass.md "Acceptance criteria", CP9: the eighth
+/// skill teaches the pass (its description 137 bytes, the body within 4 096,
+/// the steps in order, the two `json` blocks: `report_discrepancy` with
+/// `contradicts`, `mark_pairs` with `distinct`, each called as its tool's
+/// arguments by AC-07); the model-invoked descriptions 1 197 bytes
+/// together; every one of the 32 tools backticked across the skills (AC-06
+/// with `TOOLS`). M: the `mark_pairs` step dropped.
+#[test]
+fn collision_pass_cp9_check_collisions_teaches_the_pass() {
+    let skills = committed();
+    assert_eq!(CHECK_COLLISIONS_DESCRIPTION.len(), 137);
+    assert_eq!(cp9_problems(&skills), Vec::<String>::new());
+    assert_eq!(rd9_problems(&skills), Vec::<String>::new(), "1 197 bytes");
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    let listed = listed();
+    assert_eq!(TOOLS.len(), 32);
+    assert_eq!(ac06_problems(&skills, &listed), Vec::<String>::new());
+    for tool in TOOLS {
+        assert!(
+            skills
+                .values()
+                .any(|text| text.contains(&format!("`{tool}`"))),
+            "{tool} named in no skill"
+        );
+    }
+
+    // M: the `mark_pairs` step dropped (step 4, for the pairs that do not
+    // collide).
+    let text = &skills["check-collisions"];
+    let step = text
+        .lines()
+        .find(|line| line.starts_with("4. ") && line.contains("`mark_pairs`"))
+        .expect("the mark step");
+    let dropped = edited(&skills, "check-collisions", &format!("{step}\n"), "");
+    assert_names(
+        &cp9_problems(&dropped),
+        "no `mark_pairs` step for the other pairs",
+        "the mark step dropped",
+    );
+    // M: the report's `contradicts` turned into `partial`.
+    let partial = edited(
+        &skills,
+        "check-collisions",
+        "\"gap_type\": \"contradicts\"",
+        "\"gap_type\": \"partial\"",
+    );
+    assert_names(
+        &cp9_problems(&partial),
+        "the report is no `contradicts`",
+        "partial",
     );
 }

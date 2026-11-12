@@ -241,6 +241,7 @@ mod check;
 mod code_delta;
 mod code_index;
 mod code_walk;
+mod collisions;
 mod confirm;
 mod corpus;
 mod create;
@@ -363,6 +364,10 @@ pub use catalog::{
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
+pub use collisions::{
+    CollisionsOutcome, CollisionsRequest, MarkPairsRequest, PairsMarked, collisions, mark_pairs,
+    read_pairs_input,
+};
 pub use confirm::{
     ConfirmBody, ConfirmCause, ConfirmOutcome, ConfirmRead, ConfirmRequest, confirm_question,
     confirm_staged,
@@ -482,6 +487,12 @@ pub use specengine_core::upstream::{UPSTREAM_MAX, Upstream, UpstreamChange, Upst
 /// `spec card split`'s plan-only flag, without its dashes: one spelling for
 /// the parser and the usage line that names it.
 pub const SPLIT_DRY_RUN_FLAG: &str = "dry-run";
+/// The collision pass's caps, verdicts and input (core's, task spec
+/// `collision-pass`), for the bridges.
+pub use specengine_core::collisions::{
+    COLLISION_MARKS_MAX, COLLISIONS_LIMIT_DEFAULT, COLLISIONS_LIMIT_MAX, CollisionVerdict,
+    PairJudgement, PairJudgements,
+};
 /// The intake's input types, enums and caps (core's), for the bridges;
 /// the names of the kinds `propose_change` takes and of a decision, and a
 /// kind's name with its article.
@@ -709,6 +720,10 @@ pub enum Outcome {
     Delivery(Box<DeliveryOutcome>),
     /// `catalog`: a kinds direction's nodes, their work and last change.
     Catalog(Box<CatalogOutcome>),
+    /// `collisions`: the pairs of nodes that may collide.
+    Collisions(Box<CollisionsOutcome>),
+    /// `collisions mark`: the verdicts written, or why none was.
+    PairsMarked(Box<PairsMarked>),
     /// `flow`: typed edges, lifted edges and gap rows.
     Flow(Box<FlowOutcome>),
     /// `trace`: each node's state against its cards.
@@ -833,6 +848,7 @@ impl Outcome {
             Self::CardSplit(split) => split.exit(),
             Self::Round(run) => run.exit(),
             Self::RoundAnswers(answers) => answers.exit(),
+            Self::PairsMarked(marked) => marked.exit(),
             _ => Exit::Answered,
         }
     }
@@ -857,6 +873,11 @@ impl Outcome {
             Self::Delivery(outcome) => return outcome.stderr_lines(),
             // The notes, then the tree's warnings, escaped.
             Self::Catalog(outcome) => return outcome.stderr_lines(),
+            // The walk's lines and the pass's notes, escaped, as JSON
+            // `notes` holds the notes raw.
+            Self::Collisions(outcome) => return outcome.stderr_lines(),
+            // The walk's lines, the notes, then the refusal, escaped.
+            Self::PairsMarked(outcome) => return outcome.stderr_lines(),
             Self::Flow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Impact(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
@@ -991,6 +1012,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
         Outcome::Delivery(outcome) => delivery::render_text(outcome),
         Outcome::Catalog(outcome) => catalog::render_text(outcome),
+        Outcome::Collisions(outcome) => collisions::render_text(outcome),
+        Outcome::PairsMarked(outcome) => collisions::render_mark_text(outcome),
         Outcome::Flow(outcome) => flow::render_text(outcome),
         Outcome::Impact(outcome) => impact::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
@@ -1054,6 +1077,8 @@ impl serde::Serialize for Outcome {
             Self::Roadmap(outcome) => outcome.serialize(serializer),
             Self::Delivery(outcome) => outcome.serialize(serializer),
             Self::Catalog(outcome) => outcome.serialize(serializer),
+            Self::Collisions(outcome) => outcome.serialize(serializer),
+            Self::PairsMarked(outcome) => outcome.serialize(serializer),
             Self::Flow(outcome) => outcome.serialize(serializer),
             Self::Impact(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),

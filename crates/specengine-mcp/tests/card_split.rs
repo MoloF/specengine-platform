@@ -210,7 +210,9 @@ fn split_args(extra: &Value) -> Value {
 /// output the split document's keys.
 #[test]
 fn s8_tools_list_holds_split_card() {
-    assert_eq!(TOOLS.len(), 30);
+    // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
+    // `mark_pairs`).
+    assert_eq!(TOOLS.len(), 32);
     assert!(TOOLS.contains(&"split_card"));
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -509,8 +511,10 @@ fn s8_both_texts_hold() {
     assert_ne!(stdio, hubs);
     // The instructions (the orchestrator's decision, departing from the
     // criterion's "unchanged"): both cards lines name `split_card` and
-    // `split`; the stdio text stays at its 2 048-byte cap.
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), TEXT_LIMIT);
+    // `split`; the stdio text stays at its 2 048-byte cap (2 039 since
+    // docs/features/collision-pass.md).
+    // 2 039 since docs/features/collision-pass.md CP8 (65 bytes in, 74 out).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2039);
     assert!(specengine_mcp::INSTRUCTIONS.contains(
         "- list_cards, get_card, create_card, split_card, edit_card, move_card = spec card \
          list|show|new|split|edit|move; no tool accepts.\n"

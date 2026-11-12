@@ -1,6 +1,6 @@
 ---
 name: read-spec
-description: Read the project's spec through the SpecEngine tools before reading or changing behaviour the spec describes, or when asked what the spec says. A context bundle first (a search first when no ID is known), then a node, its links or the tree; spec files only for what the bundle lacks.
+description: Read the project's spec through the SpecEngine tools before reading or changing behaviour the spec describes, or when asked what the spec says.
 ---
 
 # Reading the spec

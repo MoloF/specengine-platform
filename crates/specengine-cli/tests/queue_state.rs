@@ -956,8 +956,9 @@ fn every_other_defect_of_step_2_names_its_line() {
 
 // ------------------------------------------------------------------ AC-06
 
-/// AC-06: `format` 7 and `queue_schema` 13 (newer than this build's 6 and
-/// 12, docs/features/task-mandate.md M5; R1's record: `format-6` and
+/// AC-06: `format` 8 and `queue_schema` 15 (newer than this build's 7 and
+/// 14, docs/features/collision-pass.md D6; 7 and 13 newer than 6 and
+/// 12 at docs/features/task-mandate.md M5; R1's record: `format-6` and
 /// `schema-12`, green at 8a43e5d; card-questions M1's: `format-5` and
 /// `schema-11`, green at a62c81c): exit 2 with `upgrade SpecEngine`; a spec-b dump into spec-a: exit 2 naming both slugs; no
 /// prompt, the queue never made. M: either version check removed; the slug
@@ -968,7 +969,7 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let (_, lines) = small_dump(&pair);
     for (name, from, to) in [
         ("format-8", "\"format\":7,", "\"format\":8,"),
-        ("schema-14", "\"queue_schema\":13,", "\"queue_schema\":14,"),
+        ("schema-15", "\"queue_schema\":14,", "\"queue_schema\":15,"),
     ] {
         let mut newer = lines.clone();
         newer[0] = newer[0].replacen(from, to, 1);
@@ -986,7 +987,7 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let other_file = other.scratch.dir("dumps").join("zerkalo.jsonl");
     export_ok(&other, &other.home, &other.main, Some(&other_file), NOW);
     let bytes = fs::read(&other_file).unwrap();
-    assert!(bytes.starts_with(b"{\"format\":7,\"queue_schema\":13,\"project\":\"zerkalo\","));
+    assert!(bytes.starts_with(b"{\"format\":7,\"queue_schema\":14,\"project\":\"zerkalo\","));
     let (label, message) = refused_import(&pair, "spec-b", &bytes);
     assert!(message.starts_with(&format!("{label}:1: ")), "{message}");
     assert!(
@@ -1241,7 +1242,7 @@ fn ac08_the_worktree_top_or_the_root_without_git_bounds_the_destination() {
     assert_eq!((outcome.proposals, outcome.events), (0, 0));
     assert_eq!(
         fs::read(&out).unwrap(),
-        b"{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"cards\":0,\"events\":0}\n"
+        b"{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"cards\":0,\"events\":0}\n"
     );
     assert!(
         !data_dir(&pair.home).exists(),
@@ -2531,7 +2532,7 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     // row as format 4 wrote it. Format 6, schema 12 since
     // docs/features/task-mandate.md M5: `mandate` after `tasks`.
     assert_eq!(STATE_FORMAT, 7);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     let pair = Pair::new("qe-ct4", "studio-lamp");
     let main = pair.main.clone();
     let spec_ok = |home: &Path, args: &[&str]| {
@@ -2598,7 +2599,7 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":7,\"queue_schema\":13,\"project\":\"studio-lamp\",\"proposals\":0,\
+            "{{\"format\":7,\"queue_schema\":14,\"project\":\"studio-lamp\",\"proposals\":0,\
              \"tasks\":2,\"runs\":0,\"cards\":2,\"events\":{events}}}"
         )
     );
@@ -2650,7 +2651,7 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     // (`mandate` NULL too, docs/features/task-mandate.md M5).
     let mut v3 = lines.clone();
     v3[0] = v3[0].replacen(
-        "\"format\":7,\"queue_schema\":13,",
+        "\"format\":7,\"queue_schema\":14,",
         "\"format\":3,\"queue_schema\":9,",
         1,
     );
@@ -2814,7 +2815,7 @@ fn proposal_rows(lines: &[String]) -> Vec<usize> {
 fn card_questions_s5_format_5_carries_card_id_and_why() {
     // Format 6, schema 12 since docs/features/task-mandate.md M5.
     assert_eq!(STATE_FORMAT, 7);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     assert_eq!(PROPOSAL_COLUMNS.len(), 50);
     let pair = Pair::new("qe-cq-s5", "studio-lamp");
     let main = pair.main.clone();
@@ -2873,7 +2874,7 @@ fn card_questions_s5_format_5_carries_card_id_and_why() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":7,\"queue_schema\":13,\"project\":\"studio-lamp\",\"proposals\":2,\
+            "{{\"format\":7,\"queue_schema\":14,\"project\":\"studio-lamp\",\"proposals\":2,\
              \"tasks\":0,\"runs\":0,\"cards\":1,\"events\":{events}}}"
         )
     );
@@ -2921,7 +2922,7 @@ fn card_questions_s5_format_5_carries_card_id_and_why() {
     // A format-4 dump: imported with both NULL, re-exported as format 5.
     let mut v4 = lines.clone();
     v4[0] = v4[0].replacen(
-        "\"format\":7,\"queue_schema\":13,",
+        "\"format\":7,\"queue_schema\":14,",
         "\"format\":4,\"queue_schema\":10,",
         1,
     );
@@ -2979,7 +2980,7 @@ fn card_questions_s5_format_5_carries_card_id_and_why() {
         v4[first].strip_suffix("}}").expect("a row's end")
     );
     let mut schema_11 = lines.clone();
-    schema_11[0] = schema_11[0].replacen("\"queue_schema\":13,", "\"queue_schema\":11,", 1);
+    schema_11[0] = schema_11[0].replacen("\"queue_schema\":14,", "\"queue_schema\":11,", 1);
     // docs/features/task-mandate.md R1: format 6 refused at 8a43e5d, 7 here.
     let mut format_7 = lines.clone();
     format_7[0] = format_7[0].replacen("\"format\":7,", "\"format\":8,", 1);
@@ -2991,7 +2992,7 @@ fn card_questions_s5_format_5_carries_card_id_and_why() {
             "format-6-at-schema-11",
             schema_11,
             1,
-            "(it holds queue schema 13)",
+            "(it holds queue schemas 13 to 14)",
         ),
         ("format-7", format_7, 1, "upgrade SpecEngine"),
     ] {
@@ -3019,7 +3020,7 @@ fn card_questions_s5_a_schema_10_database_exports_as_format_5_unmigrated() {
     let current = dumps.join("v5.jsonl");
     export_ok(&pair, &pair.home, &main, Some(&current), NOW);
     let lines = lines_of(&fs::read(&current).unwrap());
-    assert!(lines[0].starts_with("{\"format\":7,\"queue_schema\":13,"));
+    assert!(lines[0].starts_with("{\"format\":7,\"queue_schema\":14,"));
     pair.sql(
         "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
          ALTER TABLE cards DROP COLUMN mandate; PRAGMA user_version = 10;",
@@ -3082,7 +3083,7 @@ fn tasks_and_mandate_null(line: &str) -> String {
 #[test]
 fn task_mandate_m5_format_6_carries_the_mandate() {
     assert_eq!(STATE_FORMAT, 7);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     assert_eq!(CARD_COLUMNS.len(), 26);
     let pair = Pair::new("qe-tm-m5", "studio-lamp");
     let main = pair.main.clone();
@@ -3126,7 +3127,7 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":7,\"queue_schema\":13,\"project\":\"studio-lamp\",\"proposals\":0,\
+            "{{\"format\":7,\"queue_schema\":14,\"project\":\"studio-lamp\",\"proposals\":0,\
              \"tasks\":0,\"runs\":0,\"cards\":3,\"events\":{events}}}"
         )
     );
@@ -3166,7 +3167,7 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
     // Formats 5, 4 and 3: `mandate` NULL, re-exported as format 6.
     let mut v5 = lines.clone();
     v5[0] = v5[0].replacen(
-        "\"format\":7,\"queue_schema\":13,",
+        "\"format\":7,\"queue_schema\":14,",
         "\"format\":5,\"queue_schema\":11,",
         1,
     );
@@ -3228,15 +3229,15 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
     let mut v5_with_mandate = v5.clone();
     v5_with_mandate[second] = lines[second].clone();
     let mut schema_11 = lines.clone();
-    schema_11[0] = schema_11[0].replacen("\"queue_schema\":13,", "\"queue_schema\":11,", 1);
+    schema_11[0] = schema_11[0].replacen("\"queue_schema\":14,", "\"queue_schema\":11,", 1);
     let mut format_7 = lines.clone();
     format_7[0] = format_7[0].replacen("\"format\":7,", "\"format\":8,", 1);
     // A newer build's dump (docs/features/plain-questions.md PQ8: 8 over this
-    // build's 7, 14 over 13).
+    // build's 7, 14 over 13; docs/features/collision-pass.md D6: 15 over 14).
     let mut schema_13 = lines.clone();
     schema_13[0] = schema_13[0].replacen(
-        "\"format\":7,\"queue_schema\":13,",
-        "\"format\":8,\"queue_schema\":14,",
+        "\"format\":7,\"queue_schema\":14,",
+        "\"format\":8,\"queue_schema\":15,",
         1,
     );
     for (name, defective, line, needle) in [
@@ -3246,10 +3247,10 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
             "format-6-at-schema-11",
             schema_11,
             1,
-            "(it holds queue schema 13)",
+            "(it holds queue schemas 13 to 14)",
         ),
         ("format-7", format_7, 1, "upgrade SpecEngine"),
-        ("format-8-schema-14", schema_13, 1, "upgrade SpecEngine"),
+        ("format-8-schema-15", schema_13, 1, "upgrade SpecEngine"),
     ] {
         assert_ne!(defective, lines, "{name}");
         let (label, message) = refused_import(&pair, name, &dump_of(&defective));
@@ -3338,7 +3339,7 @@ fn task_mandate_r2_a_format_5_dump_upgrades_into_schema_12() {
     export_ok(&pair, &pair.home, &main, Some(&current), NOW);
     let lines = lines_of(&fs::read(&current).unwrap());
     assert!(
-        lines[0].starts_with("{\"format\":7,\"queue_schema\":13,"),
+        lines[0].starts_with("{\"format\":7,\"queue_schema\":14,"),
         "{}",
         lines[0]
     );
@@ -3363,7 +3364,7 @@ fn task_mandate_r2_a_format_5_dump_upgrades_into_schema_12() {
     // The format-5 dump a schema-11 build writes of the same queue.
     let mut v5 = lines.clone();
     v5[0] = v5[0].replacen(
-        "\"format\":7,\"queue_schema\":13,",
+        "\"format\":7,\"queue_schema\":14,",
         "\"format\":5,\"queue_schema\":11,",
         1,
     );
@@ -3384,8 +3385,9 @@ fn task_mandate_r2_a_format_5_dump_upgrades_into_schema_12() {
     let upgraded = pair.scratch.home("upgraded");
     import_ok(&upgraded, &main, &v5_file);
     let db = db_of(&upgraded, "studio-lamp");
-    // 13 since docs/features/plain-questions.md PQ8.
-    assert_eq!(pair_sql(&db, "PRAGMA user_version;"), "13");
+    // 13 since docs/features/plain-questions.md PQ8, 14 since
+    // docs/features/collision-pass.md D6.
+    assert_eq!(pair_sql(&db, "PRAGMA user_version;"), "14");
     assert_eq!(
         pair_sql(&db, "SELECT count(*) FROM cards WHERE mandate IS NULL;"),
         "2"

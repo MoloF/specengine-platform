@@ -40,7 +40,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0056.md](roadmap/RM-0056.md) change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0057.md](roadmap/RM-0057.md) draft-overlay (Phase 7, step 15): revisable drafts in reads · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/roadmap/RM-0058.md](roadmap/RM-0058.md) reuse-overrides (Phase 7, step 16): overrides, variants, usage reads · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill · crates/specengine-core, crates/specengine-cli, plugin · draft
 - [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
 - [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store, crates/specengine-http · draft
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft

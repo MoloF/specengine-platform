@@ -390,14 +390,17 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // (`split_card` and `split` in the cards line, 18 bytes; `search`'s
     // `, limit?, archive?` out, 18); the values `mcp_code.rs`' re-pinned
     // `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1940);
+    // 1 931 and 2 039 since docs/features/collision-pass.md CP8 (D8: the
+    // collisions line, 65 bytes, in; the resources sentence, 74, out); the
+    // values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1931);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "a975a81193ece079d8ce216a16768cda8c163faf56ce1f72ecb98da72e2eb2e5"
+        "f58908267db5315641e3c4b1cfa209f9e7b72257c8b6e898f3f0b3fb9c136d77"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2039);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "7de2fdaa1885277df812c2e368a1fce532f8fc5aba6db0e6185ead5fbe87d351"
+        "72797a127dbf98ef66644c92d46870dacb4c072d9cc10819654c38fd82d95fe4"
     );
 }

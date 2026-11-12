@@ -19,7 +19,11 @@
 //! `trusted` scope of an `IndexTrust` the first of them walked, as a hub's
 //! daemon runs them (`docs/features/read-trust.md` "Eval"), each answer
 //! compared with the walking read's; W_after by `w`'s formula
-//! (`docs/canon/w-measurement.md` "W_after") over 20 targets; `size.json`.
+//! (`docs/canon/w-measurement.md` "W_after") over 20 targets; then the
+//! collision pass (task spec `collision-pass` CP10): `spec collisions`
+//! with its default flags and an empty ledger, timed as the reads are, and,
+//! last since it edits the tree, 25 title twins planted and counted among
+//! `--limit 200`'s pairs; `size.json`.
 //! `--corpus-only` stops after the tree.
 //!
 //! The CLI library runs with an [`Env`] and a [`GitEnv`] of its own: the
@@ -42,9 +46,9 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use specengine_cli::{
-    BundleRequest, CheckRequest, CheckedTree, Env, FlowRequest, GitEnv, Globals, IndexRequest,
-    IndexTrust, Outcome, ProjectRoot, SearchRequest, ShowRequest, TraceRequest, TreeRequest,
-    render_text, trusted,
+    BundleRequest, COLLISIONS_LIMIT_MAX, CheckRequest, CheckedTree, CollisionsRequest, Env,
+    FlowRequest, GitEnv, Globals, IndexRequest, IndexTrust, Outcome, ProjectRoot, SearchRequest,
+    ShowRequest, TraceRequest, TreeRequest, render_text, trusted,
 };
 use specengine_core::check::{CheckFile, CheckInput, Resolver, SpecGraph};
 use specengine_core::intake::normalized_summary;
@@ -106,6 +110,9 @@ const GET_TREE: &str = "get_tree";
 /// A create's similar probes (task spec `intake-similar`, IS12):
 /// `SpecIndex::similar` alone, on the warm index.
 const SIMILAR: &str = "similar";
+/// The collision pass (task spec `collision-pass` CP10): `spec
+/// collisions` with its default flags, on the warm index.
+const GET_COLLISIONS: &str = "get_collisions";
 /// The kind of every part node (the tree's `[ids]`).
 const PART_KIND: &str = "node";
 /// The link type a similar query's targets come from.
@@ -270,6 +277,9 @@ struct Measured {
     /// The planted collisions the similar probes find (task spec
     /// `intake-similar`, IS12).
     similar_recall: SimilarRecall,
+    /// The planted title twins the collision pass lists (task spec
+    /// `collision-pass` CP10).
+    collision_planted: CollisionPlanted,
     nondeterministic: usize,
     /// The (read, target) pairs whose trusted answers' BLAKE3 differ from
     /// the walking answer's.
@@ -291,7 +301,7 @@ struct CheckOut {
 }
 
 /// `reads`: the four reads of targets, then the five whole reads, then the
-/// similar probes of the timed targets.
+/// similar probes of the timed targets, then the collision pass.
 #[derive(Clone, Copy, Serialize)]
 struct ReadsOut {
     #[serde(flatten)]
@@ -299,6 +309,7 @@ struct ReadsOut {
     #[serde(flatten)]
     whole: WholeReads,
     similar: Spread,
+    collisions: Spread,
 }
 
 /// The four reads of the timed targets and the queries.
@@ -353,7 +364,7 @@ struct SearchSpread {
 }
 
 /// `growth`: [`Growth`] of the four reads, then of the five whole reads,
-/// then of the similar probes.
+/// then of the similar probes, then of the collision pass.
 #[derive(Serialize)]
 struct GrowthOut {
     #[serde(flatten)]
@@ -361,6 +372,15 @@ struct GrowthOut {
     #[serde(flatten)]
     whole: WholeGrowth,
     similar: Option<f64>,
+    collisions: Option<f64>,
+}
+
+/// `collision_planted`: the title twins planted, and those `--limit 200`
+/// lists as a pair.
+#[derive(Serialize)]
+struct CollisionPlanted {
+    planted: usize,
+    found: usize,
 }
 
 /// `similar_recall`: the planted collisions found, in all and by variant.
@@ -383,6 +403,13 @@ struct RecallVariants {
 struct Recall {
     planted: usize,
     found: usize,
+}
+
+/// `get_collisions` with its default flags: the answer rendered, and its
+/// pairs (`Timed::extra`, unread).
+fn session_collisions(session: &Session) -> Result<(String, usize), String> {
+    let (text, pairs) = session.collisions(None)?;
+    Ok((text, pairs.len()))
 }
 
 /// `median_us` over the previous size's, two decimals; `null` at the first
@@ -604,10 +631,10 @@ fn summarize(entry: &SizeEntry) {
     };
     eprintln!(
         "{MEASUREMENT}: {} part nodes: {} files, {} nodes; index {}, check {} ({} errors, {} warnings); \
-         medians get_node {}, get_node_links {}, search {}, get_context_bundle {}, similar {}; \
-         trusted medians get_node {}, get_node_links {}, search {}, get_context_bundle {}; \
-         W_after median {} bytes; similar recall {} of {}; {} nondeterministic, {} trusted \
-         differ{parsed}",
+         medians get_node {}, get_node_links {}, search {}, get_context_bundle {}, similar {}, \
+         collisions {}; trusted medians get_node {}, get_node_links {}, search {}, \
+         get_context_bundle {}; W_after median {} bytes; similar recall {} of {}; title twins \
+         listed {} of {}; {} nondeterministic, {} trusted differ{parsed}",
         entry.nodes,
         corpus.files,
         corpus.nodes,
@@ -620,6 +647,7 @@ fn summarize(entry: &SizeEntry) {
         ms(reads.search.median_us),
         ms(reads.get_context_bundle.median_us),
         ms(measured.reads.similar.median_us),
+        ms(measured.reads.collisions.median_us),
         ms(trusted.get_node.median_us),
         ms(trusted.get_node_links.median_us),
         ms(trusted.search.median_us),
@@ -627,6 +655,8 @@ fn summarize(entry: &SizeEntry) {
         measured.w_after.median,
         measured.similar_recall.found,
         measured.similar_recall.planted,
+        measured.collision_planted.found,
+        measured.collision_planted.planted,
         measured.nondeterministic,
         measured.trusted_differs,
     );
@@ -780,6 +810,24 @@ impl Session {
         Ok((render_text(&Outcome::Search(outcome)), hits))
     }
 
+    /// `get_collisions` at `limit` (`None`: the default), no kinds: the
+    /// answer rendered, and its pairs' names.
+    fn collisions(&self, limit: Option<i64>) -> Result<(String, Vec<(String, String)>), String> {
+        let request = CollisionsRequest {
+            kinds: Vec::new(),
+            any_kind: false,
+            limit,
+        };
+        let outcome = specengine_cli::collisions(&self.env, &self.globals, &request)
+            .map_err(|error| error.message)?;
+        let pairs = outcome
+            .pairs
+            .iter()
+            .map(|pair| (pair.a.name().to_owned(), pair.b.name().to_owned()))
+            .collect();
+        Ok((render_text(&Outcome::Collisions(Box::new(outcome))), pairs))
+    }
+
     /// The answer rendered, and `Bundle.bytes`.
     fn bundle(&self, request: &BundleRequest) -> Result<(String, usize), String> {
         let outcome = specengine_cli::bundle(&self.env, &self.globals, request)
@@ -865,15 +913,21 @@ impl<'a> Measuring<'a> {
         let (targeted, hub_reads) = self.reads()?;
         let whole = self.whole_reads()?;
         let similar = self.similar_read()?;
+        let collisions = self.timed(GET_COLLISIONS, WHOLE, "the default pass", || {
+            session_collisions(self.session)
+        })?;
         let reads = ReadsOut {
             targeted,
             whole,
             similar,
+            collisions: spread(&[collisions]),
         };
         let similar_recall = self.similar_recall()?;
         let (reads_trusted, hub_trusted) = self.trusted_reads()?;
         let steps = self.steps()?;
         let (w_after, hub_w_after) = self.w_after()?;
+        // Last: it edits the tree.
+        let collision_planted = self.collision_planted()?;
         let other_us = other_us(&reads.targeted, &steps);
         let samples = &self.synthetic.samples;
         let before = previous.map(|previous| &previous.reads);
@@ -886,6 +940,10 @@ impl<'a> Measuring<'a> {
                 similar: ratio(
                     reads.similar.median_us,
                     before.map(|before| before.similar.median_us),
+                ),
+                collisions: ratio(
+                    reads.collisions.median_us,
+                    before.map(|before| before.collisions.median_us),
                 ),
             },
             growth_trusted: growth_trusted(
@@ -909,6 +967,7 @@ impl<'a> Measuring<'a> {
                 },
             },
             similar_recall,
+            collision_planted,
             nondeterministic: self.nondeterministic,
             trusted_differs: self.trusted_differs,
         })
@@ -1178,6 +1237,33 @@ impl<'a> Measuring<'a> {
             planted: all.iter().map(|recall| recall.planted).sum(),
             found: all.iter().map(|recall| recall.found).sum(),
             variants,
+        })
+    }
+
+    /// The title twins planted into the tree, then `get_collisions` at
+    /// `--limit 200` once, untimed: a twin is found when its two sections
+    /// are a pair it lists, in either order.
+    fn collision_planted(&self) -> Result<CollisionPlanted, String> {
+        let twins = &self.synthetic.twins;
+        generate::plant(twins, &self.session.env.cwd)
+            .map_err(|reason| self.failed("the title twins", &reason))?;
+        let limit = i64::try_from(COLLISIONS_LIMIT_MAX).unwrap_or(i64::MAX);
+        let (_, pairs) = self
+            .session
+            .collisions(Some(limit))
+            .map_err(|reason| self.failed(GET_COLLISIONS, &reason))?;
+        let found = twins
+            .iter()
+            .filter(|twin| {
+                pairs.iter().any(|(a, b)| {
+                    (*a == twin.source && *b == twin.target)
+                        || (*a == twin.target && *b == twin.source)
+                })
+            })
+            .count();
+        Ok(CollisionPlanted {
+            planted: twins.len(),
+            found,
         })
     }
 

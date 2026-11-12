@@ -60,16 +60,20 @@ mod default_build {
             && !matches!(name, "get_card" | "list_cards"))
             || name == "split_card";
         let owner = OWNER_TOOLS.contains(&name);
-        let annotations = if WRITE_TOOLS.contains(&name) || moves_a_task || moves_a_card || owner {
-            json!({
-                "readOnlyHint": false,
-                "destructiveHint": false,
-                "idempotentHint": false,
-                "openWorldHint": false
-            })
-        } else {
-            json!({"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false})
-        };
+        // docs/features/collision-pass.md "Acceptance criteria", CP8:
+        // `mark_pairs` has the queue writers' annotations.
+        let marks = name == "mark_pairs";
+        let annotations =
+            if WRITE_TOOLS.contains(&name) || moves_a_task || moves_a_card || owner || marks {
+                json!({
+                    "readOnlyHint": false,
+                    "destructiveHint": false,
+                    "idempotentHint": false,
+                    "openWorldHint": false
+                })
+            } else {
+                json!({"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false})
+            };
         assert_eq!(
             tool["annotations"], annotations,
             "{era:?} {name}: annotations"

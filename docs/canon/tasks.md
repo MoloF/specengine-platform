@@ -81,7 +81,7 @@ API: `create_task`, `reject_with_task` (a follow-up), `get_task`, `list_tasks`, 
 
 ## Backup
 
-`STATE_FORMAT` 7; commands, import steps: `queue-backup.md`; export bounds: `queue-export.md`. Header `{"format":7,"queue_schema":13,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"cards":c,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), cards by number, events by `seq`. A schema 1-12 database exports unmigrated as format 7, schema 13 (1-3 no tasks or runs).
+`STATE_FORMAT` 7; commands, import steps: `queue-backup.md`; export bounds: `queue-export.md`. Header `{"format":7,"queue_schema":14,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"cards":c,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), cards by number, events by `seq`. A schema 1-12 database exports unmigrated as format 7, schema 13 (1-3 no tasks or runs).
 
 Import takes format 1 (five header keys, schema 1-3, proposals and events; later columns, `task_id` too, `NULL`), 2 (seven keys, schemas 4-8, no cards; a schema-6 dump's open approve stages restored in schema 7's shape, `proposal-revisions.md` "Stage and UI"), 3 (eight keys, schema 9, a card's `tasks` `NULL`), 4 (10, a proposal's `card_id`, `why` `NULL`), 5 (11, a card's `mandate` `NULL`) or 6 (12). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven, a format-3 to -6 of seven; a task or card ID not as the queue writes it; a task, a card, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four, 3-6 five).
 

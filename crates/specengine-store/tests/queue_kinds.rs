@@ -623,7 +623,7 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     // Schema 11 and 48 columns since docs/features/card-questions.md S1; 46
     // since docs/features/drift-queue.md "Queue schema 8". Schema 12 since
     // docs/features/task-mandate.md M5, `proposals` unchanged.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     assert_eq!(PROPOSAL_COLUMNS.len(), 50);
     assert_eq!(PROPOSAL_COLUMNS[..4], ["id", "project", "kind", "status"]);
     let scratch = Scratch::new("qk-schema");
@@ -641,7 +641,7 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "50"

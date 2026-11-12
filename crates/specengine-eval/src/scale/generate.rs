@@ -109,6 +109,11 @@ const COLLISION_TITLE_WORDS: usize = 3;
 const KEYWORD_TITLE_WORDS: usize = 2;
 /// The syllables of a stage word.
 const STAGE_SYLLABLES: usize = 2;
+/// The title twins `collision_planted` plants (task spec `collision-pass`
+/// CP10).
+const TWINS: usize = 25;
+/// Of them, those whose words are reversed.
+const TWINS_REVERSED: usize = 12;
 
 /// One size's tree, in memory.
 pub struct Synthetic {
@@ -123,6 +128,25 @@ pub struct Synthetic {
     /// What the similar read and its recall take (task spec
     /// `intake-similar`, IS12).
     pub similar: SimilarSamples,
+    /// The title twins the collision pass's recall plants once every other
+    /// read is measured (task spec `collision-pass` CP10); [`write`] never
+    /// writes them.
+    pub twins: Vec<Twin>,
+}
+
+/// One title twin: a live section's title, its case changed (and its words
+/// reversed, the first [`TWINS_REVERSED`]), put onto another live section;
+/// every part node has the one kind.
+pub struct Twin {
+    /// The section whose title is copied.
+    pub source: String,
+    /// The section that takes it.
+    pub target: String,
+    /// The target's file, root-relative.
+    pub path: String,
+    /// The target's heading line as written, and as planted.
+    pub written: String,
+    pub planted: String,
 }
 
 /// The similar read's keywords and the planted collisions, drawn after
@@ -295,6 +319,8 @@ pub fn generate(seed: u64, nodes: usize) -> Synthetic {
     }
     let samples = Samples::draw(&mut rng, &plan, &links, &written.rare_live, &stages);
     let similar = SimilarSamples::draw(&mut rng, &plan, &samples, &written.texts);
+    // Drawn last: the tree and every other sample are as before.
+    let twins = draw_twins(&mut rng, &plan, &written.texts);
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
     let non_hub = (0..nodes).filter(|&node| !plan.is_hub(node));
@@ -323,7 +349,66 @@ pub fn generate(seed: u64, nodes: usize) -> Synthetic {
         tier0_bytes,
         tier1_bytes,
         similar,
+        twins,
     }
+}
+
+/// [`TWINS`] pairs of distinct live sections drawn from `rng`, each pair's
+/// first title upper-cased onto its second, the first [`TWINS_REVERSED`]
+/// with their words reversed.
+fn draw_twins(rng: &mut Rng, plan: &Plan, texts: &[SectionText]) -> Vec<Twin> {
+    let pool: Vec<usize> = texts
+        .iter()
+        .enumerate()
+        .filter(|(_, text)| text.live)
+        .map(|(at, _)| at)
+        .collect();
+    let drawn = draw_distinct(rng, &pool, 2 * TWINS);
+    drawn
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .enumerate()
+        .map(|(turn, &[from, to])| {
+            let (source, target) = (&texts[from], &texts[to]);
+            let words: Vec<&str> = source.title.split_whitespace().collect();
+            let title = if turn < TWINS_REVERSED {
+                words.iter().rev().copied().collect::<Vec<_>>().join(" ")
+            } else {
+                words.join(" ")
+            };
+            let k = plan.file_of[target.node];
+            let id = id_of(target.node);
+            Twin {
+                source: id_of(source.node),
+                path: part_path(k, plan.files[k].first),
+                written: format!("## {} {{#{id}}}", target.title),
+                planted: format!("## {} {{#{id}}}", title.to_uppercase()),
+                target: id,
+            }
+        })
+        .collect()
+}
+
+/// Puts each of `twins` into its file under `tree`: the target's heading
+/// line replaced. An error names the file.
+pub fn plant(twins: &[Twin], tree: &Path) -> Result<(), String> {
+    for twin in twins {
+        let file = twin
+            .path
+            .split('/')
+            .fold(tree.to_path_buf(), |dir, part| dir.join(part));
+        let text = fs::read_to_string(&file)
+            .map_err(|error| format!("cannot read {}: {error}", file.display()))?;
+        let line = format!("\n{}\n", twin.written);
+        if !text.contains(&line) {
+            return Err(format!("{}: no heading of {}", file.display(), twin.target));
+        }
+        let text = text.replacen(&line, &format!("\n{}\n", twin.planted), 1);
+        fs::write(&file, text)
+            .map_err(|error| format!("cannot write {}: {error}", file.display()))?;
+    }
+    Ok(())
 }
 
 impl SimilarSamples {

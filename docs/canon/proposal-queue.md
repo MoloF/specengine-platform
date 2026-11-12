@@ -54,7 +54,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, never below a hub's floor (`queue-backup.md`), in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON (core `Author`); `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 13; higher -> exit 2, nothing changed; older builds refuse it, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 50). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 14; higher: `SchemaTooNew`, exit 2, nothing changed), all due in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 50). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -63,12 +63,12 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 3 | a record's five, `record_id` to `choice` | 40 | `decision-record.md` "Queue and documents" |
 | 4 | `tasks`, `runs`; `task_id` | 41 | `tasks.md` "Store" |
 | 5 | `staged`, `staged_at` | 43 | `decision-staging.md` "Queue" |
-| 6 | `interpretation` | 44 | `proposal-interpretation.md` "Row and review" |
-| 7 | open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
+| 6, 7 | `interpretation`; open approve stages gain `"editorial":null` | 44 | `proposal-{interpretation,revisions}.md` |
 | 8 | `drift`, `drift_hash` | 46 | `proposal-drift-item.md` "The item" |
 | 9, 10 | `cards`; `cards.tasks` | 46 | `cards.md` "Store" |
 | 11, 12 | `card_id`, `why`; `cards.mandate` | 48 | `card-{questions,mandate}.md` |
 | 13 | `gist`, `matters` | 50 | `plain-questions.md` "Shapes" |
+| 14 | `collision_marks`, never dumped | 50 | `collision-pass.md` "Ledger" |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).

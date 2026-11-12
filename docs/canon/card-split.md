@@ -87,7 +87,7 @@ note: <note>
 
 ## MCP
 
-`split_card` on stdio (30 tools) and a hub's `/mcp` (18): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `mandate`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card with one; a hub as the login. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, the determinism sentence: stdio 1 749 B, hub 1 764 ("You act as your login"). `INSTRUCTIONS`, `HUB_INSTRUCTIONS` (`mcp-read.md`, `hub-mcp.md` "Tools") and `read-spec` name it.
+`split_card` on stdio (32 tools) and a hub's `/mcp` (18): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `mandate`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card with one; a hub as the login. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, the determinism sentence: stdio 1 749 B, hub 1 764 ("You act as your login"). `INSTRUCTIONS`, `HUB_INSTRUCTIONS` (`mcp-read.md`, `hub-mcp.md` "Tools") and `read-spec` name it.
 
 ## Screen
 

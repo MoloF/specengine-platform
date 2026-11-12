@@ -589,11 +589,11 @@ fn pq5_a_question_with_options_takes_an_option_a_decision_none() {
 /// `proposal_columns` 48 for 12, 50 for 13, `None` for 14.
 #[test]
 fn pq8_a_new_queue_stands_at_13_with_50_proposal_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     let scratch = Scratch::new("pq-pq8-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "13");
+    assert_eq!(user_version(&db), "14");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(PROPOSAL_COLUMNS.len(), 50);
     assert_eq!(PROPOSAL_COLUMNS[48..], ["gist", "matters"]);
@@ -613,7 +613,8 @@ fn pq8_a_new_queue_stands_at_13_with_50_proposal_columns() {
     assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..48]));
     assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..48]));
     assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(14), None);
+    assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(15), None);
 }
 
 /// A schema-12 queue: one item of each deciding kind (a plain question, a
@@ -632,7 +633,7 @@ fn schema_12(db: &Path) {
     sqlite3(
         db,
         "UPDATE proposals SET gist = NULL, matters = NULL; ALTER TABLE proposals DROP COLUMN \
-         matters; ALTER TABLE proposals DROP COLUMN gist; PRAGMA user_version = 12;",
+         matters; ALTER TABLE proposals DROP COLUMN gist; DROP TABLE IF EXISTS collision_marks; PRAGMA user_version = 12;",
     );
 }
 
@@ -662,7 +663,7 @@ fn pq8_a_schema_12_queue_with_rows_steps_at_its_first_open() {
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), "3");
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(user_version(&db), "13");
+    assert_eq!(user_version(&db), "14");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(rows_of_12(&db), before, "every row as it was");
     assert_eq!(
@@ -684,7 +685,7 @@ fn pq8_a_schema_12_queue_with_rows_steps_at_its_first_open() {
     assert_eq!(question.recommendation, Some(0));
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "13", "stepped once");
+    assert_eq!(user_version(&db), "14", "stepped once");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS, "no second column");
 }
 
@@ -728,7 +729,8 @@ fn pq8_open_existing_reads_a_12_queue_and_steps_nothing() {
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS[..48]);
 }
 
-/// PQ8: schema 14 (this build's is 13) is `SchemaTooNew` for `open` and
+/// PQ8: a newer schema (15 since docs/features/collision-pass.md D6, this
+/// build's 14; 14 over 13 before it) is `SchemaTooNew` for `open` and
 /// `open_existing`, the file left alone. The path an older build meets at
 /// 13 (a build set to 12): recorded with the HEAD-of-slice binary in this
 /// slice's report.
@@ -738,7 +740,7 @@ fn pq8_a_newer_schema_is_refused() {
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     let newer = QUEUE_SCHEMA_VERSION + 1;
-    assert_eq!(newer, 14);
+    assert_eq!(newer, 15);
     sqlite3(&db, &format!("PRAGMA user_version = {newer};"));
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
@@ -749,7 +751,7 @@ fn pq8_a_newer_schema_is_refused() {
             other => panic!("expected SchemaTooNew {newer}, got {other:?}"),
         }
     }
-    assert_eq!(user_version(&db), "14", "left alone");
+    assert_eq!(user_version(&db), "15", "left alone");
 }
 
 // --------------------------------------------------------- D3, the stage

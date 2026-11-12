@@ -36,7 +36,7 @@ rmcp's configuration: `legacy_session_mode` on; `allowed_hosts` the hub's author
 Held in memory only: session id -> slug, login, last use. The ids are rmcp's, a UUID v4.
 
 - **Bound.** A session belongs to the slug and login of the POST whose 2xx issued it. A request naming an id not bound to its own slug and login gets 404 `Not Found: Session not found`, rmcp's bytes, on every method, with rmcp never called. The id may be unknown, ended, another login's or another project's; all four answer alike, so no login learns of another's session.
-- **One id per request.** A request carrying more than one `Mcp-Session-Id` value, equal or not, gets the same 404, with rmcp never called and nothing unbound. rmcp would close only the first value on DELETE, leaving live sessions no cap counts.
+- **One id per request.** A request carrying more than one `Mcp-Session-Id` value, equal or not, gets the same 404, with rmcp never called and nothing unbound. rmcp would close only the first on DELETE, leaving sessions no cap counts.
 - **Drop-safe.** A request dropped after rmcp issued an id, before the daemon bound it, has that session closed: no unbound session outlives its request.
 - **Caps.** 4 per login per project and 64 per hub, counting only the sessions rmcp still holds.
   - A login's fifth session in a project closes its least recently used one there.
@@ -68,7 +68,7 @@ Eighteen tools and both resources, each its stdio twin's CLI call:
 
 None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 18 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it, never only on a typed `CallToolRequest`. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
 
-Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub).
+Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub); `get_collisions`, `mark_pairs` (local: `collision-pass.md`).
 
 **Texts.** `HUB_INSTRUCTIONS`, and thirteen hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the four card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other five are stdio's. Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
 
@@ -120,15 +120,15 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 - A bearer `Remote-User` that is an email or a UUID would split a person in two; the deployment's Basic user is the door login.
 - Answers carry the corpus to the client's model provider.
 - A forged `Remote-User` raises proposals as anyone: no real use before the gate, step 11b-3.
-- A body's buffer is reserved from its `Content-Length`, at most the 4 MiB cap.
+- A body's buffer is reserved from its `Content-Length`, at most 4 MiB.
 - A body that is no JSON-RPC message but names an unknown tool is refused as one (rmcp: a parse error).
 - A duplicated JSON key can cost up to three parses of one body.
 - `Mounts::shutdown` effectively never runs: sessions end with the process.
-- The drop-safe bind has no end-to-end test; the window is one task's step.
+- The drop-safe bind has no end-to-end test.
 
 ## Client check
 
-By hand at the gate, not yet run; findings go to `hub-deploy.md` "Gate" with the client's version and date.
+By hand at the gate; findings go to `hub-deploy.md` "Gate" with the client's version and date.
 1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http ... --header "Authorization: Basic ..."`. Expected: the session holds, the GET stream reopens at 300 s, 18 tools, `login` on a proposal and a card, a second login's own sessions.
 2. **claude.ai and Claude Desktop, at the gate, step 11b-3,** on the public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
 

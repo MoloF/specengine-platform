@@ -196,13 +196,15 @@ fn under(files: &BTreeSet<String>, dir: &str) -> BTreeSet<String> {
 
 // ------------------------------------------------------------------ AC-03
 
-/// The plugin's seven skill bodies (the root `README.md` "Claude Code plugin",
+/// The plugin's eight skill bodies (the root `README.md` "Claude Code plugin",
 /// its Files bullet; `analyze` and `implement` since docs/features/plugin-gate.md,
-/// `feature` since docs/features/plugin-roles.md): under `roots` through
-/// `plugin`, kept out of the walk by `exclude` alone.
-const SKILL_FILES: [&str; 7] = [
+/// `feature` since docs/features/plugin-roles.md, `check-collisions` since
+/// docs/features/collision-pass.md CP9): under `roots` through `plugin`, kept
+/// out of the walk by `exclude` alone.
+const SKILL_FILES: [&str; 8] = [
     "plugin/specengine/skills/analyze/SKILL.md",
     "plugin/specengine/skills/ask-owner/SKILL.md",
+    "plugin/specengine/skills/check-collisions/SKILL.md",
     "plugin/specengine/skills/feature/SKILL.md",
     "plugin/specengine/skills/implement/SKILL.md",
     "plugin/specengine/skills/propose-spec-change/SKILL.md",
@@ -766,14 +768,20 @@ fn the_core_render_is_the_committed_index() {
         (&set[4], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[2].1)),
         // card-tasks (RM-0092): the `card*` card canons.
         (&set[5], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[3].1)),
+        // docs/features/collision-pass.md: the `code-*` code-layer canons.
         (&set[6], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[4].1)),
+        (&set[7], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[5].1)),
         (
-            &set[7],
+            &set[8],
             "## Decisions",
-            format!("`{}`", INDEX_LIVE_SHARDS[5].1),
+            format!("`{}`", INDEX_LIVE_SHARDS[6].1),
         ),
-        (&set[8], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[6].1)),
-        (&set[9], "## Specs", format!("`{}`", INDEX_LIVE_SHARDS[7].1)),
+        (&set[9], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[7].1)),
+        (
+            &set[10],
+            "## Specs",
+            format!("`{}`", INDEX_LIVE_SHARDS[8].1),
+        ),
     ] {
         let (path, text) = (output.path.as_str(), output.bytes.as_str());
         assert!(
@@ -801,13 +809,14 @@ fn the_core_render_is_the_committed_index() {
     }
     // Seven since docs/features/review-form.md (the `proposal-*` shard),
     // eight since docs/features/hub-ops.md (the `hub*` shard), nine since
-    // card-tasks (RM-0092, the `card*` shard): the archive and eight live
-    // shards.
-    assert_eq!(INDEX_SET - 1, 9);
+    // card-tasks (RM-0092, the `card*` shard), ten since
+    // docs/features/collision-pass.md (the `code-*` shard): the archive and
+    // nine live shards.
+    assert_eq!(INDEX_SET - 1, 10);
     assert_eq!(
         section_lines(root, SHARDS).len(),
         INDEX_SET - 1,
-        "{INDEX}: nine pointers"
+        "{INDEX}: ten pointers"
     );
     // No plan item in the root: each is claimed or Tier 3.
     assert!(
@@ -1161,7 +1170,8 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     let (root, shard) = (set[0].bytes.as_str(), set[1].bytes.as_str());
     // Three Tier 3 seeds sit under the decisions shard's claim: Tier 3
     // places before the claims.
-    let [_, _, _, _, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
+    // The `code-*` shard (docs/features/collision-pass.md) fifth.
+    let [_, _, _, _, _, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
     assert_eq!(
         COMPACTION_SEEDS
             .iter()
@@ -1376,6 +1386,8 @@ fn each_seed_blocks_exactly_its_target() {
         (canon_spec, _),
         _,
         _,
+        _,
+        // The `code-*` shard (docs/features/collision-pass.md).
         _,
         (canon, _),
         (decisions, _),
@@ -1962,7 +1974,9 @@ const SEEDS: &[Seed] = &[
     // `spec-*` one): the shard drifts, the root untouched.
     (
         "a new canon document, not rendered",
-        INDEX_LIVE_SHARDS[4].0,
+        // The `docs/canon/*.md` shard, sixth since
+        // docs/features/collision-pass.md (the `code-*` shard fifth).
+        INDEX_LIVE_SHARDS[5].0,
         "index-drift",
         |r| {
             write_new(
@@ -1976,7 +1990,7 @@ const SEEDS: &[Seed] = &[
     // leaves that shard for the archive, the root untouched.
     (
         "ADR-0010 superseded-by ADR-0001, not rendered",
-        INDEX_LIVE_SHARDS[5].0,
+        INDEX_LIVE_SHARDS[6].0,
         "index-drift",
         |r| {
             set_key(

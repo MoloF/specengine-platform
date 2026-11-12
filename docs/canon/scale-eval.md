@@ -11,7 +11,7 @@ reviewed: 2026-11-12
 `specengine-eval scale` (eval `src/scale/`) takes each `--nodes` size in turn and:
 - generates a corpus;
 - indexes it cold and checks it;
-- times today's warm reads through the CLI library, as MCP's `get_node`, `search` and `get_context_bundle` call it (`crates/specengine-mcp/src/read.rs`), five whole reads, of `get_flow`, `get_trace` and `get_tree`, and `similar`, a create's probes, with their recall (`proposal-similar.md` "Measured");
+- times today's warm reads through the CLI library, as MCP's `get_node`, `search` and `get_context_bundle` call it (mcp `read.rs`), five whole reads, of `get_flow`, `get_trace` and `get_tree`, `similar`, a create's probes, with their recall (`proposal-similar.md` "Measured"), and `collisions` with its planted twins (`collision-pass.md` "Measured");
 - replays each step of the first four alone;
 - computes W_after by `w`'s formula (`docs/canon/w-measurement.md` "W_after").
 
@@ -112,7 +112,7 @@ The steps, each the best of three on the warm index:
 
 `other_us.<read>` is `max(0, median_us - the sum of its steps)`: locating, assembly and fitting, rendering, noise.
 
-The whole reads, timed alike, have no steps, `other_us`, trusted twin or bar (a hub's flow and trace walk): `get_flow_top`, `flow` with no ROOT, `depth: 0`; `get_flow_root`, of the flow root, `depth: 1`; `get_flow_stage`, of the stage; each `trace: true`; `get_trace_summary`, `summary: true`; `get_tree`, no ROOT, `depth: 1`. So has `similar`.
+The whole reads, timed alike, have no steps, `other_us`, trusted twin or bar (a hub's flow and trace walk): `get_flow_top`, `flow` with no ROOT, `depth: 0`; `get_flow_root`, of the flow root, `depth: 1`; `get_flow_stage`, of the stage; each `trace: true`; `get_trace_summary`, `summary: true`; `get_tree`, no ROOT, `depth: 1`. So have `similar` and `collisions`.
 
 ## Output
 
@@ -123,7 +123,7 @@ stdout is the envelope `{measurement: "scale", label, versions, wall_ms, result}
 - `reads_trusted.<read> {median_us, max_us}` and `growth_trusted.<read>` (each median at least 10 000 us), the trusted reads'; `trusted_differs`: (read, target) pairs whose trusted answer's BLAKE3 is not the walking one's;
 - `steps`, `other_us`, `w_after {median, p90, max, tier0, tier1_max}` by nearest rank;
 - `hub {degree, links_shown, get_node_links_us, get_context_bundle_us, w_after, trusted {get_node_links_us, get_context_bundle_us}}`;
-- `similar_recall {planted, found, variants}`, each of the four `{planted, found}`;
+- `similar_recall {planted, found, variants}`, each of the four `{planted, found}`; `collision_planted {planted, found}`;
 - `nondeterministic`: (read, target) pairs whose four answers differ.
 
 With `--corpus-only`, a size holds `nodes` and `corpus` only. stdout holds numbers only, never an ID, word or path. stderr holds one summary line per size, the trusted medians too.
@@ -141,7 +141,7 @@ Every call takes `Globals {root: tree}`, an `Env` with `cwd` the tree and home t
 
 ## Baseline
 
-2026-11-08, `flow-scope`'s head, a quiet machine, release, seed 1, budget 10 000, `wall_ms` 54 679. A later slice re-runs its base and head on one machine. 12b's run, before 12c-12e and the flow shape: `docs/features/scale-eval.md` "Baseline".
+2026-11-08, `flow-scope`'s head, a quiet machine, release, seed 1, budget 10 000, `wall_ms` 54 679. A later slice re-runs its base and head on one machine.
 
 | Read, median ms | 1k | 10k | 100k |
 |---|---|---|---|
@@ -163,7 +163,7 @@ At 100k: 20 015 files, 23.9 MB, 101 746 drawn links, 3 973 Tier 3; build 11.3 s,
 
 `tests/scale_edges.rs` checks the index's edge tables (`spec-index-edges.md`) on the `--corpus-only` 1k tree: they equal core's resolution before and after 20 seeded edits, and the worktree dumps as a fresh index's.
 
-`scale_baseline` is `#[ignore]` and runs the baseline: `cargo nextest run -p specengine-eval --release --test scale_cli --run-ignored ignored-only scale_baseline --no-capture`. Release runs grow `target.noindex`.
+`scale_baseline` is `#[ignore]` and runs the baseline: `cargo nextest run -p specengine-eval --release --test scale_cli --run-ignored ignored-only scale_baseline --no-capture`.
 
 ## Known limits
 

@@ -10,7 +10,7 @@ adrs: []
 
 ## Why
 
-`collision-pass` has agents file a real collision as `report_discrepancy` with `gap_type: contradicts` (`docs/features/collision-pass.md` D4). The owner gets a summary, IDs and a flat evidence list, and works out which quote belongs to which document. His vision asks for "what conflicts with what", side by side under their titles (RM-0088).
+`collision-pass` has agents file a real collision as `report_discrepancy` with `gap_type: contradicts` (`docs/canon/collision-pass.md`). The owner gets a summary, IDs and a flat evidence list, and works out which quote belongs to which document. His vision asks for "what conflicts with what", side by side under their titles (RM-0088).
 
 After this slice the core computes per read, for a `contradicts` discrepancy with exactly two targets, a `pair`: each side's ID, title and path, resolved now, with the indices of the evidence citing that side's file, and the rest under `other`; any other item `null`. The review document (`spec review`, `get_proposal`, the daemon's `Proposal`) and the round item serve it; the Inbox, Questions and a card's Answer… render two columns from a lazy chunk. Nothing stored, no queue schema or backup format step; plugin 0.45.0, since `get_proposal`'s output schema gains a key.
 

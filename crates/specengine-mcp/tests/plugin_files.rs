@@ -260,6 +260,16 @@
 //!   0.43.0, 0.42.0's schemas today's without the keys ([`as_of_0_42_0`]).
 //!   M: the `gist` sentence dropped; the schema changed with no new
 //!   `SCHEMA_PINS` entry.
+//! - collision-pass (RM-0060, CP9,
+//!   docs/features/collision-pass.md "Acceptance criteria"): 0.43.0 ->
+//!   0.44.0, MINOR: two tools, `get_collisions` and `mark_pairs`, and the
+//!   eighth skill, `check-collisions` (the eighteenth file). A `PINS` entry
+//!   0.44.0, the tree with plugin.json's version and `read-spec`'s
+//!   description set back and the skill removed 0.43.0's; a `SCHEMA_PINS`
+//!   entry 0.44.0, 0.43.0's schemas today's without the two tools
+//!   ([`as_of_0_43_0`]). The skills' descriptions 1 197 B together, 3 B of
+//!   the 1 200 left. M: the schema changed with no new `SCHEMA_PINS` entry;
+//!   plugin.json left at 0.43.0.
 //!
 //! The repository is only read.
 
@@ -677,7 +687,30 @@ const PINS: &[(&str, &str)] = &[
         "0.43.0",
         "5d29b41c4ea4d759ba06594d6f7dc37c2c7e4782fd596ffdae79300225e2943e",
     ),
+    // collision-pass (RM-0060, CP9: 0.43.0 -> 0.44.0, MINOR: two tools and
+    // the eighth skill): plugin.json's version, `read-spec`'s description
+    // ([`READ_SPEC_DESCRIPTION_0_44_0`]) and `check-collisions`; the version
+    // and the description set back and the skill removed, the tree hashes as
+    // 0.43.0's pin.
+    (
+        "0.44.0",
+        "54c6280df8ec87df4803ea2c5d819a0fdcf8391a91c89b0b7ca28b9326f9504f",
+    ),
 ];
+
+/// docs/features/collision-pass.md CP9: `read-spec`'s description, `(0.43.0's,
+/// 0.44.0's)`: its second sentence dropped, 283 -> 143 bytes.
+const READ_SPEC_DESCRIPTION_0_44_0: (&str, &str) = (
+    "description: Read the project's spec through the SpecEngine tools before reading or \
+     changing behaviour the spec describes, or when asked what the spec says. A context bundle \
+     first (a search first when no ID is known), then a node, its links or the tree; spec files \
+     only for what the bundle lacks.\n",
+    "description: Read the project's spec through the SpecEngine tools before reading or \
+     changing behaviour the spec describes, or when asked what the spec says.\n",
+);
+
+/// docs/features/collision-pass.md CP9: the eighth skill's file.
+const CHECK_COLLISIONS: &str = "specengine/skills/check-collisions/SKILL.md";
 
 /// docs/features/plain-questions.md "The plugin": `ask-owner`'s eight
 /// edits, body 4 095 -> 4 089 bytes by `plugin_skills.rs`' measure (the
@@ -1221,13 +1254,21 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
         "0.43.0",
         "0a200d69435a03f396ecb30c8c5d60644be9914fb77cf21d53e42cec587ff3a1",
     ),
+    // collision-pass (RM-0060, CP9): `get_collisions` and `mark_pairs`, their
+    // input and output schemas ([`as_of_0_43_0`] takes the two tools out; no
+    // other tool's schema changed).
+    (
+        "0.44.0",
+        "781ef4398c3e68ce6f6cf0cb3753f9e7d1e751c2d73ed3452bd9b9a819b8e0bd",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
 /// ten (its Files bullet) and docs/canon/plugin-files.md "Changing it", Files
 /// (the five agents and `skills/feature/SKILL.md`), docs/features/flow-authoring.md
-/// `skills/write-flow/SKILL.md`, seventeen.
-const FILES: [&str; 17] = [
+/// `skills/write-flow/SKILL.md`, seventeen; docs/features/collision-pass.md
+/// CP9 `skills/check-collisions/SKILL.md`, eighteen.
+const FILES: [&str; 18] = [
     ".claude-plugin/marketplace.json",
     "specengine/.claude-plugin/plugin.json",
     "specengine/.mcp.json",
@@ -1240,6 +1281,7 @@ const FILES: [&str; 17] = [
     "specengine/hooks/hooks.json",
     "specengine/skills/analyze/SKILL.md",
     "specengine/skills/ask-owner/SKILL.md",
+    "specengine/skills/check-collisions/SKILL.md",
     "specengine/skills/feature/SKILL.md",
     "specengine/skills/implement/SKILL.md",
     "specengine/skills/propose-spec-change/SKILL.md",
@@ -1579,7 +1621,7 @@ fn ac03_problems(tree: &Tree) -> Vec<String> {
     let wanted = BTreeSet::from(FILES);
     let mut problems: Vec<String> = found
         .difference(&wanted)
-        .map(|path| format!("plugin/{path}: outside the seventeen files"))
+        .map(|path| format!("plugin/{path}: outside the eighteen files"))
         .collect();
     problems.extend(
         wanted
@@ -1636,7 +1678,7 @@ fn ac03_the_plugin_tree_is_data_s_ten_files() {
         write(&copy, extra, b"{}\n");
         assert_names(
             &ac03_problems(&read_tree(&copy)),
-            &format!("plugin/{extra}: outside the seventeen files"),
+            &format!("plugin/{extra}: outside the eighteen files"),
             extra,
         );
         fs::remove_file(copy.join(extra)).unwrap();
@@ -1992,7 +2034,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
         .keys()
         .filter(|path| path.ends_with("/SKILL.md"))
         .collect();
-    assert_eq!(skills.len(), 7, "{skills:?}");
+    // Eight since docs/features/collision-pass.md CP9.
+    assert_eq!(skills.len(), 8, "{skills:?}");
 
     // M: `name` other than the directory.
     let renamed = edited(&tree, READ_SPEC, "name: read-spec\n", "name: read-specs\n");
@@ -2233,9 +2276,11 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// 0.37.0 since department-split (RM-0100), 0.38.0 since task-mandate
 /// (RM-0104), 0.39.0 since card-context (RM-0108), 0.40.0 since
 /// node-history (RM-0035), 0.41.0 since upstream-signal (RM-0105), 0.42.0
-/// since intake-similar (RM-0059, IS11). No room is left, so the next byte
-/// is over.
-/// M: a 31-byte description.
+/// since intake-similar (RM-0059, IS11), 0.43.0 since plain-questions
+/// (RM-0088), 0.44.0 since collision-pass (RM-0060, CP9: an eighth skill,
+/// `check-collisions`, its description 137 B, `read-spec`'s 140 B shorter:
+/// 1 197 B together, 3 B of room).
+/// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     let tree = committed();
@@ -2247,6 +2292,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
         [
             "analyze",
             "ask-owner",
+            "check-collisions",
             "feature",
             "implement",
             "propose-spec-change",
@@ -2256,7 +2302,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.43.0")
+        json!("0.44.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2267,16 +2313,18 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     };
     assert_eq!(description(&tree), 30, "\"Budgets\"");
 
-    let fits = with_description(&tree, WRITE_FLOW, &"a".repeat(30));
+    // 1 197 B together since docs/features/collision-pass.md CP9: 3 B more
+    // fit, a fourth is over.
+    let fits = with_description(&tree, WRITE_FLOW, &"a".repeat(33));
     assert_eq!(
         ac05_problems(&fits),
         Vec::<String>::new(),
         "1 200 B together"
     );
     assert_names(
-        &ac05_problems(&with_description(&tree, WRITE_FLOW, &"a".repeat(31))),
+        &ac05_problems(&with_description(&tree, WRITE_FLOW, &"a".repeat(34))),
         "together, over 1 200",
-        "a 31-byte description",
+        "a 34-byte description",
     );
 
     let at_cap = with_body_size(&tree, WRITE_FLOW, 4096);
@@ -2407,11 +2455,48 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // collision-pass (RM-0060, CP9: 0.43.0 -> 0.44.0): plugin.json's version
+    // and `read-spec`'s description, each once, and `check-collisions`; set
+    // back and removed, the tree is 0.43.0's pinned content, every other
+    // skill and role byte-equal. M: plugin.json left at 0.43.0; the skill or
+    // another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.44.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.44.0"),
+        "plugin.json's version"
+    );
+    let mut at_0_43_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.44.0\"",
+        "\"version\": \"0.43.0\"",
+    );
+    at_0_43_0 = edited(
+        &at_0_43_0,
+        READ_SPEC,
+        READ_SPEC_DESCRIPTION_0_44_0.1,
+        READ_SPEC_DESCRIPTION_0_44_0.0,
+    );
+    assert!(
+        at_0_43_0.files.remove(CHECK_COLLISIONS).is_some(),
+        "the skill is in the tree"
+    );
+    assert_eq!(
+        content_hash(&at_0_43_0),
+        PINS[PINS.len() - 2].1,
+        "0.44.0 changes plugin.json's version, read-spec's description and adds the skill only"
+    );
+    let tree = at_0_43_0;
+    let pins_0_43_0 = &PINS[..PINS.len() - 1];
     // plain-questions (RM-0088, PQ11: 0.42.0 -> 0.43.0): plugin.json's
     // version and `ask-owner`'s eight edits, each once; set back, the tree is
     // 0.42.0's pinned content, every other skill and role byte-equal. M:
     // plugin.json left at 0.42.0; an edit missing or another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.43.0"));
+    assert_eq!(
+        pins_0_43_0.last().map(|(version, _)| *version),
+        Some("0.43.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.43.0"),
@@ -2428,11 +2513,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     }
     assert_eq!(
         content_hash(&at_0_42_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_43_0[pins_0_43_0.len() - 2].1,
         "0.43.0 changes plugin.json's version and ask-owner's edits only"
     );
     let tree = at_0_42_0;
-    let pins_0_42_0 = &PINS[..PINS.len() - 1];
+    let pins_0_42_0 = &pins_0_43_0[..pins_0_43_0.len() - 1];
     // intake-similar (RM-0059, IS11: 0.41.0 -> 0.42.0): plugin.json's
     // version and the two skills' edits, each once; set back, the tree is
     // 0.41.0's pinned content, every other skill and role byte-equal. M:
@@ -3731,6 +3816,15 @@ fn as_of_0_41_0(schemas: &mut Value) {
     );
 }
 
+/// collision-pass (RM-0060, CP9): `schemas` as 0.43.0 listed them: no
+/// `get_collisions`, no `mark_pairs`; no other tool's schema changed.
+fn as_of_0_43_0(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("the schemas by tool");
+    for name in ["get_collisions", "mark_pairs"] {
+        assert!(tools.remove(name).is_some(), "{name} is listed");
+    }
+}
+
 /// plain-questions (RM-0088, PQ11): `schemas` as 0.42.0 listed them: no
 /// `gist`, `matters`, `options`, `recommendation` in `ask_question`'s input;
 /// no `gist`, `matters` in the review document's output (`propose_change`,
@@ -4610,7 +4704,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[32].0, "0.41.0", "an entry for 0.41.0");
     assert_eq!(SCHEMA_PINS[33].0, "0.42.0", "an entry for 0.42.0");
     assert_eq!(SCHEMA_PINS[34].0, "0.43.0", "an entry for 0.43.0");
-    assert_eq!(SCHEMA_PINS.len(), 35, "0.43.0 the last entry");
+    assert_eq!(SCHEMA_PINS[35].0, "0.44.0", "an entry for 0.44.0");
+    assert_eq!(SCHEMA_PINS.len(), 36, "0.44.0 the last entry");
+    // collision-pass (RM-0060, CP9): 0.43.0's schemas are today's without
+    // `get_collisions` and `mark_pairs`. M: `SCHEMA_PINS` not appended.
+    let mut at_0_43_0 = schemas.clone();
+    as_of_0_43_0(&mut at_0_43_0);
+    let at_0_43_0_hash = schema_hash(&at_0_43_0);
+    assert_eq!(
+        at_0_43_0_hash, SCHEMA_PINS[34].1,
+        "0.43.0's schemas are today's without collision-pass' two tools"
+    );
+    assert_ne!(
+        at_0_43_0_hash, current,
+        "collision-pass changed the schemas"
+    );
+    let (schemas, current) = (at_0_43_0, at_0_43_0_hash);
     // plain-questions (RM-0088, PQ11): 0.42.0's schemas are today's without
     // `ask_question`'s four keys and the outputs' `gist` and `matters`. M:
     // `SCHEMA_PINS` not appended.

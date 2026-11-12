@@ -120,7 +120,11 @@
 //! - [`card_counts`] — a project's card counts, the pure half (task spec
 //!   `department-overview`): the store's grouped rows per (flow, column)
 //!   and per flow, ordered by `[card]`, no clock, computed per read and
-//!   never stored.
+//!   never stored;
+//! - [`collisions`] — the collision pass, the pure half (task spec
+//!   `collision-pass`): the pairs of nodes that may collide, scored from
+//!   shared link targets and title trigrams within a kind, ordered, and
+//!   filtered by the verdicts an agent left; a mark's caps and names.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -132,6 +136,7 @@ pub mod card_toml;
 pub mod catalog;
 pub mod check;
 pub mod code_toml;
+pub mod collisions;
 pub mod create;
 pub mod delivery;
 pub mod drift;

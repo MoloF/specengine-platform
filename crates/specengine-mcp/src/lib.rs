@@ -29,6 +29,9 @@
 //! spec `card-store` and `docs/features/department-split.md`
 //! "Acceptance criteria", S8, writing only the queue, and none accepts a
 //! card);
+//! the collision tools `get_collisions` and `mark_pairs` (`spec
+//! collisions`, `spec collisions mark`: task spec `collision-pass`, the
+//! mark writing only the queue DB's ledger, no event);
 //! resources `spec://<slug>/tree` and `spec://<slug>/node/<id>` over the
 //! same calls; the owner's form `review_proposal` (task spec
 //! `review-form`: `_meta["anthropic/requiresUserInteraction"]: true`, a
@@ -53,6 +56,7 @@
 
 mod cards;
 mod code;
+mod collisions;
 mod hub;
 mod intake;
 mod mirror;

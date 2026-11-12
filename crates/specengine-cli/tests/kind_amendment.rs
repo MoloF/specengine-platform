@@ -2001,7 +2001,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]

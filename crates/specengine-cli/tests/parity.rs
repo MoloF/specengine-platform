@@ -268,6 +268,8 @@ fn export_index_recreates_this_repository_s_index() {
         "## Canon",
         // card-tasks (RM-0092): the `card*` card canons.
         "## Canon",
+        // docs/features/collision-pass.md: the `code-*` code-layer canons.
+        "## Canon",
         "## Canon",
         "## Decisions",
         "## Canon",

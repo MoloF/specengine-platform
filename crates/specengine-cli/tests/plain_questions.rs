@@ -1700,14 +1700,14 @@ fn without_plain_columns(line: &str) -> String {
 #[test]
 fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
     assert_eq!(STATE_FORMAT, 7);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     assert_eq!(PROPOSAL_COLUMNS.len(), 50);
     let pair = Pair::new("pq-pq8", "spec-a");
     mixed_queue(&pair);
     let dumps = pair.scratch.dir("dumps");
     let lines = export(&pair, &pair.home, &dumps.join("seven.jsonl"));
     assert!(
-        lines[0].starts_with("{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -1758,7 +1758,7 @@ fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
     // gist and matters out, as schema 12 held none).
     let mut six = lines.clone();
     six[0] = six[0].replacen(
-        "\"format\":7,\"queue_schema\":13,",
+        "\"format\":7,\"queue_schema\":14,",
         "\"format\":6,\"queue_schema\":12,",
         1,
     );
@@ -1783,7 +1783,7 @@ fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
         .unwrap();
     assert_eq!(String::from_utf8_lossy(&rows_sql.stdout), "5\n");
     let reexported = export(&pair, &older, &dumps.join("six-again.jsonl"));
-    assert_eq!(reexported[0], lines[0], "the header format 7, schema 13");
+    assert_eq!(reexported[0], lines[0], "the header format 7, schema 14");
     for index in 1..lines.len() {
         let want = if rows.contains(&index) {
             format!(
@@ -1811,13 +1811,13 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
         .find(|index| lines[*index].starts_with("{\"proposals\":"))
         .unwrap();
     let mut header_12 = lines.clone();
-    header_12[0] = header_12[0].replacen("\"queue_schema\":13,", "\"queue_schema\":12,", 1);
+    header_12[0] = header_12[0].replacen("\"queue_schema\":14,", "\"queue_schema\":12,", 1);
     let mut no_matters = lines.clone();
     let at = no_matters[row].rfind(",\"matters\":").unwrap();
     no_matters[row] = format!("{}}}}}", &no_matters[row][..at]);
     let mut six_with_gist = lines.clone();
     six_with_gist[0] = six_with_gist[0].replacen(
-        "\"format\":7,\"queue_schema\":13,",
+        "\"format\":7,\"queue_schema\":14,",
         "\"format\":6,\"queue_schema\":12,",
         1,
     );
@@ -1829,7 +1829,12 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
     let mut eight = lines.clone();
     eight[0] = eight[0].replacen("\"format\":7,", "\"format\":8,", 1);
     for (name, bad, line, says) in [
-        ("header-12", header_12, 1, "(it holds queue schema 13)"),
+        (
+            "header-12",
+            header_12,
+            1,
+            "(it holds queue schemas 13 to 14)",
+        ),
         ("no-matters", no_matters, row + 1, "matters"),
         ("six-with-gist", six_with_gist, row + 1, "gist"),
         ("eight", eight, 1, "upgrade SpecEngine"),
@@ -1847,16 +1852,16 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
     }
 
     // A queue a newer build stepped: refused, left at 14.
-    pair.sql("PRAGMA user_version = 14;");
+    pair.sql("PRAGMA user_version = 15;");
     let run = pair.spec_piped(&pair.linked, &["inbox"], b"");
     assert_eq!(run.code, 2, "{}", run.show());
     assert!(
         run.stderr
-            .contains("schema version 14, this build knows 13"),
+            .contains("schema version 15, this build knows 14"),
         "{}",
         run.stderr
     );
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "14");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "15");
 }
 
 // ----------------------------------------------------------------- PQ10

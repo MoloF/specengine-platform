@@ -5,15 +5,18 @@
 //! mandate: canon `card-mandate`, "The rule"; a question's gist and
 //! matters: task spec `plain-questions` PQ8): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":7,"queue_schema":13,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
+//! `{"format":7,"queue_schema":14,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `cards` row by ID number, every
 //! `events` row by `seq`, each `{"<table>":{…}}` with every column in table
 //! order: `TEXT` a string, `NULL` `null`, `run`, `position` and `seq`
 //! numbers; JSON columns stay the strings stored. No export time and no host
-//! inside: equal queues give equal bytes. Format 7 holds queue schema 13,
-//! its proposals' 50 columns, `gist` and `matters` last. A format-6 dump
+//! inside: equal queues give equal bytes. Format 7 holds queue schema 13 or
+//! 14, its proposals' 50 columns, `gist` and `matters` last; step 14 adds
+//! only a local cache no dump holds (task spec `collision-pass` CP6), so a
+//! schema 14 dump has a schema 13 one's tables and either restores into an
+//! empty cache. A format-6 dump
 //! holds queue schema 12 and still restores, its proposals' 48 columns,
 //! `gist` and `matters` restored `NULL`; its cards' 26 columns, `mandate`
 //! last. A format-5 dump holds queue
@@ -96,7 +99,8 @@ const CARD_ITEMS_SCHEMA: i64 = 11;
 const MANDATE_SCHEMA: i64 = 12;
 
 /// The first queue schema whose proposals hold `gist` and `matters`:
-/// format 7 holds it, to this build's.
+/// format 7 holds it, to this build's (14: step 14 changes no dumped
+/// table).
 const PLAIN_QUESTIONS_SCHEMA: i64 = 13;
 
 /// The header's keys, in the order written.

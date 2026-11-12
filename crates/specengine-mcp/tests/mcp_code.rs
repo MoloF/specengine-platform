@@ -1906,7 +1906,12 @@ fn code_mirrors_pin_the_q35_types() {
 /// "Acceptance criteria", S8 (the orchestrator's decision): the cards line
 /// names `split_card` and `split` ([`SPLIT_WORDS`], 18 bytes), `search` loses
 /// [`SEARCH_INPUTS`] (18 bytes, still in its schema);
-/// [`as_of_department_split`] takes that back.
+/// [`as_of_department_split`] takes that back. 2 039 since
+/// docs/features/collision-pass.md "Acceptance criteria", CP8 (D8):
+/// [`COLLISIONS_LINE`] after [`REVIEW_LINE`] (65 bytes), the resources
+/// sentence [`RESOURCES_SENTENCE`] cut (74 bytes; `resources/list` and
+/// `resources/templates/list` still list them); [`as_of_collision_pass`]
+/// takes that back.
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec in git. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1927,6 +1932,7 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "distinct_from names each; work on your working answer.\n",
     "- report_drift = spec propose drift: queues HEAD's lock drift.\n",
     "- review_proposal = review --brief after the owner's form; only when the owner asks.\n",
+    "- get_collisions, mark_pairs = spec collisions, collisions mark.\n",
     "- get_task, claim_task, submit_plan, report_run, complete_task = spec task ",
     "show|claim|plan|report|complete.\n",
     "- list_cards, get_card, create_card, split_card, edit_card, move_card = spec card ",
@@ -1934,8 +1940,7 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "\n",
     "REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: ",
     "--kind is kinds, ROOT is root, --links, --bindings are with items. Answers are cut at ",
-    "40000 characters. ",
-    "Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.\n",
+    "40000 characters.\n",
     "\n",
     "Rules:\n",
     "- Deterministic: one state, one result; no LLM inside.\n",
@@ -1963,6 +1968,25 @@ const SPLIT_WORDS: [&str; 2] = ["split_card, ", "split|"];
 /// ... and what `search`'s clause loses for it (18 bytes), its inputs kept in
 /// its schema.
 const SEARCH_INPUTS: &str = ", limit?, archive?";
+
+/// docs/features/collision-pass.md CP8 (D8): the line naming the two tools,
+/// its LF included (65 bytes), right after [`REVIEW_LINE`].
+const COLLISIONS_LINE: &str = "- get_collisions, mark_pairs = spec collisions, collisions mark.\n";
+
+/// ... and the sentence cut for it (74 bytes): the resources stay listed by
+/// `resources/list` and `resources/templates/list`.
+const RESOURCES_SENTENCE: &str =
+    " Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.";
+
+/// department-split's text (2 048 bytes) out of collision-pass': no
+/// collisions line, the resources sentence back after the cap's.
+fn as_of_collision_pass(instructions: &str) -> String {
+    instructions.replacen(COLLISIONS_LINE, "", 1).replacen(
+        "Answers are cut at 40000 characters.\n",
+        &format!("Answers are cut at 40000 characters.{RESOURCES_SENTENCE}\n"),
+        1,
+    )
+}
 
 /// trace-views' text (2 048 bytes) out of department-split's: the cards
 /// line and `search`'s inputs as they were.
@@ -2159,9 +2183,15 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// docs/features/show-bindings.md, docs/features/impact.md,
 /// docs/features/impact-since.md, docs/features/review-form.md,
 /// docs/features/flow-read.md, docs/features/card-store.md,
-/// docs/features/card-trace.md, docs/features/trace-views.md and
-/// docs/features/department-split.md).
-const PLANNED_BLAKE3: &str = "7de2fdaa1885277df812c2e368a1fce532f8fc5aba6db0e6185ead5fbe87d351";
+/// docs/features/card-trace.md, docs/features/trace-views.md,
+/// docs/features/department-split.md and docs/features/collision-pass.md).
+const PLANNED_BLAKE3: &str = "72797a127dbf98ef66644c92d46870dacb4c072d9cc10819654c38fd82d95fe4";
+
+/// department-split's text (2 048 bytes), [`as_of_collision_pass`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/collision-pass.md.
+const DEPARTMENT_SPLIT_BLAKE3: &str =
+    "7de2fdaa1885277df812c2e368a1fce532f8fc5aba6db0e6185ead5fbe87d351";
 
 /// trace-views' text (2 048 bytes), [`as_of_department_split`] over
 /// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
@@ -2220,16 +2250,17 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 /// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 940
-/// bytes since docs/features/trace-views.md, trace-views' `3dce41d9…`, and
-/// department-split's); card-trace's 1 932 was
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 931
+/// bytes since docs/features/collision-pass.md; 1 940 since
+/// docs/features/trace-views.md, trace-views' `3dce41d9…`, and
+/// department-split's `a975a811…`); card-trace's 1 932 was
 /// `576f7ffe…`, card-store's 1 939
 /// `6e322b8c…`, flow-read's 1 910 `322b35f2…`, review-form's 1 902
 /// `f0924769…`, impact-since's 1 885
 /// `381344b2…`, impact's 1 879 `523f0715…`, show-bindings' 1 839
 /// `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "a975a81193ece079d8ce216a16768cda8c163faf56ce1f72ecb98da72e2eb2e5";
+    "f58908267db5315641e3c4b1cfa209f9e7b72257c8b6e898f3f0b3fb9c136d77";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -2276,7 +2307,10 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2048, "trace-views' figure");
+    // docs/features/collision-pass.md CP8: 2 048 - 74 + 65.
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2039, "collision-pass' figure");
+    assert_eq!(COLLISIONS_LINE.len(), 65);
+    assert_eq!(RESOURCES_SENTENCE.len(), 74);
     assert_eq!(TRACE_INPUT.len(), 8);
     assert_eq!(TRACE_READ.len(), 25);
     assert_eq!(EVIDENCE_CLAUSE.len(), 32);
@@ -2304,13 +2338,21 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TASKS_LINE.len(), 108);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 2048);
-    assert_eq!(2048 - instructions.len(), 0, "the room left");
+    assert_eq!(instructions.len(), 2039);
+    assert_eq!(2048 - instructions.len(), 9, "the room left");
     assert!(
         instructions.contains(&format!(
-            "lock drift.\n{REVIEW_LINE}{TASKS_LINE}{CARDS_LINE}\n"
+            "lock drift.\n{REVIEW_LINE}{COLLISIONS_LINE}{TASKS_LINE}{CARDS_LINE}\n"
         )),
-        "the form's line, the tasks line, the cards line, an empty line"
+        "the form's line, the collisions line, the tasks line, the cards line, an empty line"
+    );
+    assert!(
+        !instructions.contains("Resources:") && !instructions.contains("percent-encoded"),
+        "the resources sentence is cut (D8)"
+    );
+    assert!(
+        instructions.contains("Answers are cut at 40000 characters.\n\nRules:"),
+        "the hints' paragraph ends at the cap"
     );
     assert!(instructions.is_ascii());
     assert!(
@@ -2332,8 +2374,17 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
     assert_eq!(instructions.matches(IMPACT_READ).count(), 1);
+    // The text before docs/features/collision-pass.md: department-split's
+    // 2 048.
+    let department_split = as_of_collision_pass(instructions);
+    assert_eq!(department_split.len(), 2048);
+    assert_eq!(
+        blake3_hex(department_split.as_bytes()),
+        DEPARTMENT_SPLIT_BLAKE3,
+        "only the collisions line was added and the resources sentence cut"
+    );
     // The text before docs/features/department-split.md: trace-views' 2 048.
-    let trace_views = as_of_department_split(instructions);
+    let trace_views = as_of_department_split(&department_split);
     assert_eq!(trace_views.len(), 2048);
     assert_eq!(
         blake3_hex(trace_views.as_bytes()),
@@ -2394,7 +2445,7 @@ fn rd5_instructions_are_the_planned_text() {
     assert!(instructions.contains("get_flow("), "get_flow(");
     assert!(instructions.contains("get_trace("), "get_trace(");
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1940, "2 048 less 108");
+    assert_eq!(less.len(), 1931, "2 039 less 108");
     // The text before docs/features/trace-views.md: card-trace's 2 040.
     assert_eq!(card_trace.len(), 2040);
     assert_eq!(
@@ -2489,7 +2540,12 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
-    let trace_views = as_of_department_split(PLANNED_INSTRUCTIONS);
+    let department_split = as_of_collision_pass(PLANNED_INSTRUCTIONS);
+    assert_eq!(
+        blake3_hex(department_split.as_bytes()),
+        DEPARTMENT_SPLIT_BLAKE3
+    );
+    let trace_views = as_of_department_split(&department_split);
     assert_eq!(blake3_hex(trace_views.as_bytes()), TRACE_VIEWS_BLAKE3);
     let card_trace = as_of_card_trace(&trace_views);
     assert_eq!(blake3_hex(card_trace.as_bytes()), CARD_TRACE_BLAKE3);

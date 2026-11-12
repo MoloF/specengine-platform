@@ -1332,7 +1332,7 @@ const INTAKE: [&str; 10] = [
 #[test]
 fn is7_nothing_new_is_stored() {
     // 13 since docs/features/plain-questions.md PQ8.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     let at = std::env::temp_dir().join(format!("specengine-cli-is7-{}", std::process::id()));
     let named = {
         let pair = pair_at(&at);
@@ -1370,9 +1370,10 @@ fn is7_nothing_new_is_stored() {
         let state = fs::read_to_string(&out).expect("the backup");
         let mut lines = state.lines();
         let header: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
-        // Format 7, schema 13 since docs/features/plain-questions.md PQ8.
+        // Format 7, schema 13 since docs/features/plain-questions.md PQ8, 14
+        // since docs/features/collision-pass.md D6.
         assert_eq!(header["format"], json!(7), "{header}");
-        assert_eq!(header["queue_schema"], json!(13), "{header}");
+        assert_eq!(header["queue_schema"], json!(14), "{header}");
         let line: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
         let keys: Vec<&str> = line["proposals"]
             .as_object()

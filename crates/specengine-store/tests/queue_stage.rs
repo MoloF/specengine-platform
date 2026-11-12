@@ -271,7 +271,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     // (`card_id`, `why` last); 46 since
     // docs/features/drift-queue.md "Queue schema 8". Schema 12 since
     // docs/features/task-mandate.md M5, `proposals` unchanged.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
     assert_eq!(PROPOSAL_COLUMNS.len(), 50);
     // 50 since docs/features/plain-questions.md PQ8 (`gist`, `matters`).
     assert_eq!(
@@ -307,7 +307,8 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..48]));
     assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..48]));
     assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(14), None);
+    assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(15), None);
 
     let scratch = Scratch::new("qst-schema");
     let db = scratch.db("q");
@@ -326,7 +327,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
         .expect("a task");
     let made = queue.stored_rows().expect("rows");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
     assert_eq!(
         sqlite3(
             &db,
@@ -347,7 +348,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
         "ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
          ALTER TABLE proposals DROP COLUMN drift_hash; ALTER TABLE proposals DROP COLUMN drift; \
          ALTER TABLE proposals DROP COLUMN interpretation; ALTER TABLE proposals DROP COLUMN \
-         staged_at; ALTER TABLE proposals DROP COLUMN staged; DROP TABLE cards; PRAGMA \
+         staged_at; ALTER TABLE proposals DROP COLUMN staged; DROP TABLE cards; DROP TABLE IF EXISTS collision_marks; PRAGMA \
          user_version = 4;",
     );
     assert_eq!(
@@ -369,7 +370,7 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     assert_eq!(unstepped.tasks[0].id(), Some(task.id.as_str()));
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
     assert_eq!(
         sqlite3(
             &db,
@@ -393,23 +394,23 @@ fn ac02_schema_6_holds_44_columns_and_a_schema_4_database_opens_as_6() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14", "stepped once");
 
     // Schema 13 (this build's is 12, docs/features/task-mandate.md M5; R1:
     // 12 over 11 green at 8a43e5d): refused by a read and an open, left
     // alone.
-    sqlite3(&db, "PRAGMA user_version = 14;");
+    sqlite3(&db, "PRAGMA user_version = 15;");
     let dumped = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(QueueError::SchemaTooNew { found: 14 }) => {}
+            Err(QueueError::SchemaTooNew { found: 15 }) => {}
             other => panic!("expected SchemaTooNew 14, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), dumped);
 }
 
@@ -1091,7 +1092,7 @@ fn ac12_stored_rows_reads_the_tasks_of_a_schema_6_queue() {
         .expect("a task");
     let state: StoredQueue = queue.stored_rows().expect("rows");
     // 12 since docs/features/task-mandate.md M5.
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
     assert_eq!(state.tasks.len(), 1, "the schema-6 queue's task: {state:?}");
     assert_eq!(state.tasks[0].id(), Some(task.id.as_str()));
     let mut fresh = SqliteQueue::open(scratch.db("fresh"), PROJECT).expect("open");
@@ -1162,7 +1163,7 @@ fn schema_7_rewrites_open_approve_stages() {
              ALTER TABLE proposals DROP COLUMN drift_hash; \
              ALTER TABLE proposals DROP COLUMN drift; \
              DROP TABLE cards; \
-             PRAGMA user_version = 6;",
+             DROP TABLE IF EXISTS collision_marks; PRAGMA user_version = 6;",
             quote(six_update),
             quote(six_question),
             quote(corrupt)
@@ -1176,7 +1177,7 @@ fn schema_7_rewrites_open_approve_stages() {
     let queue = SqliteQueue::open(&db, PROJECT).expect("a schema-6 queue opens");
     // Stepped 6 -> 7 -> ... -> 12: this build's schema
     // (docs/features/task-mandate.md M5).
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
     let seven_update = "{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\
                         \"editorial\":null,\"note\":\"keep \\\"it\\\"\",\"span_hash\":\"b3:aa\"}";
     let seven_question = "{\"decision\":\"approve\",\"option\":null,\"answer\":\"No.\",\

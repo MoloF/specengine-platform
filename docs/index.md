@@ -21,8 +21,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
+- [docs/features/collision-names.md](features/collision-names.md) collision-names: a pair names each side by its canonical reference, never by an ambiguous bare ID · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/features/collision-pairs.md](features/collision-pairs.md) collision-pairs: a two-sided collision shows as two documents side by side under their titles (RM-0088, the pair half) · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, scripts, fixtures · draft
-- [docs/features/collision-pass.md](features/collision-pass.md) collision-pass: the engine lists pairs of nodes that may collide, an agent judges them, a ledger keeps the verdicts (RM-0060) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-eval, plugin, scripts · draft
 - [docs/features/delivery-timeline.md](features/delivery-timeline.md) delivery-timeline: when each task was created, taken and accepted, against its due date and its release (RM-0107 b) · crates/specengine-core, crates/specengine-cli, crates/specengine-http, crates/specengine-eval, fixtures, ui · draft
 - [docs/features/hub-department.md](features/hub-department.md) hub-department: a hub login lands on its own department (RM-0089) · crates/specengine-core, crates/specengine-cli, crates/specengine-http, fixtures, ui · draft
 - [docs/features/zone-index.md](features/zone-index.md) zone-index: canon under the index entry's unlisted globs takes no line, and canon retires by status (RM-0055) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, docs · draft
@@ -40,6 +40,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`
 - [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`
 - [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`
+- [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`
 - [docs/index-canon.md](index-canon.md) `docs/canon/*.md`
 - [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`
 - [docs/index-crates.md](index-crates.md) `crates/*/README.md`

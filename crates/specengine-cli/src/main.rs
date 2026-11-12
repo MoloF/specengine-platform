@@ -36,19 +36,19 @@ use specengine_cli::{
     CardAcceptRequest, CardAssignRequest, CardCancelRequest, CardClearGroupRequest,
     CardClearOutcome, CardClearRequest, CardCountsRequest, CardEditRequest, CardListRequest,
     CardMoveRequest, CardNewRequest, CardShowRequest, CardSplitRequest, CatalogRequest,
-    CheckRequest, CheckedTree, CliError, CreateRequest, DecisionRequest, DeliveryRequest,
-    DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest, ExportStateRequest,
-    FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
-    GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest,
-    InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
-    LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Mandate,
-    Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest,
-    ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest,
-    RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest,
-    TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
-    TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest,
-    TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest,
-    render_json, render_text,
+    CheckRequest, CheckedTree, CliError, CollisionsRequest, CreateRequest, DecisionRequest,
+    DeliveryRequest, DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest,
+    ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
+    GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
+    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
+    InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest,
+    LockRegenRequest, Mandate, MarkPairsRequest, Outcome, ProposeRequest, ProposedText,
+    QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest,
+    RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest,
+    ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest, UnmappedRequest,
+    VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -259,6 +259,25 @@ enum Command {
         #[arg(long)]
         archive: bool,
     },
+    /// List pairs of spec nodes that may collide, for an agent to judge: within a kind, those sharing a link target (but `mentions`; a target too many nodes of the kind hold skipped) or with alike titles by title trigrams, scored and ordered; a pair an agent marked stays hidden until either side's norm_hash changes. Computed per read; writes nothing but the index. Exit 0 whatever is listed, 2 when it cannot run (a bad --limit, no project, an index or a queue that cannot be read).
+    #[command(args_conflicts_with_subcommands = true)]
+    Collisions {
+        #[command(subcommand)]
+        command: Option<CollisionsCommand>,
+        /// Keep the pairs of this kind (repeatable); never an error.
+        #[arg(long = "kind", value_name = "K")]
+        kinds: Vec<String>,
+        /// Pair across kinds: one group.
+        #[arg(long)]
+        any_kind: bool,
+        #[arg(
+            long,
+            value_name = "N",
+            allow_negative_numbers = true,
+            help = collisions_limit_help()
+        )]
+        limit: Option<i64>,
+    },
     /// List what in the code names REF: the markers (`@implements`, `@verifies`, `@configures`, `@assumes`) and comment mentions under `[code]`, each with its state and binding; read-only, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run (no `[code]`, a config error, an incomplete walk).
     Refs {
         /// Any form `show` takes.
@@ -448,6 +467,25 @@ enum RoundCommand {
         /// No file: ask the open questions, discrepancies and decisions already staged, in round order.
         #[arg(long)]
         staged: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum CollisionsCommand {
+    /// Keep an agent's verdicts on listed pairs in the queue DB's ledger, one row per pair keyed by both names with their norm_hash: `distinct` hides the pair until either side changes, `reported` names the proposal filed for it. No event, no proposal changed, nothing the owner decides. Exit 0 marked, 1 refused (nothing written), 2 on a form error.
+    Mark {
+        /// A JSON document `{"pairs": [{a, a_norm, b, b_norm, verdict, proposal}]}` (verdict `distinct` or `reported`), or `-` for stdin; at most 8 MiB.
+        #[arg(long, value_name = "F")]
+        input: PathBuf,
+        /// The judging agent's role (any given: an agent's mark).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The judging agent's model.
+        #[arg(long = "author-model", value_name = "M", requires = "author_role")]
+        author_model: Option<String>,
+        /// The judging agent's run.
+        #[arg(long, value_name = "ID", requires = "author_role")]
+        run: Option<String>,
     },
 }
 
@@ -1382,6 +1420,48 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             globals,
             &CatalogRequest { kinds, archive },
         )?)),
+        Command::Collisions {
+            command: None,
+            kinds,
+            any_kind,
+            limit,
+        } => Outcome::Collisions(Box::new(specengine_cli::collisions(
+            env,
+            globals,
+            &CollisionsRequest {
+                kinds,
+                any_kind,
+                limit,
+            },
+        )?)),
+        Command::Collisions {
+            command:
+                Some(CollisionsCommand::Mark {
+                    input,
+                    author_role,
+                    author_model,
+                    run,
+                }),
+            ..
+        } => {
+            let source = if input.as_os_str() == "-" {
+                IntakeSource::Given(read_stdin(INTAKE_INPUT_MAX_BYTES, "the input")?)
+            } else {
+                IntakeSource::File(input)
+            };
+            let input = specengine_cli::read_pairs_input(env, &source)?;
+            Outcome::PairsMarked(Box::new(specengine_cli::mark_pairs(
+                env,
+                globals,
+                &MarkPairsRequest {
+                    input,
+                    author_role,
+                    author_model,
+                    run,
+                    now: now(),
+                },
+            )?))
+        }
         Command::Refs { reference } => Outcome::Refs(Box::new(specengine_cli::refs(
             env,
             globals,
@@ -2746,6 +2826,15 @@ fn decision(env: &Env, id: String, note: Option<String>) -> TaskDecisionRequest 
 /// local `GIT_*` ones before running it in a proposal's worktree).
 fn process_git(env: &Env) -> GitEnv {
     specengine_cli::process_git(env)
+}
+
+/// `spec collisions --limit`'s help, its numbers the library's.
+fn collisions_limit_help() -> String {
+    format!(
+        "Pairs at most, 1 to {} (default {})",
+        specengine_cli::COLLISIONS_LIMIT_MAX,
+        specengine_cli::COLLISIONS_LIMIT_DEFAULT
+    )
 }
 
 /// The clock: now, UTC, `YYYY-MM-DDTHH:MM:SSZ`.

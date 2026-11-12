@@ -57,7 +57,10 @@ use specengine_mcp::{
 
 /// The BLAKE3 of the build before's `INSTRUCTIONS` and `HUB_INSTRUCTIONS`
 /// (card-context's pins, unchanged by it): NH11 keeps both byte-equal.
-const INSTRUCTIONS_B3: &str = "7de2fdaa1885277df812c2e368a1fce532f8fc5aba6db0e6185ead5fbe87d351";
+// Re-pinned by docs/features/collision-pass.md "Acceptance criteria", CP8
+// (the collisions line in, the resources sentence out; `mcp_code.rs`' RD-5
+// steps back to the value this slice pinned, `7de2fdaa…`).
+const INSTRUCTIONS_B3: &str = "72797a127dbf98ef66644c92d46870dacb4c072d9cc10819654c38fd82d95fe4";
 const HUB_INSTRUCTIONS_B3: &str =
     "a1762b8eee9cc29a6a6590e12a346f249927e106b01cfc9aea2b28be34734fa1";
 
@@ -679,6 +682,7 @@ fn nh11_the_description_holds_the_history_sentence() {
         "the sentence before `archive:`: {text}"
     );
     assert!(NODE_SENTENCE.contains(&format!("at most {HISTORY_MAX},")));
-    assert_eq!(INSTRUCTIONS.len(), 2048);
+    // 2 039 since docs/features/collision-pass.md CP8.
+    assert_eq!(INSTRUCTIONS.len(), 2039);
     assert_eq!(blake3_hex(INSTRUCTIONS.as_bytes()), INSTRUCTIONS_B3);
 }

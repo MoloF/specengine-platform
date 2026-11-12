@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [docs]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-12
 ---
 
 # Documentation: how the convention is applied
@@ -96,7 +96,7 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Generated
 
-The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here nine: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-canon-spec.md` (`spec-*`, the commands' canon), `docs/index-canon-proposal.md` (`proposal-*`, the queue's), `docs/index-canon-hub.md` (`hub*`, the hub's), `docs/index-canon-card.md` (`card*`, the cards'), `docs/index-canon.md` (the rest of `docs/canon/*.md`; Tier 2 canon is cited by path, found by scope), `docs/index-decisions.md` (`docs/decisions/*.md`, read by id), `docs/index-crates.md` (`crates/*/README.md`, by path) and `docs/index-roadmap.md` (`docs/roadmap/*.md`, the plan items), so the root keeps what a task starts from (Tier 0–1 canon, the live specs), its `## Shards` points at the rest, and a read costs the root plus at most one live shard. The first claim matching a path wins, so a narrower glob stands before `docs/canon/*.md`; as canon grows, the next split is again such a glob. It also writes the roadmap view `docs/generated/roadmap.md`, unindexed (`docs/canon/spec-roadmap.md` "View"). All are written only by that generator, `cargo run -q -p specengine-cli -- export index` (or in an apply's commit); a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
+The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here ten: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-canon-spec.md` (`spec-*`, the commands' canon), `docs/index-canon-proposal.md` (`proposal-*`, the queue's), `docs/index-canon-hub.md` (`hub*`, the hub's), `docs/index-canon-card.md` (`card*`, the cards'), `docs/index-canon-code.md` (`code-*`, the code layer's), `docs/index-canon.md` (the rest of `docs/canon/*.md`; Tier 2 canon is cited by path, found by scope), `docs/index-decisions.md` (`docs/decisions/*.md`, read by id), `docs/index-crates.md` (`crates/*/README.md`, by path) and `docs/index-roadmap.md` (`docs/roadmap/*.md`, the plan items), so the root keeps what a task starts from (Tier 0–1 canon, the live specs), its `## Shards` points at the rest, and a read costs the root plus at most one live shard. The first claim matching a path wins, so a narrower glob stands before `docs/canon/*.md`; as canon grows, the next split is again such a glob. It also writes the roadmap view `docs/generated/roadmap.md`, unindexed (`docs/canon/spec-roadmap.md` "View"). All are written only by that generator, `cargo run -q -p specengine-cli -- export index` (or in an apply's commit); a manual edit fails the check (`index-drift`).
 
 ## Enforcement
 
