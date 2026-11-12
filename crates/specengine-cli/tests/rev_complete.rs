@@ -106,6 +106,7 @@ fn propose_piece(repo: &LockRepo) -> String {
             links: false,
             archive: false,
             bindings: false,
+            history: false,
             git: repo.git_env(&repo.root),
         },
     )

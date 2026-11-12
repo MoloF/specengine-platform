@@ -604,6 +604,7 @@ pub fn node_of(repo: &LockRepo, reference: &str) -> (String, String, String) {
             links: false,
             archive: false,
             bindings: false,
+            history: false,
             git: repo.git_env(&repo.root),
         },
     )

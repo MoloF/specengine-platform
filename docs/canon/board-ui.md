@@ -60,7 +60,7 @@ The Board's screen, the card modal and page, lanes, the hand-off and return dial
 
 ## Types
 
-`provisional.ts`; `CardFlow.return` a column or `null`; `CardCreateBody.reviewer`, `CardMoveBody.note`, `CardsOptions.parent`, the create, edit and split bodies' `mandate` optional; `Card.mandate`, `CardRow.mandate` a `Mandate` or `null`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 122 sets, among them `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`, `Identity`, `CardSplit`, `CardSplitParent`, `CardSplitChild`, `CardSubtaskItem`; `CardRow` 22 keys. `QUEUE_EVENT_TYPES` 25.
+`provisional.ts`; `CardFlow.return` a column or `null`; `CardCreateBody.reviewer`, `CardMoveBody.note`, `CardsOptions.parent`, the create, edit and split bodies' `mandate` optional; `Card.mandate`, `CardRow.mandate` a `Mandate` or `null`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 124 sets, among them `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`, `Identity`, `CardSplit`, `CardSplitParent`, `CardSplitChild`, `CardSubtaskItem`; `CardRow` 22 keys. `QUEUE_EVENT_TYPES` 25.
 
 ## Known limits
 

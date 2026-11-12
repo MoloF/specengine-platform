@@ -927,6 +927,7 @@ fn a_root_below_the_top_completes_by_its_commit() {
             links: false,
             archive: false,
             bindings: false,
+            history: false,
             git: genv(&linked.join("proj")),
         },
     )

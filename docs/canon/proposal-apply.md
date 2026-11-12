@@ -62,7 +62,7 @@ Proposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown
 Base-commit: <40 or 64 hex>
 ```
 
-`Decided-by`: the step-7 identity (a hub's confirm: `<login> <email>` from `[team]`). `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`, then ` login=<login>` on a hub's departing accept alone. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply". `Revision:`, `Lock:`, `Lock-mode:` follow `Base-commit:`.
+`Decided-by`: the step-7 identity (a hub's confirm: `<login> <email>` from `[team]`). `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`, then ` login=<login>` on a hub's departing accept alone. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply". `Revision:`, `Lock:`, `Lock-mode:` follow `Base-commit:`. `spec show --history` reads them back (`spec-history.md`).
 
 ## Known limits
 

@@ -3494,7 +3494,7 @@ fn te2_code_tools_write_nothing_under_the_root() {
         ("check_binding", json!({})),
         ("check_binding", json!({"node": 7})),
         ("check_binding", json!({"node": "LAW-STEP", "bogus": true})),
-        ("get_node", json!({"id": "LAW-STEP", "with": ["history"]})),
+        ("get_node", json!({"id": "LAW-STEP", "with": ["tasks"]})),
         ("get_context_bundle", json!({"node_ids": "GOAL-01"})),
         (
             "get_context_bundle",

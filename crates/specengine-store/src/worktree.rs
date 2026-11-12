@@ -50,7 +50,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::git::{GitEnv, same_dir};
+use crate::git::{Blob, CatFile, GitEnv, GitFailure, same_dir};
 use crate::queue::Place;
 
 /// The variables `git rev-parse --local-env-vars` lists in git 2.50,
@@ -1287,6 +1287,72 @@ impl WorktreeGit {
         self.trailer_log(&format!("refs/heads/{branch}"), key, value)
     }
 
+    /// Whether the repository is a shallow clone (`rev-parse
+    /// --is-shallow-repository`): its history ends before its first commit
+    /// (task spec `node-history` NH5).
+    pub fn is_shallow(&self) -> Result<bool, GitError> {
+        const COMMAND: &str = "rev-parse";
+        let output = self.read(COMMAND, &["rev-parse", "--is-shallow-repository"])?;
+        match one_line(&output) {
+            Some(b"true") => Ok(true),
+            Some(b"false") => Ok(false),
+            _ => Err(GitError::Unreadable { command: COMMAND }),
+        }
+    }
+
+    /// The commits of `HEAD` that changed the file `path` (relative to the
+    /// handle's directory), newest first, at most `max` (task spec
+    /// `node-history` NH1, NH3, NH9): `log --follow --raw` against each
+    /// commit's first parent (`--diff-merges=first-parent`, a root commit's
+    /// diff too), git's default history simplification deciding which merges
+    /// show. Each commit carries its OID, author, committer time, raw
+    /// message, and the file's blob OIDs before and after from the log's own
+    /// record (a rename's: its old path's blob before). Unborn `HEAD` is the
+    /// caller's to rule out: git fails.
+    pub fn file_log(&self, path: &str, max: usize) -> Result<Vec<LoggedCommit>, GitError> {
+        const COMMAND: &str = "log";
+        let count = format!("--max-count={max}");
+        let spec = literal(path);
+        let output = self.read(
+            COMMAND,
+            &[
+                "log",
+                "--follow",
+                "-z",
+                "--no-show-signature",
+                "--no-color",
+                "--no-ext-diff",
+                "--raw",
+                "--root",
+                "--no-relative",
+                "--no-abbrev",
+                "--diff-merges=first-parent",
+                "--encoding=UTF-8",
+                "--format=%H%n%an%n%ae%n%ct%n%B",
+                &count,
+                "--end-of-options",
+                "HEAD",
+                "--",
+                &spec,
+            ],
+        )?;
+        file_log_records(&output).ok_or(GitError::Unreadable { command: COMMAND })
+    }
+
+    /// One `cat-file --batch` session of this handle ([`BlobBatch`]): blobs
+    /// by OID, in lockstep, `GIT_NO_LAZY_FETCH=1` so a partial clone never
+    /// fetches; the handle's deadline does not reach it.
+    pub fn blob_batch(&self) -> Result<BlobBatch, GitError> {
+        let mut command = self.command(&[OsStr::new("cat-file"), OsStr::new("--batch")], true);
+        // Nobody reads it: a pipe could fill and stall the session.
+        command.stdin(Stdio::piped()).stderr(Stdio::null());
+        let child = command.spawn().map_err(GitError::NotRunnable)?;
+        let session = CatFile::of_child(child).ok_or(GitError::Unreadable {
+            command: "cat-file",
+        })?;
+        Ok(BlobBatch { session })
+    }
+
     /// `log -z` of `range`: the commits whose `key` trailer is `value`.
     fn trailer_log(&self, range: &str, key: &str, value: &str) -> Result<Vec<String>, GitError> {
         let format = format!("--format=%H%x1f%(trailers:key={key},valueonly,separator=%x1e)");
@@ -1323,6 +1389,159 @@ impl WorktreeGit {
             }
         }
         Ok(found)
+    }
+}
+
+/// One commit of a file's log ([`WorktreeGit::file_log`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoggedCommit {
+    /// Its OID, hex.
+    pub oid: String,
+    /// `%an` and `%ae`, as written.
+    pub author_name: String,
+    pub author_email: String,
+    /// `%ct`: the committer time, seconds since 1970-01-01T00:00:00Z.
+    pub committed_at: i64,
+    /// `%B`: the raw message, lossily UTF-8.
+    pub message: String,
+    /// The file's record against the first parent; `None` when the log
+    /// printed none (a merge whose file is its first parent's).
+    pub change: Option<FileChange>,
+}
+
+/// What one commit did to the followed file: its blob OIDs before (in the
+/// first parent, a rename's old path) and after (in the commit).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileChange {
+    /// `None` when the commit adds the file (a root commit too).
+    pub before: Option<String>,
+    /// `None` when the commit deletes it.
+    pub after: Option<String>,
+}
+
+/// The records of `file_log`'s output: per commit, its header (`%H`,
+/// `%an`, `%ae`, `%ct`, then `%B`, LF between: git keeps no LF in an OID,
+/// an identity or a time, so only the message, last, holds one; ended by
+/// NUL), then at most one raw record (`:<mode> <mode> <oid> <oid>
+/// <status>` and its one path, two for a rename or a copy, each ended by
+/// NUL). `None`: the output breaks that form.
+fn file_log_records(output: &[u8]) -> Option<Vec<LoggedCommit>> {
+    let mut commits: Vec<LoggedCommit> = Vec::new();
+    let mut tokens = output.split(|&byte| byte == 0);
+    while let Some(token) = tokens.next() {
+        let token = token.strip_prefix(b"\n").unwrap_or(token);
+        if token.is_empty() {
+            continue;
+        }
+        let Some(record) = token.strip_prefix(b":") else {
+            commits.push(log_header(token)?);
+            continue;
+        };
+        let record = std::str::from_utf8(record).ok()?;
+        let [_, _, before, after, status] = record.split(' ').collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        // The paths: one, two for a rename or a copy; not needed, the
+        // blobs name the sides.
+        tokens.next()?;
+        if matches!(status.as_bytes().first()?, b'R' | b'C') {
+            tokens.next()?;
+        }
+        if !is_oid(before.as_bytes()) || !is_oid(after.as_bytes()) {
+            return None;
+        }
+        let side = |blob: &str| (!blob.bytes().all(|byte| byte == b'0')).then(|| blob.to_owned());
+        let commit = commits.last_mut()?;
+        // One record per commit is asked for (the followed file); a second
+        // is never the followed one's.
+        if commit.change.is_none() {
+            commit.change = Some(FileChange {
+                before: side(before),
+                after: side(after),
+            });
+        }
+    }
+    Some(commits)
+}
+
+/// One commit's header of [`file_log_records`].
+fn log_header(token: &[u8]) -> Option<LoggedCommit> {
+    let text = String::from_utf8_lossy(token);
+    let mut fields = text.splitn(5, '\n');
+    let (Some(oid), Some(name), Some(email), Some(time), Some(message)) = (
+        fields.next(),
+        fields.next(),
+        fields.next(),
+        fields.next(),
+        fields.next(),
+    ) else {
+        return None;
+    };
+    if !is_oid(oid.as_bytes()) {
+        return None;
+    }
+    Some(LoggedCommit {
+        oid: oid.to_owned(),
+        author_name: name.to_owned(),
+        author_email: email.to_owned(),
+        committed_at: time.parse().ok()?,
+        message: message.to_owned(),
+        change: None,
+    })
+}
+
+/// One `cat-file --batch` session of a [`WorktreeGit`]
+/// ([`WorktreeGit::blob_batch`]): `verify_git.rs`'s lockstep reader, blobs
+/// asked by OID.
+#[derive(Debug)]
+pub struct BlobBatch {
+    session: CatFile,
+}
+
+/// An object as [`BlobBatch::blob`] read it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BatchBlob {
+    Bytes(Vec<u8>),
+    /// Not in the object database (never fetched: a partial clone's).
+    Missing,
+    /// Another type than a blob (a submodule's commit).
+    Foreign,
+}
+
+impl BlobBatch {
+    /// The object `oid` names; a text that is no OID is never asked
+    /// ([`BatchBlob::Missing`]). An error: git cannot be run, or its reply
+    /// cannot be read (the session is then unusable).
+    pub fn blob(&mut self, oid: &str) -> Result<BatchBlob, GitError> {
+        if !is_oid(oid.as_bytes()) {
+            return Ok(BatchBlob::Missing);
+        }
+        Ok(match self.session.get(oid).map_err(batch_error)? {
+            Blob::Bytes(bytes) => BatchBlob::Bytes(bytes),
+            Blob::Missing => BatchBlob::Missing,
+            Blob::Foreign => BatchBlob::Foreign,
+        })
+    }
+
+    /// Ends the session: it must end cleanly.
+    pub fn finish(self) -> Result<(), GitError> {
+        self.session.finish().map_err(batch_error)
+    }
+}
+
+/// A batch session's failure as this module's error.
+fn batch_error(failure: GitFailure) -> GitError {
+    match failure {
+        GitFailure::NotRunnable(kind) => GitError::NotRunnable(io::Error::from(kind)),
+        GitFailure::Failed { command, code } => GitError::Failed {
+            command,
+            code,
+            stderr: String::new(),
+        },
+        GitFailure::Unreadable { command } => GitError::Unreadable { command },
+        GitFailure::RootGone => GitError::Unreadable {
+            command: "cat-file",
+        },
     }
 }
 

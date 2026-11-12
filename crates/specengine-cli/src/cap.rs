@@ -50,17 +50,28 @@
 //! node's `bindings` `{rows, omitted, tested}` holds the printed rows,
 //! `omitted` the tail's `<k>` on the cut node, 0 on the others, and the
 //! printed blocks (`null` when not judged).
+//!
+//! With `--history` (task spec `node-history`) each node's history block
+//! follows its bindings block, before its text, and counts toward the cap
+//! with them, one entry (its line and the text line under it) one unit,
+//! then the closing `  history <n>[, truncated]`. When the cut falls in the
+//! block it falls after the last whole entry that fits; the text is not
+//! shown and the tail gains `; history not shown: <k>` after its bindings
+//! part (NH10). JSON then takes the text's cut: a node's `history`
+//! `{entries, truncated, omitted}` holds the printed entries, `omitted` the
+//! tail's `<k>` on the cut node, 0 on the others.
 
 use serde::Serialize;
 use specengine_core::verify::Class;
 use specengine_model::{BindingPlace, BindingRow, TestedRow};
 
+use crate::history::{HistoryEntry, ShownHistory, short_oid};
 use crate::links::{LinksJson, block_lines, links_json};
-use crate::one_line;
 use crate::search::notes;
 use crate::show::{NestedSection, ShowOutcome, ShownAncestor, ShownBindings, ShownNode};
 use crate::tested::tested_line;
 use crate::verify::keyed_binding;
+use crate::{escape_controls, one_line};
 
 /// The most characters a `show` or `search` answer prints before its tail
 /// line (07 §1.1: bounded answers).
@@ -99,8 +110,15 @@ struct Cut {
     /// Whole rows of the node's bindings block printed; JSON keeps as
     /// many rows.
     rows: usize,
-    /// The block's closing line is printed (the cut falls in the text).
+    /// The bindings block's closing line is printed (the cut falls in the
+    /// history block or the text).
     closing: bool,
+    /// Whole entries of the node's history block printed; JSON keeps as
+    /// many entries.
+    entries: usize,
+    /// The history block's closing line is printed (the cut falls in the
+    /// text).
+    history_closing: bool,
     /// Bytes of the node's text shown.
     shown: usize,
 }
@@ -315,6 +333,105 @@ fn closing_line(bindings: &ShownBindings) -> String {
     line
 }
 
+/// A node's history block (none without `--history` or when its history
+/// was not read): each entry's lines, then the closing line.
+struct HistoryBlock {
+    entries: Vec<Vec<String>>,
+    closing: Vec<String>,
+}
+
+impl HistoryBlock {
+    fn of(node: &ShownNode) -> Self {
+        let Some(history) = &node.history else {
+            return Self {
+                entries: Vec::new(),
+                closing: Vec::new(),
+            };
+        };
+        Self {
+            entries: history.entries.iter().map(entry_lines).collect(),
+            closing: vec![history_closing(history)],
+        }
+    }
+
+    /// Each entry's characters, line ends included.
+    fn entry_costs(&self) -> Vec<usize> {
+        self.entries.iter().map(|lines| chars(lines)).collect()
+    }
+}
+
+/// An entry's line and the text line under it (task spec `node-history`
+/// NH1): a commit `  <at> | <change>[ created] | rev <r> | <proposal> |
+/// <by> | <proposed_by> | <OID's first 12 hex>`, then `    <rationale or
+/// title>` when set; a card `  <at> | accepted | <id> | <by> | <title>`;
+/// an item `  <at> | <kind> | <id> | <record> | <by>`; `-` for `null`
+/// and for an empty `by`. Each line control-escaped
+/// ([`escape_controls`]: a commit message, a card title or an identity may
+/// hold a control character), so the cap counts what prints; the JSON
+/// keeps the values raw.
+fn entry_lines(entry: &HistoryEntry) -> Vec<String> {
+    let lines = raw_entry_lines(entry);
+    lines.iter().map(|line| escape_controls(line)).collect()
+}
+
+/// [`entry_lines`] before the escape.
+fn raw_entry_lines(entry: &HistoryEntry) -> Vec<String> {
+    let or_dash =
+        |value: &Option<String>| value.as_deref().map_or_else(|| "-".to_owned(), one_line);
+    let by = match entry.by.as_str() {
+        "" => "-".to_owned(),
+        by => one_line(by),
+    };
+    match entry.source {
+        "commit" => {
+            let rev = match (entry.rev_before, entry.rev) {
+                (Some(before), Some(after)) if before != after => format!("{before} -> {after}"),
+                (_, Some(after)) => after.to_string(),
+                _ => "-".to_owned(),
+            };
+            let created = if entry.created { " created" } else { "" };
+            let mut lines = vec![format!(
+                "  {} | {}{created} | rev {rev} | {} | {} | {} | {}",
+                one_line(&entry.at),
+                entry.change,
+                or_dash(&entry.proposal),
+                by,
+                or_dash(&entry.proposed_by),
+                short_oid(&entry.id)
+            )];
+            if let Some(text) = entry.rationale.as_ref().or(entry.title.as_ref()) {
+                lines.push(format!("    {}", one_line(text)));
+            }
+            lines
+        }
+        "card" => vec![format!(
+            "  {} | {} | {} | {} | {}",
+            one_line(&entry.at),
+            entry.change,
+            one_line(&entry.id),
+            by,
+            or_dash(&entry.title)
+        )],
+        _ => vec![format!(
+            "  {} | {} | {} | {} | {}",
+            one_line(&entry.at),
+            entry.change,
+            one_line(&entry.id),
+            or_dash(&entry.record),
+            by
+        )],
+    }
+}
+
+/// `  history <n>[, truncated]`.
+fn history_closing(history: &ShownHistory) -> String {
+    let mut line = format!("  history {}", history.entries.len());
+    if history.truncated {
+        line.push_str(", truncated");
+    }
+    line
+}
+
 /// `spec tree` and `spec graph`: how many of `lines` (their characters,
 /// line end included), from the first, fit in [`OUTPUT_CAP_CHARS`] after
 /// `used` characters, and the characters then used; `first_whole`: never
@@ -345,9 +462,12 @@ fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
         let rows = BindingsBlock::of(node);
         let row_costs = rows.row_costs();
         let bindings = row_costs.iter().sum::<usize>() + rows.closing_cost();
+        let changes = HistoryBlock::of(node);
+        let entry_costs = changes.entry_costs();
+        let history = entry_costs.iter().sum::<usize>() + chars(&changes.closing);
         let body = node.text.chars().count() + usize::from(!node.text.ends_with('\n'));
-        if used + head + links + bindings + body <= OUTPUT_CAP_CHARS {
-            used += head + links + bindings + body;
+        if used + head + links + bindings + history + body <= OUTPUT_CAP_CHARS {
+            used += head + links + bindings + history + body;
             continue;
         }
         if used + head > OUTPUT_CAP_CHARS {
@@ -365,6 +485,8 @@ fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
                 links: 0,
                 rows: 0,
                 closing: false,
+                entries: 0,
+                history_closing: false,
                 shown: 0,
             });
         }
@@ -378,6 +500,8 @@ fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
                 links: whole_within(costs, room),
                 rows: 0,
                 closing: false,
+                entries: 0,
+                history_closing: false,
                 shown: 0,
             });
         }
@@ -390,16 +514,34 @@ fn plan_text(nodes: &[ShownNode]) -> Option<Cut> {
                 links: block.len(),
                 rows: whole_within(row_costs.iter().copied(), room),
                 closing: false,
+                entries: 0,
+                history_closing: false,
                 shown: 0,
             });
         }
-        let room = OUTPUT_CAP_CHARS - used - head - links - bindings;
+        if used + head + links + bindings + history > OUTPUT_CAP_CHARS {
+            // In the history block, after the last whole entry that fits.
+            let room = OUTPUT_CAP_CHARS - used - head - links - bindings;
+            return Some(Cut {
+                node: index,
+                header: Header::Whole,
+                links: block.len(),
+                rows: row_costs.len(),
+                closing: true,
+                entries: whole_within(entry_costs.iter().copied(), room),
+                history_closing: false,
+                shown: 0,
+            });
+        }
+        let room = OUTPUT_CAP_CHARS - used - head - links - bindings - history;
         return Some(Cut {
             node: index,
             header: Header::Whole,
             links: block.len(),
             rows: row_costs.len(),
             closing: true,
+            entries: entry_costs.len(),
+            history_closing: true,
             shown: cut_text(&node.text, room, true),
         });
     }
@@ -435,8 +577,20 @@ fn bindings_not_shown(nodes: &[ShownNode], cut: Cut) -> usize {
     cut_node - cut.rows.min(cut_node) + nodes[cut.node + 1..].iter().map(count).sum::<usize>()
 }
 
-/// The cut of the JSON rendering without `--links` or rows (the sum of
-/// the texts), if any.
+/// History entries of the text rendering not printed: the cut node's beyond
+/// the whole entries printed, and every one of the nodes after it.
+fn history_not_shown(nodes: &[ShownNode], cut: Cut) -> usize {
+    let count = |node: &ShownNode| {
+        node.history
+            .as_ref()
+            .map_or(0, |history| history.entries.len())
+    };
+    let cut_node = count(&nodes[cut.node]);
+    cut_node - cut.entries.min(cut_node) + nodes[cut.node + 1..].iter().map(count).sum::<usize>()
+}
+
+/// The cut of the JSON rendering without `--links`, rows or history (the
+/// sum of the texts), if any.
 fn plan_json(nodes: &[ShownNode]) -> Option<Cut> {
     let mut used = 0;
     for (index, node) in nodes.iter().enumerate() {
@@ -451,6 +605,8 @@ fn plan_json(nodes: &[ShownNode]) -> Option<Cut> {
             links: 0,
             rows: 0,
             closing: false,
+            entries: 0,
+            history_closing: false,
             shown: cut_text(&node.text, OUTPUT_CAP_CHARS - used, false),
         });
     }
@@ -570,6 +726,20 @@ pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
                 out.push('\n');
             }
         }
+        let changes = HistoryBlock::of(node);
+        let printed = this_cut.map_or(changes.entries.len(), |cut| {
+            cut.entries.min(changes.entries.len())
+        });
+        for line in changes.entries[..printed].iter().flatten() {
+            out.push_str(line);
+            out.push('\n');
+        }
+        if this_cut.is_none_or(|cut| cut.history_closing) {
+            for line in &changes.closing {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
         let text = match this_cut {
             Some(cut) => &node.text[..cut.shown],
             None => node.text.as_str(),
@@ -593,6 +763,12 @@ pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
             links.push_str(&format!(
                 "; bindings not shown: {}",
                 bindings_not_shown(nodes, cut)
+            ));
+        }
+        if nodes.iter().any(|node| node.history.is_some()) {
+            links.push_str(&format!(
+                "; history not shown: {}",
+                history_not_shown(nodes, cut)
             ));
         }
         // One line whatever the paths hold.
@@ -643,6 +819,18 @@ struct NodeJson<'a> {
     links: Option<LinksJson<'a>>,
     /// `null` without `--bindings` or when no row could be read.
     bindings: Option<BindingsJson<'a>>,
+    /// `null` without `--history` or when its holder's history could not
+    /// be read.
+    history: Option<HistoryJson<'a>>,
+}
+
+/// A node's history: the entries printed, its own `truncated`, and the
+/// entries the cap cut (0 when none was).
+#[derive(Serialize)]
+struct HistoryJson<'a> {
+    entries: &'a [HistoryEntry],
+    truncated: bool,
+    omitted: usize,
 }
 
 /// A node's rows: those printed, and the rows the cap cut (0 when none
@@ -666,13 +854,13 @@ struct OmittedJson {
 
 fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
     let nodes = &outcome.nodes;
-    // With `--links` or rows: the text's cut, so the JSON holds the
-    // printed links and rows.
+    // With `--links`, rows or history: the text's cut, so the JSON holds
+    // the printed links, rows and entries.
     let cut = if outcome.view == View::Browser {
         None
     } else if nodes
         .iter()
-        .any(|node| node.links.is_some() || node.bindings.is_some())
+        .any(|node| node.links.is_some() || node.bindings.is_some() || node.history.is_some())
     {
         plan_text(nodes)
     } else {
@@ -738,6 +926,18 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                         rows: &bindings.rows,
                         omitted: 0,
                         tested: bindings.tested.as_deref(),
+                    },
+                }),
+                history: node.history.as_ref().map(|history| match this_cut {
+                    Some(cut) => HistoryJson {
+                        entries: &history.entries[..cut.entries.min(history.entries.len())],
+                        truncated: history.truncated,
+                        omitted: history_not_shown(nodes, cut),
+                    },
+                    None => HistoryJson {
+                        entries: &history.entries,
+                        truncated: history.truncated,
+                        omitted: 0,
                     },
                 }),
             }

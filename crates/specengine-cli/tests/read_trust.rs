@@ -126,6 +126,7 @@ impl Place {
                 links,
                 archive,
                 bindings: false,
+                history: false,
                 git: self.git.clone(),
             },
         )

@@ -54,6 +54,7 @@ import type {
   HealthDrift,
   HealthReport,
   HealthUnbound,
+  HistoryEntry,
   HubSync,
   Identity,
   InboxEntry,
@@ -89,6 +90,7 @@ import type {
   SearchHit,
   ShownAncestor,
   ShownBindings,
+  ShownHistory,
   ShownLink,
   ShownNode,
   SnapshotDiff,
@@ -191,10 +193,12 @@ import type {
 // after `reviewer` (22 keys), a card's `mandate` after `reviewer` and `subtask_items` after `items`
 // (34) and a split's subtask's `mandate` last (9); and card-context's one key, no set
 // (docs/features/card-context.md "Acceptance criteria", CC10: a card's `context` after `history`, 35
-// keys, written by its Rust test). A key the types carry ahead of the file is listed
-// in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already names fails.
-// While that file is absent the comparison is skipped, saying so; once it exists it names all one
-// hundred and twenty-two, in the slices' order.
+// keys, written by its Rust test); and node-history's two (docs/features/node-history.md
+// "Acceptance criteria", NH12: a shown node's history and its entry, sets 123 and 124, the last),
+// with a shown node's `history` after `bindings` (21 keys). A key the types carry ahead of the file
+// is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already
+// names fails. While that file is absent the comparison is skipped, saying so; once it exists it
+// names all one hundred and twenty-four, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -681,7 +685,7 @@ const KEYS = {
   // crates/specengine-cli/README.md "Output and the cap": `spec show --json`'s node; its 19th key
   // `bindings` after `links` and that key's three: docs/canon/code-reads.md "spec show --bindings"
   // (docs/features/ui-node-bindings.md, UI-8 and TE-1); `ancestors` after `omitted`, 20 keys (RM-0094
-  // flow-scenario).
+  // flow-scenario); `history` after `bindings`, 21 (docs/features/node-history.md "Acceptance criteria", NH12).
   ShownNode: {
     id: true,
     kind: true,
@@ -703,6 +707,7 @@ const KEYS = {
     ancestors: true,
     links: true,
     bindings: true,
+    history: true,
   } satisfies Record<keyof ShownNode, true>,
   ShownBindings: { rows: true, omitted: true, tested: true } satisfies Record<keyof ShownBindings, true>,
   // docs/features/lock-diff.md "Daemon keys": the five sets after `ShownBindings`, keys in "Data"'s
@@ -907,6 +912,26 @@ const KEYS = {
     record_path: true,
     record_title: true,
   } satisfies Record<keyof CardSubtaskItem, true>,
+  // docs/features/node-history.md "Acceptance criteria" (NH12): a shown node's history (set 123) and
+  // its entry's 15 keys in the table's order (set 124); every key present.
+  ShownHistory: { entries: true, truncated: true, omitted: true } satisfies Record<keyof ShownHistory, true>,
+  HistoryEntry: {
+    source: true,
+    at: true,
+    id: true,
+    change: true,
+    created: true,
+    rev: true,
+    rev_before: true,
+    by: true,
+    by_name: true,
+    proposal: true,
+    proposed_by: true,
+    proposer: true,
+    record: true,
+    title: true,
+    rationale: true,
+  } satisfies Record<keyof HistoryEntry, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1000,7 +1025,7 @@ const CITED: Record<Named, string> = {
   DriftMarker: "line, rev",
   DriftLock: "rev, commit, verified_at",
   DriftLevels: "lock, markers, changed",
-  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, ancestors, links, bindings",
+  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, ancestors, links, bindings, history",
   ShownBindings: "rows, omitted, tested",
   LockDiffView: "ref, reason, notes, nodes",
   LockDiffNode: "id, path, line, rows",
@@ -1048,6 +1073,8 @@ const CITED: Record<Named, string> = {
   CardSplitParent: "id, created, title, discipline, flow, flow_title, column, targets",
   CardSplitChild: "id, discipline, flow, flow_title, column, targets, from, suggested, mandate",
   CardSubtaskItem: "card_id, id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
+  ShownHistory: "entries, truncated, omitted",
+  HistoryEntry: "source, at, id, change, created, rev, rev_before, by, by_name, proposal, proposed_by, proposer, record, title, rationale",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1270,8 +1297,14 @@ const BEFORE_TASK_MANDATE: readonly Named[] = [...BEFORE_DEPARTMENT_SPLIT, ...DE
 /** task-mandate's one: a subtask's item, set 122 (docs/features/task-mandate.md "Acceptance criteria", M6, M7). */
 const TASK_MANDATE: readonly Named[] = ["CardSubtaskItem"];
 
+/** The hundred and twenty-two types the fixture named before node-history. */
+const BEFORE_NODE_HISTORY: readonly Named[] = [...BEFORE_TASK_MANDATE, ...TASK_MANDATE];
+
+/** node-history's two: a shown node's history and its entry, sets 123 and 124 (docs/features/node-history.md "Acceptance criteria", NH12). */
+const NODE_HISTORY: readonly Named[] = ["ShownHistory", "HistoryEntry"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_TASK_MANDATE, ...TASK_MANDATE];
+const ALL: readonly Named[] = [...BEFORE_NODE_HISTORY, ...NODE_HISTORY];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1312,7 +1345,9 @@ function served(name: Named): string[] {
  * since task-mandate's wrote a row's and a card's `mandate`, a card's `subtask_items`, a split's
  * subtask's `mandate` and set 122 (docs/features/task-mandate.md "Acceptance criteria", M7), and
  * since card-context's wrote a card's `context`
- * (docs/features/card-context.md "Acceptance criteria", CC10).
+ * (docs/features/card-context.md "Acceptance criteria", CC10), and since node-history's wrote a
+ * shown node's `history` and sets 123 and 124 (docs/features/node-history.md "Acceptance criteria",
+ * NH12).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1366,7 +1401,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_CARD_QUESTIONS.at(-1)).toBe("ShownAncestor");
     expect(BEFORE_DEPARTMENT_SPLIT.at(-1)).toBe("IntakeMatch");
     expect(BEFORE_TASK_MANDATE.at(-1)).toBe("CardSplitChild");
-    expect(ALL.at(-1)).toBe("CardSubtaskItem");
+    expect(BEFORE_NODE_HISTORY.at(-1)).toBe("CardSubtaskItem");
+    expect(ALL.at(-1)).toBe("HistoryEntry");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1395,7 +1431,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(122);
+    expect(ALL).toHaveLength(124);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1411,7 +1447,7 @@ describe("the daemon's document types (AC-09)", () => {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
-    // Empty again since card-context's Rust test wrote a card's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
+    // Empty again since node-history's Rust test wrote a shown node's `history` (docs/features/node-history.md "Acceptance criteria", NH12).
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -1456,7 +1492,8 @@ describe("the daemon's document types (AC-09)", () => {
     const node = declaredKeys("ShownNode");
     expect(node.slice(node.indexOf("omitted"), node.indexOf("omitted") + 3)).toEqual(["omitted", "ancestors", "links"]);
     expect(node).toEqual(served("ShownNode"));
-    expect(node).toHaveLength(20);
+    // 21 since node-history's `history` (docs/features/node-history.md "Acceptance criteria", NH12).
+    expect(node).toHaveLength(21);
     expect(served("ShownAncestor")).toEqual(["id", "kind", "title", "path"]);
     expect(declaredKeys("ShownAncestor")).toEqual(served("ShownAncestor"));
     expect(source).toMatch(/^export interface ShownAncestor \{\n {2}id: string \| null;\n {2}kind: string \| null;\n {2}title: string \| null;\n {2}path: string;\n\}$/m);
@@ -1533,7 +1570,7 @@ describe("the daemon's document types (AC-09)", () => {
       const at = Math.max(source.indexOf(`export interface ${type} `), source.indexOf(`export type ${type} =`));
       expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/task-mandate.md` "Acceptance criteria"');
     }
-    expect(ALL.slice(BEFORE_TASK_MANDATE.length)).toEqual([...TASK_MANDATE]);
+    expect(ALL.slice(BEFORE_TASK_MANDATE.length, BEFORE_NODE_HISTORY.length)).toEqual([...TASK_MANDATE]);
     // The bodies of the three writes gain one key each: requests, no set (M7).
     expect(declaredKeys("CardCreateBody").slice(-3)).toEqual(["reviewer", "mandate", "as"]);
     expect(declaredKeys("CardEditBody").slice(-4)).toEqual(["mandate", "reason", "revision", "as"]);
@@ -1693,8 +1730,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_CARD_QUESTIONS).toHaveLength(115);
     expect(BEFORE_DEPARTMENT_SPLIT).toHaveLength(118);
     expect(BEFORE_TASK_MANDATE).toHaveLength(121);
-    expect(ALL).toHaveLength(122);
-    expect(new Set(ALL).size).toBe(122);
+    expect(BEFORE_NODE_HISTORY).toHaveLength(122);
+    expect(ALL).toHaveLength(124);
+    expect(new Set(ALL).size).toBe(124);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1732,12 +1770,14 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it("counts ui-node-bindings' two: a shown node's 20 keys (flow-scenario's `ancestors` after `omitted`), bindings its last after links, and ShownBindings' 3, declared so, the seventy-fifth and seventy-sixth sets (UI-8 of ui-node-bindings)", () => {
-    expect(UI_NODE_BINDINGS.map((name) => served(name).length)).toEqual([20, 3]);
+    // A shown node's 21 since node-history's `history` (docs/features/node-history.md "Acceptance criteria", NH12).
+    expect(UI_NODE_BINDINGS.map((name) => served(name).length)).toEqual([21, 3]);
     expect(ALL.slice(BEFORE_UI_NODE_BINDINGS.length, BEFORE_LOCK_DIFF.length)).toEqual([...UI_NODE_BINDINGS]);
     expect(declaredKeys("ShownNode")).toEqual(Object.keys(KEYS.ShownNode));
     expect(declaredKeys("ShownBindings")).toEqual(Object.keys(KEYS.ShownBindings));
-    expect(served("ShownNode").slice(-2)).toEqual(["links", "bindings"]);
-    expect(source).toMatch(/^ {2}links: ShownLinks \| null;\n(?: {2}\/\*\*[^]*?\*\/\n)? {2}bindings: ShownBindings \| null;\n\}$/m);
+    // `history` last, after `bindings` (docs/features/node-history.md "Acceptance criteria", NH12).
+    expect(served("ShownNode").slice(-3)).toEqual(["links", "bindings", "history"]);
+    expect(source).toMatch(/^ {2}links: ShownLinks \| null;\n(?: {2}\/\*\*[^]*?\*\/\n)? {2}bindings: ShownBindings \| null;\n(?: {2}\/\*\*[^]*?\*\/\n)? {2}history: ShownHistory \| null;\n\}$/m);
     expect(source).toMatch(/^export interface ShownBindings \{\n {2}rows: BindingRow\[\];\n {2}omitted: number;\n {2}tested: TestedRow\[\] \| null;\n\}$/m);
   });
 
@@ -1945,12 +1985,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and twenty-two types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one", () => {
+  it("names exactly the one hundred and twenty-four types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and twenty-two, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and twenty-four, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(122);
+    expect(Object.keys(sets)).toHaveLength(124);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -1963,9 +2003,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names task-mandate's one last, after CardSplitChild, set 122 `CardSubtaskItem`: `card_id`, then a card's item's 16; a row's `mandate` after `reviewer` (22), a card's after `reviewer` and its `subtask_items` after `items` (34) (M6, M7 of task-mandate)", () => {
-    expect(Object.keys(sets).slice(BEFORE_TASK_MANDATE.length)).toEqual([...TASK_MANDATE]);
+    expect(Object.keys(sets).slice(BEFORE_TASK_MANDATE.length, BEFORE_NODE_HISTORY.length)).toEqual([...TASK_MANDATE]);
     expect(Object.keys(sets).indexOf("CardSubtaskItem")).toBe(121);
-    expect(Object.keys(sets).at(-1)).toBe("CardSubtaskItem");
+    expect(Object.keys(sets).at(BEFORE_NODE_HISTORY.length - 1)).toBe("CardSubtaskItem");
     expect(sets.CardSubtaskItem).toEqual(["card_id", ...(sets.CardItem ?? [])]);
     expect(sets.CardSubtaskItem).toEqual(declaredKeys("CardSubtaskItem"));
     for (const [name, key, after] of [
@@ -1998,7 +2038,7 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.ShownAncestor).toEqual(declaredKeys("ShownAncestor"));
     const node = sets.ShownNode ?? [];
     expect(node.slice(node.indexOf("omitted"), node.indexOf("omitted") + 3)).toEqual(["omitted", "ancestors", "links"]);
-    expect(node).toEqual(declaredKeys("ShownNode"));
+    expect(node).toEqual(declaredNow("ShownNode"));
     expect([sets.FlowView?.length, sets.FlowNode?.length]).toEqual([13, 16]);
     expect(sets.FlowView).toEqual(declaredKeys("FlowView"));
     expect(sets.FlowNode).toEqual(declaredKeys("FlowNode"));
@@ -2107,11 +2147,21 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(Object.keys(sets).slice(BEFORE_UI_NODE_BINDINGS.length, BEFORE_LOCK_DIFF.length)).toEqual([...UI_NODE_BINDINGS]);
     expect(Object.keys(sets).indexOf("ShownNode")).toBe(74);
     expect(Object.keys(sets).at(BEFORE_LOCK_DIFF.length - 1)).toBe("ShownBindings");
-    expect(UI_NODE_BINDINGS.map((name) => sets[name])).toEqual(UI_NODE_BINDINGS.map((name) => served(name)));
+    expect(UI_NODE_BINDINGS.map((name) => sets[name])).toEqual(UI_NODE_BINDINGS.map((name) => compared(name)));
     expect(sets.ShownBindings).toEqual(["rows", "omitted", "tested"]);
     const node = sets.ShownNode ?? [];
-    expect([node.indexOf("bindings"), node.length]).toEqual([19, 20]);
-    expect(node.slice(-2)).toEqual(["links", "bindings"]);
+    // docs/features/node-history.md "Acceptance criteria", NH12: 21 keys, `history` after `bindings`.
+    expect([node.indexOf("bindings"), node.length]).toEqual([19, 21]);
+    expect(node.slice(-2)).toEqual(["bindings", "history"]);
+  });
+
+  it("names node-history's two last, after CardSubtaskItem, sets 123 and 124: a shown node's history's 3 keys and its entry's 15, in the types' order (NH12 of node-history)", () => {
+    expect(Object.keys(sets).slice(BEFORE_NODE_HISTORY.length)).toEqual([...NODE_HISTORY]);
+    expect(Object.keys(sets).indexOf("ShownHistory")).toBe(122);
+    expect(Object.keys(sets).at(-1)).toBe("HistoryEntry");
+    expect(NODE_HISTORY.map((name) => sets[name])).toEqual(NODE_HISTORY.map((name) => served(name)));
+    expect(NODE_HISTORY.map((name) => sets[name])).toEqual(NODE_HISTORY.map((name) => declaredKeys(name)));
+    expect(NODE_HISTORY.map((name) => sets[name]?.length)).toEqual([3, 15]);
   });
 
   it("names lock-diff's five after ShownBindings, before flow-read's five: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {

@@ -175,8 +175,11 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 // `bindings` null and the note.
                 json!({"id": "MEC-STAMINA", "with": ["bindings"]}),
                 json!({"id": "MEC-STAMINA", "with": ["links", "bindings"], "archive": true}),
+                // docs/features/node-history.md NH6: the history reads git
+                // and the queue, and writes nothing under the root.
+                json!({"id": "MEC-STAMINA", "with": ["links", "bindings", "history"]}),
             ],
-            vec![json!({}), json!({"id": "R-12", "with": ["history"]})],
+            vec![json!({}), json!({"id": "R-12", "with": ["tasks"]})],
         ),
         "search" => (
             vec![

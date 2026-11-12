@@ -251,7 +251,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 12 | `department-overview` | RM-0086 | Re-scoped: an Overview per department, counted by status category | - | 5-7 | 4, 5, 6 |
 | 13 | `hub-department` | RM-0089 | A hub login's default department, presentation only | maybe `hub-workspace` | 2-3 | 4, 11b-3 |
 | v5 | `upstream-signal` | RM-0105 | A subtask marked when its parent's goal, criteria or targets changed, or a decision on its targets was applied, after it was made; per read | - | 4-6 | 6c |
-| v5 | `node-history` | RM-0035 | `spec show --history` from the apply trailers, a History part in the document view; out of RM-0056 | - | 5-7 | - |
+| v5 | `node-history` | RM-0035 | Shipped 2026-11-12: `spec show --history`, `get_node {with: ["history"]}`, the daemon's `with=history`: the commits that changed a node's span with their apply trailers (hand commits marked), the tasks accepted on it and the items applied to it, newest first; a History part in the document view; out of RM-0056 (`docs/canon/spec-history.md`) | - | 5-7 | - |
 | v5 | `direction-catalog` | RM-0106 | A direction as a table: title, revision, work state, open items, tasks, last change | - | 6-9 | 4, RM-0035 |
 | v5 | `delivery-analytics` | RM-0107 | Created, taken, accepted against estimate and due; lateness with reasons; by release and department; RM-0087's timeline | - | 8-12 | 6 |
 | v5 | `card-context` | RM-0108 | Shipped 2026-11-12: `get_card {context}`, `spec card show --context [--budget N]`: the parent's goal and one bundle of its targets and its own applied records, fitted into the room its lines leave; a bundle not made is a note (`docs/canon/card-context.md`) | - | 4-6 | 5 |
@@ -339,7 +339,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | # | Core slice | Item | Fixed now |
 |---|---|---|---|
 | 1 | `card-context` | RM-0108 | plugin 0.39.0; shipped 2026-11-12 (`docs/canon/card-context.md`) |
-| 2 | `node-history` | RM-0035 | plugin 0.40.0 (`docs/features/node-history.md`) |
+| 2 | `node-history` | RM-0035 | plugin 0.40.0; shipped 2026-11-12 (`docs/canon/spec-history.md`) |
 | 3 | `upstream-signal` | RM-0105 | plugin 0.41.0 |
 | 4 | `intake-similar` | RM-0059 | plugin 0.42.0; no schema step |
 | 5 | `pack` | RM-0061 | CLI only; the config proposal split off to RM-0110, which needs its own ADR |

@@ -93,6 +93,7 @@ import { flowOf, mockFlowOf } from "./flow";
 import { ASIDE_KINDS, ASIDE_STATUSES, asideCorpusLinks, asideDocuments } from "./harbor-sim/aside";
 import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
+import { mockHistory } from "./history";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { lockDiffOf } from "./lockDiff";
@@ -170,6 +171,8 @@ export class MockClient implements SpecEngineClient {
   private readonly tasks = new Map<string, MockTasks>();
   private readonly delayMs: number;
   private readonly now: () => number;
+  /** The clock at construction: the fixtures' times are relative to it. */
+  private readonly at: number;
   /** Each project's cards by slug (src/mocks/cards.ts): the daemon's writes on them, until a reload. */
   private readonly boards = new Map<string, MockBoard>();
   /** `conflict`: the projects whose first card write has met a change made elsewhere. */
@@ -188,6 +191,7 @@ export class MockClient implements SpecEngineClient {
     this.now = options.now ?? Date.now;
     this.delayMs = options.delayMs ?? (scenario === "slow" ? SLOW_MS : 0);
     const at = this.now();
+    this.at = at;
     this.projects = [harborSim(at), ledgerApi(at)];
     for (const project of this.projects) {
       this.tasks.set(project.project.slug, mockTasks(project.project.slug));
@@ -275,11 +279,15 @@ export class MockClient implements SpecEngineClient {
     return treeOf(this.project(project).corpus, options);
   }
 
-  /** A node's read; with `bindings`, the project's code layer in this scenario (src/mocks/bindings.ts), built only then. */
+  /**
+   * A node's read; with `bindings`, the project's code layer in this scenario (src/mocks/bindings.ts),
+   * built only then; with `history`, its changes (src/mocks/history.ts), read only then.
+   */
   async getNode(project: string, ref: string, options: NodeOptions = {}): Promise<NodeView> {
     await this.read();
     const code = (options.with ?? []).includes("bindings") ? mockCode(project, this.scenario) : undefined;
-    return nodeViewOf(this.project(project).corpus, ref, options, code);
+    const history = (options.with ?? []).includes("history") ? mockHistory(project, this.at) : undefined;
+    return nodeViewOf(this.project(project).corpus, ref, options, code, history);
   }
 
   async search(project: string, options: SearchOptions): Promise<SearchResults> {

@@ -14,6 +14,7 @@ import type {
   SearchHit,
   SearchResults,
   ShownBindings,
+  ShownHistory,
   ShownLink,
   ShownLinks,
   ShownNode,
@@ -26,6 +27,7 @@ import type {
 } from "../api/types";
 import { bindingsOf, type MockCode } from "./bindings";
 import { fakeHex, tokensEst, type MockCorpus, type MockDocument, type MockLink, type MockNode } from "./build";
+import { NO_HISTORY, type MockHistory } from "./history";
 
 // The reads `spec serve` answers for a browser (daemon-read): tree, nodes and search uncut,
 // search snippets as structure, refusals as the CLI words them (exit 2, here 503).
@@ -316,7 +318,7 @@ function normHash(corpus: MockCorpus, node: MockNode, file: MockDocument): strin
   return `b3:${fakeHex([NORM_RECIPE, String(links.length), ...links, normText(ownLines(node, file))].join("\n"), 64)}`;
 }
 
-function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null, bindings: ShownBindings | null): ShownNode {
+function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null, bindings: ShownBindings | null, history: ShownHistory | null): ShownNode {
   const file = fileOf(corpus, node);
   const text = spanText(node, file);
   return {
@@ -342,6 +344,7 @@ function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null,
       .map((ancestor) => ({ id: ancestor.id, kind: ancestor.kind, title: ancestor.title, path: ancestor.path })),
     links,
     bindings,
+    history,
   };
 }
 
@@ -444,9 +447,11 @@ function setIds(corpus: MockCorpus, node: MockNode): Set<string> {
  * unread). With `bindings`, each holder's rows from `code` (none given: no [code] table), and the
  * code layer's one note after show's own.
  */
-export function nodeViewOf(corpus: MockCorpus, ref: string, options: NodeOptions = {}, code: MockCode = { notes: [], rows: null, tested: null }): NodeView {
+export function nodeViewOf(corpus: MockCorpus, ref: string, options: NodeOptions = {}, code: MockCode = { notes: [], rows: null, tested: null }, history: MockHistory = NO_HISTORY): NodeView {
   const links = (options.with ?? []).includes("links");
   const bindings = (options.with ?? []).includes("bindings");
+  // docs/features/node-history.md "Acceptance criteria", NH4: not asked, nothing read, `history` null and no note.
+  const histories = (options.with ?? []).includes("history");
   if (options.archive === true && !links) {
     throw refusal("--archive applies to --links only: add --links, or drop --archive");
   }
@@ -457,13 +462,14 @@ export function nodeViewOf(corpus: MockCorpus, ref: string, options: NodeOptions
   return {
     ref,
     reason: null,
-    notes: bindings ? [...code.notes] : [],
+    notes: [...(bindings ? code.notes : []), ...(histories ? history.notes(resolved.holders) : [])],
     nodes: resolved.holders.map((holder) =>
       shownNode(
         corpus,
         holder,
         links ? linksOf(corpus, holder, options.archive ?? false) : null,
         bindings ? structuredClone(bindingsOf(code, setIds(corpus, holder))) : null,
+        histories ? history.of(holder) : null,
       ),
     ),
   };

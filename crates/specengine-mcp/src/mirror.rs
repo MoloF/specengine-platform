@@ -202,6 +202,9 @@ pub(crate) struct ShowNode {
     /// `null` without `with: ["bindings"]`, without a `[code]` table, or
     /// when the code layer could not be read (a note says why).
     pub bindings: Option<ShowBindings>,
+    /// `null` without `with: ["history"]`, or when the node's history
+    /// could not be read (a note says why).
+    pub history: Option<ShowHistory>,
 }
 
 /// A node a shown node is listed under: a section's enclosing node, a
@@ -227,6 +230,78 @@ pub(crate) struct ShowBindings {
     /// when the rows were not judged or the blocks could not be (a note
     /// says why).
     pub tested: Option<Vec<VerifyTested>>,
+}
+
+/// A node's changes, newest first (task spec `node-history`): those
+/// printed, whether more existed or the scan stopped short, and the
+/// entries the cut left out.
+#[derive(JsonSchema)]
+pub(crate) struct ShowHistory {
+    pub entries: Vec<ShowHistoryEntry>,
+    pub truncated: bool,
+    pub omitted: usize,
+}
+
+/// One change of a node: a commit that changed its text, a card accepted
+/// on it, an item decided on it; the same keys for the three.
+#[derive(JsonSchema)]
+pub(crate) struct ShowHistoryEntry {
+    pub source: HistorySource,
+    /// UTC, `YYYY-MM-DDTHH:MM:SSZ`: a commit's committer time, a card's
+    /// accept, an item's decision.
+    pub at: String,
+    /// A commit's full OID, a card's or an item's ID.
+    pub id: String,
+    pub change: HistoryChange,
+    /// A commit whose parent holds no such node.
+    pub created: bool,
+    /// A commit's revision of the node after it; `null` elsewhere.
+    pub rev: Option<u32>,
+    /// Before it; `null` when created, and elsewhere.
+    pub rev_before: Option<u32>,
+    /// As written: a commit's `Decided-by`, else its author; a card's
+    /// acceptor; an item's decider.
+    pub by: String,
+    /// The name part of `by`.
+    pub by_name: String,
+    /// An apply commit's `Proposal:`, `Proposed-by:` as written, and who
+    /// proposed (its type and role); `null` elsewhere.
+    pub proposal: Option<String>,
+    pub proposed_by: Option<String>,
+    pub proposer: Option<String>,
+    /// An item's decision record.
+    pub record: Option<String>,
+    /// A hand commit's subject, a card's title: one line, at most 300
+    /// characters and `…`.
+    pub title: Option<String>,
+    /// An apply commit's rationale: one line, at most 300 characters and
+    /// `…`.
+    pub rationale: Option<String>,
+}
+
+/// Where a history entry comes from.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum HistorySource {
+    Commit,
+    Card,
+    Item,
+}
+
+/// What a history entry's change was: a commit's `raised`, `editorial`,
+/// `applied` (no `Revision:` for the node) or `hand` (no apply trailers);
+/// a card's `accepted`; an item's kind.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum HistoryChange {
+    Raised,
+    Editorial,
+    Applied,
+    Hand,
+    Accepted,
+    Question,
+    Discrepancy,
+    Decision,
 }
 
 /// One code binding as a read shows it (the model's `BindingRow`, key for

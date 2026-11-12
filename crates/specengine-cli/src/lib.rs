@@ -240,6 +240,7 @@ mod group;
 mod health;
 mod health_code;
 mod health_drift;
+mod history;
 mod impact;
 mod inbox;
 mod init;
@@ -361,6 +362,7 @@ pub use health_code::{
     RowState, UnboundCounts, UnboundMarker, UnboundRow,
 };
 pub use health_drift::HealthDrift;
+pub use history::{HistoryEntry, ShownHistory};
 pub use impact::{ImpactOutcome, ImpactRequest, ImpactRow, ImpactTask, SeedSymbol, impact};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
@@ -435,6 +437,9 @@ pub use specengine_core::card::{
 /// The most subtasks one split makes, and where a subtask's targets come
 /// from (core's), for the bridges.
 pub use specengine_core::card_split::{MAX_SPLIT_CHILDREN, TargetsFrom};
+/// The entries one node's history lists at most (core's `HISTORY_MAX`,
+/// task spec `node-history`): MCP's description states it.
+pub use specengine_core::history::HISTORY_MAX as NODE_HISTORY_MAX;
 
 /// `spec card split`'s plan-only flag, without its dashes: one spelling for
 /// the parser and the usage line that names it.

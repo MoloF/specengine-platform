@@ -1,5 +1,6 @@
-import type { NodeView, Proposal, ShownLink, ShownLinks, TreeNode, WorkspaceDocument } from "../api/types";
-import { aDirection, aLink, aModule, aNode, aTrace, aTraceCard, aTraceNode, aTreeNode, aTreeView, aWorkspace, aWorkspaces } from "./builders";
+import type { NodeOptions } from "../api/client";
+import type { NodeView, Proposal, ShownHistory, ShownLink, ShownLinks, TreeNode, WorkspaceDocument } from "../api/types";
+import { aDirection, aHistory, aHistoryEntry, aLink, aModule, aNode, aTrace, aTraceCard, aTraceNode, aTreeNode, aTreeView, aWorkspace, aWorkspaces } from "./builders";
 import { stubClient } from "./stubClient";
 
 // A river ferry for the document view's tests (docs/features/doc-modal.md "Acceptance criteria",
@@ -101,6 +102,36 @@ export function docView(ref: string): NodeView {
   };
 }
 
+/** A commit's full OID, invented: its digit repeated. */
+export function ferryOid(digit: string): string {
+  return digit.repeat(40);
+}
+
+/**
+ * The ferry's history (docs/features/node-history.md "Acceptance criteria", NH13), newest first, as
+ * NH1's and NH8's: a hand edit; C-0001 accepted; a wording fix, PR-0002; PR-0040's decision recorded
+ * in DEC-0031; the raise, PR-0001, 1 to 2; the hand commit creating it. Bob and Ann are invented.
+ */
+export function ferryHistory(): ShownHistory {
+  const agent = { proposed_by: "agent role=spec-writer model=m run=r", proposer: "agent spec-writer" };
+  const ann = { by: "Ann Owner <ann@example.org>", by_name: "Ann Owner" };
+  const bob = { by: "Bob Hand <bob@example.org>", by_name: "Bob Hand" };
+  return aHistory([
+    aHistoryEntry({ id: ferryOid("d"), at: "2026-01-04T10:00:00Z", change: "hand", rev: 2, rev_before: 2, title: "Fix a typo in the window rule", ...bob }),
+    aHistoryEntry({ source: "card", id: "C-0001", at: "2026-01-03T12:00:00Z", change: "accepted", rev: null, rev_before: null, title: "Paint the ferry", by: "Ann Owner", by_name: "Ann Owner" }),
+    aHistoryEntry({ id: ferryOid("c"), at: "2026-01-03T10:00:00Z", change: "editorial", rev: 2, rev_before: 2, proposal: "PR-0002", rationale: "Wording only.", ...agent, ...ann }),
+    aHistoryEntry({ source: "item", id: "PR-0040", at: "2026-01-02T12:00:00Z", change: "decision", rev: null, rev_before: null, record: "DEC-0031", ...ann }),
+    aHistoryEntry({ id: ferryOid("b"), at: "2026-01-02T10:00:00Z", change: "raised", rev: 2, rev_before: 1, proposal: "PR-0001", rationale: "Tighten the window.", ...agent, ...ann }),
+    aHistoryEntry({ id: ferryOid("a"), at: "2026-01-01T10:00:00Z", change: "hand", created: true, rev: 1, rev_before: null, title: "Add the rules", ...bob }),
+  ]);
+}
+
+/** `getNode(REF, {with: ["history"]})`: the ferry's history, any other document's none; no links. */
+export function historyView(ref: string): NodeView {
+  const view = docView(ref);
+  return { ...view, nodes: view.nodes.map((node) => ({ ...node, links: null, history: ref === FERRY ? ferryHistory() : aHistory([]) })) };
+}
+
 /** `getTree({root: DOM-FERRY, depth: 2})`: the document and its section; three under the section; Boarding with its own child; a note without an ID. */
 export function ferryTree(): TreeNode[] {
   return [
@@ -133,7 +164,7 @@ export const FERRY_CARD = aTraceCard({ id: "C-0007", title: "Paint the ferry", m
 /** A stub client serving the ferry: its node reads, its trace, its rooted tree; any other root none. */
 export function docClient(proposals: Proposal[] = []) {
   const client = stubClient(proposals);
-  client.getNode.mockImplementation((_project, ref) => Promise.resolve(docView(ref)));
+  client.getNode.mockImplementation((_project, ref, options?: NodeOptions) => Promise.resolve(options?.with?.includes("history") === true ? historyView(ref) : docView(ref)));
   client.getTrace.mockImplementation((_project, options) =>
     Promise.resolve(options?.ref === FERRY ? aTrace([aTraceNode(FERRY, [FERRY_CARD], { title: "The ferry", rollup: "in work" })], { ref: FERRY }) : aTrace([], { ref: options?.ref ?? null })),
   );

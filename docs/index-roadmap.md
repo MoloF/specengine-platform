@@ -30,7 +30,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0028.md](roadmap/RM-0028.md) Spec digest into AGENTS.md or CLAUDE.md for external reviewers · crates/specengine-cli · draft
 - [docs/roadmap/RM-0031.md](roadmap/RM-0031.md) symbol-renamed: delta.symbols.renamed from the anchor pairing · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0034.md](roadmap/RM-0034.md) tree-bindings: opt-in binding counters in spec tree, get_tree and the daemon's tree · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin · draft
-- [docs/roadmap/RM-0035.md](roadmap/RM-0035.md) node-history (Phase 7, v5): a node's changes, who made them and when, on the CLI and in the document view · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0036.md](roadmap/RM-0036.md) impact-daemon: spec impact on the daemon and the graph's impact mode · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0037.md](roadmap/RM-0037.md) evidence-level: each node's evidence level, computed per read · crates/specengine-core, crates/specengine-cli, ui · draft
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft

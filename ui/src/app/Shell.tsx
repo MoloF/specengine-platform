@@ -80,10 +80,17 @@ function docRefOf(route: Route): string | null {
   return route.type === "section" || route.type === "project" ? (route.doc ?? null) : null;
 }
 
-/** What the document view keeps per project for the page's life (docs/features/doc-modal.md "Acceptance criteria", DM-13). */
+/**
+ * What the document view keeps per project for the page's life: Inside and History expanded or not
+ * (docs/features/doc-modal.md "Acceptance criteria", DM-13; docs/features/node-history.md "Acceptance criteria", NH7).
+ */
 export interface DocState {
   insideOpen: boolean;
+  historyOpen: boolean;
 }
+
+/** A project's document view before any choice: both parts collapsed. */
+const DOC_STATE: DocState = { insideOpen: false, historyOpen: false };
 
 /**
  * Where focus goes once the document modal is gone: its opener while it stands and is not inert;
@@ -280,7 +287,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
   );
   /** The Questions screen's drafts, limit and last outcome per project for this page's life; a reload drops them (docs/features/ui-round.md). */
   const [roundMemory] = useState(createRoundMemory);
-  /** The document view's choices per project for this page's life: Inside kept open or not. */
+  /** The document view's choices per project for this page's life: Inside and History kept open or not. */
   const [docStates, setDocStates] = useState<ReadonlyMap<string, DocState>>(() => new Map());
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
@@ -345,11 +352,19 @@ export function Shell({ scenario }: { scenario: string | null }) {
       focusLater(() => afterDocModal(opener, main.current));
     }
   }, [docShown, focusLater]);
-  const insideOpen = routeProject === null ? false : (docStates.get(routeProject)?.insideOpen ?? false);
-  function setInsideOpen(open: boolean) {
+  const docState = routeProject === null ? DOC_STATE : (docStates.get(routeProject) ?? DOC_STATE);
+  const { insideOpen, historyOpen } = docState;
+  /** One choice of the route's project's document view changed, the other kept. */
+  function setDocState(change: Partial<DocState>) {
     if (routeProject !== null) {
-      setDocStates((states) => new Map(states).set(routeProject, { insideOpen: open }));
+      setDocStates((states) => new Map(states).set(routeProject, { ...(states.get(routeProject) ?? DOC_STATE), ...change }));
     }
+  }
+  function setInsideOpen(open: boolean) {
+    setDocState({ insideOpen: open });
+  }
+  function setHistoryOpen(open: boolean) {
+    setDocState({ historyOpen: open });
   }
 
   // A Retry in the config notes answered: the nav changed under it; focus lost with the button goes there.
@@ -583,7 +598,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
   } else if (route.section === "tasks") {
     view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
   } else if (route.section === "tree" && route.view !== undefined && route.id !== null) {
-    view = <DocPage key={`${route.project}/${route.id}`} project={route.project} docRef={route.id} insideOpen={insideOpen} onInside={setInsideOpen} />;
+    view = <DocPage key={`${route.project}/${route.id}`} project={route.project} docRef={route.id} insideOpen={insideOpen} onInside={setInsideOpen} historyOpen={historyOpen} onHistory={setHistoryOpen} />;
   } else if (route.section === "board" && route.view !== undefined && route.id !== null) {
     view = <CardPage key={`${route.project}/${route.id}`} project={route.project} id={route.id} />;
   } else if (route.section === "board") {
@@ -737,7 +752,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
         </div>
         {/* After the view, so it mounts over any dialog of the view in the same commit (DM-10). */}
         {docShown && (
-          <DocModal key={`${routeProject}/${shownDoc}`} project={routeProject} docRef={shownDoc} pending={writing} insideOpen={insideOpen} onInside={setInsideOpen} onClose={closeDoc} />
+          <DocModal key={`${routeProject}/${shownDoc}`} project={routeProject} docRef={shownDoc} pending={writing} insideOpen={insideOpen} onInside={setInsideOpen} historyOpen={historyOpen} onHistory={setHistoryOpen} onClose={closeDoc} />
         )}
         {shortcutsOpen && <ShortcutsDialog section={route.type === "section" ? route.section : null} onClose={closeShortcuts} />}
         {paletteOpen && (

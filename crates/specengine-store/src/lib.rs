@@ -201,9 +201,9 @@ pub use verify_git::{
     IndexRefusal, MISSING_COMMIT_BLOB, ObjectBlob, VerifyGit,
 };
 pub use worktree::{
-    ChangedPath, CreateFileError, CreatedFile, DiskName, GitError, ListedWorktree, Merge,
-    Operation, PlaceError, STDERR_MAX, StatusEntry, WorktreeGit, create_file, disk_name,
-    replace_file, same_repository,
+    BatchBlob, BlobBatch, ChangedPath, CreateFileError, CreatedFile, DiskName, FileChange,
+    GitError, ListedWorktree, LoggedCommit, Merge, Operation, PlaceError, STDERR_MAX, StatusEntry,
+    WorktreeGit, create_file, disk_name, replace_file, same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change

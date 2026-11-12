@@ -33,10 +33,10 @@ use serde::Deserialize;
 use serde_json::Value;
 use specengine_cli::{
     BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, FlowRequest, GAP_ITEMS_SHOWN,
-    Globals, ImpactRequest, MIN_TERM_CHARS, OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET,
-    RoadmapRequest, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES,
-    SearchRequest, ShowRequest, TraceRequest, TreeRequest, View, process_git, render_json,
-    render_text,
+    Globals, ImpactRequest, MIN_TERM_CHARS, NODE_HISTORY_MAX, OUTPUT_CAP_CHARS, Outcome,
+    PACKAGE_BUDGET, RoadmapRequest, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
+    SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TraceRequest, TreeRequest, View, process_git,
+    render_json, render_text,
 };
 
 use crate::mirror::{
@@ -126,7 +126,7 @@ macro_rules! node_body {
         concat!(
     "A node's current text: a document's whole file or an ID section's span, read \
 from disk now, with a header line (ID, kind, title, path:lines, status, rev, \
-estimated tokens) per node. The same as `spec show REF [--links] [--bindings] \
+estimated tokens) per node. The same as `spec show REF [--links] [--bindings] [--history] \
 [--archive]`: content is the command's output (its note and warning lines first), \
 structuredContent its --json document.
 
@@ -139,6 +139,9 @@ with: [\"bindings\"] lists each node's code bindings, its sections' too, each wi
 for the node and its sections, as plain spec verify judges it now ([] when none, null when not \
 judged); without a [code] table they are null, \
 and a code layer that cannot be read gives a note, never an error.
+with: [\"history\"] lists the commits that changed each node's text, then the cards accepted on \
+it and the items decided on it, newest first, at most 64, trailers as written; no git history \
+gives a note and null, never an error.
 archive: with [\"links\"] only: links written in Tier 3 (archived) documents too.
 
 An answer above 40000 characters is cut, with a tail naming the lines not shown and \
@@ -467,6 +470,19 @@ const _: () = assert!(holds_number(
     SHOW_TAIL_NAMES,
     " sections and holders"
 ));
+// `with: ["history"]`'s cap is core's (task spec `node-history` NH11).
+const _: () = assert!(holds_number(
+    NODE_DESCRIPTION,
+    "newest first, at most ",
+    NODE_HISTORY_MAX,
+    ", trailers as written"
+));
+const _: () = assert!(holds_number(
+    HUB_NODE_DESCRIPTION,
+    "newest first, at most ",
+    NODE_HISTORY_MAX,
+    ", trailers as written"
+));
 const _: () = assert!(holds_number(
     SEARCH_DESCRIPTION,
     "above ",
@@ -585,10 +601,12 @@ pub(crate) enum With {
     Links,
     /// `spec show --bindings`.
     Bindings,
+    /// `spec show --history` (task spec `node-history`).
+    History,
 }
 
-/// `{"type": "string", "enum": ["links", "bindings"]}`, inlined (the
-/// derive would write a `oneOf` of `const`s).
+/// `{"type": "string", "enum": ["links", "bindings", "history"]}`,
+/// inlined (the derive would write a `oneOf` of `const`s).
 impl schemars::JsonSchema for With {
     fn inline_schema() -> bool {
         true
@@ -603,7 +621,11 @@ impl schemars::JsonSchema for With {
         object.insert("type".to_owned(), Value::from("string"));
         object.insert(
             "enum".to_owned(),
-            Value::from(vec![Value::from("links"), Value::from("bindings")]),
+            Value::from(vec![
+                Value::from("links"),
+                Value::from("bindings"),
+                Value::from("history"),
+            ]),
         );
         schemars::Schema::from(object)
     }
@@ -611,7 +633,7 @@ impl schemars::JsonSchema for With {
 
 /// The input schema's description of `get_node.with`.
 const WITH_DOC: &str = "`[\"links\"]`: each node's links, outgoing and incoming; `[\"bindings\"]`: \
-each node's code bindings with their sync.";
+each node's code bindings with their sync; `[\"history\"]`: each node's changes, newest first.";
 
 /// The input schema's description of `search.query`.
 const QUERY_DOC: &str = "The words to find (terms of 3 or more characters).";
@@ -769,6 +791,7 @@ impl SpecEngineServer {
                     links: with.contains(&With::Links),
                     archive,
                     bindings: with.contains(&With::Bindings),
+                    history: with.contains(&With::History),
                     git: process_git(env),
                 };
                 specengine_cli::show(env, globals, &request).map(Outcome::Show)

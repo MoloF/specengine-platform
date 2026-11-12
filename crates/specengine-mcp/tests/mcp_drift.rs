@@ -476,6 +476,7 @@ fn get_proposal_counts_format_1_entries() {
             links: false,
             archive: false,
             bindings: false,
+            history: false,
             git: git.clone(),
         },
     )

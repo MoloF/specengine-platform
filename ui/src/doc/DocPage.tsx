@@ -7,7 +7,21 @@ import { DocFrame } from "./DocFrame";
 // Spec tree, a reload keeps it. An ancestor crumb is followed as a link; a document link opens the
 // modal over the page.
 
-export function DocPage({ project, docRef, insideOpen, onInside }: { project: string; docRef: string; insideOpen: boolean; onInside: (open: boolean) => void }) {
+export function DocPage({
+  project,
+  docRef,
+  insideOpen,
+  onInside,
+  historyOpen,
+  onHistory,
+}: {
+  project: string;
+  docRef: string;
+  insideOpen: boolean;
+  onInside: (open: boolean) => void;
+  historyOpen: boolean;
+  onHistory: (open: boolean) => void;
+}) {
   const titleId = useId();
   const read = useDocNode(project, docRef);
   const title = read.data?.nodes[0]?.title ?? null;
@@ -18,7 +32,7 @@ export function DocPage({ project, docRef, insideOpen, onInside }: { project: st
   );
   return (
     <section className="view doc-page" aria-labelledby={titleId}>
-      <DocFrame project={project} docRef={docRef} frame="page" heading={heading} tools={null} insideOpen={insideOpen} onInside={onInside} />
+      <DocFrame project={project} docRef={docRef} frame="page" heading={heading} tools={null} insideOpen={insideOpen} onInside={onInside} historyOpen={historyOpen} onHistory={onHistory} />
     </section>
   );
 }

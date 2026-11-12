@@ -827,15 +827,15 @@ fn spec_part(document: &Value) -> Value {
 }
 
 /// `spec show REF` without `--bindings`: each node's `bindings` `null`,
-/// its last key, after `links` (20 keys since docs/features/flow-scenario.md
-/// FS-8 added `ancestors`): docs/features/show-bindings.md
-/// "spec show --bindings".
+/// after `links` (20 keys since docs/features/flow-scenario.md FS-8 added
+/// `ancestors`; 21 since docs/features/node-history.md NH4 added `history`
+/// after it, last): docs/features/show-bindings.md "spec show --bindings".
 fn assert_unbound_document(run: &Show) {
     for node in run.nodes() {
         assert!(
             node.as_object()
-                .is_some_and(|object| object.contains_key("bindings") && object.len() == 20),
-            "{}: `bindings` present, 20 keys\n{}",
+                .is_some_and(|object| object.contains_key("bindings") && object.len() == 21),
+            "{}: `bindings` present, 21 keys\n{}",
             run.what,
             run.show()
         );
@@ -850,9 +850,9 @@ fn assert_unbound_document(run: &Show) {
     if let Some(at) = raw.find("\"nodes\":[{") {
         let keys = raw_order(raw, at + "\"nodes\":[".len());
         assert_eq!(
-            &keys[keys.len() - 2..],
-            ["links", "bindings"],
-            "{}: `bindings` after `links`",
+            &keys[keys.len() - 3..],
+            ["links", "bindings", "history"],
+            "{}: `bindings` after `links`, `history` last",
             run.what
         );
     }

@@ -134,6 +134,7 @@ impl Repo {
                 links: false,
                 archive: false,
                 bindings: false,
+                history: false,
                 git: GitEnv::new(&self.linked, self.git.vars()),
             },
         )

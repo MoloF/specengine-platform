@@ -32,11 +32,14 @@ export interface DocFrameProps {
   /** Inside expanded: the Shell's choice for the project, kept for the page's life. */
   insideOpen: boolean;
   onInside: (open: boolean) => void;
+  /** History expanded: the Shell's choice for the project, as Inside's (docs/features/node-history.md "Acceptance criteria", NH7). */
+  historyOpen: boolean;
+  onHistory: (open: boolean) => void;
   /** In the modal, an ancestor crumb's plain click replaces the document; on the page it is followed. */
   onCrumb?: (ref: string) => void;
 }
 
-export function DocFrame({ project, docRef, frame, heading, tools, insideOpen, onInside, onCrumb }: DocFrameProps) {
+export function DocFrame({ project, docRef, frame, heading, tools, insideOpen, onInside, historyOpen, onHistory, onCrumb }: DocFrameProps) {
   const t = useTranslate();
   const read = useDocNode(project, docRef);
   const data = read.data;
@@ -73,7 +76,7 @@ export function DocFrame({ project, docRef, frame, heading, tools, insideOpen, o
       main={
         <RegionBoundary name={t("doc.boundary")}>
           <Suspense fallback={reading}>
-            <DocMain project={project} docRef={docRef} read={read} level={level} insideOpen={insideOpen} onInside={onInside} />
+            <DocMain project={project} docRef={docRef} read={read} level={level} insideOpen={insideOpen} onInside={onInside} historyOpen={historyOpen} onHistory={onHistory} />
           </Suspense>
         </RegionBoundary>
       }

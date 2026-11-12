@@ -203,11 +203,15 @@ fn show_json_has_exactly_the_data_keys() {
             // docs/features/show-bindings.md "spec show --bindings":
             // `null` without `--bindings`.
             "bindings",
+            // docs/features/node-history.md NH4: `null` without
+            // `--history`, after `bindings`.
+            "history",
         ]),
         "{json}"
     );
     assert!(node["links"].is_null(), "{json}");
     assert!(node["bindings"].is_null(), "{json}");
+    assert!(node["history"].is_null(), "{json}");
     assert!(node["ancestors"].is_array(), "{json}");
     assert_eq!(json["ref"], "MEC-STAMINA");
     assert!(json["reason"].is_null());

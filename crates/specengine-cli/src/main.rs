@@ -115,6 +115,9 @@ enum Command {
         /// Also list each node's code bindings and its sections', each with its state as `verify --node` judges it.
         #[arg(long)]
         bindings: bool,
+        /// Also list each node's changes, newest first: the commits that changed its text, the cards accepted on it and the items decided on it.
+        #[arg(long)]
+        history: bool,
     },
     /// Print the containment tree (`parent:` and section nesting) from ROOT, or from the roots under `[paths] spec`.
     Tree {
@@ -1184,6 +1187,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             links,
             archive,
             bindings,
+            history,
         } => Outcome::Show(specengine_cli::show(
             env,
             globals,
@@ -1192,6 +1196,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 links,
                 archive,
                 bindings,
+                history,
                 git: process_git(env),
             },
         )?),

@@ -45,6 +45,13 @@
 //! With the rows judged, each node also carries the `[[tested]]` blocks
 //! of it and its sections, as `spec verify` judges them (task spec
 //! `tested-reads`); without `--bindings` the lock is never read.
+//!
+//! `--history` (task spec `node-history`): each shown node also carries its
+//! changes, newest first ([`crate::history`]): the commits that changed its
+//! span, the cards accepted on it and the items decided on it; never a
+//! failure of the read: a holder whose history cannot be read is one `note:
+//! history:` line and its `history` `None`. Without `--history` no git runs
+//! and no queue row is read for it (NH4).
 
 use std::panic::{self, AssertUnwindSafe};
 
@@ -60,6 +67,7 @@ use specengine_store::{GitEnv, Source as _, WorkingTree, b3_hash, span_hash};
 use crate::bindings::{SetRow, no_code_note, set_bindings};
 use crate::cap::View;
 use crate::corpus::{Admission, indexed, indexed_read};
+use crate::history::{HistoryRead, ShownHistory, add_history};
 use crate::links::{ShownLinks, node_links};
 use crate::location::open_index;
 use crate::node_set::contained;
@@ -82,7 +90,11 @@ pub struct ShowRequest {
     /// `--bindings`: each node's code binding rows and its contained
     /// sections' (task spec `show-bindings`).
     pub bindings: bool,
-    /// Git's environment: `--bindings` judges the rows with it.
+    /// `--history`: each node's changes, newest first (task spec
+    /// `node-history`).
+    pub history: bool,
+    /// Git's environment: `--bindings` judges the rows with it, and
+    /// `--history` reads the log with it.
     pub git: GitEnv,
 }
 
@@ -144,6 +156,9 @@ pub struct ShownNode {
     /// `--bindings`; `None` without the flag or when no row could be read
     /// (no `[code]`, a `[code]` error, a walk gap, the data directory).
     pub bindings: Option<ShownBindings>,
+    /// Its changes with `--history`; `None` without the flag or when its
+    /// holder's history could not be read (a note says why).
+    pub history: Option<ShownHistory>,
 }
 
 /// A node a shown node is listed under ([`SpecGraph::ancestors`]).
@@ -249,6 +264,7 @@ fn run_show(
         Err(reason) => return Ok(not_found(request, reason, messages)),
     };
     let read = Read {
+        env,
         project: &project,
         text: &text,
         request,
@@ -271,6 +287,7 @@ fn run_show(
 
 /// What one `spec show` call reads beside its input.
 struct Read<'a> {
+    env: &'a Env,
     project: &'a ProjectRoot,
     text: &'a str,
     request: &'a ShowRequest,
@@ -322,7 +339,7 @@ fn subset_answer(
             }
         },
     };
-    let shown = match read_holders(
+    let mut shown = match read_holders(
         read,
         &holders,
         &resolver,
@@ -335,7 +352,8 @@ fn subset_answer(
     };
     // `--bindings` without `[code]` (cause (2)): the note alone.
     let note = read.request.bindings.then(|| no_code_note(project));
-    Ok(finish(read.request, shown, note, messages))
+    let history = history_of(read, &mut shown.nodes);
+    Ok(finish(read.request, shown, note, history, messages))
 }
 
 /// The walk (D5): today's whole read, from the freshness step on. With
@@ -408,7 +426,23 @@ fn walk(env: &Env, read: &Read<'_>, mut messages: Vec<Message>) -> Result<ShowOu
         }
         None => no_code.then(|| no_code_note(project)),
     };
-    Ok(finish(request, shown, note, messages))
+    let history = history_of(read, &mut shown.nodes);
+    Ok(finish(request, shown, note, history, messages))
+}
+
+/// `--history`, once REF named a node: each node's history, the notes;
+/// without the flag nothing is read (NH4).
+fn history_of(read: &Read<'_>, nodes: &mut [ShownNode]) -> Vec<String> {
+    if !read.request.history {
+        return Vec::new();
+    }
+    let history = HistoryRead {
+        env: read.env,
+        project: read.project,
+        git: &read.request.git,
+        whole_file: matches!(read.target, Target::Path(_)),
+    };
+    add_history(&history, nodes)
 }
 
 /// The files holding `REF` in `input`: a path's own when indexed; else the
@@ -548,11 +582,13 @@ fn read_holders(
     })
 }
 
-/// The outcome: the holders' warning, then the code layer's note.
+/// The outcome: the holders' warning, then the code layer's note, then the
+/// history's notes.
 fn finish(
     request: &ShowRequest,
     shown: Shown,
     note: Option<String>,
+    history: Vec<String>,
     mut messages: Vec<Message>,
 ) -> ShowOutcome {
     if shown.nodes.len() > 1 {
@@ -564,6 +600,7 @@ fn finish(
         )));
     }
     messages.extend(note.map(Message::Note));
+    messages.extend(history.into_iter().map(Message::Note));
     ShowOutcome {
         reference: request.reference.clone(),
         reason: None,
@@ -957,6 +994,7 @@ pub(crate) fn shown(
         ancestors: Vec::new(),
         links: None,
         bindings: None,
+        history: None,
     }
 }
 
@@ -982,6 +1020,7 @@ fn whole_file(path: &str, bytes: &[u8], archived: bool, utf8: bool) -> ShownNode
         ancestors: Vec::new(),
         links: None,
         bindings: None,
+        history: None,
     }
 }
 

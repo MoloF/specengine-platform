@@ -27,6 +27,7 @@ import type {
   HealthDrift,
   HealthReport,
   HealthUnbound,
+  HistoryEntry,
   InboxEntry,
   Proposal,
   RoadmapDocument,
@@ -37,6 +38,7 @@ import type {
   RoundSheet,
   SearchHit,
   SearchResults,
+  ShownHistory,
   ShownLink,
   ShownNode,
   TaskListEntry,
@@ -216,8 +218,35 @@ export function aNode(fields: Partial<ShownNode> & Pick<ShownNode, "id">): Shown
     ancestors: [],
     links: null,
     bindings: null,
+    history: null,
     ...fields,
   };
+}
+
+/** One history entry for tests: a hand commit unless told, absent keys null (docs/features/node-history.md "Acceptance criteria", NH12). */
+export function aHistoryEntry(fields: Partial<HistoryEntry> & Pick<HistoryEntry, "id">): HistoryEntry {
+  return {
+    source: "commit",
+    at: "2026-01-01T10:00:00Z",
+    change: "hand",
+    created: false,
+    rev: 1,
+    rev_before: 1,
+    by: "Ann Owner <ann@example.org>",
+    by_name: "Ann Owner",
+    proposal: null,
+    proposed_by: null,
+    proposer: null,
+    record: null,
+    title: null,
+    rationale: null,
+    ...fields,
+  };
+}
+
+/** A shown node's history for tests: the entries, not truncated, nothing omitted unless told. */
+export function aHistory(entries: HistoryEntry[], fields: Partial<ShownHistory> = {}): ShownHistory {
+  return { entries, truncated: false, omitted: 0, ...fields };
 }
 
 /** One tree row for tests: a live document at the given depth. */

@@ -65,7 +65,8 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
   });
 
   it("names the options exactly as the MCP tools do", () => {
-    for (const option of ["root?: string;", "depth?: number;", "kinds?: string[];", "archive?: boolean;", 'with?: ("links" | "bindings")[];', "query: string;", "limit?: number;", "node_ids: string[];", "budget?: number;", "ref: string;", "impact?: boolean;", "types?: string[];"]) {
+    // `get_node`'s `with` takes `history` since node-history (docs/features/node-history.md "Acceptance criteria", NH12).
+    for (const option of ["root?: string;", "depth?: number;", "kinds?: string[];", "archive?: boolean;", 'with?: ("links" | "bindings" | "history")[];', "query: string;", "limit?: number;", "node_ids: string[];", "budget?: number;", "ref: string;", "impact?: boolean;", "types?: string[];"]) {
       expect([option, source.includes(option)]).toEqual([option, true]);
     }
   });

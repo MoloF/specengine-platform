@@ -192,6 +192,7 @@ pub(crate) fn read(
                     links: false,
                     archive: false,
                     bindings: false,
+                    history: false,
                     git: process_git(env),
                 },
             )

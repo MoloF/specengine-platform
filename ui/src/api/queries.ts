@@ -682,6 +682,23 @@ export function useNodeBindings(project: string, ref: string) {
 }
 
 /**
+ * A node's history, `nodes/<REF>?with=history`
+ * (docs/features/node-history.md "Acceptance criteria", NH7): the document view's History part,
+ * read only once `enabled`, its first expansion, never on open; a new REF never shows the last one's.
+ * Its key is the node's, `["node", project, ref, {with: ["history"], archive: false}]`, among the
+ * reads of the spec, so an apply reads it again.
+ */
+export function useNodeHistory(project: string, ref: string, enabled: boolean) {
+  const client = useClient();
+  const options: NodeOptions = { with: ["history"] };
+  return useQuery({
+    queryKey: queryKeys.node(project, ref, options),
+    queryFn: ({ signal }) => client.getNode(project, ref, nodeRequest(options), signal),
+    enabled,
+  });
+}
+
+/**
  * What moved since each drifted binding of a node was accepted, `lock-diff?ref=<REF>`
  * (`docs/canon/spec-lock-diff.md` "The read"): the Bindings tab's "Changes since the lock", read
  * only once `enabled` (its first expanding), never when the tab opens; then kept while the pane

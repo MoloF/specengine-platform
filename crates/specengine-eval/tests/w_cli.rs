@@ -370,6 +370,7 @@ fn library_show(tree: &Path, home: &Path, reference: &str) -> (usize, bool) {
             links: false,
             archive: false,
             bindings: false,
+            history: false,
             git: GitEnv::new(tree, [("HOME", home.as_os_str())]),
         },
     )

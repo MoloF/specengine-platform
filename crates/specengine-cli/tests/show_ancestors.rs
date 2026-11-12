@@ -45,17 +45,19 @@ const TABLE: [(&str, &[&str]); 5] = [
     ("ATL-POTTERY", &[]),
 ];
 
-/// "Data", "`spec show` JSON": the section's whole list, as printed.
+/// "Data", "`spec show` JSON": the section's whole list, as printed (with
+/// docs/features/node-history.md NH4's `history` last, `null`).
 const SHELF_ANCESTORS: &str = "\"ancestors\":[\
 {\"id\":\"ATL-POTTERY\",\"kind\":\"atelier\",\"title\":\"The pottery\",\
 \"path\":\"docs/workshop/atelier.md\"},\
 {\"id\":\"WBAY-KILN\",\"kind\":\"workbay\",\"title\":\"Kiln bay\",\
 \"path\":\"docs/workshop/bays/kiln.md\"},\
 {\"id\":\"CONE-GLOST\",\"kind\":\"conerule\",\"title\":\"Glost cone\",\
-\"path\":\"docs/workshop/cones/glost.md\"}],\"links\":null,\"bindings\":null}";
+\"path\":\"docs/workshop/cones/glost.md\"}],\"links\":null,\"bindings\":null,\"history\":null}";
 
-/// A shown node's keys, in order: `ancestors` before `links`.
-const SHOWN_NODE_KEYS: usize = 20;
+/// A shown node's keys, in order: `ancestors` before `links`; 21 since
+/// docs/features/node-history.md NH4 (`history` last).
+const SHOWN_NODE_KEYS: usize = 21;
 
 // ------------------------------------------------------------------ helpers
 
@@ -185,7 +187,7 @@ fn find(graph: &SpecGraph<'_>, name: &str) -> NodeAt {
 // ------------------------------------------------------------------ flow-aside
 
 /// FS-8's table on the fixture, plain and with `--links`; the section's list
-/// as "Data" prints it, before `links`, in a node of 20 keys.
+/// as "Data" prints it, before `links`, in a node of 21 keys.
 #[test]
 fn fs8_the_table_on_the_fixture() {
     let reads = Reads::new("anc-table");

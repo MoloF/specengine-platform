@@ -97,7 +97,11 @@
 //!   `spec impact --since` and `spec verify --changed`'s `delta.symbols`;
 //! - [`trace`] — a card against its brief (task spec `card-trace`): the
 //!   frozen snapshot, `card_mark`, `rollup`, pure, computed per read and
-//!   never stored.
+//!   never stored;
+//! - [`history`] — a node's history, the pure half (task spec
+//!   `node-history`): an apply commit's trailers from its raw message, the
+//!   names an entry shows, and the judge of one commit's two versions of a
+//!   file by the node's span bytes.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -115,6 +119,7 @@ mod front_matter;
 pub mod gate;
 mod glob;
 pub mod health_toml;
+pub mod history;
 pub mod intake;
 mod lines;
 pub mod lock;

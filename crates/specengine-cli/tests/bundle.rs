@@ -1087,6 +1087,8 @@ fn ac14_both_fixtures_give_one_key_set() {
             "links",
             // docs/features/show-bindings.md "spec show --bindings".
             "bindings",
+            // docs/features/node-history.md NH4: `null` unless asked.
+            "history",
         ])
     );
     let search = spec30(&home, &root, &["--json", "search", "stamina"]).json();

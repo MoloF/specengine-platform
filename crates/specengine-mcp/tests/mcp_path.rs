@@ -85,6 +85,7 @@ impl Repo {
                 links: false,
                 archive: false,
                 bindings: false,
+                history: false,
                 git: GitEnv::new(&self.linked, [("HOME", self.home.as_os_str())]),
             },
         )

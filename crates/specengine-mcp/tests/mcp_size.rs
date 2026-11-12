@@ -82,6 +82,14 @@
 //! pinned ([`CARD_CONTEXT_MAXIMUM`]) and printed for "Implementation"
 //! (`card_context_stays_under_the_declared_cap`).
 //!
+//! docs/features/node-history.md NH14, the size: `get_node {id: "R-12",
+//! with: ["links", "bindings", "history"]}` on NH10's two nodes (64 apply
+//! commits each with a 300-character rationale, under a 20 000-character
+//! text; and under a 470-character `Decided-by:`, the history past the
+//! cut): each the CLI library's, within the cut and `MAX_RESULT_CHARS`;
+//! the maximum pinned ([`NODE_HISTORY_MAXIMUM`]) and printed for
+//! "Implementation" (`node_history_stays_under_the_declared_cap`).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -368,7 +376,9 @@ fn doc_modal_control_title_residue_is_its_measured_size() {
     let ring = scratch.dir("ring");
     flow_ring(&ring, &c.repeat(7));
     let flow = residue(&ring, &home, "get_flow", json!({}));
-    assert_eq!(links, (549_458, 549_458), "get_node with links");
+    // docs/features/node-history.md: each node's `"history":null` (15
+    // characters) since node-history.
+    assert_eq!(links, (549_473, 549_473), "get_node with links");
     assert_eq!(flow, (576_111, 576_111), "get_flow");
     for (chars, _) in [links, flow] {
         assert!(
@@ -1150,6 +1160,128 @@ fn card_context_stays_under_the_declared_cap() {
     assert!(largest as u64 <= MAX_RESULT_CHARS);
     assert_eq!(
         largest, CARD_CONTEXT_MAXIMUM,
+        "the pinned maximum (\"Implementation\")"
+    );
+}
+
+// ------------------------------------------------- node-history (RM-0035)
+
+/// docs/features/node-history.md NH14: the largest `get_node` answer with
+/// all three `with` values on NH10's nodes, text plus `structuredContent`,
+/// in characters (UTF-16 units alike: the corpus is ASCII).
+const NODE_HISTORY_MAXIMUM: usize = 110_216;
+
+/// 2026-01-01T00:00:00Z.
+const EPOCH_2026: i64 = 1_767_225_600;
+
+/// A fast-import stream: R-12's text `body` created by hand, then 63 apply
+/// commits of a 300-character rationale each, decided by `decider`, each
+/// changing R-12's last line.
+fn history_stream(body: &str, decider: &str) -> Vec<u8> {
+    let config = "[project]\nslug = \"quill-rules\"\n\n[paths]\nroots = [\"docs\"]\n\n[ids]\n\
+                  R = { kind = \"requirement\", width = 2 }\n";
+    let rules = |n: usize| {
+        format!(
+            "# Rules\n\nThe house rules.\n\n## Window {{#R-12}}\n\n{body}\nEdit {n}.\n\n\
+             ## Door {{#R-13}}\n\nThe door shuts at dusk.\n"
+        )
+    };
+    let mut out = Vec::new();
+    for n in 0..64_usize {
+        let message = if n == 0 {
+            "Add the rules\n".to_owned()
+        } else {
+            let mut rationale = format!("Step {n:02}:");
+            while rationale.len() < 300 {
+                rationale.push_str(" tighten");
+            }
+            rationale.truncate(300);
+            format!(
+                "spec: apply PR-{n:04}\n\n{rationale}\n\nProposal: PR-{n:04}\nDecided-by: \
+                 {decider}\nProposed-by: agent role=spec-writer model=m run=r\nBase-commit: \
+                 {}\n",
+                "0".repeat(40)
+            )
+        };
+        let time = EPOCH_2026 + 60 * i64::try_from(n).expect("small");
+        out.extend_from_slice(
+            format!(
+                "commit refs/heads/main\nmark :{}\nauthor Bob Hand <bob@example.org> {time} \
+                 +0000\ncommitter Dana Desk <dana@example.org> {time} +0000\ndata {}\n{message}\n",
+                n + 1,
+                message.len()
+            )
+            .as_bytes(),
+        );
+        if n > 0 {
+            out.extend_from_slice(format!("from :{n}\n").as_bytes());
+        }
+        let mut files = vec![("docs/rules.md".to_owned(), rules(n))];
+        if n == 0 {
+            files.push(("specengine.toml".to_owned(), config.to_owned()));
+        }
+        for (path, content) in files {
+            out.extend_from_slice(
+                format!(
+                    "M 100644 inline {path}\ndata {}\n{content}\n",
+                    content.len()
+                )
+                .as_bytes(),
+            );
+        }
+        out.push(b'\n');
+    }
+    out
+}
+
+/// NH14: NH10's two nodes read with `links`, `bindings` and `history`,
+/// each within the cut and `MAX_RESULT_CHARS`; their maximum is
+/// [`NODE_HISTORY_MAXIMUM`]. M: the declared value below the measurement.
+#[test]
+fn node_history_stays_under_the_declared_cap() {
+    let scratch = Scratch::new("size-node-history");
+    let home = scratch.home("h");
+    let sandbox = git::Sandbox::new(scratch.path());
+    let mut body = String::new();
+    let mut n = 0;
+    while body.len() < 20_000 {
+        n += 1;
+        body.push_str(&format!(
+            "Line {n:05} of the window's long text, kept as written.\n"
+        ));
+    }
+    let decider = format!(
+        "{} <ann@example.org>",
+        "Ann Owner of the Long Name".repeat(18)
+    );
+    let mut largest = 0;
+    for (dir, decided_by) in [
+        ("text-cut", "Ann Owner <ann@example.org>"),
+        ("history-cut", decider.as_str()),
+    ] {
+        let root = scratch.dir(dir);
+        sandbox.init(&root);
+        sandbox.git_stdin(
+            &root,
+            &["fast-import", "--quiet"],
+            &history_stream(body.trim_end(), decided_by),
+        );
+        sandbox.git(&root, &["reset", "-q", "--hard", "main"]);
+        let size = measure(
+            &format!("node-history NH14 {dir}"),
+            &root,
+            &home.join(dir),
+            &[(
+                "get_node",
+                json!({"id": "R-12", "with": ["links", "bindings", "history"]}),
+            )],
+        );
+        largest = largest.max(size);
+    }
+    eprintln!("node-history NH14 get_node maximum: {largest}");
+    assert!(largest as u64 <= MAX_RESULT_CHARS);
+    assert_eq!(
+        largest, NODE_HISTORY_MAXIMUM,
         "the pinned maximum (\"Implementation\")"
     );
 }

@@ -60,11 +60,12 @@ export interface TreeOptions {
 }
 
 /**
- * `get_node`: `--links` and `--bindings`, each a repeated `with`; `--archive` with `links` only (the
- * daemon refuses `archive` without `links`). Source: `docs/canon/code-reads.md` "Twins".
+ * `get_node`: `--links`, `--bindings` and `--history`, each a repeated `with`; `--archive` with
+ * `links` only (the daemon refuses `archive` without `links`). Sources: `docs/canon/code-reads.md`
+ * "Twins"; `docs/features/node-history.md` "Acceptance criteria" (NH12).
  */
 export interface NodeOptions {
-  with?: ("links" | "bindings")[];
+  with?: ("links" | "bindings" | "history")[];
   archive?: boolean;
 }
 

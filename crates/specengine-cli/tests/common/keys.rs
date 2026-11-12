@@ -16,8 +16,10 @@ pub const FLOW_SCENARIO_KEYS: [&str; 4] = ["in_flow", "not_in_flow", "types", "a
 /// keys alone.
 pub const FLOW_KEYS: [&str; 3] = ["in_flow", "not_in_flow", "types"];
 
-/// The one a `spec show` document gains.
-pub const SHOW_KEYS: [&str; 1] = ["ancestors"];
+/// The ones a `spec show` document gains: flow-scenario's `ancestors`
+/// (RM-0094) and node-history's `history` (RM-0035, `null` unless asked),
+/// each a shown node's.
+pub const SHOW_KEYS: [&str; 2] = ["ancestors", "history"];
 
 /// docs/features/doc-modal.md (RM-0095), its test churn: a shown link's
 /// `title` and `end_kind` (D4) and a gap row's `titles` (D5, RM-0101).

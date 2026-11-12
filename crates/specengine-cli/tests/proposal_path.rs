@@ -230,6 +230,7 @@ fn shown(pair: &Pair, cwd: &Path, reference: &str) -> Result<usize, String> {
             links: false,
             archive: false,
             bindings: false,
+            history: false,
             git: pair.git_env(cwd),
         },
     )

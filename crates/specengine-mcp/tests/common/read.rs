@@ -936,6 +936,7 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
                 links: strings(&args["with"]).iter().any(|with| with == "links"),
                 archive: flag("archive"),
                 bindings: strings(&args["with"]).iter().any(|with| with == "bindings"),
+                history: strings(&args["with"]).iter().any(|with| with == "history"),
                 git: server_git(env),
             },
         )

@@ -756,6 +756,81 @@ export interface ShownNode {
    * without `[code]` or under a cause that lists no row. Source: `docs/canon/code-reads.md` "spec show --bindings".
    */
   bindings: ShownBindings | null;
+  /**
+   * The node's changes, newest first, after `bindings`: null without `with=history`, and null when
+   * git could not be read for its holder (a `history:` note says why). Source:
+   * `docs/features/node-history.md` "Acceptance criteria" (NH12).
+   */
+  history: ShownHistory | null;
+}
+
+// A node's history (docs/features/node-history.md "Acceptance criteria", NH12): built per read
+// from git and the queue, never stored; information, never a hold on work (ADR-0012).
+
+/** Where a history entry comes from: a commit, a task accepted on the node, an item applied to it. Source: `docs/features/node-history.md` "Acceptance criteria" (NH12). */
+export type KnownHistorySource = "commit" | "card" | "item";
+
+/** A history entry's source as sent; any other word kept, shown raw. Source: `docs/features/node-history.md` "Acceptance criteria" (NH12). */
+export type HistorySource = KnownHistorySource | Unlisted;
+
+/**
+ * What an entry did, as the keys of a record (a task's word is also one of the mocks' spec
+ * statuses, which app code never quotes): a commit raised, editorial, applied (no `Revision:` for
+ * this node) or hand (no apply trailers); a task accepted; an item a question, a discrepancy or a
+ * decision. Source: `docs/features/node-history.md` "Acceptance criteria" (NH12).
+ */
+interface HistoryChanges {
+  raised: true;
+  editorial: true;
+  applied: true;
+  hand: true;
+  accepted: true;
+  question: true;
+  discrepancy: true;
+  decision: true;
+}
+
+/** The eight change words. Source: `docs/features/node-history.md` "Acceptance criteria" (NH12). */
+export type KnownHistoryChange = keyof HistoryChanges;
+
+/** A history entry's change as sent; any other word kept, shown raw. Source: `docs/features/node-history.md` "Acceptance criteria" (NH12). */
+export type HistoryChange = KnownHistoryChange | Unlisted;
+
+/**
+ * One change of a node, its 15 keys in this order, all present, absent null: `id` a commit's full
+ * OID, else the task's or the item's ID; `at` UTC; `created` the node absent before the commit;
+ * `rev`, `rev_before` a commit's revisions after and before; `by` as written (`Name <email>`),
+ * `by_name` its name part, the one the UI draws; `proposal`, `proposed_by`, `proposer` an apply's
+ * trailers; `record` an item's record; `title` a hand commit's subject or the task's title;
+ * `rationale` an apply's. Source: `docs/features/node-history.md` "Acceptance criteria" (NH12).
+ */
+export interface HistoryEntry {
+  source: HistorySource;
+  at: string;
+  id: string;
+  change: HistoryChange;
+  created: boolean;
+  rev: number | null;
+  rev_before: number | null;
+  by: string;
+  by_name: string;
+  proposal: string | null;
+  proposed_by: string | null;
+  proposer: string | null;
+  record: string | null;
+  title: string | null;
+  rationale: string | null;
+}
+
+/**
+ * A shown node's history: at most 64 entries, newest first; `truncated` when more existed or the
+ * scan stopped short; `omitted` the CLI's text cap's count, 0 from the daemon, which never cuts.
+ * Source: `docs/features/node-history.md` "Acceptance criteria" (NH12).
+ */
+export interface ShownHistory {
+  entries: HistoryEntry[];
+  truncated: boolean;
+  omitted: number;
 }
 
 /** One step of a shown node's `ancestors` (RM-0094): `path` its file, since a section's enclosing document may have no ID. Source: `crates/specengine-cli/README.md` "Output and the cap". */

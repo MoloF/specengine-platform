@@ -547,8 +547,8 @@ fn ac05_errors_are_the_clis_and_the_session_goes_on() {
             "unknown field `bogus`",
         ),
         (
-            ("get_node", json!({"id": "R-12", "with": ["history"]})),
-            "unknown variant `history`",
+            ("get_node", json!({"id": "R-12", "with": ["tasks"]})),
+            "unknown variant `tasks`",
         ),
         (("get_node", json!({})), "missing field `id`"),
         (("search", json!({"query": 7})), "invalid type"),
@@ -697,10 +697,10 @@ fn ac13_every_input_schema_is_flat() {
         assert_eq!(properties("search"), ["archive", "kinds", "limit", "query"]);
         assert_eq!(properties("get_context_bundle"), ["budget", "node_ids"]);
         // docs/features/show-bindings.md "MCP get_node": the enum in that
-        // order.
+        // order; docs/features/node-history.md NH6: `history` third.
         assert_eq!(
             tool(&list, "get_node")["inputSchema"]["properties"]["with"]["items"],
-            json!({"type": "string", "enum": ["links", "bindings"]})
+            json!({"type": "string", "enum": ["links", "bindings", "history"]})
         );
     }
 }
@@ -983,8 +983,14 @@ fn ac14_every_mostly_null_key_is_non_null_once_with_its_exact_keys() {
 /// spec's line, the twin `spec show REF [--links] [--bindings] [--archive]`,
 /// ASCII, in both eras. M: the line missing or reworded.
 /// docs/features/tested-reads.md "MCP": the line names `tested` (1 527 ->
-/// 1 670 bytes).
+/// 1 670 bytes). docs/features/node-history.md NH11: the head gains
+/// `[--history]` and the history line follows the bindings line, before
+/// archive's (1 670 -> 1 909 bytes).
 const BINDINGS_LINE: &str = "with: [\"bindings\"] lists each node's code bindings, its sections' too, each with its sync (the state spec verify --node gives), after its links, with tested: the owner's test evidence for the node and its sections, as plain spec verify judges it now ([] when none, null when not judged); without a [code] table they are null, and a code layer that cannot be read gives a note, never an error.\n";
+
+/// docs/features/node-history.md NH11: the history line, as the spec gives
+/// it (NH11).
+const HISTORY_LINE: &str = "with: [\"history\"] lists the commits that changed each node's text, then the cards accepted on it and the items decided on it, newest first, at most 64, trailers as written; no git history gives a note and null, never an error.\n";
 
 #[test]
 fn get_node_description_names_bindings() {
@@ -1002,16 +1008,16 @@ fn get_node_description_names_bindings() {
         );
         assert!(
             description.contains(&format!(
-                "lists each node's links, outgoing and incoming, before its text.\n{BINDINGS_LINE}archive: "
+                "lists each node's links, outgoing and incoming, before its text.\n{BINDINGS_LINE}{HISTORY_LINE}archive: "
             )),
             "{era:?}: after the links line, before archive's: {description}"
         );
         assert!(
-            description.contains("`spec show REF [--links] [--bindings] [--archive]`"),
+            description.contains("`spec show REF [--links] [--bindings] [--history] [--archive]`"),
             "{era:?}: {description}"
         );
         assert!(description.is_ascii());
-        assert_eq!(description.len(), 1670, "{era:?}: the spec's figure");
+        assert_eq!(description.len(), 1909, "{era:?}: the spec's figure");
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }

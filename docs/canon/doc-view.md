@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # The document view: one modal and page everywhere
 
-A document opens as one view, a modal over any screen or its own page; the Spec tree's node view stays the technical one (`doc-modal`, code `ui/src/doc/`, `src/app/location.ts`). The layout: `ui-design.md` "The work item". Served keys: `spec-cli-read.md` "Output" (`ancestors`, a link's `title` and `end_kind`), `spec-flow.md` "Output" (a gap's `titles`). No ADR: no rule of `architecture.md` changed.
+A document opens as one view, a modal over any screen or its own page; the Spec tree's node view stays the technical one (`doc-modal`, code `ui/src/doc/`, `src/app/location.ts`). The layout: `ui-design.md` "The work item". Served keys: `spec-cli-read.md` "Output" (`ancestors`, a link's `title` and `end_kind`), `spec-flow.md` "Output" (a gap's `titles`), `spec-history.md` (`history`). No ADR: no rule of `architecture.md` changed.
 
 ## The hash
 
@@ -43,7 +43,7 @@ As the card modal's (`board-screen.md` "The card modal and page"):
 `DocModal` (`Dialog`, `aria-modal`, labelled by its focused `h2`, the title once read, the REF until then) and `DocPage` (`#/<p>/tree/<REF>/page`, an `h1`, no tools, the nav marking Spec tree) render `DocFrame`, an `IssueView`. The frame, its title and tools, is first load; its slots (`DocCrumbs`, `DocMeta`, `DocActs`, `DocMain`, `DocSide`) come from one lazy chunk, `DocBody.tsx`, never preloaded. The title node never swaps, so focus never leaves it. Width: `ui-design.md` "The work item".
 
 - **Head.** Breadcrumbs: Project (`#/<p>`), each `ancestors` entry top first by title (else ID, else path), the document current; an ancestor's `href` is its page, its plain click in the modal replacing `doc`. Tools (modal): Open as a page, Close. `meta`: the work state, a `Lozenge` of the node's trace row (`rollupLook`), `doc.notKnown` with no row, none while reading; the raw `status:`, neutral, `lang="en"`, none for a section. Acts: New task (primary, `NewCardDialog` preset), Split to departments… (`card-split.md` "Screen"), Open in Flow (`flowHash`, `scope` the last ancestor, null at a root, `select` the node), Open in Spec tree; each a push, closing the modal.
-- **Main.** A REF several holders answer: the first, and `doc.holders`. **Text**: the body without front-matter and without a first heading equal to the title (`{#…}` ignored), through `src/markdown/` at `--font-size-document` and `--reading-width`; its headings one level below the part heading "Text" (`h4` in the modal, `h3` on the page); anchors are `DocLink`s; then `doc.throughAi`. **Links**: Out, then In, the served strong links whose `state` is `resolved`, in served order, a row the raw type (neutral, `lang="en"`) then the end's `title`, else `name`, as a `DocLink`; `mentions` under a collapsed `Disclosure` with their count; none, `doc.links.none`. **Inside**, below.
+- **Main.** A REF several holders answer: the first, and `doc.holders`. **Text**: the body without front-matter and without a first heading equal to the title (`{#…}` ignored), through `src/markdown/` at `--font-size-document` and `--reading-width`; its headings one level below the part heading "Text" (`h4` in the modal, `h3` on the page); anchors are `DocLink`s; then `doc.throughAi`. **Links**: Out, then In, the served strong links whose `state` is `resolved`, in served order, a row the raw type (neutral, `lang="en"`) then the end's `title`, else `name`, as a `DocLink`; `mentions` under a collapsed `Disclosure` with their count; none, `doc.links.none`. **Inside**, then **History**, below.
 - **Side**, at most 360 px. Tasks: `CardsBlock`, its own New task off. Technical details, a collapsed `Disclosure` (`ui.technicalDetails`): the ID with a copy button (ID-less: the path; `doc.technical.copyFailed`); `Facts` (`src/tree/Facts.tsx`, shared with `NodePane`): kind, `path:line-end`, status, rev, tokens, span hash, flags; the norm hash; the front-matter verbatim; unresolved links, `<type> <written>`, state and reason, `lang="en"`; `left_out`; the read's notes; `doc.technical.inTree`; Open in Graph.
 - **A 404**: the daemon's reason verbatim, `lang="en"`; only Close and Open in Spec tree stay. A section: its span, no status, Inside rooted at it.
 
@@ -56,7 +56,14 @@ As the card modal's (`board-screen.md` "The card modal and page"):
 - ID-less children are counted, one line linking the Spec tree at REF;
 - a skeleton while reading; a failure, the daemon's words and Retry; none, `doc.inside.none`.
 
-The expanded choice is the Shell's per project for the page's life (`DocState {insideOpen}`).
+The expanded choice is the Shell's per project for the page's life (`DocState {insideOpen, historyOpen}`; one choice leaves the other as it was).
+
+## History part
+
+`DocHistory.tsx`, a collapsed `Disclosure` after Inside, read as Inside is ("Reads"); the first holder's entries in served order, 18 `doc.history.*` keys:
+- a skeleton; a failure, the daemon's words and Retry; `[]`, `none`; `truncated`, its line (alone when nothing is listed); the read's `history: ` notes, `lang="en"`, when `history` is `null` and beside a list;
+- an `ol` entry says what changed (`history.ts`): `raised`, `applied` "Version N", `editorial` `wording`, `hand` `outside`, the three with `rev` `null` the raw word; `accepted` `task`, its ID a Board link; an item `question|discrepancy|decision` with its record a `DocLink`, none: `<kind>Plain`; an unknown word raw, `lang="en"`; `created` a `Lozenge` on any entry with `created`;
+- then a `<time>`, `by` with `by_name` as served in a `bdi`; an apply's `proposedBy`, `proposer` `lang="en"`, the proposal an Inbox link (alone with no `proposer`); the rationale or title. No OID and no `by` is drawn.
 
 ## Reads
 
@@ -65,12 +72,13 @@ The expanded choice is the Shell's per project for the page's life (`DocState {i
 | Document | `getNode(REF, {with: ["links"]})` (`useDocNode`), its first node | on open; the subset read, about 56 ms at 100k |
 | Work state, Cards | `getTrace({ref: REF})` | on open |
 | Inside | `getTree({root: REF, depth: 2})` | on the first expansion, per document |
+| History | `getNode(REF, {with: ["history"]})` (`useNodeHistory`), its first node | on the first expansion, per document |
 
-The keys are `READS_OF_THE_SPEC`'s: an apply, a gap or a card event re-reads an open view. `useDocNode` refetches on mount only when no other view holds the read: Flow's box read is the same key, so Open document draws at once.
+The keys are `READS_OF_THE_SPEC`'s: an apply, a gap or a card event re-reads an open view; History's key is a node's, which no card event re-reads ("Known limits"). `useDocNode` refetches on mount only when no other view holds the read: Flow's box read is the same key, so Open document draws at once.
 
 ## Rules
 
-- No kind, status, link type or rollup word is branched on but through `labels.ts`; `policy.test.ts` scans `src/doc/`. Link types stay raw (ADR-0031): words need a served label. No spec write (ADR-0004): `doc.throughAi`.
+- No kind, status, link type or rollup word is branched on but through `labels.ts`, and no history `change` word but through `history.ts`, the one table of change words (`SENTENCES`); `policy.test.ts` scans `src/doc/`. Link types stay raw (ADR-0031): words need a served label. No spec write (ADR-0004): `doc.throughAi`.
 - Chrome is `doc.` keys (`flow.`, `tree.`, `ui.` where shown); the daemon's words verbatim, `lang="en"`. The CSS takes tokens only.
 
 ## Known limits
@@ -81,7 +89,8 @@ The keys are `READS_OF_THE_SPEC`'s: an apply, a gap or a card event re-reads an 
 - A project named as its root document repeats in the breadcrumb (data). Prose wiki-style `[[path]]` references render raw.
 - Widths, 320 px and stacking are proven by looks (2026-11-11), not tests: jsdom lays nothing out.
 - `DocMeta` and `CardsBlock` find their own row by `node.id === docRef`, so a document opened by an alias shows its work state as not known (before RM-0100).
+- An open History stays as read after a hand commit (no event names it) and after a task is accepted (card events re-read no node key), until the view is reopened.
 
 ## Tests
 
-UI `src/doc/*.test.*` on `src/test/docStub.ts`, `app/{routes,location}.test.ts`, `mocks/doc.smoke.test.tsx` (nine screens), `board/CardModal.test.tsx` (stacking), `flow/FlowView.test.tsx`, `tree/TreeView.test.tsx`, `palette/Palette.test.tsx`, `ui/IssueView.test.tsx`, `i18n/plural.test.ts`, `policy.test.ts`; CLI `tests/doc_modal.rs` (served titles; the golden `doc_modal_before.json`).
+UI `src/doc/*.test.*` on `src/test/docStub.ts`, `app/{routes,location}.test.ts`, `mocks/doc.smoke.test.tsx` (nine screens), `mocks/history.smoke.test.tsx`, `api/history.live.test.tsx`, `board/CardModal.test.tsx` (stacking), `flow/FlowView.test.tsx`, `tree/TreeView.test.tsx`, `palette/Palette.test.tsx`, `ui/IssueView.test.tsx`, `i18n/plural.test.ts`, `policy.test.ts`; CLI `tests/doc_modal.rs` (served titles; the golden `doc_modal_before.json`).

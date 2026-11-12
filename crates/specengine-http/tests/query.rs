@@ -376,7 +376,9 @@ fn code_a_repo(scratch: &Scratch) -> std::path::PathBuf {
 /// sections' rows, a section, a path, a node without bindings, REF naming
 /// nothing as a 404), its rows judged; `with=<other>` is a 400 `` `with=<value>`:
 /// the values are `links` and `bindings` `` before any call (a fresh `HOME`
-/// stays empty). M: `with=bindings` ignored (its `bindings` `null`).
+/// stays empty); since docs/features/node-history.md NH12 `` the values are
+/// `links`, `bindings` and `history` ``. M: `with=bindings` ignored (its
+/// `bindings` `null`).
 #[test]
 fn nodes_with_bindings_equals_show_bindings() {
     let scratch = Scratch::new("query-bindings");
@@ -443,12 +445,12 @@ fn nodes_with_bindings_equals_show_bindings() {
 
     let fresh = scratch.home("fresh");
     let other = Server::serve(&fresh, &cwd, &[&root]);
-    for value in ["history", "Bindings", ""] {
+    for value in ["tasks", "Bindings", "History", ""] {
         let reply = other.get(&format!("{base}/nodes/LAW-BOUND?with={value}"));
         assert_eq!(reply.status, 400, "with={value}: {}", reply.text());
         assert_eq!(
             reply.error_message(),
-            format!("`with={value}`: the values are `links` and `bindings`"),
+            format!("`with={value}`: the values are `links`, `bindings` and `history`"),
             "with={value}"
         );
     }

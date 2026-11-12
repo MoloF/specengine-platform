@@ -618,15 +618,16 @@ async fn nodes(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
         .ok_or_else(|| unknown_route_of(&uri))?;
     let reference = percent_decode(raw).map_err(Refusal::bad_request)?;
     let args = args("nodes", &["with", "archive"], &uri)?;
-    let ((links, bindings), archive) =
+    let (with, archive) =
         (|| Ok::<_, String>((args.with()?, args.boolean("archive")?.unwrap_or(false))))()
             .map_err(Refusal::bad_request)?;
     Ok(run_read(project, move |env, globals| {
         let request = ShowRequest {
             reference,
-            links,
+            links: with.links,
             archive,
-            bindings,
+            bindings: with.bindings,
+            history: with.history,
             git: process_git(env),
         };
         specengine_cli::show_with_view(env, globals, &request, View::Browser).map(Outcome::Show)

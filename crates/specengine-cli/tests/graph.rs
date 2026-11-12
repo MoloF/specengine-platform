@@ -754,13 +754,14 @@ fn exits_of_the_graph_reads() {
             }
         }
     }
-    // Usage: `--archive` without `--links`, `--proposals`, `--history`
-    // (`--bindings` is a flag since docs/features/show-bindings.md).
+    // Usage: `--archive` without `--links`, `--proposals`, `--changes`
+    // (`--bindings` is a flag since docs/features/show-bindings.md,
+    // `--history` since docs/features/node-history.md).
     for args in [
         &["show", "MEC-STAMINA", "--archive"][..],
         &["--json", "show", "MEC-STAMINA", "--archive"],
         &["show", "MEC-STAMINA", "--proposals"],
-        &["show", "MEC-STAMINA", "--history"],
+        &["show", "MEC-STAMINA", "--changes"],
         &["tree", "--depth"],
         &["graph"],
     ] {

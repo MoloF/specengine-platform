@@ -3,7 +3,7 @@
 //! tool has, its JSON echo keys: docs/features/ui-live.md "Data"); an
 //! array repeats its key
 //! (`kinds=a&kinds=b`), an integer is decimal, a boolean `true` or
-//! `false`, `with` `links` or `bindings`. 400: a name the endpoint does not take
+//! `false`, `with` `links`, `bindings` or `history`. 400: a name the endpoint does not take
 //! (listing its names), a scalar given twice, a bad value, a required
 //! name missing. A REF is the rest of the path after `nodes/`,
 //! percent-decoded once as UTF-8 (a bad `%` or non-UTF-8: 400).
@@ -15,8 +15,17 @@
 
 use specengine_cli::TaskStatus;
 
-/// `with`'s values: MCP `get_node`'s, `spec show --links`, `--bindings`.
-const WITH_VALUES: [&str; 2] = ["links", "bindings"];
+/// `with`'s values: MCP `get_node`'s, `spec show --links`, `--bindings`,
+/// `--history` (task spec `node-history` NH12).
+const WITH_VALUES: [&str; 3] = ["links", "bindings", "history"];
+
+/// What `with` asks a node read to add.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct With {
+    pub links: bool,
+    pub bindings: bool,
+    pub history: bool,
+}
 
 /// An endpoint's query, its names checked.
 pub(crate) struct Args {
@@ -123,21 +132,25 @@ impl Args {
             .collect()
     }
 
-    /// `with`: each value `links` or `bindings`; whether each is given at
-    /// least once, `(links, bindings)`.
-    pub(crate) fn with(&self) -> Result<(bool, bool), String> {
+    /// `with`: each value `links`, `bindings` or `history`; whether each
+    /// is given at least once.
+    pub(crate) fn with(&self) -> Result<With, String> {
         let values = self.texts("with");
         if let Some(value) = values
             .iter()
             .find(|value| !WITH_VALUES.contains(&value.as_str()))
         {
             return Err(format!(
-                "`with={value}`: the values are `{}` and `{}`",
-                WITH_VALUES[0], WITH_VALUES[1]
+                "`with={value}`: the values are `{}`, `{}` and `{}`",
+                WITH_VALUES[0], WITH_VALUES[1], WITH_VALUES[2]
             ));
         }
         let given = |wanted: &str| values.iter().any(|value| value == wanted);
-        Ok((given(WITH_VALUES[0]), given(WITH_VALUES[1])))
+        Ok(With {
+            links: given(WITH_VALUES[0]),
+            bindings: given(WITH_VALUES[1]),
+            history: given(WITH_VALUES[2]),
+        })
     }
 }
 

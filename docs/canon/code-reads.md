@@ -89,8 +89,8 @@ A node's block follows its header and links block, before its bytes:
 
 ## Twins
 
-- MCP `get_node {id, with?, archive?}`: `with` items the enum `["links", "bindings"]`; `archive` with `"links"` only. Mirror: `ShowNode.bindings` `Option<ShowBindings {rows, omitted, tested}>`, `BindingRowShape` key for key (`relation`, `kind`, `sync`, `anchor` verify's enums; the rest free). `NODE_DESCRIPTION` 1 670 B. `get_context_bundle`'s `layers.bindings`, `.tests`: `BundleRowShape` (`BindingRowShape`'s keys, then `tokens_est`); `get_task`'s `bindings`: `BindingRowShape`. The resource `spec://<slug>/node/<REF>` carries none.
-- Daemon: `nodes/{*ref}?with=bindings`, repeatable with `with=links`: the CLI's JSON, `View::Browser`; another value: 400 `` `with=<value>`: the values are `links` and `bindings` ``. The bundle's and task's JSON carry rows; the Bundle tab prints them as lines with a Sync badge, no link (`docs/features/bundle-bindings.md` "UI and daemon keys"); Bindings tab: `drift-screens.md`.
+- MCP `get_node {id, with?, archive?}`: `with` items `"bindings"` (the enum: `mcp-read.md`); `archive` with `"links"` only. Mirror: `ShowNode.bindings` `Option<ShowBindings {rows, omitted, tested}>`, `BindingRowShape` key for key (`relation`, `kind`, `sync`, `anchor` verify's enums; the rest free). `get_context_bundle`'s `layers.bindings`, `.tests`: `BundleRowShape` (`BindingRowShape`'s keys, then `tokens_est`); `get_task`'s `bindings`: `BindingRowShape`. The resource `spec://<slug>/node/<REF>` carries none.
+- Daemon: `nodes/{*ref}?with=bindings`, repeatable with `with=links`: the CLI's JSON, `View::Browser`; another value: a 400 naming the values (`spec-history.md`). The bundle's and task's JSON carry rows; the Bundle tab prints them as lines with a Sync badge, no link (`docs/features/bundle-bindings.md` "UI and daemon keys"); Bindings tab: `drift-screens.md`.
 - Plugin: `read-spec` names `with: ["bindings"]` (0.13.0), the bundle's rows and their `sync` (0.14.0, step 1; `plugin.md` "Skills").
 
 ## delta.tests_reaching

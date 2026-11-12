@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 46 open, 64 done; current mvp; to mvp 2-3 days; total 13-21 days, 12 unestimated
+roadmap: 45 open, 65 done; current mvp; to mvp 2-3 days; total 13-21 days, 11 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,19 +29,18 @@ roadmap: 46 open, 64 done; current mvp; to mvp 2-3 days; total 13-21 days, 12 un
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 11 open, 12 done | 0 days, 11 unestimated
+## release v5 | 10 open, 13 done | 0 days, 10 unestimated
 
 1. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | -
-2. [RM-0035](../roadmap/RM-0035.md) | node-history (Phase 7, v5): a node's changes, who made them and when, on the CLI and in the document view | draft | should | -
-3. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
-4. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
-5. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0060, RM-0099
-6. [RM-0105](../roadmap/RM-0105.md) | upstream-signal (Phase 7, v5): a subtask shows that its parent changed above it | draft | should | -
-7. [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, v5): a direction as a table of its documents | draft | should | - | waits on RM-0035
-8. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | draft | should | -
-9. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a non-game preset | draft | could | -
-10. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
-11. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+2. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
+3. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
+4. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0060, RM-0099
+5. [RM-0105](../roadmap/RM-0105.md) | upstream-signal (Phase 7, v5): a subtask shows that its parent changed above it | draft | should | -
+6. [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, v5): a direction as a table of its documents | draft | should | -
+7. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | draft | should | -
+8. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a non-game preset | draft | could | -
+9. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
+10. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
 
 ## pool | 28 open, 1 done | 7-12 days, 24 unestimated
 
@@ -49,7 +48,7 @@ roadmap: 46 open, 64 done; current mvp; to mvp 2-3 days; total 13-21 days, 12 un
 - [RM-0040](../roadmap/RM-0040.md) | check-parity: what pilot A's own docs check still does beside spec check | draft | should | -
 - [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch | draft | should | -
 - [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | -
-- [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0035, RM-0036
+- [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0036
 - [RM-0070](../roadmap/RM-0070.md) | trial-followups (Phase 7): what the second trial and earlier review left | draft | should | -
 - [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | -
 - [RM-0019](../roadmap/RM-0019.md) | roadmap-moves (Phase 6, 3b): moves from the Roadmap screen | draft | could | -

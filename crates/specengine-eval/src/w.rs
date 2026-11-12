@@ -966,6 +966,7 @@ fn show(env: &Env, globals: &Globals, reference: &str) -> Shown {
         links: false,
         archive: false,
         bindings: false,
+        history: false,
         git: specengine_cli::process_git(env),
     };
     match specengine_cli::show(env, globals, &request) {

@@ -217,8 +217,8 @@ const KEYS = {
   } satisfies Record<keyof BundleLayers, true>,
   // crates/specengine-cli/README.md "Output and the cap": a shown node, `span_hash` included;
   // docs/features/norm-hash.md "Data": `norm_hash` right before it; docs/canon/code-reads.md
-  // "spec show --bindings": `bindings`, its last key, after `links`; RM-0094's `ancestors` after
-  // `omitted`, 20 keys.
+  // "spec show --bindings": `bindings` after `links`; RM-0094's `ancestors` after `omitted`;
+  // docs/features/node-history.md "Acceptance criteria" (NH12): `history`, its last key, after `bindings`, 21 keys.
   ShownNode: {
     id: true,
     kind: true,
@@ -240,6 +240,7 @@ const KEYS = {
     ancestors: true,
     links: true,
     bindings: true,
+    history: true,
   } satisfies Record<keyof ShownNode, true>,
   // docs/canon/code-reads.md "spec show --bindings": a node's `bindings` {rows, omitted}, then
   // docs/canon/spec-lock-tested.md "Reads": `tested` after `omitted`.
@@ -326,9 +327,9 @@ const CITED: Record<keyof typeof KEYS, string> = {
   BundleLayers: "targets, open_questions, ancestors, criteria, bindings, decisions, neighbours, terms, tests",
   // docs/features/norm-hash.md "Data": JSON node {id, ..., sections, norm_hash, span_hash, ...};
   // docs/canon/code-reads.md "spec show --bindings": `bindings` after `links`; RM-0094's `ancestors`
-  // after `omitted`.
+  // after `omitted`; docs/features/node-history.md "Acceptance criteria" (NH12): `history` after `bindings`.
   ShownNode:
-    "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, ancestors, links, bindings",
+    "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, ancestors, links, bindings, history",
   ShownBindings: "rows, omitted, tested",
 };
 
@@ -823,7 +824,8 @@ describe("the binding row types (UI-1 of bundle-bindings)", () => {
   });
 
   it("gives a shown node its bindings after links, null or {rows, omitted, tested}; the package its rows, never unknown", () => {
-    expect(source).toMatch(/^ {2}links: ShownLinks \| null;\n(?: {2}\/\*\*[\s\S]*?\*\/\n)? {2}bindings: ShownBindings \| null;\n\}$/m);
+    // `history` after it since node-history (docs/features/node-history.md "Acceptance criteria", NH12).
+    expect(source).toMatch(/^ {2}links: ShownLinks \| null;\n(?: {2}\/\*\*[\s\S]*?\*\/\n)? {2}bindings: ShownBindings \| null;\n(?: {2}\/\*\*[\s\S]*?\*\/\n)? {2}history: ShownHistory \| null;\n\}$/m);
     const none: Pick<ShownNode, "bindings"> = { bindings: null };
     const some: Pick<ShownNode, "bindings"> = { bindings: { rows: [], omitted: 3, tested: null } };
     expect([none.bindings, some.bindings?.omitted]).toEqual([null, 3]);

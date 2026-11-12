@@ -1046,6 +1046,7 @@ fn a_root_below_the_top_applies_at_its_top_relative_path() {
             links: false,
             archive: false,
             bindings: false,
+            history: false,
             git: genv(&linked.join("proj")),
         },
     )

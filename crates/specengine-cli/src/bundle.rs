@@ -1224,6 +1224,7 @@ fn shown_node(graph: &SpecGraph<'_>, at: NodeAt) -> ShownNode {
             ancestors: Vec::new(),
             links: None,
             bindings: None,
+            history: None,
         },
     }
 }

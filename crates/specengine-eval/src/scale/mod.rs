@@ -629,6 +629,7 @@ impl Session {
             links,
             archive: false,
             bindings: false,
+            history: false,
             git: self.git.clone(),
         }
     }

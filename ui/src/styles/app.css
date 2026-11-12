@@ -6703,6 +6703,55 @@ mark {
   color: var(--text-secondary);
 }
 
+/* A node's history (src/doc/DocHistory.tsx; docs/features/node-history.md "Acceptance criteria",
+   NH13): its toggle sized as Inside's; each entry what changed, then its date, who and its proposal on
+   one wrapping line, then its rationale or title at reading width, any script wrapping, nothing cut. */
+.doc-history > .disclosure-heading > .disclosure-button {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.doc-history-list {
+  display: grid;
+  gap: var(--space-150);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-history-entry {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+}
+
+.doc-history-what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+}
+
+.doc-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-050) var(--space-150);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.doc-history-text {
+  max-width: var(--reading-width);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .board-handoff {
   display: flex;
   flex-wrap: wrap;

@@ -19,6 +19,7 @@ import { Lozenge } from "../ui/Lozenge";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
+import { DocHistory } from "./DocHistory";
 import { DocInside } from "./DocInside";
 import { DocLinks, PartHeading, type PartLevel } from "./DocLinks";
 import { DocTechnical } from "./DocTechnical";
@@ -29,7 +30,7 @@ const SplitDialog = lazy(() => import("../board/SplitDialog").then((module) => (
 // One document as a work item (docs/features/doc-modal.md "Acceptance criteria", DM-12): the parts the
 // frame (./DocFrame.tsx) lays out around its own title, loaded on demand as one chunk: the path from
 // the top as the breadcrumb, the work state and the raw status, the acts; the main column (the text
-// at reading width, the links by title, Inside); the side (Cards, Technical details folded). The
+// at reading width, the links by title, Inside, History); the side (Cards, Technical details folded). The
 // frame's title never waits for this chunk, so focus on it never moves. Read only: changes go through
 // the AI, as proposals (ADR-0004); a card is the one write here.
 
@@ -246,8 +247,30 @@ export function DocActs({ project, docRef, holder }: { project: string; docRef: 
   );
 }
 
-/** The main column: a skeleton while read, the daemon's words and Retry, its reason for a REF naming nothing, else the holders' line, Text, Links and Inside. */
-export function DocMain({ project, docRef, read, level, insideOpen, onInside }: { project: string; docRef: string; read: NodeQuery; level: PartLevel; insideOpen: boolean; onInside: (open: boolean) => void }) {
+/**
+ * The main column: a skeleton while read, the daemon's words and Retry, its reason for a REF naming
+ * nothing, else the holders' line, Text, Links, Inside and History (docs/features/node-history.md
+ * "Acceptance criteria", NH7), each folded part held open or not by the Shell.
+ */
+export function DocMain({
+  project,
+  docRef,
+  read,
+  level,
+  insideOpen,
+  onInside,
+  historyOpen,
+  onHistory,
+}: {
+  project: string;
+  docRef: string;
+  read: NodeQuery;
+  level: PartLevel;
+  insideOpen: boolean;
+  onInside: (open: boolean) => void;
+  historyOpen: boolean;
+  onHistory: (open: boolean) => void;
+}) {
   const t = useTranslate();
   const failure = useRetainedFailure(read.error, read.isFetching);
   const data = read.data;
@@ -282,6 +305,7 @@ export function DocMain({ project, docRef, read, level, insideOpen, onInside }: 
       <Text project={project} holder={holder} level={level} />
       <DocLinks project={project} links={holder.links} level={level} />
       <DocInside project={project} docRef={docRef} open={insideOpen} onToggle={onInside} level={level} />
+      <DocHistory project={project} docRef={docRef} open={historyOpen} onToggle={onHistory} level={level} />
     </>
   );
 }

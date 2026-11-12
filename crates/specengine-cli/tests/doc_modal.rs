@@ -682,10 +682,11 @@ fn normalised(text: &str, places: &[(String, &'static str)]) -> String {
 }
 
 /// A JSON stdout with doc-modal's keys out, every other byte kept; a stdout
-/// holding no JSON document as it is.
+/// holding no JSON document as it is. Since docs/features/node-history.md
+/// (NH4) a shown node's `history` (`null`, not asked) is out too.
 fn json_before(stdout: &str) -> String {
     if stdout.starts_with('{') {
-        without_doc_modal_keys(stdout)
+        common::keys::without_keys(&without_doc_modal_keys(stdout), &["history"])
     } else {
         stdout.to_owned()
     }

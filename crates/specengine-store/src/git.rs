@@ -782,7 +782,7 @@ impl Git {
         let unreadable = GitFailure::Unreadable {
             command: "cat-file",
         };
-        let mut child = self
+        let child = self
             .command(&["cat-file", "--batch"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -790,17 +790,7 @@ impl Git {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|error| self.spawn_failure(&error))?;
-        let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(unreadable);
-        };
-        Ok(CatFile {
-            child,
-            stdin: Some(stdin),
-            stdout: BufReader::new(stdout),
-            done: false,
-        })
+        CatFile::of_child(child).ok_or(unreadable)
     }
 }
 
@@ -825,8 +815,9 @@ impl Blob {
     }
 }
 
-/// One `cat-file --batch` session in strict lockstep.
-struct CatFile {
+/// One `cat-file --batch` session in strict lockstep (also a
+/// [`crate::WorktreeGit`]'s, `crate::worktree::BlobBatch`).
+pub(crate) struct CatFile {
     child: Child,
     stdin: Option<ChildStdin>,
     stdout: BufReader<ChildStdout>,
@@ -836,9 +827,25 @@ struct CatFile {
 impl CatFile {
     const COMMAND: &'static str = "cat-file";
 
+    /// The session of `child`, a spawned `cat-file --batch` with its stdin
+    /// and stdout piped; `None` (the child killed) when a pipe is missing.
+    pub(crate) fn of_child(mut child: Child) -> Option<Self> {
+        let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        };
+        Some(Self {
+            child,
+            stdin: Some(stdin),
+            stdout: BufReader::new(stdout),
+            done: false,
+        })
+    }
+
     /// Writes one request and reads its whole reply:
     /// `<oid> SP <type> SP <size> LF <bytes> LF` or `<oid> SP missing LF`.
-    fn get(&mut self, oid: &str) -> Result<Blob, GitFailure> {
+    pub(crate) fn get(&mut self, oid: &str) -> Result<Blob, GitFailure> {
         let unreadable = || GitFailure::Unreadable {
             command: Self::COMMAND,
         };
@@ -935,7 +942,7 @@ impl CatFile {
 
     /// Closes the requests and waits: the session must end cleanly, with
     /// nothing left unread.
-    fn finish(mut self) -> Result<(), GitFailure> {
+    pub(crate) fn finish(mut self) -> Result<(), GitFailure> {
         drop(self.stdin.take());
         let mut rest = Vec::new();
         let drained = self.stdout.read_to_end(&mut rest);

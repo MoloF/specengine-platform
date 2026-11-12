@@ -228,6 +228,12 @@
 //!   a `SCHEMA_PINS` entry 0.39.0, 0.38.0's schemas today's without the
 //!   three keys ([`as_of_0_38_0`]). M: the schema changed with no new
 //!   `SCHEMA_PINS` entry.
+//! - node-history (RM-0035, NH11, D8): 0.39.0 -> 0.40.0, MINOR: `get_node`'s
+//!   `with` takes `history` and each node returns `history`. A `PINS` entry
+//!   0.40.0, the tree with plugin.json's version set back 0.39.0's
+//!   (`read-spec` byte-equal); a `SCHEMA_PINS` entry 0.40.0, 0.39.0's
+//!   schemas today's without the value and the key ([`as_of_0_39_0`]). M:
+//!   the schema changed with no new `SCHEMA_PINS` entry.
 //!
 //! The repository is only read.
 
@@ -613,6 +619,13 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.39.0",
         "df4a0309cd9e73c87b2205f45477a24b95b453ce2b70065a842c10727f702dd4",
+    ),
+    // node-history (RM-0035, NH11: 0.39.0 -> 0.40.0, MINOR: `get_node`'s
+    // `with` value `history` and its key): plugin.json's version alone;
+    // set back, the tree hashes as 0.39.0's pin (`read-spec` unchanged).
+    (
+        "0.40.0",
+        "bab1f5cffd378d5aa0155c89d19a008a64f30a458e42159918d114df3ec97fda",
     ),
 ];
 
@@ -1023,6 +1036,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.39.0",
         "7459b8e2b1cef6c84769d8b4bd9a396cc5659e49f52f4dc72a68a5e49ec7b312",
+    ),
+    // node-history (RM-0035, NH11): `get_node`'s `with` value `history`
+    // (its doc reworded) and each node's `history` ([`as_of_0_39_0`] takes
+    // them out; no other tool's schema changed).
+    (
+        "0.40.0",
+        "a97ffc0ac3a8f960fe387660c78b48207dc07c626462368b59e5bc7f767d965a",
     ),
 ];
 
@@ -2034,8 +2054,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095), 0.35.0
 /// since departments (RM-0096), 0.36.0 since card-questions (RM-0097),
 /// 0.37.0 since department-split (RM-0100), 0.38.0 since task-mandate
-/// (RM-0104), 0.39.0 since card-context (RM-0108). No room is left, so the
-/// next byte is over.
+/// (RM-0104), 0.39.0 since card-context (RM-0108), 0.40.0 since
+/// node-history (RM-0035). No room is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2057,7 +2077,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.39.0")
+        json!("0.40.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2208,11 +2228,37 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // node-history (RM-0035, NH11: 0.39.0 -> 0.40.0): plugin.json's version
+    // alone; set back, the tree is 0.39.0's pinned content, `read-spec`
+    // and every other skill and role byte-equal. M: plugin.json left at
+    // 0.39.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.40.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.40.0"),
+        "plugin.json's version"
+    );
+    let at_0_39_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.40.0\"",
+        "\"version\": \"0.39.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_39_0),
+        PINS[PINS.len() - 2].1,
+        "0.40.0 changes plugin.json's version only"
+    );
+    let tree = at_0_39_0;
+    let pins_0_39_0 = &PINS[..PINS.len() - 1];
     // card-context (RM-0108, CC8: 0.38.0 -> 0.39.0): plugin.json's version
     // and `read-spec`'s three edits, net +5 bytes; all set back, the tree
     // is 0.38.0's pinned content, every other skill and role byte-equal. M:
     // plugin.json left at 0.38.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.39.0"));
+    assert_eq!(
+        pins_0_39_0.last().map(|(version, _)| *version),
+        Some("0.39.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.39.0"),
@@ -2232,11 +2278,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     assert_eq!(net, 5, "net +5");
     assert_eq!(
         content_hash(&at_0_38_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_39_0[pins_0_39_0.len() - 2].1,
         "0.39.0 changes plugin.json's version and read-spec's three edits only"
     );
     let tree = at_0_38_0;
-    let pins_0_38_0 = &PINS[..PINS.len() - 1];
+    let pins_0_38_0 = &pins_0_39_0[..pins_0_39_0.len() - 1];
     // task-mandate (RM-0104, P1, D14: 0.37.0 -> 0.38.0): plugin.json's
     // version alone; set back, the tree is 0.37.0's pinned content,
     // `read-spec`'s body and every other skill and role byte-equal. M:
@@ -3392,6 +3438,28 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// `get_node.with`'s doc as 0.39.0 listed it.
+const WITH_DOC_0_39_0: &str = "`[\"links\"]`: each node's links, outgoing and incoming; \
+                               `[\"bindings\"]`: each node's code bindings with their sync.";
+
+/// node-history (RM-0035, NH11): `schemas` as 0.39.0 listed them:
+/// `get_node`'s `with` items `["links", "bindings"]` with its 0.39.0 doc,
+/// its node without the `history` property and `required` entry; no other
+/// tool's schema changed.
+fn as_of_0_39_0(schemas: &mut Value) {
+    let node = &mut schemas["get_node"];
+    let with = &mut node["inputSchema"]["properties"]["with"];
+    assert_eq!(
+        with["items"]["enum"],
+        json!(["links", "bindings", "history"]),
+        "the enum in that order"
+    );
+    with["items"]["enum"] = json!(["links", "bindings"]);
+    with["description"] = json!(WITH_DOC_0_39_0);
+    let item = &mut node["outputSchema"]["properties"]["nodes"]["items"];
+    assert!(without_property(item, "history"), "the node's history");
+}
+
 /// card-context (RM-0108, CC8): `schemas` as 0.38.0 listed them: no
 /// `context` and `budget` in `get_card`'s input, no `context` in its output;
 /// no other tool's schema changed.
@@ -4102,7 +4170,20 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[28].0, "0.37.0", "an entry for 0.37.0");
     assert_eq!(SCHEMA_PINS[29].0, "0.38.0", "an entry for 0.38.0");
     assert_eq!(SCHEMA_PINS[30].0, "0.39.0", "an entry for 0.39.0");
-    assert_eq!(SCHEMA_PINS.len(), 31, "0.39.0 the last entry");
+    assert_eq!(SCHEMA_PINS[31].0, "0.40.0", "an entry for 0.40.0");
+    assert_eq!(SCHEMA_PINS.len(), 32, "0.40.0 the last entry");
+    // node-history (RM-0035, NH11): 0.39.0's schemas are today's without
+    // `get_node`'s `with` value `history` and each node's `history`. M:
+    // `SCHEMA_PINS` not appended.
+    let mut at_0_39_0 = schemas.clone();
+    as_of_0_39_0(&mut at_0_39_0);
+    let at_0_39_0_hash = schema_hash(&at_0_39_0);
+    assert_eq!(
+        at_0_39_0_hash, SCHEMA_PINS[30].1,
+        "0.39.0's schemas are today's without node-history's value and key"
+    );
+    assert_ne!(at_0_39_0_hash, current, "node-history changed the schemas");
+    let (schemas, current) = (at_0_39_0, at_0_39_0_hash);
     // card-context (RM-0108, CC8): 0.38.0's schemas are today's without
     // `get_card`'s `context` and `budget` taken and `context` returned. M:
     // `SCHEMA_PINS` not appended.

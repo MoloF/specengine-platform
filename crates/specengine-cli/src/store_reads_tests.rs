@@ -273,6 +273,7 @@ impl Place {
             links,
             archive,
             bindings: false,
+            history: false,
             git: self.git.clone(),
         }
     }
@@ -1589,6 +1590,7 @@ fn sr1_an_edit_at_every_attempt_gives_two_attempts_then_the_walk() {
                         links,
                         archive,
                         bindings: false,
+                        history: false,
                         git: request_place.2.clone(),
                     },
                 )

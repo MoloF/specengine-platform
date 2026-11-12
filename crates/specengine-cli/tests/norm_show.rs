@@ -290,8 +290,10 @@ fn te7_json_keys_in_order() {
         // docs/features/flow-scenario.md FS-8: before `links`.
         "ancestors",
         "links",
-        // docs/features/show-bindings.md "spec show --bindings": last.
+        // docs/features/show-bindings.md "spec show --bindings".
         "bindings",
+        // docs/features/node-history.md NH4: last, after `bindings`.
+        "history",
     ];
     for reference in [
         "MEC-STAMINA",

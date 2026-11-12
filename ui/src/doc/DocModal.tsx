@@ -21,6 +21,8 @@ export function DocModal({
   pending,
   insideOpen,
   onInside,
+  historyOpen,
+  onHistory,
   onClose,
 }: {
   project: string;
@@ -29,6 +31,8 @@ export function DocModal({
   pending: boolean;
   insideOpen: boolean;
   onInside: (open: boolean) => void;
+  historyOpen: boolean;
+  onHistory: (open: boolean) => void;
   onClose: () => void;
 }) {
   const t = useTranslate();
@@ -61,7 +65,7 @@ export function DocModal({
       closeOnScrim
       focusTitle
       top
-      frame={(heading) => <DocFrame project={project} docRef={docRef} frame="modal" heading={heading} tools={tools} insideOpen={insideOpen} onInside={onInside} onCrumb={openDoc} />}
+      frame={(heading) => <DocFrame project={project} docRef={docRef} frame="modal" heading={heading} tools={tools} insideOpen={insideOpen} onInside={onInside} historyOpen={historyOpen} onHistory={onHistory} onCrumb={openDoc} />}
     />
   );
 }

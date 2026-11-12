@@ -29,6 +29,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-flow-readings.md](canon/spec-flow-readings.md) spec flow: readings of the walk, the edges and the rows · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-flow-screen.md](canon/spec-flow-screen.md) The Flow screen · ui · tier 2
 - [docs/canon/spec-flow.md](canon/spec-flow.md) spec flow: the walk, typed edges, lifted edges and gap rows · crates/specengine-model, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
+- [docs/canon/spec-history.md](canon/spec-history.md) spec show --history: a node's changes, who made them and when · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-ids.md](canon/spec-ids.md) Spec IDs: a hub mints from 100001, a terminal below it · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · tier 2
 - [docs/canon/spec-impact.md](canon/spec-impact.md) spec impact: what a change to a node, a code symbol or the code since a revision reaches · crates/specengine-cli, crates/specengine-mcp, crates/specengine-store, crates/specengine-core, plugin · tier 2
 - [docs/canon/spec-index-edges.md](canon/spec-index-edges.md) spec index: core's resolved edges, kept incrementally · crates/specengine-store, crates/specengine-core, crates/specengine-model · tier 2

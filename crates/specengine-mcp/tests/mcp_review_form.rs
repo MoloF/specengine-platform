@@ -143,6 +143,7 @@ impl Repo {
                 links: false,
                 archive: false,
                 bindings: false,
+                history: false,
                 git: self.git_env(&self.linked),
             },
         )
