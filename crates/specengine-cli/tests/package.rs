@@ -1200,6 +1200,8 @@ fn ac06_a_section_form_create_refreshes_and_a_file_form_one_does_not() {
                 login: None,
                 now: common::proposal::NOW.to_owned(),
                 git: pair.git_env(&main),
+                distinct_from: Vec::new(),
+                keywords: Vec::new(),
             },
             Some(&id),
         )

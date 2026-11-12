@@ -79,6 +79,7 @@ use specengine_core::proposal::{
     Author, COMMIT_SUBJECT, CommitFacts, PROPOSAL_TRAILER, commit_message,
 };
 use specengine_core::record::{HUB_ID_START, IdSide, record_form, record_id, record_number};
+use specengine_core::similar::{distinct_from_problem, keyword_problem};
 use specengine_core::{Paths, is_clean_relative, is_under};
 use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape, grammar};
 use specengine_store::{
@@ -92,7 +93,7 @@ use crate::amend::{Amended, amended_step, text_problem};
 use crate::apply::{
     ApproveRequest, Consent, Made, complete, failed, made_anyway, noted, recorded_already, verify,
 };
-use crate::corpus::indexed;
+use crate::corpus::indexed_in;
 use crate::decide::{exists, path_free};
 use crate::freshness::{After, post_commit_update};
 use crate::location::{OpenIndex, open_index};
@@ -113,6 +114,7 @@ use crate::propose::{
 use crate::refresh::refresh;
 use crate::review::previewed;
 use crate::show::latin_fix;
+use crate::similar::similar_step;
 use crate::stage::Staging;
 use crate::task::bound_task;
 use crate::{
@@ -149,6 +151,12 @@ pub struct CreateRequest {
     /// The caller's environment; git runs without its local `GIT_*`
     /// variables.
     pub git: GitEnv,
+    /// `--distinct-from X`: the gating similar entries the proposer judges
+    /// distinct, each by its name byte for byte; read and dropped, never
+    /// stored (task spec `intake-similar`, IS1, IS7).
+    pub distinct_from: Vec<String>,
+    /// `--keyword W`: extra search words for this call's similar step.
+    pub keywords: Vec<String>,
 }
 
 /// `spec propose create`: checks and stores one proposal of kind `create`.
@@ -249,6 +257,13 @@ fn run_create(
     }) {
         return Err(CliError::spec(problem));
     }
+    // The similar step's caps, of the form (task spec `intake-similar`,
+    // IS6): exit 2, nothing read past it.
+    if let Some(problem) =
+        distinct_from_problem(&request.distinct_from).or_else(|| keyword_problem(&request.keywords))
+    {
+        return Err(CliError::spec(problem));
+    }
     let mut author = Author::new(
         request.author_role.clone(),
         request.author_model.clone(),
@@ -289,7 +304,8 @@ fn run_create(
 
     // 2–3. The form, the target and the text, over the index refreshed now.
     let written = request.target.trim();
-    let input = indexed(env, &context.project, &mut messages, false)?;
+    let mut open = open_index(env, &context.project)?;
+    let mut input = indexed_in(&mut open.index, &context.project, &mut messages, false)?;
     let project = &context.project;
     let today = &now[..10];
     let new_file = is_path_target(written) && !input.files.iter().any(|file| file.path == written);
@@ -368,6 +384,19 @@ fn run_create(
     );
     let (diagnostics, held) = unheld_findings(&context, diagnostics, &mut messages)?;
 
+    // The similar step (task spec `intake-similar`): what the create may
+    // repeat; an unnamed gating entry keeps it unstored.
+    let similar = similar_step(
+        &open.index,
+        &context.queue,
+        project,
+        &mut input,
+        &checked,
+        &request.keywords,
+        &request.distinct_from,
+    )?;
+    drop(open);
+
     // 7. Stored, bound to the place found first; a live create taking an ID
     // meanwhile is step 4's refusal.
     let new = match &checked.span {
@@ -407,6 +436,29 @@ fn run_create(
     };
     if dry_run {
         let mut document = rehearsed(&context, &request.git, &new, task.as_deref());
+        if let Some(note) = similar.unstored {
+            // After the dry run's own note.
+            let at = usize::from(!document.notes.is_empty());
+            document.notes.insert(at, note);
+        }
+        document.similar = Some(similar.entries);
+        document.notes.extend(held);
+        return Ok(ProposalOutcome::done(
+            QueueCommand::Propose,
+            document,
+            messages,
+        ));
+    }
+    // Not stored: the rehearsal's shape, the note first (no row, no event,
+    // no ID held).
+    if let Some(note) = similar.unstored {
+        let mut document = rehearsed(&context, &request.git, &new, task.as_deref());
+        // In the dry run's note's place.
+        match document.notes.first_mut() {
+            Some(first) => *first = note,
+            None => document.notes.push(note),
+        }
+        document.similar = Some(similar.entries);
         document.notes.extend(held);
         return Ok(ProposalOutcome::done(
             QueueCommand::Propose,
@@ -426,6 +478,7 @@ fn run_create(
         Err(error) => return Err(queue_cannot(error)),
     };
     let mut document = previewed(env, &request.git, &context, &created, &mut messages);
+    document.similar = Some(similar.entries);
     document.notes.extend(held);
     Ok(ProposalOutcome::done(
         QueueCommand::Propose,

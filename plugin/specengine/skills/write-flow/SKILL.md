@@ -7,13 +7,13 @@ description: Write a flow of spec documents
 
 The project's CLAUDE.md and its roles take precedence over this skill.
 
-Use this to write a flow: steps in reading order, with forks, loops, reuse and groups. `get_flow` reads it back: its rows name what is missing and how to clear it.
+Use this to write a flow: steps in reading order, with forks, loops, reuse and groups.
 
 ## Steps
 
-1. **Configure.** Add the block below to the project's config; the owner commits it: a proposal needs a commit and the rules live there. Name steps by `paths`: your own key in a rule's `when` selector warns on each document holding it. `[[flow.step]]` is optional.
+1. **Configure.** Add the block below to the project's config; the owner commits it: a proposal needs a commit. Name steps by `paths`: your own key in a rule's `when` selector warns on each document holding it. `[[flow.step]]` is optional.
 2. **Rehearse.** Send the first proposal with `dry_run` true: the real refusals and findings, nothing stored.
-3. **Propose.** One proposal per document, no `base` for a new file; a later edit goes by the propose-spec-change skill. A document may name one still open. One not yet sent, as a loop needs, reads `ref-dangling` until it lands.
+3. **Propose.** One proposal per document, no `base` for a new file; a later edit goes by the propose-spec-change skill. A document may name one still open. One not yet sent, as a loop needs, reads `ref-dangling` until it lands. A reply with `id` null names a gating `similar` entry: reuse it, or resend naming it in `distinct_from`.
 4. **Approve.** The owner runs `spec approve --open` on a terminal, one key each.
 5. **Read.** Call `get_flow` until each row is measured and finds nothing; a row not measured is no pass.
 

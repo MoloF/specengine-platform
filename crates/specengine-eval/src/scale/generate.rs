@@ -100,6 +100,13 @@ const W_TARGETS: usize = 20;
 const QUERIES: usize = 3;
 /// The stage words of every tree (docs/features/flow-scope.md "Data").
 const STAGES: usize = 8;
+/// The planted collisions of `similar_recall` (task spec `intake-similar`,
+/// IS12), one variant in turn.
+const COLLISIONS: usize = 100;
+/// The words a collision's section title holds at least.
+const COLLISION_TITLE_WORDS: usize = 3;
+/// The common words of a keyword collision's title.
+const KEYWORD_TITLE_WORDS: usize = 2;
 /// The syllables of a stage word.
 const STAGE_SYLLABLES: usize = 2;
 
@@ -113,6 +120,68 @@ pub struct Synthetic {
     pub tier0_bytes: usize,
     /// Bytes of each area's Tier 1 README, by area.
     pub tier1_bytes: Vec<usize>,
+    /// What the similar read and its recall take (task spec
+    /// `intake-similar`, IS12).
+    pub similar: SimilarSamples,
+}
+
+/// The similar read's keywords and the planted collisions, drawn after
+/// every other sample, so the tree and the other samples are as before.
+pub struct SimilarSamples {
+    /// The rare word of each W target, in [`Samples::targets`]' order: a
+    /// section's own, a document's first section's; `None` for a document
+    /// without sections.
+    pub target_rare: Vec<Option<String>>,
+    /// [`COLLISIONS`] on distinct live sections whose titles have at least
+    /// [`COLLISION_TITLE_WORDS`] words, the variants in turn.
+    pub collisions: Vec<Collision>,
+}
+
+/// One planted collision: a create's title (and keyword) that should find
+/// its section.
+pub struct Collision {
+    /// The section's ID.
+    pub target: String,
+    pub variant: Variant,
+    /// The create's title.
+    pub title: String,
+    /// The keyword variant's: the section's rare word.
+    pub keyword: Option<String>,
+}
+
+/// How a collision's title departs from its section's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Variant {
+    /// The title in another case.
+    Exact,
+    /// Its words reversed.
+    Reordered,
+    /// Its last word dropped.
+    Dropped,
+    /// Two common words absent from it, the rare word as a keyword.
+    Keyword,
+}
+
+impl Variant {
+    /// The variants in planting order.
+    pub const ALL: [Self; 4] = [Self::Exact, Self::Reordered, Self::Dropped, Self::Keyword];
+}
+
+/// What the part files written so far gathered: the sections, in ID
+/// order; each rare word a live section holds; each section's text.
+#[derive(Default)]
+struct Written {
+    sections: usize,
+    rare_live: Vec<usize>,
+    texts: Vec<SectionText>,
+}
+
+/// One section as written: its node, heading, rare word number and state.
+struct SectionText {
+    node: usize,
+    title: String,
+    rare: usize,
+    live: bool,
 }
 
 /// What a tree holds (`corpus` of the result). `files` and `bytes` count
@@ -161,6 +230,8 @@ pub struct Samples {
 pub struct Target {
     pub id: String,
     pub area: usize,
+    /// Its node index (the ID's number minus one).
+    node: usize,
 }
 
 impl Synthetic {
@@ -217,21 +288,13 @@ pub fn generate(seed: u64, nodes: usize) -> Synthetic {
     for (area, text) in readmes.tier1.into_iter().enumerate() {
         files.push((tier1_path(area), text.into_bytes()));
     }
-    let mut sections = 0;
-    let mut rare_live: Vec<usize> = Vec::new();
+    let mut written = Written::default();
     for (k, file) in plan.files.iter().enumerate() {
-        let text = part_file(
-            &mut rng,
-            &plan,
-            &links,
-            &stages,
-            k,
-            &mut sections,
-            &mut rare_live,
-        );
+        let text = part_file(&mut rng, &plan, &links, &stages, k, &mut written);
         files.push((part_path(k, file.first), text.into_bytes()));
     }
-    let samples = Samples::draw(&mut rng, &plan, &links, &rare_live, &stages);
+    let samples = Samples::draw(&mut rng, &plan, &links, &written.rare_live, &stages);
+    let similar = SimilarSamples::draw(&mut rng, &plan, &samples, &written.texts);
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
     let non_hub = (0..nodes).filter(|&node| !plan.is_hub(node));
@@ -259,6 +322,81 @@ pub fn generate(seed: u64, nodes: usize) -> Synthetic {
         samples,
         tier0_bytes,
         tier1_bytes,
+        similar,
+    }
+}
+
+impl SimilarSamples {
+    /// The W targets' rare words, then [`COLLISIONS`] sections drawn from
+    /// `rng`, each with its variant's title (a keyword collision's two
+    /// common words drawn too).
+    fn draw(rng: &mut Rng, plan: &Plan, samples: &Samples, texts: &[SectionText]) -> Self {
+        let section = |node: usize| {
+            texts
+                .binary_search_by_key(&node, |text| text.node)
+                .ok()
+                .map(|at| &texts[at])
+        };
+        let target_rare = samples
+            .targets
+            .iter()
+            .map(|target| {
+                let node = target.node;
+                let file = &plan.files[plan.file_of[node]];
+                let own = if node == file.first && file.sections > 0 {
+                    node + 1
+                } else {
+                    node
+                };
+                section(own).map(|text| rare_word(text.rare))
+            })
+            .collect();
+        let pool: Vec<usize> = texts
+            .iter()
+            .enumerate()
+            .filter(|(_, text)| {
+                text.live && text.title.split_whitespace().count() >= COLLISION_TITLE_WORDS
+            })
+            .map(|(at, _)| at)
+            .collect();
+        let mut collisions = Vec::with_capacity(COLLISIONS);
+        for (turn, at) in draw_distinct(rng, &pool, COLLISIONS)
+            .into_iter()
+            .enumerate()
+        {
+            let text = &texts[at];
+            let words: Vec<&str> = text.title.split_whitespace().collect();
+            let variant = Variant::ALL[turn % Variant::ALL.len()];
+            let (title, keyword) = match variant {
+                Variant::Exact => (text.title.to_uppercase(), None),
+                Variant::Reordered => {
+                    let reversed: Vec<&str> = words.iter().rev().copied().collect();
+                    (reversed.join(" "), None)
+                }
+                Variant::Dropped => (words[..words.len() - 1].join(" "), None),
+                Variant::Keyword => {
+                    let lower: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
+                    let mut chosen: Vec<String> = Vec::with_capacity(KEYWORD_TITLE_WORDS);
+                    while chosen.len() < KEYWORD_TITLE_WORDS {
+                        let word = common_word(rng);
+                        if !lower.contains(&word) && !chosen.contains(&word) {
+                            chosen.push(word);
+                        }
+                    }
+                    (chosen.join(" "), Some(rare_word(text.rare)))
+                }
+            };
+            collisions.push(Collision {
+                target: id_of(text.node),
+                variant,
+                title,
+                keyword,
+            });
+        }
+        Self {
+            target_rare,
+            collisions,
+        }
     }
 }
 
@@ -516,6 +654,7 @@ fn target(plan: &Plan, node: usize) -> Target {
     Target {
         id: id_of(node),
         area: plan.file_of[node] % AREAS,
+        node,
     }
 }
 
@@ -622,15 +761,15 @@ impl Readmes {
 /// H1 and paragraph (the hub it names), then each section's heading and
 /// paragraph (its mentions and its rare word). `sections` counts the
 /// sections written so far, in ID order; `rare_live` gathers each rare word
-/// a live section holds.
+/// a live section holds; `texts` each section's heading and rare word (all
+/// in `written`).
 fn part_file(
     rng: &mut Rng,
     plan: &Plan,
     links: &Links,
     stages: &[String; STAGES],
     k: usize,
-    sections: &mut usize,
-    rare_live: &mut Vec<usize>,
+    written: &mut Written,
 ) -> String {
     let file = &plan.files[k];
     let mut text = format!("---\nclass: spec\nid: {}\n", id_of(file.first));
@@ -665,10 +804,10 @@ fn part_file(
     let body = paragraph(rng, &DOCUMENT_WORDS, &hub);
     text.push_str(&format!("---\n\n# {heading}\n\n{body}\n"));
     for section in file.first + 1..=file.first + file.sections {
-        let rare = *sections / RARE_SECTIONS;
-        *sections += 1;
-        if !file.shipped && rare_live.last() != Some(&rare) {
-            rare_live.push(rare);
+        let rare = written.sections / RARE_SECTIONS;
+        written.sections += 1;
+        if !file.shipped && written.rare_live.last() != Some(&rare) {
+            written.rare_live.push(rare);
         }
         let mut specials: Vec<String> = links.mentions[section]
             .iter()
@@ -677,6 +816,12 @@ fn part_file(
         specials.push(rare_word(rare));
         let heading = title(rng);
         let body = paragraph(rng, &SECTION_WORDS, &specials);
+        written.texts.push(SectionText {
+            node: section,
+            title: heading.clone(),
+            rare,
+            live: !file.shipped,
+        });
         text.push_str(&format!(
             "\n## {heading} {{#{}}}\n\n{body}\n",
             id_of(section)

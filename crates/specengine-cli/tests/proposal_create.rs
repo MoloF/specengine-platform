@@ -769,11 +769,27 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
         .map(String::as_str)
         .collect();
     keys.sort_unstable();
-    let mut want = REVIEW_KEYS.to_vec();
+    // docs/features/intake-similar.md "Acceptance criteria" IS6: the JSON
+    // gains `similar` after `why` (51 keys, `null` in a review); the text
+    // has no line for it.
+    let json_keys: Vec<&str> = REVIEW_KEYS
+        .iter()
+        .flat_map(|key| {
+            if *key == "why" {
+                vec![*key, "similar"]
+            } else {
+                vec![*key]
+            }
+        })
+        .collect();
+    assert_eq!(json_keys.len(), 51);
+    assert!(value["similar"].is_null(), "{json}");
+    assert!(!text.contains("\nsimilar"), "{text}");
+    let mut want = json_keys.clone();
     want.sort_unstable();
     assert_eq!(keys, want, "{json}");
     // JSON in Data's order: each key's first position rises.
-    let positions: Vec<usize> = REVIEW_KEYS
+    let positions: Vec<usize> = json_keys
         .iter()
         .map(|key| json.find(&format!("\"{key}\":")).unwrap())
         .collect();

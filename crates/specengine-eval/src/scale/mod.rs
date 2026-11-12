@@ -47,13 +47,15 @@ use specengine_cli::{
     render_text, trusted,
 };
 use specengine_core::check::{CheckFile, CheckInput, Resolver, SpecGraph};
-use specengine_model::IdScheme;
+use specengine_core::intake::normalized_summary;
+use specengine_core::similar::similar_terms;
+use specengine_model::{IdScheme, LinkOrigin, LinkTarget};
 use specengine_store::{
-    IndexWriter as _, SEARCH_LIMIT_DEFAULT, SearchQuery, Source as _, SpecIndex as _, WorkingTree,
-    b3_hash,
+    IndexWriter as _, SEARCH_LIMIT_DEFAULT, SearchQuery, SimilarQuery, SimilarTarget, SimilarTitle,
+    Source as _, SpecIndex as _, SqliteIndex, WorkingTree, b3_hash,
 };
 
-use self::generate::{CorpusCounts, Synthetic, Target};
+use self::generate::{CorpusCounts, Synthetic, Target, Variant};
 use crate::ScaleArgs;
 use crate::census::write_json;
 use crate::harness::{self, HarnessError};
@@ -101,6 +103,13 @@ const GET_FLOW_ROOT: &str = "get_flow_root";
 const GET_FLOW_STAGE: &str = "get_flow_stage";
 const GET_TRACE_SUMMARY: &str = "get_trace_summary";
 const GET_TREE: &str = "get_tree";
+/// A create's similar probes (task spec `intake-similar`, IS12):
+/// `SpecIndex::similar` alone, on the warm index.
+const SIMILAR: &str = "similar";
+/// The kind of every part node (the tree's `[ids]`).
+const PART_KIND: &str = "node";
+/// The link type a similar query's targets come from.
+const DEPENDS_ON: &str = "depends_on";
 
 /// How `calls` names the target of a whole read with no `ROOT`, as
 /// `spec flow`'s header names it.
@@ -258,6 +267,9 @@ struct Measured {
     other_us: OtherUs,
     w_after: WAfter,
     hub: HubOut,
+    /// The planted collisions the similar probes find (task spec
+    /// `intake-similar`, IS12).
+    similar_recall: SimilarRecall,
     nondeterministic: usize,
     /// The (read, target) pairs whose trusted answers' BLAKE3 differ from
     /// the walking answer's.
@@ -278,13 +290,15 @@ struct CheckOut {
     us: u64,
 }
 
-/// `reads`: the four reads of targets, then the five whole reads.
+/// `reads`: the four reads of targets, then the five whole reads, then the
+/// similar probes of the timed targets.
 #[derive(Clone, Copy, Serialize)]
 struct ReadsOut {
     #[serde(flatten)]
     targeted: Reads,
     #[serde(flatten)]
     whole: WholeReads,
+    similar: Spread,
 }
 
 /// The four reads of the timed targets and the queries.
@@ -338,13 +352,37 @@ struct SearchSpread {
     hits_max: usize,
 }
 
-/// `growth`: [`Growth`] of the four reads, then of the five whole reads.
+/// `growth`: [`Growth`] of the four reads, then of the five whole reads,
+/// then of the similar probes.
 #[derive(Serialize)]
 struct GrowthOut {
     #[serde(flatten)]
     targeted: Growth,
     #[serde(flatten)]
     whole: WholeGrowth,
+    similar: Option<f64>,
+}
+
+/// `similar_recall`: the planted collisions found, in all and by variant.
+#[derive(Serialize)]
+struct SimilarRecall {
+    planted: usize,
+    found: usize,
+    variants: RecallVariants,
+}
+
+#[derive(Default, Serialize)]
+struct RecallVariants {
+    exact: Recall,
+    reordered: Recall,
+    dropped: Recall,
+    keyword: Recall,
+}
+
+#[derive(Default, Serialize)]
+struct Recall {
+    planted: usize,
+    found: usize,
 }
 
 /// `median_us` over the previous size's, two decimals; `null` at the first
@@ -566,9 +604,10 @@ fn summarize(entry: &SizeEntry) {
     };
     eprintln!(
         "{MEASUREMENT}: {} part nodes: {} files, {} nodes; index {}, check {} ({} errors, {} warnings); \
-         medians get_node {}, get_node_links {}, search {}, get_context_bundle {}; \
+         medians get_node {}, get_node_links {}, search {}, get_context_bundle {}, similar {}; \
          trusted medians get_node {}, get_node_links {}, search {}, get_context_bundle {}; \
-         W_after median {} bytes; {} nondeterministic, {} trusted differ{parsed}",
+         W_after median {} bytes; similar recall {} of {}; {} nondeterministic, {} trusted \
+         differ{parsed}",
         entry.nodes,
         corpus.files,
         corpus.nodes,
@@ -580,11 +619,14 @@ fn summarize(entry: &SizeEntry) {
         ms(reads.get_node_links.median_us),
         ms(reads.search.median_us),
         ms(reads.get_context_bundle.median_us),
+        ms(measured.reads.similar.median_us),
         ms(trusted.get_node.median_us),
         ms(trusted.get_node_links.median_us),
         ms(trusted.search.median_us),
         ms(trusted.get_context_bundle.median_us),
         measured.w_after.median,
+        measured.similar_recall.found,
+        measured.similar_recall.planted,
         measured.nondeterministic,
         measured.trusted_differs,
     );
@@ -822,7 +864,13 @@ impl<'a> Measuring<'a> {
         let check = self.check()?;
         let (targeted, hub_reads) = self.reads()?;
         let whole = self.whole_reads()?;
-        let reads = ReadsOut { targeted, whole };
+        let similar = self.similar_read()?;
+        let reads = ReadsOut {
+            targeted,
+            whole,
+            similar,
+        };
+        let similar_recall = self.similar_recall()?;
         let (reads_trusted, hub_trusted) = self.trusted_reads()?;
         let steps = self.steps()?;
         let (w_after, hub_w_after) = self.w_after()?;
@@ -835,6 +883,10 @@ impl<'a> Measuring<'a> {
             growth: GrowthOut {
                 targeted: growth(&reads.targeted, before.map(|before| &before.targeted)),
                 whole: whole_growth(&reads.whole, before.map(|before| &before.whole)),
+                similar: ratio(
+                    reads.similar.median_us,
+                    before.map(|before| before.similar.median_us),
+                ),
             },
             growth_trusted: growth_trusted(
                 &reads_trusted,
@@ -856,6 +908,7 @@ impl<'a> Measuring<'a> {
                     get_context_bundle_us: hub_trusted.get_context_bundle_us,
                 },
             },
+            similar_recall,
             nondeterministic: self.nondeterministic,
             trusted_differs: self.trusted_differs,
         })
@@ -1043,6 +1096,88 @@ impl<'a> Measuring<'a> {
             get_flow_stage: spread(&[flow_stage]),
             get_trace_summary: spread(&[trace_summary]),
             get_tree: spread(&[tree]),
+        })
+    }
+
+    /// The similar probes of the first [`TIMED_TARGETS`] W targets on the
+    /// warm index (task spec `intake-similar`, IS12), timed as the reads
+    /// are, with no steps and no trusted twin: each query the target's
+    /// title upper-cased, its rare word as a keyword, the kind of every
+    /// part node and its document's `depends_on`, resolved by ID.
+    fn similar_read(&mut self) -> Result<Spread, String> {
+        let project = self.project()?;
+        let open = specengine_cli::open_index(&self.session.env, &project)
+            .map_err(|error| self.failed(SIMILAR, &error.message))?;
+        let synthetic = self.synthetic;
+        let samples = &synthetic.samples;
+        let count = TIMED_TARGETS.min(samples.targets.len());
+        let mut us = Vec::with_capacity(count);
+        for (ordinal, target) in samples.targets[..count].iter().enumerate() {
+            let what = format!("target {}", ordinal + 1);
+            let rare = synthetic
+                .similar
+                .target_rare
+                .get(ordinal)
+                .cloned()
+                .flatten();
+            let query = target_query(&open.index, &target.id, rare)
+                .map_err(|reason| self.failed(&format!("{SIMILAR}, {what}"), &reason))?;
+            let timed = self.timed(SIMILAR, &target.id, &what, || {
+                let rows = open
+                    .index
+                    .similar(&query)
+                    .map_err(|error| error.to_string())?;
+                Ok((format!("{rows:?}"), rows.len()))
+            })?;
+            us.push(timed);
+        }
+        Ok(spread(&us))
+    }
+
+    /// Each planted collision's query on the warm index, untimed: found
+    /// when its section is among the rows.
+    fn similar_recall(&self) -> Result<SimilarRecall, String> {
+        let project = self.project()?;
+        let open = specengine_cli::open_index(&self.session.env, &project)
+            .map_err(|error| self.failed(SIMILAR, &error.message))?;
+        let mut variants = RecallVariants::default();
+        for collision in &self.synthetic.similar.collisions {
+            let normalized = normalized_summary(&collision.title);
+            let keywords: Vec<String> = collision.keyword.iter().cloned().collect();
+            let query = SimilarQuery {
+                terms: similar_terms(&[normalized.as_str()], &keywords),
+                titles: vec![SimilarTitle {
+                    new: collision.target.clone(),
+                    normalized,
+                }],
+                ..SimilarQuery::default()
+            };
+            let rows = open
+                .index
+                .similar(&query)
+                .map_err(|error| self.failed(SIMILAR, &error.to_string()))?;
+            let found = rows
+                .iter()
+                .any(|row| row.id.as_deref() == Some(collision.target.as_str()));
+            let recall = match collision.variant {
+                Variant::Exact => &mut variants.exact,
+                Variant::Reordered => &mut variants.reordered,
+                Variant::Dropped => &mut variants.dropped,
+                Variant::Keyword => &mut variants.keyword,
+            };
+            recall.planted += 1;
+            recall.found += usize::from(found);
+        }
+        let all = [
+            &variants.exact,
+            &variants.reordered,
+            &variants.dropped,
+            &variants.keyword,
+        ];
+        Ok(SimilarRecall {
+            planted: all.iter().map(|recall| recall.planted).sum(),
+            found: all.iter().map(|recall| recall.found).sum(),
+            variants,
         })
     }
 
@@ -1422,6 +1557,61 @@ fn growth_trusted(reads: &TrustedReads, previous: Option<&TrustedReads>) -> Grow
             previous.map(|p| p.get_context_bundle.median_us),
         ),
     }
+}
+
+/// The similar query of the W target `id`: its indexed title upper-cased,
+/// `rare` as its keyword, the part kind, and its document's `depends_on`
+/// targets each resolved by ID.
+fn target_query(
+    index: &SqliteIndex,
+    id: &str,
+    rare: Option<String>,
+) -> Result<SimilarQuery, String> {
+    let hits = index.lookup_id(id).map_err(|error| error.to_string())?;
+    let hit = hits
+        .first()
+        .ok_or_else(|| format!("`{id}` is not indexed"))?;
+    let title = hit.node.title.as_deref().unwrap_or_default().to_uppercase();
+    let normalized = normalized_summary(&title);
+    let keywords: Vec<String> = rare.into_iter().collect();
+    let parsed = index
+        .file(&hit.path)
+        .map_err(|error| error.to_string())?
+        .and_then(|file| file.parsed);
+    let mut links = Vec::new();
+    for link in parsed.iter().flat_map(|parsed| &parsed.links) {
+        let LinkTarget::Reference(reference) = &link.dst else {
+            continue;
+        };
+        if link.link_type != DEPENDS_ON || link.origin != LinkOrigin::Frontmatter {
+            continue;
+        }
+        let ends = index
+            .lookup_id(&reference.id)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|end| (end.path, end.ord))
+            .collect();
+        links.push(SimilarTarget {
+            name: reference.id.clone(),
+            ends,
+        });
+    }
+    let titles = if normalized.is_empty() {
+        Vec::new()
+    } else {
+        vec![SimilarTitle {
+            new: id.to_owned(),
+            normalized: normalized.clone(),
+        }]
+    };
+    Ok(SimilarQuery {
+        terms: similar_terms(&[normalized.as_str()], &keywords),
+        titles,
+        kind: Some(PART_KIND.to_owned()),
+        links,
+        exclude: None,
+    })
 }
 
 /// Whole microseconds, saturating.

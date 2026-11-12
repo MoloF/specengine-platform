@@ -321,6 +321,11 @@
 //! through its route; `CardRow` (91) gains `upstream` after `correction`
 //! (23 keys, `null` without `marks`, a flag with it), `Card` (92)
 //! `upstream` after `correction` (36). M: `upstream` out of the fixture.
+//!
+//! docs/features/intake-similar.md (RM-0059) "Acceptance criteria", IS10:
+//! `Proposal` gains `similar` after `why` (51 keys), `null` on every route
+//! (`intake_similar.rs` asserts the value); no set added. M: `similar` out
+//! of the fixture.
 
 mod common;
 mod task_state;
@@ -2351,8 +2356,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // after `revisions`: 48.
     // docs/features/card-questions.md: `card_id`, `why` after
     // `interpretation`: 50.
+    // docs/features/intake-similar.md "Acceptance criteria" IS10: `similar`
+    // after `why` (null on every route), 51 keys, no set added.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 50, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 51, "{:?}", sets[2].1);
     let conflict = sets[2].1.iter().position(|key| key == "conflict");
     assert_eq!(
         sets[2].1[conflict.expect("conflict") + 1..conflict.expect("conflict") + 3],
@@ -2370,6 +2377,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "interpretation",
             "card_id",
             "why",
+            "similar",
             "notes"
         ]
     );
@@ -3314,8 +3322,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
             .collect()
     };
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
-    // docs/features/card-questions.md L1 (`card_id`, `why`).
-    assert_eq!(set("Proposal").len(), 50);
+    // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS10.
+    assert_eq!(set("Proposal").len(), 51);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -3482,8 +3491,9 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
             .collect()
     };
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
-    // docs/features/card-questions.md L1 (`card_id`, `why`).
-    assert_eq!(set("Proposal").len(), 50);
+    // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS10.
+    assert_eq!(set("Proposal").len(), 51);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

@@ -159,12 +159,13 @@ describe("the normal scenario", () => {
     expect(missing.notes.at(-1)).toBe("no proposal `PR-9999` in this project's queue");
   });
 
-  it("serves each review document's task_id after choice, null unbound, as the task canon's Task-bound proposals; the interpretation after the stage, the card and why after it (L1 of card-questions)", async () => {
+  it("serves each review document's task_id after choice, null unbound, as the task canon's Task-bound proposals; the interpretation after the stage, the card and why after it (L1 of card-questions), similar after why (IS10 of intake-similar)", async () => {
     const client = new MockClient("normal", { now: clock });
     const { proposals } = await client.getInbox("harbor-sim");
     const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));
     for (const review of reviews) {
-      expect([review.id, Object.keys(review).slice(-8)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "notes"]]);
+      expect([review.id, Object.keys(review).slice(-9)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes"]]);
+      expect([review.id, review.similar]).toEqual([review.id, null]);
       expect([review.staged, review.staged_at]).toEqual([null, null]);
     }
     expect(Object.keys(proposals[0] ?? {}).slice(-2)).toEqual(["record_id", "staged_at"]);

@@ -134,6 +134,8 @@ fn request(pair: &Pair, cwd: &Path, target: &str, base: Option<&str>, text: &str
         login: None,
         now: CLOCK.to_owned(),
         git: pair.git_env(cwd),
+        distinct_from: Vec::new(),
+        keywords: Vec::new(),
     }
 }
 

@@ -129,6 +129,7 @@ mod roles;
 mod rows;
 mod schema;
 mod search;
+mod similar;
 mod source;
 mod sparse;
 mod symbols;
@@ -176,18 +177,19 @@ pub use queue::{
     EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED, EVENT_TASK_COMPLETED, EVENT_TASK_CREATED,
     EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED, EVENT_TASK_RUN_REPORTED, EVENT_UNSTAGED, Event,
     EventsAfter, GateObserved, GateQueue, Intake, IntakeResult, Interpretation, KindFamily,
-    NewCard, NewDrift, NewIntake, NewProposal, NewSplit, NewSplitChild, NewTask, PROPOSAL_COLUMNS,
-    Place, Proposal, ProposalFilter, ProposalFinding, ProposalKind, ProposalList, ProposalQueue,
-    ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch, RUN_COLUMNS,
-    RecordApproval, RecordSeries, RefreshEntry, Reservation, Restore, Run, Seen, SnapshotEntry,
-    SplitCards, SplitParent, SqliteQueue, Stage, StagedChoice, StoredCard, StoredEvent, StoredNote,
-    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange,
-    TaskList, TaskRefresh, TaskSeen, TaskSnapshot, UnreadableCard, UnreadableRow, UnreadableTask,
-    binding_problem, card_columns, claimed_elsewhere, open_for_gate, patch_hash, proposal_columns,
-    record_gate_observed, task_event,
+    LiveAdd, NewCard, NewDrift, NewIntake, NewProposal, NewSplit, NewSplitChild, NewTask,
+    PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter, ProposalFinding, ProposalKind, ProposalList,
+    ProposalQueue, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch,
+    RUN_COLUMNS, RecordApproval, RecordSeries, RefreshEntry, Reservation, Restore, Run, Seen,
+    SnapshotEntry, SplitCards, SplitParent, SqliteQueue, Stage, StagedChoice, StoredCard,
+    StoredEvent, StoredNote, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
+    TailEvent, Task, TaskChange, TaskList, TaskRefresh, TaskSeen, TaskSnapshot, UnreadableCard,
+    UnreadableRow, UnreadableTask, binding_problem, card_columns, claimed_elsewhere, open_for_gate,
+    patch_hash, proposal_columns, record_gate_observed, task_event,
 };
 pub use read::{Decoded, IndexSnapshot, NodeNorm};
 pub use roles::{RoleCandidate, StoredRole};
+pub use similar::{SimilarQuery, SimilarRow, SimilarTarget, SimilarTitle};
 pub use source::{GitIndex, Listing, Probed, Source, StatKey, WorkingTree};
 pub use sparse::{SparseError, SparseSet, sparse_set};
 pub use symbols::{SymbolHit, SymbolTier};
@@ -612,6 +614,11 @@ pub trait SpecIndex {
     /// file in path order with its stored `size`, parse and `read_error`;
     /// `bytes` empty, no walk `problems` (the index keeps none).
     fn indexed_input(&self) -> Result<CheckInput, StoreError>;
+    /// A create's similar probes 1, 2, 4 and 5 over the corpus, from one
+    /// snapshot (task spec `intake-similar`, IS1 to IS5): ordered by
+    /// source, then by each probe's keys; deduplicated, a node found by an
+    /// earlier probe never found again; search and neighbours capped.
+    fn similar(&self, query: &SimilarQuery) -> Result<Vec<SimilarRow>, StoreError>;
 }
 
 /// Writing the index of the handle's worktree. Parsing runs before the

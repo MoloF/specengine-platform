@@ -246,6 +246,21 @@ const SIZE_LEAVES: &[&str] = &[
     "hub/trusted/get_node_links_us",
     "hub/trusted/get_context_bundle_us",
     "hub/w_after",
+    // docs/features/intake-similar.md "Acceptance criteria" IS12: the
+    // similar probes' read and its growth, and the planted collisions.
+    "reads/similar/median_us",
+    "reads/similar/max_us",
+    "growth/similar",
+    "similar_recall/planted",
+    "similar_recall/found",
+    "similar_recall/variants/exact/planted",
+    "similar_recall/variants/exact/found",
+    "similar_recall/variants/reordered/planted",
+    "similar_recall/variants/reordered/found",
+    "similar_recall/variants/dropped/planted",
+    "similar_recall/variants/dropped/found",
+    "similar_recall/variants/keyword/planted",
+    "similar_recall/variants/keyword/found",
     "nondeterministic",
 ];
 
@@ -2154,7 +2169,55 @@ fn se5_se7_se8_one_debug_run_at_1k() {
             assert_split(&envelope["result"]["sizes"][0], "n1000");
         }),
         criterion("FS-7", || assert_flow_reads_hold_nodes(&scratch, &run)),
+        criterion("IS12", || assert_similar_recall_keys(&run)),
     ]);
+}
+
+/// docs/features/intake-similar.md "Acceptance criteria" IS12, the run's
+/// half: n1000 holds `reads.similar`, `growth.similar` (`null` at the first
+/// size) and `similar_recall` with 100 collisions, 25 per variant, and the
+/// `exact` variant finds all 25 (a title in another case gates by title).
+/// No time and no overall recall is asserted (D10: measured, never
+/// asserted).
+fn assert_similar_recall_keys(run: &ScaleRun) {
+    let entry = &run.envelope()["result"]["sizes"][0];
+    for key in ["median_us", "max_us"] {
+        assert!(
+            entry["reads"]["similar"][key].is_u64(),
+            "reads.similar.{key}: {}",
+            entry["reads"]
+        );
+    }
+    assert!(
+        entry["growth"]
+            .as_object()
+            .is_some_and(|growth| growth.contains_key("similar")),
+        "growth.similar: {}",
+        entry["growth"]
+    );
+    assert_eq!(entry["growth"]["similar"], Value::Null, "the first size");
+    let recall = &entry["similar_recall"];
+    assert_eq!(recall["planted"], 100, "{recall}");
+    let found = recall["found"].as_u64().expect("found");
+    assert!(found <= 100, "{recall}");
+    let mut sum = 0;
+    for variant in ["exact", "reordered", "dropped", "keyword"] {
+        let one = &recall["variants"][variant];
+        assert_eq!(one["planted"], 25, "{variant}: {recall}");
+        let got = one["found"].as_u64().expect("found");
+        assert!(got <= 25, "{variant}: {recall}");
+        sum += got;
+    }
+    assert_eq!(sum, found, "the variants add up: {recall}");
+    assert_eq!(
+        recall["variants"]["exact"]["found"], 25,
+        "exact finds 25 of 25: {recall}"
+    );
+    assert_eq!(
+        run.size_json(1_000)["similar_recall"],
+        *recall,
+        "size.json holds the same recall"
+    );
 }
 
 /// docs/features/flow-scope.md FS-7: `get_flow_top`'s and

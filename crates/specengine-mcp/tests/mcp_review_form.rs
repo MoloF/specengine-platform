@@ -2216,6 +2216,10 @@ fn the_form_is_the_canons_message_and_schema() {
                 login: None,
                 now: NOW.to_owned(),
                 git: repo.git_env(&repo.linked),
+                // R-12's copy keeps its title: R-12 named
+                // (docs/features/intake-similar.md "Acceptance criteria" IS1).
+                distinct_from: vec!["R-12".to_owned()],
+                keywords: Vec::new(),
             },
         )
         .expect("propose create");

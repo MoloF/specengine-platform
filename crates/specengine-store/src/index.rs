@@ -13,8 +13,8 @@ use crate::error::{Db, StoreError};
 use crate::source::Source;
 use crate::write::Mode;
 use crate::{
-    IdHit, IndexWriter, IndexedFile, SearchQuery, SearchResults, SpecIndex, UpdateReport, dump,
-    read, schema, write,
+    IdHit, IndexWriter, IndexedFile, SearchQuery, SearchResults, SimilarQuery, SimilarRow,
+    SpecIndex, UpdateReport, dump, read, schema, similar, write,
 };
 
 /// A connection bound to one worktree `(project, canonical root)` of an
@@ -223,6 +223,10 @@ impl SpecIndex for SqliteIndex {
 
     fn indexed_input(&self) -> Result<CheckInput, StoreError> {
         read::indexed_input(self)
+    }
+
+    fn similar(&self, query: &SimilarQuery) -> Result<Vec<SimilarRow>, StoreError> {
+        similar::similar_capped(self, query, &similar::SimilarCaps::ENGINE)
     }
 }
 

@@ -287,8 +287,11 @@ fn report_drift_answers_as_its_twin_and_writes_only_the_queue() {
         "get_proposal PR-0001",
     );
     let document = &result(&reply)["structuredContent"];
-    // 50 since docs/features/card-questions.md L1 (`card_id`, `why`).
-    assert_eq!(document.as_object().map(serde_json::Map::len), Some(50));
+    // 50 since docs/features/card-questions.md L1 (`card_id`, `why`); 51
+    // since docs/features/intake-similar.md "Acceptance criteria" IS6
+    // (`similar`, `null`).
+    assert_eq!(document.as_object().map(serde_json::Map::len), Some(51));
+    assert_eq!(document["similar"], Value::Null);
     assert_eq!(document["kind"], json!("drift"));
     assert_eq!(document["preview"], Value::Null);
     let drift = document["drift"].as_object().expect("a drift object");

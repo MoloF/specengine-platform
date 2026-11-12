@@ -812,8 +812,9 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         let keys = task_common::keys(&raw);
         // 47 since docs/features/rev-discipline.md added `revisions`; 48
         // since docs/features/drift-queue.md added `drift` after it; 50
-        // since docs/features/card-questions.md L1 (`card_id`, `why`).
-        assert_eq!(keys.len(), 50, "{keys:?}");
+        // since docs/features/card-questions.md L1 (`card_id`, `why`); 51
+        // since docs/features/intake-similar.md "Acceptance criteria" IS6.
+        assert_eq!(keys.len(), 51, "{keys:?}");
         assert_eq!(
             keys[42..],
             [
@@ -824,6 +825,7 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
                 "interpretation",
                 "card_id",
                 "why",
+                "similar",
                 "notes"
             ],
             "{keys:?}"

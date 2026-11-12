@@ -16,6 +16,12 @@
 //! store, the CLI or the MCP server writes the kind `create` as a literal:
 //! core's `CREATE_KIND` names it. M: a `"create"` or prefix literal
 //! outside core.
+//!
+//! docs/features/intake-similar.md "Acceptance criteria" IS9: core and CLI
+//! `similar.rs` are scanned with the new and the create sources (no kind,
+//! prefix, `docs/` or `records/` literal; the kind words core's constants),
+//! and the dependency guard below still names no `similar` crate. M: a
+//! `"create"` literal in CLI `similar.rs`.
 
 #![cfg(unix)]
 
@@ -31,8 +37,10 @@ use specengine_core::ProjectConfig;
 /// (core `record`, CLI `decide`), of docs/features/proposal-kinds.md
 /// (core and CLI `create`) and of docs/features/task-package.md
 /// (docs/canon/task-package.md "Genre": model, core and store tasks, CLI `task` and `package`, the MCP
-/// task tools) and of docs/features/card-store.md (their cards).
-const NEW_SOURCES: [&str; 27] = [
+/// task tools) and of docs/features/card-store.md (their cards), and
+/// docs/features/intake-similar.md "Acceptance criteria" IS9 (core and CLI
+/// `similar`).
+const NEW_SOURCES: [&str; 29] = [
     "crates/specengine-core/src/patch.rs",
     "crates/specengine-core/src/proposal.rs",
     "crates/specengine-core/src/record.rs",
@@ -60,12 +68,19 @@ const NEW_SOURCES: [&str; 27] = [
     "crates/specengine-store/src/queue/cards.rs",
     "crates/specengine-cli/src/card.rs",
     "crates/specengine-mcp/src/cards.rs",
+    "crates/specengine-core/src/similar.rs",
+    "crates/specengine-cli/src/similar.rs",
 ];
 
-/// docs/features/proposal-kinds.md's new sources (AC-11).
-const CREATE_SOURCES: [&str; 2] = [
+/// docs/features/proposal-kinds.md's new sources (AC-11), and the similar
+/// step's (docs/features/intake-similar.md "Acceptance criteria", IS9): no
+/// kind, prefix, `docs/` or `records/` literal; the kind words are core's
+/// constants.
+const CREATE_SOURCES: [&str; 4] = [
     "crates/specengine-core/src/create.rs",
     "crates/specengine-cli/src/create.rs",
+    "crates/specengine-core/src/similar.rs",
+    "crates/specengine-cli/src/similar.rs",
 ];
 
 /// The crates whose sources take the kind names from core's constants.

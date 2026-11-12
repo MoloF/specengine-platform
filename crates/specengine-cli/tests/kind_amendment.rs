@@ -355,6 +355,8 @@ fn ac_r2_propose_stores_pr_0001_holding_only_its_own_new_id() {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&pair.main),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     );
     let reason = refused(&outcome, "a create of the reserved ID");
@@ -578,6 +580,8 @@ fn ac_r3_text_and_target_refusals_store_nothing() {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&cwd),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     );
     assert_eq!(
@@ -784,21 +788,23 @@ fn edge_a_create_of_a_broken_front_matter_is_stored_with_its_finding() {
     .into_iter()
     .enumerate()
     {
-        let run = pair.spec_piped(
-            &pair.linked,
-            &[
-                "propose",
-                "create",
-                path,
-                "--text-file",
-                "-",
-                "--rationale",
-                "R",
-                "--author-role",
-                ROLE,
-            ],
-            text.as_bytes(),
-        );
+        let mut args = vec![
+            "propose",
+            "create",
+            path,
+            "--text-file",
+            "-",
+            "--rationale",
+            "R",
+            "--author-role",
+            ROLE,
+        ];
+        // The second is titled as the first, a live create: named
+        // (docs/features/intake-similar.md "Acceptance criteria" IS2).
+        if number == 1 {
+            args.extend_from_slice(&["--distinct-from", "PR-0001"]);
+        }
+        let run = pair.spec_piped(&pair.linked, &args, text.as_bytes());
         assert_eq!(run.code, 0, "{path}: {}", run.show());
         let id = format!("PR-{:04}", number + 1);
         assert!(
@@ -898,6 +904,10 @@ fn iteration2_reservation_refusals_name_the_holders_kind() {
                 login: None,
                 now: NOW.to_owned(),
                 git: pair.git_env(&cwd),
+                // Titled as the live amendment PR-0001: named
+                // (docs/features/intake-similar.md "Acceptance criteria" IS2).
+                distinct_from: vec!["PR-0001".to_owned()],
+                keywords: Vec::new(),
             },
         )
     };
@@ -1124,6 +1134,8 @@ fn ac_r4_amended_ids_are_canonical_live_and_named_once() {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&cwd),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     )
     .expect("create");
@@ -1560,6 +1572,8 @@ fn ac_r7_reject_frees_the_reservation() {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&pair.linked),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     )
     .expect("create");
@@ -1837,8 +1851,10 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let keys = task_common::keys(&raw);
     // 47 since docs/features/rev-discipline.md added `revisions`; 48 since
     // docs/features/drift-queue.md added `drift` after it; 50 since
-    // docs/features/card-questions.md D14 (`card_id`, `why` before `notes`).
-    assert_eq!(keys.len(), 50, "{keys:?}");
+    // docs/features/card-questions.md D14 (`card_id`, `why` before `notes`);
+    // 51 since docs/features/intake-similar.md "Acceptance criteria" IS6
+    // (`similar` after `why`).
+    assert_eq!(keys.len(), 51, "{keys:?}");
     let revisions = keys.iter().position(|key| key == "revisions");
     assert_eq!(keys[revisions.expect("revisions") + 1], "drift", "{keys:?}");
     let fixture: Value = serde_json::from_str(&read_text(

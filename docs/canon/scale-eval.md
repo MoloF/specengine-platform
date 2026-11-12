@@ -3,15 +3,15 @@ class: canon
 tier: 2
 scope: [crates/specengine-eval]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-12
 ---
 
 # Scale eval: read cost on a seeded synthetic corpus
 
-`specengine-eval scale` (eval `src/scale/`) works through each `--nodes` size in turn. For each it:
+`specengine-eval scale` (eval `src/scale/`) takes each `--nodes` size in turn and:
 - generates a corpus;
 - indexes it cold and checks it;
-- times today's warm reads through the CLI library, as MCP's `get_node`, `search` and `get_context_bundle` call it (`crates/specengine-mcp/src/read.rs`), and five whole reads, of `get_flow`, `get_trace` and `get_tree`;
+- times today's warm reads through the CLI library, as MCP's `get_node`, `search` and `get_context_bundle` call it (`crates/specengine-mcp/src/read.rs`), five whole reads, of `get_flow`, `get_trace` and `get_tree`, and `similar`, a create's probes, with their recall (`proposal-similar.md` "Measured");
 - replays each step of the first four alone;
 - computes W_after by `w`'s formula (`docs/canon/w-measurement.md` "W_after").
 
@@ -26,24 +26,18 @@ specengine-eval scale --out <scratch-dir> [--label <name>] [--nodes <n>[,<n>...]
     [--seed <u64>] [--budget <n>] [--timeout <s>] [--corpus-only]
 ```
 
-The flags:
-- `--nodes`: default `1000,10000,100000`. Each value is 500 to 200 000, strictly ascending.
-- `--seed`: default 1.
-- `--budget`: default 10 000, 1 to 4294967295, as `w`.
-- `--timeout`: default 600 s, over the whole run. The heavy run gives 3600.
-- `--label`: default `synthetic`, one plain path component.
-- `--corpus-only`: write the trees and `size.json` only, with no index, check or timing.
+Defaults and bounds: `--nodes` `1000,10000,100000`, each 500 to 200 000, strictly ascending; `--seed` 1; `--budget` 10 000, 1 to 4294967295, as `w`; `--timeout` 600 s over the whole run (the heavy run gives 3600); `--label` `synthetic`, one plain path component. `--corpus-only` writes the trees and `size.json` only: no index, check or timing.
 
-The corpus is generated, never read, so there is no `--pilot`, `--config` or `--scheme`.
+The corpus is generated, never read: no `--pilot`, `--config` or `--scheme`.
 
 Exit codes:
-- **0** measured. An overrun prints `"timeout"`, and finished sizes keep their `size.json`.
+- **0** measured; an overrun prints `"timeout"`, finished sizes keeping their `size.json`.
 - **2** refused, nothing written: a flag out of range; `--nodes` empty, unsorted or repeated; `--out` and this repository (`CARGO_MANIFEST_DIR/../..`, canonicalised; absent: only the link checks) nested either way; a symbolic link at `<out>/scale` or `<out>/scale/<label>`; clap's usage errors.
 - **1** an I/O error, or a read answering an error or a `reason`. stderr names the step and the size.
 
 ## Corpus
 
-`generate(seed, nodes)` builds every file in memory, and `write` writes them. It uses two xorshift64\* streams seeded through splitmix64, so seed 0 works. The READMEs, then the stage words, come from the seed alone, so they are byte-equal at every size. The part files and the samples come from the seed and the size. Nothing else goes in: no clock, no hash-map order, no environment.
+`generate(seed, nodes)` builds every file in memory, `write` writes them: two xorshift64\* streams seeded through splitmix64, so seed 0 works. The READMEs, then the stage words, come from the seed alone, so they are byte-equal at every size. The part files and the samples come from the seed and the size. Nothing else goes in: no clock, no hash-map order, no environment.
 
 `n<N>/tree/` holds `specengine.toml`, `README.md` (Tier 0), `areas/a00/README.md` to `areas/a15/README.md` (Tier 1) and the part files `areas/aNN/gMMMM/P-XXXXXX.md`. The config:
 
@@ -77,7 +71,7 @@ P = { kind = "node", width = 6 }
 - A syllable is one of `j k q v x z` followed by one of `a e i o u y`. Common words are 1 to 3 syllables.
 - Titles 2 to 4 words; paragraphs 20 to 60 words for a document, 15 to 50 for a section; sentences 6 to 14.
 - Section j holds the 5-syllable rare word `floor(j / 8)`, in base 36, so a rare word is in at most 8 sections at any size.
-- The READMEs hold one paragraph each (Tier 0 also lists the 16 areas). They have no ID and nothing that grows with N.
+- The READMEs hold one paragraph each (Tier 0 also lists the 16 areas), no ID and nothing that grows with N.
 
 **Vocabulary:** a token is a run of `[A-Za-z0-9_-]` with its edge `-` stripped. Every token is one of:
 - a syllable word;
@@ -85,13 +79,13 @@ P = { kind = "node", width = 6 }
 - a front-matter or config key or value.
 
 **Samples:**
-- 20 W targets: live, non-hub part nodes. The first 3 are timed.
+- 20 W targets: live, non-hub part nodes, the first 3 timed.
 - 3 queries: rare words held by a live section.
 - The hub: `P-000001`. The flow root: `areas/a00/g0000/`'s head. The stage: the first word.
 
 ## Reads and steps
 
-Each read is called once to warm up, then timed three times, and the best is kept. A call includes `render_text`. The tree waits 2.1 s after it is written (`RACY_WAIT`), so its build stores keys a warm update trusts (`spec-read-freshness.md`). The four reads and the hub's two run again in a `trusted` scope whose `IndexTrust` the warm-up walked.
+Each read is warmed up once, then timed three times, the best kept. A call includes `render_text`. The tree waits 2.1 s after it is written (`RACY_WAIT`), so its build stores keys a warm update trusts (`spec-read-freshness.md`). The four reads and the hub's two run again in a `trusted` scope whose `IndexTrust` the warm-up walked.
 
 | Key | Call | Its steps |
 |---|---|---|
@@ -116,9 +110,9 @@ The steps, each the best of three on the warm index:
 | `graph_us` | `SpecGraph::new` over the re-parsed input |
 | `fts_us` | `SpecIndex::search`, the first query |
 
-`other_us.<read>` is `max(0, median_us - the sum of its steps)`. It holds locating, assembly and fitting, rendering, and noise.
+`other_us.<read>` is `max(0, median_us - the sum of its steps)`: locating, assembly and fitting, rendering, noise.
 
-The whole reads, timed alike, have no steps, `other_us`, trusted twin or bar (a hub's flow and trace walk): `get_flow_top`, `flow` with no ROOT, `depth: 0`; `get_flow_root`, of the flow root, `depth: 1`; `get_flow_stage`, of the stage; each `trace: true`; `get_trace_summary`, `summary: true`; `get_tree`, no ROOT, `depth: 1`.
+The whole reads, timed alike, have no steps, `other_us`, trusted twin or bar (a hub's flow and trace walk): `get_flow_top`, `flow` with no ROOT, `depth: 0`; `get_flow_root`, of the flow root, `depth: 1`; `get_flow_stage`, of the stage; each `trace: true`; `get_trace_summary`, `summary: true`; `get_tree`, no ROOT, `depth: 1`. So has `similar`.
 
 ## Output
 
@@ -129,11 +123,12 @@ stdout is the envelope `{measurement: "scale", label, versions, wall_ms, result}
 - `reads_trusted.<read> {median_us, max_us}` and `growth_trusted.<read>` (each median at least 10 000 us), the trusted reads'; `trusted_differs`: (read, target) pairs whose trusted answer's BLAKE3 is not the walking one's;
 - `steps`, `other_us`, `w_after {median, p90, max, tier0, tier1_max}` by nearest rank;
 - `hub {degree, links_shown, get_node_links_us, get_context_bundle_us, w_after, trusted {get_node_links_us, get_context_bundle_us}}`;
+- `similar_recall {planted, found, variants}`, each of the four `{planted, found}`;
 - `nondeterministic`: (read, target) pairs whose four answers differ.
 
 With `--corpus-only`, a size holds `nodes` and `corpus` only. stdout holds numbers only, never an ID, word or path. stderr holds one summary line per size, the trusted medians too.
 
-The detail goes under `<out>/scale/<label>/`, emptied first. Each size gets a `n<N>/` directory with `tree/`, `home/` (the data directory) and `size.json`. `size.json` is written when the size ends and holds:
+The detail goes under `<out>/scale/<label>/`, emptied first. Each size gets a `n<N>/` directory with `tree/`, `home/` (the data directory) and `size.json`, written when the size ends, holding:
 - the size's entry;
 - `digest`: `b3:` over each file's path, NUL, bytes, NUL, in path order;
 - `targets`, `queries` and `hubs`;
@@ -142,9 +137,7 @@ The detail goes under `<out>/scale/<label>/`, emptied first. Each size gets a `n
 
 ## Isolation
 
-Every call takes `Globals {root: tree}`, an `Env` whose `cwd` is the tree and home the size's `home` directory (`xdg_data_home` `None`), and `GitEnv::new(tree, [PATH, HOME])`, `HOME` that same directory.
-
-It never calls `Env::from_process` or `process_git`, so nothing is read or written under the process's `HOME` or the repository. The run deletes nothing outside `<out>/scale/<label>/`.
+Every call takes `Globals {root: tree}`, an `Env` with `cwd` the tree and home the size's `home` directory (`xdg_data_home` `None`), and `GitEnv::new(tree, [PATH, HOME])`, `HOME` that directory. It never calls `Env::from_process` or `process_git`: nothing is read or written under the process's `HOME` or the repository, and the run deletes nothing outside `<out>/scale/<label>/`.
 
 ## Baseline
 
@@ -178,8 +171,8 @@ At 100k: 20 015 files, 23.9 MB, 101 746 drawn links, 3 973 Tier 3; build 11.3 s,
 - **The steps run low and `other_us` high:** they share one warm connection and one `WorkingTree`, a read opens its own; the residual never hides time.
 - **Timing noise can push `other_us` to 0;** when every residual is 0, SE-8 says it cannot tell a dropped step apart.
 - **A failure's stderr quotes the engine's reason,** which may hold a synthetic ID.
-- **The reused refusal (`layout::check_out`) calls the repository "the corpus".**
-- **The in-degree cap never binds at seed 1:** `degree_max` is 6, 12 and 15 at 1k, 10k and 100k, so dropping it survives the tests.
+- **`layout::check_out`'s reused refusal calls the repository "the corpus".**
+- **The in-degree cap never binds at seed 1:** `degree_max` 6, 12, 15 at 1k, 10k, 100k; dropping it survives the tests.
 - **`process_git` in place of the scratch `GitEnv` is caught only by SE-7's static scan.**
 - **The `read_bytes` mirror drops the CLI's warnings.** A file that cannot be read keeps its decoded parse.
 - **Flow, trace and tree stay whole O(N) reads,** about 1 s at 100k, `--stage` bounding only the payload: a screen asking one per scope change pays it (RM-0084).

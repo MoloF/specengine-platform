@@ -658,7 +658,39 @@ pub(crate) struct ReviewDocument {
     pub card_id: Option<String>,
     /// A decision's why, as stored; `null` on any other kind.
     pub why: Option<String>,
+    /// What a create may repeat (task spec `intake-similar`, IS8): a list
+    /// on a create's propose answer, `[]` when nothing is found; `null` on
+    /// every other kind and in every review.
+    pub similar: Option<Vec<SimilarShape>>,
     pub notes: Vec<String>,
+}
+
+/// One entry of a create's `similar` list: a corpus node, or a live
+/// proposal (`id` its `PR-` ID, `path` its target path); `gates` true for
+/// the exact sources, which keep the create unstored until
+/// `distinct_from` names it.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct SimilarShape {
+    pub id: Option<String>,
+    pub path: String,
+    pub title: Option<String>,
+    /// Free: the project's kinds.
+    pub kind: Option<String>,
+    pub source: SimilarSourceShape,
+    pub reason: String,
+    pub gates: bool,
+}
+
+/// Where a similar entry was found (core `SimilarSource`).
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum SimilarSourceShape {
+    Title,
+    Alias,
+    Queue,
+    Search,
+    Neighbours,
 }
 
 /// An interpretation (task spec `kind-interpretation`, "Data"): the

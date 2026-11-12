@@ -70,10 +70,16 @@ const NEXT_SECOND: Duration = Duration::from_millis(1100);
 const POLL: Duration = Duration::from_millis(100);
 
 /// docs/features/spec-ids.md "Data", "The MCP texts": the two sentences.
+///
+/// docs/features/intake-similar.md "Acceptance criteria" IS8: each sentence
+/// ends `; a similar entry with gates true stores nothing (id null) until
+/// distinct_from names it.` (2 041 and 2 037 bytes since).
 const HUB_SENTENCE: &str = "you name each new ID, from 100001 on this hub; a taken or lower one is \
-                            refused naming the next free ID.";
+                            refused naming the next free ID; a similar entry with gates true \
+                            stores nothing (id null) until distinct_from names it.";
 const STDIO_SENTENCE: &str = "you name each new ID, below 100001 unless on a hub; a taken one is \
-                              refused naming the next free ID.";
+                              refused naming the next free ID; a similar entry with gates true \
+                              stores nothing (id null) until distinct_from names it.";
 const OLD_SENTENCE: &str = "you name each new ID; a taken one is refused naming the next free one.";
 
 // ---------------------------------------------------------------- helpers
@@ -811,7 +817,9 @@ fn ac5a_a_terminals_dump_restored_on_a_hub_confirms_and_applies() {
 /// `tools/list` over stdio shows `CHANGE_DESCRIPTION` with its sentence,
 /// 2044 bytes, and over a hub's `/mcp` `HUB_CHANGE_DESCRIPTION` with its own,
 /// 2040 bytes; each ASCII, the `target` line `(the whole file)`, the old
-/// sentence gone. M13: a sentence dropped.
+/// sentence gone. M13: a sentence dropped. Since
+/// docs/features/intake-similar.md "Acceptance criteria" IS8 (its seven
+/// edits): 2041 and 2037 bytes, the `target` line ending `.md path.`.
 #[test]
 fn ac8a_both_descriptions_name_the_range_on_the_wire() {
     let setup = Setup::new("si-texts", "card-press");
@@ -841,8 +849,8 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
         .to_owned();
 
     for (label, description, sentence, bytes) in [
-        ("stdio", &terminal, STDIO_SENTENCE, 2044),
-        ("hub", &on_hub, HUB_SENTENCE, 2040),
+        ("stdio", &terminal, STDIO_SENTENCE, 2041),
+        ("hub", &on_hub, HUB_SENTENCE, 2037),
     ] {
         assert!(description.is_ascii(), "{label}");
         assert_eq!(
@@ -852,9 +860,11 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
         );
         assert!(!description.contains(OLD_SENTENCE), "{label}");
         assert!(
-            description.contains(".md path (the whole file).\n"),
+            description
+                .contains("(no alias, ID#SECTION or ID@rev), or a root-relative .md path.\n"),
             "{label}: {description}"
         );
+        assert!(!description.contains("(the whole file)"), "{label}");
         assert!(
             !description.contains("(its document, the whole file)"),
             "{label}"
@@ -879,7 +889,9 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
 /// mandate's keys) 0.38.0; since card-context (RM-0108, CC8: `get_card`'s
 /// `context`) 0.39.0; since node-history (RM-0035, NH11: `get_node`'s
 /// `history`) 0.40.0; since upstream-signal (RM-0105, US-11: `get_card`'s
-/// and `list_cards`' `upstream`) 0.41.0.
+/// and `list_cards`' `upstream`) 0.41.0; since intake-similar (RM-0059,
+/// IS11: `propose_change`'s `distinct_from`, `keywords` and `similar`)
+/// 0.42.0.
 #[test]
 fn ac8d_the_release_tag_is_the_plugin_version() {
     let scratch = common::Scratch::new("si-tag");
@@ -891,7 +903,7 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
     ];
     let output = alarmed(
         Path::new("/bin/sh"),
-        &[script.as_os_str(), OsStr::new("v0.41.0")],
+        &[script.as_os_str(), OsStr::new("v0.42.0")],
         &env,
     )
     .current_dir(&elsewhere)
@@ -903,13 +915,13 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.41.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.42.0\n");
     let example = read_text(&repository_root(), "scripts/deploy/.env.example");
     assert_eq!(
         example
             .lines()
             .filter(|line| line.starts_with("SPECENGINE_VERSION="))
             .collect::<Vec<_>>(),
-        ["SPECENGINE_VERSION=0.41.0"]
+        ["SPECENGINE_VERSION=0.42.0"]
     );
 }

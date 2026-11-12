@@ -240,6 +240,16 @@
 //!   (`read-spec` byte-equal); a `SCHEMA_PINS` entry 0.41.0, 0.40.0's
 //!   schemas today's without the two keys ([`as_of_0_40_0`]). M: the schema
 //!   changed with no new `SCHEMA_PINS` entry.
+//! - intake-similar (RM-0059, IS11,
+//!   docs/features/intake-similar.md "Acceptance criteria"): 0.41.0 ->
+//!   0.42.0, MINOR: `propose_change` takes `distinct_from` and `keywords`
+//!   and returns `similar` (so do `get_proposal` and `review_proposal`). A
+//!   `PINS` entry 0.42.0, the tree
+//!   with plugin.json's version and the two skills' edits
+//!   ([`PROPOSE_SKILL_0_42_0`], [`WRITE_FLOW_0_42_0`]) set back 0.41.0's; a
+//!   `SCHEMA_PINS` entry 0.42.0, 0.41.0's schemas today's without the three
+//!   keys ([`as_of_0_41_0`]). M: the schema changed with no new
+//!   `SCHEMA_PINS` entry.
 //!
 //! The repository is only read.
 
@@ -640,6 +650,70 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.41.0",
         "79a2ce540b90de7e586d32cc5f01d0cb375996194efe86148685e91d5fb85e42",
+    ),
+    // intake-similar (RM-0059, IS11: 0.41.0 -> 0.42.0, MINOR: two keys
+    // `propose_change` takes, one it returns): plugin.json's version and the
+    // two skills' edits ([`PROPOSE_SKILL_0_42_0`], [`WRITE_FLOW_0_42_0`]);
+    // all set back, the tree hashes as 0.41.0's pin.
+    (
+        "0.42.0",
+        "c24e8ec0e4ee261fdf66eed457850792bc091ed79a44cc2b3dcee41791d87a5f",
+    ),
+];
+
+/// docs/features/intake-similar.md "Acceptance criteria" IS11:
+/// `propose-spec-change`'s six edits, body 4 092 -> 4 088 bytes, each
+/// `(0.41.0's words, 0.42.0's)`.
+const PROPOSE_SKILL_0_42_0: [(&str, &str); 6] = [
+    (
+        "2. A cut answer lacks the rest: target a smaller ID section, or read the span in the \
+         file, `line` to `end_line`.",
+        "2. A cut answer: target a smaller ID section, or read the file, `line` to `end_line`.",
+    ),
+    (
+        "the text its span plus the new ID headings below its own level, its own ID headings \
+         kept at their levels.",
+        "the text its span plus new ID headings below its own level.",
+    ),
+    (
+        "`target` a root-relative .md path where nothing is yet, inside the spec's directories;",
+        "`target` a free root-relative .md path inside the spec's directories;",
+    ),
+    (
+        "the reply's `target_ids` lists the target and them.\n",
+        "the reply's `target_ids` lists the target and them.\n- The reply's `similar` lists what \
+         yours may repeat, with why: prefer an update of it. One with `gates` true keeps yours \
+         unstored (`id` null) until you resend naming it in `distinct_from`.\n",
+    ),
+    (
+        "- Refused for a stale `base`: the span changed since you read it; read it again, redo \
+         your text, resend.",
+        "- Refused for a stale `base`: read the span again, redo your text, resend.",
+    ),
+    (
+        "- Refused for the span's headings: keep its ID headings at their levels, a new heading \
+         below the section's; an ID section",
+        "- Refused for the span's headings: an ID section",
+    ),
+];
+
+/// docs/features/intake-similar.md "Acceptance criteria" IS11:
+/// `write-flow`'s three edits, body 4 086 -> 4 089 bytes, each `(0.41.0's
+/// words, 0.42.0's)`.
+const WRITE_FLOW_0_42_0: [(&str, &str); 3] = [
+    (
+        "and groups. `get_flow` reads it back: its rows name what is missing and how to clear \
+         it.\n",
+        "and groups.\n",
+    ),
+    (
+        "the owner commits it: a proposal needs a commit and the rules live there.",
+        "the owner commits it: a proposal needs a commit.",
+    ),
+    (
+        "reads `ref-dangling` until it lands.\n",
+        "reads `ref-dangling` until it lands. A reply with `id` null names a gating `similar` \
+         entry: reuse it, or resend naming it in `distinct_from`.\n",
     ),
 ];
 
@@ -1064,6 +1138,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.41.0",
         "bc979ce4a6c2d8807559207150cfdd117970b0b7a8491b8b2d6693b190501711",
+    ),
+    // intake-similar (RM-0059, IS11): `propose_change`'s input
+    // `distinct_from` and `keywords`, `similar` in its output and in
+    // `get_proposal`'s and `review_proposal`'s ([`as_of_0_41_0`] takes them
+    // out; no other tool's schema changed).
+    (
+        "0.42.0",
+        "7dea6428ab2611551ccf61b030530af87acd7a5a2f433d1fc665d22398dfa1ac",
     ),
 ];
 
@@ -2076,8 +2158,9 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// since departments (RM-0096), 0.36.0 since card-questions (RM-0097),
 /// 0.37.0 since department-split (RM-0100), 0.38.0 since task-mandate
 /// (RM-0104), 0.39.0 since card-context (RM-0108), 0.40.0 since
-/// node-history (RM-0035), 0.41.0 since upstream-signal (RM-0105). No room
-/// is left, so the next byte is over.
+/// node-history (RM-0035), 0.41.0 since upstream-signal (RM-0105), 0.42.0
+/// since intake-similar (RM-0059, IS11). No room is left, so the next byte
+/// is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2099,7 +2182,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.41.0")
+        json!("0.42.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2250,11 +2333,43 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // intake-similar (RM-0059, IS11: 0.41.0 -> 0.42.0): plugin.json's
+    // version and the two skills' edits, each once; set back, the tree is
+    // 0.41.0's pinned content, every other skill and role byte-equal. M:
+    // plugin.json left at 0.41.0; an edit missing or another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.42.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.42.0"),
+        "plugin.json's version"
+    );
+    let mut at_0_41_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.42.0\"",
+        "\"version\": \"0.41.0\"",
+    );
+    for (old, new) in PROPOSE_SKILL_0_42_0 {
+        at_0_41_0 = edited(&at_0_41_0, PROPOSE_SKILL, new, old);
+    }
+    for (old, new) in WRITE_FLOW_0_42_0 {
+        at_0_41_0 = edited(&at_0_41_0, WRITE_FLOW, new, old);
+    }
+    assert_eq!(
+        content_hash(&at_0_41_0),
+        PINS[PINS.len() - 2].1,
+        "0.42.0 changes plugin.json's version and the two skills' edits only"
+    );
+    let tree = at_0_41_0;
+    let pins_0_41_0 = &PINS[..PINS.len() - 1];
     // upstream-signal (RM-0105, US-11: 0.40.0 -> 0.41.0): plugin.json's
     // version alone; set back, the tree is 0.40.0's pinned content,
     // `read-spec` and every other skill and role byte-equal. M: plugin.json
     // left at 0.40.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.41.0"));
+    assert_eq!(
+        pins_0_41_0.last().map(|(version, _)| *version),
+        Some("0.41.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.41.0"),
@@ -2268,11 +2383,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_40_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_41_0[pins_0_41_0.len() - 2].1,
         "0.41.0 changes plugin.json's version only"
     );
     let tree = at_0_40_0;
-    let pins_0_40_0 = &PINS[..PINS.len() - 1];
+    let pins_0_40_0 = &pins_0_41_0[..pins_0_41_0.len() - 1];
     // node-history (RM-0035, NH11: 0.39.0 -> 0.40.0): plugin.json's version
     // alone; set back, the tree is 0.39.0's pinned content, `read-spec`
     // and every other skill and role byte-equal. M: plugin.json left at
@@ -3486,6 +3601,33 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// intake-similar (RM-0059, IS11): `schemas` as 0.41.0 listed them: no
+/// `distinct_from` and `keywords` in `propose_change`'s input, no `similar`
+/// in its output, `get_proposal`'s or `review_proposal`'s (when listed); no
+/// other tool's schema changed.
+fn as_of_0_41_0(schemas: &mut Value) {
+    for key in ["distinct_from", "keywords"] {
+        assert!(
+            without_property(&mut schemas["propose_change"]["inputSchema"], key),
+            "propose_change takes {key}"
+        );
+    }
+    let mut dropped = 0;
+    for name in ["propose_change", "get_proposal", "review_proposal"] {
+        if schemas[name]["outputSchema"].is_object() {
+            assert!(
+                without_property(&mut schemas[name]["outputSchema"], "similar"),
+                "{name} returns similar"
+            );
+            dropped += 1;
+        }
+    }
+    assert!(
+        dropped >= 2,
+        "propose_change and get_proposal return similar"
+    );
+}
+
 /// upstream-signal (RM-0105, US-11): `schemas` as 0.40.0 listed them: no
 /// `upstream` in `get_card`'s output or in a `list_cards` row; no other
 /// tool's schema changed.
@@ -4237,7 +4379,23 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[30].0, "0.39.0", "an entry for 0.39.0");
     assert_eq!(SCHEMA_PINS[31].0, "0.40.0", "an entry for 0.40.0");
     assert_eq!(SCHEMA_PINS[32].0, "0.41.0", "an entry for 0.41.0");
-    assert_eq!(SCHEMA_PINS.len(), 33, "0.41.0 the last entry");
+    assert_eq!(SCHEMA_PINS[33].0, "0.42.0", "an entry for 0.42.0");
+    assert_eq!(SCHEMA_PINS.len(), 34, "0.42.0 the last entry");
+    // intake-similar (RM-0059, IS11): 0.41.0's schemas are today's without
+    // `propose_change`'s `distinct_from` and `keywords` and the review
+    // document's `similar`. M: `SCHEMA_PINS` not appended.
+    let mut at_0_41_0 = schemas.clone();
+    as_of_0_41_0(&mut at_0_41_0);
+    let at_0_41_0_hash = schema_hash(&at_0_41_0);
+    assert_eq!(
+        at_0_41_0_hash, SCHEMA_PINS[32].1,
+        "0.41.0's schemas are today's without intake-similar's three keys"
+    );
+    assert_ne!(
+        at_0_41_0_hash, current,
+        "intake-similar changed the schemas"
+    );
+    let (schemas, current) = (at_0_41_0, at_0_41_0_hash);
     // upstream-signal (RM-0105, US-11): 0.40.0's schemas are today's without
     // `get_card`'s and a `list_cards` row's `upstream`. M: `SCHEMA_PINS` not
     // appended.

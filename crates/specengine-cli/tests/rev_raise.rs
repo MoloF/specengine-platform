@@ -676,8 +676,9 @@ fn review_document_every_key_present() {
         .collect();
     // 48 since docs/features/drift-queue.md added `drift` after
     // `revisions` (`null` on an update); 50 since
-    // docs/features/card-questions.md D14 (`card_id`, `why`).
-    assert_eq!(keys.len(), 50, "{keys:?}");
+    // docs/features/card-questions.md D14 (`card_id`, `why`); 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS6 (`similar`).
+    assert_eq!(keys.len(), 51, "{keys:?}");
     assert_eq!(value["drift"], Value::Null);
     let json_text = serde_json::to_string(&value).unwrap();
     let printed = rev_common::printed(

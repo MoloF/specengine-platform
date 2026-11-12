@@ -337,8 +337,9 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         assert!(reply.cors_headers().is_empty(), "{reply:?}");
         let document = reply.json();
         // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
-        // docs/features/card-questions.md L1.
-        assert_eq!(document.as_object().unwrap().len(), 50, "{document}");
+        // docs/features/card-questions.md L1, 51 since
+        // docs/features/intake-similar.md "Acceptance criteria" IS10.
+        assert_eq!(document.as_object().unwrap().len(), 51, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -351,7 +352,7 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         assert!(
             reply.text().contains(&format!(
                 "\"staged\":{staged},\"staged_at\":\"{at}\",\"interpretation\":null,\
-                 \"card_id\":null,\"why\":null,\"notes\":"
+                 \"card_id\":null,\"why\":null,\"similar\":null,\"notes\":"
             )),
             "the stage's bytes, keys in the canon's order: {}",
             reply.text()
@@ -441,6 +442,10 @@ fn ac04_a_flag_the_terminal_refuses_is_refused_with_its_message_nothing_stored()
             "-",
             "--rationale",
             "A new record.",
+            // R-12's copy keeps its title: R-12 named
+            // (docs/features/intake-similar.md "Acceptance criteria" IS1).
+            "--distinct-from",
+            "R-12",
         ],
         record.as_bytes(),
     );
@@ -1269,8 +1274,9 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
     // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
-    // docs/features/card-questions.md L1.
-    assert_eq!(document.as_object().unwrap().len(), 50, "{document}");
+    // docs/features/card-questions.md L1, 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS10.
+    assert_eq!(document.as_object().unwrap().len(), 51, "{document}");
     assert_eq!(document["kind"], json!("interpretation"));
     assert_eq!(
         document["staged"],
@@ -1384,8 +1390,9 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     assert_eq!(reply.status, 200, "{}", reply.text());
     let document = reply.json();
     // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
-    // docs/features/card-questions.md L1.
-    assert_eq!(document.as_object().unwrap().len(), 50, "{document}");
+    // docs/features/card-questions.md L1, 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS10.
+    assert_eq!(document.as_object().unwrap().len(), 51, "{document}");
     assert_eq!(document["kind"], json!("decision"));
     assert_eq!(document["linked"], json!("PR-0005"));
     assert_eq!(document["options"], json!([]));

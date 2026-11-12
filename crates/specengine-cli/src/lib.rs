@@ -276,6 +276,7 @@ mod round;
 mod search;
 mod serve;
 mod show;
+mod similar;
 mod sparse;
 mod stage;
 mod state;

@@ -345,7 +345,8 @@ export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
  * `preview`; a decided one its record's five after `linked`; `task_id`, after `choice`, the task it
  * was raised for; `staged`, `staged_at` after it, the owner's staged choice; `interpretation` after
  * them, an interpretation's decision and texts; `drift`, after `revisions`, a drift item's evidence;
- * `card_id` and `why` after `interpretation`, the card it was raised for and a decision's why (50 keys).
+ * `card_id` and `why` after `interpretation`, the card it was raised for and a decision's why;
+ * `similar` after `why`, always null here (51 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
  * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents";
@@ -433,6 +434,8 @@ export interface Proposal {
   card_id: string | null;
   /** Why a decision was taken, as its author wrote it; null on a question, a discrepancy and a decision without one. */
   why: string | null;
+  /** Always null here: only a create's propose answer lists it (`docs/features/intake-similar.md` "Acceptance criteria", IS10). */
+  similar: null;
   /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
   notes: string[];
 }

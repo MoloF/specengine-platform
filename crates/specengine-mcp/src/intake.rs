@@ -64,19 +64,19 @@ as an open proposal; the owner's approval writes the file. content is the comman
 structuredContent its --json document: the brief review (no texts or diff; at most 20 \
 findings, the rest counted; the text cut at 40000 characters).
 
-kind: update: replace the node's span (a section and its subsections, or a whole file). \
-create: new ID sections below the node (text: its span with them), or a new file at a free \
-.md path (base null, text the whole file); you name each new ID, below 100001 unless on a \
-hub; a taken one is refused naming the next free ID. interpretation: an update carrying an \
-accepted decision. \
+kind: update: replace the node's span (a section with its subsections, or a file). \
+create: new ID sections below the node (its span with them), or a new file at a free .md \
+path (base null); you name each new ID, below 100001 unless on a hub; a taken one is \
+refused naming the next free ID; a similar entry with gates true stores nothing (id null) \
+until distinct_from names it. interpretation: an update carrying an accepted decision. \
 amendment: a new spec or decision file (base null) declaring links: {amends: [ID]} to live \
-nodes, which stay unwritten.
-target: the node's ID or slug/ID (not an alias, ID#SECTION or ID@rev), or a root-relative \
-.md path (the whole file).
-base: get_node's span_hash of the target; a stale one is refused naming the current hash; \
-null only for a new file.
-decision, how, why: an interpretation's decision ID, how it was applied, why interpretation \
-was needed (at most 2048 bytes each).
+nodes, unwritten.
+target: the node's ID or slug/ID (no alias, ID#SECTION or ID@rev), or a root-relative .md \
+path.
+base: get_node's span_hash; a stale one is refused naming the current hash; null only for a \
+new file.
+decision, how, why: an interpretation's decision ID, how it was applied, why it was needed \
+(at most 2048 bytes each).
 text: inline (never a path), at most 1048576 bytes.
 rationale: why, at most 4096 bytes; the commit's body.
 author_role (required), author_model, run: who proposes; printable ASCII without spaces, 1 \
@@ -522,6 +522,10 @@ pub(crate) struct ChangeArgs {
     pub task_id: Option<String>,
     /// true: every refusal and the diagnostics of the real call, nothing stored; update and create only.
     pub dry_run: Option<bool>,
+    /// create only: each gating similar entry you judge distinct, by its id, else its path, byte for byte.
+    pub distinct_from: Option<Vec<String>>,
+    /// create only: extra search words, one word each.
+    pub keywords: Option<Vec<String>>,
 }
 
 /// `ask_question` arguments.
@@ -699,6 +703,10 @@ pub(crate) struct HubChangeArgs {
     pub run: Option<String>,
     /// true: every refusal and the diagnostics of the real call, nothing stored; update and create only.
     pub dry_run: Option<bool>,
+    /// create only: each gating similar entry you judge distinct, by its id, else its path, byte for byte.
+    pub distinct_from: Option<Vec<String>>,
+    /// create only: extra search words, one word each.
+    pub keywords: Option<Vec<String>>,
 }
 
 impl From<HubChangeArgs> for ChangeArgs {
@@ -717,6 +725,8 @@ impl From<HubChangeArgs> for ChangeArgs {
             run: args.run,
             task_id: None,
             dry_run: args.dry_run,
+            distinct_from: args.distinct_from,
+            keywords: args.keywords,
         }
     }
 }
@@ -1058,6 +1068,8 @@ impl SpecEngineServer {
             run,
             task_id,
             dry_run,
+            distinct_from,
+            keywords,
         } = args;
         // A dry run rehearses an update or a create alone (a form error,
         // naming the field).
@@ -1072,6 +1084,24 @@ impl SpecEngineServer {
                 ),
                 None,
             ));
+        }
+        // The similar step's keys are a create's alone (task spec
+        // `intake-similar`, IS6): a form error naming the field and the kind.
+        if kind != ChangeKind::Create {
+            let given = [
+                ("distinct_from", distinct_from.is_some()),
+                ("keywords", keywords.is_some()),
+            ];
+            if let Some((field, _)) = given.into_iter().find(|(_, given)| *given) {
+                return Err(ErrorData::invalid_params(
+                    format!(
+                        "{field}: only {} takes it, not {}",
+                        with_article(CREATE_KIND),
+                        with_article(kind.as_str())
+                    ),
+                    None,
+                ));
+            }
         }
         // An update or an interpretation is written against its span:
         // `base` is required, as `spec propose update --base` is; an
@@ -1198,6 +1228,8 @@ impl SpecEngineServer {
                             login,
                             now,
                             git,
+                            distinct_from: distinct_from.unwrap_or_default(),
+                            keywords: keywords.unwrap_or_default(),
                         };
                         if dry_run {
                             specengine_cli::propose_create_dry_run_brief(

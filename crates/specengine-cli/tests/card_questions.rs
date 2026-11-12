@@ -1138,12 +1138,14 @@ fn l1_the_raises_take_card_and_review_ends_with_card_id_and_why() {
     let raw = json_run(&pair, &pair.main, &["review", "PR-0001"], b"");
     raw.code(0);
     let keys = keys_of(raw.stdout.trim_end());
+    // 51 since docs/features/intake-similar.md "Acceptance criteria" IS6
+    // (`similar` after `why`, `null` in a review).
     assert_eq!(
         keys[keys.len() - 4..],
-        ["interpretation", "card_id", "why", "notes"],
+        ["card_id", "why", "similar", "notes"],
         "{keys:?}"
     );
-    assert_eq!(keys.len(), 50, "{keys:?}");
+    assert_eq!(keys.len(), 51, "{keys:?}");
 
     // The twin, on a second copy: the same question without the flag.
     let twin = Pair::new("cq-l1-twin", LAMP);

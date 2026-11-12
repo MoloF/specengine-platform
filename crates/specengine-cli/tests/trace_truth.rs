@@ -1529,6 +1529,8 @@ fn created(pair: &Pair, target: &str, text: &str) -> String {
             login: None,
             now: common::proposal::NOW.to_owned(),
             git: pair.git_env(&pair.main),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     )
     .expect("a create")

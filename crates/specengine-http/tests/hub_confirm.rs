@@ -377,6 +377,10 @@ fn new_record(setup: &Setup, id: &str, path: &str) -> String {
             "-",
             "--rationale",
             "A new record.",
+            // R-12's copy keeps its title: R-12 named
+            // (docs/features/intake-similar.md "Acceptance criteria" IS1).
+            "--distinct-from",
+            "R-12",
         ],
         text.as_bytes(),
     );

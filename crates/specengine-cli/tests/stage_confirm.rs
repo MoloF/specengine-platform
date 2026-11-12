@@ -947,6 +947,10 @@ fn ac11_a_file_form_create_stages_no_span_hash_and_a_section_form_its_targets() 
                 login: None,
                 now: CLOCK.to_owned(),
                 git: pair.git_env(&pair.linked),
+                // R-12's copy keeps its title: R-12 named
+                // (docs/features/intake-similar.md "Acceptance criteria" IS1).
+                distinct_from: vec!["R-12".to_owned()],
+                keywords: Vec::new(),
             },
         )
         .expect("propose create");
@@ -1132,7 +1136,8 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
     assert!(
         json.contains(&format!(
             "\"staged\":{{\"decision\":\"reject\",\"reason\":\"asked before\"}},\"staged_at\":\
-             \"{STAGED}\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"notes\":"
+             \"{STAGED}\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\
+             \"notes\":"
         )),
         "{json}"
     );

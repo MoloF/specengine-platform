@@ -110,6 +110,7 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     interpretation: null,
     card_id: null,
     why: null,
+    similar: null,
     notes: [],
     ...fields,
   };
@@ -186,6 +187,7 @@ export function noReview(id: string): Proposal {
     interpretation: null,
     card_id: null,
     why: null,
+    similar: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }

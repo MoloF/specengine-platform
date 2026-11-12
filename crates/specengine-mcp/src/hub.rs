@@ -457,19 +457,19 @@ as an open proposal; a Confirm writes the file. content is the command's output,
 structuredContent its --json document: the brief review (no texts or diff; at most 20 \
 findings, the rest counted; the text cut at 40000 characters).
 
-kind: update: replace the node's span (a section and its subsections, or a whole file). \
-create: new ID sections below the node (text: its span with them), or a new file at a free \
-.md path (base null, text the whole file); you name each new ID, from 100001 on this hub; a \
-taken or lower one is refused naming the next free ID. interpretation: an update carrying an \
-accepted decision. \
+kind: update: replace the node's span (a section with its subsections, or a file). \
+create: new ID sections below the node (its span with them), or a new file at a free .md \
+path (base null); you name each new ID, from 100001 on this hub; a taken or lower one is \
+refused naming the next free ID; a similar entry with gates true stores nothing (id null) \
+until distinct_from names it. interpretation: an update carrying an accepted decision. \
 amendment: a new spec or decision file (base null) declaring links: {amends: [ID]} to live \
-nodes, which stay unwritten.
-target: the node's ID or slug/ID (not an alias, ID#SECTION or ID@rev), or a root-relative \
-.md path (the whole file).
-base: get_node's span_hash of the target; a stale one is refused naming the current hash; \
-null only for a new file.
-decision, how, why: an interpretation's decision ID, how it was applied, why interpretation \
-was needed (at most 2048 bytes each).
+nodes, unwritten.
+target: the node's ID or slug/ID (no alias, ID#SECTION or ID@rev), or a root-relative .md \
+path.
+base: get_node's span_hash; a stale one is refused naming the current hash; null only for a \
+new file.
+decision, how, why: an interpretation's decision ID, how it was applied, why it was needed \
+(at most 2048 bytes each).
 text: inline (never a path), at most 1048576 bytes.
 rationale: why, at most 4096 bytes; the commit's body.
 author_role (required), author_model, run: who proposes; printable ASCII without spaces, 1 \

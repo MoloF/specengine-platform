@@ -532,7 +532,9 @@ fn ac04_a_reference_to_a_live_create_stores_no_ref_dangling() {
 
 /// "Schema": `dry_run` an optional boolean in the spec's words, in both eras;
 /// `propose_change`'s description stays as it was, 19 B under 2 048; 4 B
-/// under since docs/features/spec-ids.md "Data", "The MCP texts" (2 044 B).
+/// under since docs/features/spec-ids.md "Data", "The MCP texts" (2 044 B);
+/// 7 B under since docs/features/intake-similar.md "Acceptance criteria"
+/// IS8 (2 041 B).
 #[test]
 fn the_input_schema_takes_dry_run_and_the_description_stays() {
     for era in ERAS {
@@ -547,7 +549,7 @@ fn the_input_schema_takes_dry_run_and_the_description_stays() {
         assert!(!required.contains(&json!("dry_run")), "{required:?}");
         let description = change["description"].as_str().expect("a description");
         assert!(!description.contains("dry_run"), "{description}");
-        assert_eq!(description.len(), 2_048 - 4, "{description}");
+        assert_eq!(description.len(), 2_048 - 7, "{description}");
         drop(session.finish());
     }
 }

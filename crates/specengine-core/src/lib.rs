@@ -105,7 +105,10 @@
 //! - [`upstream`] — what changed above an open subtask, the pure half (task
 //!   spec `upstream-signal`): the judge over the queue's events, its applied
 //!   items and the parent's mark, by `seq`, computed per read and never
-//!   stored.
+//!   stored;
+//! - [`similar`] — a create's similar step, the pure half (task spec
+//!   `intake-similar`): its five sources, the entry, the search terms, the
+//!   `keywords` check and the caps.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -141,6 +144,7 @@ pub mod roadmap;
 pub mod roadmap_toml;
 pub mod round;
 pub mod scheme_toml;
+pub mod similar;
 pub mod symbol_delta;
 pub mod task;
 pub mod team_toml;

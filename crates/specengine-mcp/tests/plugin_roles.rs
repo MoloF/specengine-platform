@@ -1391,10 +1391,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // keys): 0.38.0; card-context (RM-0108, CC8, `get_card`'s `context`):
     // 0.39.0; node-history (RM-0035, NH11, `get_node`'s `history`): 0.40.0;
     // upstream-signal (RM-0105, US-11, `get_card`'s and `list_cards`'
-    // `upstream`): 0.41.0.
-    if plugin["version"] != "0.41.0" {
+    // `upstream`): 0.41.0; intake-similar (RM-0059, IS11,
+    // `propose_change`'s `distinct_from`, `keywords` and `similar`): 0.42.0.
+    if plugin["version"] != "0.42.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.41.0",
+            "plugin.json: version {}, not 0.42.0",
             plugin["version"]
         ));
     }
@@ -1464,9 +1465,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.41.0\"", "\"0.40.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.41.0");
-    assert_names(&r2_problems(&older, &market), "not 0.41.0", "0.40.0");
+    let older = plugin.replacen("\"0.42.0\"", "\"0.41.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.42.0");
+    assert_names(&r2_problems(&older, &market), "not 0.42.0", "0.41.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

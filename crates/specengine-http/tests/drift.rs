@@ -88,8 +88,10 @@ fn drift_item_is_served_and_cannot_be_staged() {
         .to_owned();
     let review: Value = serde_json::from_str(&text).expect("JSON");
     let object = review.as_object().expect("an object");
-    // 50 since docs/features/card-questions.md L1.
-    assert_eq!(object.len(), 50, "{review}");
+    // 50 since docs/features/card-questions.md L1; 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS10.
+    assert_eq!(object.len(), 51, "{review}");
+    assert_eq!(review["similar"], Value::Null, "{review}");
     assert_eq!(review["kind"], json!("drift"));
     assert_eq!(review["target_id"], json!("LAW-BOUND"));
     assert_eq!(review["target_path"], json!("spec.lock"));

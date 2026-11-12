@@ -161,6 +161,8 @@ pub fn propose_create_text(
             login: None,
             now: NOW.to_owned(),
             git: at.git.clone(),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     )
 }

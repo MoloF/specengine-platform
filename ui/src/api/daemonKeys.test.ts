@@ -200,7 +200,9 @@ import type {
 // with a shown node's `history` after `bindings` (21 keys); and upstream-signal's two
 // (docs/features/upstream-signal.md "Acceptance criteria", US-12: what changed above a subtask and
 // one change, sets 125 and 126, the last), with a row's `upstream` after `correction` (23 keys) and
-// a card's (36). A key the types carry ahead of the file
+// a card's (36); and intake-similar's one key, no set
+// (docs/features/intake-similar.md "Acceptance criteria", IS10: the review document's `similar` after
+// `why`, 51 keys, always null on the route, written by its Rust test). A key the types carry ahead of the file
 // is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already
 // names fails. While that file is absent the comparison is skipped, saying so; once it exists it
 // names all one hundred and twenty-six, in the slices' order.
@@ -231,7 +233,8 @@ const KEYS = {
   // docs/features/kind-interpretation.md "Data" `interpretation` after `staged_at`,
   // docs/features/rev-discipline.md "Review document, stage, queue" `revisions` after `conflict`,
   // docs/features/drift-queue.md "Review, inbox, round, stage" `drift` after `revisions`,
-  // docs/features/card-questions.md "Acceptance criteria" (L1) `card_id`, `why` after `interpretation`.
+  // docs/features/card-questions.md "Acceptance criteria" (L1) `card_id`, `why` after `interpretation`,
+  // docs/features/intake-similar.md "Acceptance criteria" (IS10) `similar` after `why`, ahead of the file.
   Proposal: {
     id: true,
     project: true,
@@ -282,6 +285,7 @@ const KEYS = {
     interpretation: true,
     card_id: true,
     why: true,
+    similar: true,
     notes: true,
   } satisfies Record<keyof Proposal, true>,
   // docs/features/kind-interpretation.md "Data": the row's JSON, keys in its order.
@@ -981,6 +985,7 @@ const CITED: Record<Named, string> = {
     "staged, staged_at, " +
     "interpretation, " +
     "card_id, why, " +
+    "similar, " +
     "notes",
   Interpretation: "decision, how, why",
   StagedApprove: "decision, option, answer, canon, editorial, note, span_hash",
@@ -1386,7 +1391,9 @@ function served(name: Named): string[] {
  * (docs/features/card-context.md "Acceptance criteria", CC10), and since node-history's wrote a
  * shown node's `history` and sets 123 and 124 (docs/features/node-history.md "Acceptance criteria",
  * NH12), and since upstream-signal's wrote a row's and a card's `upstream` and sets 125 and 126
- * (docs/features/upstream-signal.md "Acceptance criteria", US-12).
+ * (docs/features/upstream-signal.md "Acceptance criteria", US-12). intake-similar's review
+ * document's `similar` until its Rust test wrote it
+ * (docs/features/intake-similar.md "Acceptance criteria", IS10), then empty again.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1410,8 +1417,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 12 inbox-entry keys, 50 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue, L1 of card-questions)", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 50]);
+  it("counts 4 project keys, 12 inbox-entry keys, 51 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue, L1 of card-questions, IS10 of intake-similar)", () => {
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 51]);
   });
 
   it("gives the review document its drift right after revisions, before decided_by, and the DriftEvidence set its 3 keys (UI-1 of drift-queue)", () => {
@@ -1482,13 +1489,14 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar` (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
     // Empty again since node-history's Rust test wrote a shown node's `history` (docs/features/node-history.md "Acceptance criteria", NH12);
-    // upstream-signal's two until its Rust test wrote them, then empty again (docs/features/upstream-signal.md "Acceptance criteria", US-12).
+    // upstream-signal's two until its Rust test wrote them, then empty again (docs/features/upstream-signal.md "Acceptance criteria", US-12);
+    // intake-similar's review document's `similar` until its Rust test wrote it, then empty again (docs/features/intake-similar.md "Acceptance criteria", IS10).
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -1560,7 +1568,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^ {2}why: string \| null;\n {2}author: Author;\n {2}created_at: string;$/m);
     expect(source).toMatch(/^export interface IntakeDocument \{\n {2}id: string \| null;\n {2}created: boolean;\n {2}hits: IntakeMatch\[\];\n {2}related: IntakeMatch\[\];\n/m);
     const review = declaredKeys("Proposal");
-    expect(review.slice(-4)).toEqual(["interpretation", "card_id", "why", "notes"]);
+    // `similar` after `why` since intake-similar (docs/features/intake-similar.md "Acceptance criteria", IS10).
+    expect(review.slice(-5)).toEqual(["interpretation", "card_id", "why", "similar", "notes"]);
     expect(source).toMatch(/^ {2}card_id: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}why: string \| null;$/m);
     expect(ALL.slice(BEFORE_CARD_QUESTIONS.length, BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...CARD_QUESTIONS]);
     // The body of the card's raise and the stage's `as`: requests, no set.
@@ -1593,6 +1602,16 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/card-context.md` "Acceptance criteria", CC10');
     // 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12).
     expect(served("Card")).toHaveLength(36);
+  });
+
+  it('types intake-similar\'s key as the spec writes it: the review document\'s `similar` always null, after `why`, 51 keys, the key citing `docs/features/intake-similar.md` "Acceptance criteria" (IS10 of intake-similar)', () => {
+    const review = declaredKeys("Proposal");
+    expect(review.slice(review.indexOf("why"))).toEqual(["why", "similar", "notes"]);
+    expect(source).toMatch(/^ {2}why: string \| null;\n {2}\/\*\*[^\n]*\*\/\n {2}similar: null;\n {2}\/\*\*[^\n]*\*\/\n {2}notes: string\[\];\n\}$/m);
+    const at = source.indexOf("  similar: null;\n");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/intake-similar.md` "Acceptance criteria", IS10');
+    expect(served("Proposal")).toHaveLength(51);
+    expect(Object.keys(KEYS.InboxEntry)).not.toContain("similar");
   });
 
   it('types task-mandate\'s keys as the spec writes them: a mandate `binding`, `open` or null, a row\'s after `reviewer` (22 keys), a card\'s after `reviewer` with `subtask_items` after `items` (34), a split\'s subtask\'s last (9); set 122 `CardSubtaskItem`, `card_id` then a card\'s item\'s 16 in their order; each citing `docs/features/task-mandate.md` "Acceptance criteria" (M1, M6, M7 of task-mandate)', () => {
@@ -1641,7 +1660,7 @@ describe("the daemon's document types (AC-09)", () => {
       expect([type, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/upstream-signal.md` "Acceptance criteria", US-12')]).toEqual([type, true]);
     }
     // Ahead of the file until its Rust test wrote them, with the two sets CardUpstream and CardUpstreamChange: none now.
-    expect(AHEAD_OF_FIXTURE.map(([name, key]) => `${name}.${key}`)).toEqual([]);
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => key === "upstream" || UPSTREAM_SIGNAL.includes(name)).map(([name, key]) => `${name}.${key}`)).toEqual([]);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -1743,8 +1762,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/rev-discipline.md` "Review document, stage, queue"');
   });
 
-  it("gives the review document an interpretation after staged_at, before card-questions' two and notes, and its three keys (AC-U1 of kind-interpretation)", () => {
-    expect(Object.keys(KEYS.Proposal).slice(-5)).toEqual(["staged_at", "interpretation", "card_id", "why", "notes"]);
+  it("gives the review document an interpretation after staged_at, before card-questions' two, intake-similar's one and notes, and its three keys (AC-U1 of kind-interpretation)", () => {
+    expect(Object.keys(KEYS.Proposal).slice(-6)).toEqual(["staged_at", "interpretation", "card_id", "why", "similar", "notes"]);
     expect(KIND_INTERPRETATION.map((name) => served(name))).toEqual([["decision", "how", "why"]]);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("interpretation");
   });
@@ -1972,10 +1991,11 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("names no task in an inbox entry; the review document's task_id sits after choice, then the stage's two, the interpretation, the card and why, notes", () => {
+  it("names no task in an inbox entry; the review document's task_id sits after choice, then the stage's two, the interpretation, the card and why, similar, notes", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("task_id");
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("card_id");
-    expect(Object.keys(KEYS.Proposal).slice(-8)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "notes"]);
+    expect(Object.keys(KEYS.InboxEntry)).not.toContain("similar");
+    expect(Object.keys(KEYS.Proposal).slice(-9)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes"]);
   });
 
   it("gives an inbox entry the stage's time alone, after record_id: the stage itself is the review document's", () => {
@@ -2154,10 +2174,11 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names drift-queue's keys where the types put them: the review's 48, drift after revisions, before decided_by; DriftEvidence's three in order, the forty-sixth set, before health-code's (UI-1, TE-11)", () => {
-    // 50 since card-questions' `card_id` and `why` (L1 of card-questions).
+    // 50 since card-questions' `card_id` and `why` (L1 of card-questions); 51 once the file names
+    // intake-similar's `similar` (docs/features/intake-similar.md "Acceptance criteria", IS10).
     const review = sets.Proposal ?? [];
-    expect(review).toEqual(served("Proposal"));
-    expect(review).toHaveLength(50);
+    expect(review).toEqual(compared("Proposal"));
+    expect(review).toHaveLength(isAhead("Proposal", "similar") ? 50 : 51);
     expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(BEFORE_DRIFT_QUEUE.length);
@@ -2331,7 +2352,10 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {
-    expect(sets.Proposal?.slice(-5)).toEqual(["staged_at", "interpretation", "card_id", "why", "notes"]);
+    // Then intake-similar's `similar`, once the file names it, before notes (docs/features/intake-similar.md "Acceptance criteria", IS10).
+    const review = sets.Proposal ?? [];
+    expect(review.slice(review.indexOf("staged_at"), review.indexOf("staged_at") + 4)).toEqual(["staged_at", "interpretation", "card_id", "why"]);
+    expect(review.slice(review.indexOf("why"))).toEqual(isAhead("Proposal", "similar") ? ["why", "notes"] : ["why", "similar", "notes"]);
     expect(sets.Interpretation).toEqual(["decision", "how", "why"]);
   });
 });

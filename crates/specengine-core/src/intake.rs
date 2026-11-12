@@ -502,7 +502,11 @@ pub fn distinct_entry_fits(name: &str) -> bool {
     !name.is_empty() && !name.chars().any(char::is_control) && name.len() <= DISTINCT_ITEM_MAX
 }
 
-fn distinct_problem(distinct_from: &[String]) -> Option<FieldProblem> {
+/// The first problem of a `distinct_from`: at most [`DISTINCT_MAX`]
+/// entries, each one [`distinct_entry_fits`] takes, named `distinct_from` or
+/// `distinct_from[i]`; shared by the intake and a create's similar step
+/// (task spec `intake-similar`, IS6).
+pub fn distinct_problem(distinct_from: &[String]) -> Option<FieldProblem> {
     if distinct_from.len() > DISTINCT_MAX {
         return Some(FieldProblem::new(
             "distinct_from",

@@ -1004,8 +1004,9 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let keys = task_common::keys(&raw);
     // 47 since docs/features/rev-discipline.md added `revisions`; 48 since
     // docs/features/drift-queue.md added `drift` after it; 50 since
-    // docs/features/card-questions.md D14.
-    assert_eq!(keys.len(), 50, "{keys:?}");
+    // docs/features/card-questions.md D14; 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS6.
+    assert_eq!(keys.len(), 51, "{keys:?}");
     assert_eq!(
         keys[44..],
         [
@@ -1014,6 +1015,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
             "interpretation",
             "card_id",
             "why",
+            "similar",
             "notes"
         ],
         "{keys:?}"
@@ -1021,7 +1023,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert!(
         raw.contains(&format!(
             "\"staged_at\":null,\"interpretation\":{{\"decision\":\"DEC-0023\",\"how\":\"{HOW}\",\
-             \"why\":\"{WHY}\"}},\"card_id\":null,\"why\":null,\"notes\":"
+             \"why\":\"{WHY}\"}},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":"
         )),
         "{raw}"
     );
@@ -1065,8 +1067,9 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     let brief_value = json_of(&brief_json);
     assert_eq!(brief_value["interpretation"], value["interpretation"]);
     assert_eq!(brief_value["new_text"], Value::Null);
-    // 50 since docs/features/card-questions.md L1.
-    assert_eq!(task_common::keys(&brief_json).len(), 50);
+    // 50 since docs/features/card-questions.md L1; 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS6.
+    assert_eq!(task_common::keys(&brief_json).len(), 51);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);
@@ -1780,6 +1783,8 @@ fn w7_never_flags_a_section_form_create() {
             login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&main),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     )
     .expect("propose create");

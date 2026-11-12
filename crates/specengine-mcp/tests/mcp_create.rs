@@ -202,6 +202,8 @@ fn create_twin(args: &Value, cwd: &Path, home: &Path, now: &str) -> common::read
             login: None,
             now: now.to_owned(),
             git: GitEnv::new(cwd, [("HOME", home.as_os_str())]),
+            distinct_from: Vec::new(),
+            keywords: Vec::new(),
         },
     )
     .map(|outcome| Outcome::Proposal(Box::new(outcome)));

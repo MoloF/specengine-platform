@@ -1240,8 +1240,10 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // 0.38.0 since task-mandate (RM-0104, the mandate's keys); 0.39.0 since
     // card-context (RM-0108, `get_card`'s `context`); 0.40.0 since
     // node-history (RM-0035, `get_node`'s `history`); 0.41.0 since
-    // upstream-signal (RM-0105, `get_card`'s and `list_cards`' `upstream`).
-    assert_eq!(manifest["version"], "0.41.0");
+    // upstream-signal (RM-0105, `get_card`'s and `list_cards`' `upstream`);
+    // 0.42.0 since intake-similar (RM-0059, `propose_change`'s
+    // `distinct_from`, `keywords` and `similar`).
+    assert_eq!(manifest["version"], "0.42.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1352,8 +1354,10 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // 0.38.0 since task-mandate (RM-0104, the mandate's keys); 0.39.0 since
     // card-context (RM-0108, `get_card`'s `context`); 0.40.0 since
     // node-history (RM-0035, `get_node`'s `history`); 0.41.0 since
-    // upstream-signal (RM-0105, `get_card`'s and `list_cards`' `upstream`).
-    assert_eq!(manifest["version"], "0.41.0");
+    // upstream-signal (RM-0105, `get_card`'s and `list_cards`' `upstream`);
+    // 0.42.0 since intake-similar (RM-0059, `propose_change`'s
+    // `distinct_from`, `keywords` and `similar`).
+    assert_eq!(manifest["version"], "0.42.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1456,7 +1460,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.41.0",
+        manifest["version"], "0.42.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1470,7 +1474,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          card-questions (`card_id`, `why`, `items`): 0.36.0; department-split \
          (`split_card`): 0.37.0; task-mandate (`mandate`, `subtask_items`): 0.38.0; \
          card-context (`get_card`'s `context`): 0.39.0; node-history (`get_node`'s \
-         `history`): 0.40.0; upstream-signal (`upstream`): 0.41.0"
+         `history`): 0.40.0; upstream-signal (`upstream`): 0.41.0; intake-similar (`distinct_from`, `keywords`, `similar`): 0.42.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2568,8 +2572,10 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // (RM-0104, the mandate's keys); 0.39.0 since card-context (RM-0108,
     // `get_card`'s `context`); 0.40.0 since node-history (RM-0035,
     // `get_node`'s `history`); 0.41.0 since upstream-signal (RM-0105,
-    // `get_card`'s and `list_cards`' `upstream`).
-    assert_eq!(manifest["version"], "0.41.0");
+    // `get_card`'s and `list_cards`' `upstream`); 0.42.0 since intake-similar
+    // (RM-0059, `propose_change`'s `distinct_from`, `keywords` and
+    // `similar`).
+    assert_eq!(manifest["version"], "0.42.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -2835,5 +2841,149 @@ fn card_questions_p1_ask_owner_names_card_id_and_why() {
     assert!(
         !dropped["ask-owner"].contains("`card_id`"),
         "the mutation is seen"
+    );
+}
+
+// ------------------------------------------------------------ intake-similar
+
+/// docs/features/intake-similar.md "Acceptance criteria" IS11:
+/// `propose-spec-change`'s six edits, each `(0.41.0's words, 0.42.0's)`.
+const PROPOSE_SIMILAR_EDITS: [(&str, &str); 6] = [
+    (
+        "2. A cut answer lacks the rest: target a smaller ID section, or read the span in the \
+         file, `line` to `end_line`.",
+        "2. A cut answer: target a smaller ID section, or read the file, `line` to `end_line`.",
+    ),
+    (
+        "the text its span plus the new ID headings below its own level, its own ID headings \
+         kept at their levels.",
+        "the text its span plus new ID headings below its own level.",
+    ),
+    (
+        "`target` a root-relative .md path where nothing is yet, inside the spec's directories;",
+        "`target` a free root-relative .md path inside the spec's directories;",
+    ),
+    (
+        "- Your new IDs are held while the proposal is open; the reply's `target_ids` lists the \
+         target and them.\n- A document amending",
+        "- Your new IDs are held while the proposal is open; the reply's `target_ids` lists the \
+         target and them.\n- The reply's `similar` lists what yours may repeat, with why: prefer \
+         an update of it. One with `gates` true keeps yours unstored (`id` null) until you resend \
+         naming it in `distinct_from`.\n- A document amending",
+    ),
+    (
+        "- Refused for a stale `base`: the span changed since you read it; read it again, redo \
+         your text, resend.",
+        "- Refused for a stale `base`: read the span again, redo your text, resend.",
+    ),
+    (
+        "- Refused for the span's headings: keep its ID headings at their levels, a new heading \
+         below the section's; an ID section",
+        "- Refused for the span's headings: an ID section",
+    ),
+];
+
+/// docs/features/intake-similar.md "Acceptance criteria" IS11: `write-flow`'s
+/// three edits, each `(0.41.0's words, 0.42.0's)`.
+const WRITE_FLOW_SIMILAR_EDITS: [(&str, &str); 3] = [
+    (
+        "reuse and groups. `get_flow` reads it back: its rows name what is missing and how to \
+         clear it.\n",
+        "reuse and groups.\n",
+    ),
+    (
+        "the owner commits it: a proposal needs a commit and the rules live there.",
+        "the owner commits it: a proposal needs a commit.",
+    ),
+    (
+        "reads `ref-dangling` until it lands.\n",
+        "reads `ref-dangling` until it lands. A reply with `id` null names a gating `similar` \
+         entry: reuse it, or resend naming it in `distinct_from`.\n",
+    ),
+];
+
+/// The two descriptions as 0.41.0 shipped them, unchanged by IS11.
+const PROPOSE_DESCRIPTION_0_41_0: &str = "Propose a new text for a spec section or document, or \
+     a new section or spec file, through the SpecEngine queue, only where the project routes \
+     spec edits through it. The owner approves and a commit lands; never edit the spec file \
+     yourself.";
+const WRITE_FLOW_DESCRIPTION_0_41_0: &str = "Write a flow of spec documents";
+
+/// The digits of `text` outside a numbered step's leading `N. `.
+fn digits_outside_steps(text: &str) -> Vec<char> {
+    let unnumbered = text
+        .strip_prefix(|c: char| c.is_ascii_digit())
+        .and_then(|rest| rest.strip_prefix(". "))
+        .unwrap_or(text);
+    unnumbered.chars().filter(char::is_ascii_digit).collect()
+}
+
+/// IS11: each edit once, the words it replaces gone, no digit in the new
+/// words but a step's number; `propose-spec-change` 4 374 bytes (body
+/// 4 088), `write-flow` 4 158 (body 4 089), each description as it was;
+/// `write-flow`'s five steps in order. M: the `similar` bullet dropped;
+/// `distinct_from` unbackticked in `write-flow`.
+#[test]
+fn intake_similar_the_two_skills_teach_the_similar_list() {
+    let skills = committed();
+    for (name, edits, size, body_size, description) in [
+        (
+            "propose-spec-change",
+            &PROPOSE_SIMILAR_EDITS[..],
+            4374,
+            4088,
+            PROPOSE_DESCRIPTION_0_41_0,
+        ),
+        (
+            "write-flow",
+            &WRITE_FLOW_SIMILAR_EDITS[..],
+            4158,
+            4089,
+            WRITE_FLOW_DESCRIPTION_0_41_0,
+        ),
+    ] {
+        let skill = &skills[name];
+        for (old, new) in edits {
+            assert_eq!(skill.matches(new).count(), 1, "{name}: {new:?} once");
+            if !new.contains(old) {
+                assert!(!skill.contains(old), "{name}: {old:?} gone");
+            }
+            let added = new.replacen(old.trim_end_matches('\n'), "", 1);
+            assert_eq!(
+                digits_outside_steps(&added),
+                Vec::<char>::new(),
+                "{name}: {added:?}"
+            );
+        }
+        assert_eq!(skill.len(), size, "{name}: the file");
+        let body = skill
+            .splitn(3, "---\n")
+            .nth(2)
+            .expect("a front-matter and a body");
+        assert_eq!(body.len(), body_size, "{name}: the body");
+        assert!(
+            skill.contains(&format!("\ndescription: {description}\n")),
+            "{name}: the description as it was"
+        );
+    }
+    let flow = &skills["write-flow"];
+    let steps: Vec<&str> = flow
+        .lines()
+        .filter(|line| line.len() > 3 && line.as_bytes()[0].is_ascii_digit() && &line[1..3] == ". ")
+        .map(|line| &line[..2])
+        .collect();
+    assert_eq!(steps, ["1.", "2.", "3.", "4.", "5."], "the five steps");
+    assert!(
+        flow.contains("resend naming it in `distinct_from`."),
+        "`distinct_from` backticked"
+    );
+    let propose = &skills["propose-spec-change"];
+    assert!(
+        propose.contains(
+            "\n- The reply's `similar` lists what yours may repeat, with why: prefer an update of \
+             it. One with `gates` true keeps yours unstored (`id` null) until you resend naming \
+             it in `distinct_from`.\n"
+        ),
+        "the similar bullet"
     );
 }

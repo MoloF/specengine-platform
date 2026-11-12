@@ -106,6 +106,8 @@ fn request(pair: &Pair, cwd: &Path, target: &str, base: Option<&str>, text: &str
         login: None,
         now: CLOCK.to_owned(),
         git: pair.git_env(cwd),
+        distinct_from: Vec::new(),
+        keywords: Vec::new(),
     }
 }
 
@@ -121,6 +123,43 @@ fn create(
         &Globals::default(),
         &request(pair, cwd, target, base, text),
     )
+}
+
+/// T13's `similar` lines on spec-a: search advice alone, five, each reason
+/// checked (docs/features/intake-similar.md "Acceptance criteria" IS4).
+const T13_SIMILAR: &str = "similar: MEC-STAMINA | search | advises | mechanic | \
+docs/spec/movement/stamina.md | Stamina | search rank 1 on `sprint`, `keeps`, `stamina`, `reserve`
+similar: MEC-SPRINT | search | advises | mechanic | docs/spec/movement/sprint.md | Sprint | \
+search rank 2 on `sprint`, `keeps`, `stamina`, `reserve`
+similar: DOM-MOVEMENT | search | advises | domain | docs/spec/movement/README.md | Movement | \
+search rank 3 on `sprint`, `keeps`, `stamina`, `reserve`
+similar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain \
+stamina? | search rank 4 on `sprint`, `keeps`, `stamina`, `reserve`
+similar: R-12 | search | advises | requirement | docs/records/R/R-12.md | Stamina regenerates \
+only at rest | search rank 5 on `sprint`, `keeps`, `stamina`, `reserve`
+";
+
+/// [`created`] with `distinct` named in `distinct_from`: a second create
+/// titled as a node or a live create stores only so
+/// (docs/features/intake-similar.md "Acceptance criteria" IS1, IS2).
+fn created_naming(
+    pair: &Pair,
+    cwd: &Path,
+    target: &str,
+    base: Option<&str>,
+    text: &str,
+    distinct: &[&str],
+) -> String {
+    let mut request = request(pair, cwd, target, base, text);
+    request.distinct_from = distinct.iter().map(|name| (*name).to_owned()).collect();
+    let outcome = propose_create(&pair.env(cwd), &Globals::default(), &request)
+        .unwrap_or_else(|error| panic!("propose create {target}: {error}"));
+    assert_eq!(
+        outcome.exit(),
+        Exit::Answered,
+        "propose create {target}: {outcome:?}"
+    );
+    outcome.document.id.clone().expect("an ID")
 }
 
 /// A create that must be stored: its ID.
@@ -302,7 +341,7 @@ fn ac01_a_new_file_is_proposed_and_nothing_is_written() {
     let outcome = create(&pair, &pair.linked, R13, None, &t13).expect("propose create");
     assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
     let (text, json) = printed(&outcome);
-    assert_eq!(text, "PR-0001\nintroduced: 0\n");
+    assert_eq!(text, format!("PR-0001\nintroduced: 0\n{T13_SIMILAR}"));
     assert_eq!(json_of(&json)["id"], json!("PR-0001"));
     assert_eq!(
         files_and_git(&pair.state()),
@@ -964,7 +1003,10 @@ fn ac08_findings_are_stored_never_a_refusal() {
     let (stdout, _) = printed(&outcome);
     let lines: Vec<&str> = stdout.lines().collect();
     assert_eq!(lines[..2], ["PR-0001", "introduced: 1"], "{stdout}");
-    assert_eq!(lines.len(), 3, "{stdout}");
+    // The finding, then T13's five search lines (docs/features/intake-similar.md
+    // "Acceptance criteria" IS4: advice, stored).
+    assert_eq!(lines.len(), 8, "{stdout}");
+    assert_eq!(lines[3..].join("\n") + "\n", T13_SIMILAR, "{stdout}");
     assert!(
         lines[2].contains("ref-dangling") && lines[2].contains("R-99"),
         "{stdout}"
@@ -1120,12 +1162,15 @@ fn ac11_spec_b_creates_with_its_own_scheme() {
     let head = pair.rev(&pair.linked, "t1");
     assert_eq!(name_status(&pair, &head), [format!("A\t{path}")]);
     assert_eq!(blob(&pair, &head, path), text.as_bytes());
-    let merge = created(
+    // Titled as the applied `REQ-003`: named (docs/features/intake-similar.md
+    // "Acceptance criteria" IS1).
+    let merge = created_naming(
         &pair,
         &pair.linked,
         "docs/records/GLS/GLS-merge.md",
         None,
         &record_b("GLS-merge", "glossary-entry"),
+        &["REQ-003"],
     );
     assert_eq!(pair.proposal(&merge).target_ids(), ["GLS-merge"]);
     assert_eq!(
@@ -1841,7 +1886,11 @@ fn n2_on_either_side_the_race_names_the_next_free_id_of_its_side() {
         let fifo: PathBuf = pair.linked.join(".spec-debt.toml");
         mkfifo(&fifo);
         let env = pair.env(&pair.linked);
-        let request = request(&pair, &pair.linked, &path, None, &ruling(mine));
+        // docs/features/intake-similar.md "Acceptance criteria" IS1, IS2:
+        // the hand-made record and the competing create share its title;
+        // named, the similar step passes and the insert's race answers.
+        let mut request = request(&pair, &pair.linked, &path, None, &ruling(mine));
+        request.distinct_from = vec!["STY-100001".to_owned(), holder.to_owned()];
         let (done, finished) = mpsc::channel();
         std::thread::spawn(move || {
             let _ = done.send(propose_create(&env, &Globals::default(), &request));
@@ -1948,7 +1997,16 @@ fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
         None,
         plain,
     );
-    let early_view = created(&pair, &pair.linked, "docs/spec/plan-view.md", None, plain);
+    // Titled as `early`, a live create: named (docs/features/intake-similar.md
+    // "Acceptance criteria" IS2).
+    let early_view = created_naming(
+        &pair,
+        &pair.linked,
+        "docs/spec/plan-view.md",
+        None,
+        plain,
+        &[&early],
+    );
     let config = read_text(&pair.linked, "specengine.toml");
     write(&pair.linked, "specengine.toml", sharded_config(&config));
     pair.commit_all(&pair.linked, "The index and its shards");

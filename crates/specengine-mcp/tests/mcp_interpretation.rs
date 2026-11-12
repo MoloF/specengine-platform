@@ -407,12 +407,15 @@ fn ac_r11_propose_change_takes_an_interpretation_as_its_twin() {
     let mirrored: Value = serde_json::from_str(&rendered).expect("JSON");
     assert_eq!(document["interpretation"], mirrored["interpretation"]);
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
-    // docs/features/card-questions.md L1.
+    // docs/features/card-questions.md L1; 51 since
+    // docs/features/intake-similar.md "Acceptance criteria" IS6 (`similar`,
+    // `null`).
     assert_eq!(
         document.as_object().map(|object| object.len()),
-        Some(50),
+        Some(51),
         "{document}"
     );
+    assert_eq!(document["similar"], Value::Null, "{document}");
     if let Err(problem) = common::read::conforms(&schemas["get_proposal"], &document, "$") {
         panic!("get_proposal breaks its outputSchema: {problem}");
     }

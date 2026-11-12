@@ -110,6 +110,9 @@ struct Call<'a> {
     text: &'a str,
     task: Option<&'a str>,
     role: &'a str,
+    /// `--distinct-from X`, each (a create's; docs/features/intake-similar.md
+    /// "Acceptance criteria" IS1, IS2).
+    distinct: &'a [&'a str],
 }
 
 /// `spec propose update TARGET --base BASE`.
@@ -121,6 +124,7 @@ fn update<'a>(target: &'a str, base: &'a str, text: &'a str) -> Call<'a> {
         text,
         task: None,
         role: "spec-writer",
+        distinct: &[],
     }
 }
 
@@ -133,6 +137,7 @@ fn create<'a>(target: &'a str, text: &'a str) -> Call<'a> {
         text,
         task: None,
         role: "spec-writer",
+        distinct: &[],
     }
 }
 
@@ -145,6 +150,7 @@ fn sections<'a>(target: &'a str, base: &'a str, text: &'a str) -> Call<'a> {
         text,
         task: None,
         role: "spec-writer",
+        distinct: &[],
     }
 }
 
@@ -160,6 +166,11 @@ impl<'a> Call<'a> {
     /// `--author-role`: another agent's call.
     fn by(self, role: &'a str) -> Self {
         Self { role, ..self }
+    }
+
+    /// `--distinct-from` each of `distinct`: a create titled as a live one.
+    fn naming(self, distinct: &'a [&'a str]) -> Self {
+        Self { distinct, ..self }
     }
 
     fn run(&self, pair: &Pair, cwd: &Path, json: bool, dry: bool) -> Run {
@@ -183,6 +194,9 @@ impl<'a> Call<'a> {
         }
         if let Some(task) = self.task {
             args.extend(["--task", task]);
+        }
+        for name in self.distinct {
+            args.extend(["--distinct-from", name]);
         }
         if dry {
             args.push("--dry-run");
@@ -722,6 +736,7 @@ fn ac03_the_other_kinds_take_no_dry_run_flag() {
 /// filtering on the code alone.
 #[test]
 fn ac04_follows_and_parent_on_a_live_create_store_no_ref_dangling() {
+    const LIVE: [&str; 3] = ["PR-0001", "PR-0002", "PR-0003"];
     for corpus in &CORPORA {
         let context = corpus.fixture;
         let pair = Pair::new("pr-ac04", context);
@@ -740,7 +755,10 @@ fn ac04_follows_and_parent_on_a_live_create_store_no_ref_dangling() {
             ("parent", child, format!("parent: {held}\n")),
         ] {
             let text = (corpus.record)(id, &extra);
-            let call = create(path, &text);
+            // spec-b's records share one title: each names the live ones
+            // (docs/features/intake-similar.md "Acceptance criteria" IS2;
+            // a name no entry has is ignored).
+            let call = create(path, &text).naming(&LIVE);
             let rehearsed = call.rehearsed(&pair, &cwd);
             assert_eq!(
                 subjects(&rehearsed, "ref-dangling"),
@@ -774,7 +792,7 @@ fn ac04_follows_and_parent_on_a_live_create_store_no_ref_dangling() {
             id,
             &format!("links: {{follows: [{held}, {}]}}\n", corpus.missing),
         );
-        let stored = create(path, &text).stored(&pair, &cwd);
+        let stored = create(path, &text).naming(&LIVE).stored(&pair, &cwd);
         assert_eq!(
             subjects(&stored, "ref-dangling"),
             [corpus.missing],

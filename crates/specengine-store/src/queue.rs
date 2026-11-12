@@ -1235,6 +1235,27 @@ pub struct Reservation {
     pub status: ProposalStatus,
 }
 
+/// A live create or amendment as a create's similar step reads it
+/// ([`ProposalQueue::live_adds`]; task spec `intake-similar`, IS2): the
+/// text it adds, to be parsed under the reader's scheme.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveAdd {
+    /// `PR-…`.
+    pub id: String,
+    /// One that [adds nodes](ProposalKind::adds_nodes).
+    pub kind: ProposalKind,
+    /// `open` or `approved`.
+    pub status: ProposalStatus,
+    /// Root-relative, of its recorded root.
+    pub target_path: String,
+    /// The whole new file, or the target's span with its new sections.
+    pub new_text: String,
+    /// Its new IDs, canonical, as [`Reservation`] holds them.
+    pub new_ids: Vec<String>,
+    /// A new file: no base stored.
+    pub new_file: bool,
+}
+
 /// The `target_ids` of a kind that adds nodes: `new_ids` alone for a new
 /// file whose first new ID is its `target_id` (its `id:`), else
 /// `target_id` then `new_ids`.
@@ -1278,6 +1299,11 @@ pub trait ProposalQueue {
     /// ID number then in text order; read only. A row whose targets do not
     /// read holds none.
     fn reserved(&self) -> Result<Vec<Reservation>, QueueError>;
+    /// The project's live creates and amendments (`open`, `approved`, any
+    /// repository), the rows [`Self::reserved`] reads, with their target
+    /// path and new text, by proposal ID number; read only, outside any
+    /// write lock. A row whose targets do not read is left out.
+    fn live_adds(&self) -> Result<Vec<LiveAdd>, QueueError>;
     /// The intake's step 7, one `Immediate` transaction: the queue's hits
     /// and related items read under the write lock ([`IntakeResult`]);
     /// when every hit, `corpus_hits` (names) and the queue's (IDs), is
@@ -3501,10 +3527,83 @@ fn new_ids_of(target_ids: &[String], new_file: bool) -> Vec<String> {
     }
 }
 
-/// The new IDs the live proposals of the kinds that
-/// [add nodes](ProposalKind::adds_nodes) hold ([`ProposalQueue::reserved`]),
-/// read in `conn` (a write transaction's, for [`ProposalQueue::create`]).
-fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation>, QueueError> {
+/// The live proposals of the kinds that [add nodes](ProposalKind::adds_nodes)
+/// ([`ProposalQueue::live_adds`]): [`live_reservations`]' rows with their
+/// target path and new text.
+fn live_add_rows(conn: &Connection, project: &str) -> Result<Vec<LiveAdd>, QueueError> {
+    let (adding, slots) = adding_kinds();
+    let mut statement = conn
+        .prepare(&format!(
+            "SELECT id, status, base_hash, target_ids, kind, target_path, new_text \
+             FROM main.proposals \
+             WHERE project = ?1 AND status IN (?2, ?3) AND kind IN ({slots}) {ID_ORDER}"
+        ))
+        .db()?;
+    let params = [
+        project,
+        ProposalStatus::Open.as_str(),
+        ProposalStatus::Approved.as_str(),
+    ]
+    .into_iter()
+    .chain(adding.iter().copied());
+    let rows: Vec<[Option<String>; 7]> = statement
+        .query_map(rusqlite::params_from_iter(params), |row| {
+            Ok([
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+            ])
+        })
+        .db()?
+        .collect::<rusqlite::Result<_>>()
+        .db()?;
+    let mut adds = Vec::new();
+    for [
+        id,
+        status,
+        base_hash,
+        target_ids,
+        kind,
+        target_path,
+        new_text,
+    ] in rows
+    {
+        let (Some(id), Some(status), Some(kind), Some(target_path), Some(new_text)) = (
+            id,
+            status.as_deref().and_then(ProposalStatus::parse),
+            kind.as_deref().and_then(ProposalKind::parse),
+            target_path,
+            new_text,
+        ) else {
+            continue;
+        };
+        let Some(targets) = target_ids
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<Vec<String>>(text).ok())
+        else {
+            continue;
+        };
+        let new_file = base_hash.is_none();
+        adds.push(LiveAdd {
+            id,
+            kind,
+            status,
+            target_path,
+            new_text,
+            new_ids: new_ids_of(&targets, new_file),
+            new_file,
+        });
+    }
+    Ok(adds)
+}
+
+/// The names of the kinds that [add nodes](ProposalKind::adds_nodes) and
+/// their SQL slots from `?4` on.
+fn adding_kinds() -> (Vec<&'static str>, String) {
     let adding: Vec<&str> = ProposalKind::ALL
         .into_iter()
         .filter(|kind| kind.adds_nodes())
@@ -3514,6 +3613,14 @@ fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation
         .map(|at| format!("?{}", at + 4))
         .collect::<Vec<_>>()
         .join(", ");
+    (adding, slots)
+}
+
+/// The new IDs the live proposals of the kinds that
+/// [add nodes](ProposalKind::adds_nodes) hold ([`ProposalQueue::reserved`]),
+/// read in `conn` (a write transaction's, for [`ProposalQueue::create`]).
+fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation>, QueueError> {
+    let (adding, slots) = adding_kinds();
     let mut statement = conn
         .prepare(&format!(
             "SELECT id, status, base_hash, target_ids, kind FROM main.proposals \
@@ -4132,6 +4239,13 @@ impl ProposalQueue for SqliteQueue {
         let held = live_reservations(&tx, &self.project)?;
         tx.commit().db()?;
         Ok(held)
+    }
+
+    fn live_adds(&self) -> Result<Vec<LiveAdd>, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let adds = live_add_rows(&tx, &self.project)?;
+        tx.commit().db()?;
+        Ok(adds)
     }
 
     fn get(&self, id: &str) -> Result<Option<Proposal>, QueueError> {

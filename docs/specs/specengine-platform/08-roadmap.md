@@ -244,7 +244,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 6d | `task-mandate` | RM-0104 | Shipped 2026-11-12: a subtask binding, or its department decides: `mandate` on the card (queue schema 12, backup format 6), named per subtask at creation, required in Hand off and Split, changed by the reviewer alone; a binding task leads with Return and a question, an open one with Record a decision, its why required by the form; the parent's Decisions from subtasks, one read; nothing reads it; plugin 0.38.0; first-load JS 823.45 kB of 845 (`docs/canon/card-mandate.md`) | ADR-0079 `card-mandate` (supplements ADR-0056, ADR-0074, ADR-0077) | 7-11 | 5, 6c |
 | gate | the pipeline trial | - | No code: the bar below | - | - | 1-6d |
 | 7 | `design-sweep` | RM-0099 | Two slices: (a) `design-sweep`, shipped 2026-11-12: the rename of every legacy-token use and the weights, the aliases out, the guards G1 and G2, Inbox, Questions and the Spec tree on primitives (a list's one item a pane), the Overview renamed only; first-load JS 825.27 kB of 845 (`docs/canon/ui-design.md`); (b) `design-sweep-b`, shipped 2026-11-12: Health, Graph, Roadmap and Agent tasks on primitives (an Agent task a pane), the exceptions down to the two kept (G3), the header heights from `--nav-height`, the old empty states gone, Questions sending `as`; first-load JS 831.15 kB of 845 on `main` (`docs/canon/ui-design.md`) | - | 11-15 | 1, RM-0103 |
-| 8 | `intake-similar` | RM-0059 | `similar` and `distinct_from` on create | - | 4-6 | - |
+| 8 | `intake-similar` | RM-0059 | Shipped 2026-11-12: a create's `similar` from five probes (an equal title, an alias, a live create's or amendment's title, a search rank, shared link targets), each with its source and reason; the exact three gate until `distinct_from` names each, the rest advise; `keywords` per call; nothing new stored, no schema step; plugin 0.42.0; a 9.5 ms median at 100k, recall 80 of 100 at 10k (`docs/canon/proposal-similar.md`) | - | 4-6 | - |
 | 9 | `collision-pass` | RM-0060 | Candidates, a pair ledger, a skill; queue schema 14 | - | 5-8 | 8 |
 | 10 | `plain-questions` | RM-0088 | Re-scoped: a question's gist, why it matters and 2-3 options; collisions as pairs; two halves, the questions (queue schema 13, backup format 7), then the pairs | - | 9-13 | 5, 7; the pair half 9 |
 | 11 | `pack` | RM-0061 | `spec init --pack` by path, a non-game preset; the config proposal split off to RM-0110 | - | 3-4 | 4 |
@@ -341,7 +341,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | 1 | `card-context` | RM-0108 | plugin 0.39.0; shipped 2026-11-12 (`docs/canon/card-context.md`) |
 | 2 | `node-history` | RM-0035 | plugin 0.40.0; shipped 2026-11-12 (`docs/canon/spec-history.md`) |
 | 3 | `upstream-signal` | RM-0105 | plugin 0.41.0; shipped 2026-11-12 (`docs/canon/card-upstream.md`) |
-| 4 | `intake-similar` | RM-0059 | plugin 0.42.0; no schema step |
+| 4 | `intake-similar` | RM-0059 | plugin 0.42.0; no schema step; shipped 2026-11-12 (`docs/canon/proposal-similar.md`) |
 | 5 | `pack` | RM-0061 | CLI only; the config proposal split off to RM-0110, which needs its own ADR |
 | 6 | `delivery-analytics`, part a | RM-0107 | the read and its tables; no MCP tool |
 | 7 | `direction-catalog` | RM-0106 | no MCP tool |

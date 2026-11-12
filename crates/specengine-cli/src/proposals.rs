@@ -65,6 +65,7 @@ use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
 use specengine_core::raise::RevisionRow;
+use specengine_core::similar::SimilarEntry;
 use specengine_store::{
     Choice, GitEnv, KindFamily, NewProposal, Proposal, ProposalFinding, ProposalQueue as _,
     ProposalStatus, QueueError, SqliteQueue, Stage, WorktreeGit, same_repository,
@@ -74,14 +75,16 @@ use crate::cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
 use crate::location::prepared_data_dir;
 use crate::project::{CONFIG_FILE, ProjectRoot, discover};
 use crate::revisions::rows_text as revisions_text;
+use crate::similar::similar_line;
 use crate::verify::{FindingLine, keyed_binding};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// A dry run's first note and its text's first line.
 pub(crate) const DRY_RUN_NOTE: &str = "dry run: nothing stored";
 
-/// Where a brief dry run's reader finds the rest: no row to review, so the
-/// command's whole answer.
+/// Where the reader of a brief answer with no row finds the rest (a dry
+/// run's, or a create's a gating similar entry kept unstored): no row to
+/// review, so the dry run's whole answer, which lists the same.
 const DRY_RUN_TAIL: &str = "spec propose's dry run without --brief lists them";
 
 /// Which command answered with a review document.
@@ -216,6 +219,11 @@ pub struct ProposalDocument {
     pub card_id: Option<String>,
     /// A decision's why, as stored; `null` on any other kind.
     pub why: Option<String>,
+    /// What a create may repeat (task spec `intake-similar`, IS1, IS10):
+    /// a list on a create's propose answer (stored, not stored or
+    /// rehearsed), `[]` when nothing is found; `null` on every other kind,
+    /// on a refusal and in every review, approve and reject answer.
+    pub similar: Option<Vec<SimilarEntry>>,
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
@@ -298,6 +306,7 @@ impl ProposalDocument {
             interpretation: proposal.interpretation.clone(),
             card_id: proposal.card_id.clone(),
             why: intake.and_then(|intake| intake.why.clone()),
+            similar: None,
             notes: Vec::new(),
         }
     }
@@ -382,6 +391,7 @@ pub(crate) fn briefed(mut outcome: ProposalOutcome) -> ProposalOutcome {
         findings.truncate(SHOW_TAIL_NAMES);
         let note = match document.id.as_deref() {
             Some(id) => more_findings_note(omitted, id),
+            // No row: a dry run, or a create kept unstored.
             None => format!("{omitted} more introduced finding(s): {DRY_RUN_TAIL}"),
         };
         let at = document.notes.len() - usize::from(outcome.refusal.is_some());
@@ -753,7 +763,8 @@ pub(crate) fn render_text(outcome: &ProposalOutcome) -> String {
     let text = escape_controls(&raw_text(outcome));
     match (outcome.brief, outcome.document.id.as_deref()) {
         (Some(_), Some(id)) => cut_brief(text, &format!("spec review {id}")),
-        // Only a dry run answers a text with no ID.
+        // No ID: a dry run, or a create a gating similar entry kept
+        // unstored.
         (Some(_), None) => cut_brief(text, DRY_RUN_TAIL),
         (None, _) => text,
     }
@@ -809,11 +820,20 @@ fn raw_text(outcome: &ProposalOutcome) -> String {
         QueueCommand::Propose => {
             let findings = document.diagnostics.as_deref().unwrap_or_default();
             let introduced = findings.len() + outcome.brief.unwrap_or(0);
-            // A dry run stored no row: its line says so.
-            let head = document.id.as_deref().unwrap_or(DRY_RUN_NOTE);
+            // A dry run stored no row, nor did a create a similar entry
+            // gates: its first note says so.
+            let head = document
+                .id
+                .as_deref()
+                .or(document.notes.first().map(String::as_str))
+                .unwrap_or(DRY_RUN_NOTE);
             out.push_str(&format!("{head}\nintroduced: {introduced}\n"));
             for finding in findings {
                 out.push_str(&finding_line(finding));
+                out.push('\n');
+            }
+            for entry in document.similar.iter().flatten() {
+                out.push_str(&similar_line(entry));
                 out.push('\n');
             }
         }

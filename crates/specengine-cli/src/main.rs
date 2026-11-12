@@ -911,6 +911,12 @@ enum Propose {
         /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
         #[arg(long, value_name = "T")]
         task: Option<String>,
+        /// A gating similar entry (its id, else its path, byte for byte) this create is distinct from; name each to store it anyway (at most 64).
+        #[arg(long = "distinct-from", value_name = "X")]
+        distinct_from: Vec<String>,
+        /// One extra search word for the similar list: 3 to 64 characters, no whitespace, each once (at most 16).
+        #[arg(long = "keyword", value_name = "W")]
+        keywords: Vec<String>,
     },
     /// Replace the text of node TARGET as `update` does, carrying the accepted decision REF into it: how the decision was applied and why interpretation was needed go with it into the commit.
     Interpretation {
@@ -1515,6 +1521,8 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     brief,
                     dry_run,
                     task,
+                    distinct_from,
+                    keywords,
                 },
         } => {
             let text = if text_file.as_os_str() == "-" {
@@ -1533,6 +1541,8 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 login: None,
                 now: now(),
                 git: process_git(env),
+                distinct_from,
+                keywords,
             };
             let task = task.as_deref();
             Outcome::Proposal(Box::new(match (dry_run, brief) {

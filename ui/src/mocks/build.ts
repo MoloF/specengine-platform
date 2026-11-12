@@ -309,6 +309,7 @@ export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | 
       interpretation: null,
       card_id: null,
       why: null,
+      similar: null,
       notes: [],
       ...given,
     },
@@ -397,6 +398,7 @@ export function noReview(id: string): Proposal {
     interpretation: null,
     card_id: null,
     why: null,
+    similar: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
   };
 }

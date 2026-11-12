@@ -921,8 +921,11 @@ fn drift_review_has_no_preview() {
     let stored = proposal(&repo, SLUG, &id);
     let item = stored.drift.clone().expect("drift");
     let (text, json_text, document) = review_of(&repo, &id);
-    // 50 since docs/features/card-questions.md D14 (`card_id`, `why`).
-    assert_eq!(document.as_object().unwrap().len(), 50);
+    // 50 since docs/features/card-questions.md D14 (`card_id`, `why`); 51
+    // since docs/features/intake-similar.md "Acceptance criteria" IS6
+    // (`similar`, `null`).
+    assert_eq!(document.as_object().unwrap().len(), 51);
+    assert_eq!(document["similar"], Value::Null);
     assert_eq!(document["kind"], json!("drift"));
     assert_eq!(document["card_id"], Value::Null);
     assert_eq!(document["why"], Value::Null);

@@ -25,3 +25,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/proposal-queue.md](canon/proposal-queue.md) Proposal queue: commands, states, store · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/proposal-review.md](canon/proposal-review.md) Proposal review: inbox, review document, preview · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/proposal-revisions.md](canon/proposal-revisions.md) Proposal apply: revisions and the editorial approve · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2
+- [docs/canon/proposal-similar.md](canon/proposal-similar.md) Proposal similar: what a create may repeat · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-eval, plugin · tier 2

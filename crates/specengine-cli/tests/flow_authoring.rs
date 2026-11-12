@@ -441,6 +441,8 @@ impl Project {
                 login: None,
                 now: NOW.to_owned(),
                 git: self.git_env(),
+                distinct_from: Vec::new(),
+                keywords: Vec::new(),
             },
         )
         .unwrap_or_else(|error| panic!("propose {}: {error}", block.target));
