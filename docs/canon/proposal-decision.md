@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-11-12
 ---
 
 # Proposal kind: decision
@@ -33,7 +33,7 @@ No flag form: the patch's four fields (text <= 1 MiB) have none, and one shape k
 
 ## Row and dedup
 
-No column or schema step of its own (`STATE_FORMAT` unchanged). `ProposalKind::Decision`: `family()` `Decides`; `create` -> `Invalid`, `create_intake` stores it. `intake_shape()`, exhaustive over every kind, gives a deciding kind's `IntakeShape`: `Question` for `question` and `decision` (`summary` = `text`, `working_answer`, `price_of_other`; `gap_type`, `evidence`, `options`, `recommendation` NULL), `Discrepancy` (`price_of_other` NULL). The shape is also the queue's dedup family: step 7 compares the rows whose kind shares the item's shape, so a decision and a question of equal normalised text on a shared target hit each other, a discrepancy neither. Corpus dedup unchanged. Reading such a row, `create_intake`'s shape refusals: `agent-intake.md` "Stored".
+No column or schema step of its own (`STATE_FORMAT` unchanged). `ProposalKind::Decision`: `family()` `Decides`; `create` -> `Invalid`, `create_intake` stores it. `intake_shape()`, exhaustive over every kind, gives a deciding kind's `IntakeShape`: `Decision` (`summary` = `text`, `working_answer`, `price_of_other`; `gap_type`, `evidence`, `options`, `recommendation`, `gist`, `matters` NULL), `Question` (a decision's, with options and a lead allowed), `Discrepancy` (`plain-questions.md` "Shapes"). Its `family()` is the queue's dedup family: step 7 compares the rows of the item's family (question and decision `Asks`), so a decision and a question of equal normalised text on a shared target hit each other, a discrepancy neither. Corpus dedup unchanged. Reading such a row, `create_intake`'s shape refusals: `agent-intake.md` "Stored".
 
 Review document: `"kind": "decision"`, a question's keys, none added (46). Inbox `PR-0001 | decision | open | RULE-STAM-REGEN | <branch> | <created_at> | normal: Does regeneration wait for rest?`.
 

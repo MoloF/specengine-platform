@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-12
 ---
 
 # Decision records: a deciding item approved
@@ -55,7 +55,7 @@ A run killed between steps 8 and 9 leaves the item `approved` with its record, t
 
 ## Queue and documents
 
-Queue step 2 -> 3 (`QUEUE_SCHEMA_VERSION` 3): `ADD COLUMN ... TEXT` `record_id`, `record_path` (root-relative, clean), `record_title`, `record_text`, `choice` (one-key JSON `{"option":1}`, `{"working_answer":true}`, `{"answer":"..."}`, core `Choice`); `PROPOSAL_COLUMNS` 40 (later: `proposal-queue.md` "Store"). Set together by `approve_record_from` (`RecordApproval {series, preview, path, title, text, choice}`), replaced by a later one, kept by `reopen_from`. A deciding kind: `create`, `approve`, `approve_from` -> `Invalid`; `applied`, `applied_with` without its record -> `Invalid`. Corrupt, named: any on an update; set partly; `record_id` no ID; `record_path` not clean; `choice` of another shape or kind, or out of range; an `approved` or `applied` deciding row without them. Events `.approved`, `.applied` add `record`.
+Queue step 2 -> 3 (`QUEUE_SCHEMA_VERSION` 3): `ADD COLUMN ... TEXT` `record_id`, `record_path` (root-relative, clean), `record_title`, `record_text`, `choice` (one-key JSON `{"option":1}`, `{"working_answer":true}`, `{"answer":"..."}`, core `Choice`); `PROPOSAL_COLUMNS` 40 (later: `proposal-queue.md` "Store"). Set together by `approve_record_from` (`RecordApproval {series, preview, path, title, text, choice}`), replaced by a later one, kept by `reopen_from`. A deciding kind: `create`, `approve`, `approve_from` -> `Invalid`; `applied`, `applied_with` without its record -> `Invalid`. Corrupt, named: any on an update; set partly; `record_id` no ID; `record_path` not clean; `choice` of another shape, one the item's fields do not take (`plain-questions.md` "Shapes"), or out of range; an `approved` or `applied` deciding row without them. Events `.approved`, `.applied` add `record`.
 
 - **Review document** (`get_proposal`): after `linked`, `record_id`, `record_path`, `record_title`, `record_text`, `choice` (an object), then `task_id`, absent `null`; text: `record_text` a block, `choice` compact JSON; `--brief`: `record_text` `null`.
 - **Inbox**: + `record_id`; an applied one's last column ends ` [<record_id>]`.

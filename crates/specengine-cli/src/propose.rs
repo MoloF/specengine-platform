@@ -40,6 +40,7 @@
 //! no event, no ID held; the answer is the real call's document with no ID
 //! and no state ([`crate::proposals::rehearsed`]).
 
+use std::cell::OnceCell;
 use std::fs;
 use std::io::Read as _;
 use std::panic::{self, AssertUnwindSafe};
@@ -505,6 +506,24 @@ fn holder_path(
     }
 }
 
+/// Why a written target names no node over the index ([`placed`]): the
+/// refusal's line, and whether the target is an alias its holder's
+/// document declares (the node it names exists, under its canonical ID).
+struct Unplaced {
+    reason: String,
+    alias: bool,
+}
+
+impl Unplaced {
+    /// A refusal of anything but a document's alias.
+    fn other(reason: String) -> Self {
+        Self {
+            reason,
+            alias: false,
+        }
+    }
+}
+
 /// The node `reference` names in `parsed` (of `path`): its position, else
 /// why not (declared several times; absent, an alias of the document
 /// named).
@@ -515,12 +534,12 @@ fn node_position(
     path: &str,
     written: &str,
     reference: &Reference,
-) -> Result<usize, String> {
+) -> Result<usize, Unplaced> {
     match locate(parsed, &reference.id) {
         Ok(ord) => Ok(ord),
-        Err(LocateError::Repeated(count)) => Err(format!(
+        Err(LocateError::Repeated(count)) => Err(Unplaced::other(format!(
             "`{written}` is declared {count} times in `{path}`; a proposal names one node"
-        )),
+        ))),
         Err(LocateError::Absent) => {
             let document = parsed.document();
             let aliased = document
@@ -532,11 +551,16 @@ fn node_position(
                         .any(|alias| *alias == reference.id || alias == written)
                 });
             Err(match document.and_then(|document| document.id.as_deref()) {
-                Some(id) if aliased => format!(
-                    "`{written}` is an alias of `{}`: a proposal names the canonical ID",
-                    canonical_id(resolver, scheme, path, id, None)
-                ),
-                _ => format!("`{written}` is not in `{path}` as read now; run it again"),
+                Some(id) if aliased => Unplaced {
+                    reason: format!(
+                        "`{written}` is an alias of `{}`: a proposal names the canonical ID",
+                        canonical_id(resolver, scheme, path, id, None)
+                    ),
+                    alias: true,
+                },
+                _ => Unplaced::other(format!(
+                    "`{written}` is not in `{path}` as read now; run it again"
+                )),
             })
         }
     }
@@ -570,19 +594,32 @@ pub(crate) fn resolved_at(
         Err(reason) => return Ok(Err(reason)),
     };
     let resolver = Resolver::new(input, scheme, &project.config.paths);
-    let (written, reference, at) = match named(input, &resolver, scheme, written, reference)? {
+    Ok(placed(project, input, &resolver, written, reference)?.map_err(|unplaced| unplaced.reason))
+}
+
+/// [`resolved_at`] past [`written_reference`], over `resolver`: the
+/// canonical target, its holder and the node's position, or why not.
+fn placed(
+    project: &ProjectRoot,
+    input: &CheckInput,
+    resolver: &Resolver<'_>,
+    written: &str,
+    reference: Option<Reference>,
+) -> Result<Result<(String, String, usize), Unplaced>, CliError> {
+    let scheme = &project.config.scheme;
+    let (written, reference, at) = match named(input, resolver, scheme, written, reference)? {
         Ok(Named::Document { path }) => return Ok(Ok((path.clone(), path, 0))),
         Ok(Named::Id {
             written,
             reference,
             at,
         }) => (written, reference, at),
-        Err(reason) => return Ok(Err(reason)),
+        Err(reason) => return Ok(Err(Unplaced::other(reason))),
     };
     let written = written.as_str();
-    let path = match holder_path(&resolver, written, &reference, at.as_deref())? {
+    let path = match holder_path(resolver, written, &reference, at.as_deref())? {
         Ok(path) => path,
-        Err(reason) => return Ok(Err(reason)),
+        Err(reason) => return Ok(Err(Unplaced::other(reason))),
     };
     let Some(parsed) = input
         .files
@@ -590,22 +627,83 @@ pub(crate) fn resolved_at(
         .find(|file| file.path == path)
         .and_then(|file| file.parsed.as_ref())
     else {
-        return Ok(Err(format!(
+        return Ok(Err(Unplaced::other(format!(
             "`{path}` could not be read: its nodes cannot be named"
-        )));
+        ))));
     };
-    let ord = match node_position(&resolver, scheme, parsed, &path, written, &reference) {
+    let ord = match node_position(resolver, scheme, parsed, &path, written, &reference) {
         Ok(ord) => ord,
-        Err(reason) => return Ok(Err(reason)),
+        Err(unplaced) => return Ok(Err(unplaced)),
     };
     let id = canonical_id(
-        &resolver,
+        resolver,
         scheme,
         &path,
         &reference.id,
         reference.scope.as_deref(),
     );
     Ok(Ok((id, path, ord)))
+}
+
+/// Whether a token names a node of the index the intake's call refreshed,
+/// read as its step 3 reads a target, an alias of a node included: the
+/// plain-words note's third test (task spec `plain-questions` PQ6). A
+/// token names one when step 3 resolves it, when it is a legacy alias (an
+/// `aliases_from` prefix) whose canonical ID step 3 resolves, or when it is
+/// an alias its holder's document declares. A look-alike, a mixed script,
+/// a `project:` or unclean path (step 3's exit 2), any other form and
+/// anything unknown name none. The resolver is built once, on the first
+/// token that parses as a reference.
+pub(crate) struct GistNames<'a> {
+    project: &'a ProjectRoot,
+    input: &'a CheckInput,
+    resolver: OnceCell<Resolver<'a>>,
+}
+
+impl<'a> GistNames<'a> {
+    pub(crate) fn new(project: &'a ProjectRoot, input: &'a CheckInput) -> Self {
+        Self {
+            project,
+            input,
+            resolver: OnceCell::new(),
+        }
+    }
+
+    /// `written`, trimmed, names a node (see the type's documentation).
+    pub(crate) fn names(&self, written: &str) -> bool {
+        let project = self.project;
+        let input = self.input;
+        let scheme = &project.config.scheme;
+        let written = written.trim();
+        let (written, reference) = match written_reference(written, scheme) {
+            Ok(Ok(reference)) => (written.to_owned(), reference),
+            // A legacy alias names its canonical ID's node.
+            Ok(Err(_)) => {
+                let canonical =
+                    grammar::parse_reference(written, 0, scheme).and_then(
+                        |found| match target_form(&found.reference) {
+                            TargetForm::Alias { canonical } => Some(canonical),
+                            _ => None,
+                        },
+                    );
+                match canonical.map(|canonical| {
+                    let reference = written_reference(&canonical, scheme);
+                    (canonical, reference)
+                }) {
+                    Some((canonical, Ok(Ok(reference)))) => (canonical, reference),
+                    _ => return false,
+                }
+            }
+            Err(_) => return false,
+        };
+        let resolver = self
+            .resolver
+            .get_or_init(|| Resolver::new(input, scheme, &project.config.paths));
+        matches!(
+            placed(project, input, resolver, &written, reference),
+            Ok(Ok(_) | Err(Unplaced { alias: true, .. }))
+        )
+    }
 }
 
 /// Steps 1–4 of `propose update` over the index this call refreshed
@@ -747,7 +845,7 @@ pub(crate) fn located(
                         reference.scope.as_deref(),
                     ),
                 ),
-                Err(reason) => return Ok(Err(reason)),
+                Err(unplaced) => return Ok(Err(unplaced.reason)),
             }
         }
     };

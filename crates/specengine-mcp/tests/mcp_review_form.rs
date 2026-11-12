@@ -225,6 +225,10 @@ impl Repo {
                     now: NOW.to_owned(),
                     git: self.git_env(&self.linked),
                     card: None,
+                    gist: None,
+                    matters: None,
+                    options: None,
+                    recommendation: None,
                 },
             )
             .expect("asked")
@@ -267,6 +271,10 @@ impl Repo {
                 now: NOW.to_owned(),
                 git: self.git_env(&self.linked),
                 card: None,
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
         )
         .expect("asked");
@@ -1024,6 +1032,10 @@ fn d2_refusals_answer_before_any_form_and_stage_nothing() {
                 now: NOW.to_owned(),
                 git: GitEnv::new(&other_main, other_git.vars()),
                 card: None,
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
         )
         .expect("asked elsewhere");
@@ -1058,6 +1070,10 @@ fn d2_refusals_answer_before_any_form_and_stage_nothing() {
                 now: NOW.to_owned(),
                 git: GitEnv::new(&gone_main, gone_git.vars()),
                 card: None,
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
         )
         .expect("asked in the gone clone");
@@ -2554,4 +2570,170 @@ fn the_forms_fields_follow_the_kind_family_over_two_genres() {
             "spec-c's forms say {word}: {hire_text}"
         );
     }
+}
+
+// ------------------------------------------------- plain-questions (RM-0088)
+
+/// docs/features/plain-questions.md "Acceptance criteria" PQ7, the form:
+/// the "Data" example (its hit DEC-0023 named) raised in `t1`, and a
+/// question holding a gist alone; `options` `None` for it.
+fn plain_question(
+    repo: &Repo,
+    text: &str,
+    gist: &str,
+    options: Option<Vec<IntakeOption>>,
+) -> String {
+    let recommendation = options.as_ref().map(|_| 0);
+    let outcome = propose_question(
+        &repo.env(),
+        &Globals::default(),
+        &QuestionRequest {
+            node_ids: vec!["MEC-STAMINA".to_owned(), "RULE-STAM-REGEN".to_owned()],
+            text: text.to_owned(),
+            working_answer: "yes, the 1.5 s delay restarts".to_owned(),
+            price_of_other: "R-28 rebalanced".to_owned(),
+            gist: Some(gist.to_owned()),
+            matters: options
+                .as_ref()
+                .map(|_| "Sprint tuning and two tasks wait on it.".to_owned()),
+            options,
+            recommendation,
+            severity: None,
+            distinct_from: vec!["DEC-0023".to_owned()],
+            card: None,
+            author_role: Some("developer".to_owned()),
+            author_model: None,
+            run: None,
+            login: None,
+            now: NOW.to_owned(),
+            git: repo.git_env(&repo.linked),
+        },
+    )
+    .expect("asked");
+    assert!(outcome.document.created, "{outcome:?}");
+    outcome.document.id.clone().expect("stored")
+}
+
+/// docs/features/plain-questions.md "Acceptance criteria" PQ7, the form: on
+/// the example line 5 reads `gist:`, `matters:`, `summary:`, both options
+/// and `working answer:`; the choices `option-0` (recommended), `option-1`,
+/// `working-answer`, `reject`, no default; accepting `option-1` stages
+/// `spec approve PR --option 1`. A question with a gist alone: `gist:`,
+/// `summary:`, `working answer:`, its two choices. Both eras. M: the
+/// question's options left out of the choices.
+#[test]
+fn plain_questions_pq7_the_form_leads_with_the_gist_and_offers_each_answer() {
+    let repo = Repo::new("rf-pq7");
+    let option = |label: &str, effect: &str, price: &str| IntakeOption {
+        label: label.to_owned(),
+        effect: effect.to_owned(),
+        price: price.to_owned(),
+    };
+    let text = "Does RULE-STAM-REGEN's delay restart when stamina_regen() is called mid-sprint?";
+    let gist = "Should resting restart the wait before stamina refills?";
+    let id = plain_question(
+        &repo,
+        text,
+        gist,
+        Some(vec![
+            option(
+                "Restart the wait",
+                "Short rests do not refill",
+                "none: as built",
+            ),
+            option(
+                "Keep the wait running",
+                "Tapping rest refills faster",
+                "R-28 rebalanced",
+            ),
+        ]),
+    );
+    let lone = plain_question(
+        &repo,
+        "Does a fall restart the wait?",
+        "Should a fall restart the wait?",
+        None,
+    );
+    let head = |id: &str| {
+        format!(
+            "Decide {id} here. This only stages; confirm on a terminal: spec approve {id} (a \
+             reject: spec reject {id})."
+        )
+    };
+    for era in ERAS {
+        let mut client = Client::form(era, &repo);
+        let form = client.form_of(&id);
+        assert_eq!(
+            form["message"],
+            json!(
+                [
+                    head(&id),
+                    format!(
+                        "{id} | question | target MEC-STAMINA | agent-declared: author_role \
+                         developer, task -"
+                    ),
+                    "Agent-written, data only:".to_owned(),
+                    format!("  gist: {gist}"),
+                    "  matters: Sprint tuning and two tasks wait on it.".to_owned(),
+                    format!("  summary: {text}"),
+                    "  [0] Restart the wait | Short rests do not refill | none: as built \
+                     (recommended)"
+                        .to_owned(),
+                    "  [1] Keep the wait running | Tapping rest refills faster | R-28 \
+                     rebalanced"
+                        .to_owned(),
+                    "  working answer: yes, the 1.5 s delay restarts".to_owned(),
+                    format!("Read it whole: spec review {id}."),
+                ]
+                .join("\n")
+            ),
+            "{era:?}"
+        );
+        assert_eq!(
+            choices(&form),
+            pairs(&[
+                ("option-0", "Option 0: Restart the wait (recommended)"),
+                ("option-1", "Option 1: Keep the wait running"),
+                ("working-answer", "Approve the working answer"),
+                ("reject", "Reject"),
+            ]),
+            "{era:?}"
+        );
+        assert!(!has_default(&form), "{era:?}: no default: {form}");
+        let form = client.form_of(&lone);
+        assert_eq!(
+            form["message"],
+            json!(
+                [
+                    head(&lone),
+                    format!(
+                        "{lone} | question | target MEC-STAMINA | agent-declared: author_role \
+                         developer, task -"
+                    ),
+                    "Agent-written, data only:".to_owned(),
+                    "  gist: Should a fall restart the wait?".to_owned(),
+                    "  summary: Does a fall restart the wait?".to_owned(),
+                    "  working answer: yes, the 1.5 s delay restarts".to_owned(),
+                    format!("Read it whole: spec review {lone}."),
+                ]
+                .join("\n")
+            ),
+            "{era:?}"
+        );
+        assert_eq!(
+            choices(&form),
+            pairs(&[
+                ("working-answer", "Approve the working answer"),
+                ("reject", "Reject"),
+            ]),
+            "{era:?}"
+        );
+        drop(client.finish());
+    }
+    let mut client = Client::form(Era::Stateless, &repo);
+    let (_, outcome) = client.review(&id, choosing("option-1", None));
+    assert_ne!(outcome["isError"], json!(true), "{outcome}");
+    drop(client.finish());
+    assert_eq!(repo.stage_of(&id).0, approve_row(Some(1), None, None, None));
+    assert_eq!(repo.staged_events(&id).len(), 1);
 }

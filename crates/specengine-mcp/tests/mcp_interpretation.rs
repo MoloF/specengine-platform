@@ -409,10 +409,11 @@ fn ac_r11_propose_change_takes_an_interpretation_as_its_twin() {
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
     // docs/features/card-questions.md L1; 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS6 (`similar`,
-    // `null`).
+    // `null`); 53 since docs/features/plain-questions.md PQ10 (`gist`,
+    // `matters`).
     assert_eq!(
         document.as_object().map(|object| object.len()),
-        Some(51),
+        Some(53),
         "{document}"
     );
     assert_eq!(document["similar"], Value::Null, "{document}");

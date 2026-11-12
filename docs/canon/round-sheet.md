@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-11-12
 ---
 
 # Question rounds: the sheet
 
-What `spec round new` prints for one question, staged, and one decision (`round.md` "Sheet": the rules; "Answers": what each line does). A decision is laid out and answered as a question: it has no options (`proposal-decision.md`).
+What `spec round new` prints for one question, staged, and one decision (`round.md` "Sheet": the rules; "Answers": what each line does). A decision is laid out and answered as a question: it has no options (`proposal-decision.md`). A question with a lead (`plain-questions.md`) last.
 
 ```
 # Open questions: <slug>
@@ -43,4 +43,30 @@ Another answer costs:
 Concerns: Cargo cranes (MEC-CARGO-CRANES)
 
 PR-0005:
+```
+
+```
+## PR-0007 - question, normal
+
+Gist: Should resting restart the wait before stamina refills?
+
+Why it matters:
+  Sprint tuning and two tasks wait on it.
+
+As asked:
+  Does RULE-STAM-REGEN's delay restart when stamina_regen() is called mid-sprint?
+
+Options:
+  - [0] Restart the wait | Short rests do not refill | none: as built (recommended)
+  - [1] Keep the wait running | Tapping rest refills faster | R-28 rebalanced
+
+Working answer:
+  yes, the 1.5 s delay restarts
+
+Another answer costs:
+  R-28 rebalanced
+
+Concerns: Stamina (MEC-STAMINA); Regeneration (RULE-STAM-REGEN)
+
+PR-0007:
 ```

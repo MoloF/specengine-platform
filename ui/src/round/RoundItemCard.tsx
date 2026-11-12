@@ -2,6 +2,7 @@ import { memo, useId, useRef, type ReactNode } from "react";
 import type { RoundAnswerEntry, RoundItem } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
+import { AskedFold, ItemLead, RecommendedMark } from "../inbox/ItemLead";
 import { severityLook } from "../inbox/labels";
 import { StagedChoice } from "../inbox/StagedChoice";
 import { Badge } from "../ui/Badge";
@@ -9,7 +10,7 @@ import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { shownSlot, shownText } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
-import { capOf, draftOf, offers, stateOf, textOf, type Draft, type DraftPick } from "./drafts";
+import { answersOf, capOf, draftOf, offers, stateOf, textOf, type Draft, type DraftPick } from "./drafts";
 import { utf8Bytes } from "./text";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -117,9 +118,12 @@ function Concern({ project, target }: { project: string; target: RoundItem["targ
  * One item of the round, in the sheet's order and with the text sheet's fields
  * (`docs/canon/round.md` "Sheet"): its ID, kind (raw) and severity, text, working answer, the price
  * of another answer, options, Concerns and Waiting as links; no worktree, branch, gap type, author
- * or evidence. Its controls follow its structure: with options, each option, Reject with a reason,
- * Leave open; without, Take the working answer (when given), Your answer, Reject, Leave open. Nothing
- * is picked for the owner, the recommended option only marked. A staged choice shows as the Inbox
+ * or evidence. Its controls follow its structure (answersOf): each option it holds; with a price of
+ * another answer, or with no options, Take the working answer (when given) and Your answer; then
+ * Reject with a reason, Leave open. Nothing is picked for the owner, the recommended option only
+ * marked with who made it (docs/features/plain-questions.md "Acceptance criteria", PQ12). An item
+ * holding a gist leads with it and why it matters, then its controls; its text, working answer and
+ * price are folded under them, collapsed. A staged choice shows as the Inbox
  * shows it, with its terminal command and Unstage. Memoised: typing in one item renders that item
  * alone (a sheet holds up to 200), so the callbacks take the item and are stable. Where a hub's
  * `allowed` omits `stage` the item is to read: its choices stand off and no answer is written. Where
@@ -162,7 +166,6 @@ export const RoundItemCard = memo(function RoundItemCard({
   const state = stateOf(item, draft);
   const current = draft !== undefined && offers(item, draft) ? draft : undefined;
   const shown: DraftPick = current?.pick ?? "open";
-  const hasOptions = item.options.length > 0;
   const group = `round-${item.id}`;
 
   /** A pick on the version shown: the texts typed are kept. */
@@ -202,6 +205,138 @@ export const RoundItemCard = memo(function RoundItemCard({
   const cap = capOf(shown);
   const sentText = current === undefined ? "" : textOf(current);
 
+  // The item's parts: in the sheet's order without a gist, in the lead's with one (PQ12).
+  const asked = (
+    <>
+      <AgentText text={item.summary} />
+
+      {item.working_answer !== null && (
+        <div className="round-part">
+          <p className="round-label">{t("round.workingAnswer")}</p>
+          <AgentText text={item.working_answer} />
+        </div>
+      )}
+      {item.price_of_other !== null && (
+        <div className="round-part">
+          <p className="round-label">{t("round.priceOfOther")}</p>
+          <AgentText text={item.price_of_other} />
+        </div>
+      )}
+    </>
+  );
+
+  const links = (item.targets.length > 0 || item.tasks.length > 0) && (
+    <dl className="round-links">
+      {item.targets.length > 0 && (
+        <div>
+          <dt>{t("round.concerns")}</dt>
+          <dd>
+            <ul className="round-link-list">
+              {item.targets.map((target, index) => (
+                <li key={`${String(index)}-${target.id ?? target.path ?? ""}`}>
+                  <Concern project={project} target={target} />
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </div>
+      )}
+      {item.tasks.length > 0 && (
+        <div>
+          <dt>{t("round.waiting")}</dt>
+          <dd>
+            <ul className="round-link-list">
+              {item.tasks.map((task) => (
+                <li key={task.id}>
+                  <a href={sectionHash(project, "tasks", task.id)}>
+                    {task.title === null ? (
+                      <span className="mono">{task.id}</span>
+                    ) : (
+                      <>
+                        <Slot text={task.title} /> (<span className="mono">{task.id}</span>)
+                      </>
+                    )}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
+
+  const staged = item.staged !== null && item.staged_at !== null && (
+    <StagedChoice
+      id={item.id}
+      review={item}
+      busy={busy || !canStage}
+      refusal={unstageRefusal}
+      onUnstage={() => {
+        onUnstage(item);
+      }}
+      onConfirm={
+        canConfirm
+          ? () => {
+              onConfirm(item);
+            }
+          : undefined
+      }
+      confirmBusy={busy}
+      confirmLook="default"
+    />
+  );
+
+  const controls = (
+    <>
+      <fieldset ref={choices} className="option-choice round-choice" disabled={!canStage}>
+        <legend>
+          {fill(t(item.staged_at === null ? "round.answerLegend" : "round.answerAgainLegend", { id: slot("id") }), { id: <span className="sr-only">{item.id}</span> })}
+        </legend>
+        {answersOf(item).map((offered) => {
+          if (offered.pick !== "option") {
+            return radio(offered.pick, <span className="option-radio-label">{offered.pick === "working" ? t("round.takeWorking") : t("round.yourAnswer")}</span>);
+          }
+          const index = offered.option;
+          const option = item.options[index];
+          return (
+            option !== undefined &&
+            radio(
+              "option",
+              <span className="option-radio-body">
+                <span className="option-radio-label">
+                  {/* The index as `spec approve --option` and the sheet write it. */}
+                  <span className="mono">[{index}]</span> <Slot text={option.label} />
+                  {index === item.recommendation && <RecommendedMark author={item.author} />}
+                </span>
+                <span className="option-radio-detail">
+                  <Slot text={option.effect} />
+                </span>
+                <span className="option-radio-detail">{fill(t("round.price", { price: slot("price") }), { price: <Slot text={option.price} /> })}</span>
+              </span>,
+              index,
+            )
+          );
+        })}
+        {radio("reject", <span className="option-radio-label">{t("round.reject")}</span>)}
+        {radio("open", <span className="option-radio-label">{t("round.leaveOpen")}</span>)}
+      </fieldset>
+
+      {canStage && cap !== null && current !== undefined && (
+        <DraftText
+          label={shown === "reject" ? t("round.reasonFor", { id: item.id }) : t("round.answerTo", { id: item.id })}
+          value={shown === "reject" ? current.reason : current.answer}
+          cap={cap}
+          sent={sentText}
+          missing={sentText === "" ? (shown === "reject" ? t("round.writeReason") : t("round.writeAnswer")) : null}
+          onChange={(value) => {
+            write(shown === "reject" ? "reason" : "answer", value);
+          }}
+        />
+      )}
+    </>
+  );
+
   return (
     <li className="round-item" data-item={item.id}>
       <article className="round-card" aria-labelledby={headingId}>
@@ -224,131 +359,21 @@ export const RoundItemCard = memo(function RoundItemCard({
           </a>
         </header>
 
-        <AgentText text={item.summary} />
-
-        {item.working_answer !== null && (
-          <div className="round-part">
-            <p className="round-label">{t("round.workingAnswer")}</p>
-            <AgentText text={item.working_answer} />
-          </div>
-        )}
-        {item.price_of_other !== null && (
-          <div className="round-part">
-            <p className="round-label">{t("round.priceOfOther")}</p>
-            <AgentText text={item.price_of_other} />
-          </div>
-        )}
-
-        {(item.targets.length > 0 || item.tasks.length > 0) && (
-          <dl className="round-links">
-            {item.targets.length > 0 && (
-              <div>
-                <dt>{t("round.concerns")}</dt>
-                <dd>
-                  <ul className="round-link-list">
-                    {item.targets.map((target, index) => (
-                      <li key={`${String(index)}-${target.id ?? target.path ?? ""}`}>
-                        <Concern project={project} target={target} />
-                      </li>
-                    ))}
-                  </ul>
-                </dd>
-              </div>
-            )}
-            {item.tasks.length > 0 && (
-              <div>
-                <dt>{t("round.waiting")}</dt>
-                <dd>
-                  <ul className="round-link-list">
-                    {item.tasks.map((task) => (
-                      <li key={task.id}>
-                        <a href={sectionHash(project, "tasks", task.id)}>
-                          {task.title === null ? (
-                            <span className="mono">{task.id}</span>
-                          ) : (
-                            <>
-                              <Slot text={task.title} /> (<span className="mono">{task.id}</span>)
-                            </>
-                          )}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </dd>
-              </div>
-            )}
-          </dl>
-        )}
-
-        {item.staged !== null && item.staged_at !== null && (
-          <StagedChoice
-            id={item.id}
-            review={item}
-            busy={busy || !canStage}
-            refusal={unstageRefusal}
-            onUnstage={() => {
-              onUnstage(item);
-            }}
-            onConfirm={
-              canConfirm
-                ? () => {
-                    onConfirm(item);
-                  }
-                : undefined
-            }
-            confirmBusy={busy}
-            confirmLook="default"
-          />
-        )}
-
-        <fieldset ref={choices} className="option-choice round-choice" disabled={!canStage}>
-          <legend>
-            {fill(t(item.staged_at === null ? "round.answerLegend" : "round.answerAgainLegend", { id: slot("id") }), { id: <span className="sr-only">{item.id}</span> })}
-          </legend>
-          {hasOptions
-            ? item.options.map((option, index) =>
-                radio(
-                  "option",
-                  <span className="option-radio-body">
-                    <span className="option-radio-label">
-                      {/* The index as `spec approve --option` and the sheet write it. */}
-                      <span className="mono">[{index}]</span> <Slot text={option.label} />
-                      {index === item.recommendation && (
-                        <span className="recommended-mark">
-                          <Icon name="recommended" />
-                          {t("round.recommended")}
-                        </span>
-                      )}
-                    </span>
-                    <span className="option-radio-detail">
-                      <Slot text={option.effect} />
-                    </span>
-                    <span className="option-radio-detail">{fill(t("round.price", { price: slot("price") }), { price: <Slot text={option.price} /> })}</span>
-                  </span>,
-                  index,
-                ),
-              )
-            : (
-                <>
-                  {item.working_answer !== null && radio("working", <span className="option-radio-label">{t("round.takeWorking")}</span>)}
-                  {radio("answer", <span className="option-radio-label">{t("round.yourAnswer")}</span>)}
-                </>
-              )}
-          {radio("reject", <span className="option-radio-label">{t("round.reject")}</span>)}
-          {radio("open", <span className="option-radio-label">{t("round.leaveOpen")}</span>)}
-        </fieldset>
-
-        {canStage && cap !== null && current !== undefined && (
-          <DraftText
-            label={shown === "reject" ? t("round.reasonFor", { id: item.id }) : t("round.answerTo", { id: item.id })}
-            value={shown === "reject" ? current.reason : current.answer}
-            cap={cap}
-            sent={sentText}
-            missing={sentText === "" ? (shown === "reject" ? t("round.writeReason") : t("round.writeAnswer")) : null}
-            onChange={(value) => {
-              write(shown === "reject" ? "reason" : "answer", value);
-            }}
-          />
+        {item.gist === null ? (
+          <>
+            {asked}
+            {links}
+            {staged}
+            {controls}
+          </>
+        ) : (
+          <>
+            <ItemLead gist={item.gist} matters={item.matters} />
+            {staged}
+            {controls}
+            <AskedFold>{asked}</AskedFold>
+            {links}
+          </>
         )}
 
         {state === "changed" && draft !== undefined && (

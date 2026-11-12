@@ -422,6 +422,8 @@ fn reject_with_task_takes_only_a_drift_item() {
             recommendation: None,
             distinct_from: Vec::new(),
             why: None,
+            gist: None,
+            matters: None,
         },
         actor: None,
         card_id: None,

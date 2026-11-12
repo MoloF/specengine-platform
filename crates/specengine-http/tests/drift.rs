@@ -90,7 +90,8 @@ fn drift_item_is_served_and_cannot_be_staged() {
     let object = review.as_object().expect("an object");
     // 50 since docs/features/card-questions.md L1; 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS10.
-    assert_eq!(object.len(), 51, "{review}");
+    // 53 since docs/features/plain-questions.md PQ10.
+    assert_eq!(object.len(), 53, "{review}");
     assert_eq!(review["similar"], Value::Null, "{review}");
     assert_eq!(review["kind"], json!("drift"));
     assert_eq!(review["target_id"], json!("LAW-BOUND"));

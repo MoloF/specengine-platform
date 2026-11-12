@@ -1005,10 +1005,11 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     // 47 since docs/features/rev-discipline.md added `revisions`; 48 since
     // docs/features/drift-queue.md added `drift` after it; 50 since
     // docs/features/card-questions.md D14; 51 since
-    // docs/features/intake-similar.md "Acceptance criteria" IS6.
-    assert_eq!(keys.len(), 51, "{keys:?}");
+    // docs/features/intake-similar.md "Acceptance criteria" IS6; 53 since
+    // docs/features/plain-questions.md PQ10 (two after `summary`).
+    assert_eq!(keys.len(), 53, "{keys:?}");
     assert_eq!(
-        keys[44..],
+        keys[46..],
         [
             "staged",
             "staged_at",
@@ -1068,8 +1069,9 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert_eq!(brief_value["interpretation"], value["interpretation"]);
     assert_eq!(brief_value["new_text"], Value::Null);
     // 50 since docs/features/card-questions.md L1; 51 since
-    // docs/features/intake-similar.md "Acceptance criteria" IS6.
-    assert_eq!(task_common::keys(&brief_json).len(), 51);
+    // docs/features/intake-similar.md "Acceptance criteria" IS6; 53 since
+    // docs/features/plain-questions.md PQ10.
+    assert_eq!(task_common::keys(&brief_json).len(), 53);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);
@@ -1550,7 +1552,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1558,7 +1560,8 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let row: Value = serde_json::from_str(lines[1]).expect("a row");
     let row = row["proposals"].as_object().expect("a proposals row");
     // 48 since docs/features/card-questions.md S1.
-    assert_eq!(row.len(), 48);
+    // 50 since docs/features/plain-questions.md PQ8.
+    assert_eq!(row.len(), 50);
     assert_eq!(row["kind"], json!("interpretation"));
     assert_eq!(
         row["interpretation"],
@@ -1586,7 +1589,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":6,\"queue_schema\":12,",
+            "\"format\":7,\"queue_schema\":13,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )

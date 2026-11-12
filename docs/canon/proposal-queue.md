@@ -16,10 +16,8 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 
 - `spec propose update ID --base HASH --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID]` -> `PR-0001`, `introduced: <n>`, one `<severity>  <path>:<line>: <code>: <message>` per finding. `HASH`: `spec show`'s `span_hash`. Role, model, run: `author_problem`'s grammar, else exit 2; any given -> author `agent`, none -> `human`. Text: UTF-8, <= 1 MiB (`TEXT_MAX_BYTES`), `-` = stdin; `--rationale` <= 4 096 B.
 - `spec propose drift [REF…]`: `proposal-drift.md` "Raise".
-- `spec inbox [--all]`, `spec review PR`: `proposal-review.md`.
+- `spec inbox [--all]`, `spec review PR`, the **review document** (JSON of propose, review, approve, reject; MCP `get_proposal`): `proposal-review.md`.
 - `spec approve PR [--note T]|--open` -> `applied PR-0001 as <sha> on <branch>`; `spec reject PR --reason T [--follow-up code|spec]` (empty -> exit 2; `--follow-up`: a drift item's draft task, `proposal-completion.md` "Reject") -> `rejected PR-0001`. Refused: stdout holds only a conflict's text; the reason is the `spec:` line and the last of `notes`.
-
-JSON of propose, review, approve, reject: the **review document** (MCP `get_proposal`), its key order, `diff`, `preview`: `proposal-review.md`.
 
 ## Creation
 
@@ -56,7 +54,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, never below a hub's floor (`queue-backup.md`), in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON (core `Author`); `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 12; higher -> exit 2, nothing changed; older builds refuse it, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 48). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 13; higher -> exit 2, nothing changed; older builds refuse it, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 50). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -69,7 +67,8 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 7 | open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
 | 8 | `drift`, `drift_hash` | 46 | `proposal-drift-item.md` "The item" |
 | 9, 10 | `cards`; `cards.tasks` | 46 | `cards.md` "Store" |
-| 11 | `card_id`, `why` | 48 | `card-questions.md` "Store" |
+| 11, 12 | `card_id`, `why`; `cards.mandate` | 48 | `card-{questions,mandate}.md` |
+| 13 | `gist`, `matters` | 50 | `plain-questions.md` "Shapes" |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).
@@ -96,5 +95,5 @@ Also `events()`, `dump()`, `reserved()`; unconditional ops for tests. Step 10's 
 
 ## Terminal and git safety
 
-- **Escaping** (agent-written text in the queue commands' output, prompts, stderr): every C0 control but LF, TAB and a CRLF's CR, DEL, every C1 and bidi marks, embeddings, overrides, isolates (U+061C, U+200E, U+200F, U+202A-U+202E, U+2066-U+2069) print as `\u{1b}`; JSON escapes by itself, values raw. `inbox`'s rationale turns a lone CR into a space.
+- **Escaping** (agent-written text in the queue commands' output, prompts, stderr): every C0 control but LF, TAB and a CRLF's CR, DEL, every C1 and the bidi controls (U+061C, U+200E, U+200F, U+202A-U+202E, U+2066-U+2069) print as `\u{1b}`; JSON escapes by itself, values raw. `inbox`'s rationale turns a lone CR into a space.
 - **Git** (store `WorktreeGit`): `git -C <dir>`, stdin null, `GIT_TERMINAL_PROMPT=0`, without every variable `git rev-parse --local-env-vars` lists (a probe reading no repository); every other command but `commit` with `GIT_OPTIONAL_LOCKS=0`. Paths as `:(literal)` pathspecs (`commit_only_paths`: several); every revision after `--end-of-options`, checked by `rev-parse --verify`; `blob_at`, `has_path` refuse an empty, `./` or `../` path unread. `merge-file` with `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` (the repository's config still read). `diff_hunks` (review's `diff`, the package's `snapshot_diff`, `spec lock diff`): `git -C <data dir> -c core.attributesFile=/dev/null diff --no-index --no-color --no-ext-diff --no-textconv --diff-algorithm=myers -U3` with those two, `GIT_ATTR_NOSYSTEM=1`, `GIT_CEILING_DIRECTORIES` the data directory's parent, no `GIT_DIFF_OPTS`: no repository's config or attributes; a pair git deems binary (a NUL byte) has no hunk, so review and the package read it as equal (`spec lock diff`: `null`). Scratch files (merge and diff sides, the message): new, in the data directory, removed after.

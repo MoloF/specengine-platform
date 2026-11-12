@@ -569,6 +569,10 @@ fn ac05_eight_parallel_asks_and_the_twin_store_one_row() {
                 now: NOW.to_owned(),
                 git: repo.git_env(&repo.main),
                 card: None,
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             };
             std::thread::spawn(move || {
                 barrier.wait();
@@ -1160,7 +1164,9 @@ fn ac13_each_queue_tool_answers_as_its_twin() {
 /// 1 736, `get_card` 1 411, `get_proposal` 1 150; `get_card` 1 541 since
 /// docs/features/task-mandate.md M7, its mandate sentence added, 1 987
 /// since docs/features/card-context.md CC9, its head naming `--context`
-/// and its context sentence added, 2 041 since docs/features/upstream-signal.md
+/// and its context sentence added, 2 047 since
+/// docs/features/plain-questions.md PQ10 (the items' `gist`, `matters`; two
+/// trims), 2 041 since docs/features/upstream-signal.md
 /// US-11, its `upstream` sentence added and its `card_id` clause shortened), ASCII,
 /// each raise's naming `card_id`, holding "Data"'s new sentences and not the dropped
 /// ones. M: the question text left untrimmed (over 2 048).
@@ -1191,16 +1197,20 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
 
         for (name, bytes, holds, lacks) in [
             (
+                // 2 031 since docs/features/plain-questions.md "MCP" (its
+                // six edits; "queued items with other text." dropped).
                 "ask_question",
-                2033,
+                2031,
                 vec![
                     "card_id: the card (C-0001) it is asked for, in any state.",
                     "severity: high, normal (absent) or low.",
-                    "queued items with other text.",
+                    "gist (160 bytes), matters (512), options (2-3) and recommendation: what \
+                     the owner reads first; plain words, no IDs, paths or code names.",
                 ],
                 vec![
                     "it only orders the queue",
                     "(stored by its id, else its path)",
+                    "queued items with other text.",
                 ],
             ),
             (
@@ -1215,18 +1225,18 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
             ("report_discrepancy", 1736, vec!["card_id"], vec![]),
             (
                 "get_card",
-                2041,
+                2047,
                 vec![
                     "One card: the same as `spec card show C --marks [--history] [--context \
                      [--budget N]]`.",
                     "budget needs context. Without context: null.",
                     "mandate: binding, open or null. subtask_items: the items naming one of its \
                      subtasks, each with card_id first, by ID, in one read.",
-                    "items: the questions, discrepancies and decisions that name it {id, kind, \
-                     status, summary, working_answer, why, author, created_at, updated_at, \
-                     staged_at, decided_by, decided_at, decision_note, record_id, record_path, \
-                     record_title}, by ID, read now; with history, their last 64 proposal.* \
-                     events join it by seq.",
+                    "items: the questions, discrepancies and decisions naming it {id, kind, \
+                     status, summary, gist, matters, working_answer, why, author, created_at, \
+                     updated_at, staged_at, decided_by, decided_at, decision_note, record_id, \
+                     record_path, record_title}, by ID, read now; with history, their last 64 \
+                     proposal.* events join it by seq.",
                 ],
                 vec!["`spec card show C --marks [--history]`."],
             ),

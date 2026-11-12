@@ -304,6 +304,10 @@ fn question(pair: &Pair, cwd: &Path, card: &str, node: &str, text: &str) -> Stri
         login: None,
         now: RAISED.to_owned(),
         git: pair.git_env(cwd),
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     };
     let ask = |request: &QuestionRequest| {
         propose_question(&pair.env(cwd), &Globals::default(), request)
@@ -766,6 +770,22 @@ fn cc2_not_asked_is_the_read_before_plus_context_null() {
             assert_eq!(document["upstream"], Value::Null, "{context}");
             for key in ["context", "upstream"] {
                 document.as_object_mut().expect("an object").remove(key);
+            }
+            // docs/features/plain-questions.md PQ10: each item's `gist` and
+            // `matters` after `summary`, `null` on the golden's items.
+            for list in ["items", "subtask_items"] {
+                if let Some(items) = document[list].as_array_mut() {
+                    for item in items {
+                        let object = item.as_object_mut().expect("an item");
+                        for key in ["gist", "matters"] {
+                            assert_eq!(
+                                object.remove(key),
+                                Some(Value::Null),
+                                "{context}: {list}'s {key}"
+                            );
+                        }
+                    }
+                }
             }
             let was: Value = serde_json::from_str(&before.stdout).expect("JSON");
             assert_eq!(document, was, "{context}: every other key equal");

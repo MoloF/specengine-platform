@@ -307,6 +307,10 @@ impl Seeded {
                 login: None,
                 now: "2026-11-12T10:00:00Z".to_owned(),
                 git: GitEnv::new(self.root.clone(), self.git.vars()),
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
         )
         .unwrap_or_else(|error| panic!("question: {error}"));

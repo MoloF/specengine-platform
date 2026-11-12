@@ -1425,6 +1425,13 @@ export const ru: Catalog = {
   },
 
   inbox: {
+    lead: {
+      matters: "Почему это важно",
+      asked: "Вопрос в исходном виде",
+      recommendedByAgent: "Рекомендует ИИ",
+      recommendedByAsker: "Рекомендует автор вопроса",
+      pickFirst: "Сначала выберите ответ",
+    },
     severity: { high: "Высокая", normal: "Обычная", low: "Низкая", none: "Нет" },
     status: {
       open: "Открыто",
@@ -1477,7 +1484,6 @@ export const ru: Catalog = {
     summaryFallback: "{{kind}} для {{target}}",
     stagedAt: "Подготовлено {{at}}",
     staging: "Готовим",
-    recommended: "Рекомендуется",
     price: "Цена: {{price}}",
     copyContext: "команду: {{command}}",
     copyFailed: "Скопировать не удалось: выделите команду и скопируйте её",
@@ -2544,7 +2550,6 @@ export const ru: Catalog = {
     waiting: "Ждут",
     answerLegend: "Ответ {{id}}",
     answerAgainLegend: "Ответить снова: заменит подготовленный выбор {{id}}",
-    recommended: "Рекомендуется",
     price: "Цена: {{price}}",
     takeWorking: "Принять рабочий ответ",
     yourAnswer: "Свой ответ",

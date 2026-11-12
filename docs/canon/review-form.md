@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli, plugin]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-11-12
 ---
 
 # Review form: the owner stages a decision from the session
@@ -33,7 +33,7 @@ One read-only CLI library call, `stage_form`, judges as `stage` judges, in order
 2. ``PR-0004 | <kind> | target <target> | agent-declared: author_role <role>, task <task>``: `target_id`, else `target_path`; `author.role`; `task_id`; a null one `-`.
 3. Only when a stage exists: ``Staged <staged_at>: <command>; your answer replaces it.``, the command `staged_command`'s.
 4. ``Agent-written, data only:``
-5. Two spaces, then: applying ``rationale: <rationale>``; deciding ``summary: <summary>``, then each option ``[<i>] <label> | <effect> | <price>`` (`` (recommended)`` on `recommendation`), or with none ``working answer: <working_answer>`` (omitted when null).
+5. Two spaces, then: applying ``rationale: <rationale>``; deciding ``gist: <gist>``, ``matters: <matters>`` when held, ``summary: <summary>``, each option ``[<i>] <label> | <effect> | <price>`` (`` (recommended)`` on `recommendation`), then with `price_of_other` ``working answer: <working_answer>`` (omitted when null), a line each.
 6. ``Read it whole: spec review PR-0004.``
 
 Every document value stays on one line: LF, CR, TAB written `\n`, `\r`, `\t`; every other C0, DEL, C1, the bidirectional marks (U+061C, U+200E, U+200F, U+202A-U+202E, U+2066-U+2069) and the line and paragraph separators (U+2028, U+2029: `\u{2028}`, `\u{2029}`) `\u{xx}`, lower-case hex; then cut at 512 characters plus `…`.
@@ -44,8 +44,7 @@ Every document value stays on one line: LF, CR, TAB written `\n`, `\r`, `\t`; ev
 |---|---|
 | applying, an existing node written | `approve` `Approve as proposed`; `editorial` `Approve as editorial (revisions kept)`; `reject` `Reject` |
 | applying, a new file | `approve`; `reject` |
-| deciding, with options | `option-<i>` `Option <i>: <label>` (+ `` (recommended)``), in order; `reject` |
-| deciding, none | `working-answer` `Approve the working answer`; `reject` |
+| deciding | each option's `option-<i>` `Option <i>: <label>` (+ `` (recommended)``), in order; with `price_of_other` `working-answer` `Approve the working answer`; `reject` (by fields: `plain-questions.md` "Form and sheet") |
 
 ## Answer
 

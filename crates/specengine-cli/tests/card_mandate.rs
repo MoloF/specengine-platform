@@ -139,12 +139,16 @@ const CARD_KEYS: [&str; 36] = [
 ];
 
 /// A subtask item's 17 keys: `card_id`, then `CardItem`'s 16 (set 122).
-const SUBTASK_ITEM_KEYS: [&str; 17] = [
+// `gist`, `matters` after `summary` since docs/features/plain-questions.md
+// PQ10.
+const SUBTASK_ITEM_KEYS: [&str; 19] = [
     "card_id",
     "id",
     "kind",
     "status",
     "summary",
+    "gist",
+    "matters",
     "working_answer",
     "why",
     "author",

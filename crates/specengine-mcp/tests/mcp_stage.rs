@@ -266,6 +266,10 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
                 now: NOW.to_owned(),
                 git: repo.git_env(&repo.linked),
                 card: None,
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
         )
         .expect("asked")

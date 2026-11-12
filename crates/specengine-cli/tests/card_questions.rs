@@ -1145,7 +1145,9 @@ fn l1_the_raises_take_card_and_review_ends_with_card_id_and_why() {
         ["card_id", "why", "similar", "notes"],
         "{keys:?}"
     );
-    assert_eq!(keys.len(), 51, "{keys:?}");
+    // 53 since docs/features/plain-questions.md PQ10 (`gist`, `matters`
+    // after `summary`).
+    assert_eq!(keys.len(), 53, "{keys:?}");
 
     // The twin, on a second copy: the same question without the flag.
     let twin = Pair::new("cq-l1-twin", LAMP);
@@ -1167,6 +1169,8 @@ fn l1_the_raises_take_card_and_review_ends_with_card_id_and_why() {
         [
             "branch",
             "created_at",
+            // docs/features/plain-questions.md PQ10: `gist` after `summary`.
+            "gist",
             "id",
             "kind",
             "rationale",
@@ -1178,7 +1182,7 @@ fn l1_the_raises_take_card_and_review_ends_with_card_id_and_why() {
             "target_id",
             "target_ids"
         ],
-        "set 2 unchanged"
+        "set 2 unchanged but plain-questions' `gist`"
     );
 }
 

@@ -628,6 +628,11 @@ pub(crate) struct ReviewDocument {
     pub severity: Option<IntakeSeverity>,
     pub gap_type: Option<GapType>,
     pub summary: Option<String>,
+    // `docs/features/plain-questions.md` "Acceptance criteria", PQ9.
+    /// A question's gist, in plain words; `null` on any other kind.
+    pub gist: Option<String>,
+    /// Why a question matters; `null` on any other kind.
+    pub matters: Option<String>,
     pub working_answer: Option<String>,
     pub price_of_other: Option<String>,
     pub evidence: Vec<Evidence>,
@@ -745,9 +750,9 @@ pub(crate) enum StagedShape {
 #[schemars(deny_unknown_fields)]
 pub(crate) struct StagedApprove {
     pub decision: ApproveWord,
-    /// A discrepancy's option, from 0.
+    /// The option of an item holding options, from 0.
     pub option: Option<u64>,
-    /// A question's answer other than its working answer.
+    /// An answer other than the working answer.
     pub answer: Option<String>,
     /// The section its record governs.
     pub canon: Option<String>,
@@ -781,15 +786,16 @@ pub(crate) enum RejectWord {
     Reject,
 }
 
-/// The owner's choice of a decided question or discrepancy: one key.
+/// The owner's choice of a decided question, discrepancy or decision: one
+/// key.
 #[derive(JsonSchema)]
 #[schemars(rename_all = "snake_case")]
 pub(crate) enum Choice {
-    /// A discrepancy's option, by index from 0.
+    /// One of the item's options, by index from 0.
     Option(u64),
-    /// A question's working answer (`true`).
+    /// Its working answer (`true`).
     WorkingAnswer(bool),
-    /// Another answer to a question.
+    /// Another answer than the working answer.
     Answer(String),
 }
 
@@ -1714,6 +1720,10 @@ pub(crate) struct CardItemShape {
     pub status: ProposalState,
     /// A question's or a decision's text, a discrepancy's summary.
     pub summary: String,
+    /// A question's gist, in plain words; `null` on any other kind.
+    pub gist: Option<String>,
+    /// Why a question matters; `null` on any other kind.
+    pub matters: Option<String>,
     pub working_answer: Option<String>,
     /// A decision's why.
     pub why: Option<String>,
@@ -1746,6 +1756,10 @@ pub(crate) struct CardSubtaskItemShape {
     pub status: ProposalState,
     /// A question's or a decision's text, a discrepancy's summary.
     pub summary: String,
+    /// A question's gist, in plain words; `null` on any other kind.
+    pub gist: Option<String>,
+    /// Why a question matters; `null` on any other kind.
+    pub matters: Option<String>,
     pub working_answer: Option<String>,
     /// A decision's why.
     pub why: Option<String>,

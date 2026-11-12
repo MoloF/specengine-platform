@@ -4,25 +4,26 @@ import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
-import { shownSlot } from "../ui/text";
+import { shownSlot, shownText } from "../ui/text";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
+import { answersOf } from "../round/drafts";
 import { wordingOf, type DecisionKind } from "./decisions";
+import { AskedFold, AskedText, ItemLead, RecommendedMark } from "./ItemLead";
 import { isRefused, revisionsToKeep } from "./revisions";
 import { RevisionList } from "./RevisionList";
 
-function initialOption(proposal: Proposal): number | null {
-  if (proposal.options.length === 0) {
-    return null;
-  }
-  const recommended = proposal.recommendation;
-  return recommended !== null && recommended >= 0 && recommended < proposal.options.length ? recommended : 0;
-}
+/**
+ * What Accept stages on an item with options: one of them by index, or its working answer where the
+ * item holds a price of another answer; null until the owner picks: nothing is picked for them, a
+ * discrepancy's recommendation neither (docs/features/plain-questions.md "Acceptance criteria", PQ12).
+ */
+type Chosen = number | "working" | null;
 
 /**
  * The stage a dialog sends (`docs/canon/decision-staging.md` "The stage"): an approve with the
- * chosen option when the proposal has options (else none: a question's working answer, an
- * update's change), `editorial` true when the owner keeps the revisions, else null
+ * chosen option when one is chosen (else none: a question's working answer, picked or its only
+ * answer, an update's change), `editorial` true when the owner keeps the revisions, else null
  * (`docs/features/rev-discipline.md` "UI"), no `--answer` or `--canon` from the UI; a reject with
  * its reason.
  */
@@ -41,7 +42,8 @@ function NotStaged({ id, proposal, kind, onCancel }: { id: string; proposal: Pro
   const wording = wordingOf(kind, id, t);
   return (
     <Dialog title={wording.title} onClose={onCancel} className="decision-dialog">
-      <p className="dialog-text">{proposal.summary ?? proposal.target_id ?? proposal.kind ?? id}</p>
+      {/* A gist, agent text, as the lead draws it; the summary's line as before. */}
+      <p className="dialog-text">{proposal.gist === null ? (proposal.summary ?? proposal.target_id ?? proposal.kind ?? id) : <bdi>{shownSlot(proposal.gist)}</bdi>}</p>
       <p className="dialog-text dialog-effect">{wording.effect}</p>
       <div className="notice notice-not-served" role="status">
         <p className="notice-title">
@@ -62,12 +64,16 @@ function NotStaged({ id, proposal, kind, onCancel }: { id: string; proposal: Pro
 /**
  * One decision as an in-app dialog. Accept and Reject stage the owner's choice: a submit is one
  * call; while it is pending the dialog stays open: a second submit, Cancel and Esc do nothing, and
- * the buttons keep focus (aria-disabled, not disabled). A refusal keeps the dialog and the typed
+ * the buttons keep focus (aria-disabled, not disabled). Accept on an item with options offers each
+ * and, where it holds a price of another answer, its working answer; nothing is picked, the
+ * recommendation only marked with who made it, and Accept stays off, saying so, until the owner picks
+ * (docs/features/plain-questions.md "Acceptance criteria", PQ12). An item holding a gist leads with it
+ * and why it matters, its text folded under the choices. A refusal keeps the dialog and the typed
  * text, shows the daemon's message verbatim and puts focus back in the text field; the alert speaks
  * it, so the field leaves it out of its description until focus leaves the field. A proposal
  * revised while the dialog is open (a new `updated_at`, a stage made elsewhere among them) replaces
- * the shown one: the dialog says so, keeps the typed text, picks the new version's recommended
- * option (the option is an index into the new list) and waits for a submit made on the new
+ * the shown one: the dialog says so, keeps the typed text, clears the pick (an option is an index
+ * into the old list) and waits for a pick and a submit made on the new
  * version, which sends its `updated_at`. Accept on a change that alters a node's meaning (the
  * review's `revisions` a non-empty list) offers "Editorial: keep the revision", unchecked: approval
  * raises each revision unless the owner says the change is wording only; a revised version unchecks
@@ -115,10 +121,11 @@ function StageDialog({
   const editorialHintId = useId();
   const missingId = useId();
   const refusalId = useId();
+  const pickFirstId = useId();
   /** The version on screen: the one opened, then each revision the inbox brings. */
   const [shown, setShown] = useState(proposal);
   const [changed, setChanged] = useState(false);
-  const [option, setOption] = useState(() => initialOption(proposal));
+  const [chosen, setChosen] = useState<Chosen>(null);
   /** The owner keeps the revisions (`--editorial`); never the default. */
   const [editorial, setEditorial] = useState(false);
   const [text, setText] = useState("");
@@ -137,7 +144,7 @@ function StageDialog({
     // the dialog or comes back as a refusal, after which the revision is taken.
     setShown(proposal);
     setChanged(true);
-    setOption(initialOption(proposal));
+    setChosen(null);
     setEditorial(false);
   }
 
@@ -149,6 +156,12 @@ function StageDialog({
   }, [changed, shown]);
 
   const hasOptions = kind === "accept" && shown.options.length > 0;
+  /** By its structure, never its kind: its working answer where it holds a price of another answer; no own answer here (`docs/canon/decision-staging.md` "UI"). */
+  const takesWorking = hasOptions && answersOf(shown).some((offered) => offered.pick === "working");
+  /** Accept on options stays off until a pick. */
+  const needsPick = hasOptions && chosen === null;
+  /** Accept without options records the working answer, shown as the choice; the fold leaves it out then, so it shows once. */
+  const recordsWorking = kind === "accept" && !hasOptions && shown.working_answer !== null;
   /** The nodes whose revisions Accept raises: only then is Editorial offered. */
   const raised = kind === "accept" ? revisionsToKeep(shown) : null;
   const showMissing = missing && text.trim() === "";
@@ -168,6 +181,10 @@ function StageDialog({
     if (inFlight.current || updatedAt === null) {
       return;
     }
+    if (needsPick) {
+      form.current?.querySelector<HTMLElement>("input[type=radio]")?.focus();
+      return;
+    }
     const trimmed = text.trim();
     if (wording.required && trimmed === "") {
       setMissing(true);
@@ -178,7 +195,7 @@ function StageDialog({
     inFlight.current = true;
     setPending(true);
     setRefusal(null);
-    const outcome = await onSubmit(stageOf(kind, hasOptions ? option : null, raised !== null && editorial, trimmed), updatedAt);
+    const outcome = await onSubmit(stageOf(kind, hasOptions && typeof chosen === "number" ? chosen : null, raised !== null && editorial, trimmed), updatedAt);
     if (outcome !== null) {
       inFlight.current = false;
       setPending(false);
@@ -200,7 +217,11 @@ function StageDialog({
           <p>{t("inbox.dialog.changedText")}</p>
         </div>
       )}
-      <p className="dialog-text">{shown.summary ?? shown.target_id ?? shown.kind ?? id}</p>
+      {shown.gist === null ? (
+        <p className="dialog-text">{shown.summary ?? shown.target_id ?? shown.kind ?? id}</p>
+      ) : (
+        <ItemLead gist={shown.gist} matters={shown.matters} />
+      )}
       <p className="dialog-text dialog-effect">{wording.effect}</p>
       {shown.interpretation !== null && (
         // Whatever its kind: the key alone says the change carries a decision.
@@ -237,31 +258,63 @@ function StageDialog({
                   type="radio"
                   name="option"
                   value={index}
-                  checked={option === index}
+                  checked={chosen === index}
                   onChange={() => {
-                    setOption(index);
+                    setChosen(index);
                   }}
-                  data-autofocus={option === index ? "" : undefined}
+                  data-autofocus={chosen === index || (chosen === null && index === 0) ? "" : undefined}
                 />
                 <span className="option-radio-body">
                   <span className="option-radio-label">
                     {/* The index as `spec approve --option` and the terminal's review line write it. */}
                     <span className="mono">[{index}]</span> <bdi>{shownSlot(choice.label)}</bdi>
-                    {index === shown.recommendation && (
-                      <span className="recommended-mark">
-                        <Icon name="recommended" />
-                        {t("inbox.recommended")}
-                      </span>
-                    )}
+                    {index === shown.recommendation && <RecommendedMark author={shown.author} />}
                   </span>
                   <span className="option-radio-detail">{choice.effect}</span>
                   <span className="option-radio-detail">{t("inbox.price", { price: choice.price })}</span>
                 </span>
               </label>
             ))}
+            {takesWorking && shown.working_answer !== null && (
+              <label className="option-radio">
+                <input
+                  type="radio"
+                  name="option"
+                  value="working"
+                  checked={chosen === "working"}
+                  onChange={() => {
+                    setChosen("working");
+                  }}
+                  data-autofocus={chosen === "working" ? "" : undefined}
+                />
+                <span className="option-radio-body">
+                  <span className="option-radio-label">{t("round.takeWorking")}</span>
+                  <span className="option-radio-detail">
+                    <bdi>{shownText(shown.working_answer)}</bdi>
+                  </span>
+                </span>
+              </label>
+            )}
           </fieldset>
         )}
-        {kind === "accept" && !hasOptions && shown.working_answer !== null && (
+        {shown.gist !== null && (
+          <AskedFold>
+            {shown.summary !== null && <AskedText text={shown.summary} />}
+            {shown.working_answer !== null && !recordsWorking && (
+              <div className="round-part">
+                <p className="round-label">{t("round.workingAnswer")}</p>
+                <AskedText text={shown.working_answer} />
+              </div>
+            )}
+            {shown.price_of_other !== null && (
+              <div className="round-part">
+                <p className="round-label">{t("round.priceOfOther")}</p>
+                <AskedText text={shown.price_of_other} />
+              </div>
+            )}
+          </AskedFold>
+        )}
+        {recordsWorking && (
           <div className="dialog-text">
             <p className="field-label">{t("inbox.dialog.workingRecorded")}</p>
             <p className="staged-text">{shown.working_answer}</p>
@@ -330,8 +383,14 @@ function StageDialog({
             </p>
           </div>
         )}
+        {needsPick && (
+          <p id={pickFirstId} className="note">
+            <Icon name="info" />
+            <span>{t("inbox.lead.pickFirst")}</span>
+          </p>
+        )}
         <div className="dialog-actions">
-          <Button type="submit" appearance={kind === "reject" ? "danger" : "primary"} aria-disabled={pending}>
+          <Button type="submit" appearance={kind === "reject" ? "danger" : "primary"} aria-disabled={pending || needsPick} aria-describedby={needsPick ? pickFirstId : undefined}>
             {pending ? t("inbox.staging") : wording.submit}
           </Button>
           <Button aria-disabled={pending} onClick={cancel}>

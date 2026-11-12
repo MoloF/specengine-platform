@@ -59,9 +59,9 @@ use specengine_model::{
 
 use super::state::{TASK_LINKS_SCHEMA, stored_text};
 use super::{
-    CARD_COLUMNS, CARD_ITEMS_SCHEMA, COLUMNS, EVENT_CREATED, Event, ID_ORDER, IntakeResult,
-    MANDATE_SCHEMA, NewIntake, Proposal, ProposalKind, ProposalStatus, QueueError, RawRow,
-    SqliteQueue, UnreadableRow, check_time, created_payload, existing, index_only, insert_intake,
+    CARD_COLUMNS, CARD_ITEMS_SCHEMA, EVENT_CREATED, Event, ID_ORDER, IntakeResult, MANDATE_SCHEMA,
+    NewIntake, Proposal, ProposalKind, ProposalStatus, QueueError, RawRow, SqliteQueue,
+    UnreadableRow, check_time, columns_of, created_payload, existing, index_only, insert_intake,
     link_problem, log, log_text, queue_matches, to_json, user_version,
 };
 use crate::error::{Db, StoreError};
@@ -618,10 +618,13 @@ impl SqliteQueue {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut found = CardItems::default();
         if !index_only(&tx)? && user_version(&tx)? >= CARD_ITEMS_SCHEMA {
+            // At schema 11 or 12 (no step run here), `gist` and `matters`
+            // read `NULL`.
+            let columns = columns_of(&tx)?;
             let raws: Vec<RawRow> = {
                 let mut statement = tx
                     .prepare(&format!(
-                        "SELECT {COLUMNS} FROM main.proposals \
+                        "SELECT {columns} FROM main.proposals \
                          WHERE project = ?1 AND card_id = ?2 {ID_ORDER}"
                     ))
                     .db()?;
@@ -654,10 +657,11 @@ impl SqliteQueue {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut found = CardItems::default();
         if !index_only(&tx)? && user_version(&tx)? >= CARD_ITEMS_SCHEMA {
+            let columns = columns_of(&tx)?;
             let raws: Vec<RawRow> = {
                 let mut statement = tx
                     .prepare(&format!(
-                        "SELECT {COLUMNS} FROM main.proposals \
+                        "SELECT {columns} FROM main.proposals \
                          WHERE project = ?1 AND card_id IN \
                          (SELECT id FROM main.cards WHERE project = ?1 AND parent = ?2) \
                          {ID_ORDER}"

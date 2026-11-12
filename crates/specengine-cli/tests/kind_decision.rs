@@ -75,10 +75,11 @@ const WORKING: &str = "Yes: it starts 1.5 s after the last stamina use.";
 const PRICE: &str = "Without the wait R-28 is rebalanced.";
 /// The rule's new text: rest named in `RULE-STAM-REGEN`'s first line.
 const REST: (&str, &str) = ("Base rate 10 units/s,", "Base rate 10 units/s at rest,");
-/// W19's refusal of `--option` on a decision.
+/// W19's refusal of `--option` on a decision, as
+/// docs/features/plain-questions.md "Approve, stage, form, round" words it.
 fn option_refusal(id: &str) -> String {
     format!(
-        "spec: `--option` names a discrepancy's option, and `{id}` is a decision: its working \
+        "spec: `--option` names an option, and `{id}` is a decision with none: its working \
          answer, or `--answer T`, answers it; nothing changed"
     )
 }
@@ -653,6 +654,10 @@ fn ac_r3_a_question_and_a_decision_hit_each_other_a_discrepancy_neither() {
             now: NOW.to_owned(),
             git: pair.git_env(&cwd),
             card: None,
+            gist: None,
+            matters: None,
+            options: None,
+            recommendation: None,
         },
     )
     .expect("ask");
@@ -1848,7 +1853,8 @@ fn iteration2_a_decision_flag_on_an_update_names_the_deciding_kinds() {
 }
 
 /// Iteration 2, the stricter row reading through the CLI: a question's or
-/// a decision's row holding `options` (`[]` counts), `evidence`,
+/// a decision's row holding `evidence` (`[]` counts), a decision's `options`
+/// (a question's since docs/features/plain-questions.md PQ5),
 /// `gap_type` or `recommendation`, and a discrepancy's row holding
 /// `price_of_other`: `review` exits 2 naming the row and the column (`it
 /// is set on <kind>, which holds none`); the inbox skips the row with a
@@ -1871,7 +1877,9 @@ fn iteration2_a_row_holding_a_column_its_shape_lacks_is_named_by_review_and_inbo
     );
     let option = "[{\"label\":\"a\",\"effect\":\"b\",\"price\":\"c\"}]";
     let cases: Vec<(&str, &str, &str, &str)> = vec![
-        (question.as_str(), "a question", "options", "[]"),
+        // A question may hold options since docs/features/plain-questions.md
+        // PQ5: its `evidence` stands in.
+        (question.as_str(), "a question", "evidence", "[]"),
         (question.as_str(), "a question", "gap_type", "contradicts"),
         (decided.as_str(), "a decision", "options", "[]"),
         (decided.as_str(), "a decision", "options", option),

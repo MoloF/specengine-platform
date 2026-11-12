@@ -1,4 +1,5 @@
 import type {
+  Author,
   KnownGapType,
   KnownPreview,
   KnownProposalStatus,
@@ -124,4 +125,16 @@ export function previewLabel(value: Preview | null, t: Translate): string | null
     return null;
   }
   return Object.hasOwn(PREVIEW, value) ? t(`inbox.preview.${value as KnownPreview}`) : value;
+}
+
+/** The author type whose recommendation is the AI's: an agent's (`docs/canon/proposal-queue.md` "Store"). */
+const AGENT: Author["type"] = "agent";
+
+/**
+ * Who made an item's recommendation, in words (docs/features/plain-questions.md "Acceptance criteria",
+ * PQ12): an agent's is the AI's; any other author's, a person's or one this build does not know, and an
+ * item with none, the asker's, with no login looked up. The one place an author's type is compared.
+ */
+export function recommendedBy(author: Pick<Author, "type"> | null, t: Translate): string {
+  return author !== null && author.type === AGENT ? t("inbox.lead.recommendedByAgent") : t("inbox.lead.recommendedByAsker");
 }

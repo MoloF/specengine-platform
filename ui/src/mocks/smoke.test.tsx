@@ -36,6 +36,8 @@ describe("the UI over the mock", () => {
     await within(card).findByText("Entry only inside the tide window");
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-0041" });
+    // Nothing is picked for the owner (docs/features/plain-questions.md "Acceptance criteria", PQ12): the recommended option, picked.
+    fireEvent.click(within(dialog).getByRole("radio", { name: /^\[0\] Code to spec/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
       expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(
@@ -54,6 +56,8 @@ describe("the UI over the mock", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Note for the record (optional)"), { target: { value: "try" } });
+    // Nothing is picked for the owner (docs/features/plain-questions.md "Acceptance criteria", PQ12): an option, picked.
+    fireEvent.click(within(dialog).getByRole("radio", { name: /^\[0\] Spec to code/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     expect(await within(dialog).findByText(/`PR-0046` is deferred, not open/)).toBeTruthy();
     expect(within(dialog).getByLabelText("Note for the record (optional)")).toHaveProperty("value", "try");

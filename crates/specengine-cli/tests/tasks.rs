@@ -813,10 +813,11 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         // 47 since docs/features/rev-discipline.md added `revisions`; 48
         // since docs/features/drift-queue.md added `drift` after it; 50
         // since docs/features/card-questions.md L1 (`card_id`, `why`); 51
-        // since docs/features/intake-similar.md "Acceptance criteria" IS6.
-        assert_eq!(keys.len(), 51, "{keys:?}");
+        // since docs/features/intake-similar.md "Acceptance criteria" IS6; 53
+        // since docs/features/plain-questions.md PQ10 (two after `summary`).
+        assert_eq!(keys.len(), 53, "{keys:?}");
         assert_eq!(
-            keys[42..],
+            keys[44..],
             [
                 "choice",
                 "task_id",
@@ -843,7 +844,8 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
     let listed = task_common::Ordered::of(&common::proposal::printed_inbox(&inbox).1);
     for index in 0..2 {
         let keys = listed.get("proposals").at(index).keys();
-        assert_eq!(keys.len(), 12, "{keys:?}");
+        // 13 since docs/features/plain-questions.md PQ10 (`gist`).
+        assert_eq!(keys.len(), 13, "{keys:?}");
         assert!(!keys.contains(&"task_id".to_owned()), "{keys:?}");
     }
 }
@@ -997,7 +999,7 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":5,\"runs\":2,\"cards\":0,\"events\":{events}}}"
         )
     );
@@ -1128,13 +1130,13 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":1}"
     );
     // Format 1, schema 3: the header's five keys, rows without `task_id`,
     // the stage's two, `interpretation`, `drift` and `drift_hash`.
     let later = ",\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\
-                 \"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null}}";
+                 \"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null}}";
     let mut v3_lines = v4_lines.clone();
     v3_lines[0] = "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":1,\
                    \"events\":1}"
@@ -1163,7 +1165,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     // Refused headers and rows: line 1 (the header) or 2 (the row).
     let two = |line: &str| {
         line.replacen(
-            "\"format\":6,\"queue_schema\":12,",
+            "\"format\":7,\"queue_schema\":13,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
@@ -1711,6 +1713,10 @@ fn n2_paths_compare_as_directories() {
             now: common::proposal::NOW.to_owned(),
             git: pair.git_env(&pair.linked),
             card: None,
+            gist: None,
+            matters: None,
+            options: None,
+            recommendation: None,
         },
         Some(&id),
     )

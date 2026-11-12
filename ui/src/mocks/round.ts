@@ -11,6 +11,7 @@ import type {
   Stage,
   StageBody,
 } from "../api/types";
+import { optionAndAnswer, optionOnNone } from "./approveLines";
 import type { MockProject, StoredReview } from "./build";
 import { resolveRef } from "./corpus";
 import { packageOf, type MockTasks } from "./tasks";
@@ -108,6 +109,8 @@ function itemOf(project: MockProject, tasks: MockTasks, review: StoredReview): R
     severity: review.severity,
     gap_type: review.gap_type,
     summary: review.summary ?? "",
+    gist: review.gist,
+    matters: review.matters,
     working_answer: review.working_answer,
     price_of_other: review.price_of_other,
     options: review.options,
@@ -191,12 +194,17 @@ function stageFlaw(review: StoredReview, stage: StageBody): string | null {
   const last = review.options.length - 1;
   if (stage.option !== null) {
     if (last < 0) {
-      return `--option: \`${id}\` has no options`;
+      return optionOnNone(review);
+    }
+    // A question with options and a price of another answer takes either, one at a time (docs/features/plain-questions.md "Acceptance criteria", PQ4).
+    if (stage.answer !== null && review.price_of_other !== null) {
+      return optionAndAnswer(id);
     }
     if (review.options[stage.option] === undefined) {
       return `option ${String(stage.option)}: \`${id}\` has options 0-${String(last)}`;
     }
-  } else if (last >= 0) {
+  } else if (last >= 0 && review.price_of_other === null) {
+    // Judged by fields: options with a price of another answer take the working answer or an own one too (docs/features/plain-questions.md "Acceptance criteria", PQ7).
     return `\`${id}\` takes one of its options by number, 0-${String(last)}, or a reject with its reason`;
   }
   if (stage.editorial === true) {

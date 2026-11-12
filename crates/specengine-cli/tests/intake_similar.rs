@@ -1256,7 +1256,7 @@ fn pair_at(at: &Path) -> Pair {
 
 /// The backup's proposal line's keys, as the format of before writes them
 /// (48: the table's columns).
-const BACKUP_KEYS: [&str; 48] = [
+const BACKUP_KEYS: [&str; 50] = [
     "id",
     "project",
     "kind",
@@ -1305,6 +1305,8 @@ const BACKUP_KEYS: [&str; 48] = [
     "drift_hash",
     "card_id",
     "why",
+    "gist",
+    "matters",
 ];
 
 /// The intake columns a create leaves empty.
@@ -1329,7 +1331,8 @@ const INTAKE: [&str; 10] = [
 /// `distinct_from` stored.
 #[test]
 fn is7_nothing_new_is_stored() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
+    // 13 since docs/features/plain-questions.md PQ8.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
     let at = std::env::temp_dir().join(format!("specengine-cli-is7-{}", std::process::id()));
     let named = {
         let pair = pair_at(&at);
@@ -1367,8 +1370,9 @@ fn is7_nothing_new_is_stored() {
         let state = fs::read_to_string(&out).expect("the backup");
         let mut lines = state.lines();
         let header: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
-        assert_eq!(header["format"], json!(6), "{header}");
-        assert_eq!(header["queue_schema"], json!(12), "{header}");
+        // Format 7, schema 13 since docs/features/plain-questions.md PQ8.
+        assert_eq!(header["format"], json!(7), "{header}");
+        assert_eq!(header["queue_schema"], json!(13), "{header}");
         let line: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
         let keys: Vec<&str> = line["proposals"]
             .as_object()
@@ -1383,7 +1387,9 @@ fn is7_nothing_new_is_stored() {
         assert_eq!(got, want, "{line}");
         assert_eq!(line["proposals"]["distinct_from"], Value::Null);
         let columns = pair.sql("SELECT count(*) FROM pragma_table_info('proposals');");
-        assert_eq!(columns.trim(), "48", "no column added");
+        // 50 since docs/features/plain-questions.md PQ8 (its two, none of
+        // this slice's).
+        assert_eq!(columns.trim(), "50", "no column added");
         row
     };
     let plain = {

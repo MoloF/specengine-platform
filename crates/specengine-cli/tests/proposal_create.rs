@@ -589,7 +589,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 /// The Data keys of `review` in order (docs/canon/decision-record.md
 /// "Queue and documents", Review document: the five of a decision record
 /// after `linked`).
-const REVIEW_KEYS: [&str; 50] = [
+const REVIEW_KEYS: [&str; 52] = [
     "id",
     "project",
     "kind",
@@ -625,6 +625,10 @@ const REVIEW_KEYS: [&str; 50] = [
     "severity",
     "gap_type",
     "summary",
+    // docs/features/plain-questions.md PQ1: `gist:`, `matters:` after
+    // `summary:`.
+    "gist",
+    "matters",
     "working_answer",
     "price_of_other",
     "evidence",
@@ -727,6 +731,9 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
             [
                 "branch",
                 "created_at",
+                // docs/features/plain-questions.md PQ10: `gist` after
+                // `summary`, 13 keys.
+                "gist",
                 "id",
                 "kind",
                 "rationale",
@@ -782,7 +789,8 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
             }
         })
         .collect();
-    assert_eq!(json_keys.len(), 51);
+    // 53 since docs/features/plain-questions.md PQ10.
+    assert_eq!(json_keys.len(), 53);
     assert!(value["similar"].is_null(), "{json}");
     assert!(!text.contains("\nsimilar"), "{text}");
     let mut want = json_keys.clone();

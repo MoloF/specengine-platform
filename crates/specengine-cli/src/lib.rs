@@ -406,7 +406,7 @@ pub use intake::{
     IntakeDocument, IntakeMatch, IntakeOutcome, IntakeSource, MatchSource, QuestionRequest,
     propose_decision, propose_decision_with_task, propose_discrepancy,
     propose_discrepancy_with_task, propose_question, propose_question_with_task,
-    read_decision_input, read_discrepancy_input,
+    read_decision_input, read_discrepancy_input, read_question_options,
 };
 pub use interpret::{InterpretRequest, propose_interpretation, propose_interpretation_brief};
 pub use layer_c::{
@@ -488,10 +488,10 @@ pub const SPLIT_DRY_RUN_FLAG: &str = "dry-run";
 pub use specengine_core::intake::{
     AMENDMENT_KIND, ANSWER_MAX, CREATE_KIND, DECISION_KIND, DISTINCT_ITEM_MAX, DISTINCT_MAX,
     DRIFT_KIND, DecisionInput, DiscrepancyInput, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence,
-    GapType, INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption,
-    IntakeSeverity, Interpretation, LABEL_MAX, LINE_LIMIT, LOCATION_MAX, NODE_IDS_MAX,
-    OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch, RATIONALE_MAX, SUMMARY_MAX,
-    UPDATE_KIND, with_article,
+    GIST_MAX, GapType, INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX,
+    IntakeOption, IntakeSeverity, Interpretation, LABEL_MAX, LINE_LIMIT, LOCATION_MAX, MATTERS_MAX,
+    NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch, QUESTION_OPTIONS_MAX,
+    RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND, with_article,
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;

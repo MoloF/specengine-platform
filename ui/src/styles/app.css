@@ -899,6 +899,42 @@ textarea.field {
   font-weight: var(--font-weight-semibold);
 }
 
+/* A question's lead (src/inbox/ItemLead.tsx; docs/features/plain-questions.md "Acceptance criteria", PQ12): the gist one
+   line of plain words, raised; why it matters under a secondary label; the text as asked folded. Each
+   wraps whatever its script and is never cut; each line of a text takes its own direction. */
+.lead-gist {
+  margin: 0;
+  max-width: 72ch;
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.lead-matters {
+  display: grid;
+  gap: var(--space-050);
+}
+
+.lead-label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.lead-text {
+  margin: 0;
+  max-width: 72ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+
+.lead-asked .disclosure-region {
+  padding-inline-start: var(--space-250);
+}
+
 /* Loading, errors, notices. */
 .skeleton {
   display: grid;

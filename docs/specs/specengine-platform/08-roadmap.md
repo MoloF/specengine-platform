@@ -345,14 +345,14 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | 5 | `pack` | RM-0061 | CLI only, no plugin version; the config proposal split off to RM-0110, which needs its own ADR; shipped 2026-11-12 (`docs/canon/presets.md`) |
 | 6 | `delivery-analytics`, part a | RM-0107 | the read and its tables; no MCP tool, no plugin version; shipped 2026-11-12 (`docs/canon/spec-delivery.md`) |
 | 7 | `direction-catalog` | RM-0106 | no MCP tool, no plugin version; shipped 2026-11-12 (`docs/canon/spec-catalog.md`) |
-| 8 | `plain-questions`, the question half | RM-0088 | queue schema 13, backup format 7 |
+| 8 | `plain-questions`, the question half | RM-0088 | queue schema 13, backup format 7, plugin 0.43.0; shipped 2026-11-12 (`docs/canon/plain-questions.md`) |
 | 9 | `collision-pass` | RM-0060 | queue schema 14; two stdio tools, an eighth skill |
 | 10 | `plain-questions`, the pair half | RM-0088 | a served `pair` for a two-target `contradicts`; after 9 |
 | 11 | `department-overview` | RM-0086 | no MCP tool, no plugin version; shipped 2026-11-12, ahead of 8-10 (`docs/canon/card-counts.md`) |
 | 12 | `hub-department` | RM-0089 | - |
 | 13 | `delivery-analytics`, part b | RM-0107 | the timeline |
 
-**The order changed, 2026-11-12**, to follow the UI stack: slice 11's UI was built ahead and merged onto `main`, and the slice shipped before 8-10. The rest: 8 `plain-questions` (the question half), 9 `collision-pass`, then 10 `collision-pairs` (the pair half) beside 12 `hub-department`, then 13 `delivery-timeline`.
+**The order changed, 2026-11-12**, to follow the UI stack: slice 11's UI was built ahead and merged onto `main`, and the slice shipped before 8-10. 8 `plain-questions` (the question half) shipped 2026-11-12. The rest: 9 `collision-pass`, then 10 `collision-pairs` (the pair half) beside 12 `hub-department`, then 13 `delivery-timeline`.
 
 **The UI lane**, beside core slices 1-5, in the same tree: RM-0103 `canvas-clicks`, shipped 2026-11-12 (no plugin version; `docs/canon/spec-flow-layout.md` "Layout", `docs/canon/ui-languages.md` "Size"), then RM-0099 in two slices, `design-sweep` (a), shipped 2026-11-12 (no plugin version; `docs/canon/ui-design.md` "Guards and exceptions", "The work item"), and `design-sweep-b` (b), shipped 2026-11-12 (no plugin version; `docs/canon/ui-design.md` "Guards and exceptions", "The work item"), which closes RM-0099 and the lane. It shared only documents with the core lane, so the owner committed each slice on its own.
 

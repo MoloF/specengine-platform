@@ -227,8 +227,11 @@ import type {
 // (docs/features/direction-catalog.md "Acceptance criteria", DC-9: the catalog document, a row and
 // its last change, sets 138 to 140), written by its Rust test; and department-overview's three
 // (docs/features/department-overview.md "Acceptance criteria", DO10: the counts document, a column's
-// counts and a flow's, sets 141 to 143, the last), written by its Rust test.
-// A key the types carry ahead of the file
+// counts and a flow's, sets 141 to 143, the last), written by its Rust test; and plain-questions'
+// nine keys, no set (docs/features/plain-questions.md "Acceptance criteria", PQ10: `gist` and
+// `matters` after `summary` on the review document, 53 keys, a round item, 21, a card's item, 18,
+// and a subtask's item, 19, and `gist` alone on an inbox entry, 13), written by its Rust test. A
+// key the types carry ahead of the file
 // is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already
 // names fails. While that file is absent the comparison is skipped, saying so; once it exists it
 // names all one hundred and forty-three written so far, in the slices' order.
@@ -248,6 +251,7 @@ const KEYS = {
     rationale: true,
     severity: true,
     summary: true,
+    gist: true,
     record_id: true,
     staged_at: true,
   } satisfies Record<keyof InboxEntry, true>,
@@ -260,7 +264,8 @@ const KEYS = {
   // docs/features/rev-discipline.md "Review document, stage, queue" `revisions` after `conflict`,
   // docs/features/drift-queue.md "Review, inbox, round, stage" `drift` after `revisions`,
   // docs/features/card-questions.md "Acceptance criteria" (L1) `card_id`, `why` after `interpretation`,
-  // docs/features/intake-similar.md "Acceptance criteria" (IS10) `similar` after `why`.
+  // docs/features/intake-similar.md "Acceptance criteria" (IS10) `similar` after `why`,
+  // docs/features/plain-questions.md "Acceptance criteria" (PQ10) `gist`, `matters` after `summary`.
   Proposal: {
     id: true,
     project: true,
@@ -293,6 +298,8 @@ const KEYS = {
     severity: true,
     gap_type: true,
     summary: true,
+    gist: true,
+    matters: true,
     working_answer: true,
     price_of_other: true,
     evidence: true,
@@ -476,7 +483,8 @@ const KEYS = {
   TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
   // docs/features/hub-confirm.md "Data" `login`: a departing accept's on a hub alone, skipped when none.
   Author: { type: true, role: true, model: true, run: true, login: true } satisfies Record<keyof Author, true>,
-  // docs/canon/round.md "JSON": the sheet, an item's 19 keys, a target, a task.
+  // docs/canon/round.md "JSON": the sheet, an item's 21 keys (`gist`, `matters` after `summary`:
+  // docs/features/plain-questions.md "Acceptance criteria", PQ10), a target, a task.
   RoundSheet: { project: true, items: true, more: true, minutes: true, notes: true } satisfies Record<keyof RoundSheet, true>,
   RoundItem: {
     id: true,
@@ -484,6 +492,8 @@ const KEYS = {
     severity: true,
     gap_type: true,
     summary: true,
+    gist: true,
+    matters: true,
     working_answer: true,
     price_of_other: true,
     options: true,
@@ -907,11 +917,14 @@ const KEYS = {
   // crates/specengine-cli/README.md "Output and the cap": one entry of a shown node's `ancestors` (RM-0094); every key present.
   ShownAncestor: { id: true, kind: true, title: true, path: true } satisfies Record<keyof ShownAncestor, true>,
   // docs/features/card-questions.md "Acceptance criteria" (K1, L3): a card's item (set 116), the intake document (117) and a match (118); every key present.
+  // A card's item's `gist` and `matters` after `summary` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
   CardItem: {
     id: true,
     kind: true,
     status: true,
     summary: true,
+    gist: true,
+    matters: true,
     working_answer: true,
     why: true,
     author: true,
@@ -931,13 +944,15 @@ const KEYS = {
   CardSplit: { dry_run: true, parent: true, children: true, reviewer: true, notes: true } satisfies Record<keyof CardSplit, true>,
   CardSplitParent: { id: true, created: true, title: true, discipline: true, flow: true, flow_title: true, column: true, targets: true } satisfies Record<keyof CardSplitParent, true>,
   CardSplitChild: { id: true, discipline: true, flow: true, flow_title: true, column: true, targets: true, from: true, suggested: true, mandate: true } satisfies Record<keyof CardSplitChild, true>,
-  // docs/features/task-mandate.md "Acceptance criteria" (M6, M7): a subtask's item (set 122), its card first, then a card's item's 16; every key present.
+  // docs/features/task-mandate.md "Acceptance criteria" (M6, M7): a subtask's item (set 122), its card first, then a card's item's 18; every key present.
   CardSubtaskItem: {
     card_id: true,
     id: true,
     kind: true,
     status: true,
     summary: true,
+    gist: true,
+    matters: true,
     working_answer: true,
     why: true,
     author: true,
@@ -1078,13 +1093,13 @@ type Named = keyof typeof KEYS;
 /** The key lists as the cited headings write them, copied verbatim (the review document's joined). */
 const CITED: Record<Named, string> = {
   Project: "slug, name, root, branch",
-  InboxEntry: "id, kind, status, target_id, target_ids, branch, created_at, rationale, severity, summary, record_id, staged_at",
+  InboxEntry: "id, kind, status, target_id, target_ids, branch, created_at, rationale, severity, summary, gist, record_id, staged_at",
   Proposal:
     "id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, " +
     "revisions, " +
     "drift, " +
     "decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, " +
-    "target_ids, severity, gap_type, summary, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked, " +
+    "target_ids, severity, gap_type, summary, gist, matters, working_answer, price_of_other, evidence, options, recommendation, distinct_from, linked, " +
     "record_id, record_path, record_title, record_text, choice, " +
     "task_id, " +
     "staged, staged_at, " +
@@ -1127,7 +1142,7 @@ const CITED: Record<Named, string> = {
   Author: "type, role, model, run, login?",
   RoundSheet: "project, items, more, minutes, notes",
   RoundItem:
-    "id, kind, severity, gap_type, summary, working_answer, price_of_other, options, recommendation, evidence, targets, tasks, worktree, branch, author, staged, staged_at, created_at, updated_at",
+    "id, kind, severity, gap_type, summary, gist, matters, working_answer, price_of_other, options, recommendation, evidence, targets, tasks, worktree, branch, author, staged, staged_at, created_at, updated_at",
   RoundTarget: "id, path, title",
   RoundTask: "id, status, title",
   RoundAnswersOutcome: "project, answers, notes",
@@ -1206,13 +1221,13 @@ const CITED: Record<Named, string> = {
   WorkspaceModule: "name, title, root, kinds",
   CardTask: "id, status, title, stale",
   ShownAncestor: "id, kind, title, path",
-  CardItem: "id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
+  CardItem: "id, kind, status, summary, gist, matters, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
   IntakeDocument: "id, created, hits, related, linked, diagnostics, notes",
   IntakeMatch: "id, source, status, path, answer, record",
   CardSplit: "dry_run, parent, children, reviewer, notes",
   CardSplitParent: "id, created, title, discipline, flow, flow_title, column, targets",
   CardSplitChild: "id, discipline, flow, flow_title, column, targets, from, suggested, mandate",
-  CardSubtaskItem: "card_id, id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
+  CardSubtaskItem: "card_id, id, kind, status, summary, gist, matters, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
   ShownHistory: "entries, truncated, omitted",
   HistoryEntry: "source, at, id, change, created, rev, rev_before, by, by_name, proposal, proposed_by, proposer, record, title, rationale",
   CardUpstream: "parent, mark, on, correction, changes, more",
@@ -1499,6 +1514,23 @@ const BEFORE_DEPARTMENT_OVERVIEW: readonly Named[] = [...BEFORE_DIRECTION_CATALO
 /** department-overview's three, sets 141 to 143 in "JSON"'s order (docs/features/department-overview.md "Acceptance criteria", DO10). */
 const DEPARTMENT_OVERVIEW: readonly Named[] = ["CardCounts", "CardColumnCount", "CardFlowCount"];
 
+/**
+ * plain-questions' keys, on five sets the fixture already names, as pairs (docs/features/plain-questions.md
+ * "Acceptance criteria", PQ10): a question's lead after `summary` on the review document, the inbox entry
+ * (`gist` alone), the round item and a card's item; and a subtask's item, which flattens a card's.
+ */
+const PLAIN_QUESTIONS: readonly (readonly [Named, string])[] = [
+  ["Proposal", "gist"],
+  ["Proposal", "matters"],
+  ["InboxEntry", "gist"],
+  ["RoundItem", "gist"],
+  ["RoundItem", "matters"],
+  ["CardItem", "gist"],
+  ["CardItem", "matters"],
+  ["CardSubtaskItem", "gist"],
+  ["CardSubtaskItem", "matters"],
+];
+
 /** The types each set names in `provisional.ts`, where the fixture's name is not the type's own. */
 const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument" };
 
@@ -1555,7 +1587,9 @@ function served(name: Named): string[] {
  * direction-catalog's three sets, every key of each, until its Rust test wrote them
  * (docs/features/direction-catalog.md "Acceptance criteria", DC-9), then empty again; and
  * department-overview's three sets, every key of each, until its Rust test wrote them
- * (docs/features/department-overview.md "Acceptance criteria", DO10), then empty again.
+ * (docs/features/department-overview.md "Acceptance criteria", DO10), then empty again. Now
+ * plain-questions' nine keys on five sets the file names, as pairs, until its Rust test wrote them,
+ * then empty again (docs/features/plain-questions.md "Acceptance criteria", PQ10).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1579,8 +1613,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS[name]).join(", ")).toBe(CITED[name].replaceAll("?", ""));
   });
 
-  it("counts 4 project keys, 12 inbox-entry keys, 51 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue, L1 of card-questions, IS10 of intake-similar)", () => {
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 12, 51]);
+  it("counts 4 project keys, 13 inbox-entry keys, 53 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue, L1 of card-questions, IS10 of intake-similar, PQ10 of plain-questions)", () => {
+    // 13 and 53 since plain-questions' `gist`, and its `matters` on the review (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 13, 53]);
   });
 
   it("gives the review document its drift right after revisions, before decided_by, and the DriftEvidence set its 3 keys (UI-1 of drift-queue)", () => {
@@ -1654,7 +1689,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three, nor since department-overview's Rust test wrote its three (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog, DO10 of department-overview)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three, nor since department-overview's Rust test wrote its three, nor since plain-questions' Rust test wrote its nine (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog, DO10 of department-overview, PQ10 of plain-questions)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1665,6 +1700,7 @@ describe("the daemon's document types (AC-09)", () => {
     // delivery-analytics' eleven sets, every key, until its Rust test wrote them, then empty again (docs/features/delivery-analytics.md "Acceptance criteria", DA-11);
     // direction-catalog's three sets, every key, until its Rust test wrote them, then empty again (docs/features/direction-catalog.md "Acceptance criteria", DC-9);
     // department-overview's three sets, every key, until its Rust test wrote them, then empty again (docs/features/department-overview.md "Acceptance criteria", DO10).
+    // plain-questions' nine keys on five sets, as pairs, until its Rust test wrote them, then empty again (docs/features/plain-questions.md "Acceptance criteria", PQ10).
     expect(AHEAD_OF_FIXTURE.filter(([name]) => DELIVERY_ANALYTICS.includes(name))).toHaveLength(0);
     expect(AHEAD_OF_FIXTURE.filter(([name]) => DIRECTION_CATALOG.includes(name))).toHaveLength(0);
     expect(AHEAD_OF_FIXTURE.filter(([name]) => DEPARTMENT_OVERVIEW.includes(name))).toHaveLength(0);
@@ -1729,7 +1765,8 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it('types card-questions\' three as the spec writes them: a card\'s item 16 keys, its kind a plain string, its status a proposal\'s, its author an author; the intake document 7, a match 6; the review document\'s `card_id` and `why` after `interpretation`, a card\'s `items` after `tasks`, each citing `docs/features/card-questions.md` "Acceptance criteria" (K1, L1, L3 of card-questions)', () => {
-    expect(CARD_QUESTIONS.map((name) => served(name).length)).toEqual([16, 7, 6]);
+    // A card's item's 18 since plain-questions' `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect(CARD_QUESTIONS.map((name) => served(name).length)).toEqual([18, 7, 6]);
     for (const name of CARD_QUESTIONS) {
       expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
       const at = source.indexOf(`export interface ${name} `);
@@ -1775,20 +1812,22 @@ describe("the daemon's document types (AC-09)", () => {
     expect(served("Card")).toHaveLength(36);
   });
 
-  it('types intake-similar\'s key as the spec writes it: the review document\'s `similar` always null, after `why`, 51 keys, the key citing `docs/features/intake-similar.md` "Acceptance criteria" (IS10 of intake-similar)', () => {
+  it('types intake-similar\'s key as the spec writes it: the review document\'s `similar` always null, after `why`, 51 keys then, 53 since plain-questions\' two, the key citing `docs/features/intake-similar.md` "Acceptance criteria" (IS10 of intake-similar)', () => {
     const review = declaredKeys("Proposal");
     expect(review.slice(review.indexOf("why"))).toEqual(["why", "similar", "notes"]);
     expect(source).toMatch(/^ {2}why: string \| null;\n {2}\/\*\*[^\n]*\*\/\n {2}similar: null;\n {2}\/\*\*[^\n]*\*\/\n {2}notes: string\[\];\n\}$/m);
     const at = source.indexOf("  similar: null;\n");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/intake-similar.md` "Acceptance criteria", IS10');
-    expect(served("Proposal")).toHaveLength(51);
+    // 53 since plain-questions' `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect(served("Proposal")).toHaveLength(53);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("similar");
   });
 
   it('types task-mandate\'s keys as the spec writes them: a mandate `binding`, `open` or null, a row\'s after `reviewer` (22 keys), a card\'s after `reviewer` with `subtask_items` after `items` (34), a split\'s subtask\'s last (9); set 122 `CardSubtaskItem`, `card_id` then a card\'s item\'s 16 in their order; each citing `docs/features/task-mandate.md` "Acceptance criteria" (M1, M6, M7 of task-mandate)', () => {
     expect(source).toMatch(/^export type Mandate = "binding" \| "open";$/m);
     // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10); a row's 23 and a card's 36 since upstream-signal's `upstream` (US-12).
-    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([23, 36, 9, 17]);
+    // A subtask's item's 19 since plain-questions' two, a card's item's (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([23, 36, 9, 19]);
     const row = declaredKeys("CardRow");
     expect(row.slice(row.indexOf("reviewer"), row.indexOf("reviewer") + 3)).toEqual(["reviewer", "mandate", "estimate"]);
     const card = declaredKeys("Card");
@@ -2203,8 +2242,36 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/spec-cli-graph.md` "spec show --links"');
   });
 
-  it("counts ui-round's six: 5 sheet keys, 19 item keys, 3, 3; 3 answers-document keys, 6 entry keys (T-04 of ui-round)", () => {
-    expect(UI_ROUND.map((name) => served(name).length)).toEqual([5, 19, 3, 3, 3, 6]);
+  it('types plain-questions\' keys as the spec writes them: `gist` and `matters` after `summary`, each `string | null`, on the review document, the round item, a card\'s item and a subtask\'s; the inbox entry\'s `gist` alone; each type citing `docs/features/plain-questions.md` "Acceptance criteria" (PQ10)', () => {
+    for (const type of ["Proposal", "RoundItem", "CardItem", "CardSubtaskItem"] as const) {
+      const keys = declaredKeys(type);
+      expect([type, keys.slice(keys.indexOf("summary"), keys.indexOf("summary") + 3)]).toEqual([type, ["summary", "gist", "matters"]]);
+      const at = source.indexOf(`export interface ${type} {`);
+      const body = source.slice(at, source.indexOf("\n}\n", at));
+      expect([type, /^ {2}gist: string \| null;$/m.test(body), /^ {2}matters: string \| null;$/m.test(body)]).toEqual([type, true, true]);
+      expect([type, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/plain-questions.md` "Acceptance criteria"')]).toEqual([type, true]);
+    }
+    const entry = declaredKeys("InboxEntry");
+    expect(entry.slice(entry.indexOf("summary"), entry.indexOf("summary") + 3)).toEqual(["summary", "gist", "record_id"]);
+    expect(entry).not.toContain("matters");
+    expect(PLAIN_QUESTIONS.map(([name, key]) => `${name}.${key}`)).toEqual([
+      "Proposal.gist",
+      "Proposal.matters",
+      "InboxEntry.gist",
+      "RoundItem.gist",
+      "RoundItem.matters",
+      "CardItem.gist",
+      "CardItem.matters",
+      "CardSubtaskItem.gist",
+      "CardSubtaskItem.matters",
+    ]);
+    // No set is added: the five are the file's already.
+    expect(ALL).toEqual(expect.arrayContaining(["Proposal", "InboxEntry", "RoundItem", "CardItem", "CardSubtaskItem"]));
+  });
+
+  it("counts ui-round's six: 5 sheet keys, 21 item keys, 3, 3; 3 answers-document keys, 6 entry keys (T-04 of ui-round, PQ10 of plain-questions)", () => {
+    // An item's 21 since plain-questions' `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect(UI_ROUND.map((name) => served(name).length)).toEqual([5, 21, 3, 3, 3, 6]);
     expect(Object.keys(KEYS.RoundItem).slice(-4)).toEqual(["staged", "staged_at", "created_at", "updated_at"]);
   });
 
@@ -2333,12 +2400,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(DEPARTMENT_SPLIT.map((name) => sets[name])).toEqual(DEPARTMENT_SPLIT.map((name) => declaredKeys(name)));
   });
 
-  it("names task-mandate's one last, after CardSplitChild, set 122 `CardSubtaskItem`: `card_id`, then a card's item's 16; a row's `mandate` after `reviewer` (22), a card's after `reviewer` and its `subtask_items` after `items` (34) (M6, M7 of task-mandate)", () => {
+  it("names task-mandate's one last, after CardSplitChild, set 122 `CardSubtaskItem`: `card_id`, then a card's item's 18; a row's `mandate` after `reviewer` (22), a card's after `reviewer` and its `subtask_items` after `items` (34) (M6, M7 of task-mandate)", () => {
     expect(Object.keys(sets).slice(BEFORE_TASK_MANDATE.length, BEFORE_NODE_HISTORY.length)).toEqual([...TASK_MANDATE]);
     expect(Object.keys(sets).indexOf("CardSubtaskItem")).toBe(121);
     expect(Object.keys(sets).at(BEFORE_NODE_HISTORY.length - 1)).toBe("CardSubtaskItem");
     expect(sets.CardSubtaskItem).toEqual(["card_id", ...(sets.CardItem ?? [])]);
-    expect(sets.CardSubtaskItem).toEqual(declaredKeys("CardSubtaskItem"));
+    expect(sets.CardSubtaskItem).toEqual(declaredNow("CardSubtaskItem"));
     for (const [name, key, after] of [
       ["CardRow", "mandate", "reviewer"],
       ["Card", "mandate", "reviewer"],
@@ -2353,13 +2420,14 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect([sets.CardRow, sets.Card]).toEqual([declaredNow("CardRow"), declaredNow("Card")]);
   });
 
-  it("names card-questions' three after ShownAncestor, before department-split's three, sets 116 to 118 with their keys in the types' order: 16, 7, 6 (K1, L3 of card-questions)", () => {
+  it("names card-questions' three after ShownAncestor, before department-split's three, sets 116 to 118 with their keys in the types' order: 18, 7, 6 (K1, L3 of card-questions; PQ10 of plain-questions)", () => {
     expect(Object.keys(sets).slice(BEFORE_CARD_QUESTIONS.length, BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...CARD_QUESTIONS]);
     expect(Object.keys(sets).indexOf("CardItem")).toBe(115);
     expect(Object.keys(sets).at(BEFORE_DEPARTMENT_SPLIT.length - 1)).toBe("IntakeMatch");
-    expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => served(name)));
-    expect(CARD_QUESTIONS.map((name) => sets[name]?.length)).toEqual([16, 7, 6]);
-    expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => declaredKeys(name)));
+    expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => compared(name)));
+    // 18 since plain-questions' Rust test wrote its `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect(CARD_QUESTIONS.map((name) => sets[name]?.length)).toEqual([18, 7, 6]);
+    expect(CARD_QUESTIONS.map((name) => sets[name])).toEqual(CARD_QUESTIONS.map((name) => declaredNow(name)));
   });
 
   it('names flow-scenario\'s one after CardTask, before card-questions\' three, set 115 `ShownAncestor` with its four keys in the types\' order; a shown node\'s `ancestors` after `omitted` (20), the flow document\'s 13 keys and a flow node\'s 16 (RM-0094, FS-11)', () => {
@@ -2422,7 +2490,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // intake-similar's `similar` (docs/features/intake-similar.md "Acceptance criteria", IS10).
     const review = sets.Proposal ?? [];
     expect(review).toEqual(compared("Proposal"));
-    expect(review).toHaveLength(isAhead("Proposal", "similar") ? 50 : 51);
+    // 53 since plain-questions' Rust test wrote its `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect(review).toHaveLength(53);
     expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(BEFORE_DRIFT_QUEUE.length);

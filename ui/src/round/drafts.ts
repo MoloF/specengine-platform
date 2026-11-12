@@ -10,7 +10,7 @@ import { ANSWER_MAX_BYTES, REASON_MAX_BYTES } from "./text";
 /**
  * What the owner picked for an item: one of its options by index, its working answer, an answer of
  * their own, a reject with its reason, or nothing (left open). Which picks an item offers follows
- * its structure, its options and its working answer, never its kind.
+ * its structure, its options, its working answer and its price of another answer, never its kind.
  */
 export type DraftPick = "open" | "option" | "working" | "answer" | "reject";
 
@@ -35,10 +35,44 @@ export function draftOf(item: { updated_at: string | null }): Draft {
   return { pick: "open", option: null, answer: "", reason: "", updatedAt: item.updated_at ?? "" };
 }
 
+/** What an item's structure is read by: its options, its working answer and the price of another answer (a round item's, a review's). */
+interface Structure {
+  readonly options: readonly unknown[];
+  readonly working_answer: string | null;
+  readonly price_of_other: string | null;
+}
+
 /**
- * Whether the item shown now offers the draft's pick: by its structure, options or none, never its
- * kind. A revised item may no longer offer it (its options gone, added or fewer): such a pick is
- * never sent, and never kept for the new version.
+ * Whether an item takes an answer of the owner's own, and its working answer when it has one: with a
+ * price of another answer, options or none, so a question with options takes all three
+ * (docs/features/plain-questions.md "Acceptance criteria", PQ12); as before with no options at all; an
+ * item whose options are its only answers (a discrepancy's) takes neither.
+ */
+function takesOwnAnswer(item: Structure): boolean {
+  return item.price_of_other !== null || item.options.length === 0;
+}
+
+/** One answer an item offers: an option by its index, its working answer, or an own answer. */
+export type Offered = { readonly pick: "option"; readonly option: number } | { readonly pick: "working" | "answer"; readonly option: null };
+
+/**
+ * The answers an item offers by its structure, never its kind (`docs/canon/round-ui.md` "Screen";
+ * docs/features/plain-questions.md "Acceptance criteria", PQ12): each option it holds, then its working
+ * answer when it has one, then an own answer, those two as `takesOwnAnswer` says. Reject, and Leave open
+ * on the Questions screen, follow them on every surface.
+ */
+export function answersOf(item: Structure): readonly Offered[] {
+  const options = item.options.map((_option, index): Offered => ({ pick: "option", option: index }));
+  if (!takesOwnAnswer(item)) {
+    return options;
+  }
+  return [...options, ...(item.working_answer === null ? [] : [{ pick: "working", option: null } as const]), { pick: "answer", option: null }];
+}
+
+/**
+ * Whether the item shown now offers the draft's pick: by its structure (answersOf), never its kind. A
+ * revised item may no longer offer it (its options gone, added or fewer): such a pick is never sent,
+ * and never kept for the new version.
  */
 export function offers(item: RoundItem, draft: Draft): boolean {
   switch (draft.pick) {
@@ -48,9 +82,9 @@ export function offers(item: RoundItem, draft: Draft): boolean {
     case "option":
       return item.options.length > 0 && draft.option !== null && draft.option >= 0 && draft.option < item.options.length;
     case "answer":
-      return item.options.length === 0;
+      return takesOwnAnswer(item);
     case "working":
-      return item.options.length === 0 && item.working_answer !== null;
+      return takesOwnAnswer(item) && item.working_answer !== null;
   }
 }
 

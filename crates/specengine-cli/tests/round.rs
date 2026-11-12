@@ -108,13 +108,16 @@ const CONSENT: &str = "spec: `spec round answer` asks the owner for consent on a
                        stdin is not one (a pipe, a script or an agent's shell): run it in a \
                        terminal; nothing changed\n";
 
-/// The 19 keys of a sheet's item, in order (canon "JSON").
-const ITEM_KEYS: [&str; 19] = [
+/// The 21 keys of a sheet's item, in order (canon "JSON"): `gist` and
+/// `matters` after `summary` since docs/features/plain-questions.md PQ7.
+const ITEM_KEYS: [&str; 21] = [
     "id",
     "kind",
     "severity",
     "gap_type",
     "summary",
+    "gist",
+    "matters",
     "working_answer",
     "price_of_other",
     "options",
@@ -179,6 +182,10 @@ fn question_request(
         now: now.to_owned(),
         git: pair.git_env(cwd),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     }
 }
 

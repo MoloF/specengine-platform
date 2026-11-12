@@ -437,6 +437,10 @@ fn asked(setup: &Setup, targets: &[&str], text: &str) -> String {
         now: utc_now(),
         git: terminal_git(setup),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     };
     let ask = |request: &QuestionRequest| {
         propose_question(&env, &globals, request).unwrap_or_else(|error| panic!("{text}: {error}"))

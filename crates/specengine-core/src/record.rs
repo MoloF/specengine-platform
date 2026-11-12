@@ -518,14 +518,16 @@ pub fn highest_record_number<'a>(
     highest
 }
 
-/// The owner's choice, as the queue stores it (JSON with one key).
+/// The owner's choice, as the queue stores it (JSON with one key), judged
+/// by the item's fields (`docs/features/plain-questions.md`
+/// "Acceptance criteria", PQ4).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Choice {
-    /// A discrepancy's option, by index: `{"option":1}`.
+    /// One of the item's options, by index: `{"option":1}`.
     Option(u64),
-    /// A question's working answer: `{"working_answer":true}`.
+    /// Its working answer: `{"working_answer":true}`.
     WorkingAnswer,
-    /// Another answer to a question: `{"answer":"…"}`.
+    /// Another answer than the working answer: `{"answer":"…"}`.
     Answer(String),
 }
 

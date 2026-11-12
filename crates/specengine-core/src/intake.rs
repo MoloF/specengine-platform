@@ -64,10 +64,17 @@ pub const EVIDENCE_MAX: usize = 8;
 pub const LOCATION_MAX: usize = 512;
 /// The most bytes of an evidence item's `observed` and `documented`.
 pub const EVIDENCE_TEXT_MAX: usize = 1024;
-/// The fewest `options` of a discrepancy.
+/// The fewest `options` of a discrepancy, and of a question holding them.
 pub const OPTIONS_MIN: usize = 2;
 /// The most `options` of a discrepancy.
 pub const OPTIONS_MAX: usize = 6;
+/// The most `options` of a question (`docs/features/plain-questions.md`
+/// "Acceptance criteria", PQ2).
+pub const QUESTION_OPTIONS_MAX: usize = 3;
+/// The most bytes of a question's `gist`: one line for the owner.
+pub const GIST_MAX: usize = 160;
+/// The most bytes of a question's `matters`: why it matters to the owner.
+pub const MATTERS_MAX: usize = 512;
 /// The most bytes of an option's `label`.
 pub const LABEL_MAX: usize = 128;
 /// The most bytes of an option's `effect` and `price`.
@@ -276,11 +283,22 @@ pub struct DecisionInput {
     pub distinct_from: Option<Vec<String>>,
 }
 
-/// A question as given.
+/// A question as given. The four lead fields are optional, a question
+/// without them stored and answered as before
+/// (`docs/features/plain-questions.md` "Acceptance criteria", PQ3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuestionInput<'a> {
     pub node_ids: &'a [String],
     pub text: &'a str,
+    /// The question in one line of plain words, at most [`GIST_MAX`]
+    /// bytes.
+    pub gist: Option<&'a str>,
+    /// Why it matters to the owner, at most [`MATTERS_MAX`] bytes.
+    pub matters: Option<&'a str>,
+    /// [`OPTIONS_MIN`] to [`QUESTION_OPTIONS_MAX`] priced answers.
+    pub options: Option<&'a [IntakeOption]>,
+    /// An index into `options`; given only with them.
+    pub recommendation: Option<u64>,
     pub working_answer: &'a str,
     pub price_of_other: &'a str,
     pub distinct_from: &'a [String],
@@ -318,14 +336,26 @@ impl fmt::Display for FieldProblem {
 }
 
 /// The first problem of a question's fields, in input order: `node_ids`,
-/// `text`, `working_answer`, `price_of_other`, `distinct_from`, then the
-/// author's.
+/// `text`, `gist`, `matters`, `options`, `recommendation`,
+/// `working_answer`, `price_of_other`, `distinct_from`, then the author's.
 pub fn question_problem(
     question: &QuestionInput<'_>,
     author: AuthorInput<'_>,
 ) -> Option<FieldProblem> {
     node_ids_problem(question.node_ids)
         .or_else(|| required("text", question.text, SUMMARY_MAX))
+        .or_else(|| gist_problem(question.gist))
+        .or_else(|| optional("matters", question.matters, MATTERS_MAX))
+        .or_else(|| {
+            question
+                .options
+                .and_then(|options| options_problem(options, QUESTION_OPTIONS_MAX))
+        })
+        .or_else(|| match (question.recommendation, question.options) {
+            (None, _) => None,
+            (Some(_), None) => Some(FieldProblem::new("recommendation", "given without options")),
+            (Some(at), Some(options)) => recommendation_problem(at, options.len()),
+        })
         .or_else(|| required("working_answer", question.working_answer, ANSWER_MAX))
         .or_else(|| required("price_of_other", question.price_of_other, ANSWER_MAX))
         .or_else(|| distinct_problem(question.distinct_from))
@@ -342,7 +372,7 @@ pub fn discrepancy_problem(
     node_ids_problem(&input.node_ids)
         .or_else(|| required("summary", &input.summary, SUMMARY_MAX))
         .or_else(|| evidence_problem(&input.evidence))
-        .or_else(|| options_problem(&input.options))
+        .or_else(|| options_problem(&input.options, OPTIONS_MAX))
         .or_else(|| recommendation_problem(input.recommendation, input.options.len()))
         .or_else(|| {
             optional(
@@ -458,12 +488,14 @@ fn evidence_problem(evidence: &[Evidence]) -> Option<FieldProblem> {
     })
 }
 
-fn options_problem(options: &[IntakeOption]) -> Option<FieldProblem> {
-    if !(OPTIONS_MIN..=OPTIONS_MAX).contains(&options.len()) {
+/// [`OPTIONS_MIN`] to `max` options (a discrepancy's [`OPTIONS_MAX`], a
+/// question's [`QUESTION_OPTIONS_MAX`]), each labelled and priced.
+fn options_problem(options: &[IntakeOption], max: usize) -> Option<FieldProblem> {
+    if !(OPTIONS_MIN..=max).contains(&options.len()) {
         return Some(FieldProblem::new(
             "options",
             format!(
-                "{} option(s); give {OPTIONS_MIN} to {OPTIONS_MAX}, each priced",
+                "{} option(s); give {OPTIONS_MIN} to {max}, each priced",
                 options.len()
             ),
         ));
@@ -487,6 +519,51 @@ fn recommendation_problem(recommendation: u64, options: usize) -> Option<FieldPr
             ),
         )
     })
+}
+
+/// A question's `gist` when given: not blank, one line (no LF or CR), at
+/// most [`GIST_MAX`] bytes.
+fn gist_problem(gist: Option<&str>) -> Option<FieldProblem> {
+    let gist = gist?;
+    if gist.trim().is_empty() {
+        return Some(FieldProblem::new("gist", blank()));
+    }
+    if gist.contains(['\n', '\r']) {
+        return Some(FieldProblem::new(
+            "gist",
+            "holds a line break; give one line",
+        ));
+    }
+    over("gist", gist, GIST_MAX)
+}
+
+/// The characters a gist's token sheds at both ends before it is judged
+/// a path or a node.
+const TOKEN_TRIM: [char; 17] = [
+    '`', '"', '\'', '(', ')', '[', ']', '{', '}', '<', '>', ',', '.', ';', ':', '!', '?',
+];
+
+/// The plain-words note of a question's `gist`
+/// (`docs/features/plain-questions.md` "Acceptance criteria", PQ6):
+/// advice, never a refusal. The gist is cut into tokens at Unicode
+/// whitespace; the first one flagged is named, once. A token is flagged
+/// when, shed of [`TOKEN_TRIM`] at both ends, it ends in `.md` (ASCII
+/// case-insensitive), or when `flags` takes it, given the token as written
+/// and shed: the caller's tests, a code path and a node of its index, the
+/// core holding no language's syntax. The token is named shed, else as
+/// written. `None`: none flagged.
+pub fn gist_note(gist: &str, mut flags: impl FnMut(&str, &str) -> bool) -> Option<String> {
+    let flagged = gist.split_whitespace().find_map(|token| {
+        let shed = token.trim_matches(&TOKEN_TRIM[..]);
+        let named = if shed.is_empty() { token } else { shed };
+        let path =
+            shed.len() >= 3 && shed.as_bytes()[shed.len() - 3..].eq_ignore_ascii_case(b".md");
+        (path || flags(token, shed)).then_some(named)
+    })?;
+    Some(format!(
+        "gist: `{flagged}` reads as code to the owner: say it in plain words; IDs belong in \
+         node_ids"
+    ))
 }
 
 fn patch_problem(patch: &ProposedPatch) -> Option<FieldProblem> {

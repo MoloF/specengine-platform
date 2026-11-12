@@ -145,6 +145,8 @@ describe("the normal scenario", () => {
         "rationale",
         "severity",
         "summary",
+        // A question's gist, whole (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+        "gist",
         "record_id",
         "staged_at",
       ]);
@@ -337,7 +339,8 @@ describe("a card's items over the mock (card-questions)", () => {
       ["PR-0055", "question", "open", null, null],
       ["PR-0056", "decision", "applied", "Pilots read the diagram for the worst case, and full boom is it.", "DEC-0013"],
     ]);
-    expect(Object.keys(card.items[0] ?? {})).toHaveLength(16);
+    // 18 since plain-questions' `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    expect(Object.keys(card.items[0] ?? {})).toHaveLength(18);
     const history = card.history ?? [];
     expect(history.map((event) => event.type)).toEqual(["card.created", "card.moved", "proposal.created", "proposal.created", "proposal.approved", "proposal.applied"]);
     expect(history.map((event) => event.seq)).toEqual([...history.map((event) => event.seq)].sort((a, b) => a - b));

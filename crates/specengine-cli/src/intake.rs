@@ -1,5 +1,6 @@
 //! `spec propose question ID… --text T --working-answer W --price-of-other
-//! P [--severity S] [--distinct-from X]… [--card C]`, `spec propose
+//! P [--severity S] [--gist G] [--matters M] [--options F]
+//! [--recommendation N] [--distinct-from X]… [--card C]`, `spec propose
 //! discrepancy --input F|- [--card C]` and `spec propose decision --input
 //! F|- [--card C]` (canon `agent-intake`, "Tools", "Rules"; task spec
 //! `kind-decision`; the card: canon `card-questions`, "The rule"): an agent's
@@ -11,7 +12,8 @@
 //! of another proposal. In order, the first refusal answering (exit 1
 //! `<field>: <problem>`, nothing stored, no ID taken):
 //!
-//! 1. form: clap, `--input` not UTF-8 JSON of the shape (exit 2);
+//! 1. form: clap, `--input` (a question's `--options`) not UTF-8 JSON of
+//!    the shape (exit 2);
 //! 2. caps, enums (core [`specengine_core::intake`]); then `--card` as
 //!    written, a card ID (a look-alike exit 2 naming its Latin form); then
 //!    the author's grammar;
@@ -45,7 +47,16 @@
 //! `{id, created, hits, related, linked, diagnostics, notes}`; past 10 hits
 //! (related items), a note names the rest, up to 64 in all
 //! (`distinct_from`'s cap), and counts those past that: an item with more
-//! than 64 hits is never stored (a known limit).
+//! than 64 hits is never stored (a known limit). A question whose `gist`
+//! reads as code gets the plain-words note last, stored or not, never on a
+//! refusal (task spec `plain-questions` PQ6; core
+//! [`specengine_core::intake::gist_note`], which judges a `.md` path).
+//! The other two tests are this crate's: a token holding a code path's
+//! separator, then [`crate::propose::GistNames`]: a token step 3 resolves
+//! in the index this call refreshed, a legacy alias whose canonical ID it
+//! resolves, or an alias a document declares; a look-alike, a mixed
+//! script, a `project:` and anything unknown are no flag. The note names
+//! the token as given, trimmed.
 
 use std::fs;
 use std::io::Read as _;
@@ -60,7 +71,7 @@ use specengine_core::check::{DocClass, Endpoint, NodeAt, SpecGraph, Standing};
 use specengine_core::intake::{
     AuthorInput, DISTINCT_MAX, DecisionInput, DiscrepancyInput, Evidence, FieldProblem, GapType,
     IntakeOption, IntakeSeverity, ProposedPatch, QuestionInput, author_problem, decision_problem,
-    discrepancy_problem, question_problem,
+    discrepancy_problem, gist_note, question_problem,
 };
 use specengine_core::proposal::Author;
 use specengine_model::{Direction, is_weak_link};
@@ -76,7 +87,7 @@ use crate::create::unheld_findings;
 use crate::proposals::{
     checked_now, escaped_error, finding_line, more_findings_note, open_context, queue_cannot,
 };
-use crate::propose::{checked_update, is_path_target, resolved_node, written_reference};
+use crate::propose::{GistNames, checked_update, is_path_target, resolved_node, written_reference};
 use crate::task::bound_task;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
@@ -93,6 +104,10 @@ pub const INTAKE_MATCHES_MAX: usize = 10;
 /// The most matches of one list a note names past [`INTAKE_MATCHES_MAX`].
 const NAMED_PAST_MAX: usize = DISTINCT_MAX - INTAKE_MATCHES_MAX;
 
+/// What joins a code path's segments: a gist token holding it reads as code
+/// to the owner (task spec `plain-questions` PQ6).
+const CODE_PATH_SEPARATOR: &str = "::";
+
 // The `status:` of a decision the owner accepted (the documentation
 // convention's decision class): the one a record from the queue carries.
 use specengine_core::record::ACCEPTED;
@@ -108,6 +123,16 @@ pub struct QuestionRequest {
     pub working_answer: String,
     /// `--price-of-other P`: what another answer would cost.
     pub price_of_other: String,
+    /// `--gist G`: the question in one line of plain words for the owner
+    /// (task spec `plain-questions` PQ1).
+    pub gist: Option<String>,
+    /// `--matters M`: why it matters to the owner.
+    pub matters: Option<String>,
+    /// `--options F` ([`read_question_options`]): two or three priced
+    /// answers the owner may pick.
+    pub options: Option<Vec<IntakeOption>>,
+    /// `--recommendation N`: an index into `options`.
+    pub recommendation: Option<u64>,
     /// `--severity S`; absent: `normal`.
     pub severity: Option<IntakeSeverity>,
     /// `--distinct-from X…`: the hits this question is declared distinct
@@ -400,6 +425,24 @@ pub fn read_discrepancy_input(
     .map_err(escaped_error)
 }
 
+/// `--options F|-` of `spec propose question`: UTF-8 JSON of a question's
+/// options, an array of `{label, effect, price}` (every key, no other), at
+/// most [`INTAKE_INPUT_MAX_BYTES`], read as `--input` is read; anything else
+/// exits 2 (task spec `plain-questions` PQ2). Their count and caps are the
+/// intake's step 2.
+pub fn read_question_options(
+    env: &Env,
+    source: &IntakeSource,
+) -> Result<Vec<IntakeOption>, CliError> {
+    read_document(
+        env,
+        source,
+        "--options",
+        "a question's options (an array of `{label, effect, price}`)",
+    )
+    .map_err(escaped_error)
+}
+
 /// `--input F|-` of `spec propose decision`: UTF-8 JSON of a decision's
 /// arguments (the author's aside), as [`read_discrepancy_input`] reads a
 /// discrepancy's: an unknown key (an `options`), a required one missing,
@@ -421,13 +464,23 @@ fn read_input<T: DeserializeOwned>(
     source: &IntakeSource,
     shape: &str,
 ) -> Result<T, CliError> {
+    read_document(env, source, "--input", shape)
+}
+
+/// A JSON document of the flag `flag` as `T`; `shape` names it in a
+/// refusal.
+fn read_document<T: DeserializeOwned>(
+    env: &Env,
+    source: &IntakeSource,
+    flag: &str,
+    shape: &str,
+) -> Result<T, CliError> {
     let read: Vec<u8>;
     let (label, bytes) = match source {
         IntakeSource::Given(bytes) => ("-".to_owned(), bytes.as_slice()),
         IntakeSource::File(path) => {
             let label = path.display().to_string();
-            let cannot =
-                |error: std::io::Error| CliError::spec(format!("--input {label}: {error}"));
+            let cannot = |error: std::io::Error| CliError::spec(format!("{flag} {label}: {error}"));
             let file = fs::File::open(env.cwd.join(path)).map_err(cannot)?;
             let mut bytes = Vec::new();
             file.take(INTAKE_INPUT_MAX_BYTES as u64 + 1)
@@ -439,17 +492,17 @@ fn read_input<T: DeserializeOwned>(
     };
     if bytes.len() > INTAKE_INPUT_MAX_BYTES {
         return Err(CliError::spec(format!(
-            "--input {label}: longer than {INTAKE_INPUT_MAX_BYTES} bytes (8 MiB)"
+            "{flag} {label}: longer than {INTAKE_INPUT_MAX_BYTES} bytes (8 MiB)"
         )));
     }
     let text = std::str::from_utf8(bytes).map_err(|error| {
         CliError::spec(format!(
-            "--input {label}: not UTF-8 (at byte {})",
+            "{flag} {label}: not UTF-8 (at byte {})",
             error.valid_up_to()
         ))
     })?;
     serde_json::from_str(text)
-        .map_err(|error| CliError::spec(format!("--input {label}: not {shape}: {error}")))
+        .map_err(|error| CliError::spec(format!("{flag} {label}: not {shape}: {error}")))
 }
 
 /// The author's fields judged apart: the card as written goes between the
@@ -471,6 +524,10 @@ fn run_question(
         &QuestionInput {
             node_ids: &request.node_ids,
             text: &request.text,
+            gist: request.gist.as_deref(),
+            matters: request.matters.as_deref(),
+            options: request.options.as_deref(),
+            recommendation: request.recommendation,
             working_answer: &request.working_answer,
             price_of_other: &request.price_of_other,
             distinct_from: &request.distinct_from,
@@ -489,11 +546,13 @@ fn run_question(
             working_answer: Some(&request.working_answer),
             price_of_other: Some(&request.price_of_other),
             evidence: &[],
-            options: &[],
-            recommendation: None,
+            options: request.options.as_deref().unwrap_or_default(),
+            recommendation: request.recommendation,
             patch: None,
             distinct_from: &request.distinct_from,
             why: None,
+            gist: request.gist.as_deref(),
+            matters: request.matters.as_deref(),
             card: request.card.as_deref(),
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
@@ -531,6 +590,8 @@ fn run_discrepancy(
             patch: input.proposed_patch.as_ref(),
             distinct_from: input.distinct_from.as_deref().unwrap_or_default(),
             why: None,
+            gist: None,
+            matters: None,
             card: request.card.as_deref(),
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
@@ -571,6 +632,8 @@ fn run_decision(
             patch: input.proposed_patch.as_ref(),
             distinct_from: input.distinct_from.as_deref().unwrap_or_default(),
             why: input.why.as_deref(),
+            gist: None,
+            matters: None,
             card: request.card.as_deref(),
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
@@ -599,6 +662,9 @@ struct Item<'a> {
     distinct_from: &'a [String],
     /// A decision's why.
     why: Option<&'a str>,
+    /// A question's gist and why it matters.
+    gist: Option<&'a str>,
+    matters: Option<&'a str>,
     /// `--card C` as written.
     card: Option<&'a str>,
     /// Role, model, run.
@@ -660,6 +726,8 @@ pub(crate) fn departure_intake(
             recommendation: Some(input.recommendation),
             distinct_from: Vec::new(),
             why: None,
+            gist: None,
+            matters: None,
         },
         card_id: Some(card.to_owned()),
         actor: None,
@@ -828,6 +896,17 @@ fn run_intake(
         None => None,
     };
 
+    // The plain-words note of a gist, judged once the item passed steps
+    // 1-5; told last whether stored or not (task spec `plain-questions`
+    // PQ6): a code path's separator in the token as written, else a node
+    // its shed form names, one resolver for the whole gist.
+    let names = GistNames::new(&context.project, &input);
+    let plain_words = item.gist.and_then(|gist| {
+        gist_note(gist, |token, shed| {
+            token.contains(CODE_PATH_SEPARATOR) || (!shed.is_empty() && names.names(shed))
+        })
+    });
+
     // 6. The corpus's accepted decisions on the targets.
     let graph = SpecGraph::new(
         &input,
@@ -854,6 +933,8 @@ fn run_intake(
             recommendation: item.recommendation,
             distinct_from: item.distinct_from.to_vec(),
             why: item.why.map(str::to_owned),
+            gist: item.gist.map(str::to_owned),
+            matters: item.matters.map(str::to_owned),
         },
         card_id: card,
         actor: item.actor.map(str::to_owned),
@@ -900,6 +981,11 @@ fn run_intake(
         let told = held.iter().cloned().map(Message::Note);
         outcome.messages.extend(told);
         outcome.document.notes.extend(held);
+    }
+    if let Some(note) = plain_words {
+        let note = one_line(&note);
+        outcome.messages.push(Message::Note(note.clone()));
+        outcome.document.notes.push(note);
     }
     Ok(outcome)
 }

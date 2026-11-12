@@ -23,10 +23,11 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { DECISION_KEYS, isStaged, verbOf, type DecisionKind } from "./decisions";
 import { DriftSection, TerminalDecision } from "./DriftItem";
+import { AskedFold, AskedText, LeadMatters, RecommendedMark } from "./ItemLead";
 import { gapLabel, previewLabel, severityLook, statusLook, statusLozenge } from "./labels";
 import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
-import { summaryOf } from "./summary";
+import { leadingGist, summaryOf } from "./summary";
 import { targetsOf } from "./targets";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -169,6 +170,85 @@ function choiceText(choice: Choice, options: readonly ProposalOption[], t: Trans
   return t("inbox.staged.workingAnswer");
 }
 
+/** A review's options, each with its effect and price, the recommended one marked with who made it; never picked here. */
+function OptionsSection({ project, review }: { project: string; review: Proposal }) {
+  const t = useTranslate();
+  return (
+    <Section title={t("inbox.card.options")}>
+      {review.options.length === 0 ? (
+        <p className="muted">{t("inbox.card.noOptions")}</p>
+      ) : (
+        <ol className="option-list">
+          {review.options.map((choice, index) => {
+            const recommended = index === review.recommendation;
+            return (
+              <li key={`${String(index)}-${choice.label}`} className={recommended ? "option option-recommended" : "option"}>
+                <p className="option-label">
+                  {/* Agent text, as the round sheet writes a slot: controls as `\u{..}`, isolated. */}
+                  <span>
+                    <bdi>{shownSlot(choice.label)}</bdi>
+                  </span>
+                  {recommended && <RecommendedMark author={review.author} />}
+                </p>
+                <Prose className="option-effect" source={choice.effect} links={null} project={project} baseLevel={3} frontMatter={false} />
+                <div className="option-price">
+                  <p className="price-label">{t("inbox.card.price")}</p>
+                  <Prose source={choice.price} links={null} project={project} baseLevel={3} frontMatter={false} />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Section>
+  );
+}
+
+/** A review's working answer with the price of another answer, then a decision's why. */
+function AnswerSections({ project, review }: { project: string; review: Proposal }) {
+  const t = useTranslate();
+  return (
+    <>
+      {review.working_answer !== null && (
+        <Section title={t("inbox.card.workingAnswer")}>
+          <Prose className="prose" source={review.working_answer} links={null} project={project} baseLevel={3} frontMatter={false} />
+          {review.price_of_other !== null && (
+            <div className="prose">
+              <p className="price-label">{t("inbox.card.priceOfOther")}</p>
+              <Prose source={review.price_of_other} links={null} project={project} baseLevel={3} frontMatter={false} />
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* A decision's why, as its author wrote it (docs/features/card-questions.md "Acceptance criteria", U5). */}
+      {review.why !== null && (
+        <Section title={t("inbox.proposal.why")}>
+          <Prose className="prose" source={review.why} links={null} project={project} baseLevel={3} frontMatter={false} />
+        </Section>
+      )}
+    </>
+  );
+}
+
+/**
+ * A question's lead on the Inbox card (docs/features/plain-questions.md "Acceptance criteria", PQ12),
+ * its gist the card's title: why it matters, its options, then what it said before it had a gist, its
+ * text verbatim with its working answer, price and why, folded and collapsed; the targets follow.
+ */
+function QuestionLead({ project, review }: { project: string; review: Proposal }) {
+  return (
+    <>
+      {review.matters !== null && <LeadMatters matters={review.matters} />}
+      <OptionsSection project={project} review={review} />
+      <AskedFold>
+        {review.summary !== null && <AskedText text={review.summary} />}
+        <AnswerSections project={project} review={review} />
+      </AskedFold>
+    </>
+  );
+}
+
 /** The review document's sections, as `spec review` sent them. */
 function ReviewBody({
   project,
@@ -217,60 +297,9 @@ function ReviewBody({
         </Section>
       )}
 
-      {/* A drift item has no options to choose: decided on a terminal, its section left out. */}
-      {drift === null && (
-        <Section title={t("inbox.card.options")}>
-          {review.options.length === 0 ? (
-            <p className="muted">{t("inbox.card.noOptions")}</p>
-          ) : (
-            <ol className="option-list">
-              {review.options.map((choice, index) => {
-                const recommended = index === review.recommendation;
-                return (
-                  <li key={`${String(index)}-${choice.label}`} className={recommended ? "option option-recommended" : "option"}>
-                    <p className="option-label">
-                      {/* Agent text, as the round sheet writes a slot: controls as `\u{..}`, isolated. */}
-                      <span>
-                        <bdi>{shownSlot(choice.label)}</bdi>
-                      </span>
-                      {recommended && (
-                        <span className="recommended-mark">
-                          <Icon name="recommended" />
-                          {t("inbox.recommended")}
-                        </span>
-                      )}
-                    </p>
-                    <Prose className="option-effect" source={choice.effect} links={null} project={project} baseLevel={3} frontMatter={false} />
-                    <div className="option-price">
-                      <p className="price-label">{t("inbox.card.price")}</p>
-                      <Prose source={choice.price} links={null} project={project} baseLevel={3} frontMatter={false} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </Section>
-      )}
-
-      {review.working_answer !== null && (
-        <Section title={t("inbox.card.workingAnswer")}>
-          <Prose className="prose" source={review.working_answer} links={null} project={project} baseLevel={3} frontMatter={false} />
-          {review.price_of_other !== null && (
-            <div className="prose">
-              <p className="price-label">{t("inbox.card.priceOfOther")}</p>
-              <Prose source={review.price_of_other} links={null} project={project} baseLevel={3} frontMatter={false} />
-            </div>
-          )}
-        </Section>
-      )}
-
-      {/* A decision's why, as its author wrote it (docs/features/card-questions.md "Acceptance criteria", U5). */}
-      {review.why !== null && (
-        <Section title={t("inbox.proposal.why")}>
-          <Prose className="prose" source={review.why} links={null} project={project} baseLevel={3} frontMatter={false} />
-        </Section>
-      )}
+      {/* A drift item has no options to choose: decided on a terminal, its section left out. A gist leads with them instead (QuestionLead). */}
+      {drift === null && review.gist === null && <OptionsSection project={project} review={review} />}
+      {review.gist === null && <AnswerSections project={project} review={review} />}
 
       {review.rationale !== null && review.rationale !== review.summary && (
         <Section title={t("inbox.card.rationale")}>
@@ -483,7 +512,9 @@ function ReviewBody({
  * and it has no options or section diff to show. Where a hub's `allowed` omits `stage`, the decisions
  * that stage and Unstage stay focusable and do nothing; the two that send nothing stay as they are.
  * Laid out as a work item beside the queue (docs/features/design-sweep.md "Acceptance criteria", DS5):
- * the trail, the summary, its status as a lozenge, the decisions; then its facts, then the review.
+ * the trail, the summary, its status as a lozenge, the decisions; then its facts, then the review. A
+ * question holding a gist is titled by it and leads with why it matters and its options, its text
+ * folded under them (docs/features/plain-questions.md "Acceptance criteria", PQ12).
  */
 export function ProposalCard({
   project,
@@ -571,6 +602,8 @@ export function ProposalCard({
   }
 
   const staged = reviewed !== undefined && reviewed.id === id && reviewed.staged !== null && reviewed.staged_at !== null ? reviewed : null;
+  /** The gist the card is titled by, the agent's words as the lead draws them; null: the summary's line as before. */
+  const titleGist = leadingGist(reviewed ?? entry);
   // One primary per item: a staged choice confirmed here takes it from Accept, as a task's Answer dialog does.
   const acceptLook = staged !== null && onConfirm !== undefined ? "default" : "primary";
   const crumbs: Crumb[] = [
@@ -615,7 +648,7 @@ export function ProposalCard({
         breadcrumbs={<Breadcrumbs items={crumbs} />}
         title={
           <h2 id="card-title" className="card-title">
-            {summaryOf(reviewed ?? entry, t)}
+            {titleGist === null ? summaryOf(reviewed ?? entry, t) : <bdi>{shownSlot(titleGist)}</bdi>}
           </h2>
         }
         meta={<Lozenge {...statusLozenge(reviewed?.status ?? entry.status, t)} />}
@@ -667,6 +700,7 @@ export function ProposalCard({
         side={<PropertyList label={t("inbox.card.details")} items={details} />}
         main={
           <div className="card-body" ref={body} tabIndex={-1}>
+            {reviewed !== undefined && reviewed.gist !== null && <QuestionLead project={project} review={reviewed} />}
             <Section title={t("inbox.card.targets")}>
               {targets.length === 0 ? (
                 <p className="muted">{t("inbox.card.noTargets")}</p>

@@ -2563,10 +2563,15 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // The counts the spec names: 4 project keys, 12 inbox-entry keys
     // (decision-staging: `staged_at` after `record_id`, never `staged`).
     assert_eq!(sets[0].1, ["slug", "name", "root", "branch"]);
-    assert_eq!(sets[1].1.len(), 12, "{:?}", sets[1].1);
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10: 13,
+    // `gist` after `summary`.
+    assert_eq!(sets[1].1.len(), 13, "{:?}", sets[1].1);
     assert!(!sets[1].1.contains(&"task_id".to_owned()));
     assert!(!sets[1].1.contains(&"staged".to_owned()));
-    assert_eq!(sets[1].1[10..], ["record_id", "staged_at"]);
+    assert_eq!(
+        sets[1].1[9..],
+        ["summary", "gist", "record_id", "staged_at"]
+    );
     // docs/features/task-package.md "Data", AC-10: the review document
     // gains `task_id` after `choice`; decision-staging `staged`,
     // `staged_at` after it, before `notes`; docs/features/kind-interpretation.md
@@ -2577,8 +2582,17 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // `interpretation`: 50.
     // docs/features/intake-similar.md "Acceptance criteria" IS10: `similar`
     // after `why` (null on every route), 51 keys, no set added.
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10: `gist`,
+    // `matters` after `summary`, 53 keys, no set added.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 51, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 53, "{:?}", sets[2].1);
+    let summary = sets[2].1.iter().position(|key| key == "summary");
+    assert_eq!(
+        sets[2].1[summary.expect("summary")..summary.expect("summary") + 4],
+        ["summary", "gist", "matters", "working_answer"],
+        "{:?}",
+        sets[2].1
+    );
     let conflict = sets[2].1.iter().position(|key| key == "conflict");
     assert_eq!(
         sets[2].1[conflict.expect("conflict") + 1..conflict.expect("conflict") + 3],
@@ -2587,7 +2601,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         sets[2].1
     );
     assert_eq!(
-        sets[2].1[42..],
+        sets[2].1[44..],
         [
             "choice",
             "task_id",
@@ -2723,7 +2737,15 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "RoundAnswerEntry"
         ]
     );
-    assert_eq!(sets[35].1.len(), 19, "{:?}", sets[35].1);
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10: 21,
+    // `gist` and `matters` after `summary`.
+    assert_eq!(sets[35].1.len(), 21, "{:?}", sets[35].1);
+    assert_eq!(
+        sets[35].1[4..7],
+        ["summary", "gist", "matters"],
+        "{:?}",
+        sets[35].1
+    );
     assert_eq!(sets[37].1, ["id", "status", "title"]);
     assert_eq!(sets[38].1, ["project", "answers", "notes"]);
     assert_eq!(
@@ -3296,6 +3318,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(sets[114].1, ["id", "kind", "title", "path"]);
     // docs/features/card-questions.md K1, sets 116 to
     // 118.
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10: 18,
+    // `gist` and `matters` after `summary`.
     assert_eq!(sets[115].0, "CardItem");
     assert_eq!(
         sets[115].1,
@@ -3304,6 +3328,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "kind",
             "status",
             "summary",
+            "gist",
+            "matters",
             "working_answer",
             "why",
             "author",
@@ -3374,12 +3400,13 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         ]
     );
     // docs/features/task-mandate.md M7: set 122, last: `card_id`, then
-    // `CardItem`'s 16. M: a key missing from the fixture.
+    // `CardItem`'s 16 (18 since docs/features/plain-questions.md PQ10, so
+    // 19). M: a key missing from the fixture.
     assert_eq!(sets[121].0, "CardSubtaskItem");
     let mut subtask_item = vec!["card_id".to_owned()];
     subtask_item.extend(sets[115].1.iter().cloned());
     assert_eq!(sets[121].1, subtask_item);
-    assert_eq!(sets[121].1.len(), 17);
+    assert_eq!(sets[121].1.len(), 19);
     // docs/features/node-history.md NH12: sets 123 and 124, last: the
     // spec's keys in its order. M: `history` out of the fixture.
     assert_eq!(sets[122].0, "ShownHistory");
@@ -3713,8 +3740,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     };
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
     // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
-    // docs/features/intake-similar.md "Acceptance criteria" IS10.
-    assert_eq!(set("Proposal").len(), 51);
+    // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10.
+    assert_eq!(set("Proposal").len(), 53);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -3886,8 +3914,9 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     };
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
     // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
-    // docs/features/intake-similar.md "Acceptance criteria" IS10.
-    assert_eq!(set("Proposal").len(), 51);
+    // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10.
+    assert_eq!(set("Proposal").len(), 53);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

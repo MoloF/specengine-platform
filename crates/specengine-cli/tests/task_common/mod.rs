@@ -568,6 +568,10 @@ pub fn ask(
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     };
     let run = |request: &QuestionRequest| {
         propose_question_with_task(&pair.env(cwd), &Globals::default(), request, task)

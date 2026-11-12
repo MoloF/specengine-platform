@@ -1353,6 +1353,15 @@ export const en = {
 
   // The Inbox's closed tables (inbox/labels.ts): severities, proposal states, gap types, previews.
   inbox: {
+    // A question's lead (ItemLead.tsx), on the Inbox, the Questions screen and a task's Activity and Answer…
+    // (docs/features/plain-questions.md "Acceptance criteria", PQ12, PQ13): who recommends, and Accept held until a pick.
+    lead: {
+      matters: "Why it matters",
+      asked: "The question as asked",
+      recommendedByAgent: "Recommended by the AI",
+      recommendedByAsker: "Recommended by the asker",
+      pickFirst: "Pick an answer first",
+    },
     severity: { high: "High", normal: "Normal", low: "Low", none: "None" },
     status: {
       open: "Open",
@@ -1404,7 +1413,6 @@ export const en = {
     summaryFallback: "{{kind}} on {{target}}",
     stagedAt: "Staged {{at}}",
     staging: "Staging",
-    recommended: "Recommended",
     price: "Price: {{price}}",
     copyContext: "the command: {{command}}",
     copyFailed: "Copy failed: select the command and copy it",
@@ -2408,7 +2416,6 @@ export const en = {
     waiting: "Waiting",
     answerLegend: "Answer {{id}}",
     answerAgainLegend: "Answer again: replaces the staged choice {{id}}",
-    recommended: "Recommended",
     price: "Price: {{price}}",
     takeWorking: "Take the working answer",
     yourAnswer: "Your answer",

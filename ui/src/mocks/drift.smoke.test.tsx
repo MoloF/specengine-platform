@@ -67,15 +67,17 @@ describe("ledger-api's drift item (UI-1 of drift-queue)", () => {
       rationale: null,
       severity: "high",
       summary: "broken_binding symbol_gone, code_ahead code_changed",
+      // A question's alone (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+      gist: null,
       record_id: null,
       staged_at: null,
     });
   });
 
-  it("serves its review: 51 keys (the card and why since card-questions, L1, similar since intake-similar, IS10), drift after revisions as {hash, rows, more}; the lock its path; no texts, diff, preview or revisions; the note", async () => {
+  it("serves its review: 53 keys (the card and why since card-questions, L1, similar since intake-similar, IS10; the gist and why it matters since plain-questions, PQ10), drift after revisions as {hash, rows, more}; the lock its path; no texts, diff, preview or revisions; the note", async () => {
     const review = await mock().getProposal(SLUG, DRIFT_ITEM);
     const keys = Object.keys(review);
-    expect(keys).toHaveLength(51);
+    expect(keys).toHaveLength(53);
     expect(keys.slice(keys.indexOf("revisions"), keys.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(review).toMatchObject({
       id: DRIFT_ITEM,

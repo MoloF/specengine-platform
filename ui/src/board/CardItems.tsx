@@ -6,8 +6,9 @@ import { DocLink } from "../doc/DocLink";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { confirmedLine, stagedAnnouncement } from "../inbox/decisions";
+import { AskedFold, AskedText, ItemLead, RecommendedMark } from "../inbox/ItemLead";
 import { StagedChoice } from "../inbox/StagedChoice";
-import { choiceOf, draftOf, type Draft, type DraftPick } from "../round/drafts";
+import { answersOf, choiceOf, draftOf, type Draft, type DraftPick } from "../round/drafts";
 import { useAnnounce } from "../ui/announcer";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
@@ -46,7 +47,9 @@ function Text({ text }: { text: string }) {
 
 /**
  * One item's block in the Activity: its ID, its kind raw in a neutral badge (a project's word, under
- * `lang="en"`), its state's lozenge and its text; under them the working answer and the why. Then how
+ * `lang="en"`), its state's lozenge and its text; under them the working answer and the why. An item
+ * holding a gist leads with it and why it matters instead, its text, working answer and why folded
+ * under them, collapsed (docs/features/plain-questions.md "Acceptance criteria", PQ12). Then how
  * it stands: staged when it is; its record, a document link by the record's title, and who decided;
  * else a decision's note, which is a rejected item's answer. An open item takes Answer…, which a hub's
  * `allowed` without `stage` keeps idle with its line, and which opens nothing while a card write of the
@@ -62,6 +65,58 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
   const [answering, setAnswering] = useState(false);
   const stages = allows("stage");
   const open = takesAnswer(item.status);
+  // What the item says, folded under a gist (PQ12); then how it stands.
+  const told = (
+    <>
+      {item.working_answer !== null && (
+        <>
+          <dt>{t("board.items.workingAnswer")}</dt>
+          <dd>
+            <Text text={item.working_answer} />
+          </dd>
+        </>
+      )}
+      {item.why !== null && (
+        <>
+          <dt>{t("board.items.why")}</dt>
+          <dd>
+            <Text text={item.why} />
+          </dd>
+        </>
+      )}
+    </>
+  );
+  const decided = (
+    <>
+      {item.record_id !== null && (
+        <>
+          <dt>{t("board.items.record")}</dt>
+          <dd>
+            <DocLink project={project} docRef={item.record_id}>
+              <bdi>{shownSlot(item.record_title ?? item.record_id)}</bdi>
+            </DocLink>
+          </dd>
+        </>
+      )}
+      {item.decision_note !== null && (
+        // A rejected item's reason is its answer; any other's note is the decider's note (labels.ts).
+        <>
+          <dt>{noteAnswers(item.status) ? t("board.items.answer") : t("inbox.card.decisionNote")}</dt>
+          <dd>
+            <Text text={item.decision_note} />
+          </dd>
+        </>
+      )}
+      {item.decided_by !== null && (
+        <>
+          <dt>{t("board.items.decidedBy")}</dt>
+          <dd>
+            <bdi>{shownSlot(item.decided_by)}</bdi>
+          </dd>
+        </>
+      )}
+    </>
+  );
   return (
     <article className="board-item" aria-labelledby={headingId} data-item={item.id}>
       <p className="board-item-head">
@@ -73,56 +128,28 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
         </span>
         <Lozenge {...itemStatusLook(item.status, t)} />
       </p>
-      {item.summary !== null && (
-        <p className="board-item-summary">
-          <Text text={item.summary} />
-        </p>
+      {item.gist === null ? (
+        <>
+          {item.summary !== null && (
+            <p className="board-item-summary">
+              <Text text={item.summary} />
+            </p>
+          )}
+          <dl className="pairs board-item-facts">
+            {told}
+            {decided}
+          </dl>
+        </>
+      ) : (
+        <>
+          <ItemLead gist={item.gist} matters={item.matters} />
+          <AskedFold>
+            {item.summary !== null && <AskedText text={item.summary} />}
+            {(item.working_answer !== null || item.why !== null) && <dl className="pairs board-item-facts">{told}</dl>}
+          </AskedFold>
+          <dl className="pairs board-item-facts">{decided}</dl>
+        </>
       )}
-      <dl className="pairs board-item-facts">
-        {item.working_answer !== null && (
-          <>
-            <dt>{t("board.items.workingAnswer")}</dt>
-            <dd>
-              <Text text={item.working_answer} />
-            </dd>
-          </>
-        )}
-        {item.why !== null && (
-          <>
-            <dt>{t("board.items.why")}</dt>
-            <dd>
-              <Text text={item.why} />
-            </dd>
-          </>
-        )}
-        {item.record_id !== null && (
-          <>
-            <dt>{t("board.items.record")}</dt>
-            <dd>
-              <DocLink project={project} docRef={item.record_id}>
-                <bdi>{shownSlot(item.record_title ?? item.record_id)}</bdi>
-              </DocLink>
-            </dd>
-          </>
-        )}
-        {item.decision_note !== null && (
-          // A rejected item's reason is its answer; any other's note is the decider's note (labels.ts).
-          <>
-            <dt>{noteAnswers(item.status) ? t("board.items.answer") : t("inbox.card.decisionNote")}</dt>
-            <dd>
-              <Text text={item.decision_note} />
-            </dd>
-          </>
-        )}
-        {item.decided_by !== null && (
-          <>
-            <dt>{t("board.items.decidedBy")}</dt>
-            <dd>
-              <bdi>{shownSlot(item.decided_by)}</bdi>
-            </dd>
-          </>
-        )}
-      </dl>
       {item.staged_at !== null && (
         <p className="board-item-staged">
           <Icon name="terminal" />
@@ -159,19 +186,22 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
   );
 }
 
-/** The picks an item offers by its structure, the Questions screen's (`docs/canon/round-ui.md` "Screen"): each option, else the working answer when given and an own answer; Reject with a reason always. */
-function picksOf(review: Proposal): { pick: DraftPick; option: number | null }[] {
-  const answers: { pick: DraftPick; option: number | null }[] =
-    review.options.length > 0
-      ? review.options.map((_option, index) => ({ pick: "option", option: index }))
-      : [...(review.working_answer === null ? [] : [{ pick: "working" as const, option: null }]), { pick: "answer", option: null }];
-  return [...answers, { pick: "reject", option: null }];
+/**
+ * The picks an item offers by its structure, the Questions screen's (`docs/canon/round-ui.md` "Screen";
+ * round/drafts.ts answersOf): each option it holds; with a price of another answer, or with no options,
+ * the working answer when given and an own answer
+ * (docs/features/plain-questions.md "Acceptance criteria", PQ12); Reject with a reason always.
+ */
+function picksOf(review: Proposal): readonly { pick: DraftPick; option: number | null }[] {
+  return [...answersOf(review), { pick: "reject", option: null }];
 }
 
 /**
  * Answer… on an open item (docs/features/card-questions.md "Acceptance criteria", U4): its review
  * document read once, its controls the Questions screen's by structure, never its kind, staged through
- * the decision route with the acting name. Staged, the dialog stays and shows the staged choice as the
+ * the decision route with the acting name. A review holding a gist leads with it and why it matters,
+ * then the controls, nothing picked, the recommendation marked with who made it; its text, working
+ * answer and price folded under them (docs/features/plain-questions.md "Acceptance criteria", PQ12). Staged, the dialog stays and shows the staged choice as the
  * Inbox does: when, the terminal command and Copy (fixed words and a checked ID), Unstage; on a hub,
  * Confirm where `[team]` lists `confirm`, the Inbox's dialog. A refusal keeps the dialog and the pick.
  */
@@ -262,7 +292,8 @@ function AnswerDialog({ project, item, onClose }: { project: string; item: CardI
     );
   } else {
     const text = shown.pick === "reject" ? shown.reason : shown.answer;
-    body = (
+    // What the item says: first without a gist, folded under the controls with one (PQ12).
+    const asked = (
       <>
         {review.summary !== null && (
           <p className="dialog-text">
@@ -285,6 +316,11 @@ function AnswerDialog({ project, item, onClose }: { project: string; item: CardI
             </p>
           </div>
         )}
+      </>
+    );
+    body = (
+      <>
+        {review.gist === null ? asked : <ItemLead gist={review.gist} matters={review.matters} />}
         {review.staged !== null && (
           <StagedChoice
             id={item.id}
@@ -324,12 +360,7 @@ function AnswerDialog({ project, item, onClose }: { project: string; item: CardI
                   <span className="option-radio-body">
                     <span className="option-radio-label">
                       <span className="mono">[{option}]</span> <bdi>{shownSlot(choice.label)}</bdi>
-                      {option === review.recommendation && (
-                        <span className="recommended-mark">
-                          <Icon name="recommended" />
-                          {t("round.recommended")}
-                        </span>
-                      )}
+                      {option === review.recommendation && <RecommendedMark author={review.author} />}
                     </span>
                     <span className="option-radio-detail">
                       <bdi>{shownSlot(choice.effect)}</bdi>
@@ -351,6 +382,7 @@ function AnswerDialog({ project, item, onClose }: { project: string; item: CardI
             required
           />
         )}
+        {review.gist !== null && <AskedFold>{asked}</AskedFold>}
         <ActingNote />
       </>
     );

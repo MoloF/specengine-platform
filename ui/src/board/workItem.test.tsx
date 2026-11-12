@@ -183,6 +183,8 @@ describe("one primary per area (DF-4)", () => {
           kind: "question",
           status: "open",
           summary: "Which bell?",
+          gist: null,
+          matters: null,
           working_answer: "The harbour bell.",
           why: null,
           author: { type: "human", role: null, model: null, run: null },

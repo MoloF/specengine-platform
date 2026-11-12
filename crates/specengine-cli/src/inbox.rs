@@ -3,8 +3,9 @@
 //! (`--all`: every state), one line each: `<id> | <kind> | <status> |
 //! <target_id> | <branch> | <created_at> | <rationale's first line, at most
 //! 80 characters>`; a question's or a discrepancy's last column
-//! `<severity>: <summary's first line>` (canon `agent-intake`,
-//! "Review document"), an applied one's ending ` [<record_id>]`
+//! `<severity>: <gist, else the summary's first line>` (canon
+//! `agent-intake`, "Review document"; task spec `plain-questions` PQ10),
+//! an applied one's ending ` [<record_id>]`
 //! (canon `decision-record`, "Queue and documents"); a create's
 //! `target_ids` its target then its new IDs (task spec `proposal-kinds`); a
 //! staged one's state `open (staged)`, its JSON entry's `staged_at` set
@@ -68,6 +69,9 @@ pub struct InboxEntry {
     /// A question's text's or a discrepancy's summary's first line, cut as
     /// the rationale; `null` for an update.
     pub summary: Option<String>,
+    /// A question's gist as stored, when given; `null` on every other kind
+    /// (task spec `plain-questions` PQ10). The text line leads with it.
+    pub gist: Option<String>,
     /// A question's or a discrepancy's decision record, from its step 7.
     pub record_id: Option<String>,
     /// When the owner's choice was staged on it, UTC
@@ -205,6 +209,7 @@ fn entry(proposal: &Proposal) -> InboxEntry {
         summary: intake
             .map(|intake| first_line(&intake.summary))
             .or(drift.map(|drift| first_line(&drift.summary))),
+        gist: intake.and_then(|intake| intake.gist.clone()),
         record_id: proposal.record.as_ref().map(|record| record.id.clone()),
         staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
     }
@@ -232,11 +237,13 @@ pub(crate) fn render_text(outcome: &InboxOutcome) -> String {
 fn raw_text(outcome: &InboxOutcome) -> String {
     let mut out = String::new();
     for entry in &outcome.proposals {
-        // A drift item's summary alone: its rows' states.
+        // A drift item's summary alone: its rows' states. A gist leads in
+        // place of the summary's first line.
         let drift = entry.kind == ProposalKind::Drift.as_str();
-        let mut last = match (&entry.severity, &entry.summary) {
+        let lead = entry.gist.as_ref().or(entry.summary.as_ref());
+        let mut last = match (&entry.severity, lead) {
             (_, Some(summary)) if drift => summary.clone(),
-            (Some(severity), Some(summary)) => format!("{severity}: {summary}"),
+            (Some(severity), Some(lead)) => format!("{severity}: {lead}"),
             _ => entry.rationale.clone().unwrap_or_default(),
         };
         if entry.status == ProposalStatus::Applied.as_str()

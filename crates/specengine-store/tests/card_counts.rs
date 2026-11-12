@@ -161,6 +161,8 @@ fn item(kind: ProposalKind, node: &str, text: &str, card: &str) -> NewIntake {
             recommendation: None,
             distinct_from: Vec::new(),
             why: None,
+            gist: None,
+            matters: None,
         },
         card_id: Some(card.to_owned()),
         actor: None,

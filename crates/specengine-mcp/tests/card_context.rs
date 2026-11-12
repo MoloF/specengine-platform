@@ -251,6 +251,10 @@ impl Repo {
             login: None,
             now: RAISED.to_owned(),
             git: self.git_env(),
+            gist: None,
+            matters: None,
+            options: None,
+            recommendation: None,
         };
         let ask = |request: &QuestionRequest| {
             propose_question(&self.env(), &Globals::default(), request).expect("a question")
@@ -709,7 +713,9 @@ fn folded(text: &str) -> String {
 }
 
 /// CC9: `get_card`'s description is 1 987 bytes of ASCII (2 041 since
-/// docs/features/upstream-signal.md US-11), starts with the spec's head,
+/// docs/features/upstream-signal.md US-11, 2 047 since
+/// docs/features/plain-questions.md PQ10, the items' `gist` and `matters`),
+/// starts with the spec's head,
 /// and holds its sentence once, after "in one read." (and, since
 /// upstream-signal, its `upstream` sentence) and before "Reads only:"; the stdio `INSTRUCTIONS` are 3892f03's (2 048
 /// bytes). The two numbers are tied by compile-time asserts in `src/`. M:
@@ -724,7 +730,7 @@ fn cc9_the_description_holds_the_context_sentence() {
         .to_owned();
     drop(session.finish());
     assert!(text.is_ascii());
-    assert_eq!(text.len(), 2041, "{text}");
+    assert_eq!(text.len(), 2047, "{text}");
     assert!(folded(&text).starts_with(GET_HEAD), "{text}");
     let folded_text = folded(&text);
     assert_eq!(

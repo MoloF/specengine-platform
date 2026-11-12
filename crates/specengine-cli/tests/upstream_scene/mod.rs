@@ -412,6 +412,10 @@ impl Scene {
             login: None,
             now: T_MADE.to_owned(),
             git: self.git_env(),
+            gist: None,
+            matters: None,
+            options: None,
+            recommendation: None,
         };
         stored(
             &propose_question(&self.env(), &Globals::default(), &request)

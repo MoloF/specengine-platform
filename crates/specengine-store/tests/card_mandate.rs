@@ -146,6 +146,8 @@ fn item(kind: ProposalKind, text: &str, card: &str) -> NewIntake {
             recommendation: None,
             distinct_from: Vec::new(),
             why: None,
+            gist: None,
+            matters: None,
         },
         card_id: Some(card.to_owned()),
         actor: None,
@@ -285,11 +287,14 @@ fn three_cards(db: &Path) {
 /// Every table's rows, `cards` by its first 25 columns.
 fn rows_of_11(db: &Path) -> String {
     let columns = CARD_COLUMNS[..25].join(", ");
+    // `proposals` by its first 48 (docs/features/plain-questions.md PQ8:
+    // step 13 adds two).
+    let proposals = PROPOSAL_COLUMNS[..48].join(", ");
     sqlite3(
         db,
         &format!(
-            "SELECT {columns} FROM cards ORDER BY id; SELECT * FROM proposals ORDER BY id; \
-             SELECT * FROM tasks; SELECT * FROM runs; SELECT * FROM events ORDER BY seq;"
+            "SELECT {columns} FROM cards ORDER BY id; SELECT {proposals} FROM proposals ORDER BY \
+             id; SELECT * FROM tasks; SELECT * FROM runs; SELECT * FROM events ORDER BY seq;"
         ),
     )
 }
@@ -301,11 +306,11 @@ fn rows_of_11(db: &Path) -> String {
 /// and 26 for 9 to 12, `None` for 13 and 8.
 #[test]
 fn m5_a_new_queue_stands_at_12_with_26_card_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
     let scratch = Scratch::new("cm-m5-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "12");
+    assert_eq!(user_version(&db), "13");
     assert_eq!(card_table(&db), CARD_COLUMNS);
     assert_eq!(CARD_COLUMNS.len(), 26);
     assert_eq!(CARD_COLUMNS[25], "mandate");
@@ -318,7 +323,7 @@ fn m5_a_new_queue_stands_at_12_with_26_card_columns() {
         "TEXT"
     );
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS, "proposals unchanged");
-    assert_eq!(PROPOSAL_COLUMNS.len(), 48);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 50);
     for (schema, width) in [(9, 24), (10, 25), (11, 25), (12, 26)] {
         assert_eq!(
             card_columns(schema),
@@ -326,7 +331,7 @@ fn m5_a_new_queue_stands_at_12_with_26_card_columns() {
             "schema {schema}"
         );
     }
-    assert_eq!(card_columns(13), None);
+    assert_eq!(card_columns(14), None);
     assert_eq!(card_columns(8), None);
     // No index on the new column.
     assert_eq!(
@@ -349,14 +354,14 @@ fn m5_a_schema_11_queue_with_three_cards_steps_at_its_first_open() {
     three_cards(&db);
     sqlite3(
         &db,
-        "ALTER TABLE cards DROP COLUMN mandate; PRAGMA user_version = 11;",
+        "ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE cards DROP COLUMN mandate; PRAGMA user_version = 11;",
     );
     assert_eq!(card_table(&db), CARD_COLUMNS[..25], "premise");
     let before = rows_of_11(&db);
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM cards;"), "3", "premise");
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(user_version(&db), "12");
+    assert_eq!(user_version(&db), "13");
     assert_eq!(card_table(&db), CARD_COLUMNS);
     assert_eq!(rows_of_11(&db), before, "every row as it was");
     assert_eq!(
@@ -369,7 +374,7 @@ fn m5_a_schema_11_queue_with_three_cards_steps_at_its_first_open() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "12", "stepped once");
+    assert_eq!(user_version(&db), "13", "stepped once");
     assert_eq!(card_table(&db), CARD_COLUMNS, "no second column");
 }
 
@@ -382,7 +387,7 @@ fn m5_a_schema_9_queue_reaches_12_in_one_migrate() {
     three_cards(&db);
     sqlite3(
         &db,
-        "UPDATE proposals SET card_id = NULL; ALTER TABLE proposals DROP COLUMN why; \
+        "UPDATE proposals SET card_id = NULL; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; \
          ALTER TABLE proposals DROP COLUMN card_id; ALTER TABLE cards DROP COLUMN mandate; \
          ALTER TABLE cards DROP COLUMN tasks; PRAGMA user_version = 9;",
     );
@@ -394,7 +399,7 @@ fn m5_a_schema_9_queue_reaches_12_in_one_migrate() {
         ),
     );
     drop(SqliteQueue::open(&db, PROJECT).expect("open steps"));
-    assert_eq!(user_version(&db), "12");
+    assert_eq!(user_version(&db), "13");
     assert_eq!(card_table(&db), CARD_COLUMNS);
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(
@@ -426,7 +431,10 @@ fn m5_a_hand_made_mandate_column_fails_step_12() {
 
     let eleven = scratch.db("eleven");
     three_cards(&eleven);
-    sqlite3(&eleven, "PRAGMA user_version = 11;");
+    sqlite3(
+        &eleven,
+        "ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; PRAGMA user_version = 11;",
+    );
     assert!(card_table(&eleven).contains(&"mandate".to_owned()));
     if let Ok(queue) = SqliteQueue::open(&eleven, PROJECT) {
         panic!("step 12 ran over a hand-made mandate: {:?}", queue.dump());
@@ -438,7 +446,7 @@ fn m5_a_hand_made_mandate_column_fails_step_12() {
     three_cards(&ten);
     sqlite3(
         &ten,
-        "UPDATE proposals SET card_id = NULL; ALTER TABLE proposals DROP COLUMN why; \
+        "UPDATE proposals SET card_id = NULL; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; \
          ALTER TABLE proposals DROP COLUMN card_id; PRAGMA user_version = 10;",
     );
     let proposals = proposal_table(&ten);
@@ -461,7 +469,7 @@ fn m5_open_existing_reads_an_11_queue_mandate_none_and_steps_nothing() {
     three_cards(&db);
     sqlite3(
         &db,
-        "ALTER TABLE cards DROP COLUMN mandate; PRAGMA user_version = 11;",
+        "ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE cards DROP COLUMN mandate; PRAGMA user_version = 11;",
     );
     let queue = SqliteQueue::open_existing(&db, PROJECT)
         .expect("open_existing")

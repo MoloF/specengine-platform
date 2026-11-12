@@ -80,6 +80,10 @@ fn question(pair: &Pair, cwd: &Path, node_ids: &[&str], text: &str) -> QuestionR
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     }
 }
 
@@ -1158,7 +1162,7 @@ fn ac10_path_targets_round_trip_through_a_backup() {
     let text = String::from_utf8(bytes.clone()).expect("a UTF-8 dump");
     assert!(
         text.starts_with(
-            "{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{text}"

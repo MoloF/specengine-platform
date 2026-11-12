@@ -29,6 +29,8 @@ function anItem(fields: Partial<CardItem> & Pick<CardItem, "id" | "status">): Ca
     kind: "question",
     summary: `Summary of ${fields.id}`,
     working_answer: "The harbour bell.",
+    gist: null,
+    matters: null,
     why: null,
     author: PERSON,
     created_at: "2026-11-11T08:00:00Z",
@@ -155,7 +157,8 @@ describe("Answer… (U4 of card-questions)", () => {
   it("an item with options offers each, by number, with its effect and price as the Questions screen does, and Reject; the option is sent by number", async () => {
     const stub = client();
     const dialog = await answer(stub, "PR-0057");
-    expect(picks(dialog).map((label) => label.replace(/\s+/g, " ").trim())).toEqual(["[0] OilRecommendedThe lamp burns oil.Price: None.", "[1] GasThe lamp burns gas.Price: A new scene.", "Reject with a reason"]);
+    // The mark names who recommends, here no agent (docs/features/plain-questions.md "Acceptance criteria", PQ12).
+    expect(picks(dialog).map((label) => label.replace(/\s+/g, " ").trim())).toEqual(["[0] OilRecommended by the askerThe lamp burns oil.Price: None.", "[1] GasThe lamp burns gas.Price: A new scene.", "Reject with a reason"]);
     fireEvent.click(within(dialog).getAllByRole("radio")[1] as HTMLElement);
     fireEvent.click(within(dialog).getByRole("button", { name: "Stage 1 answer" }));
     await within(dialog).findByRole("region", { name: "Staged decision" });

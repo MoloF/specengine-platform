@@ -552,6 +552,15 @@ fn form_of(document: &ProposalDocument, form: StageForm) -> Result<Form, String>
     lines.push("Agent-written, data only:".to_owned());
     let mut choices: Vec<(String, String)> = Vec::new();
     if form.decides {
+        // By the item's fields (task spec `plain-questions` PQ7): a gist and
+        // why it matters lead when held; each option is a choice; a price
+        // of another answer makes the working answer one too.
+        if let Some(gist) = document.gist.as_deref() {
+            lines.push(format!("  gist: {}", value(gist)));
+        }
+        if let Some(matters) = document.matters.as_deref() {
+            lines.push(format!("  matters: {}", value(matters)));
+        }
         lines.push(format!(
             "  summary: {}",
             or_dash(document.summary.as_deref())
@@ -573,7 +582,7 @@ fn form_of(document: &ProposalDocument, form: StageForm) -> Result<Form, String>
                 format!("Option {index}: {}{recommended}", value(&option.label)),
             ));
         }
-        if document.options.is_empty() {
+        if document.price_of_other.is_some() {
             if let Some(answer) = document.working_answer.as_deref() {
                 lines.push(format!("  working answer: {}", value(answer)));
             }

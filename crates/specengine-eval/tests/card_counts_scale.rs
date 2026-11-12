@@ -276,6 +276,8 @@ impl Seeded {
                     recommendation: None,
                     distinct_from: Vec::new(),
                     why: None,
+                    gist: None,
+                    matters: None,
                 },
                 card_id: Some("C-0001".to_owned()),
                 actor: None,

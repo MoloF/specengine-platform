@@ -1853,8 +1853,9 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     // docs/features/drift-queue.md added `drift` after it; 50 since
     // docs/features/card-questions.md D14 (`card_id`, `why` before `notes`);
     // 51 since docs/features/intake-similar.md "Acceptance criteria" IS6
-    // (`similar` after `why`).
-    assert_eq!(keys.len(), 51, "{keys:?}");
+    // (`similar` after `why`); 53 since docs/features/plain-questions.md
+    // PQ10 (`gist`, `matters` after `summary`).
+    assert_eq!(keys.len(), 53, "{keys:?}");
     let revisions = keys.iter().position(|key| key == "revisions");
     assert_eq!(keys[revisions.expect("revisions") + 1], "drift", "{keys:?}");
     let fixture: Value = serde_json::from_str(&read_text(
@@ -2000,7 +2001,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":6,\"queue_schema\":12,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":7,\"queue_schema\":13,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -2012,7 +2013,8 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
         let row: Value = serde_json::from_str(line).expect("a row");
         let row = row["proposals"].as_object().expect("a proposals row");
         // 48 since docs/features/card-questions.md S1.
-        assert_eq!(row.len(), 48);
+        // 50 since docs/features/plain-questions.md PQ8.
+        assert_eq!(row.len(), 50);
         assert_eq!(row["id"], json!(id));
         assert_eq!(row["kind"], json!(AMENDMENT_KIND));
         assert_eq!(row["status"], json!(status));

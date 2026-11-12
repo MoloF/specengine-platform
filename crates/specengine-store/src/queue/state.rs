@@ -17,8 +17,8 @@ use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
 use specengine_core::intake::{DRIFT_KIND, INTERPRETATION_KIND};
 
 use super::{
-    CARD_ITEMS_SCHEMA, ID_ORDER, MANDATE_SCHEMA, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue,
-    cards, corrupt, migrate, stage, tasks, user_version,
+    CARD_ITEMS_SCHEMA, ID_ORDER, MANDATE_SCHEMA, PLAIN_QUESTIONS_SCHEMA, QUEUE_SCHEMA_VERSION,
+    QueueError, SqliteQueue, cards, corrupt, migrate, stage, tasks, user_version,
 };
 
 use crate::error::{Db, StoreError};
@@ -34,8 +34,10 @@ use crate::schema;
 /// named after its kind (core's constant, the kind's one spelling), then
 /// a drift item's evidence and its hash step 8 appends (task spec
 /// `drift-queue`), then a deciding kind's card and a decision's `why` step
-/// 11 appends (`docs/canon/card-questions.md` "The rule").
-pub const PROPOSAL_COLUMNS: [&str; 48] = [
+/// 11 appends (`docs/canon/card-questions.md` "The rule"), then a
+/// question's `gist` and `matters` step 13 appends
+/// (`docs/features/plain-questions.md` "Acceptance criteria", PQ8).
+pub const PROPOSAL_COLUMNS: [&str; 50] = [
     "id",
     "project",
     "kind",
@@ -85,6 +87,8 @@ pub const PROPOSAL_COLUMNS: [&str; 48] = [
     "drift_hash",
     "card_id",
     "why",
+    "gist",
+    "matters",
 ];
 
 /// The first queue schema with `tasks` and `runs` (step 3 → 4).
@@ -121,9 +125,13 @@ const SCHEMA_6_COLUMNS: usize = 44;
 /// add no proposal column): the first of [`PROPOSAL_COLUMNS`].
 const SCHEMA_8_COLUMNS: usize = 46;
 
-/// The `proposals` columns of queue schema `schema`, in table order: 1, 2,
-/// 3, 4, 5, 6, 7, 8, 9, 10 and 11 (this build's) are known, a dump of any
-/// restores; `None` for any other.
+/// The columns of queue schemas 11 and 12's `proposals` (step 12 adds no
+/// proposal column): the first of [`PROPOSAL_COLUMNS`].
+const SCHEMA_11_COLUMNS: usize = 48;
+
+/// The `proposals` columns of queue schema `schema`, in table order: 1 to
+/// 13 (this build's) are known, a dump of any restores; `None` for any
+/// other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
         1 => Some(&PROPOSAL_COLUMNS[..SCHEMA_1_COLUMNS]),
@@ -133,7 +141,8 @@ pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
         5 => Some(&PROPOSAL_COLUMNS[..SCHEMA_5_COLUMNS]),
         6 | 7 => Some(&PROPOSAL_COLUMNS[..SCHEMA_6_COLUMNS]),
         DRIFT_SCHEMA..CARD_ITEMS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_8_COLUMNS]),
-        CARD_ITEMS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
+        CARD_ITEMS_SCHEMA..PLAIN_QUESTIONS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_11_COLUMNS]),
+        PLAIN_QUESTIONS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
 }
@@ -437,9 +446,10 @@ impl SqliteQueue {
     /// read transaction: `proposals`, `tasks` and `cards` by ID number,
     /// `runs` by task and number, `events` by `seq`. A `TEXT` column that
     /// holds no UTF-8 text fails, naming row and column. A DB still at queue
-    /// schema 1, 2, 3, 4, 5, 6, 7 or 8 to 10 (no step runs here) reads its
-    /// 24, 35, 40, 41, 43, 44 or 46 proposal columns, the later ones `None`
-    /// (a schema-10 row's `card_id` and `why`), its tasks and
+    /// schema 1, 2, 3, 4, 5, 6, 7, 8 to 10 or 11 to 12 (no step runs here)
+    /// reads its 24, 35, 40, 41, 43, 44, 46 or 48 proposal columns, the
+    /// later ones `None` (a schema-10 row's `card_id` and `why`, a
+    /// schema-12 row's `gist` and `matters`), its tasks and
     /// runs from schema 4 on (none before), and its cards from schema 9 on
     /// (a schema-9 card's `tasks` and a schema 9-11 card's `mandate`
     /// `None`).

@@ -98,6 +98,8 @@ fn answered_kind(
             recommendation: None,
             distinct_from: distinct_from.iter().map(|id| (*id).to_owned()).collect(),
             why: None,
+            gist: None,
+            matters: None,
         },
         actor: None,
         card_id: None,
@@ -141,6 +143,8 @@ fn discrepancy(targets: &[&str], summary: &str, distinct_from: &[&str]) -> NewIn
             recommendation: Some(1),
             distinct_from: distinct_from.iter().map(|id| (*id).to_owned()).collect(),
             why: None,
+            gist: None,
+            matters: None,
         },
         actor: None,
         card_id: None,
@@ -882,10 +886,22 @@ fn a_row_holding_a_column_its_shape_lacks_is_named_corrupt() {
     let option = "[{\"label\":\"a\",\"effect\":\"b\",\"price\":\"c\"}]";
     let evidence = "[{\"file\":\"src/a.rs\",\"qpath\":null,\"lines\":null,\"observed\":\"o\",\
                     \"documented\":\"d\"}]";
-    let mut cases: Vec<(String, StoredQueue, &str, &str)> = Vec::new();
-    for (kind, name) in [
-        (ProposalKind::Question, "a question"),
-        (ProposalKind::Decision, "a decision"),
+    let mut cases: Vec<(String, StoredQueue, &str, String)> = Vec::new();
+    let held = |name: &str| format!("it is set on {name}, which holds none");
+    // A question may hold options and a recommendation since
+    // docs/features/plain-questions.md PQ5: a recommendation without options
+    // is its corruption; a decision still holds neither.
+    for (kind, name, columns) in [
+        (
+            ProposalKind::Question,
+            "a question",
+            &["gap_type", "evidence"][..],
+        ),
+        (
+            ProposalKind::Decision,
+            "a decision",
+            &["gap_type", "evidence", "options", "recommendation"][..],
+        ),
     ] {
         let rows = rows_of(
             &scratch,
@@ -900,9 +916,27 @@ fn a_row_holding_a_column_its_shape_lacks_is_named_corrupt() {
             ("options", option),
             ("recommendation", "0"),
         ] {
+            if !columns.contains(&column) {
+                continue;
+            }
             let mut state = rows.clone();
             state.proposals[0].columns[column_at(column)] = Some(value.to_owned());
-            cases.push((format!("{name} with {column} {value}"), state, column, name));
+            cases.push((
+                format!("{name} with {column} {value}"),
+                state,
+                column,
+                held(name),
+            ));
+        }
+        if kind == ProposalKind::Question {
+            let mut state = rows.clone();
+            state.proposals[0].columns[column_at("recommendation")] = Some("0".to_owned());
+            cases.push((
+                "a question with recommendation 0, no options".to_owned(),
+                state,
+                "recommendation",
+                "it is set without options".to_owned(),
+            ));
         }
     }
     let rows = rows_of(
@@ -917,10 +951,10 @@ fn a_row_holding_a_column_its_shape_lacks_is_named_corrupt() {
             format!("a discrepancy with price_of_other {value:?}"),
             state,
             "price_of_other",
-            "a discrepancy",
+            held("a discrepancy"),
         ));
     }
-    for (index, (label, mut state, column, kind)) in cases.into_iter().enumerate() {
+    for (index, (label, mut state, column, reason)) in cases.into_iter().enumerate() {
         state.events.clear();
         let db = scratch.db(&format!("broken-{index}"));
         let mut broken = SqliteQueue::open(&db, PROJECT).expect("open");
@@ -931,8 +965,7 @@ fn a_row_holding_a_column_its_shape_lacks_is_named_corrupt() {
         };
         assert!(
             message.ends_with(&format!(
-                "proposal PR-0001: the stored `{column}` cannot be read: it is set on {kind}, \
-                 which holds none"
+                "proposal PR-0001: the stored `{column}` cannot be read: {reason}"
             )),
             "{label}: {message}"
         );
@@ -990,12 +1023,16 @@ fn create_intake_refuses_an_item_of_another_shape_unwritten() {
         let mut found = item();
         found.intake.evidence = vec![evidence.clone()];
         cases.push((found, format!("{name} holds no `evidence`")));
-        let mut priced = item();
-        priced.intake.options = vec![option.clone()];
-        cases.push((priced, format!("{name} holds no `options`")));
-        let mut recommended = item();
-        recommended.intake.recommendation = Some(0);
-        cases.push((recommended, format!("{name} holds no `recommendation`")));
+        // A question holds options and a recommendation since
+        // docs/features/plain-questions.md PQ5; a decision holds neither.
+        if kind == ProposalKind::Decision {
+            let mut priced = item();
+            priced.intake.options = vec![option.clone()];
+            cases.push((priced, format!("{name} holds no `options`")));
+            let mut recommended = item();
+            recommended.intake.recommendation = Some(0);
+            cases.push((recommended, format!("{name} holds no `recommendation`")));
+        }
         let mut unanswered = item();
         unanswered.intake.working_answer = None;
         cases.push((unanswered, format!("{name} lacks its `working_answer`")));

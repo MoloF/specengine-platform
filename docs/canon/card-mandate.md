@@ -61,7 +61,7 @@ Queue schema 12: `STEP_12` `ALTER TABLE cards ADD COLUMN mandate TEXT`, in `migr
 
 `subtask_items(parent) -> CardItems`: one read, one statement, by ID number, the items whose `card_id` is a card with `parent` exactly `parent` (cancelled children too, no grandchild), decoded as `card_items` (`card-questions.md` "Read"), a bad one into `unreadable`.
 
-Backup `STATE_FORMAT` 6 (`queue-backup.md` "Format"): `{"format":6,"queue_schema":12,…}`, a card row of 26 columns. Formats 3-5 (schemas 9-11) import with `mandate` `NULL`. Refused, exit 2: a format-6 card row without `mandate`, a format-5 one with it, format 6 not at 12, format 7 (`… upgrade SpecEngine`). A schema 1-11 DB exports as format 6, schema 12, unmigrated.
+Backup from format 6 (`queue-backup.md` "Format"): `{"format":6,"queue_schema":12,…}`, a card row of 26 columns. Formats 3-5 (schemas 9-11) import with `mandate` `NULL`. Refused, exit 2: a format-6 card row without `mandate`, a format-5 one with it, format 6 not at 12, format 7 (`… upgrade SpecEngine`). A schema 1-11 DB exports as format 6, schema 12, unmigrated.
 
 ## Commands
 
@@ -78,7 +78,7 @@ spec card split ... [--child D]... [--mandate D=binding|D=open]... [--reviewer N
 
 ## Documents and events
 
-- **The card document**, 35 keys: `mandate` after `reviewer`; `subtask_items` after `items`, `[]` when none, each `card_id` then `items`' 16 keys, an unreadable row left out with `items`' note.
+- **The card document**, 35 keys: `mandate` after `reviewer`; `subtask_items` after `items`, `[]` when none, each `card_id` then `items`' 18 keys, an unreadable row left out with `items`' note.
 - **A `list` row**, 22 keys, `mandate` after `reviewer`; **a split child**, 9 keys, `mandate` last, a dry run's too.
 - **`card.created`** always carries `mandate`, `null` when none: `{id, flow, column, position, assignee, reviewer, mandate, as}`. **`card.edited`** adds it only when `fields` hold it: `{id, fields: ["mandate"], as, mandate}`; any other edit keeps `{id, fields, as}`.
 - **Key sets** (`fixtures/daemon-keys.json`, 122): `CardRow` 22, `Card` 35, `CardSplitChild` 9, `CardSubtaskItem` 17.

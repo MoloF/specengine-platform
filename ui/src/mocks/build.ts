@@ -291,6 +291,8 @@ export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | 
       severity: null,
       gap_type: null,
       summary: null,
+      gist: null,
+      matters: null,
       working_answer: null,
       price_of_other: null,
       evidence: [],
@@ -341,6 +343,8 @@ export function inboxEntryOf(review: StoredReview): InboxEntry {
     rationale: review.rationale === null ? null : inboxLine(review.rationale),
     severity: review.severity,
     summary: review.summary === null ? null : inboxLine(review.summary),
+    // Whole, never cut: one line of at most 160 bytes (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+    gist: review.gist,
     record_id: review.record_id,
     staged_at: review.staged_at,
   };
@@ -380,6 +384,8 @@ export function noReview(id: string): Proposal {
     severity: null,
     gap_type: null,
     summary: null,
+    gist: null,
+    matters: null,
     working_answer: null,
     price_of_other: null,
     evidence: [],

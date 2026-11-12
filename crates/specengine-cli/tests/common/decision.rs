@@ -237,6 +237,10 @@ impl Pair {
             card: None,
             now: NOW.to_owned(),
             git: self.git_env(cwd),
+            gist: None,
+            matters: None,
+            options: None,
+            recommendation: None,
         };
         let ask = |request: &QuestionRequest| {
             propose_question(&self.env(cwd), &Globals::default(), request)

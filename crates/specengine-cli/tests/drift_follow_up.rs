@@ -496,6 +496,10 @@ fn question_on(repo: &LockRepo, node: &str, text: &str) -> String {
         now: RAISED.to_owned(),
         git: repo.git_env(&repo.root),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     };
     let run = |request: &QuestionRequest| {
         propose_question(&repo.env(&repo.root), &Globals::default(), request)

@@ -287,6 +287,8 @@ describe("Relies on (HP-5)", () => {
       kind: "question",
       status: "open",
       summary: "Which tide?",
+      gist: null,
+      matters: null,
       working_answer: null,
       why: null,
       author: { type: "human", role: null, model: null, run: null },

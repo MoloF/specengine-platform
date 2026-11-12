@@ -530,7 +530,8 @@ async fn us10_a_hub_answers_alike() {
 
 // ------------------------------------------------------------------ US-11
 
-/// US-11: stdio `get_card`'s description is 2 041 bytes of ASCII with the
+/// US-11: stdio `get_card`'s description is 2 041 bytes of ASCII (2 047
+/// since docs/features/plain-questions.md PQ10) with the
 /// new `card_id` clause and the sentence once, right after `subtask_items`'
 /// `…in one read.` and before `context: true:`; `list_cards`' is 1 588
 /// bytes with its sentence once, right after `a mark changes nothing.`;
@@ -545,7 +546,7 @@ fn us11_the_descriptions_hold_the_sentences() {
         .expect("a description")
         .to_owned();
     assert!(get.is_ascii());
-    assert_eq!(get.len(), 2041, "{get}");
+    assert_eq!(get.len(), 2047, "{get}");
     assert!(get.len() <= 2048);
     let flat = folded(&get);
     assert_eq!(flat.matches(GET_SENTENCE).count(), 1, "{get}");

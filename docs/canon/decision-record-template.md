@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-11-12
 ---
 
 # Decision records: config, template, flags
@@ -36,7 +36,7 @@ Slots are replaced in **one left-to-right pass**; a value is never scanned again
 | `title` * | the chosen label, or the answer's first non-blank line: whitespace runs one space, trimmed, at most 128 bytes (cut at a character, ending U+2026) |
 | `choice` * | the label, or the answer |
 | `effect`, `cost` * | the option's effect and price; `--answer`: empty, `price_of_other`; the working answer: both empty |
-| `summary`, `options`, `evidence` * | the item's; `- <label> \| <effect> \| <price>`; `- <file>[:<lines>][ <qpath>] \| <observed> \| <documented>`; a question, a decision: empty |
+| `summary`, `options`, `evidence` * | the item's (a question's, a decision's text); `- <label> \| <effect> \| <price>`, a question's when held; `- <file>[:<lines>][ <qpath>] \| <observed> \| <documented>`; none held: empty |
 | `note`, `decided_by` * | `--note`; the committer identity |
 | `why` * | a decision's `why` when the record takes its working answer (no flag); else empty: `--answer`, a question, a discrepancy, a decision without one (`card-questions.md` "Record") |
 
@@ -46,9 +46,9 @@ Slots are replaced in **one left-to-right pass**; a value is never scanned again
 
 ## Flags
 
-`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`; library `approve_with` with `ApproveFlags {option, answer, canon}`. A decision flag on a kind that does not decide -> exit 2 naming the deciding kinds by `family()` (`create::deciding_kinds`; a drift item: `proposal-drift.md` "Approve"): `` `--option` decides a `question`, `discrepancy` or `decision`; `PR-0002` is an update: `spec approve PR-0002` applies it as proposed; nothing changed ``. Then, after the terminal check, no event (a stage too: `decision-staging.md`), `first_checks` judges by the item's fields, never its kind: one without options (a question, a decision) takes the working answer or `--answer`, one with options (a discrepancy) `--option`:
+`spec approve PR [--note T] [--option N | --answer T] [--canon REF]`; library `approve_with` with `ApproveFlags {option, answer, canon}`. A decision flag on a kind that does not decide -> exit 2 naming the deciding kinds by `family()` (`create::deciding_kinds`; a drift item: `proposal-drift.md` "Approve"): `` `--option` decides a `question`, `discrepancy` or `decision`; `PR-0002` is an update: `spec approve PR-0002` applies it as proposed; nothing changed ``. Then, after the terminal check, no event (a stage too: `decision-staging.md`), `first_checks` judges by the item's fields, never its kind: options give `--option`, `price_of_other` the working answer or `--answer`, so a question with options takes all three, a decision and an option-less question the last two, a discrepancy `--option` (`plain-questions.md` "Answers"):
 
-- exit 2: `--option` on one without options (`` `--option` names a discrepancy's option, and `PR-0001` is a decision: its working answer, or `--answer T`, answers it; nothing changed ``, the kind with its article); `--answer` on a discrepancy; an open discrepancy without `--option` (naming the range, `0-2`); no ID target and no `--canon`; `--canon` not `ID`, `ID#SECTION` or `path#anchor` (core `parse_canon`); a blank `--answer`;
+- exit 2: `--option` on one without options (`` `--option` names an option, and `PR-0001` is a decision with none: its working answer, or `--answer T`, answers it; nothing changed ``, the kind with its article); `--option` with `--answer` (`` `--option` and `--answer` each name the owner's choice, and `PR-0014` takes one: give either; nothing changed ``); `--answer` without `price_of_other` (a discrepancy); such an open one without `--option` (naming the range, `0-2`); no ID target and no `--canon`; `--canon` not `ID`, `ID#SECTION` or `path#anchor` (core `parse_canon`); a blank `--answer`;
 - exit 1: `--option` past the options (naming `0-2`); `--answer` over 2 048 bytes, `--canon` over 512; an escaped character in any free-text source, named (``options[1].label: holds U+202E: a decision record never carries it; nothing changed``).
 
-The choice: a discrepancy's option; a question's or decision's working answer (no flag; never the recommendation by default) or `--answer T`. **Canon only from an ID**: a path target gives no reference-form `canon:`, so an item on a path alone needs `--canon`, which overrides anywhere; the check judges it (findings shown, never refusing). An `approved` item (stopped after step 7) takes only `--note`, any decision flag exit 2, and writes its stored `record_text`, never rendered again.
+The choice: an option; the working answer (no flag; never the recommendation by default) or `--answer T`. **Canon only from an ID**: a path target gives no reference-form `canon:`, so an item on a path alone needs `--canon`, which overrides anywhere; the check judges it (findings shown, never refusing). An `approved` item (stopped after step 7) takes only `--note`, any decision flag exit 2, and writes its stored `record_text`, never rendered again.

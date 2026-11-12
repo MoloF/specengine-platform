@@ -67,6 +67,7 @@ import type {
   TreeView,
   WorkspaceDocument,
 } from "../api/types";
+import { optionAndAnswer, optionOnNone } from "./approveLines";
 import { mockCode } from "./bindings";
 import { fakeHex, inboxEntryOf, noReview, proposal, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { cardCountsOf } from "./cardCounts";
@@ -105,6 +106,7 @@ import { ledgerApi } from "./ledger-api/fixtures";
 import { lockDiffOf } from "./lockDiff";
 import { deliveryOf } from "./delivery";
 import { catalogOf } from "./catalog";
+import { plainQuestionsScenario } from "./plainQuestions";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
@@ -215,6 +217,9 @@ export class MockClient implements SpecEngineClient {
     }
     if (scenario === "editorial") {
       editorialScenario(this.projects, at);
+    }
+    if (scenario === "plain-questions") {
+      plainQuestionsScenario(this.project("harbor-sim"), this.boards.get("harbor-sim"), at);
     }
     if (scenario === "aside" || scenario === "aside40") {
       // The pottery workshop of `fixtures/flow-aside` in place of harbor-sim's spec (`docs/canon/spec-flow-screen.md` "Mock"; RM-0094).
@@ -607,11 +612,17 @@ export class MockClient implements SpecEngineClient {
   /** The decision flags against the proposal's options, as `spec approve` checks them (`docs/canon/decision-record.md` "Flags"). */
   private checkApprove(review: StoredReview, stage: Extract<StageChoice, { decision: "approve" }>): void {
     const last = review.options.length - 1;
-    if (stage.option === null && last >= 0) {
+    // Judged by fields, never the kind: options with a price of another answer take the working
+    // answer or an own one too (docs/features/plain-questions.md "Acceptance criteria", PQ4).
+    if (stage.option === null && last >= 0 && review.price_of_other === null) {
       throw new ClientError({ status: 400, message: `spec: \`${review.id}\` takes --option N (0-${String(last)})` });
     }
     if (stage.option !== null && last < 0) {
-      throw new ClientError({ status: 400, message: `spec: --option: \`${review.id}\` has no options` });
+      throw new ClientError({ status: 400, message: `spec: ${optionOnNone(review)}; nothing changed` });
+    }
+    // A question with options and a price of another answer takes either, one at a time (PQ4).
+    if (stage.option !== null && stage.answer !== null && review.price_of_other !== null) {
+      throw new ClientError({ status: 400, message: `spec: ${optionAndAnswer(review.id)}; nothing changed` });
     }
     if (stage.option !== null && review.options[stage.option] === undefined) {
       throw this.refusal(`--option ${String(stage.option)}: \`${review.id}\` has options 0-${String(last)}; nothing changed`);

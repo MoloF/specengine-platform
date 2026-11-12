@@ -1172,6 +1172,10 @@ pub struct CardItem {
     pub status: &'static str,
     /// A question's or a decision's text, a discrepancy's summary.
     pub summary: String,
+    /// A question's gist and why it matters, when given; `null` on every
+    /// other kind (task spec `plain-questions` PQ10).
+    pub gist: Option<String>,
+    pub matters: Option<String>,
     pub working_answer: Option<String>,
     /// A decision's why.
     pub why: Option<String>,
@@ -1201,6 +1205,8 @@ impl CardItem {
             summary: intake
                 .map(|intake| intake.summary.clone())
                 .unwrap_or_default(),
+            gist: intake.and_then(|intake| intake.gist.clone()),
+            matters: intake.and_then(|intake| intake.matters.clone()),
             working_answer: intake.and_then(|intake| intake.working_answer.clone()),
             why: intake.and_then(|intake| intake.why.clone()),
             author: proposal.author.clone(),
@@ -2910,6 +2916,12 @@ fn run_raise(
                 text: request.text.clone(),
                 working_answer: request.working_answer.clone(),
                 price_of_other: request.price_of_other.clone(),
+                // A person's raise sends no lead: stored as before (task
+                // spec `plain-questions` PQ3).
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
                 severity: request.severity,
                 distinct_from: request.distinct_from.clone(),
                 card: Some(id),
@@ -4841,12 +4853,13 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
             .record_id
             .as_deref()
             .map_or_else(String::new, |record| format!(" | record {record}"));
+        // The gist leads, else the text.
         format!(
             "{} | {} | {} | {}{record}",
             item.id,
             item.kind,
             item.status,
-            one_line(&item.summary)
+            one_line(item.gist.as_deref().unwrap_or(&item.summary))
         )
     };
     list(
@@ -4971,6 +4984,8 @@ mod context_tests {
             kind: "decision",
             status,
             summary: format!("Decision {n}"),
+            gist: None,
+            matters: None,
             working_answer: Some("Yes.".to_owned()),
             why: None,
             author: Author::human(),

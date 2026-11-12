@@ -501,6 +501,10 @@ impl Scene {
             login: None,
             now: now.to_owned(),
             git: self.git_env(),
+            gist: None,
+            matters: None,
+            options: None,
+            recommendation: None,
         };
         let ask = |request: &QuestionRequest| {
             propose_question(&self.env(), &Globals::default(), request)

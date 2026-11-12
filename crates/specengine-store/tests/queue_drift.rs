@@ -265,6 +265,8 @@ fn only_create_drift_stores_a_drift_item() {
             recommendation: None,
             distinct_from: Vec::new(),
             why: None,
+            gist: None,
+            matters: None,
         },
         actor: None,
         card_id: None,
@@ -685,8 +687,8 @@ fn concurrent_raises_from_two_handles_store_one_item() {
 #[test]
 fn schema_6_and_7_step_to_8() {
     // 12 since docs/features/task-mandate.md M5.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 12);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 48);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 13);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 50);
     assert_eq!(PROPOSAL_COLUMNS[44..46], ["drift", "drift_hash"]);
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
     assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
@@ -697,10 +699,12 @@ fn schema_6_and_7_step_to_8() {
     // stays 46).
     assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..46]));
     // 48 at 11 (docs/features/card-questions.md S1), and at 12
-    // (docs/features/task-mandate.md M5: `cards` alone gains a column).
-    assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(13), None);
+    // (docs/features/task-mandate.md M5: `cards` alone gains a column); 50
+    // at 13 (docs/features/plain-questions.md PQ8: `gist`, `matters`).
+    assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..48]));
+    assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..48]));
+    assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(14), None);
     for version in [6, 7] {
         let scratch = Scratch::new(&format!("qdr-schema-{version}"));
         let db = scratch.db("q");
@@ -727,7 +731,8 @@ fn schema_6_and_7_step_to_8() {
         sqlite3(
             &db,
             &format!(
-                "DROP TABLE cards; ALTER TABLE proposals DROP COLUMN why; \
+                "DROP TABLE cards; ALTER TABLE proposals DROP COLUMN matters; \
+                 ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; \
                  ALTER TABLE proposals DROP COLUMN card_id; \
                  ALTER TABLE proposals DROP COLUMN drift_hash; \
                  ALTER TABLE proposals DROP COLUMN drift; PRAGMA user_version = {version};"
@@ -746,14 +751,14 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(sqlite3(&db, "PRAGMA user_version;"), version.to_string());
 
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping to 12");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13", "from {version}");
         assert_eq!(
             sqlite3(
                 &db,
                 "SELECT group_concat(name || ' ' || type, ',') FROM pragma_table_info('proposals') \
                  WHERE cid >= 44;"
             ),
-            "drift TEXT,drift_hash TEXT,card_id TEXT,why TEXT"
+            "drift TEXT,drift_hash TEXT,card_id TEXT,why TEXT,gist TEXT,matters TEXT"
         );
         assert_eq!(queue.dump().expect("dump"), dump, "rows kept");
         assert_eq!(
@@ -767,7 +772,7 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(id, "PR-0002");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "12", "stepped once");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "13", "stepped once");
     }
 }
 
@@ -1035,9 +1040,10 @@ fn drift_rows_round_trip_byte_identical() {
         ])
     {
         // Step 11's `card_id`, `why` after them, null on a drift item
-        // (docs/features/card-questions.md S1).
+        // (docs/features/card-questions.md S1); step 13's `gist`, `matters`
+        // too (docs/features/plain-questions.md PQ8).
         let tail = format!(
-            ",{},{},null,null]",
+            ",{},{},null,null,null,null]",
             serde_json::Value::String(evidence),
             serde_json::Value::String(hash)
         );

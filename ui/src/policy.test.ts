@@ -1099,6 +1099,49 @@ describe("source policy", () => {
     }
   });
 
+  // PQ12 of docs/features/plain-questions.md "Acceptance criteria": who made a recommendation is said by
+  // labels.ts's recommendedBy alone, and a gap type is labelled there too (`docs/canon/card-questions.md`
+  // "Screen"); no other app module compares an author's type or a gap type, against a word, null or
+  // another value, or tells an author type apart by its word. Mocks and tests may.
+  it("compares an author's type and a gap type in src/inbox/labels.ts alone: the lead's mark asks recommendedBy (PQ12 of plain-questions)", () => {
+    const field = "\\bauthor\\??\\.type\\b|\\.gap_type\\b";
+    const compares = new RegExp(
+      [
+        `(${field})\\s*[!=]==?`,
+        `[!=]==?\\s*[\\w.?]*(${field})`,
+        `switch\\s*\\([^)]*(${field})`,
+        `\\[[^\\]]*(${field})\\s*\\]`,
+        `(${field})\\s*\\?\\s*[^?.:\\s]`,
+        `(${field})\\s*(&&|\\|\\|)`,
+        // An author type's word against any `.type`: `review.author?.type === "agent"`, `who.type !== 'human'`.
+        `\\.type\\s*[!=]==?\\s*["'\`](agent|human)["'\`]`,
+        `["'\`](agent|human)["'\`]\\s*[!=]==?\\s*[\\w.?]*\\.type\\b`,
+      ].join("|"),
+    );
+    const allowed = (path: string) =>
+      path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css") || path === "/src/inbox/labels.ts";
+    expect(offending(compares, allowed)).toEqual([]);
+    expect(compares.test(sources["/src/inbox/labels.ts"] ?? "")).toBe(true);
+    // The lead draws the mark through labels.ts, and reads no author of its own.
+    expect(sources["/src/inbox/ItemLead.tsx"]).toMatch(/recommendedBy\(author, t\)/);
+    // The detector itself: a branch on an author's type or a gap type is caught; the lookups and a check for presence are not.
+    for (const line of [
+      'const ai = author.type === "agent";',
+      "return review.author?.type !== 'human' ? a : b;",
+      'if ("agent" === item.author.type) {',
+      "switch (author.type) {",
+      "const words = LABELS[author.type];",
+      "const ai = author.type ? a : b;",
+      'if (review.gap_type === "contradicts") {',
+      'const ai = who.type === "agent";',
+    ]) {
+      expect([line, compares.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["{index === review.recommendation && <RecommendedMark author={review.author} />}", "{recommendedBy(author, t)}", "value: gapLabel(reviewed.gap_type, t) ?? t(\"inbox.card.none\")", "const done = event.type === kind;"]) {
+      expect([line, compares.test(line)]).toEqual([line, false]);
+    }
+  });
+
   // US-13 of docs/features/upstream-signal.md "Acceptance criteria": what changed above a subtask is told
   // apart in labels.ts alone. No other Board module compares a change's source or searches its fields
   // (a kind and a mark are the rules above and AC-13's), and the part and the tile spell no word of the

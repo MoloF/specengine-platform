@@ -97,6 +97,10 @@ fn question(
         now: now.to_owned(),
         git: calls.git_env(),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     };
     let ask = |request: &QuestionRequest| {
         propose_question_with_task(&calls.env(), &calls.globals(), request, task)

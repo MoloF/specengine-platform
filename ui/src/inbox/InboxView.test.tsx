@@ -386,11 +386,11 @@ describe("the card's Task fact, from the review document (AC-12 of ui-live-tasks
     expect(task.getAttribute("href")).toBe("#/alpha/tasks/T-0107");
     expect(task.closest(".property-row")?.querySelector("dt")?.textContent).toBe("Agent task");
     expect(within(card).queryByRole("link", { name: "T-0999" })).toBeNull();
-    // InboxEntry stays the daemon's 12 keys: the task comes only from the review document.
+    // InboxEntry stays the daemon's 13 keys (`gist` since docs/features/plain-questions.md "Acceptance criteria", PQ10): the task comes only from the review document.
     const inbox = await client.getInbox("alpha");
     expect(inbox.proposals.map((entry) => [entry.id, Object.keys(entry).length, "task_id" in entry])).toEqual([
-      ["PR-0041", 12, false],
-      ["PR-0044", 12, false],
+      ["PR-0041", 13, false],
+      ["PR-0044", 13, false],
     ]);
   });
 
@@ -659,10 +659,14 @@ describe("keyboard (AC-13)", () => {
     await waitFor(() => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
-    const recommended = within(dialog).getByRole("radio", { name: /Spec to code/ });
-    expect((recommended as HTMLInputElement).checked).toBe(true);
+    // Nothing is picked, the recommended option only marked, and focus on the first (PQ12 of plain-questions).
+    const radios = within(dialog).getAllByRole<HTMLInputElement>("radio");
+    expect(radios.map((radio) => radio.checked)).toEqual([false, false]);
+    const first = within(dialog).getByRole("radio", { name: /Code to spec/ });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(first);
+    });
 
-    const first = recommended;
     const buttons = within(dialog).getAllByRole("button");
     const last = buttons[buttons.length - 1];
     if (last === undefined) {
@@ -1065,9 +1069,11 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
     selectedOption(list).focus();
     fireEvent.keyDown(selectedOption(list), { key: "a" });
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-1" });
+    // Nothing picked at first (PQ12 of plain-questions): the owner picks the recommended one.
     const opened = within(dialog).getByRole("radio", { name: /Spec to code/ });
+    fireEvent.click(opened);
     await waitFor(() => {
-      expect(document.activeElement).toBe(opened);
+      expect((opened as HTMLInputElement).checked).toBe(true);
     });
     const note = within(dialog).getByLabelText("Note for the record (optional)");
     fireEvent.change(note, { target: { value: "Matches the tide table" } });
@@ -1096,12 +1102,15 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
     expect(within(dialog).getByText("High one, revised")).toBeTruthy();
     expect(within(dialog).getAllByRole("radio")).toHaveLength(3);
     expect((note as HTMLTextAreaElement).value).toBe("Matches the tide table");
-    // The old choice was index 1 of the old list; the new list starts again from its recommendation.
-    const recommended = within(dialog).getByRole("radio", { name: /Drop the rule/ });
-    expect((recommended as HTMLInputElement).checked).toBe(true);
-    expect(document.activeElement).toBe(recommended);
+    // The old choice was index 1 of the old list; the new list starts with nothing picked (PQ12 of
+    // plain-questions), focus on its first option, and Accept stays off until a pick.
+    expect(within(dialog).getAllByRole<HTMLInputElement>("radio").map((radio) => radio.checked)).toEqual([false, false, false]);
+    expect(document.activeElement).toBe(within(dialog).getByRole("radio", { name: /^\[0\] Spec to code/ }));
+    expect(within(dialog).getByRole("button", { name: "Stage accept" }).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     expect(client.stageDecision).not.toHaveBeenCalled();
 
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Drop the rule/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();

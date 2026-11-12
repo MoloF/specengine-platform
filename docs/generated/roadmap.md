@@ -32,7 +32,7 @@ roadmap: 39 open, 71 done; current mvp; to mvp 2-3 days; total 13-21 days, 5 une
 ## release v5 | 4 open, 19 done | 0 days, 4 unestimated
 
 1. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | -
-2. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0060
+2. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | in-progress | should | - | waits on RM-0060
 3. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | in-progress | should | -
 4. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
 

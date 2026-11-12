@@ -250,6 +250,16 @@
 //!   `SCHEMA_PINS` entry 0.42.0, 0.41.0's schemas today's without the three
 //!   keys ([`as_of_0_41_0`]). M: the schema changed with no new
 //!   `SCHEMA_PINS` entry.
+//! - plain-questions (RM-0088, PQ11,
+//!   docs/features/plain-questions.md "Acceptance criteria"): 0.42.0 ->
+//!   0.43.0, MINOR: `ask_question` takes `gist`, `matters`, `options` and
+//!   `recommendation`, and `get_proposal`, `review_proposal` and `get_card`
+//!   return `gist` and `matters`. A `PINS` entry 0.43.0, the tree with
+//!   plugin.json's version and `ask-owner`'s eight edits
+//!   ([`ASK_OWNER_0_43_0`]) set back 0.42.0's; a `SCHEMA_PINS` entry
+//!   0.43.0, 0.42.0's schemas today's without the keys ([`as_of_0_42_0`]).
+//!   M: the `gist` sentence dropped; the schema changed with no new
+//!   `SCHEMA_PINS` entry.
 //!
 //! The repository is only read.
 
@@ -658,6 +668,58 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.42.0",
         "c24e8ec0e4ee261fdf66eed457850792bc091ed79a44cc2b3dcee41791d87a5f",
+    ),
+    // plain-questions (RM-0088, PQ11: 0.42.0 -> 0.43.0, MINOR: four keys
+    // `ask_question` takes, two the review document and a card's items
+    // return): plugin.json's version and `ask-owner`'s eight edits
+    // ([`ASK_OWNER_0_43_0`]); all set back, the tree hashes as 0.42.0's pin.
+    (
+        "0.43.0",
+        "5d29b41c4ea4d759ba06594d6f7dc37c2c7e4782fd596ffdae79300225e2943e",
+    ),
+];
+
+/// docs/features/plain-questions.md "The plugin": `ask-owner`'s eight
+/// edits, body 4 095 -> 4 089 bytes by `plugin_skills.rs`' measure (the
+/// spec's 4 096 -> 4 090), file 4 374 -> 4 368, each `(0.42.0's words,
+/// 0.43.0's)`, each 0.43.0 text once in the skill.
+const ASK_OWNER_0_43_0: [(&str, &str); 9] = [
+    (
+        "Use this when the spec is silent or ambiguous, or contradicts the code. Raise a record",
+        "Raise a record",
+    ),
+    (
+        "in `price_of_other` what another answer would cost.\n",
+        "in `price_of_other` what another answer would cost. Lead with a one-line `gist` and why \
+         it `matters`, in plain words, no IDs, paths or code names; then two or three priced \
+         `options` and your `recommendation` when known.\n",
+    ),
+    (
+        "- The `related` items are context only.\n- A refusal names the field and the problem: fix \
+         it and send again.\n",
+        "- The `related` items are context only; a refusal names the field: fix it, send again.\n",
+    ),
+    (
+        "gives its `status` and the owner's `decision_note`; on a rejected record the note is the \
+         owner's answer; on an applied one, ",
+        "gives its `status` and `decision_note`, the owner's answer on a rejected record; on an \
+         applied one, ",
+    ),
+    (
+        "the owner decided it, and that record is the owner's decision. Read it with `get_node` on \
+         its `record`; off this branch it is not there yet: `get_proposal` ",
+        "the owner's decision. Read it with `get_node` on its `record`; off this branch, \
+         `get_proposal` ",
+    ),
+    (
+        "its `answer` is only the decision's title. Read the decision with `get_node` ",
+        "its `answer` is only its title. Read it with `get_node` ",
+    ),
+    ("; it takes no evidence;", "; no evidence;"),
+    ("the owner rejected that record;", "the owner rejected it;"),
+    (
+        "  \"text\": \"<the question, one sentence>\",\n",
+        "  \"text\": \"<the question, one sentence>\",\n  \"gist\": \"<the question in plain words>\",\n",
     ),
 ];
 
@@ -1146,6 +1208,18 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.42.0",
         "7dea6428ab2611551ccf61b030530af87acd7a5a2f433d1fc665d22398dfa1ac",
+    ),
+    // plain-questions (RM-0088, PQ11): `ask_question`'s input `gist`,
+    // `matters`, `options`, `recommendation`; `gist` and `matters` in the
+    // review document's output (`get_proposal`, `review_proposal`) and a
+    // card's and a subtask's `items` (`get_card`); the docs of a staged
+    // approve's `option` and `answer` and of the choice and its three keys
+    // generalised from a discrepancy's and a question's to an item's
+    // ([`as_of_0_42_0`] takes the keys out and sets the docs back; no other
+    // tool's schema changed).
+    (
+        "0.43.0",
+        "0a200d69435a03f396ecb30c8c5d60644be9914fb77cf21d53e42cec587ff3a1",
     ),
 ];
 
@@ -2182,7 +2256,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.42.0")
+        json!("0.43.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2333,11 +2407,40 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // plain-questions (RM-0088, PQ11: 0.42.0 -> 0.43.0): plugin.json's
+    // version and `ask-owner`'s eight edits, each once; set back, the tree is
+    // 0.42.0's pinned content, every other skill and role byte-equal. M:
+    // plugin.json left at 0.42.0; an edit missing or another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.43.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.43.0"),
+        "plugin.json's version"
+    );
+    let mut at_0_42_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.43.0\"",
+        "\"version\": \"0.42.0\"",
+    );
+    for (old, new) in ASK_OWNER_0_43_0 {
+        at_0_42_0 = edited(&at_0_42_0, ASK_OWNER, new, old);
+    }
+    assert_eq!(
+        content_hash(&at_0_42_0),
+        PINS[PINS.len() - 2].1,
+        "0.43.0 changes plugin.json's version and ask-owner's edits only"
+    );
+    let tree = at_0_42_0;
+    let pins_0_42_0 = &PINS[..PINS.len() - 1];
     // intake-similar (RM-0059, IS11: 0.41.0 -> 0.42.0): plugin.json's
     // version and the two skills' edits, each once; set back, the tree is
     // 0.41.0's pinned content, every other skill and role byte-equal. M:
     // plugin.json left at 0.41.0; an edit missing or another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.42.0"));
+    assert_eq!(
+        pins_0_42_0.last().map(|(version, _)| *version),
+        Some("0.42.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.42.0"),
@@ -2357,11 +2460,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     }
     assert_eq!(
         content_hash(&at_0_41_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_42_0[pins_0_42_0.len() - 2].1,
         "0.42.0 changes plugin.json's version and the two skills' edits only"
     );
     let tree = at_0_41_0;
-    let pins_0_41_0 = &PINS[..PINS.len() - 1];
+    let pins_0_41_0 = &pins_0_42_0[..pins_0_42_0.len() - 1];
     // upstream-signal (RM-0105, US-11: 0.40.0 -> 0.41.0): plugin.json's
     // version alone; set back, the tree is 0.40.0's pinned content,
     // `read-spec` and every other skill and role byte-equal. M: plugin.json
@@ -3628,6 +3731,132 @@ fn as_of_0_41_0(schemas: &mut Value) {
     );
 }
 
+/// plain-questions (RM-0088, PQ11): `schemas` as 0.42.0 listed them: no
+/// `gist`, `matters`, `options`, `recommendation` in `ask_question`'s input;
+/// no `gist`, `matters` in the review document's output (`propose_change`,
+/// `get_proposal`, `review_proposal` when listed) or a `get_card` item or
+/// subtask item; the six generalised docs set back; no other tool's schema
+/// changed.
+fn as_of_0_42_0(schemas: &mut Value) {
+    for key in ["gist", "matters", "options", "recommendation"] {
+        assert!(
+            without_property(&mut schemas["ask_question"]["inputSchema"], key),
+            "ask_question takes {key}"
+        );
+    }
+    // The review document `propose_change` returns too.
+    let mut dropped = 0;
+    for name in ["propose_change", "get_proposal", "review_proposal"] {
+        if schemas[name]["outputSchema"].is_object() {
+            for key in ["gist", "matters"] {
+                assert!(
+                    without_property(&mut schemas[name]["outputSchema"], key),
+                    "{name} returns {key}"
+                );
+            }
+            dropped += 1;
+        }
+    }
+    assert!(
+        dropped >= 2,
+        "propose_change and get_proposal return gist and matters"
+    );
+    let mut items = 0;
+    visit_items_of(&mut schemas["get_card"]["outputSchema"], &mut |item| {
+        for key in ["gist", "matters"] {
+            assert!(without_property(item, key), "a card item's {key}");
+        }
+        items += 1;
+    });
+    assert!(items >= 1, "get_card's items hold gist and matters");
+    let mut reworded = 0;
+    docs_as_of_0_42_0(schemas, &mut reworded);
+    assert!(reworded >= 6, "the six generalised docs: {reworded}");
+}
+
+/// plain-questions' generalised docs, `(0.42.0's, 0.43.0's)`: a staged
+/// approve's `option` and `answer`, the choice's three keys; the choice's
+/// own doc is matched by its start (a doc over two source lines).
+const DOCS_0_43_0: [(&str, &str); 5] = [
+    (
+        "A discrepancy's option, from 0.",
+        "The option of an item holding options, from 0.",
+    ),
+    (
+        "A question's answer other than its working answer.",
+        "An answer other than the working answer.",
+    ),
+    (
+        "A discrepancy's option, by index from 0.",
+        "One of the item's options, by index from 0.",
+    ),
+    (
+        "A question's working answer (`true`).",
+        "Its working answer (`true`).",
+    ),
+    (
+        "Another answer to a question.",
+        "Another answer than the working answer.",
+    ),
+];
+
+/// Every string of `value` equal to a 0.43.0 doc of [`DOCS_0_43_0`] set back
+/// to its 0.42.0 words, the choice's doc too; `count` the strings set back.
+fn docs_as_of_0_42_0(value: &mut Value, count: &mut usize) {
+    match value {
+        Value::String(text) => {
+            if let Some((old, _)) = DOCS_0_43_0.iter().find(|(_, new)| text == new) {
+                *text = (*old).to_owned();
+                *count += 1;
+            } else if text
+                .starts_with("The owner's choice of a decided question, discrepancy or decision:")
+            {
+                *text =
+                    "The owner's choice of a decided question or discrepancy: one key.".to_owned();
+                *count += 1;
+            }
+        }
+        Value::Object(object) => {
+            for child in object.values_mut() {
+                docs_as_of_0_42_0(child, count);
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                docs_as_of_0_42_0(child, count);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Every object schema under `value` holding the properties `summary` and
+/// `working_answer` (a card's item, a subtask's item), `visit`ed.
+fn visit_items_of(value: &mut Value, visit: &mut dyn FnMut(&mut Value)) {
+    if value
+        .get("properties")
+        .and_then(Value::as_object)
+        .is_some_and(|properties| {
+            properties.contains_key("summary") && properties.contains_key("working_answer")
+        })
+    {
+        visit(value);
+    }
+    match value {
+        Value::Object(object) => {
+            for child in object.values_mut() {
+                visit_items_of(child, visit);
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                visit_items_of(child, visit);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// upstream-signal (RM-0105, US-11): `schemas` as 0.40.0 listed them: no
 /// `upstream` in `get_card`'s output or in a `list_cards` row; no other
 /// tool's schema changed.
@@ -4380,7 +4609,23 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[31].0, "0.40.0", "an entry for 0.40.0");
     assert_eq!(SCHEMA_PINS[32].0, "0.41.0", "an entry for 0.41.0");
     assert_eq!(SCHEMA_PINS[33].0, "0.42.0", "an entry for 0.42.0");
-    assert_eq!(SCHEMA_PINS.len(), 34, "0.42.0 the last entry");
+    assert_eq!(SCHEMA_PINS[34].0, "0.43.0", "an entry for 0.43.0");
+    assert_eq!(SCHEMA_PINS.len(), 35, "0.43.0 the last entry");
+    // plain-questions (RM-0088, PQ11): 0.42.0's schemas are today's without
+    // `ask_question`'s four keys and the outputs' `gist` and `matters`. M:
+    // `SCHEMA_PINS` not appended.
+    let mut at_0_42_0 = schemas.clone();
+    as_of_0_42_0(&mut at_0_42_0);
+    let at_0_42_0_hash = schema_hash(&at_0_42_0);
+    assert_eq!(
+        at_0_42_0_hash, SCHEMA_PINS[33].1,
+        "0.42.0's schemas are today's without plain-questions' keys"
+    );
+    assert_ne!(
+        at_0_42_0_hash, current,
+        "plain-questions changed the schemas"
+    );
+    let (schemas, current) = (at_0_42_0, at_0_42_0_hash);
     // intake-similar (RM-0059, IS11): 0.41.0's schemas are today's without
     // `propose_change`'s `distinct_from` and `keywords` and the review
     // document's `similar`. M: `SCHEMA_PINS` not appended.

@@ -691,10 +691,12 @@ pub(crate) fn assemble(
             None => proposal.rationale.lines().next().map(str::to_owned),
         };
         if let Some(intake) = intake {
-            // By its fields: with options (a discrepancy's) the recommended
-            // one's label; without (a question's, a decision's) the working
-            // answer.
-            let assumed = if intake.options.is_empty() {
+            // By its fields: with a price of another answer (a question's,
+            // a decision's) the working answer, which an approve with no
+            // flag records and the work goes on with while a question's
+            // options wait (task spec `plain-questions` PQ4); without (a
+            // discrepancy's) the recommended option's label.
+            let assumed = if intake.price_of_other.is_some() || intake.options.is_empty() {
                 intake.working_answer.clone()
             } else {
                 intake

@@ -339,7 +339,8 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
         // docs/features/card-questions.md L1, 51 since
         // docs/features/intake-similar.md "Acceptance criteria" IS10.
-        assert_eq!(document.as_object().unwrap().len(), 51, "{document}");
+        // 53 since docs/features/plain-questions.md PQ10.
+        assert_eq!(document.as_object().unwrap().len(), 53, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -470,8 +471,9 @@ fn ac04_a_flag_the_terminal_refuses_is_refused_with_its_message_nothing_stored()
             question,
             "\"decision\":\"approve\",\"option\":0".to_owned(),
             400,
+            // docs/features/plain-questions.md "Approve, stage, form, round".
             format!(
-                "`--option` names a discrepancy's option, and `{question}` is a question: its \
+                "`--option` names an option, and `{question}` is a question with none: its \
                  working answer, or `--answer T`, answers it; nothing changed"
             ),
         ),
@@ -1118,10 +1120,11 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    // This build's queue schema is 12 (docs/features/task-mandate.md M5):
-    // 13 is newer. M1's record at a62c81c: 11 over 10; task-mandate R1's at
-    // 8a43e5d: 12 over 11.
-    sqlite3(&db(&s.home), "PRAGMA user_version = 13;");
+    // This build's queue schema is 13 (docs/features/plain-questions.md PQ8):
+    // 14 is newer. M1's record at a62c81c: 11 over 10; task-mandate R1's at
+    // 8a43e5d: 12 over 11; plain-questions' at 4d52ec3c: 13 over 12 (the
+    // HEAD build refusing a schema 13 queue).
+    sqlite3(&db(&s.home), "PRAGMA user_version = 14;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
@@ -1129,14 +1132,14 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
     assert!(
-        message.contains("13") && message.contains("12"),
+        message.contains("14") && message.contains("13"),
         "{message}"
     );
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "13",
+        "14",
         "left alone"
     );
     assert_eq!(
@@ -1276,7 +1279,8 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
     // docs/features/card-questions.md L1, 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS10.
-    assert_eq!(document.as_object().unwrap().len(), 51, "{document}");
+    // 53 since docs/features/plain-questions.md PQ10.
+    assert_eq!(document.as_object().unwrap().len(), 53, "{document}");
     assert_eq!(document["kind"], json!("interpretation"));
     assert_eq!(
         document["staged"],
@@ -1370,8 +1374,9 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     let stored = seqs(&s.home, &s.a);
     let unstaged = row(&s.home, &id);
     let server = Server::serve(&s.home, &s.cwd, &[&s.a]);
+    // docs/features/plain-questions.md "Approve, stage, form, round".
     let refusal = format!(
-        "spec: `--option` names a discrepancy's option, and `{id}` is a decision: its working \
+        "spec: `--option` names an option, and `{id}` is a decision with none: its working \
          answer, or `--answer T`, answers it; nothing changed"
     );
     for fields in [
@@ -1392,7 +1397,8 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     // 48 keys since docs/features/drift-queue.md added `drift`, 50 since
     // docs/features/card-questions.md L1, 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS10.
-    assert_eq!(document.as_object().unwrap().len(), 51, "{document}");
+    // 53 since docs/features/plain-questions.md PQ10.
+    assert_eq!(document.as_object().unwrap().len(), 53, "{document}");
     assert_eq!(document["kind"], json!("decision"));
     assert_eq!(document["linked"], json!("PR-0005"));
     assert_eq!(document["options"], json!([]));

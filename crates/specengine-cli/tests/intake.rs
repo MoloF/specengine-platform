@@ -58,6 +58,10 @@ fn question(pair: &Pair, cwd: &Path, node_ids: &[&str], text: &str) -> QuestionR
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     }
 }
 

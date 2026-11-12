@@ -431,6 +431,10 @@ pub fn queue_library(
                 // docs/features/card-questions.md D5: the tool's `card_id`
                 // is the twin's `--card`.
                 card: optional_text(args, "card_id"),
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
             task,
         )

@@ -184,6 +184,10 @@ pub struct ProposalDocument {
     pub gap_type: Option<GapType>,
     /// A question's text, a discrepancy's summary.
     pub summary: Option<String>,
+    /// A question's gist and why it matters, as stored; `null` on any other
+    /// kind (task spec `plain-questions` PQ1).
+    pub gist: Option<String>,
+    pub matters: Option<String>,
     pub working_answer: Option<String>,
     pub price_of_other: Option<String>,
     pub evidence: Vec<Evidence>,
@@ -282,6 +286,8 @@ impl ProposalDocument {
             summary: intake
                 .map(|intake| intake.summary.clone())
                 .or(drift.map(|drift| drift.summary.clone())),
+            gist: intake.and_then(|intake| intake.gist.clone()),
+            matters: intake.and_then(|intake| intake.matters.clone()),
             working_answer: intake.and_then(|intake| intake.working_answer.clone()),
             price_of_other: intake.and_then(|intake| intake.price_of_other.clone()),
             evidence: intake
@@ -935,6 +941,8 @@ fn review_text(document: &ProposalDocument) -> String {
     );
     line(&mut out, "gap_type", document.gap_type.map(GapType::as_str));
     line(&mut out, "summary", document.summary.as_deref());
+    line(&mut out, "gist", document.gist.as_deref());
+    line(&mut out, "matters", document.matters.as_deref());
     line(
         &mut out,
         "working_answer",

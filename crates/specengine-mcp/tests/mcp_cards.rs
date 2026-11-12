@@ -1411,8 +1411,11 @@ fn card_questions_get_card_serves_items_valid_against_its_schema() {
                 "decided_at",
                 "decided_by",
                 "decision_note",
+                // docs/features/plain-questions.md PQ10.
+                "gist",
                 "id",
                 "kind",
+                "matters",
                 "record_id",
                 "record_path",
                 "record_title",

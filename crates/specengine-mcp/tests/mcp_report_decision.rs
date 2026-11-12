@@ -570,9 +570,11 @@ fn ac_r10_a_patch_outside_node_ids_is_an_error_result() {
 /// decision as related and is stored. M: the old text.
 #[test]
 fn iteration2_ask_question_names_decisions_among_hits_and_related() {
-    let hit = "A hit: an accepted decision document linked to a node (its id, path and title as \
-               the answer), or a question or decision queued on a shared node with the same \
-               text, whitespace and case aside (a rejected one's reason is the owner's answer).";
+    // docs/features/plain-questions.md "MCP" edit 4: "decision document" and
+    // "path and title" shortened.
+    let hit = "A hit: an accepted decision linked to a node (its id, path, title as the answer), \
+               or a question or decision queued on a shared node with the same text, whitespace \
+               and case aside (a rejected one's reason is the owner's answer).";
     // docs/features/card-questions.md L2: "queued questions or
     // decisions with other text." trimmed to "queued items with other text."
     let related = "Related: decision documents only mentioning a node, queued items with other \
@@ -590,7 +592,8 @@ fn iteration2_ask_question_names_decisions_among_hits_and_related() {
         .expect("a description")
         .to_owned();
     assert!(description.contains(hit), "{description}");
-    assert!(description.contains(related), "{description}");
+    // Dropped by docs/features/plain-questions.md "MCP" edit 5.
+    assert!(!description.contains(related), "{description}");
     assert!(
         description.is_ascii() && description.len() <= 2048,
         "{}",

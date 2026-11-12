@@ -373,7 +373,7 @@ describe("the Inbox card and the decision dialog take the decision by structure 
       (error: unknown) => error,
     );
     expect(refused).toBeInstanceOf(ClientError);
-    expect([(refused as ClientError).status, (refused as ClientError).message]).toEqual([400, "spec: --option: `PR-0050` has no options"]);
+    expect([(refused as ClientError).status, (refused as ClientError).message]).toEqual([400, "spec: `--option` names an option, and `PR-0050` is a decision with none: its working answer, or `--answer T`, answers it; nothing changed"]);
     expect((await client.getProposal(SLUG, DECISION)).staged).toBeNull();
   });
 });
@@ -470,7 +470,7 @@ describe("the Questions screen takes the decision by structure (AC-U2)", () => {
       { id: "PR-0048", stage: { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, updated_at: sheet.items.find((entry) => entry.id === "PR-0048")?.updated_at ?? "" } },
     ]);
     expect(outcome.answers.map(({ id, outcome: made, reason }) => [id, made, reason])).toEqual([
-      [DECISION, "refused", "--option: `PR-0050` has no options"],
+      [DECISION, "refused", "`--option` names an option, and `PR-0050` is a decision with none: its working answer, or `--answer T`, answers it"],
       ["PR-0048", "staged", null],
     ]);
   });

@@ -29,6 +29,8 @@ function anItem(fields: Partial<CardSubtaskItem> & Pick<CardSubtaskItem, "card_i
     kind: "decision",
     status: "open",
     summary: `What ${fields.id} decides`,
+    gist: null,
+    matters: null,
     working_answer: `The answer of ${fields.id}`,
     why: null,
     author: { type: "human", role: null, model: null, run: null },

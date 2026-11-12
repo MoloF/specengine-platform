@@ -1041,7 +1041,8 @@ fn ct6_the_link_decides_nothing_on_twin_projects() {
 /// alone (the name kept, cited by docs/features/card-tasks.md: since
 /// docs/features/card-questions.md the probe is 12 over this build's 11;
 /// since docs/features/task-mandate.md, R1 recorded at 8a43e5d, 13 over
-/// 12).
+/// 12; since docs/features/plain-questions.md PQ8, recorded with 4d52ec3c's
+/// build, 14 over 13).
 /// The gate's no verdict is `gate.rs`' AC-06.
 #[test]
 fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
@@ -1049,7 +1050,7 @@ fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     assert_eq!(task(&pair, Some(NORTH), &["ISL-LAMP"]), "T-0001");
     make(&pair, "Light the lamp", &["--discipline", "development"]);
     link(&pair, "C-0001", &["T-0001"]);
-    pair.sql("PRAGMA user_version = 13;");
+    pair.sql("PRAGMA user_version = 14;");
     let rows = pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;");
     for args in [
         &["card", "show", "C-0001"][..],
@@ -1058,10 +1059,10 @@ fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     ] {
         let message = cannot(&pair, args);
         assert!(
-            message.contains("schema version 13, this build knows 12"),
+            message.contains("schema version 14, this build knows 13"),
             "{args:?}: {message}"
         );
-        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "13", "{args:?}");
+        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "14", "{args:?}");
         assert_eq!(
             pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;"),
             rows,

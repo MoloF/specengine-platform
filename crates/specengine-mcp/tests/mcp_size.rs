@@ -942,8 +942,10 @@ fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
 /// characters (UTF-16 units alike: the corpus is ASCII). 424 208 until
 /// docs/features/upstream-signal.md US-10 made CC3 (a)'s card a subtask
 /// whose `upstream` lists 16 edits by a 128-byte name (and its context
-/// the parent's 4 096-byte goal).
-const CARD_CONTEXT_MAXIMUM: usize = 432_982;
+/// the parent's 4 096-byte goal); 432 982 until
+/// docs/features/plain-questions.md PQ10 gave each of the answer's 64 items
+/// `,"gist":null,"matters":null` (27 characters each, + 1 728).
+const CARD_CONTEXT_MAXIMUM: usize = 434_710;
 
 /// The clock of every write of the card scenes.
 const CARD_CLOCK: &str = "2026-11-12T09:00:00Z";

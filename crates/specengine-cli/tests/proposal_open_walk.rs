@@ -808,6 +808,10 @@ fn question(repo: &LockRepo, text: &str) -> String {
         now: NOW.to_owned(),
         git: repo.git_env(&repo.root),
         card: None,
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     };
     let env = repo.env(&repo.root);
     let ask = |request: &QuestionRequest| {

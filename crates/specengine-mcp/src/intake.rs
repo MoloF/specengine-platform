@@ -32,12 +32,13 @@ use serde_json::Value;
 use specengine_cli::{
     AMENDMENT_KIND, ANSWER_MAX, AUTHOR_FIELD_MAX, AmendmentRequest, CREATE_KIND, CreateRequest,
     DISTINCT_MAX, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
-    DriftRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, HUB_ID_START,
+    DriftRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GIST_MAX, GapType, HUB_ID_START,
     INTAKE_MATCHES_MAX, INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX,
-    IntakeOption, IntakeSeverity, InterpretRequest, LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX,
-    OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome, ProposeRequest,
-    ProposedPatch, ProposedText, QuestionRequest, RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES,
-    SUMMARY_MAX, TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now, with_article,
+    IntakeOption, IntakeSeverity, InterpretRequest, LABEL_MAX, LOCATION_MAX, MATTERS_MAX,
+    NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome,
+    ProposeRequest, ProposedPatch, ProposedText, QUESTION_OPTIONS_MAX, QuestionRequest,
+    RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, UPDATE_KIND,
+    process_git, utc_now, with_article,
 };
 
 use crate::mirror::{
@@ -91,15 +92,17 @@ line. ",
 
 const QUESTION_DESCRIPTION: &str = concat!(
     "Asks the owner a question about nodes: the same as `spec propose question ID... --text T \
---working-answer W --price-of-other P [--severity S] [--distinct-from X]... [--card C] \
---author-role ROLE`. Checked first against what is decided and asked; stored (open) only when nothing \
-answers it. content is the command's output, structuredContent its --json document {id, \
-created, hits, related, linked, diagnostics, notes}.
+--working-answer W --price-of-other P [--severity S] [--gist G] [--matters M] [--options F] \
+[--recommendation N] [--distinct-from X]... [--card C] --author-role ROLE`. Checked first \
+against what is decided and asked; stored (open) only when nothing answers it. content is the \
+command's output, structuredContent its --json document {id, created, hits, related, linked, \
+diagnostics, notes}.
 
-node_ids: 1 to 16 IDs (or slug/ID) it is about, or root-relative .md paths naming their \
-files' documents, each node once; an alias is refused naming the ID, a look-alike with its \
-Latin fix.
+node_ids: 1 to 16 IDs (or slug/ID) or root-relative .md paths it is about, each once; an \
+alias is refused naming the ID, a look-alike with its Latin fix.
 text: the question, at most 1024 bytes.
+gist (160 bytes), matters (512), options (2-3) and recommendation: what the owner reads \
+first; plain words, no IDs, paths or code names.
 working_answer: the answer worked on until the owner's, at most 2048 bytes: keep working \
 on it.
 price_of_other: what another answer would cost, at most 2048 bytes.
@@ -109,14 +112,12 @@ card_id: the card (C-0001) it is asked for, in any state.
 author_role (required), author_model, run: who asks.
 task_id: as propose_change.
 
-A hit: an accepted decision document linked to a node (its id, path and title as the \
-answer), or a question or decision queued on a shared node with the same text, whitespace and \
-case aside (a rejected one's reason is the owner's answer). With a hit nothing is stored: id \
-null, created false; read the answer, or name every hit in distinct_from to store it anyway. \
-Past 10 hits, a note names the rest; over 64 it cannot be stored. Related: decision documents \
-only mentioning a node, queued items with other text. The owner decides \
-with `spec approve PR` (a decision record: a queue hit's record, path, title as the answer) \
-or answers with `spec reject PR --reason <answer>`. A refusal names the field. ",
+A hit: an accepted decision linked to a node (its id, path, title as the answer), or a \
+question or decision queued on a shared node with the same text, whitespace and case aside (a \
+rejected one's reason is the owner's answer). With a hit nothing is stored: id null, created \
+false; read the answer, or name every hit in distinct_from to store it anyway. Past 10 hits, a \
+note names the rest; over 64 it cannot be stored. The owner decides with `spec approve PR` or \
+answers with `spec reject PR --reason <answer>`. A refusal names the field. ",
     queue_tail!()
 );
 
@@ -319,6 +320,31 @@ const _: () = assert!(holds_number(
     "over ",
     DISTINCT_MAX,
     " it cannot"
+));
+// The lead's caps (task spec `plain-questions` PQ9).
+const _: () = assert!(holds_number(
+    QUESTION_DESCRIPTION,
+    "gist (",
+    GIST_MAX,
+    " bytes)"
+));
+const _: () = assert!(holds_number(
+    QUESTION_DESCRIPTION,
+    "matters (",
+    MATTERS_MAX,
+    ")"
+));
+const _: () = assert!(holds_number(
+    QUESTION_DESCRIPTION,
+    "options (",
+    OPTIONS_MIN,
+    "-"
+));
+const _: () = assert!(holds_number(
+    QUESTION_DESCRIPTION,
+    "-",
+    QUESTION_OPTIONS_MAX,
+    ") and recommendation"
 ));
 const _: () = assert!(holds_number(
     DISCREPANCY_DESCRIPTION,
@@ -536,6 +562,15 @@ pub(crate) struct QuestionArgs {
     pub node_ids: Vec<String>,
     /// The question.
     pub text: String,
+    /// The question in one line of plain words for the owner: no IDs, paths or code names.
+    pub gist: Option<String>,
+    /// Why it matters to the owner, in plain words.
+    pub matters: Option<String>,
+    /// Two or three answers the owner may pick, each with its effect and price.
+    #[schemars(with = "Option<Vec<mirror::IntakeOption>>")]
+    pub options: Option<Vec<IntakeOption>>,
+    /// The index of the option you recommend, from 0.
+    pub recommendation: Option<u64>,
     /// The answer worked on until the owner answers.
     pub working_answer: String,
     /// What another answer would cost.
@@ -739,6 +774,15 @@ pub(crate) struct HubQuestionArgs {
     pub node_ids: Vec<String>,
     /// The question.
     pub text: String,
+    /// The question in one line of plain words for the owner: no IDs, paths or code names.
+    pub gist: Option<String>,
+    /// Why it matters to the owner, in plain words.
+    pub matters: Option<String>,
+    /// Two or three answers the owner may pick, each with its effect and price.
+    #[schemars(with = "Option<Vec<mirror::IntakeOption>>")]
+    pub options: Option<Vec<IntakeOption>>,
+    /// The index of the option you recommend, from 0.
+    pub recommendation: Option<u64>,
     /// The answer worked on until the owner answers.
     pub working_answer: String,
     /// What another answer would cost.
@@ -764,6 +808,10 @@ impl From<HubQuestionArgs> for QuestionArgs {
         Self {
             node_ids: args.node_ids,
             text: args.text,
+            gist: args.gist,
+            matters: args.matters,
+            options: args.options,
+            recommendation: args.recommendation,
             working_answer: args.working_answer,
             price_of_other: args.price_of_other,
             severity: args.severity,
@@ -1258,6 +1306,10 @@ impl SpecEngineServer {
             let request = QuestionRequest {
                 node_ids: args.node_ids,
                 text: args.text,
+                gist: args.gist,
+                matters: args.matters,
+                options: args.options,
+                recommendation: args.recommendation,
                 working_answer: args.working_answer,
                 price_of_other: args.price_of_other,
                 severity: args.severity,

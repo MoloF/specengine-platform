@@ -354,7 +354,7 @@ enum Command {
         /// A note kept with the decision (and in a decision record's `note` slot), at most 4096 bytes.
         #[arg(long, value_name = "T")]
         note: Option<String>,
-        /// A discrepancy: the owner's chosen option, from 0.
+        /// A discrepancy or a question with options: the owner's chosen option, from 0.
         #[arg(long, value_name = "N")]
         option: Option<u64>,
         /// A question or a decision: the owner's answer, instead of its working answer.
@@ -1022,6 +1022,18 @@ enum Propose {
         /// How much it matters (default normal); it never blocks anything.
         #[arg(long, value_name = "S", value_parser = PossibleValuesParser::new(IntakeSeverity::ALL.map(IntakeSeverity::as_str)))]
         severity: Option<String>,
+        /// The question in one line of plain words for the owner: no IDs, paths or code names; at most 160 bytes.
+        #[arg(long, value_name = "G")]
+        gist: Option<String>,
+        /// Why it matters to the owner, in plain words; at most 512 bytes.
+        #[arg(long, value_name = "M")]
+        matters: Option<String>,
+        /// A JSON array of two or three answers the owner may pick (`[{"label", "effect", "price"}]`), or `-` for stdin; at most 8 MiB.
+        #[arg(long, value_name = "F")]
+        options: Option<PathBuf>,
+        /// The index of the option you recommend, from 0; only with --options.
+        #[arg(long, value_name = "N")]
+        recommendation: Option<u64>,
         /// A hit (its ID, else its path) this question is distinct from; name every hit to store it anyway.
         #[arg(long = "distinct-from", value_name = "X")]
         distinct_from: Vec<String>,
@@ -1681,6 +1693,10 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     working_answer,
                     price_of_other,
                     severity,
+                    gist,
+                    matters,
+                    options,
+                    recommendation,
                     distinct_from,
                     card,
                     author_role,
@@ -1688,27 +1704,45 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     run,
                     task,
                 },
-        } => Outcome::Intake(Box::new(specengine_cli::propose_question_with_task(
-            env,
-            globals,
-            &QuestionRequest {
-                node_ids,
-                text,
-                working_answer,
-                price_of_other,
-                // clap took only a listed value.
-                severity: severity.as_deref().and_then(IntakeSeverity::parse),
-                distinct_from,
-                card,
-                author_role,
-                author_model,
-                run,
-                login: None,
-                now: now(),
-                git: process_git(env),
-            },
-            task.as_deref(),
-        )?)),
+        } => {
+            // Read as `--input` is (task spec `plain-questions` PQ2).
+            let options = match options {
+                None => None,
+                Some(path) => {
+                    let source = if path.as_os_str() == "-" {
+                        IntakeSource::Given(read_stdin(INTAKE_INPUT_MAX_BYTES, "the options")?)
+                    } else {
+                        IntakeSource::File(path)
+                    };
+                    Some(specengine_cli::read_question_options(env, &source)?)
+                }
+            };
+            Outcome::Intake(Box::new(specengine_cli::propose_question_with_task(
+                env,
+                globals,
+                &QuestionRequest {
+                    node_ids,
+                    text,
+                    working_answer,
+                    price_of_other,
+                    gist,
+                    matters,
+                    options,
+                    recommendation,
+                    // clap took only a listed value.
+                    severity: severity.as_deref().and_then(IntakeSeverity::parse),
+                    distinct_from,
+                    card,
+                    author_role,
+                    author_model,
+                    run,
+                    login: None,
+                    now: now(),
+                    git: process_git(env),
+                },
+                task.as_deref(),
+            )?))
+        }
         Command::Propose {
             kind:
                 Propose::Discrepancy {

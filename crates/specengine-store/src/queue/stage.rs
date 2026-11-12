@@ -48,7 +48,7 @@ pub const EVENT_UNSTAGED: &str = "proposal.unstaged";
 pub enum Stage {
     /// `spec approve PR` with these flags; `None` when absent.
     Approve {
-        /// `--option N`: a discrepancy's.
+        /// `--option N`: a discrepancy's, or a question's holding options.
         option: Option<u64>,
         /// `--answer T`: a question's or a decision's.
         answer: Option<String>,
@@ -172,19 +172,49 @@ impl Stage {
         (stage.to_json() == text).then_some(stage)
     }
 
+    /// [`Self::problem`], then the stage judged by the fields of the item
+    /// it is for, holding `options` options: an option only of an item
+    /// holding options, and in their range
+    /// (`docs/features/plain-questions.md` "Acceptance criteria", PQ5).
+    pub fn problem_holding(
+        &self,
+        kind: ProposalKind,
+        new_file: bool,
+        options: usize,
+    ) -> Option<String> {
+        self.problem(kind, new_file).or_else(|| match self {
+            Self::Approve {
+                option: Some(at), ..
+            } if usize::try_from(*at).map_or(true, |at| at >= options) => Some(if options == 0 {
+                format!(
+                    "a staged `option` on {}, which holds no options",
+                    kind.with_article()
+                )
+            } else {
+                format!(
+                    "a staged `option` {at} on {}, which holds options 0-{}",
+                    kind.with_article(),
+                    options - 1
+                )
+            }),
+            Self::Approve { .. } | Self::Reject { .. } => None,
+        })
+    }
+
     /// `true` for a staged reject.
     pub fn rejects(&self) -> bool {
         matches!(self, Self::Reject { .. })
     }
 
     /// Why a proposal of `kind` (`new_file`: a new file, a create's or an
-    /// amendment's) cannot hold this stage: any stage on a kind that locks
-    /// (a `drift` item is decided on a terminal only, task spec
-    /// `drift-queue`), a decision flag of a kind that takes none (a kind
-    /// that applies takes none; a question or a decision no `--option`; a
-    /// discrepancy no `--answer`), a span hash or `editorial` on a kind that
-    /// has no span (a deciding kind, a new file: it writes no existing
-    /// node), a blank reason; `None`: it can.
+    /// amendment's) cannot hold this stage, judged by its kind alone: any
+    /// stage on a kind that locks (a `drift` item is decided on a terminal
+    /// only, task spec `drift-queue`), a decision flag of a kind that takes
+    /// none (a kind that applies takes none; a decision no `--option`; a
+    /// discrepancy no `--answer`; a question either, but never both), a
+    /// span hash or `editorial` on a kind that has no span (a deciding kind,
+    /// a new file: it writes no existing node), a blank reason; `None`: it
+    /// can. A stored or staged one is judged by [`Self::problem_holding`].
     pub fn problem(&self, kind: ProposalKind, new_file: bool) -> Option<String> {
         if kind.family() == KindFamily::Locks {
             return Some(format!(
@@ -220,10 +250,12 @@ impl Stage {
                     }
                 } else {
                     match kind {
+                        // An option it holds (judged by its fields:
+                        // `Self::problem_holding`), the working answer or
+                        // the owner's.
+                        ProposalKind::Question => None,
                         // Answered by the working answer or the owner's.
-                        ProposalKind::Question | ProposalKind::Decision => {
-                            option.is_some().then_some("option")
-                        }
+                        ProposalKind::Decision => option.is_some().then_some("option"),
                         ProposalKind::Discrepancy => answer.is_some().then_some("answer"),
                         // Judged above: they apply, or hold no stage.
                         ProposalKind::Update
@@ -236,6 +268,14 @@ impl Stage {
                 if let Some(flag) = flag {
                     return Some(format!(
                         "a staged `{flag}` on {}, which takes none",
+                        kind.with_article()
+                    ));
+                }
+                // Two answers where one is taken (`docs/features/plain-questions.md`
+                // "Acceptance criteria", PQ4).
+                if option.is_some() && answer.is_some() {
+                    return Some(format!(
+                        "a staged `option` and `answer` on {}, which takes one of them",
                         kind.with_article()
                     ));
                 }
@@ -266,6 +306,7 @@ pub(super) fn decode(
     kind: ProposalKind,
     status: ProposalStatus,
     new_file: bool,
+    options: usize,
     columns: [Option<String>; 2],
 ) -> Result<Option<StagedChoice>, UnreadableRow> {
     let (text, at) = match columns {
@@ -301,7 +342,7 @@ pub(super) fn decode(
              \"…\"}`, keys in this order",
         )
     })?;
-    if let Some(problem) = stage.problem(kind, new_file) {
+    if let Some(problem) = stage.problem_holding(kind, new_file, options) {
         return Err(corrupt(id, "staged", problem));
     }
     Ok(Some(StagedChoice { stage, at }))
@@ -432,7 +473,13 @@ impl SqliteQueue {
         }
         match stage {
             Some(stage) => {
-                if let Some(problem) = stage.problem(current.kind, current.new_file()) {
+                let options = current
+                    .intake
+                    .as_ref()
+                    .map_or(0, |intake| intake.options.len());
+                if let Some(problem) =
+                    stage.problem_holding(current.kind, current.new_file(), options)
+                {
                     return Err(QueueError::Invalid(format!("`{id}`: {problem}")));
                 }
                 tx.execute(

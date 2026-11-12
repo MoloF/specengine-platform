@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-11-12
 ---
 
 # Question rounds
@@ -38,7 +38,7 @@ Markdown on stdout (print, mail). Fixed English frame words; every text from the
 
 The sheet, a question and a decision: `round-sheet.md`.
 
-- `## <ID> - <kind>[, <severity>]`. A question or decision (no options): its text, `Working answer:`, `Another answer costs:`. A discrepancy: its summary, `Working answer:` when given, `Options:` as `spec review` prints them (`  - [i] label | effect | price`, ` (recommended)`).
+- `## <ID> - <kind>[, <severity>]`. A question or decision: its text, a question's `Options:` when held, `Working answer:`, `Another answer costs:`; a held gist leads, the text under `As asked:` (`plain-questions.md` "Form and sheet"). A discrepancy: its summary, `Working answer:` when given, `Options:` as `spec review` prints them (`  - [i] label | effect | price`, ` (recommended)`).
 - `Concerns:` each target `<title> (<ID or path>)`, `; `-joined, resolved now; gone: `<ID or path> (not found now)`. `Waiting:` order 2's tasks by ID, `<title> (<task ID>)`, 10, then `; <k> more`; absent with none. `Staged <at>: <the staged line>` (`decision-staging.md` "Terminal").
 - The blank slot `<ID>:` at column 0 ends each item; the unedited sheet answers nothing.
 - Reading time `ceil(c / 1000)` minutes, `c` the characters of the item blocks; `1 item`, `<n> items`. None: `No open questions or discrepancies.` (kept with decisions), the notes, exit 0.
@@ -46,7 +46,7 @@ The sheet, a question and a decision: `round-sheet.md`.
 
 ## JSON
 
-`--json`: `{"project", "items", "more", "minutes", "notes"}`; an item's 19 keys in this order, raw strings as stored, absent `null`, lists `[]`: `id, kind, severity, gap_type, summary, working_answer, price_of_other, options [{label, effect, price}], recommendation, evidence [{file, qpath, lines, observed, documented}], targets [{id, path, title}], tasks [{id, status, title}], worktree, branch, author {type, role, model, run}, staged, staged_at, created_at, updated_at`; a target's `id` `null` for a path, `title` when gone; `tasks` all. `more`: the items past `--limit`; `minutes` 0 with none.
+`--json`: `{"project", "items", "more", "minutes", "notes"}`; an item's 21 keys in this order, raw strings as stored, absent `null`, lists `[]`: `id, kind, severity, gap_type, summary, gist, matters, working_answer, price_of_other, options [{label, effect, price}], recommendation, evidence [{file, qpath, lines, observed, documented}], targets [{id, path, title}], tasks [{id, status, title}], worktree, branch, author {type, role, model, run}, staged, staged_at, created_at, updated_at`; a target's `id` `null` for a path, `title` when gone; `tasks` all. `more`: the items past `--limit`; `minutes` 0 with none.
 
 ## Answers
 
@@ -59,7 +59,7 @@ The file: regular (else `<file>: not a regular file: give the filled sheet or a 
 |---|---|---|
 | blank, `?` | left open | left open |
 | `ok` (ASCII, any case) | approve, the working answer | refused, naming `0-2` |
-| `N` or `[N]`, ASCII digits | refused: no options | approve `--option N`; out of range: ``option 5: `PR` has options 0-2`` |
+| `N` or `[N]`, ASCII digits | with options as a discrepancy's, else refused: no options | approve `--option N`; out of range: ``option 5: `PR` has options 0-2`` |
 | `reject: <reason>` (any case) | reject, the reason | reject, the reason |
 | `reject`, a blank reason | ``needs a reason: write `reject: <reason>` `` | same |
 | `reject` not directly followed by `:` | ``takes its reason after a colon right behind it: write `reject: <reason>` `` | same |

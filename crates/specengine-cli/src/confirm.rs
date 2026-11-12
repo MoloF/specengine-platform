@@ -808,6 +808,10 @@ mod tests {
                 card: None,
                 now: NOW.to_owned(),
                 git: git_env.clone(),
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
         )
         .expect("a question");

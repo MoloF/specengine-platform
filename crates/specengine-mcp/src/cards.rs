@@ -76,7 +76,7 @@ const GET_DESCRIPTION: &str = concat!(
     "One card: the same as `spec card show C --marks [--history] [--context [--budget N]]`. \
 content is its key: value \
 lines, cut at 40000 characters; structuredContent the --json document: the card's fields, its \
-mark, on, discrepancy and correction as list_cards with marks: true gives them, null on a \
+mark, on, discrepancy and correction as list_cards with marks: true does, null on a \
 cancelled card, allowed (the moves open now, each {to, by}, by empty when anyone may), history and \
 notes, every key present, absent null.
 
@@ -84,9 +84,9 @@ card_id: as spec card list writes it. history: true: its last 64 card.* \
 events, oldest first; else null. tasks: each linked task {id, status, title, stale}, read now as \
 spec task list reads it; status null, with a note that starts with its ID, for a task this server \
 cannot read: a corrupt row, another repository, a hub. items: the questions, discrepancies and \
-decisions that name it {id, kind, status, summary, working_answer, why, author, created_at, \
-updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, \
-record_title}, by ID, read now; with history, their last 64 proposal.* events join it by seq. \
+decisions naming it {id, kind, status, summary, gist, matters, working_answer, why, author, \
+created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, \
+record_path, record_title}, by ID, read now; with history, their last 64 proposal.* events join it by seq. \
 mandate: binding, open or null. subtask_items: the items naming one of its subtasks, each with \
 card_id first, by ID, in one read. upstream: what changed above an open subtask, as list_cards \
 names it, or null. context: true: {parent {id, title, goal} or null, bundle, \

@@ -1124,16 +1124,18 @@ fn decision_apply_ac16_ask_owner_teaches_a_decided_item() {
     let mut unedited = edited(
         &skills,
         "ask-owner",
-        "- A queue record with a `record`: the owner decided it, and that record is the owner's \
-         decision. Read it with `get_node` on its `record`; off this branch it is not there yet: \
-         `get_proposal` with the hit's `id` gives the owner's `choice`. Follow it where it settles \
-         your question.\n",
+        // Its 0.43.0 words (docs/features/plain-questions.md "The plugin",
+        // edit 5).
+        "- A queue record with a `record`: the owner's decision. Read it with `get_node` on its \
+         `record`; off this branch, `get_proposal` with the hit's `id` gives the owner's `choice`. \
+         Follow it where it settles your question.\n",
         "",
     );
     for (from, to) in [
         (
-            "- A queue record with only an `answer`: the owner rejected that record",
-            "- A queue record with an `answer`: the owner rejected that record",
+            // "it" since plain-questions' edit 7.
+            "- A queue record with only an `answer`: the owner rejected it",
+            "- A queue record with an `answer`: the owner rejected it",
         ),
         (
             "- A queue record with neither: it is asked already.",
@@ -1142,10 +1144,11 @@ fn decision_apply_ac16_ask_owner_teaches_a_decided_item() {
         (
             // "on a rejected record" since docs/features/kind-decision.md
             // (a decision is a third deciding kind).
+            // Plain-questions' edit 4.
             "- Later, `get_proposal` with the item's `id` as `proposal_id` gives its `status` and \
-             the owner's `decision_note`; on a rejected record the note is the owner's answer; on \
-             an applied one, `record_id` and `record_title` name the owner's decision record, and \
-             its `choice` answers too.",
+             `decision_note`, the owner's answer on a rejected record; on an applied one, \
+             `record_id` and `record_title` name the owner's decision record, and its `choice` \
+             answers too.",
             "- Later, `get_proposal` with the record's `id` as `proposal_id` gives its `status` \
              and the owner's `decision_note`; on a rejected question or discrepancy the note is \
              the owner's answer.",
@@ -1242,8 +1245,10 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // node-history (RM-0035, `get_node`'s `history`); 0.41.0 since
     // upstream-signal (RM-0105, `get_card`'s and `list_cards`' `upstream`);
     // 0.42.0 since intake-similar (RM-0059, `propose_change`'s
-    // `distinct_from`, `keywords` and `similar`).
-    assert_eq!(manifest["version"], "0.42.0");
+    // `distinct_from`, `keywords` and `similar`); 0.43.0 since plain-questions
+    // (RM-0088, `ask_question`'s `gist`, `matters`, `options`,
+    // `recommendation`).
+    assert_eq!(manifest["version"], "0.43.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1356,8 +1361,10 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // node-history (RM-0035, `get_node`'s `history`); 0.41.0 since
     // upstream-signal (RM-0105, `get_card`'s and `list_cards`' `upstream`);
     // 0.42.0 since intake-similar (RM-0059, `propose_change`'s
-    // `distinct_from`, `keywords` and `similar`).
-    assert_eq!(manifest["version"], "0.42.0");
+    // `distinct_from`, `keywords` and `similar`); 0.43.0 since plain-questions
+    // (RM-0088, `ask_question`'s `gist`, `matters`, `options`,
+    // `recommendation`).
+    assert_eq!(manifest["version"], "0.43.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1400,13 +1407,15 @@ fn kind_decision_iteration2_ask_owner_tells_an_accepted_decision_from_a_decision
     assert_eq!(
         accepted,
         [
-            "- An accepted decision: its `answer` is only the decision's title. Read the decision \
-          with `get_node` (its `id`, else its `path`) and follow it where it settles your \
-          question; where it does not, yours is a different question (below)."
+            // Plain-questions' edit 6.
+            "- An accepted decision: its `answer` is only its title. Read it with `get_node` (its \
+             `id`, else its `path`) and follow it where it settles your question; where it does \
+             not, yours is a different question (below)."
         ]
     );
     assert!(
-        skill.contains("on a rejected record the note is the owner's answer"),
+        // Plain-questions' edit 4.
+        skill.contains("the owner's answer on a rejected record"),
         "{skill}"
     );
     assert!(
@@ -1460,7 +1469,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.42.0",
+        manifest["version"], "0.43.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1474,7 +1483,9 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          card-questions (`card_id`, `why`, `items`): 0.36.0; department-split \
          (`split_card`): 0.37.0; task-mandate (`mandate`, `subtask_items`): 0.38.0; \
          card-context (`get_card`'s `context`): 0.39.0; node-history (`get_node`'s \
-         `history`): 0.40.0; upstream-signal (`upstream`): 0.41.0; intake-similar (`distinct_from`, `keywords`, `similar`): 0.42.0"
+         `history`): 0.40.0; upstream-signal (`upstream`): 0.41.0; intake-similar (`distinct_from`, `keywords`, `similar`): 0.42.0; \
+         plain-questions (`ask_question`'s `gist`, `matters`, `options`, `recommendation`): \
+         0.43.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2574,8 +2585,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // `get_node`'s `history`); 0.41.0 since upstream-signal (RM-0105,
     // `get_card`'s and `list_cards`' `upstream`); 0.42.0 since intake-similar
     // (RM-0059, `propose_change`'s `distinct_from`, `keywords` and
-    // `similar`).
-    assert_eq!(manifest["version"], "0.42.0");
+    // `similar`); 0.43.0 since plain-questions (RM-0088, `ask_question`'s
+    // four keys).
+    assert_eq!(manifest["version"], "0.43.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -2790,8 +2802,10 @@ fn card_questions_p1_ask_owner_names_card_id_and_why() {
         .len();
     // The body after the closing `---` line, as docs/canon/plugin-files.md
     // measures it ("`ask-owner` 4 095 at 0.19.0"): the two edits are net zero
-    // bytes, the body 4 095 within the cap of 4 096, the file 4 374.
-    assert_eq!((body, ask_owner.len()), (4_095, 4_374));
+    // bytes, the body 4 095 within the cap of 4 096, the file 4 374; 4 089 and
+    // 4 368 since docs/features/plain-questions.md "The plugin" (its "4 096
+    // -> 4 090" counts one byte more than this measure).
+    assert_eq!((body, ask_owner.len()), (4_089, 4_368));
     assert!(body <= 4096);
     for (sentence, gone) in [
         (

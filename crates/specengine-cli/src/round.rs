@@ -121,7 +121,7 @@ pub struct RoundTask {
     pub title: Option<String>,
 }
 
-/// One item of a sheet: 19 keys, in this order, as stored.
+/// One item of a sheet: 21 keys, in this order, as stored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RoundItem {
     pub id: String,
@@ -129,6 +129,10 @@ pub struct RoundItem {
     pub severity: Option<IntakeSeverity>,
     pub gap_type: Option<GapType>,
     pub summary: String,
+    /// A question's gist and why it matters, when given; `null` on every
+    /// other kind (task spec `plain-questions` PQ7).
+    pub gist: Option<String>,
+    pub matters: Option<String>,
     pub working_answer: Option<String>,
     pub price_of_other: Option<String>,
     pub options: Vec<IntakeOption>,
@@ -424,6 +428,8 @@ fn item(
         summary: intake
             .map(|intake| intake.summary.clone())
             .unwrap_or_default(),
+        gist: intake.and_then(|intake| intake.gist.clone()),
+        matters: intake.and_then(|intake| intake.matters.clone()),
         working_answer: intake.and_then(|intake| intake.working_answer.clone()),
         price_of_other: intake.and_then(|intake| intake.price_of_other.clone()),
         options: intake
@@ -520,23 +526,41 @@ fn indented(out: &mut String, text: &str) {
     }
 }
 
-/// An item's lines on the sheet, its heading through its answer slot.
+/// An item's lines on the sheet, its heading through its answer slot. A
+/// held gist leads (`Gist:`), then why it matters, then the text as asked
+/// (`As asked:`); without a gist the text comes first, as before, and why
+/// it matters after it. An item answered by its working answer (one
+/// holding a price of another answer) shows its options before it; one
+/// answered by an option alone after its working answer, as before (task
+/// spec `plain-questions` PQ7).
 fn item_text(item: &RoundItem) -> String {
     let mut out = format!("## {} - {}", slot(&item.id), slot(&item.kind));
     if let Some(severity) = item.severity {
         out.push_str(&format!(", {}", severity.as_str()));
     }
     out.push_str("\n\n");
-    indented(&mut out, &item.summary);
-    if let Some(answer) = &item.working_answer {
-        out.push_str("\nWorking answer:\n");
-        indented(&mut out, answer);
+    let matters = |out: &mut String| {
+        if let Some(matters) = &item.matters {
+            out.push_str("\nWhy it matters:\n");
+            indented(out, matters);
+        }
+    };
+    match &item.gist {
+        Some(gist) => {
+            out.push_str(&format!("Gist: {}\n", slot(gist)));
+            matters(&mut out);
+            out.push_str("\nAs asked:\n");
+            indented(&mut out, &item.summary);
+        }
+        None => {
+            indented(&mut out, &item.summary);
+            matters(&mut out);
+        }
     }
-    if let Some(price) = &item.price_of_other {
-        out.push_str("\nAnother answer costs:\n");
-        indented(&mut out, price);
-    }
-    if !item.options.is_empty() {
+    let options = |out: &mut String| {
+        if item.options.is_empty() {
+            return;
+        }
         out.push_str("\nOptions:\n");
         for (index, option) in item.options.iter().enumerate() {
             let recommended =
@@ -549,6 +573,21 @@ fn item_text(item: &RoundItem) -> String {
                 if recommended { " (recommended)" } else { "" }
             ));
         }
+    };
+    let answered_by_working = item.price_of_other.is_some();
+    if answered_by_working {
+        options(&mut out);
+    }
+    if let Some(answer) = &item.working_answer {
+        out.push_str("\nWorking answer:\n");
+        indented(&mut out, answer);
+    }
+    if let Some(price) = &item.price_of_other {
+        out.push_str("\nAnother answer costs:\n");
+        indented(&mut out, price);
+    }
+    if !answered_by_working {
+        options(&mut out);
     }
     out.push('\n');
     let mut tail = Vec::new();
@@ -1711,9 +1750,11 @@ fn token_stage(
     proposal: &Proposal,
     intake: &Intake,
 ) -> Result<StageBody, String> {
-    // An item with options is answered by one of them; one with none by
-    // its working answer or the owner's text.
+    // By its fields (task spec `plain-questions` PQ7): an item with options
+    // is answered by one of them; one with a price of another answer by its
+    // working answer or the owner's text too.
     let count = intake.options.len();
+    let takes_answer = intake.price_of_other.is_some();
     let range = format!("0-{}", count.saturating_sub(1));
     let updated_at = proposal.updated_at.clone();
     let approve = |option: Option<u64>, answer: Option<String>| StageBody::Approve {
@@ -1731,8 +1772,8 @@ fn token_stage(
             updated_at: updated_at.clone(),
             actor: None,
         },
-        (Token::Ok, 0) => approve(None, None),
-        (Token::Text(text), 0) => approve(None, Some(text.clone())),
+        (Token::Ok, _) if takes_answer => approve(None, None),
+        (Token::Text(text), _) if takes_answer => approve(None, Some(text.clone())),
         (Token::Option(_), 0) => {
             return Err(format!(
                 "`{id}` has no options: `ok` takes its working answer, other text is your answer"

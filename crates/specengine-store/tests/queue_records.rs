@@ -81,6 +81,8 @@ fn discrepancy(summary: &str) -> NewIntake {
             recommendation: Some(1),
             distinct_from: Vec::new(),
             why: None,
+            gist: None,
+            matters: None,
         },
         actor: None,
         card_id: None,
@@ -453,7 +455,9 @@ fn a_corrupt_record_row_names_its_column() {
             "drift",
             "drift_hash",
             "card_id",
-            "why"
+            "why",
+            "gist",
+            "matters"
         ]
     );
     let cases: Vec<CorruptCase<'_>> = vec![

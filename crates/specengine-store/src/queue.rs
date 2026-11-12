@@ -191,7 +191,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 12;
+pub const QUEUE_SCHEMA_VERSION: i64 = 13;
 
 /// The first queue schema whose `proposals` holds `card_id` and `why`
 /// (step 10 → 11).
@@ -199,6 +199,10 @@ pub(crate) const CARD_ITEMS_SCHEMA: i64 = 11;
 
 /// The first queue schema whose `cards` holds `mandate` (step 11 → 12).
 pub(crate) const MANDATE_SCHEMA: i64 = 12;
+
+/// The first queue schema whose `proposals` holds `gist` and `matters`
+/// (step 12 → 13).
+pub(crate) const PLAIN_QUESTIONS_SCHEMA: i64 = 13;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -322,6 +326,14 @@ const STEP_12: &str = "
 ALTER TABLE cards ADD COLUMN mandate TEXT;
 ";
 
+/// Step 12 → 13: a question's `gist` and why it `matters`, appended in this
+/// order, `NULL` on every row stepped, which reads as none
+/// (`docs/features/plain-questions.md` "Acceptance criteria", PQ8).
+const STEP_13: &str = "
+ALTER TABLE proposals ADD COLUMN gist TEXT;
+ALTER TABLE proposals ADD COLUMN matters TEXT;
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -345,12 +357,16 @@ macro_rules! step_10_columns {
 }
 
 /// Every column of `proposals`, in table order.
-const COLUMNS: &str = concat!(step_10_columns!(), ", card_id, why");
+const COLUMNS: &str = concat!(step_10_columns!(), ", card_id, why, gist, matters");
 
 /// [`COLUMNS`] over a queue still at schema 8, 9 or 10, no step run (a
-/// handle of [`SqliteQueue::open_existing`]): `card_id` and `why` read
-/// `NULL`, as on a row step 11 stepped.
-const COLUMNS_10: &str = concat!(step_10_columns!(), ", NULL, NULL");
+/// handle of [`SqliteQueue::open_existing`]): `card_id`, `why`, `gist` and
+/// `matters` read `NULL`, as on a row steps 11 and 13 stepped.
+const COLUMNS_10: &str = concat!(step_10_columns!(), ", NULL, NULL, NULL, NULL");
+
+/// [`COLUMNS`] over a queue still at schema 11 or 12, no step run: `gist`
+/// and `matters` read `NULL`, as on a row step 13 stepped.
+const COLUMNS_12: &str = concat!(step_10_columns!(), ", card_id, why, NULL, NULL");
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -522,12 +538,13 @@ impl ProposalKind {
     }
 
     /// The fields a deciding kind's row holds, every kind listed (so a new
-    /// one must be judged here): a question's (a `question`, a `decision`)
-    /// or a discrepancy's; `None` for a kind that applies or locks. It is
-    /// also the queue's dedup family.
+    /// one must be judged here): each deciding kind its own shape; `None`
+    /// for a kind that applies or locks. Its [`IntakeShape::family`] is the
+    /// queue's dedup family.
     pub(crate) const fn intake_shape(self) -> Option<IntakeShape> {
         match self {
-            Self::Question | Self::Decision => Some(IntakeShape::Question),
+            Self::Question => Some(IntakeShape::Question),
+            Self::Decision => Some(IntakeShape::Decision),
             Self::Discrepancy => Some(IntakeShape::Discrepancy),
             Self::Update | Self::Create | Self::Interpretation | Self::Amendment | Self::Drift => {
                 None
@@ -536,35 +553,76 @@ impl ProposalKind {
     }
 }
 
-/// What a deciding kind's row holds (`docs/canon/agent-intake.md`
-/// "Stored"), and so how it is answered.
+/// What a deciding kind's row holds, and so how it is answered
+/// (`docs/canon/agent-intake.md` "Stored";
+/// `docs/features/plain-questions.md` "Acceptance criteria", PQ5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum IntakeShape {
-    /// `summary` (its text), `working_answer` and `price_of_other`; no
-    /// `gap_type`, evidence, options or recommendation: answered by the
-    /// working answer or the owner's own.
+    /// `summary` (its text), `working_answer` and `price_of_other`, an
+    /// optional `gist`, `matters`, priced options and a recommendation
+    /// among them; no `gap_type` or evidence: answered by one of its
+    /// options, the working answer or the owner's own.
     Question,
+    /// A question's text, working answer and price; no `gap_type`,
+    /// evidence, options, recommendation, gist or matters: answered by the
+    /// working answer or the owner's own.
+    Decision,
     /// `gap_type`, `summary`, evidence, priced options and a
-    /// recommendation, an optional `working_answer`: answered by one of
-    /// its options.
+    /// recommendation, an optional `working_answer`; no price, gist or
+    /// matters: answered by one of its options.
     Discrepancy,
 }
 
+/// The queue's dedup family of a shape ([`IntakeShape::family`]): an item
+/// is matched against the rows of its own family alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IntakeFamily {
+    /// Asked of the owner: a question and a decision.
+    Asks,
+    /// Reported to the owner: a discrepancy.
+    Reports,
+}
+
 impl IntakeShape {
+    /// Its dedup family, every shape listed.
+    pub(crate) const fn family(self) -> IntakeFamily {
+        match self {
+            Self::Question | Self::Decision => IntakeFamily::Asks,
+            Self::Discrepancy => IntakeFamily::Reports,
+        }
+    }
+
     /// The intake columns a row of this shape holds none of: `NULL`, else
     /// the row is corrupt, named (and [`ProposalQueue::create_intake`]
     /// refuses an item holding one).
     const fn null_columns(self) -> &'static [&'static str] {
         match self {
-            Self::Question => &["gap_type", "evidence", "options", "recommendation"],
-            Self::Discrepancy => &["price_of_other"],
+            Self::Question => &["gap_type", "evidence"],
+            Self::Decision => &[
+                "gap_type",
+                "evidence",
+                "options",
+                "recommendation",
+                "gist",
+                "matters",
+            ],
+            Self::Discrepancy => &["price_of_other", "gist", "matters"],
+        }
+    }
+
+    /// The intake columns a row of this shape requires, every shape listed.
+    const fn required_columns(self) -> &'static [&'static str] {
+        match self {
+            Self::Question | Self::Decision => &["working_answer", "price_of_other"],
+            Self::Discrepancy => &["gap_type", "recommendation"],
         }
     }
 
     /// Why `intake` is no item of this shape (`kind` as a refusal names
     /// it): a field the shape holds none of given (an empty list is none),
     /// a `why` on any kind but a decision, one it requires absent, a
-    /// recommendation out of range of the options; `None`: it is. The columns as [`IntakeColumns::decode`]
+    /// recommendation out of range of the options (none given: every
+    /// index); `None`: it is. The columns as [`IntakeColumns::decode`]
     /// reads them.
     fn problem(self, kind: ProposalKind, intake: &Intake) -> Option<String> {
         let given = [
@@ -573,6 +631,9 @@ impl IntakeShape {
             ("evidence", !intake.evidence.is_empty()),
             ("options", !intake.options.is_empty()),
             ("recommendation", intake.recommendation.is_some()),
+            ("gist", intake.gist.is_some()),
+            ("matters", intake.matters.is_some()),
+            ("working_answer", intake.working_answer.is_some()),
         ];
         if let Some((field, _)) = given
             .iter()
@@ -583,19 +644,14 @@ impl IntakeShape {
         if intake.why.is_some() && !kind.holds_why() {
             return Some(format!("{} holds no `why`", kind.with_article()));
         }
-        let required: &[(&str, bool)] = match self {
-            Self::Question => &[
-                ("working_answer", intake.working_answer.is_some()),
-                ("price_of_other", intake.price_of_other.is_some()),
-            ],
-            Self::Discrepancy => &[
-                ("gap_type", intake.gap_type.is_some()),
-                ("recommendation", intake.recommendation.is_some()),
-            ],
-        };
-        if let Some((field, _)) = required.iter().find(|(_, given)| !given) {
+        if let Some(field) = self
+            .required_columns()
+            .iter()
+            .find(|field| !given.iter().any(|(name, given)| name == *field && *given))
+        {
             return Some(format!("{} lacks its `{field}`", kind.with_article()));
         }
+        // Without options, no index is in range.
         intake
             .recommendation
             .filter(|&at| usize::try_from(at).map_or(true, |at| at >= intake.options.len()))
@@ -742,15 +798,25 @@ pub struct Intake {
     pub price_of_other: Option<String>,
     /// A discrepancy's; `[]` for a question or a decision.
     pub evidence: Vec<Evidence>,
-    /// A discrepancy's; `[]` for a question or a decision.
+    /// A discrepancy's; a question's when given (`[]`: none); `[]` for a
+    /// decision.
     pub options: Vec<IntakeOption>,
-    /// A discrepancy's: an index into `options`.
+    /// An index into `options`: a discrepancy's; a question's when given
+    /// with them.
     pub recommendation: Option<u64>,
     /// The hits the author declared this item distinct from.
     pub distinct_from: Vec<String>,
     /// A decision's own: why it was decided so, stored as given; `None`
     /// for a question and a discrepancy, which hold none.
     pub why: Option<String>,
+    /// A question's own, when given: the question in one line of plain
+    /// words, stored as given (`docs/features/plain-questions.md`
+    /// "Acceptance criteria", PQ1); `None`
+    /// for a decision and a discrepancy, which hold none.
+    pub gist: Option<String>,
+    /// A question's own, when given: why it matters to the owner, stored as
+    /// given; `None` for a decision and a discrepancy.
+    pub matters: Option<String>,
 }
 
 /// What an intake stores ([`ProposalQueue::create_intake`]); the queue adds
@@ -1314,10 +1380,11 @@ pub trait ProposalQueue {
     /// `intake` stored `open` under the next ID, then `patch` (an
     /// `update`) under the one after, `linked` both ways, a
     /// `proposal.created` each, committed; else nothing written. A kind
-    /// that applies, or an item not of its kind's fields (a question's or a
-    /// decision's with a gap type, evidence, options or a recommendation, or
-    /// without its working answer or price; a discrepancy's with a price,
-    /// or without its gap type or an in-range recommendation), is
+    /// that applies, or an item not of its kind's fields (a question's with
+    /// a gap type or evidence; a decision's with those, options, a
+    /// recommendation, a gist or matters; either without its working answer
+    /// or price; a discrepancy's with a price, a gist or matters, or without
+    /// its gap type; a recommendation out of range of the options), is
     /// [`QueueError::Invalid`].
     fn create_intake(
         &mut self,
@@ -2203,12 +2270,14 @@ enum Hold<'a> {
 /// `card-store`), 9 → 10 a card's linked tasks
 /// (`docs/canon/cards.md` "Store"), 10 → 11 a proposal's `card_id` and
 /// `why` (`docs/canon/card-questions.md` "The rule"), 11 → 12 a card's
-/// `mandate` (`docs/canon/card-mandate.md` "The rule"; 0 → 12 runs all
-/// twelve, every due step in this one transaction; a schema-5 DB opens as
-/// 12, every `interpretation`, `drift`, `drift_hash`, `card_id`, `why`
-/// `NULL`, no card; a schema-9 card reads no task, a schema-11 one no
-/// mandate); [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is
-/// refused.
+/// `mandate` (`docs/canon/card-mandate.md` "The rule"), 12 → 13 a
+/// question's `gist` and `matters` (`docs/features/plain-questions.md`
+/// "Acceptance criteria", PQ8; 0 → 13
+/// runs all thirteen, every due step in this one transaction; a schema-5
+/// DB opens as 13, every `interpretation`, `drift`, `drift_hash`,
+/// `card_id`, `why`, `gist`, `matters` `NULL`, no card; a schema-9 card
+/// reads no task, a schema-11 one no mandate); [`QUEUE_SCHEMA_VERSION`] is
+/// left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
     if version > QUEUE_SCHEMA_VERSION {
@@ -2273,6 +2342,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 11 {
         tx.execute_batch(STEP_12).db()?;
         version = 12;
+    }
+    if version == 12 {
+        tx.execute_batch(STEP_13).db()?;
+        version = 13;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -2473,7 +2546,7 @@ impl RawRow {
         let applied_commit = take();
         let created_at = required(take(), "created_at")?;
         let updated_at = required(take(), "updated_at")?;
-        let columns = IntakeColumns {
+        let mut columns = IntakeColumns {
             target_ids: take(),
             severity: take(),
             gap_type: take(),
@@ -2484,6 +2557,8 @@ impl RawRow {
             options: take(),
             recommendation: take(),
             distinct_from: take(),
+            gist: None,
+            matters: None,
         };
         let linked = take();
         let record_columns: [Option<String>; 5] = std::array::from_fn(|_| take());
@@ -2493,6 +2568,9 @@ impl RawRow {
         let drift_columns = [take(), take()];
         let card_id = take();
         let why = take();
+        // Step 13's, last in the table: intake columns of a question.
+        columns.gist = take();
+        columns.matters = take();
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
@@ -2520,7 +2598,6 @@ impl RawRow {
             ));
         }
         let new_file = kind.adds_nodes() && base_hash.is_empty();
-        let staged = stage::decode(&id, kind, status, new_file, staged_columns)?;
         let new_ids = if kind.adds_nodes() {
             columns.decode_create(&id, kind, &target_id, new_file, linked.as_deref())?
         } else {
@@ -2546,6 +2623,10 @@ impl RawRow {
                 ..columns.decode(&id, kind, shape, &target_id)?
             }),
         };
+        // The stage once the options it may name are read (task spec
+        // `plain-questions` D3: an option by the item's fields).
+        let options = intake.as_ref().map_or(0, |intake| intake.options.len());
+        let staged = stage::decode(&id, kind, status, new_file, options, staged_columns)?;
         let record = decode_record(&id, kind, status, intake.as_ref(), record_columns)?;
         if let Some(linked) = &linked
             && proposal_number(linked).is_none()
@@ -2808,12 +2889,12 @@ fn is_record_id(text: &str) -> bool {
 }
 
 /// Why `choice` is not one `kind` takes, by the fields its row holds
-/// ([`ProposalKind::intake_shape`]): an option of a discrepancy, in range
-/// of its options; the working answer or another answer of a question or
-/// a decision. `None`: it is.
+/// ([`ProposalKind::intake_shape`]): an option of a discrepancy or a
+/// question, in range of its options; the working answer or another answer
+/// of a question or a decision. `None`: it is.
 fn choice_fits(choice: &Choice, kind: ProposalKind, intake: &Intake) -> Option<String> {
     match (kind.intake_shape(), choice) {
-        (Some(IntakeShape::Discrepancy), Choice::Option(index)) => {
+        (Some(IntakeShape::Discrepancy | IntakeShape::Question), Choice::Option(index)) => {
             let fits = usize::try_from(*index).is_ok_and(|index| index < intake.options.len());
             (!fits).then(|| {
                 format!(
@@ -2822,7 +2903,10 @@ fn choice_fits(choice: &Choice, kind: ProposalKind, intake: &Intake) -> Option<S
                 )
             })
         }
-        (Some(IntakeShape::Question), Choice::WorkingAnswer | Choice::Answer(_)) => None,
+        (
+            Some(IntakeShape::Question | IntakeShape::Decision),
+            Choice::WorkingAnswer | Choice::Answer(_),
+        ) => None,
         _ => Some(format!(
             "{} is no choice of {}",
             choice.described(),
@@ -3007,6 +3091,8 @@ struct IntakeColumns {
     options: Option<String>,
     recommendation: Option<String>,
     distinct_from: Option<String>,
+    gist: Option<String>,
+    matters: Option<String>,
 }
 
 impl IntakeColumns {
@@ -3033,6 +3119,8 @@ impl IntakeColumns {
             ("options", &self.options),
             ("recommendation", &self.recommendation),
             ("distinct_from", &self.distinct_from),
+            ("gist", &self.gist),
+            ("matters", &self.matters),
         ];
         let article = kind.with_article();
         if let Some((column, _)) = others.iter().find(|(_, value)| value.is_some()) {
@@ -3095,6 +3183,8 @@ impl IntakeColumns {
             ("options", &self.options),
             ("recommendation", &self.recommendation),
             ("distinct_from", &self.distinct_from),
+            ("gist", &self.gist),
+            ("matters", &self.matters),
         ];
         let article = kind.with_article();
         if let Some((column, _)) = others.iter().find(|(_, value)| value.is_some()) {
@@ -3137,11 +3227,11 @@ impl IntakeColumns {
         Ok((severity, summary))
     }
 
-    /// The fields of a deciding kind's row, of its `shape` (a `question`'s
-    /// and a `decision`'s, or a `discrepancy`'s): a column its kind
-    /// holds none of set ([`IntakeShape::null_columns`]) or a required one
-    /// NULL, JSON not of its shape, an enum or `recommendation` out of
-    /// range make the row corrupt, named.
+    /// The fields of a deciding kind's row, of its `shape` (a `question`'s,
+    /// a `decision`'s or a `discrepancy`'s): a column its kind holds none
+    /// of set ([`IntakeShape::null_columns`]) or a required one NULL, JSON
+    /// not of its shape, an enum, a `recommendation` out of range or (a
+    /// question's) set without options make the row corrupt, named.
     fn decode(
         self,
         id: &str,
@@ -3149,16 +3239,15 @@ impl IntakeColumns {
         shape: IntakeShape,
         target_id: &str,
     ) -> Result<Intake, UnreadableRow> {
-        let question = match shape {
-            IntakeShape::Question => true,
-            IntakeShape::Discrepancy => false,
-        };
+        let asks = shape.family() == IntakeFamily::Asks;
         let held = [
             ("gap_type", &self.gap_type),
             ("price_of_other", &self.price_of_other),
             ("evidence", &self.evidence),
             ("options", &self.options),
             ("recommendation", &self.recommendation),
+            ("gist", &self.gist),
+            ("matters", &self.matters),
         ];
         if let Some((column, _)) = held
             .iter()
@@ -3192,7 +3281,7 @@ impl IntakeColumns {
         let severity_text = required(self.severity, "severity")?;
         let severity = IntakeSeverity::parse(&severity_text)
             .ok_or_else(|| corrupt(id, "severity", format!("`{severity_text}` is no severity")))?;
-        let gap_type = if question {
+        let gap_type = if asks {
             None
         } else {
             let text = required(self.gap_type, "gap_type")?;
@@ -3202,37 +3291,43 @@ impl IntakeColumns {
             )
         };
         let summary = required(self.summary, "summary")?;
-        let working_answer = if question {
+        let working_answer = if asks {
             Some(required(self.working_answer, "working_answer")?)
         } else {
             self.working_answer
         };
-        let price_of_other = if question {
+        let price_of_other = if asks {
             Some(required(self.price_of_other, "price_of_other")?)
         } else {
             None
         };
-        let (evidence, options, recommendation) = if question {
-            (Vec::new(), Vec::new(), None)
+        let evidence: Vec<Evidence> = if asks {
+            Vec::new()
         } else {
-            let evidence: Vec<Evidence> =
-                json(id, "evidence", &required(self.evidence, "evidence")?)?;
-            let options: Vec<IntakeOption> =
-                json(id, "options", &required(self.options, "options")?)?;
-            let text = required(self.recommendation, "recommendation")?;
-            let recommendation = text
-                .parse::<u64>()
-                .ok()
-                .filter(|number| number.to_string() == text)
-                .filter(|&number| usize::try_from(number).is_ok_and(|index| index < options.len()))
-                .ok_or_else(|| {
-                    corrupt(
-                        id,
-                        "recommendation",
-                        format!("`{text}` is no index into its {} options", options.len()),
-                    )
-                })?;
-            (evidence, options, Some(recommendation))
+            json(id, "evidence", &required(self.evidence, "evidence")?)?
+        };
+        // A discrepancy requires its options and recommendation; a question
+        // may hold options, and a recommendation only with them; a decision
+        // holds neither (its NULLs checked above).
+        let (options, recommendation) = match (shape, self.options, self.recommendation) {
+            (IntakeShape::Discrepancy, options, recommendation) => {
+                let options: Vec<IntakeOption> =
+                    json(id, "options", &required(options, "options")?)?;
+                let text = required(recommendation, "recommendation")?;
+                let at = recommendation_of(id, &text, options.len())?;
+                (options, Some(at))
+            }
+            (_, None, None) => (Vec::new(), None),
+            (_, None, Some(_)) => {
+                return Err(corrupt(id, "recommendation", "it is set without options"));
+            }
+            (_, Some(options), recommendation) => {
+                let options: Vec<IntakeOption> = json(id, "options", &options)?;
+                let at = recommendation
+                    .map(|text| recommendation_of(id, &text, options.len()))
+                    .transpose()?;
+                (options, at)
+            }
         };
         let distinct_from: Vec<String> = json(
             id,
@@ -3251,16 +3346,38 @@ impl IntakeColumns {
             recommendation,
             distinct_from,
             why: None,
+            gist: self.gist,
+            matters: self.matters,
         })
     }
 }
 
+/// A stored `recommendation`, `text`: a decimal index (as written, no
+/// sign or leading zero) into `options` options; else the row `id` is
+/// corrupt, named.
+fn recommendation_of(id: &str, text: &str, options: usize) -> Result<u64, UnreadableRow> {
+    text.parse::<u64>()
+        .ok()
+        .filter(|number| number.to_string() == text)
+        .filter(|&number| usize::try_from(number).is_ok_and(|index| index < options))
+        .ok_or_else(|| {
+            corrupt(
+                id,
+                "recommendation",
+                format!("`{text}` is no index into its {options} options"),
+            )
+        })
+}
+
 /// The select list of `proposals` at `conn`'s queue schema: [`COLUMNS`],
-/// or [`COLUMNS_10`] below step 11 (a handle of
-/// [`SqliteQueue::open_existing`], no step run).
-fn columns_of(conn: &Connection) -> Result<&'static str, QueueError> {
-    Ok(if user_version(conn)? < CARD_ITEMS_SCHEMA {
+/// [`COLUMNS_10`] below step 11, or [`COLUMNS_12`] below step 13 (a
+/// handle of [`SqliteQueue::open_existing`], no step run).
+pub(crate) fn columns_of(conn: &Connection) -> Result<&'static str, QueueError> {
+    let version = user_version(conn)?;
+    Ok(if version < CARD_ITEMS_SCHEMA {
         COLUMNS_10
+    } else if version < PLAIN_QUESTIONS_SCHEMA {
+        COLUMNS_12
     } else {
         COLUMNS
     })
@@ -3396,7 +3513,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL, NULL, NULL)"
+             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -3678,8 +3795,9 @@ fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation
 }
 
 /// Inserts a kind that decides as `open` under the next ID (a decision
-/// writes a question's columns, and its `why`, as given; `card_id` as
-/// given): the
+/// writes a question's columns but its lead, and its `why`, as given; a
+/// question its `gist`, `matters`, options and recommendation when given;
+/// `card_id` as given): the
 /// update's five text columns NULL, `diagnostics` `[]`, JSON lists as
 /// given (an evidence item's absent keys `null`); its ID.
 fn insert_intake(
@@ -3696,7 +3814,10 @@ fn insert_intake(
     let diagnostics = to_json(&Vec::<ProposalFinding>::new())?;
     let target_ids = to_json(&intake.target_ids)?;
     let evidence = discrepancy.then(|| to_json(&intake.evidence)).transpose()?;
-    let options = discrepancy.then(|| to_json(&intake.options)).transpose()?;
+    // A question's options when it holds them (`[]`: none, `NULL`).
+    let options = (discrepancy || !intake.options.is_empty())
+        .then(|| to_json(&intake.options))
+        .transpose()?;
     let recommendation = intake.recommendation.map(|index| index.to_string());
     let distinct_from = to_json(&intake.distinct_from)?;
     let id = next_id(tx, floor)?;
@@ -3706,7 +3827,7 @@ fn insert_intake(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
-             ?25, NULL, NULL, NULL, NULL, NULL, ?26, ?27)"
+             ?25, NULL, NULL, NULL, NULL, NULL, ?26, ?27, ?28, ?29)"
         ),
         rusqlite::params![
             id,
@@ -3736,6 +3857,8 @@ fn insert_intake(
             task,
             new.card_id,
             intake.why,
+            intake.gist,
+            intake.matters,
         ],
     )
     .db()?;
@@ -3869,7 +3992,7 @@ fn insert_drift(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, NULL, ?17, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20, NULL, NULL)"
+             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -3899,20 +4022,22 @@ fn insert_drift(
 }
 
 /// The project's rows of the intake's family (any repository, any state):
-/// the kinds of its [`ProposalKind::intake_shape`], a question and a
-/// decision one family, a discrepancy another; those that share a target
-/// with it, by ID number: hits when the normalised summary is equal, else
-/// related. A row whose targets or state do not read shares nothing.
+/// the kinds whose [`ProposalKind::intake_shape`] is of its
+/// [`IntakeShape::family`], a question and a decision one family, a
+/// discrepancy another; those that share a target with it, by ID number:
+/// hits when the normalised summary is equal, else related. A row whose
+/// targets or state do not read shares nothing.
 fn queue_matches(
     tx: &Transaction<'_>,
     project: &str,
     intake: &NewIntake,
 ) -> Result<(Vec<QueueMatch>, Vec<QueueMatch>), QueueError> {
     let wanted = normalized_summary(&intake.intake.summary);
-    let shape = intake.kind.intake_shape();
+    let family_of = |kind: ProposalKind| kind.intake_shape().map(IntakeShape::family);
+    let wanted_family = family_of(intake.kind);
     let family: Vec<&str> = ProposalKind::ALL
         .into_iter()
-        .filter(|kind| shape.is_some() && kind.intake_shape() == shape)
+        .filter(|&kind| wanted_family.is_some() && family_of(kind) == wanted_family)
         .map(ProposalKind::as_str)
         .collect();
     let slots = (0..family.len())

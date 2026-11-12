@@ -78,6 +78,8 @@ fn discrepancy(summary: &str) -> NewIntake {
             recommendation: Some(1),
             distinct_from: Vec::new(),
             why: None,
+            gist: None,
+            matters: None,
         },
         actor: None,
         card_id: None,

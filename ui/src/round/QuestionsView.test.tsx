@@ -221,10 +221,11 @@ describe("controls by structure, nothing picked (U-03)", () => {
     await openQuestions(client);
     const article = await screen.findByRole("article", { name: "PR-0005" });
     const radios = within(article).getAllByRole("radio");
+    // The mark names who recommends, an agent's the AI's (docs/features/plain-questions.md "Acceptance criteria", PQ12).
     expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual([
       "[0] Code to specFix the codePrice: One test",
       "[1] Spec to codeEdit the rulePrice: Balance changes",
-      "[2] Keep bothRecommendedBoth stayPrice: A note",
+      "[2] Keep bothRecommended by the AIBoth stayPrice: A note",
       "Reject with a reason",
       "Leave open",
     ]);

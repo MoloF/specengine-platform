@@ -769,6 +769,10 @@ fn ask(pair: &Pair, cwd: &Path, nodes: &[&str], text: &str) -> String {
         login: None,
         now: common::proposal::NOW.to_owned(),
         git: pair.git_env(cwd),
+        gist: None,
+        matters: None,
+        options: None,
+        recommendation: None,
     };
     let outcome = specengine_cli::propose_question(&pair.env(cwd), &Globals::default(), &request)
         .unwrap_or_else(|error| panic!("question {text}: {error}"));

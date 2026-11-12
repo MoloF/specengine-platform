@@ -5,7 +5,7 @@ export function fold(text: string): string {
   return text.normalize("NFC").toLowerCase();
 }
 
-/** Whether an inbox entry's ID, summary, rationale, kind, branch, targets, severity, status or record hold the query. */
+/** Whether an inbox entry's ID, gist, summary, rationale, kind, branch, targets, severity, status or record hold the query. */
 export function matchesFilter(proposal: InboxEntry, query: string): boolean {
   const needle = fold(query.trim());
   if (needle === "") {
@@ -13,6 +13,7 @@ export function matchesFilter(proposal: InboxEntry, query: string): boolean {
   }
   const haystack = [
     proposal.id,
+    proposal.gist,
     proposal.summary,
     proposal.rationale,
     proposal.kind,

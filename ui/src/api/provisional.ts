@@ -346,13 +346,15 @@ export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
  * was raised for; `staged`, `staged_at` after it, the owner's staged choice; `interpretation` after
  * them, an interpretation's decision and texts; `drift`, after `revisions`, a drift item's evidence;
  * `card_id` and `why` after `interpretation`, the card it was raised for and a decision's why;
- * `similar` after `why`, always null here (51 keys).
+ * `similar` after `why`, always null here; `gist` and `matters` after `summary`, a question's lead,
+ * null on every other kind (53 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
  * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents";
  * `docs/features/kind-interpretation.md` "Data"; `docs/features/rev-discipline.md` "Review document, stage, queue";
  * `docs/features/drift-queue.md` "Review, inbox, round, stage";
- * `docs/features/card-questions.md` "Acceptance criteria" (L1, U5); `docs/canon/card-questions.md` "The rule".
+ * `docs/features/card-questions.md` "Acceptance criteria" (L1, U5); `docs/canon/card-questions.md` "The rule";
+ * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10, PQ12).
  */
 export interface Proposal {
   id: string | null;
@@ -405,6 +407,10 @@ export interface Proposal {
   gap_type: GapType | null;
   /** A question's text, a discrepancy's summary. */
   summary: string | null;
+  /** A question's one line in plain words, as its author gave it; null when none, and on every other kind. */
+  gist: string | null;
+  /** Why the question matters, as its author gave it; null when none, and on every other kind. */
+  matters: string | null;
   working_answer: string | null;
   /** What the other answer to a question would cost. */
   price_of_other: string | null;
@@ -516,9 +522,11 @@ export interface Interpretation {
 /**
  * One line of the owner's queue, `spec inbox --json`: `rationale` an update's first line (at most
  * 80 characters), `severity` and `summary` (its first line) a question's or a discrepancy's, a
- * drift item's its rows' states; `staged_at` after `record_id` (12 keys). Sources:
+ * drift item's its rows' states; `staged_at` after `record_id`; `gist` after `summary`, a question's
+ * one line whole, null when none (13 keys). Sources:
  * `docs/canon/proposal-queue.md` "Commands"; `docs/features/daemon-read.md` "Data";
- * `docs/canon/decision-staging.md` "Documents"; `docs/features/drift-queue.md` "Review, inbox, round, stage".
+ * `docs/canon/decision-staging.md` "Documents"; `docs/features/drift-queue.md` "Review, inbox, round, stage";
+ * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10).
  */
 export interface InboxEntry {
   id: string;
@@ -534,6 +542,8 @@ export interface InboxEntry {
   rationale: string | null;
   severity: Severity | null;
   summary: string | null;
+  /** A question's one line in plain words; the row shows it, else the summary. */
+  gist: string | null;
   /** A decided question's or discrepancy's record. */
   record_id: string | null;
   /** When the owner's choice was staged, UTC as stored; null when none is staged. */
@@ -578,10 +588,12 @@ export interface RoundTask {
 }
 
 /**
- * One item of the round sheet, its 19 keys in this order: an open question or discrepancy of the
- * current repository, `staged` and `staged_at` its staged choice if any. `kind` is plain text,
- * shown raw; the controls follow its options and its working answer, never the kind.
- * Sources: `docs/canon/round.md` "JSON"; `docs/features/ui-round.md` "Data".
+ * One item of the round sheet, its 21 keys in this order: an open question or discrepancy of the
+ * current repository, `staged` and `staged_at` its staged choice if any, `gist` and `matters` after
+ * `summary`, a question's lead. `kind` is plain text, shown raw; the controls follow its options, its
+ * working answer and its price of another answer, never the kind.
+ * Sources: `docs/canon/round.md` "JSON"; `docs/features/ui-round.md` "Data";
+ * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10, PQ12).
  */
 export interface RoundItem {
   id: string;
@@ -589,6 +601,10 @@ export interface RoundItem {
   severity: Severity | null;
   gap_type: GapType | null;
   summary: string;
+  /** A question's one line in plain words; null when none. */
+  gist: string | null;
+  /** Why it matters; null when none. */
+  matters: string | null;
   working_answer: string | null;
   price_of_other: string | null;
   options: ProposalOption[];
@@ -2355,15 +2371,19 @@ export interface CardTask {
 
 /**
  * One question, discrepancy or decision naming a card, as the card's read serves it, by ID number, read
- * now: 16 keys, each the row's, `author` its object (`login` when it has one); `kind` and `status` shown
- * as sent, told apart in `src/board/labels.ts` alone. Sources: `docs/canon/card-questions.md` "The rule";
- * `docs/features/card-questions.md` "Acceptance criteria" (K1, U1).
+ * now: 18 keys, each the row's, `author` its object (`login` when it has one), `gist` and `matters` after
+ * `summary`, a question's lead; `kind` and `status` shown as sent, told apart in `src/board/labels.ts`
+ * alone. Sources: `docs/canon/card-questions.md` "The rule";
+ * `docs/features/card-questions.md` "Acceptance criteria" (K1, U1);
+ * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10, PQ12).
  */
 export interface CardItem {
   id: string;
   kind: string;
   status: ProposalStatus;
   summary: string | null;
+  gist: string | null;
+  matters: string | null;
   working_answer: string | null;
   why: string | null;
   author: Author;
@@ -2380,9 +2400,11 @@ export interface CardItem {
 
 /**
  * One question, discrepancy or decision naming a subtask of the card read, as its `subtask_items`
- * serves it: the subtask's ID, then the 16 keys of a `CardItem`, by ID number, read with the card in
- * one read. `kind` and `status` shown as sent, told apart in `src/board/labels.ts` alone. Sources:
- * `docs/canon/card-mandate.md` "The rule"; `docs/features/task-mandate.md` "Acceptance criteria" (M6, V3).
+ * serves it: the subtask's ID, then the 18 keys of a `CardItem`, by ID number, read with the card in
+ * one read (the daemon flattens a `CardItem` into it, so its `gist` and `matters` come along). `kind`
+ * and `status` shown as sent, told apart in `src/board/labels.ts` alone. Sources:
+ * `docs/canon/card-mandate.md` "The rule"; `docs/features/task-mandate.md` "Acceptance criteria" (M6, V3);
+ * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10).
  */
 export interface CardSubtaskItem {
   card_id: string;
@@ -2390,6 +2412,8 @@ export interface CardSubtaskItem {
   kind: string;
   status: ProposalStatus;
   summary: string | null;
+  gist: string | null;
+  matters: string | null;
   working_answer: string | null;
   why: string | null;
   author: Author;

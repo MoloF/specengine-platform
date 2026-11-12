@@ -31,6 +31,8 @@ function anItem(fields: Partial<CardItem> & Pick<CardItem, "id" | "kind" | "stat
   return {
     summary: null,
     working_answer: null,
+    gist: null,
+    matters: null,
     why: null,
     author: PERSON,
     created_at: "2026-11-11T08:00:00Z",

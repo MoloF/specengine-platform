@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-02
+reviewed: 2026-11-12
 ---
 
 # Decision staging: UI prepares, terminal confirms
@@ -75,7 +75,7 @@ A staged `span_hash` other than the target's now (step 5) gives ``staged against
 
 ## UI
 
-`stageDecision(project, id, stage, updatedAt, as)` (POST), `unstageDecision(project, id)` (DELETE), no `AbortSignal`: a write's answer is always taken. The decision dialog stages against the shown version's `updated_at`: Accept an option (`[0]`, `[1]`, as `--option N`) or the working answer, and a note; Reject a reason; Editorial: `proposal-revisions.md`; no `--answer`, `--canon`; it says when it replaces a staged choice. Clarification and defer send nothing (``Not built yet: only Accept and Reject are staged``). The card's "Staged decision": ``Staged <at>. Confirm on a terminal: spec approve PR-0004`` (a reject: `spec reject PR-0004`) with Copy (fixed words and an ID matching `^PR-[0-9]{4,}$`, else no command), the choice (labels escaped: `shownSlot`), Unstage; the list marks it "Staged"; it stays in the inbox. A 409 or 404 carrying a review document rejects as `ClientError` with its last note; the dialog stays. A stage event re-reads that project's inbox, that proposal and round sheets, no task. A stage changed outside this tab raises a `role="alert"` above every screen of the project (Show, Dismiss): this tab's writes are tracked per `QueryClient`, each accounting for one event, for 60 s; an unstage only when a stage was cached or shown (`round-ui.md`) and no outside stage event arrived since. An interpretation's dialog names its decision (`proposal-interpretation.md` "UI"). The mock stages alike; `?scenario=conflict`: a first stage finds one staged elsewhere (409), the next is taken.
+`stageDecision(project, id, stage, updatedAt, as)` (POST), `unstageDecision(project, id)` (DELETE), no `AbortSignal`: a write's answer is always taken. The decision dialog stages against the shown version's `updated_at`: Accept an option (as `--option N`) or the working answer, never preselected (`plain-questions.md` "UI"), and a note; Reject a reason; Editorial: `proposal-revisions.md`; no `--answer`, `--canon`; it says when it replaces a staged choice. Clarification and defer send nothing (``Not built yet: only Accept and Reject are staged``). The card's "Staged decision": ``Staged <at>. Confirm on a terminal: spec approve PR-0004`` (a reject: `spec reject PR-0004`) with Copy (fixed words and an ID matching `^PR-[0-9]{4,}$`, else no command), the choice (labels escaped: `shownSlot`), Unstage; the list marks it "Staged"; it stays in the inbox. A 409 or 404 carrying a review document rejects as `ClientError` with its last note; the dialog stays. A stage event re-reads that project's inbox, that proposal and round sheets, no task. A stage changed outside this tab raises a `role="alert"` above every screen of the project (Show, Dismiss): this tab's writes are tracked per `QueryClient`, each accounting for one event, for 60 s; an unstage only when a stage was cached or shown (`round-ui.md`) and no outside stage event arrived since. An interpretation's dialog names its decision (`proposal-interpretation.md` "UI"). The mock stages alike; `?scenario=conflict`: a first stage finds one staged elsewhere (409), the next is taken.
 
 ## Threat model
 

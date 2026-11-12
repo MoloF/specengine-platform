@@ -468,6 +468,10 @@ impl Lamp {
             login: None,
             now: now.to_owned(),
             git: GitEnv::new(cwd.to_path_buf(), self.git.vars()),
+            gist: None,
+            matters: None,
+            options: None,
+            recommendation: None,
         };
         let env = Env {
             cwd: cwd.to_path_buf(),

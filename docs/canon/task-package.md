@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-mcp, crates/specengine-model]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-11-12
 ---
 
 # Task package: what an agent is given
@@ -28,7 +28,7 @@ ADR-0027: one versioned, stack-neutral document of the approved spec an agent wo
 
 - `targets`: resolved now in the compared place; a node gone keeps its stored `id` (`null` for a path target) and `path` (else the snapshot's), `kind`, `title` `null`.
 - `criteria`: free text, or `ref` and its text now in the compared place (`null` gone; cut: "Caps").
-- `open_proposals`: `open` and `approved` proposals, any kind (an interpretation too), of the task's repository whose `target_ids` (an amendment: also the IDs its text amends) meet the snapshot (before approval: what it would freeze) or bound to the task; `summary` a deciding item's summary (a question's, a decision's text), else the rationale's first line, `null` for an empty rationale. `assumptions`, by the item's fields: one without options (a question, a decision) its `working_answer`, one with options (a discrepancy) its recommended option's label; none from an applying kind.
+- `open_proposals`: `open` and `approved` proposals, any kind (an interpretation too), of the task's repository whose `target_ids` (an amendment: also the IDs its text amends) meet the snapshot (before approval: what it would freeze) or bound to the task; `summary` a deciding item's summary (a question's, a decision's text), else the rationale's first line, `null` for an empty rationale. `assumptions`, by the item's fields: one with `price_of_other` (a question, a decision) its `working_answer`, else (a discrepancy) its recommended option's label; none from an applying kind.
 - `owner_notes` `{at, note}` per `changes --note`, oldest first; `runs` by number.
 - `bindings`: the code binding rows (`code-reads.md` "The binding row", 14 keys) of `targets`, `affected_nodes` and the sections each contains, every relation, `sync` `spec verify --node`'s, in its row order, from the bundle's one code read (`code-reads.md` "The bundle and the package"), at most 64 ("Caps"); `[]` without `[code]`, no note; a code layer that cannot be read: one `bindings: <cause>` note, rows `[]` or `sync -`.
 - `tested`: the evidence of `targets`, the criteria refs, `affected_nodes` and their sections, equal to `spec verify --task T --json`'s, judged now (`spec-lock-tested.md` "Reads"); never capped or cut; `null` not judged (no `[code]`, a cause, blocks not judgeable), `[]` no block.

@@ -504,7 +504,8 @@ fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
 // ---------------------------------------------- card-questions (RM-0097)
 
 /// docs/features/card-questions.md H3 and L2, the hub's texts: after "Data"'s
-/// edits `ask_question` is 2 030 bytes, `report_decision` 1 758,
+/// edits `ask_question` is 2 030 bytes (2 044 since
+/// docs/features/plain-questions.md "MCP"), `report_decision` 1 758,
 /// `report_discrepancy` 1 714, each ASCII and naming `card_id`;
 /// `report_decision` holds the `why` line; each schema takes `card_id` (a
 /// string or null), `report_decision` `why`, none `task_id`, root
@@ -513,7 +514,7 @@ fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
 fn card_questions_the_hub_raises_take_card_id_and_their_texts_hold() {
     let server = hub();
     for (name, bytes) in [
-        ("ask_question", 2030),
+        ("ask_question", 2044),
         ("report_decision", 1758),
         ("report_discrepancy", 1714),
     ] {

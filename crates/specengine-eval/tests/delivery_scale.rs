@@ -335,6 +335,10 @@ impl Seeded {
                 login: None,
                 now: at(9),
                 git: git.clone(),
+                gist: None,
+                matters: None,
+                options: None,
+                recommendation: None,
             },
         )
         .expect("a question");

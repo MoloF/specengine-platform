@@ -55,6 +55,9 @@ describe("the normal scenario", () => {
       "severity",
       "gap_type",
       "summary",
+      // A question's lead (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+      "gist",
+      "matters",
       "working_answer",
       "price_of_other",
       "options",

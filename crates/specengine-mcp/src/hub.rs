@@ -43,10 +43,10 @@ use rmcp::{ErrorData, RoleServer, tool, tool_router};
 use specengine_cli::{
     ANSWER_MAX, AUTHOR_FIELD_MAX, CARD_TASKS_MAX, CRITERIA_MAX, CRITERION_MAX, CliError,
     DISTINCT_MAX, EVIDENCE_ENTRIES_MAX, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, EVIDENCE_VALUE_MAX, Env,
-    GOAL_MAX, Globals, HUB_ID_START, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX, LABEL_MAX,
-    LOCATION_MAX, MAX_SPLIT_CHILDREN, NODE_IDS_MAX, NODES_MAX, NOTE_MAX, OPTION_TEXT_MAX,
-    OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX,
-    TEXT_MAX_BYTES, TITLE_MAX,
+    GIST_MAX, GOAL_MAX, Globals, HUB_ID_START, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX,
+    LABEL_MAX, LOCATION_MAX, MATTERS_MAX, MAX_SPLIT_CHILDREN, NODE_IDS_MAX, NODES_MAX, NOTE_MAX,
+    OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, QUESTION_OPTIONS_MAX,
+    RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, TITLE_MAX,
 };
 
 use crate::cards::{CreateCardArgs, EditCardArgs, MoveCardArgs, SplitCardArgs};
@@ -483,15 +483,17 @@ line. ",
 
 const HUB_QUESTION_DESCRIPTION: &str = concat!(
     "Asks a question about nodes: the same as `spec propose question ID... --text T \
---working-answer W --price-of-other P [--severity S] [--distinct-from X]... [--card C] \
---author-role ROLE`. Checked first against what is decided and asked; stored (open) only when nothing \
-answers it. content is the command's output, structuredContent its --json document {id, \
-created, hits, related, linked, diagnostics, notes}.
+--working-answer W --price-of-other P [--severity S] [--gist G] [--matters M] [--options F] \
+[--recommendation N] [--distinct-from X]... [--card C] --author-role ROLE`. Checked first \
+against what is decided and asked; stored (open) only when nothing answers it. content is the \
+command's output, structuredContent its --json document {id, created, hits, related, linked, \
+diagnostics, notes}.
 
-node_ids: 1 to 16 IDs (or slug/ID) it is about, or root-relative .md paths naming their \
-files' documents, each node once; an alias is refused naming the ID, a look-alike with its \
-Latin fix.
+node_ids: 1 to 16 IDs (or slug/ID) or root-relative .md paths it is about, each once; an \
+alias is refused naming the ID, a look-alike with its Latin fix.
 text: the question, at most 1024 bytes.
+gist (160 bytes), matters (512), options (2-3) and recommendation: what a person reads \
+first; plain words, no IDs, paths or code names.
 working_answer: the answer worked on until a person's, at most 2048 bytes: keep working \
 on it.
 price_of_other: what another answer would cost, at most 2048 bytes.
@@ -500,14 +502,13 @@ distinct_from: at most 64 hits (an id, else a path) it is declared distinct from
 card_id: the card (C-0001) it is asked for, in any state.
 author_role (required), author_model, run: who asks.
 
-A hit: an accepted decision document linked to a node (its id, path and title as the \
-answer), or a question or decision queued on a shared node with the same text, whitespace and \
-case aside (a rejected one's reason is its answer). With a hit nothing is stored: id \
-null, created false; read the answer, or name every hit in distinct_from to store it anyway. \
-Past 10 hits, a note names the rest; over 64 it cannot be stored. Related: decision documents \
-only mentioning a node, queued items with other text. A person answers it \
-with a Confirm on the hub or a terminal: approved, a decision record (a queue hit's record, \
-path, title as the answer); rejected, its reason the answer. A refusal names the field. ",
+A hit: an accepted decision linked to a node (its id, path, title as the answer), or a \
+question or decision queued on a shared node with the same text, whitespace and case aside (a \
+rejected one's reason is its answer). With a hit nothing is stored: id null, created false; \
+read the answer, or name every hit in distinct_from to store it anyway. Past 10 hits, a note \
+names the rest; over 64 it cannot be stored. A person answers it with Confirm on the hub or a \
+terminal: approved, a decision record; rejected, its reason the answer. A refusal names the \
+field. ",
     hub_queue_tail!()
 );
 
@@ -791,6 +792,31 @@ const _: () = assert!(holds_number(
     "over ",
     DISTINCT_MAX,
     " it cannot"
+));
+// The lead's caps (task spec `plain-questions` PQ9).
+const _: () = assert!(holds_number(
+    HUB_QUESTION_DESCRIPTION,
+    "gist (",
+    GIST_MAX,
+    " bytes)"
+));
+const _: () = assert!(holds_number(
+    HUB_QUESTION_DESCRIPTION,
+    "matters (",
+    MATTERS_MAX,
+    ")"
+));
+const _: () = assert!(holds_number(
+    HUB_QUESTION_DESCRIPTION,
+    "options (",
+    OPTIONS_MIN,
+    "-"
+));
+const _: () = assert!(holds_number(
+    HUB_QUESTION_DESCRIPTION,
+    "-",
+    QUESTION_OPTIONS_MAX,
+    ") and recommendation"
 ));
 const _: () = assert!(holds_number(
     HUB_DISCREPANCY_DESCRIPTION,

@@ -738,13 +738,19 @@ export function cardListOf(board: MockBoard, options: CardsOptions, settled: Set
 /** The queue's prefix of a proposal's events, as stored. */
 const ITEM_EVENT = "proposal.";
 
-/** An item of a card as its read serves it: the row's 16 keys (docs/features/card-questions.md "Acceptance criteria", K1). */
+/**
+ * An item of a card as its read serves it: the row's 18 keys
+ * (docs/features/card-questions.md "Acceptance criteria", K1), a question's `gist` and `matters` after
+ * `summary` (docs/features/plain-questions.md "Acceptance criteria", PQ10).
+ */
 function itemOf(review: StoredReview): CardItem {
   return {
     id: review.id,
     kind: review.kind,
     status: review.status,
     summary: review.summary,
+    gist: review.gist,
+    matters: review.matters,
     working_answer: review.working_answer,
     why: review.why,
     author: review.author ?? { type: "human", role: null, model: null, run: null },
