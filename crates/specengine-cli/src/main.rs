@@ -81,6 +81,10 @@ enum Command {
         /// The slug to write; default: derived from the directory name.
         #[arg(long, value_name = "S")]
         slug: Option<String>,
+        /// A preset file to install below `[project]`, verbatim, checked
+        /// before the write; a path, resolved against the current directory.
+        #[arg(long, value_name = "PATH")]
+        pack: Option<PathBuf>,
     },
     /// Bring the project's index up to date with its files.
     Index {
@@ -1167,9 +1171,11 @@ fn main() -> ExitCode {
 
 fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Outcome, CliError> {
     Ok(match command {
-        Command::Init { slug } => {
-            Outcome::Init(specengine_cli::init(env, globals, &InitRequest { slug })?)
-        }
+        Command::Init { slug, pack } => Outcome::Init(specengine_cli::init(
+            env,
+            globals,
+            &InitRequest { slug, pack },
+        )?),
         Command::Index { full } => {
             Outcome::Index(specengine_cli::index(env, globals, &IndexRequest { full })?)
         }

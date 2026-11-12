@@ -196,9 +196,10 @@ pub fn git_status(dir: &Path, pathspec: &str) -> String {
 /// (docs/features/trace-views.md), `fixtures/apply-outputs`
 /// (docs/features/apply-outputs.md), `fixtures/parent-ref`
 /// (docs/features/edge-table.md), `fixtures/studio-lamp`
-/// (docs/features/workspaces.md) or `fixtures/flow-aside`
-/// (docs/features/flow-scenario.md), each untracked until the owner commits
-/// it, nothing else.
+/// (docs/features/workspaces.md), `fixtures/flow-aside`
+/// (docs/features/flow-scenario.md) or `fixtures/plant-diary`
+/// (docs/features/pack.md), each untracked until the owner commits it,
+/// nothing else.
 pub fn assert_fixtures_status_clean() {
     let status = git_status(&repository_root(), "fixtures/");
     let foreign: Vec<&str> = status
@@ -219,6 +220,7 @@ pub fn assert_fixtures_status_clean() {
                 && !path.starts_with("fixtures/parent-ref/")
                 && !path.starts_with("fixtures/studio-lamp/")
                 && !path.starts_with("fixtures/flow-aside/")
+                && !path.starts_with("fixtures/plant-diary/")
                 && path != "fixtures/daemon-keys.json"
         })
         .collect();
@@ -228,7 +230,8 @@ pub fn assert_fixtures_status_clean() {
          fixtures/spec-c, fixtures/ui-dist, fixtures/ui-dist-pageless, fixtures/flow-relay, \
          fixtures/flow-hire, fixtures/flow-gaps, fixtures/card-press, \
          fixtures/trace-almanac, fixtures/apply-outputs, fixtures/parent-ref, \
-         fixtures/studio-lamp, fixtures/flow-aside and fixtures/daemon-keys.json:\n{}",
+         fixtures/studio-lamp, fixtures/flow-aside, fixtures/plant-diary and \
+         fixtures/daemon-keys.json:\n{}",
         foreign.join("\n")
     );
 }

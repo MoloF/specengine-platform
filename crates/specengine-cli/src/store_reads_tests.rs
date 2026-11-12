@@ -57,7 +57,7 @@ use crate::{
 // ------------------------------------------------------------------ the scratch
 
 /// The configured fixtures: every `fixtures/*/specengine.toml`.
-const FIXTURES: [&str; 21] = [
+const FIXTURES: [&str; 22] = [
     "anchor-states",
     "card-press",
     "code-a",
@@ -70,6 +70,7 @@ const FIXTURES: [&str; 21] = [
     "flow-relay",
     "impact",
     "parent-ref",
+    "plant-diary",
     "roadmap-a",
     "roadmap-b",
     "spec-a",
@@ -1083,6 +1084,7 @@ per_fixture! {
     sr0_differential_flow_relay, ac12_subset_flow_relay => "flow-relay";
     sr0_differential_impact, ac12_subset_impact => "impact";
     sr0_differential_parent_ref, ac12_subset_parent_ref => "parent-ref";
+    sr0_differential_plant_diary, ac12_subset_plant_diary => "plant-diary";
     sr0_differential_roadmap_a, ac12_subset_roadmap_a => "roadmap-a";
     sr0_differential_roadmap_b, ac12_subset_roadmap_b => "roadmap-b";
     sr0_differential_spec_a, ac12_subset_spec_a => "spec-a";

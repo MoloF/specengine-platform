@@ -51,9 +51,15 @@
 //! words gain every `disciplines` entry of every `[[card.split]]` row of the
 //! same configs and presets, lowercased, read with the TOML reader
 //! ([`split_disciplines`]): on the repository exactly `{"copy", "plates"}`,
-//! card-press's two rows (the preset's rows are commented). A row's `kind`
-//! already comes with `kind = "..."`. A planted `"plates"` in a probe source
-//! is red. M: the reader not reading the rows' disciplines.
+//! card-press's two rows, and since docs/features/pack.md
+//! "Acceptance criteria", PK3 (f), plant-diary's row's four (the presets'
+//! rows are commented). A row's `kind` already comes with `kind = "..."`. A
+//! planted `"plates"` in a probe source is red. M: the reader not reading the
+//! rows' disciplines.
+//!
+//! docs/features/pack.md (RM-0061) "Acceptance criteria", PK3 (f): the
+//! software preset's return column `reopened` joins the gamedev preset's
+//! `sent-back`.
 
 mod common;
 
@@ -649,8 +655,20 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
     let split = split_disciplines();
     assert_eq!(
         split,
-        BTreeSet::from(["copy".to_owned(), "plates".to_owned()]),
-        "card-press's two rows (M: the rows' disciplines not read)"
+        BTreeSet::from(
+            [
+                "copy",
+                "plates",
+                // docs/features/pack.md "Acceptance criteria", PK3 (f):
+                // plant-diary's row.
+                "product",
+                "experience",
+                "engineering",
+                "quality",
+            ]
+            .map(str::to_owned)
+        ),
+        "card-press's two rows and plant-diary's (M: the rows' disciplines not read)"
     );
     let mut found = Vec::new();
     let mut exempt = Vec::new();
@@ -889,8 +907,9 @@ fn board_handoff_bh13_the_scan_sees_a_preset_return_column_in_a_literal() {
     let returns = preset_return_columns();
     assert_eq!(
         returns.iter().map(String::as_str).collect::<Vec<_>>(),
-        ["sent-back"],
-        "the gamedev preset's one return column"
+        ["reopened", "sent-back"],
+        "the gamedev preset's return column and, since docs/features/pack.md \
+         PK3 (f), the software preset's"
     );
     let probe = r#"
 // A comment saying sent-back is no literal.

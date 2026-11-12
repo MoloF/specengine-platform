@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 42 open, 68 done; current mvp; to mvp 2-3 days; total 13-21 days, 8 unestimated
+roadmap: 41 open, 69 done; current mvp; to mvp 2-3 days; total 13-21 days, 7 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,15 +29,14 @@ roadmap: 42 open, 68 done; current mvp; to mvp 2-3 days; total 13-21 days, 8 une
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 7 open, 16 done | 0 days, 7 unestimated
+## release v5 | 6 open, 17 done | 0 days, 6 unestimated
 
 1. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | -
 2. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0060
 3. [RM-0106](../roadmap/RM-0106.md) | direction-catalog (Phase 7, v5): a direction as a table of its documents | draft | should | -
 4. [RM-0107](../roadmap/RM-0107.md) | delivery-analytics (Phase 7, v5): what was delivered, against its estimate, and why it took longer | draft | should | -
-5. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a non-game preset | draft | could | -
-6. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
-7. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
+5. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | -
+6. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | -
 
 ## pool | 28 open, 1 done | 7-12 days, 24 unestimated
 
@@ -65,7 +64,7 @@ roadmap: 42 open, 68 done; current mvp; to mvp 2-3 days; total 13-21 days, 8 une
 - [RM-0087](../roadmap/RM-0087.md) | roadmap-states (Phase 7, v4 step 5): the owner's states, and views by state and release | draft | could | -
 - [RM-0102](../roadmap/RM-0102.md) | flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction | draft | could | -
 - [RM-0109](../roadmap/RM-0109.md) | code-languages (Phase 7, pool, on a trigger): bind code in a second language | draft | could | -
-- [RM-0110](../roadmap/RM-0110.md) | config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal | draft | could | - | waits on RM-0061
+- [RM-0110](../roadmap/RM-0110.md) | config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal | draft | could | -
 - [RM-0020](../roadmap/RM-0020.md) | code-index-speed (6c): a faster code index | draft | - | -
 - [RM-0022](../roadmap/RM-0022.md) | layer-c-macros (11b): items under attribute macros keep their monikers | draft | - | -
 - [RM-0023](../roadmap/RM-0023.md) | layer-c-registration (11c): what the schedule dump cannot give | draft | - | - | waits on RM-0021

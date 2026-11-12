@@ -54,7 +54,7 @@ Optional: the one column of the flow a move enters only with a note. Absent, or 
 <config>:<line>: `return`: `<k>` is `accept.to`, reached only by an accept
 ```
 
-The gamedev preset's flows each take `sent-back`, titled "Returned", second in `columns` (`workspaces.md` "Preset"):
+Each preset's return column is second in `columns` (`presets.md`): gamedev's `sent-back`, software's `reopened`:
 
 ```toml
 columns = ["backlog", "sent-back", "ready", "in-progress", "in-review", "verify", "done"]
@@ -108,7 +108,7 @@ Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `
 
 ## Known limits
 
-- **Older binaries refuse `return`, `title` and `split`** (before `board-handoff`, `departments`, `department-split`): an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools (pinned on today's code by an unknown key: CLI `cards.rs` `dp5_an_unknown_flow_key_exits_2_at_its_line`, `ac05`, MCP `a_bad_card_table_stops_the_card_tools_alone`). Add a key only after every terminal, plugin and hub serving the project runs a build that reads it (ADR-0073's rule); the preset's header says so.
+- **Older binaries refuse `return`, `title` and `split`** (before `board-handoff`, `departments`, `department-split`): an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools (pinned on today's code by an unknown key: CLI `cards.rs` `dp5_an_unknown_flow_key_exits_2_at_its_line`, `ac05`, MCP `a_bad_card_table_stops_the_card_tools_alone`). Add a key only after every terminal, plugin and hub serving the project runs a build that reads it (ADR-0073's rule); the presets' headers say so.
 - **History keeps 64 events**: a returned card changed 64 times since has lost its reason; the screen says so.
 - **Hub accepts**: a writer must be a `[team]` login to accept a hand-off's result.
 - No `return_column` on the card row: the reason lives only in the event (ADR-0074 "Cost").

@@ -16,9 +16,10 @@ ISL = { kind = "island", shape = "name" }
 
 # --- scripts/presets/gamedev.toml ---
 # The gamedev preset (docs/features/workspaces.md "The gamedev preset"): six
-# card flows and five workspaces for a game studio's trades. Copy it into a
-# project's specengine.toml, add the project's own [[module]] tables and a
-# workspace's `module`, and retitle anything in the project's language.
+# card flows and five workspaces for a game studio's trades. Install it in a
+# new project with `spec init --pack <this file>`, or copy it into a project's
+# specengine.toml; add the project's own [[module]] tables and a workspace's
+# `module`, and retitle anything in the project's language.
 # Every name is data: no SpecEngine code reads one (ADR-0008, ADR-0073).
 # A flow's title and return, and a [[card.split]] row, need a build that reads
 # them on every terminal, plugin and hub serving the project, an older one

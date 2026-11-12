@@ -52,6 +52,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/node-revision.md](canon/node-revision.md) Node revision and meaning hash · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui · tier 2
 - [docs/canon/plugin-files.md](canon/plugin-files.md) Plugin: files, contract, version, install · plugin · tier 2
 - [docs/canon/plugin.md](canon/plugin.md) Plugin: skills and roles · plugin · tier 2
+- [docs/canon/presets.md](canon/presets.md) Presets: spec init and the packs it installs · crates/specengine-cli, scripts, fixtures · tier 2
 - [docs/canon/queue-backup.md](canon/queue-backup.md) Queue backup and restore · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/queue-export.md](canon/queue-export.md) Queue export: bounds and placement · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/review-form.md](canon/review-form.md) Review form: the owner stages a decision from the session · crates/specengine-mcp, crates/specengine-cli, plugin · tier 2

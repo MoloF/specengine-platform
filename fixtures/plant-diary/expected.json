@@ -1,0 +1,11 @@
+{
+  "prefixes": [
+    "EPC",
+    "STR"
+  ],
+  "kinds": [
+    "epic",
+    "story"
+  ],
+  "workspaces": "workspaces config | workspaces 5, modules 1\nworkspace product | Product | landing roadmap | sections roadmap, board, tree, flow, questions, inbox | flows product | module (none)\nworkspace experience | UX design | landing board | sections board, flow, tree, questions, inbox | flows experience | module (none)\nworkspace engineering | Engineering and quality | landing board | sections board, inbox, tree, flow, graph, health, roadmap, questions | flows engineering, quality | module (none)\nworkspace documentation | Documentation | landing board | sections board, tree, flow, questions, inbox | flows documentation | module (none)\nworkspace leadership | Leadership | landing overview | sections inbox, roadmap, board, flow, tree, graph, health, questions | flows (all) | module (none)\nmodule watering | Watering | root EPC-WATERING\n"
+}

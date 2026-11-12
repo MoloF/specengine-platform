@@ -369,7 +369,7 @@ pub use health_drift::HealthDrift;
 pub use history::{HistoryEntry, ShownHistory};
 pub use impact::{ImpactOutcome, ImpactRequest, ImpactRow, ImpactTask, SeedSymbol, impact};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
-pub use init::{InitOutcome, InitRequest, derive_slug, init};
+pub use init::{InitOutcome, InitRequest, PACK_MAX_BYTES, derive_slug, init};
 pub use intake::{
     DecisionRequest, DiscrepancyRequest, INTAKE_INPUT_MAX_BYTES, INTAKE_MATCHES_MAX,
     IntakeDocument, IntakeMatch, IntakeOutcome, IntakeSource, MatchSource, QuestionRequest,

@@ -102,6 +102,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/mcp-read.md](features/mcp-read.md) shipped
 - [docs/features/node-history.md](features/node-history.md) shipped
 - [docs/features/norm-hash.md](features/norm-hash.md) shipped
+- [docs/features/pack.md](features/pack.md) shipped
 - [docs/features/phase-0-spikes.md](features/phase-0-spikes.md) shipped
 - [docs/features/phase1-cleanup.md](features/phase1-cleanup.md) shipped
 - [docs/features/pilot-schemes.md](features/pilot-schemes.md) shipped
@@ -215,6 +216,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0053.md](roadmap/RM-0053.md) shipped
 - [docs/roadmap/RM-0054.md](roadmap/RM-0054.md) shipped
 - [docs/roadmap/RM-0059.md](roadmap/RM-0059.md) shipped
+- [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) shipped
 - [docs/roadmap/RM-0064.md](roadmap/RM-0064.md) shipped
 - [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) shipped
 - [docs/roadmap/RM-0066.md](roadmap/RM-0066.md) shipped

@@ -247,7 +247,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | 8 | `intake-similar` | RM-0059 | Shipped 2026-11-12: a create's `similar` from five probes (an equal title, an alias, a live create's or amendment's title, a search rank, shared link targets), each with its source and reason; the exact three gate until `distinct_from` names each, the rest advise; `keywords` per call; nothing new stored, no schema step; plugin 0.42.0; a 9.5 ms median at 100k, recall 80 of 100 at 10k (`docs/canon/proposal-similar.md`) | - | 4-6 | - |
 | 9 | `collision-pass` | RM-0060 | Candidates, a pair ledger, a skill; queue schema 14 | - | 5-8 | 8 |
 | 10 | `plain-questions` | RM-0088 | Re-scoped: a question's gist, why it matters and 2-3 options; collisions as pairs; two halves, the questions (queue schema 13, backup format 7), then the pairs | - | 9-13 | 5, 7; the pair half 9 |
-| 11 | `pack` | RM-0061 | `spec init --pack` by path, a non-game preset; the config proposal split off to RM-0110 | - | 3-4 | 4 |
+| 11 | `pack` | RM-0061 | Shipped 2026-11-12: `spec init --pack PATH`, `[project]`, the slug and a preset's bytes verbatim in one write, checked first by the core readers, each refusal at the pack's own line; by path, never a name; a second, software preset (five flows, five workspaces, return `reopened`) and its fixture `plant-diary`; CLI only, no plugin version; the config proposal split off to RM-0110 (`docs/canon/presets.md`) | - | 3-4 | 4 |
 | 12 | `department-overview` | RM-0086 | Re-scoped: an Overview per department, counted by status category | - | 5-7 | 4, 5, 6 |
 | 13 | `hub-department` | RM-0089 | A hub login's default department, presentation only | maybe `hub-workspace` | 2-3 | 4, 11b-3 |
 | v5 | `upstream-signal` | RM-0105 | Shipped 2026-11-12: an open subtask's `upstream`, what changed above it since it was made, by `seq`: its parent's goal, criteria or targets edited, an applied question, discrepancy or decision on their nodes, the parent suspect or correcting; per read, its own key, no mark changed; `card show --marks`, `get_card`, a flag on `list --marks` rows, the tile's "Changed above" and the work item's part; plugin 0.41.0 (`docs/canon/card-upstream.md`) | - | 4-6 | 6c |
@@ -342,7 +342,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | 2 | `node-history` | RM-0035 | plugin 0.40.0; shipped 2026-11-12 (`docs/canon/spec-history.md`) |
 | 3 | `upstream-signal` | RM-0105 | plugin 0.41.0; shipped 2026-11-12 (`docs/canon/card-upstream.md`) |
 | 4 | `intake-similar` | RM-0059 | plugin 0.42.0; no schema step; shipped 2026-11-12 (`docs/canon/proposal-similar.md`) |
-| 5 | `pack` | RM-0061 | CLI only; the config proposal split off to RM-0110, which needs its own ADR |
+| 5 | `pack` | RM-0061 | CLI only, no plugin version; the config proposal split off to RM-0110, which needs its own ADR; shipped 2026-11-12 (`docs/canon/presets.md`) |
 | 6 | `delivery-analytics`, part a | RM-0107 | the read and its tables; no MCP tool |
 | 7 | `direction-catalog` | RM-0106 | no MCP tool |
 | 8 | `plain-questions`, the question half | RM-0088 | queue schema 13, backup format 7 |

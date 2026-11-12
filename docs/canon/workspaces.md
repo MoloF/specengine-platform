@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # Workspaces: a trade's lens on a project
@@ -15,7 +15,7 @@ A workspace is how one trade sees a project, a **Department** in the chrome: the
 
 The chrome's words are the owner's: Department for a workspace, Task for a card, Subtask for a child card, Agent task for a `T-` task. Config keys, the CLI, MCP and the daemon's text keep `workspace`, `module`, `card` and `task`, with no alias key, since a new top-level key would make an older binary refuse the file. A `[[card.flow]]` may carry a `title`, its display name. A hand-off names a department; the card carries a discipline that the new-card rule places in one of that department's flows (`card-flows.md` "Config").
 
-A workspace is never an entitlement, a control point, a filter that hides work or a hidden route. Every section keeps its hash route and its palette entry, every flow stays one Show all flows away, and a workspace changes no right, gate, finding or exit (ADR-0012). `[team]`'s roles stay the acts' entitlements (ADR-0060). Locally the choice is each viewer's own; a hub login's default is RM-0089's. The core names no trade: the gamedev preset is a file outside the crates (ADR-0008). ADR-0073, ADR-0076.
+A workspace is never an entitlement, a control point, a filter that hides work or a hidden route. Every section keeps its hash route and its palette entry, every flow stays one Show all flows away, and a workspace changes no right, gate, finding or exit (ADR-0012). `[team]`'s roles stay the acts' entitlements (ADR-0060). Locally the choice is each viewer's own; a hub login's default is RM-0089's. The core names no trade: the presets are files outside the crates (`presets.md`; ADR-0008). ADR-0073, ADR-0076.
 
 ## Config
 
@@ -71,15 +71,7 @@ UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edi
 
 ## Preset
 
-`scripts/presets/gamedev.toml`: six `[[card.flow]]`, `narrative` "Narrative", `development` "Programming", `art` "Art", `level-design` "Level design", `production` "Production", `sound` "Sound", each its own discipline, the role research's columns, `accept` its last two, no `moves`, the return column `sent-back` "Returned", second (`card-flows.md` "Config"); its header says a flow's `title` and `return`, and a `[[card.split]]` row, need a build that reads them on every terminal, plugin and hub serving the project. No live `[[module]]` or split row (roots and kinds are a project's); after the workspaces, a commented direction `scenes` and two commented `[[card.split]]` rows (`card-split.md`), pinned verbatim. A project copies it, adds modules, retitles. No name echoes `[team]`'s `lead`.
-
-| Workspace | Sections | Landing | Flows |
-|---|---|---|---|
-| `writing` | flow, tree, board, questions, inbox | flow | narrative |
-| `development` | board, inbox, tree, flow, graph, health, roadmap, questions | board | development |
-| `art` "Art and levels" | board, flow, tree, questions, inbox | board | art, level-design |
-| `sound` | board, flow, tree, questions, inbox | board | sound |
-| `production` | inbox, roadmap, board, flow, tree, graph, health, questions | overview | all |
+The presets, `scripts/presets/gamedev.toml` and `software.toml`, their flows, workspaces and headers, their fixtures, and `spec init --pack`, which installs one: `presets.md`. A project installs or copies one, adds modules, retitles.
 
 ## Guards
 
@@ -92,4 +84,4 @@ http `tests/no_domain.rs` takes each `[[workspace]]` and `[[module]]` name and `
 
 ## Tests
 
-core `workspace_toml.rs`, `departments.rs`; CLI `workspace_cli.rs`, `departments.rs`; mcp `mcp_workspaces.rs`; http `workspaces.rs`, `turn.rs`, `hub.rs` (29 routes), `daemon_keys.rs`; the guards; `card-press`, `studio-lamp` (the preset verbatim); UI `src/workspace/`, `mocks/workspace*.smoke`. Not asserted: no cut, `sections (none)`, escapes.
+core `workspace_toml.rs`, `departments.rs`; CLI `workspace_cli.rs`, `departments.rs`; mcp `mcp_workspaces.rs`; http `workspaces.rs`, `turn.rs`, `hub.rs` (29 routes), `daemon_keys.rs`; the guards; `card-press`, `studio-lamp`, `plant-diary` (a preset verbatim each: `presets.md` "Fixtures"); UI `src/workspace/`, `mocks/workspace*.smoke`. Not asserted: no cut, `sections (none)`, escapes.

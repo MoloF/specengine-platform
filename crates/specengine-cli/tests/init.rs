@@ -74,9 +74,11 @@ fn init_json_is_path_and_slug() {
     let dir = scratch.dir("proj");
     let run = spec(&home, &dir, &["--json", "init"]);
     run.code(0);
+    // docs/features/pack.md "Acceptance criteria", PK6: `pack` joins, `null`
+    // without the flag.
     assert_eq!(
         run.json(),
-        serde_json::json!({"path": "specengine.toml", "slug": "proj"})
+        serde_json::json!({"path": "specengine.toml", "slug": "proj", "pack": null})
     );
 }
 

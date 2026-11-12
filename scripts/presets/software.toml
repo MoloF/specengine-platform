@@ -1,0 +1,104 @@
+# The software preset (docs/features/pack.md): five card flows and five
+# workspaces for a software product team's departments. Install it in a new
+# project with `spec init --pack <this file>`, or copy it into an existing
+# project's specengine.toml; then add the project's own [ids], [[module]]
+# tables and a workspace's `module`, and retitle anything in the project's
+# language. Every name is data: no SpecEngine code reads one (ADR-0008,
+# ADR-0073). A flow's title and return, and a [[card.split]] row, need a build
+# that reads them on every terminal, plugin and hub serving the project, an
+# older one refusing the key.
+
+[[card.flow]]
+name = "product"
+title = "Product"
+disciplines = ["product"]
+columns = ["ideas", "reopened", "discovery", "specifying", "sign-off", "planned"]
+titles = { ideas = "Ideas", reopened = "Reopened", discovery = "Discovery", specifying = "Specifying", sign-off = "Sign-off", planned = "Planned" }
+accept = { from = "sign-off", to = "planned" }
+return = "reopened"
+
+[[card.flow]]
+name = "experience"
+title = "UX design"
+disciplines = ["experience"]
+columns = ["waiting", "reopened", "research", "wireframes", "prototype", "usability-test", "handed-off"]
+titles = { waiting = "Waiting", reopened = "Reopened", research = "Research", wireframes = "Wireframes", prototype = "Prototype", usability-test = "Usability test", handed-off = "Handed off" }
+accept = { from = "usability-test", to = "handed-off" }
+return = "reopened"
+
+[[card.flow]]
+name = "engineering"
+title = "Engineering"
+disciplines = ["engineering"]
+columns = ["backlog", "reopened", "ready", "in-progress", "code-review", "staging", "released"]
+titles = { backlog = "Backlog", reopened = "Reopened", ready = "Ready", in-progress = "In progress", code-review = "Code review", staging = "Staging", released = "Released" }
+accept = { from = "staging", to = "released" }
+return = "reopened"
+
+[[card.flow]]
+name = "quality"
+title = "Quality assurance"
+disciplines = ["quality"]
+columns = ["waiting", "reopened", "test-plan", "testing", "regression", "signed-off"]
+titles = { waiting = "Waiting", reopened = "Reopened", test-plan = "Test plan", testing = "Testing", regression = "Regression", signed-off = "Signed off" }
+accept = { from = "regression", to = "signed-off" }
+return = "reopened"
+
+[[card.flow]]
+name = "documentation"
+title = "Documentation"
+disciplines = ["documentation"]
+columns = ["backlog", "reopened", "drafting", "tech-review", "editing", "published"]
+titles = { backlog = "Backlog", reopened = "Reopened", drafting = "Drafting", tech-review = "Tech review", editing = "Editing", published = "Published" }
+accept = { from = "editing", to = "published" }
+return = "reopened"
+
+[[workspace]]
+name = "product"
+title = "Product"
+sections = ["roadmap", "board", "tree", "flow", "questions", "inbox"]
+landing = "roadmap"
+flows = ["product"]
+
+[[workspace]]
+name = "experience"
+title = "UX design"
+sections = ["board", "flow", "tree", "questions", "inbox"]
+landing = "board"
+flows = ["experience"]
+
+[[workspace]]
+name = "engineering"
+title = "Engineering and quality"
+sections = ["board", "inbox", "tree", "flow", "graph", "health", "roadmap", "questions"]
+landing = "board"
+flows = ["engineering", "quality"]
+
+[[workspace]]
+name = "documentation"
+title = "Documentation"
+sections = ["board", "tree", "flow", "questions", "inbox"]
+landing = "board"
+flows = ["documentation"]
+
+[[workspace]]
+name = "leadership"
+title = "Leadership"
+sections = ["inbox", "roadmap", "board", "flow", "tree", "graph", "health", "questions"]
+
+# A direction: a module chosen by node kind, with no root. Use your project's
+# own kinds, and add it only once every terminal, plugin and hub runs a build
+# that reads `kinds`.
+# [[module]]
+# name = "stories"
+# title = "Stories"
+# kinds = ["story"]
+
+# A split template: a task on a document of this kind, or holding nodes of
+# it, pre-selects these disciplines in the Split dialog, and each subtask
+# targets the nodes of its kinds. It never refuses a split. Use your project's
+# own kinds, and add it only once every terminal, plugin and hub runs a build
+# that reads `[[card.split]]`.
+# [[card.split]]
+# kind = "epic"
+# disciplines = ["product", "experience", "engineering", "quality", "documentation"]
