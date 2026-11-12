@@ -53,6 +53,7 @@ import { returnReasonOf } from "./rollup";
 import { CardLink, type CardLinks } from "./CardLink";
 import { CardProgress } from "./CardProgress";
 import { CardTasks, ownNotes } from "./CardTasks";
+import { UpstreamPart } from "./CardUpstream";
 
 export type { CardLinks } from "./CardLink";
 
@@ -60,8 +61,8 @@ export type { CardLinks } from "./CardLink";
 // docs/features/design-foundation.md "The work item: the task modal and page"): one IssueView for
 // the Board's modal and the card's page alike. The head holds the breadcrumbs, the caller's tools and
 // title, and the acts (Accept, primary, in `accept.from` alone; Hand off; Return…; Edit; Assign; Cancel
-// card, subtle and last). The main column holds the card's blocks (its mark and Clear, why it came
-// back, Accept's verdict, the cancellation), Goal and Criteria at the document's size, Source,
+// card, subtle and last). The main column holds the card's blocks (its mark and Clear, Changed above
+// for a subtask, why it came back, Accept's verdict, the cancellation), Goal and Criteria at the document's size, Source,
 // Subtasks (once Hand-offs; its progress, CardProgress.tsx, from the card's own children read), Evidence and Activity, the card's events and its items' in one list (docs/canon/card-questions.md "The rule"). The side column holds the status (its column's
 // lozenge and the Move menu), the people's fields with the empty ones folded, and Development, the
 // linked `T-` tasks (`docs/canon/card-tasks.md` "The rule"), folded. Nothing here judges a column: the
@@ -535,6 +536,12 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
         </ul>
       )}
       {mark !== null && <BriefMark card={card} mark={mark} clears={allows("clear")} onAct={onAct} />}
+      {card.upstream !== null && (
+        // What changed above an open subtask, from the card's own read (docs/features/upstream-signal.md "Acceptance criteria", US-13).
+        <Part title={t("board.upstream.label")}>
+          <UpstreamPart project={project} upstream={card.upstream} />
+        </Part>
+      )}
       {markFailure !== null && (
         // Not known, never read as clean: no mark is shown for a read that failed.
         <p className="note">

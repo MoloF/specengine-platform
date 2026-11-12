@@ -2991,8 +2991,10 @@ fn card_tasks_ct2_the_read_serves_tasks_as_the_cli_document() {
         .status(200)
         .json();
     let row = board["cards"][0].as_object().expect("a row");
-    // 22 since docs/features/task-mandate.md M1 (`mandate`).
-    assert_eq!(row.len(), 22, "{board}");
+    // 22 since docs/features/task-mandate.md M1 (`mandate`); 23 since
+    // docs/features/upstream-signal.md US-12 (`upstream`, `null` without
+    // marks).
+    assert_eq!(row.len(), 23, "{board}");
     assert!(!row.contains_key("tasks"), "{board}");
 }
 
@@ -3119,7 +3121,10 @@ fn card_context_cc10_the_daemon_serves_context_null() {
             Value::Null,
             "M: the route asking context: true: {shown}"
         );
-        assert_eq!(card.as_object().map(serde_json::Map::len), Some(35));
+        // 36 since docs/features/upstream-signal.md US-12 (`upstream`,
+        // `null` on a card with no parent).
+        assert_eq!(card.as_object().map(serde_json::Map::len), Some(36));
+        assert_eq!(card["upstream"], Value::Null, "{shown}");
         let history = shown.find(",\"history\":").expect("history");
         let context = shown.find(",\"context\":null,").expect("context");
         let notes = shown.rfind(",\"notes\":").expect("notes");

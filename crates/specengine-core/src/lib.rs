@@ -101,7 +101,11 @@
 //! - [`history`] — a node's history, the pure half (task spec
 //!   `node-history`): an apply commit's trailers from its raw message, the
 //!   names an entry shows, and the judge of one commit's two versions of a
-//!   file by the node's span bytes.
+//!   file by the node's span bytes;
+//! - [`upstream`] — what changed above an open subtask, the pure half (task
+//!   spec `upstream-signal`): the judge over the queue's events, its applied
+//!   items and the parent's mark, by `seq`, computed per read and never
+//!   stored.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -142,6 +146,7 @@ pub mod task;
 pub mod team_toml;
 pub mod tokens;
 pub mod trace;
+pub mod upstream;
 pub mod verify;
 pub mod walk_scope;
 pub mod workspace_toml;

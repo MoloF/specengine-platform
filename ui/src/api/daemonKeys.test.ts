@@ -27,6 +27,8 @@ import type {
   CardSplitParent,
   CardSubtaskItem,
   CardTask,
+  CardUpstream,
+  CardUpstreamChange,
   CardWrite,
   CheckCause,
   CheckCounts,
@@ -195,10 +197,13 @@ import type {
 // (docs/features/card-context.md "Acceptance criteria", CC10: a card's `context` after `history`, 35
 // keys, written by its Rust test); and node-history's two (docs/features/node-history.md
 // "Acceptance criteria", NH12: a shown node's history and its entry, sets 123 and 124, the last),
-// with a shown node's `history` after `bindings` (21 keys). A key the types carry ahead of the file
+// with a shown node's `history` after `bindings` (21 keys); and upstream-signal's two
+// (docs/features/upstream-signal.md "Acceptance criteria", US-12: what changed above a subtask and
+// one change, sets 125 and 126, the last), with a row's `upstream` after `correction` (23 keys) and
+// a card's (36). A key the types carry ahead of the file
 // is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already
 // names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all one hundred and twenty-four, in the slices' order.
+// names all one hundred and twenty-six, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -794,6 +799,8 @@ const KEYS = {
     on: true,
     discrepancy: true,
     correction: true,
+    // docs/features/upstream-signal.md "Acceptance criteria" (US-12): the upstream flag after `correction`, ahead of the file.
+    upstream: true,
   } satisfies Record<keyof CardRow, true>,
   Card: {
     id: true,
@@ -808,6 +815,8 @@ const KEYS = {
     on: true,
     discrepancy: true,
     correction: true,
+    // docs/features/upstream-signal.md "Acceptance criteria" (US-12): what changed above a subtask, after `correction`, ahead of the file.
+    upstream: true,
     snapshot: true,
     criteria: true,
     assignee: true,
@@ -932,6 +941,27 @@ const KEYS = {
     title: true,
     rationale: true,
   } satisfies Record<keyof HistoryEntry, true>,
+  // docs/features/upstream-signal.md "Acceptance criteria" (US-12): what changed above a subtask
+  // (set 125) and one change's nine keys in "JSON"'s order (set 126); every key present.
+  CardUpstream: {
+    parent: true,
+    mark: true,
+    on: true,
+    correction: true,
+    changes: true,
+    more: true,
+  } satisfies Record<keyof CardUpstream, true>,
+  CardUpstreamChange: {
+    seq: true,
+    at: true,
+    source: true,
+    by: true,
+    fields: true,
+    item: true,
+    kind: true,
+    record: true,
+    on: true,
+  } satisfies Record<keyof CardUpstreamChange, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1041,8 +1071,8 @@ const CITED: Record<Named, string> = {
   CardFlow: "name, title, disciplines, columns, moves, accept, return",
   CardColumn: "id, title",
   CardMove: "from, to, by",
-  CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
-  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, notes",
+  CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction, upstream",
+  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, upstream, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, notes",
   CardEvidence: "kind, value, by, at",
   CardAcceptance: "by, at, note, verdict, departs, discrepancy",
   CardCancellation: "by, at, reason",
@@ -1075,6 +1105,8 @@ const CITED: Record<Named, string> = {
   CardSubtaskItem: "card_id, id, kind, status, summary, working_answer, why, author, created_at, updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, record_title",
   ShownHistory: "entries, truncated, omitted",
   HistoryEntry: "source, at, id, change, created, rev, rev_before, by, by_name, proposal, proposed_by, proposer, record, title, rationale",
+  CardUpstream: "parent, mark, on, correction, changes, more",
+  CardUpstreamChange: "seq, at, source, by, fields, item, kind, record, on",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1303,8 +1335,14 @@ const BEFORE_NODE_HISTORY: readonly Named[] = [...BEFORE_TASK_MANDATE, ...TASK_M
 /** node-history's two: a shown node's history and its entry, sets 123 and 124 (docs/features/node-history.md "Acceptance criteria", NH12). */
 const NODE_HISTORY: readonly Named[] = ["ShownHistory", "HistoryEntry"];
 
+/** The hundred and twenty-four types the fixture named before upstream-signal. */
+const BEFORE_UPSTREAM_SIGNAL: readonly Named[] = [...BEFORE_NODE_HISTORY, ...NODE_HISTORY];
+
+/** upstream-signal's two: what changed above a subtask and one change, sets 125 and 126 (docs/features/upstream-signal.md "Acceptance criteria", US-12). */
+const UPSTREAM_SIGNAL: readonly Named[] = ["CardUpstream", "CardUpstreamChange"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_NODE_HISTORY, ...NODE_HISTORY];
+const ALL: readonly Named[] = [...BEFORE_UPSTREAM_SIGNAL, ...UPSTREAM_SIGNAL];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1347,7 +1385,8 @@ function served(name: Named): string[] {
  * since card-context's wrote a card's `context`
  * (docs/features/card-context.md "Acceptance criteria", CC10), and since node-history's wrote a
  * shown node's `history` and sets 123 and 124 (docs/features/node-history.md "Acceptance criteria",
- * NH12).
+ * NH12), and since upstream-signal's wrote a row's and a card's `upstream` and sets 125 and 126
+ * (docs/features/upstream-signal.md "Acceptance criteria", US-12).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1402,7 +1441,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DEPARTMENT_SPLIT.at(-1)).toBe("IntakeMatch");
     expect(BEFORE_TASK_MANDATE.at(-1)).toBe("CardSplitChild");
     expect(BEFORE_NODE_HISTORY.at(-1)).toBe("CardSubtaskItem");
-    expect(ALL.at(-1)).toBe("HistoryEntry");
+    expect(BEFORE_UPSTREAM_SIGNAL.at(-1)).toBe("HistoryEntry");
+    expect(ALL.at(-1)).toBe("CardUpstreamChange");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1431,7 +1471,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(124);
+    expect(ALL).toHaveLength(126);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1447,7 +1487,8 @@ describe("the daemon's document types (AC-09)", () => {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
-    // Empty again since node-history's Rust test wrote a shown node's `history` (docs/features/node-history.md "Acceptance criteria", NH12).
+    // Empty again since node-history's Rust test wrote a shown node's `history` (docs/features/node-history.md "Acceptance criteria", NH12);
+    // upstream-signal's two until its Rust test wrote them, then empty again (docs/features/upstream-signal.md "Acceptance criteria", US-12).
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -1477,8 +1518,8 @@ describe("the daemon's document types (AC-09)", () => {
     const card = declaredKeys("Card");
     expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
     expect(card).toEqual(served("Card"));
-    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
-    expect(card).toHaveLength(35);
+    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10), 36 since upstream-signal's `upstream` (US-12).
+    expect(card).toHaveLength(36);
     expect(served("CardTask")).toEqual(["id", "status", "title", "stale"]);
     expect(declaredKeys("CardTask")).toEqual(served("CardTask"));
     expect(source).toMatch(/^export interface CardTask \{\n {2}id: string;\n {2}status: TaskStatus \| null;\n {2}title: string \| null;\n {2}stale: boolean \| null;\n\}$/m);
@@ -1550,13 +1591,14 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^ {2}history: CardEvent\[\] \| null;\n {2}context: null;\n {2}notes: string\[\];\n\}$/m);
     const at = source.indexOf("export interface Card {");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/card-context.md` "Acceptance criteria", CC10');
-    expect(served("Card")).toHaveLength(35);
+    // 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12).
+    expect(served("Card")).toHaveLength(36);
   });
 
   it('types task-mandate\'s keys as the spec writes them: a mandate `binding`, `open` or null, a row\'s after `reviewer` (22 keys), a card\'s after `reviewer` with `subtask_items` after `items` (34), a split\'s subtask\'s last (9); set 122 `CardSubtaskItem`, `card_id` then a card\'s item\'s 16 in their order; each citing `docs/features/task-mandate.md` "Acceptance criteria" (M1, M6, M7 of task-mandate)', () => {
     expect(source).toMatch(/^export type Mandate = "binding" \| "open";$/m);
-    // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
-    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([22, 35, 9, 17]);
+    // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10); a row's 23 and a card's 36 since upstream-signal's `upstream` (US-12).
+    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([23, 36, 9, 17]);
     const row = declaredKeys("CardRow");
     expect(row.slice(row.indexOf("reviewer"), row.indexOf("reviewer") + 3)).toEqual(["reviewer", "mandate", "estimate"]);
     const card = declaredKeys("Card");
@@ -1576,6 +1618,30 @@ describe("the daemon's document types (AC-09)", () => {
     expect(declaredKeys("CardEditBody").slice(-4)).toEqual(["mandate", "reason", "revision", "as"]);
     expect(source).toMatch(/^ {2}mandate\?: Mandate;$/m);
     expect(source).toMatch(/^ {2}mandate\?: string\[\] \| null;$/m);
+  });
+
+  it('types upstream-signal\'s keys as the spec writes them: a row\'s `upstream` a flag or null after `correction` (23 keys), a card\'s an object or null after `correction` (36); CardUpstream\'s six and CardUpstreamChange\'s nine in the spec\'s order, a mark `suspect` or `correcting` and a source `edit` or `item`, each kept whatever its word; each citing `docs/features/upstream-signal.md` "Acceptance criteria" (US-12 of upstream-signal)', () => {
+    const row = declaredKeys("CardRow");
+    expect(row.slice(row.indexOf("correction"))).toEqual(["correction", "upstream"]);
+    const card = declaredKeys("Card");
+    expect(card.slice(card.indexOf("correction"), card.indexOf("correction") + 3)).toEqual(["correction", "upstream", "snapshot"]);
+    expect([row.length, card.length]).toEqual([23, 36]);
+    expect(source).toMatch(/^ {2}correction: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}upstream: boolean \| null;\n\}$/m);
+    expect(source).toMatch(/^ {2}correction: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}upstream: CardUpstream \| null;\n {2}snapshot: CardFrozen\[\] \| null;$/m);
+    expect(declaredKeys("CardUpstream")).toEqual(["parent", "mark", "on", "correction", "changes", "more"]);
+    expect(declaredKeys("CardUpstreamChange")).toEqual(["seq", "at", "source", "by", "fields", "item", "kind", "record", "on"]);
+    expect(source).toMatch(/^export interface CardUpstream \{\n {2}parent: string;\n {2}mark: KnownUpstreamMark \| Unlisted \| null;\n {2}on: string \| null;\n {2}correction: string \| null;\n {2}changes: CardUpstreamChange\[\];\n {2}more: number;\n\}$/m);
+    expect(source).toMatch(
+      /^export interface CardUpstreamChange \{\n {2}seq: number;\n {2}at: string;\n {2}source: KnownUpstreamSource \| Unlisted;\n {2}by: string \| null;\n {2}fields: string\[\];\n {2}item: string \| null;\n {2}kind: string \| null;\n {2}record: string \| null;\n {2}on: string \| null;\n\}$/m,
+    );
+    expect(source).toMatch(/^export type KnownUpstreamMark = "suspect" \| "correcting";$/m);
+    expect(source).toMatch(/^export type KnownUpstreamSource = "edit" \| "item";$/m);
+    for (const type of ["Card", "CardUpstream", "CardUpstreamChange", "KnownUpstreamMark", "KnownUpstreamSource"]) {
+      const at = Math.max(source.indexOf(`export interface ${type} `), source.indexOf(`export type ${type} =`));
+      expect([type, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/upstream-signal.md` "Acceptance criteria", US-12')]).toEqual([type, true]);
+    }
+    // Ahead of the file until its Rust test wrote them, with the two sets CardUpstream and CardUpstreamChange: none now.
+    expect(AHEAD_OF_FIXTURE.map(([name, key]) => `${name}.${key}`)).toEqual([]);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -1731,8 +1797,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DEPARTMENT_SPLIT).toHaveLength(118);
     expect(BEFORE_TASK_MANDATE).toHaveLength(121);
     expect(BEFORE_NODE_HISTORY).toHaveLength(122);
-    expect(ALL).toHaveLength(124);
-    expect(new Set(ALL).size).toBe(124);
+    expect(BEFORE_UPSTREAM_SIGNAL).toHaveLength(124);
+    expect(ALL).toHaveLength(126);
+    expect(new Set(ALL).size).toBe(126);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1985,12 +2052,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and twenty-four types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two", () => {
+  it("names exactly the one hundred and twenty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two, upstream-signal's two", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and twenty-four, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and twenty-six, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(124);
+    expect(Object.keys(sets)).toHaveLength(126);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -2016,9 +2083,10 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
       const file = sets[name] ?? [];
       expect([name, key, file[file.indexOf(after) + 1]]).toEqual([name, key, key]);
     }
-    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
-    expect([sets.CardRow?.length, sets.Card?.length, sets.CardSplitChild?.at(-1)]).toEqual([22, 35, "mandate"]);
-    expect([sets.CardRow, sets.Card]).toEqual([declaredKeys("CardRow"), declaredNow("Card")]);
+    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10); 23
+    // and 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12).
+    expect([sets.CardRow?.length, sets.Card?.length, sets.CardSplitChild?.at(-1)]).toEqual([23, 36, "mandate"]);
+    expect([sets.CardRow, sets.Card]).toEqual([declaredNow("CardRow"), declaredNow("Card")]);
   });
 
   it("names card-questions' three after ShownAncestor, before department-split's three, sets 116 to 118 with their keys in the types' order: 16, 7, 6 (K1, L3 of card-questions)", () => {
@@ -2054,8 +2122,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     const card = sets.Card ?? [];
     expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
     expect(card).toEqual(declaredNow("Card"));
-    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
-    expect(card).toHaveLength(35);
+    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10); 36
+    // since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12).
+    expect(card).toHaveLength(36);
   });
 
   it('names workspaces\' three after HubSync, before card-tasks\' one, sets 111 to 113, each with its keys in the types\' order: 4, 7, 4 (docs/features/workspaces.md "Data"; DP-4 of departments)', () => {
@@ -2155,13 +2224,27 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(node.slice(-2)).toEqual(["bindings", "history"]);
   });
 
-  it("names node-history's two last, after CardSubtaskItem, sets 123 and 124: a shown node's history's 3 keys and its entry's 15, in the types' order (NH12 of node-history)", () => {
-    expect(Object.keys(sets).slice(BEFORE_NODE_HISTORY.length)).toEqual([...NODE_HISTORY]);
+  it("names node-history's two after CardSubtaskItem, sets 123 and 124: a shown node's history's 3 keys and its entry's 15, in the types' order (NH12 of node-history)", () => {
+    expect(Object.keys(sets).slice(BEFORE_NODE_HISTORY.length, BEFORE_UPSTREAM_SIGNAL.length)).toEqual([...NODE_HISTORY]);
     expect(Object.keys(sets).indexOf("ShownHistory")).toBe(122);
-    expect(Object.keys(sets).at(-1)).toBe("HistoryEntry");
+    expect(Object.keys(sets).at(BEFORE_UPSTREAM_SIGNAL.length - 1)).toBe("HistoryEntry");
     expect(NODE_HISTORY.map((name) => sets[name])).toEqual(NODE_HISTORY.map((name) => served(name)));
     expect(NODE_HISTORY.map((name) => sets[name])).toEqual(NODE_HISTORY.map((name) => declaredKeys(name)));
     expect(NODE_HISTORY.map((name) => sets[name]?.length)).toEqual([3, 15]);
+  });
+
+  it("names upstream-signal's two last, after HistoryEntry, sets 125 and 126: what changed above a subtask's 6 keys and a change's 9, in the types' order; a row's and a card's `upstream` right after `correction`, 23 and 36 keys (US-12 of upstream-signal)", () => {
+    expect(Object.keys(sets).slice(BEFORE_UPSTREAM_SIGNAL.length)).toEqual([...UPSTREAM_SIGNAL]);
+    expect(Object.keys(sets).indexOf("CardUpstream")).toBe(124);
+    expect(Object.keys(sets).at(-1)).toBe("CardUpstreamChange");
+    expect(UPSTREAM_SIGNAL.map((name) => sets[name])).toEqual(UPSTREAM_SIGNAL.map((name) => served(name)));
+    expect(UPSTREAM_SIGNAL.map((name) => sets[name])).toEqual(UPSTREAM_SIGNAL.map((name) => declaredKeys(name)));
+    expect(UPSTREAM_SIGNAL.map((name) => sets[name]?.length)).toEqual([6, 9]);
+    for (const name of ["CardRow", "Card"] as const) {
+      const file = sets[name] ?? [];
+      expect([name, file[file.indexOf("correction") + 1]]).toEqual([name, "upstream"]);
+      expect([name, file]).toEqual([name, declaredKeys(name)]);
+    }
   });
 
   it("names lock-diff's five after ShownBindings, before flow-read's five: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {
@@ -2229,8 +2312,10 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // flow's `title` after `name` (docs/features/departments.md "Acceptance criteria", DP-4); a
     // card's `items` after `tasks` (K1 of card-questions); a row's and a card's `mandate`, a card's
     // `subtask_items` (M1, M6 of task-mandate).
-    // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10).
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 22, 35, 4, 6, 3, 4, 7, 2]);
+    // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10);
+    // a row's 23 and a card's 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md
+    // "Acceptance criteria", US-12).
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 23, 36, 4, 6, 3, 4, 7, 2]);
     expect(sets.CardFlow?.at(-1)).toBe("return");
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });

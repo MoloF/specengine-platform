@@ -83,7 +83,7 @@ const WRITE_KEYS: [&str; 7] = [
 /// (docs/canon/cards.md "Documents and events": each linked task as read now),
 /// `items` after `tasks` (docs/features/card-questions.md D4), then
 /// `allowed`, `history`, `context`, `notes`.
-const SHOW_KEYS: [&str; 35] = [
+const SHOW_KEYS: [&str; 36] = [
     "id",
     "flow",
     "column",
@@ -96,6 +96,8 @@ const SHOW_KEYS: [&str; 35] = [
     "on",
     "discrepancy",
     "correction",
+    // docs/features/upstream-signal.md US-8: after `correction`.
+    "upstream",
     "snapshot",
     "criteria",
     "assignee",
@@ -128,7 +130,7 @@ const SHOW_KEYS: [&str; 35] = [
 const LIST_KEYS: [&str; 5] = ["flows", "cards", "notes", "truncated", "omitted"];
 
 /// A row of `list`'s document.
-const ROW_KEYS: [&str; 22] = [
+const ROW_KEYS: [&str; 23] = [
     "id",
     "flow",
     "column",
@@ -153,6 +155,8 @@ const ROW_KEYS: [&str; 22] = [
     "on",
     "discrepancy",
     "correction",
+    // docs/features/upstream-signal.md US-8: after `correction`.
+    "upstream",
 ];
 
 // ------------------------------------------------------------- helpers
@@ -4255,9 +4259,11 @@ fn card_questions_k1_show_serves_items_after_tasks() {
     assert_eq!(keys[tasks + 1], "items", "{keys:?}");
     // 34 since docs/features/task-mandate.md M6: `subtask_items` after
     // `items`, `mandate` after `reviewer`; 35 since
-    // docs/features/card-context.md CC2: `context` after `history`.
+    // docs/features/card-context.md CC2: `context` after `history`; 36
+    // since docs/features/upstream-signal.md US-8: `upstream` after
+    // `correction`.
     assert_eq!(keys[tasks + 2], "subtask_items", "{keys:?}");
-    assert_eq!(keys.len(), 35, "{keys:?}");
+    assert_eq!(keys.len(), 36, "{keys:?}");
     let items = raw_array(&shown.stdout, "items");
     for item_keys in serde_json::from_str::<Vec<OrderedKeys>>(items).expect("items") {
         assert_eq!(item_keys.0, ITEM_KEYS, "{items}");

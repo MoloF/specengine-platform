@@ -1498,6 +1498,10 @@ pub(crate) struct CardRowShape {
     pub on: Option<String>,
     pub discrepancy: Option<String>,
     pub correction: Option<String>,
+    // `docs/features/upstream-signal.md` "Acceptance criteria", US-8.
+    /// With `marks`: whether something changed above it, an open subtask
+    /// (`false` on a closed card or one with no parent); `null` without.
+    pub upstream: Option<bool>,
 }
 
 /// One move open to a card.
@@ -1525,6 +1529,10 @@ pub(crate) struct CardShowDocument {
     pub on: Option<String>,
     pub discrepancy: Option<String>,
     pub correction: Option<String>,
+    // `docs/features/upstream-signal.md` "Acceptance criteria", US-8.
+    /// What changed above it, an open subtask; `null` with no parent, on a
+    /// closed card, and when nothing is said.
+    pub upstream: Option<CardUpstreamShape>,
     /// Each direct target as frozen, then any target since dropped, inert;
     /// `null` on a card that never froze one.
     pub snapshot: Option<Vec<CardFrozenShape>>,
@@ -1563,6 +1571,83 @@ pub(crate) struct CardShowDocument {
     /// without `context`.
     pub context: Option<CardContextShape>,
     pub notes: Vec<String>,
+}
+
+/// What changed above an open subtask since it was made: its direct
+/// parent's own mark when suspect or correcting, then the changes, oldest
+/// first. A read only: it moves, refuses and gates nothing.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CardUpstreamShape {
+    /// The parent's ID.
+    pub parent: String,
+    /// The parent's mark word; `null` when neither.
+    pub mark: Option<CardUpstreamMark>,
+    /// The target the parent's mark is on.
+    pub on: Option<String>,
+    /// The correction holding the parent.
+    pub correction: Option<String>,
+    /// At most 16, the newest, oldest first by `seq`.
+    pub changes: Vec<CardUpstreamChangeShape>,
+    /// The changes older than those listed.
+    pub more: usize,
+}
+
+/// The parent's mark an upstream read names.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CardUpstreamMark {
+    Suspect,
+    Correcting,
+}
+
+/// One change above a subtask: the parent's edit, or an item applied on
+/// the nodes both cards reach.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CardUpstreamChangeShape {
+    /// Its event's: an edit's `card.edited`, an item's `proposal.applied`.
+    pub seq: i64,
+    pub at: String,
+    pub source: CardUpstreamSource,
+    /// An edit's `as`; an item's decider, a name, never an email; `null`
+    /// when none was recorded.
+    pub by: Option<String>,
+    /// An edit's counted fields, in its order; empty on an item.
+    pub fields: Vec<CardUpstreamField>,
+    /// An item's ID; `null` on an edit.
+    pub item: Option<String>,
+    pub kind: Option<CardUpstreamKind>,
+    /// An item's decision record.
+    pub record: Option<String>,
+    /// The first of an item's nodes the two cards' targets reach.
+    pub on: Option<String>,
+}
+
+/// Where an upstream change comes from.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CardUpstreamSource {
+    Edit,
+    Item,
+}
+
+/// A parent's field whose edit counts.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CardUpstreamField {
+    Goal,
+    Targets,
+    Criteria,
+}
+
+/// An applied item's kind.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CardUpstreamKind {
+    Question,
+    Discrepancy,
+    Decision,
 }
 
 /// A card's context: every part present when asked.

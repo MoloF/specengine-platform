@@ -89,8 +89,8 @@
   "CardFlow": ["name", "title", "disciplines", "columns", "moves", "accept", "return"],
   "CardColumn": ["id", "title"],
   "CardMove": ["from", "to", "by"],
-  "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "mandate", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled", "mark", "on", "discrepancy", "correction"],
-  "Card": ["id", "flow", "column", "position", "title", "goal", "discipline", "targets", "mark", "on", "discrepancy", "correction", "snapshot", "criteria", "assignee", "reviewer", "mandate", "estimate", "due", "parent", "corrects", "evidence", "tasks", "items", "subtask_items", "acceptance", "cancellation", "created_by", "created_at", "updated_at", "revision", "allowed", "history", "context", "notes"],
+  "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "mandate", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled", "mark", "on", "discrepancy", "correction", "upstream"],
+  "Card": ["id", "flow", "column", "position", "title", "goal", "discipline", "targets", "mark", "on", "discrepancy", "correction", "upstream", "snapshot", "criteria", "assignee", "reviewer", "mandate", "estimate", "due", "parent", "corrects", "evidence", "tasks", "items", "subtask_items", "acceptance", "cancellation", "created_by", "created_at", "updated_at", "revision", "allowed", "history", "context", "notes"],
   "CardEvidence": ["kind", "value", "by", "at"],
   "CardAcceptance": ["by", "at", "note", "verdict", "departs", "discrepancy"],
   "CardCancellation": ["by", "at", "reason"],
@@ -122,5 +122,7 @@
   "CardSplitChild": ["id", "discipline", "flow", "flow_title", "column", "targets", "from", "suggested", "mandate"],
   "CardSubtaskItem": ["card_id", "id", "kind", "status", "summary", "working_answer", "why", "author", "created_at", "updated_at", "staged_at", "decided_by", "decided_at", "decision_note", "record_id", "record_path", "record_title"],
   "ShownHistory": ["entries", "truncated", "omitted"],
-  "HistoryEntry": ["source", "at", "id", "change", "created", "rev", "rev_before", "by", "by_name", "proposal", "proposed_by", "proposer", "record", "title", "rationale"]
+  "HistoryEntry": ["source", "at", "id", "change", "created", "rev", "rev_before", "by", "by_name", "proposal", "proposed_by", "proposer", "record", "title", "rationale"],
+  "CardUpstream": ["parent", "mark", "on", "correction", "changes", "more"],
+  "CardUpstreamChange": ["seq", "at", "source", "by", "fields", "item", "kind", "record", "on"]
 }

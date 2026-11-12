@@ -61,7 +61,11 @@ flow, column, discipline, assignee: exact filters, ANDed. parent: a card ID: onl
 the hand-offs it asked for. no_target: true: only manual cards. \
 with_cancelled: true: cancelled cards too, last in their column. marks: true: each row's mark \
 over all its targets, a target gone included, with on, discrepancy and correction; null without \
-it and on a cancelled card; a mark changes nothing. A card a project's [card] no longer places \
+it and on a cancelled card; a mark changes nothing. upstream, with marks: true when, since it was \
+made, its parent's goal, criteria or targets were edited or a question, discrepancy or decision on \
+their nodes was applied, or when the parent reads suspect or correcting; false on a closed card or \
+one with no parent; an edit of its own goal, criteria or targets answers every change before it; \
+null without marks; get_card lists what changed. A card a project's [card] no longer places \
 comes last with a note; a corrupt row is a note. due is raw: nothing here knows today.
 
 Reads only: no state changes, nothing under the project root is written. ",
@@ -76,7 +80,7 @@ mark, on, discrepancy and correction as list_cards with marks: true gives them, 
 cancelled card, allowed (the moves open now, each {to, by}, by empty when anyone may), history and \
 notes, every key present, absent null.
 
-card_id: C- and 4 or more digits, as spec card list writes it. history: true: its last 64 card.* \
+card_id: as spec card list writes it. history: true: its last 64 card.* \
 events, oldest first; else null. tasks: each linked task {id, status, title, stale}, read now as \
 spec task list reads it; status null, with a note that starts with its ID, for a task this server \
 cannot read: a corrupt row, another repository, a hub. items: the questions, discrepancies and \
@@ -84,7 +88,8 @@ decisions that name it {id, kind, status, summary, working_answer, why, author, 
 updated_at, staged_at, decided_by, decided_at, decision_note, record_id, record_path, \
 record_title}, by ID, read now; with history, their last 64 proposal.* events join it by seq. \
 mandate: binding, open or null. subtask_items: the items naming one of its subtasks, each with \
-card_id first, by ID, in one read. context: true: {parent {id, title, goal} or null, bundle, \
+card_id first, by ID, in one read. upstream: what changed above an open subtask, as list_cards \
+names it, or null. context: true: {parent {id, title, goal} or null, bundle, \
 notes}: bundle is get_context_bundle's document over its targets, then the records of its applied \
 items, at budget (else the project's bundle_task, else 10000), fitted into the room its lines leave \
 of the 40000 characters, its body printed after them; a bundle that cannot be made is null with a \
@@ -493,6 +498,10 @@ impl SpecEngineServer {
                     id: args.card_id,
                     history: args.history.unwrap_or(false),
                     marks: true,
+                    // Always asked, as `--marks` asks it
+                    // (`docs/features/upstream-signal.md`
+                    // "Acceptance criteria", US-10).
+                    upstream: true,
                     // Absent, `null` or `false`: none; `budget` without it
                     // is the library's exit 2.
                     context: args.context.unwrap_or(false),

@@ -9,7 +9,7 @@ import { shownSlot } from "../ui/text";
 import { isOverdue } from "./due";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
-import { acceptedLook, byHand, cancelledLook, markLook, markNames, overdueLook, returnedCountLook, returnedLook, rowMark, unassigned } from "./labels";
+import { acceptedLook, byHand, cancelledLook, markLook, markNames, overdueLook, returnedCountLook, returnedLook, rowMark, unassigned, upstreamLook } from "./labels";
 
 /** What a card asks of its board. */
 export interface CardActions {
@@ -50,7 +50,8 @@ function Source({ project, targets }: { project: string; targets: readonly strin
 /**
  * One card (`ui/README.md` "Screen rules"): title, assignee, due, estimate, its source. A mark stands
  * first and names what it is on, the list's own, so a card on a gone target has it too; an accepted
- * card's word yields to it. A card standing in its flow's return column says Returned; a parent
+ * card's word yields to it. Changed above follows it, first with none, when the read flags what changed
+ * over a subtask (docs/features/upstream-signal.md "Acceptance criteria", US-13). A card standing in its flow's return column says Returned; a parent
  * counts its hand-offs and its returned ones (`docs/canon/card-flows.md` "The rule"). The title is
  * the tile's one link, to the card's page, stretched over the tile: a plain click opens the card's
  * modal instead, and a Meta, Ctrl or Shift click, a middle click or the context menu is left to the
@@ -94,6 +95,7 @@ export const BoardCard = memo(function BoardCard({
   const markShown = mark === null ? null : markLook(mark, t);
   const named = mark === null ? null : markNames(mark);
   const returnedShown = returned && !closed ? returnedLook(t) : null;
+  const upstreamShown = row.upstream === true ? upstreamLook(t) : null;
 
   function onClick(event: MouseEvent<HTMLElement>) {
     if (isPlainClick(event) && (!(event.target instanceof Element) || event.target.closest("a, button") === null)) {
@@ -119,7 +121,7 @@ export const BoardCard = memo(function BoardCard({
     actions.onDragStart(row);
   }
 
-  const said = [markShown?.label, returnedShown?.label].filter((label) => label !== undefined).join(", ");
+  const said = [markShown?.label, upstreamShown?.label, returnedShown?.label].filter((label) => label !== undefined).join(", ");
   const classes = ["board-card", selected && "board-card-selected", closed && "board-card-closed"].filter(Boolean).join(" ");
   return (
     <li className={dropAbove ? "board-slot board-slot-drop" : "board-slot"}>
@@ -138,10 +140,11 @@ export const BoardCard = memo(function BoardCard({
         onDragStart={onDragStart}
         onDragEnd={actions.onDragEnd}
       >
-        {markShown !== null && (
+        {(markShown !== null || upstreamShown !== null) && (
           <p className="board-card-mark">
-            <Badge look={markShown} />
+            {markShown !== null && <Badge look={markShown} />}
             {named !== null && <bdi className="mono board-card-marked">{shownSlot(named)}</bdi>}
+            {upstreamShown !== null && <Badge look={upstreamShown} />}
           </p>
         )}
         <div className="board-card-top">

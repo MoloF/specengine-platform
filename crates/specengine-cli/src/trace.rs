@@ -68,6 +68,7 @@ use crate::proposals::{queue_below_schema, queue_cannot};
 use crate::revisions::within_hash;
 use crate::search::notes;
 use crate::show::classify;
+use crate::upstream::{Reaches, reaches};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, store_error};
 
 /// Why a REF's `@rev` is ignored.
@@ -432,6 +433,29 @@ pub(crate) fn fresh_norms(
     let input = indexed_in(&mut open.index, project, messages, false)?;
     let graph = SpecGraph::new(&input, &project.config.scheme, &project.config.paths);
     norms_read(&open.index, &graph, targets.iter().copied())
+}
+
+/// [`fresh_norms`] of `targets`, and from the same refresh and graph what
+/// each of `reach_of`, all among `targets`, reaches (task spec
+/// `upstream-signal` US-3, US-9): one index read for both; none asked, no
+/// index is opened.
+pub(crate) fn fresh_norms_reach(
+    env: &Env,
+    project: &ProjectRoot,
+    targets: &BTreeSet<&String>,
+    reach_of: &BTreeSet<&String>,
+    messages: &mut Vec<Message>,
+) -> Result<(TargetNorms, Reaches), CliError> {
+    if targets.is_empty() {
+        return Ok((TargetNorms::new(), Reaches::new()));
+    }
+    let mut open = open_index(env, project)?;
+    let input = indexed_in(&mut open.index, project, messages, false)?;
+    let graph = SpecGraph::new(&input, &project.config.scheme, &project.config.paths);
+    let stored = open.index.node_norms().map_err(store_error)?;
+    let places = target_places(&graph, targets.iter().copied());
+    let reaches = reaches(&graph, &places, reach_of);
+    Ok((target_norms(&graph, &stored, &places), reaches))
 }
 
 /// The documents `at` holds by `parent:`, through sections or not, live

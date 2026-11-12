@@ -76,7 +76,7 @@ const NO_SNAPSHOT: &str =
 /// "Documents and events" with `tasks` after `evidence` (card-tasks CT-2) and
 /// `items` after `tasks` (docs/features/card-questions.md D4), `context`
 /// after `history` (docs/features/card-context.md CC2).
-const CARD_KEYS: [&str; 35] = [
+const CARD_KEYS: [&str; 36] = [
     "id",
     "flow",
     "column",
@@ -89,6 +89,8 @@ const CARD_KEYS: [&str; 35] = [
     "on",
     "discrepancy",
     "correction",
+    // docs/features/upstream-signal.md US-8: after `correction`.
+    "upstream",
     "snapshot",
     "criteria",
     "assignee",
@@ -126,7 +128,7 @@ const WRITE_KEYS: [&str; 7] = [
 ];
 
 /// A list row's 21 keys (D9: unchanged).
-const ROW_KEYS: [&str; 22] = [
+const ROW_KEYS: [&str; 23] = [
     "id",
     "flow",
     "column",
@@ -150,6 +152,8 @@ const ROW_KEYS: [&str; 22] = [
     "on",
     "discrepancy",
     "correction",
+    // docs/features/upstream-signal.md US-8: after `correction`.
+    "upstream",
 ];
 
 // ------------------------------------------------------------- helpers

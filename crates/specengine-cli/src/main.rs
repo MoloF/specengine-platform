@@ -657,7 +657,7 @@ enum CardCommand {
         /// Cancelled cards too, last in their column.
         #[arg(long = "with-cancelled")]
         with_cancelled: bool,
-        /// Each card's mark over its targets too.
+        /// Each card's mark over its targets too, and whether something changed above an open subtask.
         #[arg(long)]
         marks: bool,
         /// Only the cards whose parent is this card.
@@ -671,7 +671,7 @@ enum CardCommand {
         /// Its last 64 `card.*` events too.
         #[arg(long)]
         history: bool,
-        /// Its mark over its targets too.
+        /// Its mark over its targets too, and what changed above an open subtask.
         #[arg(long)]
         marks: bool,
         /// Its context too: its parent's goal and one bundle of its targets and its recorded decisions.
@@ -2458,6 +2458,9 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 id,
                 history,
                 marks,
+                // What changed above it rides `--marks` (task spec
+                // `upstream-signal` US-8).
+                upstream: marks,
                 context,
                 budget,
                 git: process_git(env),

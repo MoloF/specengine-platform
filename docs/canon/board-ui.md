@@ -17,7 +17,7 @@ ADR-0056, ADR-0057, built by `board-ui` (RM-0046): an ordinary kanban on the loc
 | Method, path | Query or body | Answer |
 |---|---|---|
 | GET `.../cards` | `flow`, `column`, `discipline`, `assignee`, `no_target`, `with_cancelled`, `marks`, `parent` | `spec card list [--marks] --json`, every row |
-| GET `.../cards/:id` | -- | `spec card show C --history --json` |
+| GET `.../cards/:id` | -- | `spec card show C --history --json`, with `upstream` alone of `--marks`' keys (`card-upstream.md`) |
 | POST `.../cards` | `CardNewBody` | `card_new` |
 | POST `.../cards/split` | `CardSplitBody` | `card_split`: the split document (`card-split.md` "Route and hub") |
 | POST `.../cards/:id/move` | `CardMoveBody` | `card_move` |
@@ -60,7 +60,7 @@ The Board's screen, the card modal and page, lanes, the hand-off and return dial
 
 ## Types
 
-`provisional.ts`; `CardFlow.return` a column or `null`; `CardCreateBody.reviewer`, `CardMoveBody.note`, `CardsOptions.parent`, the create, edit and split bodies' `mandate` optional; `Card.mandate`, `CardRow.mandate` a `Mandate` or `null`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 124 sets, among them `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`, `Identity`, `CardSplit`, `CardSplitParent`, `CardSplitChild`, `CardSubtaskItem`; `CardRow` 22 keys. `QUEUE_EVENT_TYPES` 25.
+`provisional.ts`; `CardFlow.return` a column or `null`; `CardCreateBody.reviewer`, `CardMoveBody.note`, `CardsOptions.parent`, the create, edit and split bodies' `mandate` optional; `Card.mandate`, `CardRow.mandate` a `Mandate` or `null`; `Card.upstream` a `CardUpstream` or `null`, `CardRow.upstream` a flag or `null`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 126 sets, among them `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`, `Identity`, `CardSplit`, `CardSplitParent`, `CardSplitChild`, `CardSubtaskItem`, `CardUpstream`, `CardUpstreamChange`; `CardRow` 23 keys, `Card` 36. `QUEUE_EVENT_TYPES` 25.
 
 ## Known limits
 

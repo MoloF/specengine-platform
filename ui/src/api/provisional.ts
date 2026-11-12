@@ -2010,6 +2010,8 @@ export interface CardRow {
   on: string | null;
   discrepancy: string | null;
   correction: string | null;
+  /** Under `--marks`, whether an open subtask has changes above it (`false` on a closed card or one with no parent); null without (`docs/features/upstream-signal.md` "Acceptance criteria", US-12). */
+  upstream: boolean | null;
 }
 
 /** `spec card list --json`: `flows` for the empty columns too; `omitted` null when nothing is cut. Source: `docs/canon/cards.md` "Documents and events". */
@@ -2137,7 +2139,7 @@ export interface CardSubtaskItem {
   record_title: string | null;
 }
 
-/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`; `items` the questions, discrepancies and decisions naming it, after `tasks`, and `history` their last 64 `proposal.*` events merged with its own by `seq`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule", `docs/features/card-questions.md` "Acceptance criteria" (K1). `context` is always null here: the daemon never asks a card's context (`docs/features/card-context.md` "Acceptance criteria", CC10). */
+/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`; `items` the questions, discrepancies and decisions naming it, after `tasks`, and `history` their last 64 `proposal.*` events merged with its own by `seq`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule", `docs/features/card-questions.md` "Acceptance criteria" (K1). `context` is always null here: the daemon never asks a card's context (`docs/features/card-context.md` "Acceptance criteria", CC10). `mark` is still null on the card route, `upstream` served there (`docs/features/upstream-signal.md` "Acceptance criteria", US-12). */
 export interface Card {
   id: string;
   flow: string;
@@ -2151,6 +2153,8 @@ export interface Card {
   on: string | null;
   discrepancy: string | null;
   correction: string | null;
+  /** What changed above an open subtask, served on the card route though `mark` stays null there; null with no parent, on a closed card and when nothing is said (`docs/features/upstream-signal.md` "Acceptance criteria", US-12). */
+  upstream: CardUpstream | null;
   snapshot: CardFrozen[] | null;
   criteria: string[];
   assignee: string | null;
@@ -2175,6 +2179,47 @@ export interface Card {
   history: CardEvent[] | null;
   context: null;
   notes: string[];
+}
+
+/** The parent's mark words an upstream read names: told apart in `src/board/labels.ts` alone. Source: `docs/features/upstream-signal.md` "Acceptance criteria", US-12. */
+export type KnownUpstreamMark = "suspect" | "correcting";
+
+/** Where a change above a subtask came from: the parent's own edit, or an applied item on the reach; told apart in `src/board/labels.ts` alone. Source: `docs/features/upstream-signal.md` "Acceptance criteria", US-12. */
+export type KnownUpstreamSource = "edit" | "item";
+
+/**
+ * What changed above an open subtask, per read, never stored: `parent` its parent's ID; `mark`, `on`
+ * and `correction` the parent's mark word and its keys, all null when it is neither suspect nor
+ * correcting; `changes` oldest first by `seq`, at most 16, the newest; `more` the older ones not
+ * listed. It moves, refuses and gates nothing (ADR-0012). Source:
+ * `docs/features/upstream-signal.md` "Acceptance criteria", US-12.
+ */
+export interface CardUpstream {
+  parent: string;
+  mark: KnownUpstreamMark | Unlisted | null;
+  on: string | null;
+  correction: string | null;
+  changes: CardUpstreamChange[];
+  more: number;
+}
+
+/**
+ * One change above a subtask: `seq` and `at` its event's (an item's `proposal.applied`); `by` an
+ * edit's `as` or an item's decider's name, never an email, null none recorded; `fields` an edit's
+ * counted fields (`goal`, `targets`, `criteria`), `[]` on an item; `item`, `kind`, `record` and `on`
+ * (the first node of the reach it names) an item's, null on an edit. Every word told apart in
+ * `src/board/labels.ts` alone. Source: `docs/features/upstream-signal.md` "Acceptance criteria", US-12.
+ */
+export interface CardUpstreamChange {
+  seq: number;
+  at: string;
+  source: KnownUpstreamSource | Unlisted;
+  by: string | null;
+  fields: string[];
+  item: string | null;
+  kind: string | null;
+  record: string | null;
+  on: string | null;
 }
 
 /** No such card (exit 1, the daemon's 404): `no card C-0099`; `id` null for no card ID. Source: `docs/canon/cards.md` "Commands". */

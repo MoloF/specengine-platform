@@ -526,6 +526,45 @@ impl SqliteQueue {
         events_naming(&self.conn, &self.project, "card.%", &[id], limit)
     }
 
+    /// Every event of this project whose type is one of `types`, oldest
+    /// first by `seq`, uncapped, in one statement; a payload that is no
+    /// JSON is passed over. No type asked: none, nothing read
+    /// (`docs/features/upstream-signal.md` "Acceptance criteria", US-5).
+    pub fn events_of_types(&self, types: &[&str]) -> Result<Vec<Event>, QueueError> {
+        if types.is_empty() {
+            return Ok(Vec::new());
+        }
+        let marks = (0..types.len())
+            .map(|place| format!("?{}", place + 2))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut statement = self
+            .conn
+            .prepare(&format!(
+                "SELECT seq, project, type, payload, at FROM main.events \
+                 WHERE project = ?1 AND type IN ({marks}) ORDER BY seq"
+            ))
+            .db()?;
+        let values = std::iter::once(self.project.as_str()).chain(types.iter().copied());
+        let mut rows = statement.query(rusqlite::params_from_iter(values)).db()?;
+        let mut events = Vec::new();
+        while let Some(row) = rows.next().db()? {
+            let text: Option<String> = row.get(3).db()?;
+            let Some(payload) = text.and_then(|text| serde_json::from_str::<Value>(&text).ok())
+            else {
+                continue;
+            };
+            events.push(Event {
+                seq: row.get(0).db()?,
+                project: row.get::<_, Option<String>>(1).db()?.unwrap_or_default(),
+                event_type: row.get::<_, Option<String>>(2).db()?.unwrap_or_default(),
+                payload,
+                at: row.get::<_, Option<String>>(4).db()?.unwrap_or_default(),
+            });
+        }
+        Ok(events)
+    }
+
     /// The questions, discrepancies and decisions whose `card_id` is the
     /// card `id`, by ID number, in one snapshot; a row naming it that does
     /// not decode is listed in [`CardItems::unreadable`]. A queue below

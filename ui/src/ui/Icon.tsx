@@ -82,6 +82,8 @@ const PATHS = {
   // A hand-off and a return (docs/canon/card-flows.md "The rule"): work passed to another trade, work sent back.
   cardHandOff: "M2.5 3.5h5v9h-5Z M7.5 8h6 M11 5.5 13.5 8 11 10.5",
   cardReturned: "M13 4.5v3a3 3 0 0 1-3 3H3.5 M6 8 3.5 10.5 6 13",
+  // What changed above a subtask (docs/features/upstream-signal.md "Acceptance criteria", US-13): a bar, an arrow down from it.
+  cardUpstream: "M3 2.5h10 M8 5v8.5 M4.5 10 8 13.5l3.5-3.5",
   // A task's mandate (docs/canon/card-mandate.md "The rule"): the brief held fast, an anchor, never a lock (nothing is gated); the department's own way, a fork.
   mandateBinding: "M8 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z M8 5v8.5 M6 6.5h4 M5 8.5H3a5 5 0 0 0 10 0h-2",
   mandateOpen: "M8 13.5V8.5 M8 8.5 4 4.5 M8 8.5l4-4 M4 4.5V7 M4 4.5h2.5 M12 4.5V7 M12 4.5H9.5",

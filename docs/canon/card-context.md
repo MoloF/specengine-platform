@@ -62,14 +62,14 @@ Writes: the data directory alone (the bundle's index update and code refresh), n
 
 ## MCP, daemon, hub, plugin
 
-- `GetCardArgs` takes `context`, `budget` (`deny_unknown_fields`). The output schema mirrors the document: `CardContextShape {parent, bundle: BundleDocument, notes}`, `CardContextParentShape {id, title, goal}`, both `deny_unknown_fields`. `GET_DESCRIPTION` is 1 987 of 2 048 B, its "else 10000)" and "the 40000 characters" tied to `DEFAULT_TASK_BUDGET` and `OUTPUT_CAP_CHARS` by `holds_number` asserts. Stdio's `INSTRUCTIONS` is unchanged.
-- The daemon's `GET .../cards/:id` never asks: `context: null`, `Card` 35 keys (`fixtures/daemon-keys.json`, 124 sets). The UI types `Card.context: null` (`provisional.ts`) and renders nothing.
+- `GetCardArgs` takes `context`, `budget` (`deny_unknown_fields`). The output schema mirrors the document: `CardContextShape {parent, bundle: BundleDocument, notes}`, `CardContextParentShape {id, title, goal}`, both `deny_unknown_fields`. `GET_DESCRIPTION` is 2 041 of 2 048 B since `upstream` (`card-upstream.md`), its "else 10000)" and "the 40000 characters" tied to `DEFAULT_TASK_BUDGET` and `OUTPUT_CAP_CHARS` by `holds_number` asserts. Stdio's `INSTRUCTIONS` is unchanged.
+- The daemon's `GET .../cards/:id` never asks: `context: null`, `Card` 36 keys (`fixtures/daemon-keys.json`, 126 sets). The UI types `Card.context: null` (`provisional.ts`) and renders nothing.
 - A hub's `/mcp/<slug>` `get_card` is stdio's route as it is: it takes the key with no hub code, the bundle reading the hub's checkout inside the project's turn (`hub-mcp.md` "Turn"); its 18 tools and `INSTRUCTIONS` unchanged. A hub gains it with its next upgrade, the owner's.
 - Plugin 0.39.0 (`plugin-files.md` "Changing it"): `read-spec`'s cards bullet names `context: true`, and `get_context_bundle` for an older server.
 
 ## Cost
 
-`get_card {context, history}` at most 424 208 characters, text and JSON, of `MAX_RESULT_CHARS` 500 000 (`mcp_size`'s `CARD_CONTEXT_MAXIMUM`: text 39 805, JSON 384 403, 64 items); a 64-target subtask 96 131. A scratch copy of a 375-document corpus, debug, warm, 3 targets: `show --context` 0.48-0.51 s, plain `show` 0.01 s, `spec bundle` of the same REFs 0.47-0.50 s.
+`get_card {context, history}` at most 432 982 characters, text and JSON, of `MAX_RESULT_CHARS` 500 000 (`mcp_size`'s `CARD_CONTEXT_MAXIMUM`: 64 items, the card a subtask whose `upstream` lists 16 edits by a 128-byte name, its context the parent's 4 096-byte goal; 424 208 before `upstream`); a 64-target subtask 96 131. A scratch copy of a 375-document corpus, debug, warm, 3 targets: `show --context` 0.48-0.51 s, plain `show` 0.01 s, `spec bundle` of the same REFs 0.47-0.50 s.
 
 ## Known limits
 

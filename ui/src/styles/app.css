@@ -792,6 +792,7 @@ textarea.field {
 .tone-card-returned { --badge-color: var(--card-returned); }
 .tone-card-handed-off { --badge-color: var(--card-handed-off); }
 .tone-card-taken { --badge-color: var(--card-taken); }
+.tone-card-upstream { --badge-color: var(--card-upstream); }
 .tone-trace-confirmed { --badge-color: var(--trace-confirmed); }
 .tone-trace-in-work { --badge-color: var(--trace-in-work); }
 .tone-trace-suspect { --badge-color: var(--trace-suspect); }

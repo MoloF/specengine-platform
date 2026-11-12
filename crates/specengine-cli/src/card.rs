@@ -9,7 +9,10 @@
 //!   [--history] [--marks] [--context [--budget N]]` → `key: value` lines,
 //!   with `--context` its parent's goal and one bundle of its targets and
 //!   its own applied records, the body last, in the room the lines leave
-//!   under the ceiling (task spec `card-context` CC1-CC5).
+//!   under the ceiling (task spec `card-context` CC1-CC5). With `--marks`,
+//!   `show` and `list` say what changed above an open subtask, its own key
+//!   beside the mark and never folded into it (`crate::upstream`, task spec
+//!   `upstream-signal` US-4, US-8).
 //! - `move C [--to K] [--before C] [--note T]`, `edit C …`, `assign C …`,
 //!   `cancel C --reason T` → `<verb> C-0001: <flow>/<column>`; JSON `{id,
 //!   flow, column, position, revision, allowed, notes}`, a refusal too; no
@@ -53,9 +56,12 @@
 //! which reads each now as `spec task list` does, a task it cannot read a
 //! note, never an exit; and `show --context`, whose bundle reads the corpus
 //! and refreshes the index as `spec bundle` does, a bundle it cannot make a
-//! note, never an exit. Nothing else reads a proposal, a lock or a task, no
-//! rule reads a link (canon `card-tasks`, "The rule"), and nothing is
-//! written under the root: the queue is in the data directory.
+//! note, never an exit. Beside a card's own items, only the upstream read of
+//! an open subtask reads proposals: the applied questions, discrepancies and
+//! decisions of every repository, no git run. Nothing else reads a proposal,
+//! a lock or a task, no rule reads a link (canon `card-tasks`, "The rule"),
+//! and nothing is written under the root: the queue is in the data
+//! directory.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -89,6 +95,7 @@ use specengine_core::trace::{
     CardMark, Departure, MarkFacts, TargetNorms, card_mark, clear_refusal, clearer_problem,
     correction_refusal, correction_title, departure_input, freeze, mark_notes, suspect_on,
 };
+use specengine_core::upstream::Upstream;
 use specengine_model::{
     Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, Mandate, TaskStatus,
 };
@@ -114,10 +121,14 @@ use crate::search::notes;
 use crate::show::classify;
 use crate::task::{LinkPlace, LinkedTask, linked_tasks, resolved_list, written_task};
 use crate::trace::{
-    QueueRead, correction_of, facts_of, fresh_norms, group_marks, held_documents, norms_read,
-    settled_of, target_norms, target_places,
+    QueueRead, correction_of, facts_of, fresh_norms, fresh_norms_reach, group_marks,
+    held_documents, norms_read, settled_of, target_norms, target_places,
 };
 use crate::tree::walked;
+use crate::upstream::{
+    Judge, Reaches, UpstreamFacts, judged_parent, no_anchor, parent_unread, reach_of,
+    upstream_lines,
+};
 use crate::{
     CliError, Env, Exit, Globals, Message, SPLIT_DRY_RUN_FLAG, escape_controls, one_line,
     process_git,
@@ -187,6 +198,10 @@ pub struct CardShowRequest {
     pub history: bool,
     /// `--marks`: its mark over all its targets, as its `list --marks` row.
     pub marks: bool,
+    /// What changed above it, an open subtask ([`Upstream`]): the CLI's
+    /// `--marks`, MCP's `get_card` and the daemon's card route; `false`:
+    /// nothing read for it (task spec `upstream-signal` US-8, US-12).
+    pub upstream: bool,
     /// `--context`: its parent's goal and one bundle of its targets and
     /// its applied records ([`CardContext`]); `false`: none read.
     pub context: bool,
@@ -1232,6 +1247,9 @@ pub struct CardShowOutcome {
     /// `--marks`' mark; `None` without it and on a cancelled card, which a
     /// read ignores.
     pub mark: Option<CardMark>,
+    /// What changed above it; `None` unasked, with no parent, on a closed
+    /// card, and when nothing is said (task spec `upstream-signal` US-8).
+    pub upstream: Option<Upstream>,
     /// Each task the card links, in link order, read now; a task's notes,
     /// each starting with its ID, follow the card's own in `notes`.
     pub tasks: Vec<LinkedTask>,
@@ -1298,9 +1316,9 @@ struct EventJson<'a> {
     payload: &'a serde_json::Value,
 }
 
-/// The columns in order, less `project`, the four keys of `--marks` right
-/// after `targets`, so no cut of a long card's text reaches them, then
-/// `allowed`, `history`, `context`, `notes`.
+/// The columns in order, less `project`, the four keys of `--marks` and
+/// `upstream` right after `targets`, so no cut of a long card's text
+/// reaches them, then `allowed`, `history`, `context`, `notes`.
 #[derive(Serialize)]
 struct CardJson<'a> {
     id: &'a str,
@@ -1315,6 +1333,7 @@ struct CardJson<'a> {
     on: Option<&'a str>,
     discrepancy: Option<&'a str>,
     correction: Option<&'a str>,
+    upstream: Option<&'a Upstream>,
     snapshot: Option<&'a [CardFrozen]>,
     criteria: &'a [String],
     assignee: Option<&'a str>,
@@ -1363,6 +1382,7 @@ impl Serialize for CardShowOutcome {
             on: mark.and_then(CardMark::on),
             discrepancy: mark.and_then(CardMark::discrepancy),
             correction: mark.and_then(CardMark::correction),
+            upstream: self.upstream.as_ref(),
             snapshot: card.snapshot.as_deref(),
             criteria: &card.criteria,
             assignee: card.assignee.as_deref(),
@@ -1412,6 +1432,11 @@ pub struct CardListOutcome {
     pub cards: Vec<Card>,
     /// `--marks`: by card ID; a cancelled card, which a read ignores, none.
     pub marks: BTreeMap<String, CardMark>,
+    /// `--marks`: the open subtasks something changed above, by ID (task
+    /// spec `upstream-signal` US-8).
+    pub upstream: BTreeSet<String>,
+    /// `--marks` was asked: each row's `upstream` is a flag, else `null`.
+    pub marked: bool,
     /// How many of `cards` are printed (text and JSON alike).
     pub shown: usize,
     pub notes: Vec<String>,
@@ -1464,6 +1489,7 @@ struct CardRowJson<'a> {
     on: Option<&'a str>,
     discrepancy: Option<&'a str>,
     correction: Option<&'a str>,
+    upstream: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -1509,6 +1535,7 @@ impl Serialize for CardListOutcome {
                         on: mark.and_then(CardMark::on),
                         discrepancy: mark.and_then(CardMark::discrepancy),
                         correction: mark.and_then(CardMark::correction),
+                        upstream: self.marked.then(|| self.upstream.contains(&card.id)),
                     }
                 })
                 .collect(),
@@ -2519,6 +2546,7 @@ fn run_show(
         allowed: Vec::new(),
         history: None,
         mark: None,
+        upstream: None,
         tasks: Vec::new(),
         items: Vec::new(),
         subtask_items: Vec::new(),
@@ -2579,11 +2607,7 @@ fn run_show(
         .into_iter()
         .collect();
     let mut messages = Vec::new();
-    let mark = if request.marks {
-        show_mark(env, &context, &card, &mut notes, &mut messages)?
-    } else {
-        None
-    };
+    let (mark, upstream) = show_marks(env, &context, &card, request, &mut notes, &mut messages)?;
     let allowed = allowed_moves(context.config.flow(&card.flow), &card);
     // The context's queue and config reads, only when asked, before the
     // linked tasks' read takes the queue (task spec `card-context` CC2).
@@ -2614,6 +2638,7 @@ fn run_show(
         card: Some(Box::new(card)),
         history,
         mark,
+        upstream,
         tasks,
         items,
         subtask_items,
@@ -2931,26 +2956,48 @@ fn run_raise(
 }
 
 /// `--marks`: `card`'s mark as its `list --marks` row reads it, over every
-/// card's live correction and its own discrepancy, so the notes are its own.
-/// A cancelled card has none; an index that cannot be read is the read's
-/// error ([`list_marks`]), never a clean card.
-fn show_mark(
+/// card's live correction and its own discrepancy, so the notes are its own;
+/// a cancelled card has none. `upstream`: an open subtask's parent is read
+/// and marked alike, from the same refresh, and what changed above it judged
+/// (task spec `upstream-signal` US-7 to US-9): one list of the cards, one
+/// refresh of the index, one read of the events and one of the applied
+/// items, each only when something asks it, so a card with no parent asked
+/// no mark reads none. An index that cannot be read is the read's error
+/// ([`list_marks`]), never a clean card.
+fn show_marks(
     env: &Env,
     context: &OpenCards,
     card: &Card,
+    request: &CardShowRequest,
     notes: &mut Vec<String>,
     messages: &mut Vec<Message>,
-) -> Result<Option<CardMark>, CliError> {
-    if card.cancellation.is_some() {
-        return Ok(None);
+) -> Result<(Option<CardMark>, Option<Upstream>), CliError> {
+    let marked = request.marks && card.cancellation.is_none();
+    let parent = match request.upstream.then(|| judged_parent(card)).flatten() {
+        Some(id) => match context.queue.get_card(id) {
+            Ok(Some(parent)) => Some(parent),
+            Ok(None) | Err(_) => {
+                notes.push(parent_unread(&card.id, id));
+                None
+            }
+        },
+        None => None,
+    };
+    if !marked && parent.is_none() {
+        return Ok((None, None));
     }
     let listed = context.queue.list_cards().map_err(queue_cannot)?;
-    notes.extend(
-        listed
-            .unreadable
-            .iter()
-            .map(|row| one_line(&format!("{row}; not read"))),
-    );
+    // The read's notes are the card's own: the project's rows that do not
+    // read under `--marks` alone, never on an upstream read without it (the
+    // daemon's card route), and the parent's discrepancy never.
+    if marked {
+        notes.extend(
+            listed
+                .unreadable
+                .iter()
+                .map(|row| one_line(&format!("{row}; not read"))),
+        );
+    }
     let mut facts = QueueRead::default();
     for other in listed
         .cards
@@ -2959,11 +3006,47 @@ fn show_mark(
     {
         correction_of(other, &mut facts);
     }
-    settled_of(&context.queue, card, &mut facts);
-    notes.append(&mut facts.notes);
-    let (mut marks, unread) = list_marks(env, context, slice::from_ref(card), &facts, messages)?;
-    notes.extend(unread);
-    Ok(marks.remove(&card.id))
+    if marked {
+        settled_of(&context.queue, card, &mut facts);
+        notes.append(&mut facts.notes);
+    }
+    let live_parent = parent
+        .as_ref()
+        .filter(|parent| parent.cancellation.is_none());
+    if let Some(parent) = live_parent {
+        settled_of(&context.queue, parent, &mut facts);
+        facts.notes.clear();
+    }
+    let shown = if marked { slice::from_ref(card) } else { &[] };
+    let reached: BTreeSet<&String> = parent
+        .iter()
+        .flat_map(|parent| card.targets.iter().chain(&parent.targets))
+        .collect();
+    let also: Vec<&Card> = live_parent.into_iter().collect();
+    let mut read = list_marks(env, context, shown, &also, &reached, &facts, messages)?;
+    notes.append(&mut read.notes);
+    let upstream = match &parent {
+        Some(parent) => {
+            let facts = UpstreamFacts::read(&context.queue)?;
+            let judge = Judge::new(&facts);
+            if !judge.anchored(&card.id) {
+                notes.push(no_anchor(&card.id));
+            }
+            // Applied rows that do not decode cannot be judged: one note
+            // whatever their count, never read as clean (task spec
+            // `upstream-signal` US-8).
+            notes.extend(facts.unread_note(&card.id));
+            let reach = reach_of(card.targets.iter().chain(&parent.targets), &read.reaches);
+            judge.judge(card, parent, read.marks.get(&parent.id), &reach)
+        }
+        None => None,
+    };
+    let mark = if marked {
+        read.marks.remove(&card.id)
+    } else {
+        None
+    };
+    Ok((mark, upstream))
 }
 
 /// Why `[card]` no longer places `card`: its flow or its column is gone.
@@ -3045,30 +3128,34 @@ fn run_list(
     let exact = |asked: &Option<String>, value: Option<&str>| {
         asked.as_deref().is_none_or(|asked| Some(asked) == value)
     };
-    let mut cards: Vec<Card> = listed
-        .cards
-        .into_iter()
-        .filter(|card| {
-            exact(&request.flow, Some(&card.flow))
-                && exact(&request.column, Some(&card.column))
-                && exact(&request.discipline, card.discipline.as_deref())
-                && exact(&request.assignee, card.assignee.as_deref())
-                && exact(&parent, card.parent.as_deref())
-                && (!request.no_target || card.targets.is_empty())
-                && (request.with_cancelled || card.cancellation.is_none())
-        })
-        .collect();
+    // The cards a filter leaves out are kept aside: a listed subtask's
+    // parent is read among them too (task spec `upstream-signal` US-8).
+    let (mut cards, others): (Vec<Card>, Vec<Card>) = listed.cards.into_iter().partition(|card| {
+        exact(&request.flow, Some(&card.flow))
+            && exact(&request.column, Some(&card.column))
+            && exact(&request.discipline, card.discipline.as_deref())
+            && exact(&request.assignee, card.assignee.as_deref())
+            && exact(&parent, card.parent.as_deref())
+            && (!request.no_target || card.targets.is_empty())
+            && (request.with_cancelled || card.cancellation.is_none())
+    });
     let config = &context.config;
     cards.sort_by_cached_key(|card| list_key(config, card));
     notes.extend(stranded_notes(config, &cards));
     let mut messages = Vec::new();
-    let marks = if request.marks {
+    let (marks, upstream) = if request.marks {
         notes.append(&mut facts.notes);
-        let (marks, unread) = list_marks(env, &context, &cards, &facts, &mut messages)?;
-        notes.extend(unread);
-        marks
+        list_upstream(
+            env,
+            &context,
+            &cards,
+            &others,
+            &facts,
+            &mut notes,
+            &mut messages,
+        )?
     } else {
-        BTreeMap::new()
+        (BTreeMap::new(), BTreeSet::new())
     };
     let flow_lines: Vec<String> = config
         .flows
@@ -3080,9 +3167,12 @@ fn run_list(
         .map(|line| line.chars().count() + 1)
         .sum::<usize>();
     let (shown, _) = lines_within(
-        cards
-            .iter()
-            .map(|card| card_line(card, marks.get(&card.id)).chars().count() + 1),
+        cards.iter().map(|card| {
+            card_line(card, marks.get(&card.id), upstream.contains(&card.id))
+                .chars()
+                .count()
+                + 1
+        }),
         used,
         false,
     );
@@ -3092,36 +3182,124 @@ fn run_list(
         flow_lines,
         cards,
         marks,
+        upstream,
+        marked: request.marks,
         shown,
         messages,
         notes,
     })
 }
 
+/// `--marks`: each listed card's mark ([`list_marks`]) and the listed open
+/// subtasks something changed above (task spec `upstream-signal` US-8,
+/// US-9): each one's parent found among every readable card, listed or not
+/// (`others`), and marked from the same refresh; one read of the events and
+/// one of the applied items for them all, none when no open subtask is
+/// listed. A parent that does not read leaves its row out of the set, its
+/// row's own note already given.
+fn list_upstream(
+    env: &Env,
+    context: &OpenCards,
+    cards: &[Card],
+    others: &[Card],
+    facts: &QueueRead,
+    notes: &mut Vec<String>,
+    messages: &mut Vec<Message>,
+) -> Result<(BTreeMap<String, CardMark>, BTreeSet<String>), CliError> {
+    let every: BTreeMap<&str, &Card> = cards
+        .iter()
+        .chain(others)
+        .map(|card| (card.id.as_str(), card))
+        .collect();
+    let subtasks: Vec<(&Card, &Card)> = cards
+        .iter()
+        .filter_map(|card| Some((card, *every.get(judged_parent(card)?)?)))
+        .collect();
+    // A listed parent is marked as a listed card, once; the others beside.
+    let mut seen: BTreeSet<&str> = cards.iter().map(|card| card.id.as_str()).collect();
+    let parents: Vec<&Card> = subtasks
+        .iter()
+        .map(|(_, parent)| *parent)
+        .filter(|parent| parent.cancellation.is_none() && seen.insert(parent.id.as_str()))
+        .collect();
+    let reached: BTreeSet<&String> = subtasks
+        .iter()
+        .flat_map(|(child, parent)| child.targets.iter().chain(&parent.targets))
+        .collect();
+    let read = list_marks(env, context, cards, &parents, &reached, facts, messages)?;
+    notes.extend(read.notes);
+    let mut upstream = BTreeSet::new();
+    if !subtasks.is_empty() {
+        let queue_facts = UpstreamFacts::read(&context.queue)?;
+        let judge = Judge::new(&queue_facts);
+        for (child, parent) in &subtasks {
+            let reach = reach_of(child.targets.iter().chain(&parent.targets), &read.reaches);
+            if judge
+                .judge(child, parent, read.marks.get(&parent.id), &reach)
+                .is_some()
+            {
+                upstream.insert(child.id.clone());
+            }
+        }
+    }
+    let marks = cards
+        .iter()
+        .filter_map(|card| Some((card.id.clone(), read.marks.get(&card.id)?.clone())))
+        .collect();
+    Ok((marks, upstream))
+}
+
+/// What one refresh of the index says of the cards a read marks.
+struct MarksRead {
+    /// Each live card's mark, listed or asked beside them, by ID.
+    marks: BTreeMap<String, CardMark>,
+    /// What each target asked reaches ([`Reaches`]).
+    reaches: Reaches,
+    /// What a read cannot compare of a listed card.
+    notes: Vec<String>,
+}
+
 /// `--marks`: each listed card's mark over all its targets, core's, and what
-/// a read cannot compare of it. A cancelled card, which every read ignores,
-/// has none. No index to read the targets: the read's error, so a board
-/// never draws a clean tile it could not vouch for.
+/// a read cannot compare of it; the marks of `also` (a subtask's parents
+/// not among `cards`) and what each of `reached` reaches, from the same
+/// refresh. A cancelled card, which every read ignores, has none. No index
+/// to read the targets: the read's error, so a board never draws a clean
+/// tile it could not vouch for.
 fn list_marks(
     env: &Env,
     context: &OpenCards,
     cards: &[Card],
+    also: &[&Card],
+    reached: &BTreeSet<&String>,
     facts: &QueueRead,
     messages: &mut Vec<Message>,
-) -> Result<(BTreeMap<String, CardMark>, Vec<String>), CliError> {
+) -> Result<MarksRead, CliError> {
     let live = || cards.iter().filter(|card| card.cancellation.is_none());
-    let targets: BTreeSet<&String> = live().flat_map(|card| &card.targets).collect();
-    let norms = fresh_norms(env, &context.project, &targets, messages)?;
+    let marked: Vec<&Card> = live()
+        .chain(
+            also.iter()
+                .copied()
+                .filter(|card| card.cancellation.is_none()),
+        )
+        .collect();
+    let mut targets: BTreeSet<&String> = marked.iter().flat_map(|card| &card.targets).collect();
+    targets.extend(reached.iter().copied());
+    let (norms, reaches) = fresh_norms_reach(env, &context.project, &targets, reached, messages)?;
     let facts = MarkFacts {
         norms: &norms,
         settled: &facts.settled,
         corrections: &facts.corrections,
     };
-    let marks = live()
+    let marks = marked
+        .iter()
         .map(|card| (card.id.clone(), card_mark(card, &card.targets, &facts)))
         .collect();
     let notes = live().flat_map(|card| mark_notes(card, &norms)).collect();
-    Ok((marks, notes))
+    Ok(MarksRead {
+        marks,
+        reaches,
+        notes,
+    })
 }
 
 /// Where a name stands in `names`: its place, or past them all by name.
@@ -3176,9 +3354,11 @@ fn flow_line(flow: &CardFlow, cards: &[Card]) -> String {
 }
 
 /// `<id> | <flow>/<column> | <position> | <title> | <discipline> | <assignee>
-/// | <due> | <targets>[ | mandate <m>][ | cancelled][ | mark <mark>]`, no
-/// line end: a card with no mandate prints as before it.
-fn card_line(card: &Card, mark: Option<&CardMark>) -> String {
+/// | <due> | <targets>[ | mandate <m>][ | cancelled][ | mark <mark>][ |
+/// upstream]`, no line end: a card with no mandate prints as before it, and
+/// `upstream` only when something changed above it (task spec
+/// `upstream-signal` US-8).
+fn card_line(card: &Card, mark: Option<&CardMark>, upstream: bool) -> String {
     let optional = |value: &Option<String>| value.as_deref().map_or(ABSENT.to_owned(), one_line);
     let targets = if card.targets.is_empty() {
         ABSENT.to_owned()
@@ -3204,6 +3384,9 @@ fn card_line(card: &Card, mark: Option<&CardMark>) -> String {
     }
     if let Some(mark) = mark {
         line.push_str(&format!(" | mark {}", one_line(&mark.text())));
+    }
+    if upstream {
+        line.push_str(" | upstream");
     }
     line
 }
@@ -4581,6 +4764,9 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
         ),
         format!("correction: {}", held(mark.and_then(CardMark::correction))),
     ]);
+    // Among the first lines, so the cut never reaches them (task spec
+    // `upstream-signal` US-8).
+    lines.extend(upstream_lines(outcome.upstream.as_ref()));
     list(
         &mut lines,
         "snapshot",
@@ -4750,7 +4936,11 @@ pub(crate) fn render_list_text(outcome: &CardListOutcome) -> String {
         out.push('\n');
     }
     for card in outcome.shown_cards() {
-        out.push_str(&card_line(card, outcome.marks.get(&card.id)));
+        out.push_str(&card_line(
+            card,
+            outcome.marks.get(&card.id),
+            outcome.upstream.contains(&card.id),
+        ));
         out.push('\n');
     }
     let omitted = outcome.omitted();

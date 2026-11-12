@@ -2010,3 +2010,129 @@ fn card_tasks_an_accept_keeps_the_links_and_a_closed_card_takes_no_link() {
         "a correction starts with none"
     );
 }
+
+// ---------------------------------------------- upstream-signal (RM-0105)
+
+/// docs/features/upstream-signal.md US-5, the store's half:
+/// `events_of_types` over 200 mixed events (`card.created`, `.edited`,
+/// `.moved`, `.assigned`, `proposal.created`, `.applied`, another project's
+/// rows) returns exactly the asked types of this project, by `seq`,
+/// uncapped, a payload that is no JSON passed over. The oracle is the raw
+/// table through `sqlite3`. M: `card_history(…, 64)` (a cap); a type filter
+/// dropped; the project unfiltered.
+#[test]
+fn upstream_events_of_types_is_every_asked_event_by_seq() {
+    const ASKED: [&str; 3] = [EVENT_CARD_CREATED, EVENT_CARD_EDITED, "proposal.applied"];
+    let scratch = Scratch::new("qc-upstream-events");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let config = press();
+    let flow = plates(&config);
+    for index in 0..10 {
+        queue
+            .create_card(&new_card(flow, &format!("Plate {index}")), T0)
+            .expect("a card");
+    }
+    let edit = |goal: String| {
+        CardChange::Edit(Box::new(CardEdit {
+            goal: Some(Some(goal)),
+            ..CardEdit::default()
+        }))
+    };
+    let raw = |event_type: &str, payload: &str, project: &str| {
+        sqlite3(
+            &db,
+            &format!(
+                "INSERT INTO events (project, type, payload, at) VALUES ('{project}', \
+                 '{event_type}', '{payload}', '{T1}');"
+            ),
+        );
+    };
+    let mut round = 0;
+    while sqlite3(&db, "SELECT COUNT(*) FROM events;")
+        .parse::<usize>()
+        .expect("a count")
+        < 200
+    {
+        let id = format!("C-{:04}", round % 10 + 1);
+        queue
+            .change_card(&id, None, &edit(format!("Goal {round}.")), "ana", T1)
+            .expect("edited");
+        queue
+            .change_card(&id, None, &to(flow, "queued"), "ana", T1)
+            .expect("reordered");
+        let item = format!("PR-{:04}", round + 1);
+        raw(
+            "proposal.created",
+            &format!("{{\"id\":\"{item}\"}}"),
+            PROJECT,
+        );
+        raw(
+            "proposal.applied",
+            &format!("{{\"id\":\"{item}\"}}"),
+            PROJECT,
+        );
+        raw(
+            "card.edited",
+            "{\"id\":\"C-0001\",\"fields\":[\"goal\"]}",
+            "elsewhere",
+        );
+        round += 1;
+    }
+    let total: usize = sqlite3(&db, "SELECT COUNT(*) FROM events;")
+        .parse()
+        .expect("a count");
+    assert!(total >= 200, "{total}");
+    let broken: i64 = sqlite3(
+        &db,
+        &format!(
+            "SELECT seq FROM events WHERE project = '{PROJECT}' AND type = 'card.edited' \
+             ORDER BY seq LIMIT 1 OFFSET 7;"
+        ),
+    )
+    .parse()
+    .expect("a seq");
+    sqlite3(
+        &db,
+        &format!("UPDATE events SET payload = 'not json {{' WHERE seq = {broken};"),
+    );
+    let expected: Vec<i64> = sqlite3(
+        &db,
+        &format!(
+            "SELECT seq FROM events WHERE project = '{PROJECT}' AND type IN ('card.created', \
+             'card.edited', 'proposal.applied') AND seq <> {broken} ORDER BY seq;"
+        ),
+    )
+    .lines()
+    .map(|seq| seq.parse().expect("a seq"))
+    .collect();
+    assert!(
+        expected.len() > 64,
+        "past the history cap: {}",
+        expected.len()
+    );
+
+    let found = queue.events_of_types(&ASKED).expect("the events");
+    let seqs: Vec<i64> = found.iter().map(|event| event.seq).collect();
+    assert_eq!(seqs, expected, "every asked event of this project, by seq");
+    assert!(
+        found
+            .iter()
+            .all(|event| event.project == PROJECT && ASKED.contains(&event.event_type.as_str())),
+        "only the asked types of this project"
+    );
+    assert!(
+        found.iter().all(|event| event.payload["id"].is_string()),
+        "payloads decoded"
+    );
+    assert!(
+        queue
+            .events_of_types(&["card.assigned"])
+            .expect("none")
+            .is_empty()
+    );
+    let moved = queue
+        .events_of_types(&[EVENT_CARD_MOVED])
+        .expect("the moves");
+    assert_eq!(moved.len(), round, "one reorder a round");
+}

@@ -19,7 +19,8 @@
 //!   `budget`, closed. A hub answers the same call alike, lists 18 tools,
 //!   and its `HUB_INSTRUCTIONS` are 3892f03's. M: `notes` dropped from
 //!   `CardContextShape`; `context` ignored on the hub's route.
-//! - CC9: `get_card`'s description is 1 987 bytes, ASCII, with the spec's
+//! - CC9: `get_card`'s description is 1 987 bytes (2 041 since
+//!   docs/features/upstream-signal.md US-11), ASCII, with the spec's
 //!   head and sentence; the stdio `INSTRUCTIONS` are 3892f03's. M: the
 //!   sentence dropped.
 //!
@@ -707,9 +708,10 @@ fn folded(text: &str) -> String {
     text.split_whitespace().collect::<Vec<&str>>().join(" ")
 }
 
-/// CC9: `get_card`'s description is 1 987 bytes of ASCII, starts with
-/// the spec's head, and holds its sentence once, after "in one read." and
-/// before "Reads only:"; the stdio `INSTRUCTIONS` are 3892f03's (2 048
+/// CC9: `get_card`'s description is 1 987 bytes of ASCII (2 041 since
+/// docs/features/upstream-signal.md US-11), starts with the spec's head,
+/// and holds its sentence once, after "in one read." (and, since
+/// upstream-signal, its `upstream` sentence) and before "Reads only:"; the stdio `INSTRUCTIONS` are 3892f03's (2 048
 /// bytes). The two numbers are tied by compile-time asserts in `src/`. M:
 /// the sentence dropped.
 #[test]
@@ -722,7 +724,7 @@ fn cc9_the_description_holds_the_context_sentence() {
         .to_owned();
     drop(session.finish());
     assert!(text.is_ascii());
-    assert_eq!(text.len(), 1987, "{text}");
+    assert_eq!(text.len(), 2041, "{text}");
     assert!(folded(&text).starts_with(GET_HEAD), "{text}");
     let folded_text = folded(&text);
     assert_eq!(
@@ -731,7 +733,10 @@ fn cc9_the_description_holds_the_context_sentence() {
         "M: the sentence dropped: {text}"
     );
     assert!(
-        folded_text.contains(&format!("in one read. {GET_CONTEXT} Reads only:")),
+        folded_text.contains(&format!(
+            "in one read. upstream: what changed above an open subtask, as list_cards names it, \
+             or null. {GET_CONTEXT} Reads only:"
+        )),
         "{text}"
     );
     assert_eq!(INSTRUCTIONS.len(), 2048);

@@ -1,5 +1,6 @@
-import type { CardAllowed, CardFlow, CardMove, CardRow, KnownProposalStatus, KnownSplitTargetsFrom, KnownTeamAct, Mandate, TraceCard } from "../api/types";
+import type { CardAllowed, CardFlow, CardMove, CardRow, CardUpstreamChange, KnownProposalStatus, KnownSplitTargetsFrom, KnownTeamAct, KnownUpstreamMark, KnownUpstreamSource, Mandate, TraceCard } from "../api/types";
 import type { Translate } from "../i18n";
+import { slot } from "../i18n/fill";
 import type { Look } from "../ui/Badge";
 import type { IconName } from "../ui/Icon";
 import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
@@ -462,4 +463,52 @@ export function subtaskMandateLook(mandate: Mandate | null, t: Translate): Lozen
 /** Whether an item is a decision: the parent's Decisions from subtasks lists these alone. */
 export function isDecision({ kind }: { kind: string }): boolean {
   return kind === RAISED_KINDS.decision;
+}
+
+/**
+ * What changed above an open subtask (docs/features/upstream-signal.md "Acceptance criteria", US-13):
+ * the tile's badge, information and never a hold on work, and the work item's lines. Every source,
+ * kind, field and mark word is looked up here alone; a word this build does not know is shown raw.
+ */
+export function upstreamLook(t: Translate): Look {
+  return { label: t("board.upstream.label"), tone: "card-upstream", icon: "cardUpstream" };
+}
+
+/** The parent's two marks an upstream read names, each its sentence's key. */
+const UPSTREAM_MARKS: Readonly<Record<KnownUpstreamMark, "mark" | "markCorrecting">> = { suspect: "mark", correcting: "markCorrecting" };
+
+/** The parent's mark as a sentence, slots `on` and `correction` (fill.ts); one this build does not know raw, `served` so it stands under `lang="en"`; null none. */
+export function upstreamMarkLine(mark: string | null, t: Translate): { text: string; served: boolean } | null {
+  if (mark === null) {
+    return null;
+  }
+  return Object.hasOwn(UPSTREAM_MARKS, mark) ? { text: t(`board.upstream.${UPSTREAM_MARKS[mark as KnownUpstreamMark]}`, { on: slot("on"), correction: slot("correction") }), served: false } : { text: mark, served: true };
+}
+
+/** The fields of a parent's edit that count, as stored. */
+const UPSTREAM_FIELDS = { goal: true, targets: true, criteria: true };
+
+/** An edited field's word; one this build does not know raw, `served`. */
+export function upstreamFieldWords(field: string, t: Translate): { text: string; served: boolean } {
+  return Object.hasOwn(UPSTREAM_FIELDS, field) ? { text: t(`board.upstream.field.${field as keyof typeof UPSTREAM_FIELDS}`), served: false } : { text: field, served: true };
+}
+
+/** The kinds of an applied item that count, as stored. */
+const UPSTREAM_KINDS = { question: true, discrepancy: true, decision: true };
+
+/** The two sources of a change, as stored. */
+const UPSTREAM_SOURCES: Readonly<Record<KnownUpstreamSource, KnownUpstreamSource>> = { edit: "edit", item: "item" };
+
+/**
+ * A change's sentence, slots `fields`, `id` and `nodes`; a source this build does not know raw, and an
+ * item's kind it does not know (or none) raw, the item's ID and node shown after it.
+ */
+export function upstreamChangeLine({ source, kind }: Pick<CardUpstreamChange, "source" | "kind">, t: Translate): { text: string; served: boolean } {
+  if (source === UPSTREAM_SOURCES.edit) {
+    return { text: t("board.upstream.edited", { fields: slot("fields") }), served: false };
+  }
+  if (source !== UPSTREAM_SOURCES.item) {
+    return { text: source, served: true };
+  }
+  return kind !== null && Object.hasOwn(UPSTREAM_KINDS, kind) ? { text: t(`board.upstream.${kind as keyof typeof UPSTREAM_KINDS}`, { id: slot("id"), nodes: slot("nodes") }), served: false } : { text: kind ?? source, served: true };
 }

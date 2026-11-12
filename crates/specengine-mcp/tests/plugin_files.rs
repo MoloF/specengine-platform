@@ -234,6 +234,12 @@
 //!   (`read-spec` byte-equal); a `SCHEMA_PINS` entry 0.40.0, 0.39.0's
 //!   schemas today's without the value and the key ([`as_of_0_39_0`]). M:
 //!   the schema changed with no new `SCHEMA_PINS` entry.
+//! - upstream-signal (RM-0105, US-11, D7): 0.40.0 -> 0.41.0, MINOR:
+//!   `get_card` and each `list_cards` row return `upstream`. A `PINS` entry
+//!   0.41.0, the tree with plugin.json's version set back 0.40.0's
+//!   (`read-spec` byte-equal); a `SCHEMA_PINS` entry 0.41.0, 0.40.0's
+//!   schemas today's without the two keys ([`as_of_0_40_0`]). M: the schema
+//!   changed with no new `SCHEMA_PINS` entry.
 //!
 //! The repository is only read.
 
@@ -626,6 +632,14 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.40.0",
         "bab1f5cffd378d5aa0155c89d19a008a64f30a458e42159918d114df3ec97fda",
+    ),
+    // upstream-signal (RM-0105, US-11, D7: 0.40.0 -> 0.41.0, MINOR: the key
+    // `upstream` `get_card` and `list_cards` return): plugin.json's version
+    // alone; set back, the tree hashes as 0.40.0's pin (`read-spec`
+    // unchanged).
+    (
+        "0.41.0",
+        "79a2ce540b90de7e586d32cc5f01d0cb375996194efe86148685e91d5fb85e42",
     ),
 ];
 
@@ -1043,6 +1057,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.40.0",
         "a97ffc0ac3a8f960fe387660c78b48207dc07c626462368b59e5bc7f767d965a",
+    ),
+    // upstream-signal (RM-0105, US-11): `get_card`'s `upstream` and each
+    // `list_cards` row's ([`as_of_0_40_0`] takes them out; no other tool's
+    // schema changed).
+    (
+        "0.41.0",
+        "bc979ce4a6c2d8807559207150cfdd117970b0b7a8491b8b2d6693b190501711",
     ),
 ];
 
@@ -2055,7 +2076,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// since departments (RM-0096), 0.36.0 since card-questions (RM-0097),
 /// 0.37.0 since department-split (RM-0100), 0.38.0 since task-mandate
 /// (RM-0104), 0.39.0 since card-context (RM-0108), 0.40.0 since
-/// node-history (RM-0035). No room is left, so the next byte is over.
+/// node-history (RM-0035), 0.41.0 since upstream-signal (RM-0105). No room
+/// is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2077,7 +2099,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.40.0")
+        json!("0.41.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2228,11 +2250,37 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // upstream-signal (RM-0105, US-11: 0.40.0 -> 0.41.0): plugin.json's
+    // version alone; set back, the tree is 0.40.0's pinned content,
+    // `read-spec` and every other skill and role byte-equal. M: plugin.json
+    // left at 0.40.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.41.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.41.0"),
+        "plugin.json's version"
+    );
+    let at_0_40_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.41.0\"",
+        "\"version\": \"0.40.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_40_0),
+        PINS[PINS.len() - 2].1,
+        "0.41.0 changes plugin.json's version only"
+    );
+    let tree = at_0_40_0;
+    let pins_0_40_0 = &PINS[..PINS.len() - 1];
     // node-history (RM-0035, NH11: 0.39.0 -> 0.40.0): plugin.json's version
     // alone; set back, the tree is 0.39.0's pinned content, `read-spec`
     // and every other skill and role byte-equal. M: plugin.json left at
     // 0.39.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.40.0"));
+    assert_eq!(
+        pins_0_40_0.last().map(|(version, _)| *version),
+        Some("0.40.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.40.0"),
@@ -2246,11 +2294,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_39_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_40_0[pins_0_40_0.len() - 2].1,
         "0.40.0 changes plugin.json's version only"
     );
     let tree = at_0_39_0;
-    let pins_0_39_0 = &PINS[..PINS.len() - 1];
+    let pins_0_39_0 = &pins_0_40_0[..pins_0_40_0.len() - 1];
     // card-context (RM-0108, CC8: 0.38.0 -> 0.39.0): plugin.json's version
     // and `read-spec`'s three edits, net +5 bytes; all set back, the tree
     // is 0.38.0's pinned content, every other skill and role byte-equal. M:
@@ -3438,6 +3486,23 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// upstream-signal (RM-0105, US-11): `schemas` as 0.40.0 listed them: no
+/// `upstream` in `get_card`'s output or in a `list_cards` row; no other
+/// tool's schema changed.
+fn as_of_0_40_0(schemas: &mut Value) {
+    assert!(
+        without_property(&mut schemas["get_card"]["outputSchema"], "upstream"),
+        "get_card returns upstream"
+    );
+    assert!(
+        without_property(
+            &mut schemas["list_cards"]["outputSchema"]["properties"]["cards"]["items"],
+            "upstream"
+        ),
+        "a list_cards row holds upstream"
+    );
+}
+
 /// `get_node.with`'s doc as 0.39.0 listed it.
 const WITH_DOC_0_39_0: &str = "`[\"links\"]`: each node's links, outgoing and incoming; \
                                `[\"bindings\"]`: each node's code bindings with their sync.";
@@ -4171,7 +4236,23 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[29].0, "0.38.0", "an entry for 0.38.0");
     assert_eq!(SCHEMA_PINS[30].0, "0.39.0", "an entry for 0.39.0");
     assert_eq!(SCHEMA_PINS[31].0, "0.40.0", "an entry for 0.40.0");
-    assert_eq!(SCHEMA_PINS.len(), 32, "0.40.0 the last entry");
+    assert_eq!(SCHEMA_PINS[32].0, "0.41.0", "an entry for 0.41.0");
+    assert_eq!(SCHEMA_PINS.len(), 33, "0.41.0 the last entry");
+    // upstream-signal (RM-0105, US-11): 0.40.0's schemas are today's without
+    // `get_card`'s and a `list_cards` row's `upstream`. M: `SCHEMA_PINS` not
+    // appended.
+    let mut at_0_40_0 = schemas.clone();
+    as_of_0_40_0(&mut at_0_40_0);
+    let at_0_40_0_hash = schema_hash(&at_0_40_0);
+    assert_eq!(
+        at_0_40_0_hash, SCHEMA_PINS[31].1,
+        "0.40.0's schemas are today's without upstream-signal's two keys"
+    );
+    assert_ne!(
+        at_0_40_0_hash, current,
+        "upstream-signal changed the schemas"
+    );
+    let (schemas, current) = (at_0_40_0, at_0_40_0_hash);
     // node-history (RM-0035, NH11): 0.39.0's schemas are today's without
     // `get_node`'s `with` value `history` and each node's `history`. M:
     // `SCHEMA_PINS` not appended.

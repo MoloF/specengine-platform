@@ -653,6 +653,9 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                         id,
                         history: args["history"] == json!(true),
                         marks: true,
+                        // docs/features/upstream-signal.md US-10: always
+                        // asked, as `--marks` asks it.
+                        upstream: true,
                         // docs/features/card-context.md CC7: `context: true`
                         // asks it; absent, `null` or `false` does not.
                         context: args["context"] == json!(true),

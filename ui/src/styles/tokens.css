@@ -240,6 +240,9 @@
   --card-returned: var(--task-changes-requested);
   --card-handed-off: var(--task-ready);
   --card-taken: var(--task-in-progress);
+  /* What changed above an open subtask (docs/features/upstream-signal.md "Acceptance criteria", US-13):
+     news, the information lozenge's colour, never a warning and never a hold on work. */
+  --card-upstream: var(--lozenge-information-text);
 
   /* A node against its cards (docs/features/trace-views.md): each state a label and an icon, never
      colour alone, none of them a hold on work. Confirmed is no sync colour, so it never reads as a

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-12
 ---
 
 # spec trace: suspect marks, clearing, verdicts, rollup
@@ -95,7 +95,7 @@ Scope: REF's holders and what they hold by `parent:`; no REF: every live documen
 
 `{ref, reason, notes, counts, stages, nodes, truncated, omitted}`; a lane `{stage, distance, counts}`, `stage` `null` for the steps with none; a node `{id, title, path, stage, distance, rollup, counts, cards: [{id, flow, column, title, mark, on, discrepancy, correction}], uses: [{id, rollup, cards}]}`. `rollup` is the state as printed, `no card`, `in work` included; `counts` `{no_card, in_work, suspect, departed, confirmed}`, a node's over it and what it holds by `parent:`, while `rollup` covers its own cards only, so a group's screen shows `counts`. A node holding a live document, with no card of its own, is counted nowhere (`Reading::counted`): no row's counts, the header or a lane; its row still says `no card`. `stage`, `distance`: its document's. `mark` the word alone. `omitted` counts the rows cut, a mixed count: nodes + cards + `uses`; `null` when uncut.
 
-**`spec card list --marks`** adds each row's mark over all its targets, core's `card_mark`, with `on`, `discrepancy`, `correction`. A gone target stands on no node, so `spec trace` says it in a note alone and a node's row reads clean; the list shows the mark, and the page takes it from there, Clear included. A cancelled card has none. An index that cannot be read is the read's error: exit 2, the daemon's 503, never a clean row. `spec card show C --marks` reads one card alike; `get_card` always asks it.
+**`spec card list --marks`** adds each row's mark over all its targets, core's `card_mark`, with `on`, `discrepancy`, `correction`. A gone target stands on no node, so `spec trace` says it in a note alone and a node's row reads clean; the list shows the mark, and the page takes it from there, Clear included. A cancelled card has none. An index that cannot be read is the read's error: exit 2, the daemon's 503, never a clean row. `spec card show C --marks` reads one card alike; `get_card` always asks it. Both add `upstream`, no mark changed (`card-upstream.md`).
 
 **`spec flow --trace`** joins each shown node's `rollup` and `counts` and never fails a flow (`spec-flow.md` "The read").
 

@@ -1120,7 +1120,8 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 }
 
 /// `GET …/cards/<id>`: `spec card show C --history --json`, uncut (no query
-/// name); no such card: the CLI's exit-1 document, a 404. A card's linked
+/// name), with `upstream` asked and `mark` not; no such card: the CLI's
+/// exit-1 document, a 404. A card's linked
 /// tasks are read in the daemon's repository; a hub reads none and serves
 /// their IDs without state (`docs/canon/card-tasks.md` "The rule").
 async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
@@ -1136,6 +1137,13 @@ async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
             id,
             history: true,
             marks: false,
+            // What changed above an open subtask, its `mark` still `null`
+            // (the panel's marks come from the list); a card with no parent,
+            // or a closed one, reads no index for it, so only an open
+            // subtask's read can be a 503
+            // (`docs/features/upstream-signal.md` "Acceptance criteria",
+            // US-12).
+            upstream: true,
             // The daemon never asks a card's context: `context: null`
             // (task spec `card-context` CC10).
             context: false,

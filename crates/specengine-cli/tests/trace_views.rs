@@ -1965,6 +1965,10 @@ fn ac09_list_marks_equals_the_traces_marks() {
         for key in MARK_KEYS {
             row[key] = Value::Null;
         }
+        // docs/features/upstream-signal.md US-8: `--marks` flags each row,
+        // `false` here (no card has a parent), `null` without it.
+        assert_eq!(row["upstream"], Value::Bool(false), "{row}");
+        row["upstream"] = Value::Null;
     }
     assert_eq!(quiet, plain, "the list but its marks");
 

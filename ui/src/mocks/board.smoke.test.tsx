@@ -530,9 +530,10 @@ describe("hand-offs and returns over the mock", () => {
     ]);
     expect((await shown("harbor-sim", "C-0002")).tasks).toEqual([]);
     expect((await shown("ledger-api", "C-0102")).tasks.map((task) => [task.id, task.status])).toEqual([["T-0033", "review"]]);
-    // The list's rows keep their keys, 22 since task-mandate's `mandate` (docs/features/task-mandate.md "Acceptance criteria", M1): no task on a tile.
+    // The list's rows keep their keys, 22 since task-mandate's `mandate` (docs/features/task-mandate.md "Acceptance criteria", M1),
+    // 23 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12): no task on a tile.
     const list = await client.getCards("harbor-sim", { marks: true });
-    expect(list.cards.every((row) => !("tasks" in row) && Object.keys(row).length === 22)).toBe(true);
+    expect(list.cards.every((row) => !("tasks" in row) && Object.keys(row).length === 23)).toBe(true);
   });
 
   it("the modal of a card with three links: its Tasks part shows each, the approval to copy on the one in review", async () => {

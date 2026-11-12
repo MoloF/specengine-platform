@@ -67,7 +67,7 @@ const NO_REVIEWER: &str =
     "mandate: a mandate goes with a reviewer, who alone changes it: name one with --reviewer";
 
 /// A `list` row's 22 keys, `mandate` after `reviewer` (set 91).
-const ROW_KEYS: [&str; 22] = [
+const ROW_KEYS: [&str; 23] = [
     "id",
     "flow",
     "column",
@@ -90,12 +90,14 @@ const ROW_KEYS: [&str; 22] = [
     "on",
     "discrepancy",
     "correction",
+    // docs/features/upstream-signal.md US-8: after `correction`.
+    "upstream",
 ];
 
 /// The card document's 35 keys, `mandate` after `reviewer`,
 /// `subtask_items` after `items` (set 92), `context` after `history`
 /// (docs/features/card-context.md CC2).
-const CARD_KEYS: [&str; 35] = [
+const CARD_KEYS: [&str; 36] = [
     "id",
     "flow",
     "column",
@@ -108,6 +110,8 @@ const CARD_KEYS: [&str; 35] = [
     "on",
     "discrepancy",
     "correction",
+    // docs/features/upstream-signal.md US-8: after `correction`.
+    "upstream",
     "snapshot",
     "criteria",
     "assignee",

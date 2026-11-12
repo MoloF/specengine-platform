@@ -1031,6 +1031,31 @@ describe("source policy", () => {
     }
   });
 
+  // US-13 of docs/features/upstream-signal.md "Acceptance criteria": what changed above a subtask is told
+  // apart in labels.ts alone. No other Board module compares a change's source or searches its fields
+  // (a kind and a mark are the rules above and AC-13's), and the part and the tile spell no word of the
+  // read: they draw what labels.ts says, an unknown word raw.
+  it("compares an upstream read's source, kind, field or mark word in labels.ts alone (US-13 of upstream-signal)", () => {
+    const board = (path: string) => path.startsWith("/src/board/") && !/\.test\.tsx?$/.test(path) && path !== "/src/board/labels.ts";
+    const compares = /\.source\b\s*[!=]==?|[!=]==?\s*[\w.?]*\.source\b|switch\s*\([^)]*\.source\b|\[[^\]]*\.source\s*\]|\.source\s*\?\s*[^?.:\s]|\.fields\.(includes|indexOf|some|every|find|filter)\(/;
+    expect(offending(compares, (path) => !board(path))).toEqual([]);
+    const words = /["'`](edit|item|goal|targets|criteria|question|discrepancy|decision|suspect|correcting)["'`]/;
+    const drawing = ["/src/board/CardUpstream.tsx", "/src/board/BoardCard.tsx"];
+    expect(Object.keys(sources)).toEqual(expect.arrayContaining(drawing));
+    expect(offending(words, (path) => !drawing.includes(path))).toEqual([]);
+    expect(sources["/src/board/CardUpstream.tsx"]).toMatch(/upstreamChangeLine\(change, t\)/);
+    // The detector itself: a branch on a source, a field searched, a word spelled are caught; the lookups are not.
+    for (const line of ['if (change.source === "edit") {', '"item" !== change.source && <p />', "switch (change.source) {", "const say = LINES[change.source];", "const words = change.source ? a : b;", 'const goal = change.fields.includes("goal");']) {
+      expect([line, compares.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ['const said = kind === "decision";', "const mark = upstream.mark === 'suspect';", "{fields.map((field) => field === `criteria`)}"]) {
+      expect([line, words.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["const line = upstreamChangeLine(change, t);", "<Fields fields={change.fields} />", "change.record !== null ? a : b", "const mark = upstreamMarkLine(upstream.mark, t);"]) {
+      expect([line, compares.test(line) || words.test(line)]).toEqual([line, false]);
+    }
+  });
+
   it("spells no column or flow the mock serves in the Board's code, and compares no bare column with a spelled word: a status category is the column's place, looked up (design-foundation)", () => {
     const mockBoard = mockCards["/src/mocks/cards.ts"]?.mockBoard;
     const scenarios = mockScenarios["/src/mocks/scenario.ts"]?.SCENARIOS ?? [];

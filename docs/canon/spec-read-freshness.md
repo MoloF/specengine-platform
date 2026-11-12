@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-12
 ---
 
 # Read freshness: the stat key, and a hub's trusted index
 
-ADR-0069, built by `read-trust` (`docs/features/read-trust.md`, RM-0054, step 12e); working answers of the orchestrator, the owner's review open. How a read's first step chooses what to read, and when a hub's read skips it. Files stay the truth, the index a rebuildable projection (ADR-0001, ADR-0003); nothing here blocks (ADR-0012). The subset read, T3 (one snapshot per read), T5 (every printed byte matches its row's BLAKE3): `spec-read-subset.md`. Code: store `write.rs`; CLI `freshness.rs`; http `answer.rs`; mcp `hub.rs`.
+ADR-0069, built by `read-trust` (`docs/features/read-trust.md`, RM-0054, step 12e). How a read's first step chooses what to read, and when a hub's read skips it. Files stay the truth, the index a rebuildable projection (ADR-0001, ADR-0003); nothing here blocks (ADR-0012). The subset read, T3 (one snapshot per read), T5 (every printed byte matches its row's BLAKE3): `spec-read-subset.md`. Code: store `write.rs`; CLI `freshness.rs`; http `answer.rs`; mcp `hub.rs`.
 
 ## The freshness step
 
@@ -55,14 +55,14 @@ The code index keys on content, never a stat (`symbol-index.md` "Cache key and c
 ## Routes and tools
 
 **Only reads trust.** A route or tool that writes or authorizes a write walks, so nothing is judged from an index that missed a hand edit; so does one not classified, and trace data wherever shown (the rollups and marks a card is accepted on).
-- **http** (`answer.rs`). `run_read` trusts: `tree`, `nodes`, `search`, `bundle`, `graph`, `flow` without `trace`, `check`, `health`, `lock-diff`, `roadmap`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`, `cards` (GET) without `marks`, `cards/<id>`; `run_as` lets `flow`, `cards` decide by the request. `run` walks the rest: `trace`, the round's sheet, the stage, the round's answers, card writes, the trace's clear, a confirm's read and write.
-- **MCP** (`hub.rs`). A call runs in the turn's `walking` scope; `reads_trust(name, arguments)` opts into `trusting` for `HUB_READ_TOOLS` (7): `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_proposal`, `list_cards` without `marks`, `get_roadmap`; resource lists and reads trust. `get_flow`, `get_trace`, `get_card`, queue and card writes, probes walk: `get_flow` even without `trace`, as its stdio text (2 045 of 2 048 B) has no room for a hub's tail.
+- **http** (`answer.rs`). `run_read` trusts: `tree`, `nodes`, `search`, `bundle`, `graph`, `flow` without `trace`, `check`, `health`, `lock-diff`, `roadmap`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`, `cards` (GET) without `marks`, `cards/<id>` (its `upstream` mark line may lag a hand edit on the host up to 300 s, which the walking `cards?marks=true` row already flags: `card-upstream.md`); `run_as` lets `flow`, `cards` decide by the request. `run` walks the rest: `trace`, the round's sheet, the stage, the round's answers, card writes, the trace's clear, a confirm's read and write.
+- **MCP** (`hub.rs`). A call runs in the turn's `walking` scope; `reads_trust(name, arguments)` opts into `trusting` for `HUB_READ_TOOLS` (7): `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_proposal`, `list_cards` without `marks`, `get_roadmap`; resource lists and reads trust. `get_flow`, `get_trace`, `get_card`, queue and card writes, probes walk: `get_flow` even without `trace`: its stdio text (2 045 of 2 048 B) has no room for a hub's tail.
 - **Texts**: `HUB_INSTRUCTIONS` and five trusting reads' tails say what a hub's read trusts (`hub-mcp.md` "Tools"); stdio's keep "refresh".
 
 ## Invariants and the window
 
 - **T1.** A trusted read equals the walking read, text, JSON and stderr, byte for byte, whenever a walk would change nothing. **T2.** It prints the last walk's warnings from `walk_notes`. **T4.** Any doubt means a walk: one mark per project, per process. T3, T5 hold in both modes.
-- **The window.** A subset read cannot see an edit made after its step to a file outside its subset (`spec-read-subset.md` "Known limits"); locally as short as the stat walk. On a hub every SpecEngine write is indexed before its turn ends, so only hand edits on the host remain: one in a printed file shows at once (T5), any other after a reconcile (at most 5 minutes of reads) or `docker compose exec specengine spec index --root /projects/<name>` (`scripts/deploy/README.md`). Writes and trace data see the disk.
+- **The window.** A subset read cannot see an edit made after its step to a file outside its subset (`spec-read-subset.md` "Known limits"); locally as short as the stat walk. On a hub every SpecEngine write is indexed before its turn ends, so only hand edits on the host remain: one in a printed file shows at once (T5), any other after a reconcile (≤ 300 s) or `docker compose exec specengine spec index --root /projects/<name>` (`scripts/deploy/README.md`). Writes and trace data see the disk.
 
 ## API
 
@@ -71,7 +71,7 @@ Store `StatKey`, `Source::stat`, `WalkNotes`, `SqliteIndex::trusted_notes(&IdSch
 ## Known limits
 
 - **A driver whose ctime does not move on a write** (some FUSE, FAT-family), with a same-size edit and mtime restored: missed until the key moves or `--full`.
-- **A network client's attribute cache** (NFS 3-60 s by default; SMB) lags another machine's write by its life; this machine's own show at once. No network file system is detected: `std` has no `statfs`, the store links no libc.
+- **A network client's attribute cache** (NFS 3-60 s by default; SMB) lags another machine's write by its life; this machine's own show at once. No network file system is detected (no `statfs` in `std`, no libc).
 - **A stale writer**, local and multi-process only: a row written from a parse older than another process's commit stands until an update reads that file, since a no-op update no longer re-checks it in an `Immediate` transaction. T5, Q7 still check printed files; a hub's writes take the turn.
 - **`roots_may_move` misses a missing root created holding only non-`.md` files:** trusted reads warn it missing until the next walk.
 - **Doubt does not cross processes:** a terminal's `spec approve` or `spec index` on a hub's host writes rows the daemon reads as written; a failure of theirs waits for the reconcile.

@@ -14,7 +14,10 @@
 //!   before targets.
 //! - CC2: plain `show` and `--json` are the build before's ([`GOLDEN`],
 //!   recorded from 3892f03's `spec` by `record_the_reads_before_card_context`)
-//!   plus `context: -` and `"context": null`; every `.md` unreadable and
+//!   plus `context: -` and `"context": null` (and, since
+//!   docs/features/upstream-signal.md US-8, `upstream: -` after
+//!   `correction:` and `"upstream": null` after `"correction"`: C-0001 has
+//!   no parent; the golden stays as recorded); every `.md` unreadable and
 //!   `.git` aside, `show` exits 0 with no stderr and `--context` with one
 //!   note. M: the context always built.
 //! - CC3: the bundle is fitted into the room the card's lines leave; a card
@@ -740,6 +743,13 @@ fn cc2_not_asked_is_the_read_before_plus_context_null() {
         }
         if before.args[0] == "--json" {
             let mut want = keys(&before.stdout);
+            // docs/features/upstream-signal.md US-8: `upstream` right after
+            // `correction`, `null` on a card with no parent.
+            let correction = want
+                .iter()
+                .position(|key| key == "correction")
+                .expect("correction");
+            want.insert(correction + 1, "upstream".to_owned());
             let at = want
                 .iter()
                 .position(|key| key == "history")
@@ -753,17 +763,25 @@ fn cc2_not_asked_is_the_read_before_plus_context_null() {
             );
             let mut document: Value = serde_json::from_str(&after.stdout).expect("JSON");
             assert_eq!(document["context"], Value::Null, "{context}");
-            document
-                .as_object_mut()
-                .expect("an object")
-                .remove("context");
+            assert_eq!(document["upstream"], Value::Null, "{context}");
+            for key in ["context", "upstream"] {
+                document.as_object_mut().expect("an object").remove(key);
+            }
             let was: Value = serde_json::from_str(&before.stdout).expect("JSON");
             assert_eq!(document, was, "{context}: every other key equal");
         } else {
+            // docs/features/upstream-signal.md US-8: `upstream: -` right
+            // after the `correction:` line.
+            let mut lines: Vec<&str> = before.stdout.lines().collect();
+            let correction = lines
+                .iter()
+                .position(|line| line.starts_with("correction: "))
+                .expect("a correction line");
+            lines.insert(correction + 1, "upstream: -");
             assert_eq!(
                 after.stdout,
-                format!("{}context: -\n", before.stdout),
-                "{context}: the last line `context: -`"
+                format!("{}\ncontext: -\n", lines.join("\n")),
+                "{context}: `upstream: -` after `correction:`, the last line `context: -`"
             );
         }
     }

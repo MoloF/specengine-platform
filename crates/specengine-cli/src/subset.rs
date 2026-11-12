@@ -627,6 +627,11 @@ pub(crate) mod seams {
         StoreRead(&'e str),
         /// A `Listed::stat`.
         Stat,
+        /// An upstream read's `events_of_types` (task spec `upstream-signal`
+        /// US-9).
+        UpstreamEvents,
+        /// An upstream read's applied items (US-9).
+        UpstreamItems,
     }
 
     /// Where the stage hook is called.
@@ -667,6 +672,10 @@ pub(crate) mod seams {
         pub store_reads: Vec<String>,
         /// `Listed::stat` calls.
         pub stats: usize,
+        /// Upstream `events_of_types` calls.
+        pub upstream_events: usize,
+        /// Upstream applied-item reads.
+        pub upstream_items: usize,
     }
 
     /// The stage hook, if any.
@@ -754,6 +763,8 @@ pub(crate) mod seams {
             Event::Parse(path) => counts.parses.push(path.to_owned()),
             Event::StoreRead(path) => counts.store_reads.push(path.to_owned()),
             Event::Stat => counts.stats += 1,
+            Event::UpstreamEvents => counts.upstream_events += 1,
+            Event::UpstreamItems => counts.upstream_items += 1,
         });
     }
 

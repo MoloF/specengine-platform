@@ -700,6 +700,22 @@ export const en = {
       ask: "Ask about it…",
       about: "About {{id}}: ",
     },
+    // What changed above an open subtask (the tile's badge in BoardCard.tsx, the part in CardUpstream.tsx;
+    // docs/features/upstream-signal.md "Acceptance criteria", US-13): its parent's goal, criteria or source
+    // edited, an item applied on their documents, the parent's own mark. News, never a hold on work.
+    upstream: {
+      label: "Changed above",
+      mark: "The parent's document changed at {{on}}.",
+      markCorrecting: "The parent's document changed at {{on}}; {{correction}} is putting it right.",
+      edited: "The parent's {{fields}} changed",
+      field: { goal: "goal", targets: "source", criteria: "criteria" },
+      question: "Question {{id}} answered on {{nodes}}",
+      discrepancy: "Discrepancy {{id}} settled on {{nodes}}",
+      decision: "Decision {{id}} applied on {{nodes}}",
+      by: "by {{name}}",
+      more_one: "{{count}} earlier change not listed",
+      more_other: "{{count}} earlier changes not listed",
+    },
     // A parent's hand-offs: each child's word, and the counts on its tile (labels.ts, BoardCard.tsx).
     rollup: {
       handedOff: "Handed off",

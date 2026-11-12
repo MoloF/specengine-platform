@@ -312,6 +312,15 @@
 //! daemon's view uncut); `ShownNode` (75) gains `history` after
 //! `bindings` (21 keys, `null` on the plain reads). M: `history` out of
 //! the fixture.
+//!
+//! docs/features/upstream-signal.md (RM-0105) "Acceptance criteria", US-12:
+//! two sets more, 126 in all, last: `CardUpstream` (`parent, mark, on,
+//! correction, changes, more`, 125) and `CardUpstreamChange` (the nine keys
+//! in "JSON"'s order, 126), from `GET .../cards/C-0005` of the same copy of
+//! `fixtures/card-press` once its split parent `C-0004`'s goal is edited
+//! through its route; `CardRow` (91) gains `upstream` after `correction`
+//! (23 keys, `null` without `marks`, a flag with it), `Card` (92)
+//! `upstream` after `correction` (36). M: `upstream` out of the fixture.
 
 mod common;
 mod task_state;
@@ -1203,6 +1212,23 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .text()
             .to_owned(),
     ];
+    // docs/features/upstream-signal.md US-12, sets 125 and 126: the split
+    // parent `C-0004`'s goal edited through its route, then its child
+    // `C-0005`'s read: what changed above it, the one edit.
+    server
+        .stage(
+            &format!("{cards}/C-0004/edit"),
+            &serde_json::json!({"goal": "Every plate of the run checked.", "as": "desk"})
+                .to_string(),
+        )
+        .status(200);
+    let upstream_shows = vec![
+        server
+            .get(&format!("{cards}/C-0005"))
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -1440,6 +1466,13 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let split_children = items(&splits, "children");
     assert_eq!(split_children.len(), 5, "two, two, one: {splits:?}");
     let subtask_items = items(&subtask_shows, "subtask_items");
+    let card_upstreams = objects(&upstream_shows, "upstream");
+    let upstream_changes = items(&card_upstreams, "changes");
+    assert_eq!(
+        upstream_changes.len(),
+        1,
+        "C-0004's goal edit above C-0005: {upstream_shows:?}"
+    );
     assert_eq!(
         subtask_items.len(),
         1,
@@ -2006,6 +2039,15 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "HistoryEntry",
             one_key_set("HistoryEntry", &history_entries, keys_of),
         ),
+        // docs/features/upstream-signal.md US-12, sets 125 and 126.
+        (
+            "CardUpstream",
+            one_key_set("CardUpstream", &card_upstreams, keys_of),
+        ),
+        (
+            "CardUpstreamChange",
+            one_key_set("CardUpstreamChange", &upstream_changes, keys_of),
+        ),
     ]
 }
 
@@ -2336,14 +2378,14 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        124,
+        126,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
          board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108; \
          hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114; \
          flow-scenario: 115; card-questions: 118; department-split: 121; task-mandate: 122; \
-         node-history: 124)"
+         node-history: 124; upstream-signal: 126)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2860,6 +2902,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "on",
                 "discrepancy",
                 "correction",
+                // docs/features/upstream-signal.md US-12: after `correction`.
+                "upstream",
             ],
         ),
         (
@@ -2877,6 +2921,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "on",
                 "discrepancy",
                 "correction",
+                // docs/features/upstream-signal.md US-12: after `correction`.
+                "upstream",
                 "snapshot",
                 "criteria",
                 "assignee",
@@ -3131,10 +3177,32 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "rationale",
         ]
     );
+    // docs/features/upstream-signal.md US-12: sets 125 and 126, last: the
+    // spec's keys in its order. M: `upstream` out of the fixture.
+    assert_eq!(sets[124].0, "CardUpstream");
+    assert_eq!(
+        sets[124].1,
+        ["parent", "mark", "on", "correction", "changes", "more"]
+    );
+    assert_eq!(sets[125].0, "CardUpstreamChange");
+    assert_eq!(
+        sets[125].1,
+        [
+            "seq", "at", "source", "by", "fields", "item", "kind", "record", "on"
+        ]
+    );
     assert_eq!(sets[91].0, "Card");
     // docs/features/card-context.md CC10: 35, `context` right after
-    // `history`. M: `context` out of the fixture.
-    assert_eq!(sets[91].1.len(), 35);
+    // `history`; docs/features/upstream-signal.md US-12: 36, `upstream`
+    // right after `correction`. M: `context` out of the fixture.
+    assert_eq!(sets[91].1.len(), 36);
+    let correction = sets[91].1.iter().position(|key| key == "correction");
+    assert_eq!(
+        sets[91].1[correction.expect("correction") + 1],
+        "upstream",
+        "{:?}",
+        sets[91].1
+    );
     let history = sets[91].1.iter().position(|key| key == "history");
     assert_eq!(
         sets[91].1[history.expect("history") + 1],
@@ -3157,7 +3225,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         sets[91].1
     );
     assert_eq!(sets[90].0, "CardRow");
-    assert_eq!(sets[90].1.len(), 22);
+    // docs/features/upstream-signal.md US-12: 23, `upstream` last, right
+    // after `correction`.
+    assert_eq!(sets[90].1.len(), 23);
+    assert_eq!(sets[90].1[21..], ["correction", "upstream"]);
     let reviewer = sets[90].1.iter().position(|key| key == "reviewer");
     assert_eq!(sets[90].1[reviewer.expect("reviewer") + 1], "mandate");
     let path = repository_root().join("fixtures").join("daemon-keys.json");
@@ -3180,7 +3251,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 124 sets (41 until
+/// unchanged, no new key): the fixture holds 126 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3205,7 +3276,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/card-questions.md its three, and
 /// docs/features/department-split.md its three, and
 /// docs/features/task-mandate.md its `CardSubtaskItem`, and
-/// docs/features/node-history.md its two, NH12); a decision
+/// docs/features/node-history.md its two, NH12, and
+/// docs/features/upstream-signal.md its two, US-12); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -3219,8 +3291,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        124,
-        "124 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        126,
+        "126 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3230,7 +3302,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
-         task-mandate's `CardSubtaskItem` and node-history's two (NH12)"
+         task-mandate's `CardSubtaskItem`, node-history's two (NH12) and \
+         upstream-signal's two (US-12)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -3345,7 +3418,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 124 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 126 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3368,7 +3441,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/card-questions.md its three, and
 /// docs/features/department-split.md its three, and
 /// docs/features/task-mandate.md its `CardSubtaskItem`, and
-/// docs/features/node-history.md its two, NH12); the amendment of
+/// docs/features/node-history.md its two, NH12, and
+/// docs/features/upstream-signal.md its two, US-12); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -3385,8 +3459,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        124,
-        "124 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        126,
+        "126 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3396,7 +3470,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
-         task-mandate's `CardSubtaskItem` and node-history's two (NH12)"
+         task-mandate's `CardSubtaskItem`, node-history's two (NH12) and \
+         upstream-signal's two (US-12)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

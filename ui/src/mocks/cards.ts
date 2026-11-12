@@ -22,6 +22,7 @@ import type {
   CardSplitBody,
   CardSplitChild,
   CardSplitParent,
+  CardUpstream,
   CardWrite,
   IntakeDocument,
   IntakeMatch,
@@ -32,6 +33,7 @@ import type {
 import { proposal, stamp, type MockProposal, type StoredReview } from "./build";
 import type { Scenario } from "./scenario";
 import { linkedTaskOf, type MockTasks } from "./tasks";
+import { HARBOR_FLAGGED, harborUpstream } from "./upstream";
 
 // The mock's cards (`docs/canon/cards.md`), in memory until a reload: two invented boards and the
 // daemon's rules in its words, so the Board's refusals can be seen without one. harbor-sim prints an
@@ -69,7 +71,7 @@ import { linkedTaskOf, type MockTasks } from "./tasks";
 // departure from a binding brief; C-0001 reads both in its `subtask_items`, by ID.
 
 /** A stored card: the document less what a read adds, its links as the task IDs the row keeps. */
-export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "items" | "subtask_items" | "allowed" | "history" | "context" | "notes"> & { tasks: string[] };
+export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "upstream" | "tasks" | "items" | "subtask_items" | "allowed" | "history" | "context" | "notes"> & { tasks: string[] };
 
 interface MockEvent extends CardEvent {
   id: string;
@@ -87,6 +89,10 @@ export interface MockBoard {
   gone: ReadonlySet<string>;
   /** The project's split templates, `[[card.split]]` as its config writes them (docs/canon/card-split.md "The rule"). */
   splits: readonly MockSplit[];
+  /** Each open subtask's read of what changed above it, by card ID (src/mocks/upstream.ts). */
+  upstream: ReadonlyMap<string, CardUpstream>;
+  /** The rows a list with marks flags as changed above. */
+  flagged: ReadonlySet<string>;
 }
 
 /** One `[[card.split]]` row: a node kind and the disciplines its work usually needs. */
@@ -632,6 +638,8 @@ export function mockBoard(slug: string, scenario: Scenario, at: number): MockBoa
     changed,
     gone: new Set(harbor ? [GONE_TARGET] : []),
     splits: harbor ? HARBOR_SPLITS : [],
+    upstream: harbor && scenario !== "empty" ? harborUpstream(at) : new Map(),
+    flagged: harbor && scenario !== "empty" ? HARBOR_FLAGGED : new Set(),
   });
   if (scenario === "empty") {
     return board([], [], new Map());
@@ -675,16 +683,21 @@ function allowedOf(board: MockBoard, card: StoredCard) {
 }
 
 function rowOf({ id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, acceptance, cancellation }: StoredCard): CardRow {
-  return { id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted: acceptance !== null, cancelled: cancellation !== null, mark: null, on: null, discrepancy: null, correction: null };
+  return { id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted: acceptance !== null, cancelled: cancellation !== null, mark: null, on: null, discrepancy: null, correction: null, upstream: null };
 }
 
-/** A row with its mark over all its targets; a cancelled card, which a read ignores, has none. */
+/** What changed above a card, as its read serves it: none on a closed card (docs/features/upstream-signal.md "Acceptance criteria", US-13). */
+function upstreamOf(board: MockBoard, card: StoredCard): CardUpstream | null {
+  return closed(card) ? null : (board.upstream.get(card.id) ?? null);
+}
+
+/** A row with its mark over all its targets and its upstream flag; a cancelled card, which a read ignores, has no mark and no flag. */
 function markedRow(board: MockBoard, card: StoredCard, settled: Settled): CardRow {
   if (card.cancellation !== null) {
-    return rowOf(card);
+    return { ...rowOf(card), upstream: false };
   }
   const { mark, on, discrepancy, correction } = markOver(board, card, card.targets, settled);
-  return { ...rowOf(card), mark, on, discrepancy, correction };
+  return { ...rowOf(card), mark, on, discrepancy, correction, upstream: !closed(card) && board.flagged.has(card.id) };
 }
 
 /** A card's place in the list: flow, column by config, cancelled last, position. */
@@ -754,7 +767,8 @@ function idNumber(id: string): number {
 
 /**
  * `spec card show C --history --json`, uncut, as `GET cards/:id` serves it: no `--marks`, so its four
- * keys null; each linked task read now from `tasks`, its notes after the card's own, in link order;
+ * keys null, `upstream` asked all the same (docs/features/upstream-signal.md "Acceptance criteria",
+ * US-12); each linked task read now from `tasks`, its notes after the card's own, in link order;
  * its items, the queue's rows naming it, by ID number, and their `proposal.*` events beside its own
  * `card.*` ones, by `seq`; an unknown C its exit-1 document.
  */
@@ -784,6 +798,7 @@ export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks, propo
     on: null,
     discrepancy: null,
     correction: null,
+    upstream: upstreamOf(board, card),
     tasks: linked.map(({ task }) => task),
     items,
     subtask_items: subtaskItems,

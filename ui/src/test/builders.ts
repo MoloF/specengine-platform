@@ -922,6 +922,8 @@ export function aCardRow(fields: Partial<CardRow> & { id: string }): CardRow {
     on: null,
     discrepancy: null,
     correction: null,
+    // A read with marks, as the Board asks: an open row with nothing above it (docs/features/upstream-signal.md "Acceptance criteria", US-12).
+    upstream: false,
     ...fields,
   };
 }
@@ -945,6 +947,7 @@ export function aCard(fields: Partial<Card> & { id: string }): Card {
     on: null,
     discrepancy: null,
     correction: null,
+    upstream: null,
     snapshot: null,
     criteria: [],
     assignee: null,

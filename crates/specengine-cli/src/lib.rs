@@ -293,6 +293,9 @@ mod tested;
 mod trace;
 mod tree;
 mod unmapped;
+mod upstream;
+#[cfg(test)]
+mod upstream_tests;
 mod verify;
 mod verify_node;
 mod verify_rows;
@@ -440,6 +443,9 @@ pub use specengine_core::card_split::{MAX_SPLIT_CHILDREN, TargetsFrom};
 /// The entries one node's history lists at most (core's `HISTORY_MAX`,
 /// task spec `node-history`): MCP's description states it.
 pub use specengine_core::history::HISTORY_MAX as NODE_HISTORY_MAX;
+/// What changed above an open subtask (core's, task spec `upstream-signal`):
+/// a card read's `upstream`, its changes and their cap.
+pub use specengine_core::upstream::{UPSTREAM_MAX, Upstream, UpstreamChange, UpstreamSource};
 
 /// `spec card split`'s plan-only flag, without its dashes: one spelling for
 /// the parser and the usage line that names it.

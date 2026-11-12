@@ -149,6 +149,11 @@ function cardsOf(project: string) {
   return ["card", project] as const;
 }
 
+/** Whether a cached card read is a card whose parent is `id`. */
+function namesParent(data: unknown, id: string): boolean {
+  return typeof data === "object" && data !== null && "parent" in data && data.parent === id;
+}
+
 /** Every trace read of a project, whatever its REF. */
 export function tracesOf(project: string) {
   return ["trace", project] as const;
@@ -458,7 +463,8 @@ const CARD_EVENT = "card.";
  * links as read now, `docs/canon/card-tasks.md` "The rule"), never the card list, which shows no
  * task; so does every `proposal.*` event, since a card serves the items naming it and their events
  * read now (`docs/canon/card-questions.md` "The rule"), an apply moving a linked task's staleness too. A `card.*`
- * event reads that project's card lists, that card (no string `id`: every card of it) and
+ * event reads that project's card lists, that card (no string `id`: every card of it), each card read
+ * naming it as `parent` (what changed above a subtask: docs/features/upstream-signal.md "Acceptance criteria", US-13) and
  * its trace again, never anything else and with no outside-change alert: a card is no decision
  * (`docs/features/board-ui.md` "Rules and edge cases"); it reads the project's flows too, whose boxes
  * carry their rollups (`docs/features/trace-views.md` "Timeline"). A rejected discrepancy settles a
@@ -553,6 +559,8 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
             void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
           } else {
             void queryClient.invalidateQueries({ queryKey: queryKeys.card(project, id), exact: true });
+            // A subtask's read serves what changed above it: its parent's write is news to it.
+            void queryClient.invalidateQueries({ queryKey: cardsOf(project), predicate: (query) => namesParent(query.state.data, id) });
           }
           readMarksAgain();
           return;

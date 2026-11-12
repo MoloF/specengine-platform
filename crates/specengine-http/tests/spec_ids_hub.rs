@@ -878,7 +878,8 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
 /// the tool `split_card`) 0.37.0; since task-mandate (RM-0104, P1: the
 /// mandate's keys) 0.38.0; since card-context (RM-0108, CC8: `get_card`'s
 /// `context`) 0.39.0; since node-history (RM-0035, NH11: `get_node`'s
-/// `history`) 0.40.0.
+/// `history`) 0.40.0; since upstream-signal (RM-0105, US-11: `get_card`'s
+/// and `list_cards`' `upstream`) 0.41.0.
 #[test]
 fn ac8d_the_release_tag_is_the_plugin_version() {
     let scratch = common::Scratch::new("si-tag");
@@ -890,7 +891,7 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
     ];
     let output = alarmed(
         Path::new("/bin/sh"),
-        &[script.as_os_str(), OsStr::new("v0.40.0")],
+        &[script.as_os_str(), OsStr::new("v0.41.0")],
         &env,
     )
     .current_dir(&elsewhere)
@@ -902,13 +903,13 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.40.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.41.0\n");
     let example = read_text(&repository_root(), "scripts/deploy/.env.example");
     assert_eq!(
         example
             .lines()
             .filter(|line| line.starts_with("SPECENGINE_VERSION="))
             .collect::<Vec<_>>(),
-        ["SPECENGINE_VERSION=0.40.0"]
+        ["SPECENGINE_VERSION=0.41.0"]
     );
 }

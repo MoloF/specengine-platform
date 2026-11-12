@@ -80,7 +80,11 @@
 //! `why`: each the CLI library's, the text before notes and tail within
 //! 40 000 characters, text plus JSON within `MAX_RESULT_CHARS`; the maximum
 //! pinned ([`CARD_CONTEXT_MAXIMUM`]) and printed for "Implementation"
-//! (`card_context_stays_under_the_declared_cap`).
+//! (`card_context_stays_under_the_declared_cap`). docs/features/upstream-signal.md
+//! US-10, the size: CC3 (a)'s card is a subtask of CC3 (b)'s parent, whose
+//! goal, targets and criteria are then edited twenty times as a 128-byte
+//! name (`CARD_PERSON_MAX`), so its `upstream` lists 16 changes, `more` 4;
+//! the maximum re-pinned, within 500 000.
 //!
 //! docs/features/node-history.md NH14, the size: `get_node {id: "R-12",
 //! with: ["links", "bindings", "history"]}` on NH10's two nodes (64 apply
@@ -935,8 +939,11 @@ fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
 
 /// docs/features/card-context.md CC11: the largest `get_card {context:
 /// true, history: true}` answer measured, text plus `structuredContent`, in
-/// characters (UTF-16 units alike: the corpus is ASCII).
-const CARD_CONTEXT_MAXIMUM: usize = 424_208;
+/// characters (UTF-16 units alike: the corpus is ASCII). 424 208 until
+/// docs/features/upstream-signal.md US-10 made CC3 (a)'s card a subtask
+/// whose `upstream` lists 16 edits by a 128-byte name (and its context
+/// the parent's 4 096-byte goal).
+const CARD_CONTEXT_MAXIMUM: usize = 432_982;
 
 /// The clock of every write of the card scenes.
 const CARD_CLOCK: &str = "2026-11-12T09:00:00Z";
@@ -1094,13 +1101,15 @@ fn card_context_stays_under_the_declared_cap() {
         .iter()
         .map(|id| (*id).to_owned())
         .collect();
+    // docs/features/upstream-signal.md US-10: the long watch is a subtask of
+    // the lamp room, so what changes above it is listed.
     let watch = card_at(
         &env,
         "The long watch",
         "Every keeper reads the three watches.",
         &long,
         long_criteria(25, 1000),
-        None,
+        Some(&parent),
     );
     for n in 0..64 {
         let mut request = specengine_cli::DecisionRequest {
@@ -1141,6 +1150,43 @@ fn card_context_stays_under_the_declared_cap() {
         };
         assert!(done.document.created, "decision {n}: {done:?}");
     }
+    // docs/features/upstream-signal.md US-10: twenty edits of the parent's
+    // goal, targets and criteria as the longest name a card takes (128
+    // bytes): both subtasks list the newest 16, `more` 4.
+    let editor = format!("Keeper {}", "w".repeat(121));
+    assert_eq!(editor.len(), 128);
+    for n in 0..20 {
+        let goal = if n % 2 == 0 { "h" } else { "g" };
+        let edited = specengine_cli::card_edit(
+            &env,
+            &Globals::default(),
+            &specengine_cli::CardEditRequest {
+                id: parent.clone(),
+                title: None,
+                goal: Some(goal.repeat(4096)),
+                targets: if n % 2 == 0 {
+                    vec!["MEC-SPRINT".to_owned(), "MEC-LONG-A".to_owned()]
+                } else {
+                    vec!["MEC-SPRINT".to_owned()]
+                },
+                criteria: vec![format!("The lamp is lit by watch {n}.")],
+                estimate: None,
+                due: None,
+                parent: None,
+                corrects: None,
+                evidence: Vec::new(),
+                tasks: Vec::new(),
+                mandate: None,
+                reason: None,
+                revision: None,
+                actor: Some(editor.clone()),
+                now: CARD_CLOCK.to_owned(),
+                tasks_here: true,
+            },
+        )
+        .unwrap_or_else(|error| panic!("edit {n}: {error}"));
+        assert!(edited.id.is_some(), "edit {n}: {edited:?}");
+    }
     let largest = measure(
         "card-context CC11",
         &root,
@@ -1158,6 +1204,38 @@ fn card_context_stays_under_the_declared_cap() {
     );
     eprintln!("card-context CC11 get_card maximum: {largest}");
     assert!(largest as u64 <= MAX_RESULT_CHARS);
+    // docs/features/upstream-signal.md US-10: within 500 000, each card's
+    // `upstream` the 16 newest of the twenty edits, `more` 4.
+    assert!(largest <= 500_000, "{largest}");
+    for id in [&subtask, &watch] {
+        let shown = specengine_cli::card_show(
+            &env,
+            &Globals::default(),
+            &specengine_cli::CardShowRequest {
+                id: id.clone(),
+                history: false,
+                marks: true,
+                upstream: true,
+                context: false,
+                budget: None,
+                git: git.clone(),
+                tasks_here: true,
+            },
+        )
+        .expect("card show");
+        let upstream = shown
+            .upstream
+            .unwrap_or_else(|| panic!("{id}: an upstream"));
+        assert_eq!((upstream.changes.len(), upstream.more), (16, 4), "{id}");
+        assert!(
+            upstream
+                .changes
+                .iter()
+                .all(|change| change.by.as_deref() == Some(editor.as_str())
+                    && change.fields == ["goal", "targets", "criteria"]),
+            "{id}: {upstream:?}"
+        );
+    }
     assert_eq!(
         largest, CARD_CONTEXT_MAXIMUM,
         "the pinned maximum (\"Implementation\")"

@@ -176,6 +176,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/ui-tasks.md](features/ui-tasks.md) shipped
 - [docs/features/ui-tree-drift.md](features/ui-tree-drift.md) shipped
 - [docs/features/ui-tree-node.md](features/ui-tree-node.md) shipped
+- [docs/features/upstream-signal.md](features/upstream-signal.md) shipped
 - [docs/features/verify-node.md](features/verify-node.md) shipped
 - [docs/features/verify-task.md](features/verify-task.md) shipped
 - [docs/features/verify-tests.md](features/verify-tests.md) shipped
@@ -245,5 +246,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0101.md](roadmap/RM-0101.md) shipped
 - [docs/roadmap/RM-0103.md](roadmap/RM-0103.md) shipped
 - [docs/roadmap/RM-0104.md](roadmap/RM-0104.md) shipped
+- [docs/roadmap/RM-0105.md](roadmap/RM-0105.md) shipped
 - [docs/roadmap/RM-0108.md](roadmap/RM-0108.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

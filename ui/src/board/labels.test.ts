@@ -135,3 +135,47 @@ describe("a task's mandate (V1, V2 of task-mandate)", () => {
     expect([board.isDecision({ kind: "decision" }), board.isDecision({ kind: "question" }), board.isDecision({ kind: "discrepancy" })]).toEqual([true, false, false]);
   });
 });
+
+describe("what changed above a subtask (US-13 of upstream-signal)", () => {
+  /** A slot as fill.ts writes it into a sentence. */
+  const at = (name: string) => `\u0000${name}\u0000`;
+
+  it("badges a flagged row as information, its own tone and icon, its label from the catalog in both languages", () => {
+    expect(board.upstreamLook(enT)).toEqual({ label: "Changed above", tone: "card-upstream", icon: "cardUpstream" });
+    expect(board.upstreamLook(ruT).label).toBe(ru.board.upstream.label);
+  });
+
+  it("words the parent's two marks with their slots, none for null, an unknown word raw and served", () => {
+    expect(board.upstreamMarkLine("suspect", enT)).toEqual({ text: `The parent's document changed at ${at("on")}.`, served: false });
+    expect(board.upstreamMarkLine("correcting", enT)).toEqual({ text: `The parent's document changed at ${at("on")}; ${at("correction")} is putting it right.`, served: false });
+    expect(board.upstreamMarkLine(null, enT)).toBeNull();
+    expect(board.upstreamMarkLine("departed", enT)).toEqual({ text: "departed", served: true });
+    expect(board.upstreamMarkLine("suspect", ruT)?.text).toBe(ru.board.upstream.mark.replace("{{on}}", at("on")));
+  });
+
+  it("words the three fields, an unknown one raw and served", () => {
+    expect(["goal", "targets", "criteria", "title"].map((field) => board.upstreamFieldWords(field, enT))).toEqual([
+      { text: "goal", served: false },
+      { text: "source", served: false },
+      { text: "criteria", served: false },
+      { text: "title", served: true },
+    ]);
+    expect(board.upstreamFieldWords("targets", ruT).text).toBe(ru.board.upstream.field.targets);
+  });
+
+  it("words an edit and the three kinds of item with their slots; an unknown source, an unknown kind or none raw and served", () => {
+    const line = (source: string, kind: string | null) => board.upstreamChangeLine({ source, kind }, enT);
+    expect(line("edit", null)).toEqual({ text: `The parent's ${at("fields")} changed`, served: false });
+    expect([line("item", "question").text, line("item", "discrepancy").text, line("item", "decision").text]).toEqual([
+      `Question ${at("id")} answered on ${at("nodes")}`,
+      `Discrepancy ${at("id")} settled on ${at("nodes")}`,
+      `Decision ${at("id")} applied on ${at("nodes")}`,
+    ]);
+    expect([line("item", "amendment"), line("item", null), line("rename", "decision")]).toEqual([
+      { text: "amendment", served: true },
+      { text: "item", served: true },
+      { text: "rename", served: true },
+    ]);
+    expect(board.upstreamChangeLine({ source: "item", kind: "decision" }, ruT).text).toBe(ru.board.upstream.decision.replace("{{id}}", at("id")).replace("{{nodes}}", at("nodes")));
+  });
+});
