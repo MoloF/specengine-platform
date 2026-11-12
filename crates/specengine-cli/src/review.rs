@@ -32,11 +32,16 @@
 //! (`refused`, `to` then `null`, and a note `meaning approve not
 //! applicable (step 6): <refused>`: the preview stays, the text an
 //! editorial approve writes); `null` for any other kind or preview (an
-//! unreadable current revision makes it `unavailable`).
+//! unreadable current revision makes it `unavailable`). A two-target
+//! `contradicts` discrepancy gets its `pair` (task spec `collision-pairs`
+//! PP1): its targets resolved now in the current root, as `spec round`
+//! resolves them; `null` on every other item, nothing resolved for it.
 
+use specengine_core::pair::Pair;
 use specengine_core::raise::RevisionRow;
 use specengine_store::{GitEnv, KindFamily, Proposal, ProposalStatus, Stage};
 
+use crate::corpus::indexed;
 use crate::create::prepare_file;
 use crate::interpret::{canon_note, recorded_canon_note};
 use crate::preflight::{RecordedCorpus, StepRead, completing, prepare_spanned, trailer_lookup};
@@ -45,6 +50,7 @@ use crate::proposals::{
     escaped_error, find, no_proposal, open_context, with_diff, written_id,
 };
 use crate::revisions::{lock_for_review, rows};
+use crate::round::{pair_of, pair_served, target};
 use crate::{CliError, Env, Globals, Message, one_line};
 
 /// `spec review` options.
@@ -127,7 +133,41 @@ fn run_review(
     .flatten();
     let mut document = document_with(&request.git, &context, &proposal, run);
     document.notes.extend(note);
+    document.pair = review_pair(env, &context, &proposal, &mut messages, &mut document.notes);
     Ok(ProposalOutcome::done(COMMAND, document, messages))
+}
+
+/// The review's `pair` (task spec `collision-pairs` PP1 to PP4, PP6): for a
+/// two-target `contradicts` discrepancy alone, its two stored targets
+/// resolved now by `spec round`'s resolver over the current root's index,
+/// refreshed as every read refreshes it, so a retitle shows on the next
+/// review and nothing is stored; no index read and no target resolved for
+/// any other item. An index that cannot be read leaves it `null`, a note
+/// saying why: a pair unknown is never served as a gone side.
+fn review_pair(
+    env: &Env,
+    context: &QueueContext,
+    proposal: &Proposal,
+    messages: &mut Vec<Message>,
+    notes: &mut Vec<String>,
+) -> Option<Pair> {
+    if !pair_served(proposal) {
+        return None;
+    }
+    let stored = proposal.target_ids();
+    let [left, right] = stored.as_slice() else {
+        return None;
+    };
+    let input = match indexed(env, &context.project, messages, false) {
+        Ok(input) => input,
+        Err(error) => {
+            notes.push(one_line(&format!("pair unknown: {}", error.message)));
+            return None;
+        }
+    };
+    let left = target(&context.project, &input, proposal, left);
+    let right = target(&context.project, &input, proposal, right);
+    Some(pair_of(proposal, &left, &right))
 }
 
 /// An update by its row's shape, never by a list of kinds: it applies to

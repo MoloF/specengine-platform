@@ -8,16 +8,27 @@ import { isSectionId } from "../app/sections";
 // (`ui/README.md` "Screen rules", which lists the storage keys). Every name is the served document's: a stored one is
 // looked up among the served names, never compared with a word of the UI's (W5). Every storage
 // access may throw (a private window, a sandboxed frame, a policy): then the choice holds in the
-// shell's state until a reload, as the tree's Show drift does (`src/tree/drift.ts`).
+// shell's state until a reload, as the tree's Show drift does (`src/tree/drift.ts`). On a hub the
+// choice is the login's (docs/features/hub-department.md "Acceptance criteria", HD3): both keys end in
+// it, so two logins in one browser keep their own, and the browser-wide keys of a local daemon stay
+// unread there. With no stored choice the document's `default`, the asking login's department, is
+// chosen; a stored one wins over it, so a default never reads as an assignment.
 
-/** Where the chosen workspace's name is kept for a project. */
-export function workspaceKey(project: string): string {
-  return `specengine.workspace.${project}`;
+/**
+ * Whose choice it is: a hub's login, null on a local daemon, as the identity read answered;
+ * undefined when that read failed, and then no key is read or written: a choice holds in the shell's
+ * state until a reload, as one the browser refuses to store.
+ */
+export type ChoiceLogin = string | null | undefined;
+
+/** Where the chosen workspace's name is kept for a project: per login on a hub, browser-wide locally (`login` null). */
+export function workspaceKey(project: string, login: string | null): string {
+  return login === null ? `specengine.workspace.${project}` : `specengine.workspace.${project}.${login}`;
 }
 
-/** Where the chosen module's name is kept for a project; `""` stands for All modules. */
-export function moduleKey(project: string): string {
-  return `specengine.module.${project}`;
+/** Where the chosen module's name is kept for a project, as the workspace's; `""` stands for All modules. */
+export function moduleKey(project: string, login: string | null): string {
+  return login === null ? `specengine.module.${project}` : `specengine.module.${project}.${login}`;
 }
 
 /** The stored value of All modules. */
@@ -60,18 +71,35 @@ function keep(key: string, value: string | null): boolean {
   }
 }
 
-/** The workspace a stored name gives: that one while the document serves it, else the first; null with none served. */
-export function workspaceOf(document: WorkspaceDocument, stored: string | null): Workspace | null {
-  return document.workspaces.find((workspace) => workspace.name === stored) ?? document.workspaces[0] ?? null;
+/**
+ * Whether the login can change the lens a document gives: more than one workspace to choose among, or a
+ * module. With one workspace and no module every login sees the same lens, so nothing waits for the login.
+ */
+export function choosesByLogin(document: WorkspaceDocument): boolean {
+  return document.workspaces.length > 1 || document.modules.length > 0;
+}
+
+/** A workspace the document serves by name; none for no name or one no longer served. */
+function servedNamed(document: WorkspaceDocument, name: string | null): Workspace | undefined {
+  return name === null ? undefined : document.workspaces.find((workspace) => workspace.name === name);
 }
 
 /**
- * The workspace the viewer chose for `project`, as the switcher stored it, over a document read;
- * null with none read. Outside the Shell (a dialog's default): a choice the browser refused to
- * store reads as the first, as after a reload.
+ * The workspace a stored name gives (docs/features/hub-department.md "Acceptance criteria", HD3): that
+ * one while the document serves it, else the document's `default` while served, else the first; null
+ * with none served. Names are looked up among the served ones, never compared with a word of the UI's.
  */
-export function storedWorkspace(project: string, document: WorkspaceDocument | undefined): Workspace | null {
-  return document === undefined ? null : workspaceOf(document, recall(workspaceKey(project)));
+export function workspaceOf(document: WorkspaceDocument, stored: string | null): Workspace | null {
+  return servedNamed(document, stored) ?? servedNamed(document, document.default) ?? document.workspaces[0] ?? null;
+}
+
+/**
+ * The workspace the viewer chose for `project`, as the switcher stored it for this login, over a
+ * document read; null with none read. Outside the Shell (a dialog's default): a choice the browser
+ * refused to store, or made with no login known, reads as the default, else the first, as after a reload.
+ */
+export function storedWorkspace(project: string, login: ChoiceLogin, document: WorkspaceDocument | undefined): Workspace | null {
+  return document === undefined ? null : workspaceOf(document, login === undefined ? null : recall(workspaceKey(project, login)));
 }
 
 /**
@@ -92,11 +120,16 @@ export function landingHash(project: string, workspace: Workspace | null): strin
   return isSectionId(landing) ? sectionHash(project, landing) : homeHash(project);
 }
 
-/** Choices the browser refused to store, per project: they hold for this shell's life. */
+/** Choices the browser refused to store, or made with no login known, per project and login: they hold for this shell's life. */
 interface Held {
   workspaces: ReadonlyMap<string, string>;
   /** A module's stored value; null: the key removed. */
   modules: ReadonlyMap<string, string | null>;
+}
+
+/** Whose held choice: a project's for one login, null locally, or with none known. */
+function heldId(project: string, login: ChoiceLogin): string {
+  return JSON.stringify([project, login === undefined ? 0 : login]);
 }
 
 const NOTHING_HELD: Held = { workspaces: new Map(), modules: new Map() };
@@ -114,11 +147,12 @@ export interface WorkspaceChoice {
 }
 
 /**
- * The project's chosen workspace and module over its served document. Storage is the truth, read on
- * each render; a write it refuses is held in this hook's state, so it holds until a reload. Nothing
- * here routes: the switcher pushes the landing itself.
+ * The project's chosen workspace and module over its served document, for `login`. Storage is the
+ * truth, read on each render; a write it refuses, or any choice while no login is known, is held in
+ * this hook's state, so it holds until a reload. Nothing here routes: the switcher pushes the landing
+ * itself. A caller with the login still out passes no document, so nothing is chosen before it is known.
  */
-export function useWorkspaceChoice(project: string | null, document: WorkspaceDocument | undefined): WorkspaceChoice {
+export function useWorkspaceChoice(project: string | null, login: ChoiceLogin, document: WorkspaceDocument | undefined): WorkspaceChoice {
   const [held, setHeld] = useState<Held>(NOTHING_HELD);
 
   const chooseWorkspace = useCallback(
@@ -126,25 +160,26 @@ export function useWorkspaceChoice(project: string | null, document: WorkspaceDo
       if (project === null) {
         return;
       }
-      const stored = keep(workspaceKey(project), name);
-      const removed = keep(moduleKey(project), null);
+      const id = heldId(project, login);
+      const stored = login !== undefined && keep(workspaceKey(project, login), name);
+      const removed = login !== undefined && keep(moduleKey(project, login), null);
       setHeld((last) => {
         const workspaces = new Map(last.workspaces);
         const modules = new Map(last.modules);
         if (stored) {
-          workspaces.delete(project);
+          workspaces.delete(id);
         } else {
-          workspaces.set(project, name);
+          workspaces.set(id, name);
         }
         if (removed) {
-          modules.delete(project);
+          modules.delete(id);
         } else {
-          modules.set(project, null);
+          modules.set(id, null);
         }
         return { workspaces, modules };
       });
     },
-    [project],
+    [project, login],
   );
 
   const chooseModule = useCallback(
@@ -152,25 +187,27 @@ export function useWorkspaceChoice(project: string | null, document: WorkspaceDo
       if (project === null) {
         return;
       }
-      const stored = keep(moduleKey(project), name);
+      const id = heldId(project, login);
+      const stored = login !== undefined && keep(moduleKey(project, login), name);
       setHeld((last) => {
         const modules = new Map(last.modules);
         if (stored) {
-          modules.delete(project);
+          modules.delete(id);
         } else {
-          modules.set(project, name);
+          modules.set(id, name);
         }
         return { ...last, modules };
       });
     },
-    [project],
+    [project, login],
   );
 
   if (project === null || document === undefined) {
     return { workspace: null, module: null, chooseWorkspace, chooseModule };
   }
-  const storedWorkspace = held.workspaces.get(project) ?? recall(workspaceKey(project));
-  const storedModule = held.modules.has(project) ? (held.modules.get(project) ?? null) : recall(moduleKey(project));
+  const id = heldId(project, login);
+  const storedWorkspace = held.workspaces.get(id) ?? (login === undefined ? null : recall(workspaceKey(project, login)));
+  const storedModule = held.modules.has(id) ? (held.modules.get(id) ?? null) : login === undefined ? null : recall(moduleKey(project, login));
   const workspace = workspaceOf(document, storedWorkspace);
   return { workspace, module: moduleOf(document, workspace, storedModule), chooseWorkspace, chooseModule };
 }

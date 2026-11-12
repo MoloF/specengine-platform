@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Round routes and screen
@@ -49,7 +49,7 @@ Each answer is refused alone, by its first refusal; the rest are staged in round
 
 The Questions section (`#/<project>/questions`), over `getRound` and `stageRoundAnswers`:
 
-- Header from the JSON (`<n> items, about <minutes> min of reading`), `notes` verbatim; `more > 0`: "Show all" reads `limit` = items + `more` (at most 200), remembered per project. Items in sheet order with the text sheet's fields, `kind` raw in a neutral badge, "Open in Inbox"; no worktree, branch, `gap_type`, author, evidence.
+- Header from the JSON (`<n> items, about <minutes> min of reading`), `notes` verbatim; `more > 0`: "Show all" reads `limit` = items + `more` (at most 200), remembered per project. Items in sheet order with the text sheet's fields, `kind` raw in a neutral badge, "Open in Inbox"; no worktree, branch, `gap_type`, author; evidence only in a served pair, after the text (`agent-intake-documents.md` "Pair").
 - Controls by structure, never a kind string (`round/drafts.ts` `answersOf`): each option held (sent by number; the recommended one marked with who recommends, never preselected); with `price_of_other`, Take the working answer (when given) / Your answer; Reject with reason; Leave open, the default. A held gist leads, the rest folded (`plain-questions.md` "UI"). A card's Answer… reuses them, one item, no Leave open (`card-questions.md` "Screen").
 - The Shell holds a per-project store (`round/memory.ts`: drafts keyed by ID and the `updated_at` shown, the limit, the last outcome, refusals, a failure, dropped notices): it survives section switches, not a reload (said on screen). A newer `updated_at`: "Changed since you answered", left out until "Keep my answer for this version" or a new pick; an item gone: its draft dropped, a polite notice. Blank own text or reason is left out; text is trimmed before sending, its UTF-8 bytes counted as sent, never cut.
 - A sticky Stage bar (max 6rem; `scroll-padding-bottom` keeps focus above it): the count, "Stage <k> answers" (one POST, none while one is pending: `useRoundPosting`; each stage carries the acting name as `as`, on a hub the login, none when empty: `board-screen.md` "The acting name"; Unstage sends no body), the picks that replace a staged choice, a one-line outcome focusing the details. Refused drafts stay with the reason verbatim, staged ones clear; status 0: the sheet read again, drafts kept. A failure with no Questions screen of the project mounted: assertive, `Questions of <project>: ` first.

@@ -106,6 +106,7 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     working_answer: null,
     price_of_other: null,
     evidence: [],
+    pair: null,
     options: [],
     recommendation: null,
     distinct_from: [],
@@ -186,6 +187,7 @@ export function noReview(id: string): Proposal {
     working_answer: null,
     price_of_other: null,
     evidence: [],
+    pair: null,
     options: [],
     recommendation: null,
     distinct_from: [],
@@ -811,6 +813,7 @@ export function aRoundItem(fields: Partial<RoundItem> & { id: string }): RoundIt
     options: [],
     recommendation: null,
     evidence: [],
+    pair: null,
     targets: [],
     tasks: [],
     worktree: "/work/alpha",
@@ -1033,12 +1036,12 @@ export function aDirection(fields: Partial<WorkspaceModule> & { name: string; ki
 
 /** `spec workspace --json` over a project with no table: the implicit document of docs/features/workspaces.md "Data". */
 export function anImplicitWorkspaces(notes: string[] = []): WorkspaceDocument {
-  return { source: "implicit", notes, workspaces: [aWorkspace({ name: "all", title: "All sections" })], modules: [] };
+  return { source: "implicit", notes, workspaces: [aWorkspace({ name: "all", title: "All sections" })], modules: [], default: null };
 }
 
 /** A configured workspaces document. */
 export function aWorkspaces(workspaces: Workspace[], modules: WorkspaceModule[] = [], fields: Partial<WorkspaceDocument> = {}): WorkspaceDocument {
-  return { source: "config", notes: [], workspaces, modules, ...fields };
+  return { source: "config", notes: [], workspaces, modules, default: null, ...fields };
 }
 
 /** A delivery row's counts: every one 0, no lead time, unless given (docs/features/delivery-analytics.md "Acceptance criteria", DA-11). */

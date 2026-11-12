@@ -123,13 +123,17 @@ export interface WorkspaceModule {
 /**
  * `spec workspace --json`, the answer of `GET .../workspaces`: every key present, `workspaces`
  * never empty (the implicit one when none is configured), `notes` the reader's lines verbatim in
- * served order. Source: `docs/features/workspaces.md` "Data".
+ * served order; `default` last, the workspace whose `logins` holds the asking login, a hub's alone,
+ * null locally or with none. Never a login or the map. Sources: `docs/features/workspaces.md` "Data";
+ * `docs/features/hub-department.md` "Acceptance criteria" (HD1).
  */
 export interface WorkspaceDocument {
   source: WorkspaceSource;
   notes: string[];
   workspaces: Workspace[];
   modules: WorkspaceModule[];
+  /** The asking login's department by name, a served workspace's or none; the viewer's own choice wins over it. */
+  default: string | null;
 }
 
 /** Queue order, never a hold on work (ADR-0012). Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
@@ -183,6 +187,32 @@ export interface Evidence {
   lines: string | null;
   observed: string;
   documented: string;
+}
+
+/**
+ * One side of a collision pair, keys in this order: `id` the stored target's ID (null for a path
+ * target), `title` its title now (null when gone), `path` its file now (null when unknown), `evidence`
+ * the positions in the item's `evidence` citing that file, ascending. Source:
+ * `docs/features/collision-pairs.md` "Acceptance criteria" (PP8).
+ */
+export interface PairSide {
+  id: string | null;
+  title: string | null;
+  path: string | null;
+  evidence: number[];
+}
+
+/**
+ * A two-target `contradicts` discrepancy's two documents, resolved per read, never stored: `left` the
+ * first stored target, `right` the second, `other` the positions of the evidence citing neither; every
+ * position of `evidence` is in one of the three lists, a shared file's under both sides. The UI lays
+ * the served positions out and never groups evidence itself. Source:
+ * `docs/features/collision-pairs.md` "Acceptance criteria" (PP8).
+ */
+export interface Pair {
+  left: PairSide;
+  right: PairSide;
+  other: number[];
 }
 
 /** One way to settle a discrepancy, with its price. Source: `docs/specs/specengine-platform/06-workflows.md` "3.2. What the agent sends". */
@@ -347,14 +377,16 @@ export type StageChoice = Omit<StagedApprove, "span_hash"> | StagedReject;
  * them, an interpretation's decision and texts; `drift`, after `revisions`, a drift item's evidence;
  * `card_id` and `why` after `interpretation`, the card it was raised for and a decision's why;
  * `similar` after `why`, always null here; `gist` and `matters` after `summary`, a question's lead,
- * null on every other kind (53 keys).
+ * null on every other kind; `pair` after `evidence`, a two-target `contradicts` discrepancy's two
+ * sides, null on every other item (54 keys).
  * Sources: `docs/canon/proposal-queue.md` "Commands"; `docs/canon/agent-intake.md` "Review document";
  * `docs/features/decision-apply.md` "Data"; `docs/features/daemon-read.md` "Data";
  * `docs/canon/tasks.md` "Task-bound proposals"; `docs/canon/decision-staging.md` "Documents";
  * `docs/features/kind-interpretation.md` "Data"; `docs/features/rev-discipline.md` "Review document, stage, queue";
  * `docs/features/drift-queue.md` "Review, inbox, round, stage";
  * `docs/features/card-questions.md` "Acceptance criteria" (L1, U5); `docs/canon/card-questions.md` "The rule";
- * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10, PQ12).
+ * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10, PQ12);
+ * `docs/features/collision-pairs.md` "Acceptance criteria" (PP8).
  */
 export interface Proposal {
   id: string | null;
@@ -415,6 +447,8 @@ export interface Proposal {
   /** What the other answer to a question would cost. */
   price_of_other: string | null;
   evidence: Evidence[];
+  /** A two-target `contradicts` discrepancy's sides, resolved per read; null on every other item. Laid out as served, never worked out here. */
+  pair: Pair | null;
   options: ProposalOption[];
   /** Index into `options`. */
   recommendation: number | null;
@@ -588,12 +622,14 @@ export interface RoundTask {
 }
 
 /**
- * One item of the round sheet, its 21 keys in this order: an open question or discrepancy of the
+ * One item of the round sheet, its 22 keys in this order: an open question or discrepancy of the
  * current repository, `staged` and `staged_at` its staged choice if any, `gist` and `matters` after
- * `summary`, a question's lead. `kind` is plain text, shown raw; the controls follow its options, its
- * working answer and its price of another answer, never the kind.
+ * `summary`, a question's lead; `pair` after `evidence`, a two-target `contradicts` discrepancy's
+ * sides. `kind` is plain text, shown raw; the controls follow its options, its working answer and
+ * its price of another answer, never the kind.
  * Sources: `docs/canon/round.md` "JSON"; `docs/features/ui-round.md` "Data";
- * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10, PQ12).
+ * `docs/features/plain-questions.md` "Acceptance criteria" (PQ10, PQ12);
+ * `docs/features/collision-pairs.md` "Acceptance criteria" (PP8).
  */
 export interface RoundItem {
   id: string;
@@ -611,6 +647,8 @@ export interface RoundItem {
   /** Index into `options`; marked on screen, never picked for the owner. */
   recommendation: number | null;
   evidence: Evidence[];
+  /** As the review document's: the two sides, or null. */
+  pair: Pair | null;
   targets: RoundTarget[];
   /** Every waiting task, by ID. */
   tasks: RoundTask[];

@@ -241,8 +241,10 @@ describe("the Board over the mock", () => {
 
   it("error: the daemon's message, Retry", async () => {
     renderMock("error", "#/harbor-sim/board");
-    expect(await screen.findByText(/database is locked/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    // The Board's own panel, in the main region: the header says the projects read failed too.
+    const main = screen.getByRole("main");
+    expect(await within(main).findByText(/database is locked/)).toBeTruthy();
+    expect(within(main).getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 
   it("conflict: the first write finds the card changed, the daemon's words; the next one, on the new read, stands", async () => {

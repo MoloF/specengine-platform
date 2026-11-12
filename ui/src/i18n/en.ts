@@ -1362,6 +1362,14 @@ export const en = {
       recommendedByAsker: "Recommended by the asker",
       pickFirst: "Pick an answer first",
     },
+    // A two-sided collision (PairView.tsx), on the Inbox, the Questions screen and a task's Answer…
+    // (docs/features/collision-pairs.md "Acceptance criteria", PP9): the region, the rest, an empty side, a gone one.
+    pair: {
+      label: "What conflicts with what",
+      other: "Other evidence",
+      noEvidence: "No evidence cites this file",
+      gone: "Not in the spec now",
+    },
     severity: { high: "High", normal: "Normal", low: "Low", none: "None" },
     status: {
       open: "Open",

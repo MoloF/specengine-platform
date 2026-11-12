@@ -97,8 +97,10 @@ describe("the normal scenario", () => {
     expect((await noted.getWorkspaces("harbor-sim")).notes).toHaveLength(2);
     expect((await noted.getWorkspaces("ledger-api")).notes).toEqual([expect.stringMatching(/; the implicit workspace is served$/)]);
     expect((await noted.getWorkspaces("ledger-api")).source).toBe("implicit");
-    // Every key of the document present, in the spec's order.
-    expect(Object.keys(harbor)).toEqual(["source", "notes", "workspaces", "modules"]);
+    // Every key of the document present, in the spec's order; `default` last, null with no login
+    // (docs/features/hub-department.md "Acceptance criteria", HD1).
+    expect(Object.keys(harbor)).toEqual(["source", "notes", "workspaces", "modules", "default"]);
+    expect([harbor.default, ledger.default]).toEqual([null, null]);
     expect(Object.keys(harbor.workspaces[0] ?? {})).toEqual(["name", "title", "landing", "sections", "flows", "disciplines", "module"]);
     expect(harbor.modules.map((module) => Object.keys(module))).toEqual([0, 1, 2].map(() => ["name", "title", "root", "kinds"]));
     expect(Object.keys((await client.getCards("harbor-sim")).flows[0] ?? {})).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);

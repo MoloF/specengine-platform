@@ -1432,6 +1432,12 @@ export const ru: Catalog = {
       recommendedByAsker: "Рекомендует автор вопроса",
       pickFirst: "Сначала выберите ответ",
     },
+    pair: {
+      label: "Что с чем расходится",
+      other: "Другие свидетельства",
+      noEvidence: "Ни одно свидетельство не ссылается на этот файл",
+      gone: "Сейчас нет в спецификации",
+    },
     severity: { high: "Высокая", normal: "Обычная", low: "Низкая", none: "Нет" },
     status: {
       open: "Открыто",

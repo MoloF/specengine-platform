@@ -23,7 +23,9 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { DECISION_KEYS, isStaged, verbOf, type DecisionKind } from "./decisions";
 import { DriftSection, TerminalDecision } from "./DriftItem";
+import { EvidenceItem } from "./EvidenceItem";
 import { AskedFold, AskedText, LeadMatters, RecommendedMark } from "./ItemLead";
+import { PairSlot } from "./PairSlot";
 import { gapLabel, previewLabel, severityLook, statusLook, statusLozenge } from "./labels";
 import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
@@ -234,7 +236,8 @@ function AnswerSections({ project, review }: { project: string; review: Proposal
 /**
  * A question's lead on the Inbox card (docs/features/plain-questions.md "Acceptance criteria", PQ12),
  * its gist the card's title: why it matters, its options, then what it said before it had a gist, its
- * text verbatim with its working answer, price and why, folded and collapsed; the targets follow.
+ * text verbatim, a served collision pair right after it, with its working answer, price and why,
+ * folded and collapsed; the targets follow.
  */
 function QuestionLead({ project, review }: { project: string; review: Proposal }) {
   return (
@@ -243,6 +246,7 @@ function QuestionLead({ project, review }: { project: string; review: Proposal }
       <OptionsSection project={project} review={review} />
       <AskedFold>
         {review.summary !== null && <AskedText text={review.summary} />}
+        {review.pair !== null && <PairSlot pair={review.pair} evidence={review.evidence} />}
         <AnswerSections project={project} review={review} />
       </AskedFold>
     </>
@@ -275,23 +279,12 @@ function ReviewBody({
     <>
       {drift !== null && <DriftSection project={project} drift={drift} commit={review.base_commit} />}
 
-      {review.evidence.length > 0 && (
+      {/* A served pair lays the evidence out by side after the summary instead (PairSlot; the key decides, never the kind). */}
+      {review.pair === null && review.evidence.length > 0 && (
         <Section title={t("inbox.card.evidence")}>
           <ul className="evidence-list">
             {review.evidence.map((item, index) => (
-              <li key={`${String(index)}-${item.file}`} className="evidence">
-                <p className="mono">
-                  {item.file}
-                  {item.lines !== null && `:${item.lines}`}
-                </p>
-                {item.qpath !== null && <p className="mono muted">{item.qpath}</p>}
-                <dl className="pairs">
-                  <dt>{t("inbox.card.observed")}</dt>
-                  <dd>{item.observed}</dd>
-                  <dt>{t("inbox.card.documented")}</dt>
-                  <dd>{item.documented}</dd>
-                </dl>
-              </li>
+              <EvidenceItem key={`${String(index)}-${item.file}`} item={item} />
             ))}
           </ul>
         </Section>
@@ -700,6 +693,8 @@ export function ProposalCard({
         side={<PropertyList label={t("inbox.card.details")} items={details} />}
         main={
           <div className="card-body" ref={body} tabIndex={-1}>
+            {/* Right after the summary, the card's title; with a gist leading, after the summary folded under the lead (docs/features/collision-pairs.md "Acceptance criteria", PP9). */}
+            {reviewed !== undefined && reviewed.gist === null && reviewed.pair !== null && <PairSlot pair={reviewed.pair} evidence={reviewed.evidence} />}
             {reviewed !== undefined && reviewed.gist !== null && <QuestionLead project={project} review={reviewed} />}
             <Section title={t("inbox.card.targets")}>
               {targets.length === 0 ? (

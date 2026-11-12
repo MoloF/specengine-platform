@@ -31,6 +31,14 @@
 //! - **Served from `[card]`**, read once: each workspace's `disciplines`
 //!   ([`disciplines_of`], DP-3 of the same criteria), none when `[card]`
 //!   does not read, with no note of their own.
+//! - **`logins`, judged after the rest** (task spec `hub-department` HD5):
+//!   no array of strings, or more than [`MAX_LOGINS`] entries, is malformed;
+//!   then each entry, in config order, is left out with a note when
+//!   [`hub_login_problem`] refuses it, its workspace lists it twice or an
+//!   earlier workspace lists it. The kept ones make
+//!   [`WorkspaceConfig::logins`], never a [`Workspace`]'s: a note names an
+//!   entry's position, never its login (HD6), since every login reads the
+//!   notes.
 //!
 //! The section IDs are the engine's closed vocabulary, the UI's
 //! `ui/src/app/sections.ts` in its order: nothing here names a trade, and
@@ -47,9 +55,11 @@ use serde::{Deserialize, Serialize};
 use toml::Spanned;
 use toml::de::{DeTable, DeValue, ValueDeserializer};
 
+use crate::card::hub_login_problem;
 use crate::card_toml::{CardConfig, card_from_toml, name_problem, title_problem};
-use crate::health_toml::{Errors, line_of, unknown_field};
+use crate::health_toml::{Errors, line_of, type_name, unknown_field};
 use crate::project_toml::ProjectError;
+use crate::team_toml::TEAM_ENTRIES_MAX;
 
 /// The section IDs, as `ui/src/app/sections.ts` lists them, in its order.
 pub const SECTIONS: [&str; 9] = [
@@ -94,13 +104,18 @@ pub const MAX_ROOT_BYTES: usize = 256;
 /// The longest entry of a direction's `kinds`, in bytes; the list holds at
 /// most [`MAX_LIST`].
 pub const MAX_KIND_BYTES: usize = 64;
+/// The most entries of a workspace's `logins`: as many as `[team]` may hold
+/// ([`TEAM_ENTRIES_MAX`]).
+pub const MAX_LOGINS: usize = TEAM_ENTRIES_MAX;
 
 /// The top-level key of the workspaces.
 const WORKSPACE: &str = "workspace";
 /// The top-level key of the modules.
 const MODULE: &str = "module";
 /// A workspace's keys, in the order a message lists them.
-const WORKSPACE_KEYS: [&str; 6] = ["name", "title", "sections", "landing", "flows", "module"];
+const WORKSPACE_KEYS: [&str; 7] = [
+    "name", "title", "sections", "landing", "flows", "module", "logins",
+];
 /// A module's keys, in the order a message lists them.
 const MODULE_KEYS: [&str; 4] = ["name", "title", "root", "kinds"];
 /// How a message names a workspace table.
@@ -202,6 +217,11 @@ pub struct WorkspaceConfig {
     pub workspaces: Vec<Workspace>,
     pub modules: Vec<WorkspaceModule>,
     pub notes: Vec<WorkspaceNote>,
+    /// Each kept `logins` entry and the workspace it lands in, the first
+    /// listing it in config order (task spec `hub-department` HD5); empty
+    /// for the implicit workspace. Never served: a read gives one login's
+    /// [`Self::default_for`] alone (HD6).
+    pub logins: BTreeMap<String, String>,
 }
 
 impl WorkspaceConfig {
@@ -213,6 +233,12 @@ impl WorkspaceConfig {
     /// Each note as `<file>:<line>: <message>`, in order.
     pub fn notes_at(&self, file: &str) -> Vec<String> {
         self.notes.iter().map(|note| note.at(file)).collect()
+    }
+
+    /// The workspace whose `logins` holds `login` byte for byte, else
+    /// `None` (task spec `hub-department` HD1): never trimmed or folded.
+    pub fn default_for(&self, login: &str) -> Option<&str> {
+        self.logins.get(login).map(String::as_str)
     }
 }
 
@@ -267,17 +293,20 @@ pub fn workspace_from_toml(text: &str) -> WorkspaceConfig {
         card: card.as_ref(),
         card_noted: false,
         notes: &mut notes,
+        logins: BTreeMap::new(),
     };
     let workspaces = written
         .into_iter()
         .map(|workspace| judge.workspace(workspace))
         .collect();
+    let logins = judge.logins;
     notes.sort_by_key(|note| note.line);
     WorkspaceConfig {
         source: WorkspaceSource::Config,
         workspaces,
         modules,
         notes,
+        logins,
     }
 }
 
@@ -298,6 +327,7 @@ fn implicit(
         workspaces: vec![workspace],
         modules,
         notes,
+        logins: BTreeMap::new(),
     }
 }
 
@@ -350,6 +380,7 @@ struct WrittenWorkspace {
     landing: Option<Written>,
     flows: Option<Vec<Written>>,
     module: Option<Written>,
+    logins: Option<Vec<Written>>,
 }
 
 /// `[[module]]`: the modules, or the first problem by line.
@@ -454,6 +485,7 @@ fn read_workspaces(
         let mut landing = None;
         let mut flows = None;
         let mut module = None;
+        let mut logins = None;
         for (key, value) in entry.iter() {
             match key.get_ref().as_ref() {
                 "name" => name = Some(string(value, &mut errors)),
@@ -462,6 +494,7 @@ fn read_workspaces(
                 "landing" => landing = string(value, &mut errors),
                 "flows" => flows = strings(value, &mut errors),
                 "module" => module = string(value, &mut errors),
+                "logins" => logins = logins_of(value, &mut errors),
                 other => errors.push(key.span(), unknown_field(other, &WORKSPACE_KEYS)),
             }
         }
@@ -479,6 +512,7 @@ fn read_workspaces(
                 landing,
                 flows,
                 module,
+                logins,
             });
         }
     }
@@ -646,6 +680,42 @@ fn strings(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<Vec<
     (errors.len() == before).then_some(out)
 }
 
+/// The strings `logins` lists, at most [`MAX_LOGINS`], each with its span;
+/// else a problem (pushed). Unlike [`strings`], a message names a type and
+/// a position, never the value the TOML reader would echo: a login stays
+/// out of the notes every login reads (task spec `hub-department` HD6).
+fn logins_of(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<Vec<Written>> {
+    let DeValue::Array(items) = value.get_ref() else {
+        errors.push(
+            value.span(),
+            format!(
+                "`logins` is {}, not an array of strings",
+                type_name(value.get_ref())
+            ),
+        );
+        return None;
+    };
+    let before = errors.len();
+    let mut out = Vec::with_capacity(items.len().min(MAX_LOGINS));
+    for (at, item) in items.iter().enumerate() {
+        if at == MAX_LOGINS {
+            errors.push(
+                item.span(),
+                format!("`logins` holds at most {MAX_LOGINS} entries"),
+            );
+            break;
+        }
+        match item.get_ref() {
+            DeValue::String(login) => out.push((login.as_ref().to_owned(), item.span())),
+            other => errors.push(
+                item.span(),
+                format!("`logins[{at}]` is {}, not a string", type_name(other)),
+            ),
+        }
+    }
+    (errors.len() == before).then_some(out)
+}
+
 /// The TOML reader's message for `value` read as a `T`, pushed at the span
 /// it names (else `value`'s). Called only once `value` is known to be no
 /// `T`; a reader that took it anyway pushes a plain type line.
@@ -670,6 +740,8 @@ struct Judge<'a, 't> {
     /// `card`'s problem is noted: once, at the first `flows` judged.
     card_noted: bool,
     notes: &'a mut Vec<WorkspaceNote>,
+    /// Each kept login and the workspace it lands in, so far.
+    logins: BTreeMap<String, String>,
 }
 
 impl Judge<'_, '_> {
@@ -681,7 +753,7 @@ impl Judge<'_, '_> {
     }
 
     /// One workspace: sections, landing, flows, module, each value naming
-    /// nothing left out with a note.
+    /// nothing left out with a note; then its `logins` ([`Self::logins`]).
     fn workspace(&mut self, written: WrittenWorkspace) -> Workspace {
         let name = written.name;
         let sections = match written.sections {
@@ -719,6 +791,9 @@ impl Judge<'_, '_> {
             );
             None
         });
+        if let Some(listed) = written.logins {
+            self.logins(&name, listed);
+        }
         Workspace {
             title: written.title.unwrap_or_else(|| name.clone()),
             name,
@@ -796,5 +871,26 @@ impl Judge<'_, '_> {
             }
         }
         (!kept.is_empty()).then_some(kept)
+    }
+
+    /// `logins`, in config order: each kept in [`Self::logins`] unless
+    /// [`hub_login_problem`] refuses it, this workspace listed it before or
+    /// an earlier one holds it; else left out with a note naming its 0-based
+    /// position, never the login (task spec `hub-department` HD5, HD6).
+    fn logins(&mut self, name: &str, listed: Vec<Written>) {
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        for (at, (login, span)) in listed.into_iter().enumerate() {
+            let message = if let Some(problem) = hub_login_problem(&login) {
+                format!("workspace `{name}`: logins[{at}]: {problem}: left out")
+            } else if !seen.insert(login.clone()) {
+                format!("workspace `{name}`: logins[{at}] is listed twice: the second left out")
+            } else if let Some(first) = self.logins.get(&login) {
+                format!("workspace `{name}`: logins[{at}] already lands in `{first}`: left out")
+            } else {
+                self.logins.insert(login, name.to_owned());
+                continue;
+            };
+            self.note(&span, message);
+        }
     }
 }

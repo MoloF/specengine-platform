@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -29,7 +29,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | Method, path | Query | Answer |
 |---|---|---|
 | GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order (CLI `project_entry`): `name` or `null`, `root` canonical, `branch` current or `null` (detached, no git) |
-| GET `/api/identity`, `.../workspaces`; a hub's `.../team`, GET, POST `.../proposals/:id/confirm`; a `--push` hub's `.../sync` | -- | `hub.md`, `workspaces.md`, `hub-team.md`, `hub-git.md` |
+| GET `/api/identity`, `.../workspaces`; a hub's `.../team`, GET, POST `.../proposals/:id/confirm`; a `--push` hub's `.../sync` | -- | `hub{,-department,-team,-git}.md`, `workspaces.md` |
 | GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json` |
 | GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json` |
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json` |

@@ -1287,8 +1287,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // `distinct_from`, `keywords` and `similar`); 0.43.0 since plain-questions
     // (RM-0088, `ask_question`'s `gist`, `matters`, `options`,
     // `recommendation`); 0.44.0 since collision-pass (RM-0060, two tools and
-    // `check-collisions`).
-    assert_eq!(manifest["version"], "0.44.0");
+    // `check-collisions`); 0.45.0 since collision-pairs (RM-0088, PP7: the
+    // review document's `pair`).
+    assert_eq!(manifest["version"], "0.45.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1404,8 +1405,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // `distinct_from`, `keywords` and `similar`); 0.43.0 since plain-questions
     // (RM-0088, `ask_question`'s `gist`, `matters`, `options`,
     // `recommendation`); 0.44.0 since collision-pass (RM-0060, two tools and
-    // `check-collisions`).
-    assert_eq!(manifest["version"], "0.44.0");
+    // `check-collisions`); 0.45.0 since collision-pairs (RM-0088, PP7: the
+    // review document's `pair`).
+    assert_eq!(manifest["version"], "0.45.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1510,7 +1512,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.44.0",
+        manifest["version"], "0.45.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1526,7 +1528,8 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          card-context (`get_card`'s `context`): 0.39.0; node-history (`get_node`'s \
          `history`): 0.40.0; upstream-signal (`upstream`): 0.41.0; intake-similar (`distinct_from`, `keywords`, `similar`): 0.42.0; \
          plain-questions (`ask_question`'s `gist`, `matters`, `options`, `recommendation`): \
-         0.43.0; collision-pass (`get_collisions`, `mark_pairs`, `check-collisions`): 0.44.0"
+         0.43.0; collision-pass (`get_collisions`, `mark_pairs`, `check-collisions`): 0.44.0; \
+         collision-pairs (the review document's `pair`): 0.45.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2679,8 +2682,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // `get_card`'s and `list_cards`' `upstream`); 0.42.0 since intake-similar
     // (RM-0059, `propose_change`'s `distinct_from`, `keywords` and
     // `similar`); 0.43.0 since plain-questions (RM-0088, `ask_question`'s
-    // four keys); 0.44.0 since collision-pass (RM-0060).
-    assert_eq!(manifest["version"], "0.44.0");
+    // four keys); 0.44.0 since collision-pass (RM-0060); 0.45.0 since
+    // collision-pairs (RM-0088, PP7).
+    assert_eq!(manifest["version"], "0.45.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s

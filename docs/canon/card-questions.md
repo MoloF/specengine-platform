@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Card questions: the items a card names, and its Activity
@@ -72,7 +72,7 @@ The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh
 - **Activity** replaces the work item's History, its blocks and dialogs lazy (`CardItems.tsx`). Items whose `proposal.created` is not in `history` come first, under "Earlier items", by ID; then every `history` entry in served order: a `card.*` as before; a `proposal.*` its word (`labels.ts` `ITEM_EVENT_WORDS`), the item's ID and "by <who>" (the payload's `as`, else `author.login`, else `author.role`); an unknown type raw under `lang="en"`. A `proposal.created` opens the item's block: `kind` raw in a neutral badge under `lang="en"`, the status lozenge, the summary, the working answer and why (a gist leading, the rest folded: `plain-questions.md` "UI"); Staged <at> in the shared date format; the record as a `DocLink` by `record_title` with `decided_by`; a `decision_note`, the answer on a rejected item; Answer… on an open item. The card is read again on every `proposal.*` live event and after a confirm.
 - **Return** (`ReturnDialog`, first load), on a card with a target: "Ask a question with it", closed (open on a binding task), the question, a working answer and what another answer would cost, all required, and the targets, at least one checked. The move first, then the raise; a refused move asks nothing; a raise failed or not stored leaves the card returned and the dialog open on its fields, its hits listed, Ask anyway (naming them in `distinct_from`) or Ask again (no answer) resending the raise alone; every hit named and nothing stored: the too-many line. The stored ID is announced with the return.
 - **Ask a question…, Record a decision…** follow Return… on any card with a target, open or closed, a mandate leading and framing them (`card-mandate.md` "Screen"); Record sends `why` or `null`, required by the form on an open task; hits as in Return; a 400 or 409 in the dialog's alert, its fields kept.
-- **Answer…**: the Questions screen's controls by structure (`round-ui.md` "Screen"), each with its price, staged through `stageDecision` with `as`; then the local command and Copy (`decision-staging.md` "UI"), or a hub's Confirm (the lazy `ConfirmDialog`) where `allowed` lists `confirm`; off (`ActOff`) where it lacks `stage`. At most one primary button; off while a card write is out.
+- **Answer…**: a served pair after the summary (`agent-intake-documents.md` "Pair"); the Questions screen's controls by structure (`round-ui.md` "Screen"), each with its price, staged through `stageDecision` with `as`; then the local command and Copy (`decision-staging.md` "UI"), or a hub's Confirm (the lazy `ConfirmDialog`) where `allowed` lists `confirm`; off (`ActOff`) where it lacks `stage`. At most one primary button; off while a card write is out.
 - **Inbox**: a proposal shows "Task C-0008", a link to `#/<p>/board/C-0008`, and a decision's Why.
 - Focus never lands on a read-only field or the body; the status region always exists. Nothing outside `labels.ts` compares a kind, status or event type (`policy.test.ts`); the chrome says "Ask a question", never a trade (`words.test.ts`).
 

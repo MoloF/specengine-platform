@@ -12,7 +12,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 
 ## Canon
 
-- [docs/canon/agent-intake-documents.md](canon/agent-intake-documents.md) Agent intake: the documents it answers with · crates/specengine-cli, crates/specengine-mcp, crates/specengine-store · tier 2
+- [docs/canon/agent-intake-documents.md](canon/agent-intake-documents.md) Agent intake: the documents it answers with · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-store, ui · tier 2
 - [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies, decisions · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
 - [docs/canon/architecture-code.md](canon/architecture-code.md) SpecEngine architecture rules: the code layer · architecture, crates/specengine-code, crates/specengine-cli · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2

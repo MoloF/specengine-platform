@@ -27,6 +27,24 @@
 //!   byte-equal to the CLI's; the fresh `HOME` holds nothing past the
 //!   daemon's own files: no project turn, no index.
 //!
+//! - docs/features/hub-department.md (RM-0089), the route's half, over git
+//!   copies of `fixtures/card-press` with the spec's two `logins` lines
+//!   added, committed:
+//!   - HD1: on a test hub (`tests/common/hub.rs`) `GET …/workspaces` as
+//!     `mira` is byte-equal to `spec workspace --json --login mira`
+//!     (`"default":"newsroom"`), as `ann` to `--login ann`, as `eve` to
+//!     `--login eve` (`null`); a local daemon's to the run without
+//!     `--login` (`null`), whatever header a request carries. M: the route
+//!     ignores the login.
+//!   - HD2: a `[team.mira]` whose `role` is `chief` leaves the route a 200
+//!     with `"default":"newsroom"` as `mira` while `GET …/team` is a 503; a
+//!     `[team]` silent on `mira` and none at all alike. M: the default kept
+//!     only for logins `[team]` lists.
+//!   - HD6: as `eve` the body holds no `mira`, `ann` or `"logins":` key (the
+//!     orchestrator's ruling: the notes name `logins[<i>]` by position); as
+//!     `mira` no `ann`, as `ann` no `mira`. M: `logins` serialized on
+//!     `Workspace`; a note naming the login.
+//!
 //! The turn is `tests/turn.rs`'s, the hub's `tests/hub.rs`'s (WS-10), the key
 //! sets `tests/daemon_keys.rs`'s.
 
@@ -37,11 +55,13 @@ mod workspaces_common;
 
 use std::path::Path;
 
+use common::hub::{Hub, P, Setup};
 use common::{
     Reply, Run, Scratch, Server, beyond_daemon, read_text, root_args, spec, spec_json, write,
 };
 use workspaces_common::{
-    CONFIG, IMPLICIT_JSON, LAMP_JSON, PRESS_JSON, line_holding, misspelt, variants, without_tables,
+    CONFIG, IMPLICIT_JSON, LAMP_JSON, PRESS_JSON, line_holding, misspelt, press_with_logins,
+    variants, without_tables,
 };
 
 /// card-press's route.
@@ -283,4 +303,139 @@ fn departments_dp3_the_route_serves_disciplines_and_a_direction_as_the_cli() {
         "the route takes no project turn: the fresh HOME holds {:?}",
         beyond_daemon(&home)
     );
+}
+
+// ------------------------------------------------ hub-department: a login
+
+/// A hub over card-press with the spec's two `logins` lines and `extra`
+/// appended to the config, committed.
+fn logins_hub(name: &str, extra: &str) -> Hub {
+    let setup = Setup::new(name, "card-press");
+    write(
+        &setup.root,
+        CONFIG,
+        format!("{}{extra}", press_with_logins()),
+    );
+    setup
+        .scratch
+        .git()
+        .run(&setup.root, &["commit", "-qam", "logins"]);
+    setup.start()
+}
+
+/// `spec workspace --json [--login L]` over the hub's root, under a `HOME`
+/// of its own: the document.
+fn cli_as(hub: &Hub, login: Option<&str>) -> String {
+    let home = hub.setup.scratch.home("cli-as");
+    let mut args = vec!["workspace"];
+    if let Some(login) = login {
+        args.extend(["--login", login]);
+    }
+    let run = spec_json(&home, &hub.setup.cwd, &hub.setup.root, &args);
+    run.code(0);
+    run.document().to_owned()
+}
+
+/// The hub's `GET …/workspaces` as `login`: a 200's body.
+fn route_as(hub: &Hub, login: &str) -> String {
+    let reply = hub.get(login, &format!("{P}/workspaces"));
+    assert_eq!(reply.status, 200, "{login}: {}", reply.text());
+    reply.text().to_owned()
+}
+
+/// HD1: as each login the route is the CLI's `--login` run byte for byte;
+/// `mira` `newsroom`, `ann` `pressroom`, `eve` and `Mira` `null`. M: the
+/// route ignores the login.
+#[test]
+fn hd1_a_hub_serves_the_askers_default() {
+    let hub = logins_hub("hd1-hub", "");
+    for (login, default) in [
+        ("mira", "\"newsroom\""),
+        ("ann", "\"pressroom\""),
+        ("eve", "null"),
+        ("Mira", "null"),
+    ] {
+        let body = route_as(&hub, login);
+        assert_eq!(body, cli_as(&hub, Some(login)), "{login}");
+        assert!(
+            body.ends_with(&format!(",\"default\":{default}}}")),
+            "{login}: {body}"
+        );
+        assert_eq!(route_as(&hub, login), body, "{login}: a repeat");
+    }
+    assert_ne!(route_as(&hub, "mira"), route_as(&hub, "ann"));
+}
+
+/// HD1: a local daemon passes no login: the route is the run without
+/// `--login`, `default` null, whatever `Remote-User` a request carries.
+#[test]
+fn hd1_a_local_daemon_serves_no_default() {
+    let scratch = Scratch::new("hd1-local");
+    let root = scratch.repo("card-press", "press", "main");
+    write(&root, CONFIG, press_with_logins());
+    scratch.git().run(&root, &["commit", "-qam", "logins"]);
+    let home = scratch.home("h");
+    let cli_home = scratch.home("cli");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let reply = answered(&server, PRESS);
+    let local = cli(&cli_home, &cwd, &root);
+    assert_eq!(reply.text(), local.document());
+    assert!(
+        reply.text().ends_with(",\"default\":null}"),
+        "{}",
+        reply.text()
+    );
+    let mira = spec_json(&cli_home, &cwd, &root, &["workspace", "--login", "mira"]);
+    assert_ne!(reply.text(), mira.document(), "the login is a hub's alone");
+}
+
+/// The bad `[team]` of HD2: `mira`'s role off the three.
+const CHIEF_TEAM: &str = "\n[team.mira]\nname = \"Mira K\"\nrole = \"chief\"\nemail = \
+                          \"mira@example.org\"\n";
+
+/// A good `[team]` silent on `mira`.
+const OLGA_TEAM: &str = "\n[team.olga]\nname = \"Olga R\"\nrole = \"owner\"\nemail = \
+                         \"olga@example.org\"\n";
+
+/// HD2: a bad `[team]` leaves the route a 200 with `mira`'s default while
+/// `GET …/team` is a 503; a `[team]` silent on `mira` answers alike. M: the
+/// default kept only for logins `[team]` lists.
+#[test]
+fn hd2_the_team_is_never_read() {
+    let hub = logins_hub("hd2-bad", CHIEF_TEAM);
+    let body = route_as(&hub, "mira");
+    assert!(body.ends_with(",\"default\":\"newsroom\"}"), "{body}");
+    assert_eq!(body, cli_as(&hub, Some("mira")));
+    let team = hub.get("mira", &format!("{P}/team"));
+    assert_eq!(team.status, 503, "{}", team.text());
+    assert!(
+        route_as(&hub, "ann").ends_with(",\"default\":\"pressroom\"}"),
+        "ann"
+    );
+    drop(hub);
+
+    let hub = logins_hub("hd2-silent", OLGA_TEAM);
+    let body = route_as(&hub, "mira");
+    assert!(body.ends_with(",\"default\":\"newsroom\"}"), "{body}");
+    assert_eq!(hub.get("olga", &format!("{P}/team")).status, 200);
+    assert!(route_as(&hub, "olga").ends_with(",\"default\":null}"));
+}
+
+/// HD6: the route serves one login's default, never the map: as `eve` no
+/// `mira`, `ann` or `"logins":` key; as `mira` no `ann`; as `ann` no
+/// `mira`; no note names a login.
+#[test]
+fn hd6_never_the_map() {
+    let hub = logins_hub("hd6-hub", "");
+    let eve = route_as(&hub, "eve");
+    for word in ["mira", "ann", "\"logins\":", "eve"] {
+        assert!(!eve.contains(word), "eve: {word}: {eve}");
+    }
+    let mira = route_as(&hub, "mira");
+    for word in ["ann", "mira", "\"logins\":"] {
+        assert!(!mira.contains(word), "mira: {word}: {mira}");
+    }
+    let ann = route_as(&hub, "ann");
+    assert!(!ann.contains("mira") && !ann.contains("\"ann\""), "{ann}");
 }

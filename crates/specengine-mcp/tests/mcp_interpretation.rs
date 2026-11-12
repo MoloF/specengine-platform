@@ -410,10 +410,10 @@ fn ac_r11_propose_change_takes_an_interpretation_as_its_twin() {
     // docs/features/card-questions.md L1; 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS6 (`similar`,
     // `null`); 53 since docs/features/plain-questions.md PQ10 (`gist`,
-    // `matters`).
+    // `matters`); 54 since docs/features/collision-pairs.md PP8 (`pair`).
     assert_eq!(
         document.as_object().map(|object| object.len()),
-        Some(53),
+        Some(54),
         "{document}"
     );
     assert_eq!(document["similar"], Value::Null, "{document}");

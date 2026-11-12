@@ -935,6 +935,74 @@ textarea.field {
   padding-inline-start: var(--space-250);
 }
 
+/* A two-sided collision (src/inbox/PairView.tsx; docs/features/collision-pairs.md "Acceptance criteria", PP9): the
+   two documents side by side under their titles, stacked when the column is narrow, each side's evidence as served
+   under it; the rest below both. Titles of any script wrap and are never cut. */
+.collision-pair {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+.collision-pair-label {
+  margin: 0;
+}
+
+.collision-pair-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-200);
+  align-items: start;
+}
+
+.collision-pair-side,
+.collision-pair-other {
+  display: grid;
+  gap: var(--space-100);
+  align-content: start;
+  min-width: 0;
+}
+
+.collision-pair-side {
+  padding-top: var(--space-100);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.collision-pair-title {
+  margin: 0;
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.collision-pair-open {
+  font-weight: var(--font-weight-semibold);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.collision-pair-gone,
+.collision-pair-where {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.collision-pair-gone {
+  display: flex;
+  align-items: center;
+  gap: var(--space-050);
+}
+
+.collision-pair-where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-025) var(--space-150);
+  overflow-wrap: anywhere;
+}
+
 /* Loading, errors, notices. */
 .skeleton {
   display: grid;

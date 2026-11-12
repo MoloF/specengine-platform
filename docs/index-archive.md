@@ -37,6 +37,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/code-refs.md](features/code-refs.md) shipped
 - [docs/features/code-tools.md](features/code-tools.md) shipped
 - [docs/features/collision-names.md](features/collision-names.md) shipped
+- [docs/features/collision-pairs.md](features/collision-pairs.md) shipped
 - [docs/features/collision-pass.md](features/collision-pass.md) shipped
 - [docs/features/constant-census.md](features/constant-census.md) shipped
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped
@@ -74,6 +75,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/health-ui-follow-up.md](features/health-ui-follow-up.md) shipped
 - [docs/features/hub-accounts.md](features/hub-accounts.md) shipped
 - [docs/features/hub-confirm.md](features/hub-confirm.md) shipped
+- [docs/features/hub-department.md](features/hub-department.md) shipped
 - [docs/features/hub-deploy.md](features/hub-deploy.md) shipped
 - [docs/features/hub-git.md](features/hub-git.md) shipped
 - [docs/features/hub-identity.md](features/hub-identity.md) shipped
@@ -246,6 +248,8 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0084.md](roadmap/RM-0084.md) shipped
 - [docs/roadmap/RM-0085.md](roadmap/RM-0085.md) shipped
 - [docs/roadmap/RM-0086.md](roadmap/RM-0086.md) shipped
+- [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) shipped
+- [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) shipped
 - [docs/roadmap/RM-0090.md](roadmap/RM-0090.md) shipped
 - [docs/roadmap/RM-0091.md](roadmap/RM-0091.md) shipped
 - [docs/roadmap/RM-0092.md](roadmap/RM-0092.md) shipped

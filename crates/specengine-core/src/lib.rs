@@ -124,7 +124,10 @@
 //! - [`collisions`] — the collision pass, the pure half (task spec
 //!   `collision-pass`): the pairs of nodes that may collide, scored from
 //!   shared link targets and title trigrams within a kind, ordered, and
-//!   filtered by the verdicts an agent left; a mark's caps and names.
+//!   filtered by the verdicts an agent left; a mark's caps and names;
+//! - [`pair`] — a two-sided collision's pair, the pure half (task spec
+//!   `collision-pairs`): which item serves one and which evidence cites
+//!   each side's file, by position; computed per read, never stored.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -153,6 +156,7 @@ pub mod lock;
 mod markdown;
 mod norm;
 mod own_text;
+pub mod pair;
 pub mod patch;
 pub mod paths_toml;
 pub mod project_toml;

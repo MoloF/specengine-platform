@@ -92,8 +92,9 @@ const OPTION_LINES: &str = "options: 2\n  [0] Restart the wait | Short rests do 
                             Tapping rest refills faster | R-28 rebalanced\nrecommendation: 0\n";
 
 /// The review document's keys: RM-0059's 51 with `gist` and `matters`
-/// after `summary`.
-const REVIEW_KEYS: [&str; 53] = [
+/// after `summary`; 54 since docs/features/collision-pairs.md PP8 (`pair`
+/// after `evidence`).
+const REVIEW_KEYS: [&str; 54] = [
     "id",
     "project",
     "kind",
@@ -130,6 +131,7 @@ const REVIEW_KEYS: [&str; 53] = [
     "working_answer",
     "price_of_other",
     "evidence",
+    "pair",
     "options",
     "recommendation",
     "distinct_from",
@@ -149,8 +151,9 @@ const REVIEW_KEYS: [&str; 53] = [
     "notes",
 ];
 
-/// A round item's 21 keys: `gist` and `matters` after `summary`.
-const ROUND_ITEM_KEYS: [&str; 21] = [
+/// A round item's keys: `gist` and `matters` after `summary`; 22 since
+/// docs/features/collision-pairs.md PP8 (`pair` after `evidence`).
+const ROUND_ITEM_KEYS: [&str; 22] = [
     "id",
     "kind",
     "severity",
@@ -163,6 +166,7 @@ const ROUND_ITEM_KEYS: [&str; 21] = [
     "options",
     "recommendation",
     "evidence",
+    "pair",
     "targets",
     "tasks",
     "worktree",

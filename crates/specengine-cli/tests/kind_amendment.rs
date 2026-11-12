@@ -1854,8 +1854,9 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     // docs/features/card-questions.md D14 (`card_id`, `why` before `notes`);
     // 51 since docs/features/intake-similar.md "Acceptance criteria" IS6
     // (`similar` after `why`); 53 since docs/features/plain-questions.md
-    // PQ10 (`gist`, `matters` after `summary`).
-    assert_eq!(keys.len(), 53, "{keys:?}");
+    // PQ10 (`gist`, `matters` after `summary`); 54 since
+    // docs/features/collision-pairs.md PP8 (`pair` after `evidence`).
+    assert_eq!(keys.len(), 54, "{keys:?}");
     let revisions = keys.iter().position(|key| key == "revisions");
     assert_eq!(keys[revisions.expect("revisions") + 1], "drift", "{keys:?}");
     let fixture: Value = serde_json::from_str(&read_text(
@@ -1866,7 +1867,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        143,
+        145,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1880,8 +1881,9 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          node-history's two (docs/features/node-history.md, NH12), upstream-signal's \
          two (docs/features/upstream-signal.md, US-12), delivery-analytics' eleven \
          (docs/features/delivery-analytics.md, DA-11), direction-catalog's three \
-         (docs/features/direction-catalog.md, DC-9) and department-overview's three \
-         (docs/features/department-overview.md, DO10)"
+         (docs/features/direction-catalog.md, DC-9), department-overview's three \
+         (docs/features/department-overview.md, DO10) and collision-pairs' two \
+         (docs/features/collision-pairs.md, PP8)"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

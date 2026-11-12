@@ -26,8 +26,14 @@
  * src/mocks/cardCounts.ts). `plain-questions`: as `normal` but harbor-sim's queue holds an agent's
  * question with a gist, why it matters, options and a recommendation, and a person's without them, both
  * on C-0001 (docs/features/plain-questions.md "Acceptance criteria", PQ14; src/mocks/plainQuestions.ts).
+ * `collision-pairs`: as `normal` but harbor-sim's spec holds a sprint and a stamina document and its queue
+ * five `contradicts` discrepancies on them, four served a pair (the spec's example, a shared file, a gone
+ * side, a grouping no looser match gives) and one of three targets served none; the example and the
+ * three-target item on C-0001 (docs/features/collision-pairs.md "Acceptance criteria", PP9, PP11;
+ * src/mocks/collisionPairs.ts). `hub` also serves the login's department, `foundry`, which is not the
+ * first (docs/features/hub-department.md "Acceptance criteria", HD8; src/mocks/workspaces.ts).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions", "collision-pairs"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

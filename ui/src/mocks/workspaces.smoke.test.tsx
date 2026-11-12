@@ -145,6 +145,7 @@ describe("the implicit workspace on the screen (WS-1)", () => {
       notes: [],
       workspaces: [{ name: "all", title: "All sections", landing: "overview", sections: ["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"], flows: null, disciplines: [], module: null }],
       modules: [],
+      default: null,
     };
     expect(JSON.stringify(workspacesOf("ledger-api", "normal"))).toBe(JSON.stringify(implicit));
   });

@@ -20,15 +20,19 @@ pub const TABLES_START: &str = "\n[[workspace]]\n";
 
 /// The implicit document of the spec's "Data", on `fixtures/spec-a`. Since
 /// docs/features/departments.md (DP-3): `disciplines` after `flows`, every
-/// flow's, `[]` on spec-a, whose default flow lists none.
+/// flow's, `[]` on spec-a, whose default flow lists none. Since
+/// docs/features/hub-department.md (HD1): `default` last, `null` without
+/// `--login`.
 pub const IMPLICIT_JSON: &str = "{\"source\":\"implicit\",\"notes\":[],\"workspaces\":[{\"name\":\
      \"all\",\"title\":\"All sections\",\"landing\":\"overview\",\"sections\":[\"inbox\",\"board\",\
      \"roadmap\",\"flow\",\"tree\",\"graph\",\"health\",\"questions\"],\"flows\":null,\
-     \"disciplines\":[],\"module\":null}],\"modules\":[]}";
+     \"disciplines\":[],\"module\":null}],\"modules\":[],\"default\":null}";
 
 /// card-press's document of the spec's "Data", compact. Since
 /// docs/features/departments.md (DP-3): each workspace's `disciplines` after
 /// `flows`, each module's `kinds` (`null`: a rooted module) after `root`.
+/// Since docs/features/hub-department.md (HD1): `default` last, `null`
+/// without `--login`.
 pub const PRESS_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\":[{\"name\":\
      \"newsroom\",\"title\":\"Newsroom\",\"landing\":\"board\",\"sections\":[\"board\",\"tree\",\
      \"inbox\"],\"flows\":[\"copy\"],\"disciplines\":[\"copy\"],\"module\":\"weekly\"},{\"name\":\
@@ -36,7 +40,7 @@ pub const PRESS_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\"
      \"flow\",\"tree\",\"health\"],\"flows\":[\"plates\"],\"disciplines\":[\"plates\"],\"module\":\
      null}],\"modules\":[{\"name\":\"weekly\",\"title\":\"The weekly run\",\"root\":\"PRN-WEEKLY\",\
      \"kinds\":null},{\"name\":\"rulings\",\"title\":\"Style rulings\",\"root\":\"STY-0001\",\
-     \"kinds\":null}]}";
+     \"kinds\":null}],\"default\":null}";
 
 /// docs/features/departments.md DP-3: studio-lamp's `spec workspace`
 /// text, the preset's workspaces (five since docs/features/department-split.md
@@ -60,7 +64,9 @@ pub const LAMP_TEXT: &str = "workspaces config | workspaces 5, modules 3\n\
 /// docs/features/departments.md DP-3: studio-lamp's `spec workspace
 /// --json`, compact, every key in order: each workspace's `disciplines` by
 /// the rule of D8 (`production`'s `flows` null: every flow's, in config
-/// order), the direction's `root` null and its `kinds`.
+/// order), the direction's `root` null and its `kinds`. Since
+/// docs/features/hub-department.md (HD1): `default` last, `null` without
+/// `--login`.
 pub const LAMP_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\":[{\"name\":\
      \"writing\",\"title\":\"Writing\",\"landing\":\"flow\",\"sections\":[\"flow\",\"tree\",\
      \"board\",\"questions\",\"inbox\"],\"flows\":[\"narrative\"],\"disciplines\":[\"narrative\"],\
@@ -78,7 +84,7 @@ pub const LAMP_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\":
      \"development\",\"art\",\"level-design\",\"production\",\"sound\"],\"module\":null}],\"modules\":[{\"name\":\
      \"shore\",\"title\":\"The shore\",\"root\":\"CHP-SHORE\",\"kinds\":null},{\"name\":\"island\",\
      \"title\":\"The lamp island\",\"root\":\"ISL-LAMP\",\"kinds\":null},{\"name\":\"scenes\",\
-     \"title\":\"Scenes\",\"root\":null,\"kinds\":[\"scene\"]}]}";
+     \"title\":\"Scenes\",\"root\":null,\"kinds\":[\"scene\"]}],\"default\":null}";
 
 /// card-press's `spec workspace` text of the spec's "Data".
 pub const PRESS_TEXT: &str = "workspaces config | workspaces 2, modules 2\n\
@@ -207,4 +213,33 @@ pub fn variants(base: &str) -> Vec<(&'static str, String)> {
 /// WS-8's copy: the first `[[workspace]]` header misspelt `[[workspaces]]`.
 pub fn misspelt(base: &str) -> String {
     base.replacen(TABLES_START, "\n[[workspaces]]\n", 1)
+}
+
+/// docs/features/hub-department.md "Acceptance criteria": newsroom's
+/// `logins` line, as the spec's example writes it.
+pub const NEWSROOM_LOGINS: &str = "logins = [\"mira\", \"agent\", \"mira\", \"ann \"]";
+
+/// The same criteria: pressroom's `logins` line.
+pub const PRESSROOM_LOGINS: &str = "logins = [\"mira\", \"ann\"]";
+
+/// card-press's config with the two `logins` lines of
+/// docs/features/hub-department.md "Acceptance criteria" added, each after
+/// its table's `sections`.
+pub fn press_with_logins() -> String {
+    with_logins(&press_config(), NEWSROOM_LOGINS, PRESSROOM_LOGINS)
+}
+
+/// `base` (card-press's config) with `newsroom` after newsroom's `sections`
+/// line and `pressroom` after pressroom's.
+pub fn with_logins(base: &str, newsroom: &str, pressroom: &str) -> String {
+    let text = changed(
+        base,
+        "sections = [\"board\", \"tree\", \"inbox\"]\n",
+        &format!("sections = [\"board\", \"tree\", \"inbox\"]\n{newsroom}\n"),
+    );
+    changed(
+        &text,
+        "sections = [\"board\", \"flow\", \"tree\", \"health\"]\n",
+        &format!("sections = [\"board\", \"flow\", \"tree\", \"health\"]\n{pressroom}\n"),
+    )
 }

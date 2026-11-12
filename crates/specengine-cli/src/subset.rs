@@ -649,6 +649,9 @@ pub(crate) mod seams {
         CatalogItems,
         /// A catalog read's git walk, for these top-relative paths (DC-8).
         CatalogWalk(&'e [String]),
+        /// A queue item's stored target resolved now (task spec
+        /// `collision-pairs` PP6).
+        PairTarget,
     }
 
     /// Where the stage hook is called.
@@ -707,6 +710,8 @@ pub(crate) mod seams {
         pub catalog_items: usize,
         /// Catalog git walks, each its paths.
         pub catalog_walks: Vec<Vec<String>>,
+        /// Queue items' targets resolved now.
+        pub pair_targets: usize,
     }
 
     /// The stage hook, if any.
@@ -803,6 +808,7 @@ pub(crate) mod seams {
             Event::CatalogTrace => counts.catalog_traces += 1,
             Event::CatalogItems => counts.catalog_items += 1,
             Event::CatalogWalk(paths) => counts.catalog_walks.push(paths.to_vec()),
+            Event::PairTarget => counts.pair_targets += 1,
         });
     }
 

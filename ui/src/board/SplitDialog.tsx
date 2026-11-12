@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { apiErrorOf } from "../api/client";
-import { useHeldWorkspaces } from "../api/queries";
+import { useHeldWorkspaces, useIdentity } from "../api/queries";
 import { useCardSplit, useHeldTrace, useSplitPlan } from "../api/splitQueries";
 import type { CardSplit, CardSplitBody, CardSplitChild, TraceCard, Workspace, WorkspaceDocument } from "../api/types";
 import { sectionHash } from "../app/routes";
@@ -219,6 +219,7 @@ export function SplitDialog({
 }) {
   const t = useTranslate();
   const login = useHubLogin();
+  const identity = useIdentity();
   const [acting] = useActing();
   const held = useHeldWorkspaces(project);
   const write = useCardSplit(project);
@@ -229,7 +230,8 @@ export function SplitDialog({
   const [form, setForm] = useState<SplitForm>(() => ({
     title: doc?.title ?? "",
     goal: "",
-    discipline: doc === null ? "" : (storedWorkspace(project, held.data)?.disciplines[0] ?? ""),
+    // The department the viewer chose, this login's on a hub, else the served default (docs/features/hub-department.md "Acceptance criteria", HD3).
+    discipline: doc === null ? "" : (storedWorkspace(project, identity.data?.login, held.data)?.disciplines[0] ?? ""),
     reviewer: handOffReviewer("parent" in source ? source.reviewer : null, acting),
   }));
   // The discipline the plan was read with: the default as it opens, the form's on Retry.

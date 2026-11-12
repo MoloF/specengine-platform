@@ -345,8 +345,12 @@ enum Command {
     SparseSet,
     /// Print the project's `[team]`: one `login, role, email` line per entry, in login order; read-only. Exit 0 with no `[team]`, 2 with a bad one.
     Team,
-    /// Print the project's `[[workspace]]` and `[[module]]` tables as read: a header line, then one line per workspace and per module, in config order (the implicit workspace when none is configured); read-only. A table that does not read is served by its default with a note. Exit 0 whatever the tables say, 2 with no project or a config that cannot be used.
-    Workspace,
+    /// Print the project's `[[workspace]]` and `[[module]]` tables as read: a header line, with --login a `default` line, then one line per workspace and per module, in config order (the implicit workspace when none is configured); read-only. A table that does not read is served by its default with a note. Exit 0 whatever the tables say, 2 with no project or a config that cannot be used.
+    Workspace {
+        /// Also print the workspace whose `logins` holds L byte for byte (`(none)`, JSON `null`, when none does); never refused or printed.
+        #[arg(long, value_name = "L", allow_hyphen_values = true)]
+        login: Option<String>,
+    },
     /// Propose a change to one node or a new one, ask the owner a question, report a discrepancy, raise a decision taken during work or queue HEAD's lock drift; no file is touched until the owner approves a change.
     Propose {
         #[command(subcommand)]
@@ -1492,9 +1496,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         }
         Command::SparseSet => Outcome::SparseSet(specengine_cli::sparse(env, globals)?),
         Command::Team => Outcome::Team(specengine_cli::team(env, globals)?),
-        Command::Workspace => {
-            Outcome::Workspace(Box::new(specengine_cli::workspace(env, globals)?))
-        }
+        Command::Workspace { login } => Outcome::Workspace(Box::new(specengine_cli::workspace(
+            env,
+            globals,
+            &specengine_cli::WorkspaceRequest { login },
+        )?)),
         Command::Unmapped { path } => Outcome::Unmapped(Box::new(specengine_cli::unmapped(
             env,
             globals,

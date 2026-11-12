@@ -303,7 +303,11 @@ fn dp3_studio_lamp_s_workspaces_are_the_spec_s() {
         document.show()
     );
     let ordered = Ordered::of(&document.stdout);
-    assert_eq!(ordered.keys(), ["source", "notes", "workspaces", "modules"]);
+    // `default` last since docs/features/hub-department.md HD1.
+    assert_eq!(
+        ordered.keys(),
+        ["source", "notes", "workspaces", "modules", "default"]
+    );
     assert_eq!(
         ordered.get("workspaces").at(0).keys(),
         [

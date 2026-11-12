@@ -21,6 +21,25 @@
 //! - Exit 2 on usage, no project and a refused config; `--config FILE` names
 //!   the file as given in every note.
 //!
+//! docs/features/hub-department.md (RM-0089) "Acceptance criteria", the
+//! CLI's half, over scratch copies of `fixtures/card-press` with the spec's
+//! two `logins` lines added:
+//!
+//! - HD1: `--json --login mira` gives `"default": "newsroom"`, `--login ann`
+//!   `"pressroom"`, `--login eve` and no `--login` `null`; `default` the
+//!   last key; any string is taken (`-x`, an empty one, `Mira`), never
+//!   refused or printed. M: the login ignored.
+//! - HD5, the CLI's half: the four notes of the example, by line, on stderr
+//!   and in JSON alike, with and without `--login`.
+//! - HD6: as `eve` the document holds no `mira`, `ann` or `"logins":` key
+//!   (the orchestrator's ruling: the notes name `logins[<i>]`); as `mira` no
+//!   `ann`; no note holds an accepted login. M: `logins`
+//!   serialized on `Workspace`; a note naming the login.
+//! - HD7: `--login mira` prints `default newsroom` second, `--login eve`
+//!   `default (none)`; without `--login` byte-equal to card-press's pinned
+//!   text, on the copy with `logins` too (notes aside). M: the line printed
+//!   without `--login`.
+//!
 //! The reader's grammar is core's `tests/workspace_toml.rs`; the route,
 //! `GET /api/projects` and a daemon's start are `specengine-http`'s
 //! `tests/workspaces.rs`; the MCP server's `initialize` and `tools/list` are
@@ -39,8 +58,9 @@ use common::{Run, Scratch, fixture, read_text, snapshot, spec, write};
 use serde_json::{Value, json};
 use specengine_core::card_from_toml;
 use workspaces_common::{
-    CONFIG, IMPLICIT_JSON, IMPLICIT_TEXT, PRESS_JSON, PRESS_TEXT, line_holding, misspelt,
-    nth_line_holding, variants, without_tables,
+    CONFIG, IMPLICIT_JSON, IMPLICIT_TEXT, NEWSROOM_LOGINS, PRESS_JSON, PRESS_TEXT,
+    PRESSROOM_LOGINS, line_holding, misspelt, nth_line_holding, press_with_logins, variants,
+    without_tables,
 };
 
 /// The spec's list of section IDs inside the unknown-section note.
@@ -466,4 +486,189 @@ fn config_flag_names_the_file_as_given() {
         run.show()
     );
     assert_eq!(run.stderr, format!("note: {want}\n"));
+}
+
+// ------------------------------------------------ hub-department: `--login`
+
+/// card-press's copy with the spec's two `logins` lines, and its config.
+fn press_logins(scratch: &Scratch) -> (std::path::PathBuf, String) {
+    let root = scratch.copy("card-press", "press");
+    let config = press_with_logins();
+    write(&root, CONFIG, &config);
+    (root, config)
+}
+
+/// The example's four notes, by line (HD5).
+fn login_notes(config: &str) -> Vec<String> {
+    let news = line_holding(config, NEWSROOM_LOGINS);
+    let press = line_holding(config, PRESSROOM_LOGINS);
+    vec![
+        note(
+            news,
+            "workspace `newsroom`: logins[1]: `agent` is the record's word for no person: left \
+             out",
+        ),
+        note(
+            news,
+            "workspace `newsroom`: logins[2] is listed twice: the second left out",
+        ),
+        note(
+            news,
+            "workspace `newsroom`: logins[3]: white space around the login: left out",
+        ),
+        note(
+            press,
+            "workspace `pressroom`: logins[0] already lands in `newsroom`: left out",
+        ),
+    ]
+}
+
+/// `spec workspace --json [--login L]` on `root`: exit 0.
+fn as_login(home: &Path, root: &Path, login: Option<&str>) -> Run {
+    let mut args = vec!["workspace", "--json"];
+    if let Some(login) = login {
+        args.extend(["--login", login]);
+    }
+    let run = spec(home, root, &args);
+    run.code(0);
+    run
+}
+
+/// PRESS_JSON with `notes` and `default` given: the document as served
+/// over the copy with `logins`.
+fn press_document(notes: &[String], default: Option<&str>) -> String {
+    let notes = serde_json::to_string(notes).expect("JSON");
+    let default = serde_json::to_string(&default).expect("JSON");
+    let body = PRESS_JSON
+        .strip_prefix("{\"source\":\"config\",\"notes\":[],")
+        .expect("PRESS_JSON's head")
+        .strip_suffix(",\"default\":null}")
+        .expect("PRESS_JSON's tail");
+    format!("{{\"source\":\"config\",\"notes\":{notes},{body},\"default\":{default}}}")
+}
+
+/// HD1: each login's `default`, the rest of the document card-press's with
+/// the four notes; `default` the last key. M: the login ignored.
+#[test]
+fn hd1_the_askers_default_alone() {
+    let scratch = Scratch::new("hd1-cli");
+    let home = scratch.home("h");
+    let (root, config) = press_logins(&scratch);
+    let notes = login_notes(&config);
+    for (login, default) in [
+        (Some("mira"), Some("newsroom")),
+        (Some("ann"), Some("pressroom")),
+        (Some("eve"), None),
+        (None, None),
+        (Some("Mira"), None),
+        (Some("ann "), None),
+        (Some("agent"), None),
+        (Some(""), None),
+        (Some("-x"), None),
+    ] {
+        let run = as_login(&home, &root, login);
+        assert_eq!(
+            run.stdout,
+            format!("{}\n", press_document(&notes, default)),
+            "{login:?}: {}",
+            run.show()
+        );
+        assert_eq!(run.stderr, note_lines(&notes), "{login:?}");
+        let doc = run.json();
+        let keys: Vec<&String> = doc.as_object().expect("an object").keys().collect();
+        assert_eq!(keys.len(), 5, "{doc}");
+        assert!(run.stdout.trim_end().ends_with(&format!(
+            ",\"default\":{}}}",
+            serde_json::to_string(&default).unwrap()
+        )));
+        assert_eq!(notes_of(&run), notes, "{login:?}");
+    }
+    // Without `logins` the login changes nothing: `default` null.
+    let plain = scratch.copy("card-press", "plain");
+    let run = as_login(&home, &plain, Some("mira"));
+    assert_eq!(run.stdout, format!("{PRESS_JSON}\n"), "{}", run.show());
+    assert_eq!(run.stderr, "");
+    // The implicit workspace: none.
+    let a = scratch.copy("spec-a", "a");
+    let run = as_login(&home, &a, Some("mira"));
+    assert_eq!(run.stdout, format!("{IMPLICIT_JSON}\n"), "{}", run.show());
+}
+
+/// HD6: as `eve` the document holds no `mira`, `ann` or `"logins":`; as `mira`
+/// no `ann`; as `ann` no `mira`. Neither stdout nor stderr names the asker's
+/// login. M: `logins` serialized on `Workspace`; a note naming the login.
+#[test]
+fn hd6_never_the_map() {
+    let scratch = Scratch::new("hd6-cli");
+    let home = scratch.home("h");
+    let (root, _) = press_logins(&scratch);
+    let eve = as_login(&home, &root, Some("eve"));
+    // The orchestrator's HD6 ruling: no `"logins":` key and no other
+    // person's login; the notes name `logins[<i>]` by position.
+    for word in ["mira", "ann", "\"logins\":", "eve"] {
+        assert!(!eve.stdout.contains(word), "eve: {word}: {}", eve.stdout);
+        assert!(!eve.stderr.contains(word), "eve: {word}: {}", eve.stderr);
+    }
+    let mira = as_login(&home, &root, Some("mira"));
+    for word in ["ann", "mira", "logins\":"] {
+        assert!(!mira.stdout.contains(word), "mira: {word}: {}", mira.stdout);
+        assert!(!mira.stderr.contains(word), "mira: {word}: {}", mira.stderr);
+    }
+    let ann = as_login(&home, &root, Some("ann"));
+    for word in ["mira", "\"ann\""] {
+        assert!(!ann.stdout.contains(word), "ann: {word}: {}", ann.stdout);
+    }
+    let text = spec(&home, &root, &["workspace", "--login", "mira"]);
+    text.code(0);
+    assert!(!text.stdout.contains("mira") && !text.stdout.contains("ann"));
+    assert!(!text.stderr.contains("mira") && !text.stderr.contains("ann"));
+}
+
+/// HD7: `--login mira` prints `default newsroom` second, `--login eve`
+/// `default (none)`; without `--login` the text is card-press's pinned
+/// text, on the copy with `logins` too, the notes on stderr. M: the line
+/// printed without `--login`.
+#[test]
+fn hd7_the_text_line() {
+    let scratch = Scratch::new("hd7-cli");
+    let home = scratch.home("h");
+    let (root, config) = press_logins(&scratch);
+    let notes = note_lines(&login_notes(&config));
+    let (head, rest) = PRESS_TEXT.split_once('\n').expect("a header line");
+    for (login, line) in [
+        ("mira", "default newsroom"),
+        ("ann", "default pressroom"),
+        ("eve", "default (none)"),
+        ("Mira", "default (none)"),
+    ] {
+        let run = spec(&home, &root, &["workspace", "--login", login]);
+        run.code(0);
+        assert_eq!(
+            run.stdout,
+            format!("{head}\n{line}\n{rest}"),
+            "{login}: {}",
+            run.show()
+        );
+        assert_eq!(run.stderr, notes, "{login}");
+    }
+    let run = spec(&home, &root, &["workspace"]);
+    run.code(0);
+    assert_eq!(run.stdout, PRESS_TEXT, "{}", run.show());
+    assert_eq!(run.stderr, notes);
+    let plain = scratch.copy("card-press", "plain");
+    let run = spec(&home, &plain, &["workspace"]);
+    run.code(0);
+    assert_eq!(run.stdout, PRESS_TEXT);
+    assert_eq!(run.stderr, "");
+    let run = spec(&home, &plain, &["workspace", "--login", "mira"]);
+    run.code(0);
+    assert_eq!(run.stdout, format!("{head}\ndefault (none)\n{rest}"));
+    let a = scratch.copy("spec-a", "a");
+    let run = spec(&home, &a, &["workspace"]);
+    run.code(0);
+    assert_eq!(run.stdout, IMPLICIT_TEXT, "spec-a unchanged");
+    // `--login` takes a value: bare, it is a usage error.
+    let run = spec(&home, &root, &["workspace", "--login"]);
+    run.code(2);
+    assert_eq!(run.stdout, "");
 }

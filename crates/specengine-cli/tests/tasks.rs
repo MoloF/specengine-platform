@@ -814,10 +814,11 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         // since docs/features/drift-queue.md added `drift` after it; 50
         // since docs/features/card-questions.md L1 (`card_id`, `why`); 51
         // since docs/features/intake-similar.md "Acceptance criteria" IS6; 53
-        // since docs/features/plain-questions.md PQ10 (two after `summary`).
-        assert_eq!(keys.len(), 53, "{keys:?}");
+        // since docs/features/plain-questions.md PQ10 (two after `summary`);
+        // 54 since docs/features/collision-pairs.md PP8 (`pair`).
+        assert_eq!(keys.len(), 54, "{keys:?}");
         assert_eq!(
-            keys[44..],
+            keys[45..],
             [
                 "choice",
                 "task_id",

@@ -678,8 +678,9 @@ fn review_document_every_key_present() {
     // `revisions` (`null` on an update); 50 since
     // docs/features/card-questions.md D14 (`card_id`, `why`); 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS6 (`similar`);
-    // 53 since docs/features/plain-questions.md PQ10.
-    assert_eq!(keys.len(), 53, "{keys:?}");
+    // 53 since docs/features/plain-questions.md PQ10; 54 since
+    // docs/features/collision-pairs.md PP8 (`pair`).
+    assert_eq!(keys.len(), 54, "{keys:?}");
     assert_eq!(value["drift"], Value::Null);
     let json_text = serde_json::to_string(&value).unwrap();
     let printed = rev_common::printed(

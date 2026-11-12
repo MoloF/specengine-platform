@@ -46,6 +46,10 @@ function daemon(): Fates {
     if (url === "/api/projects") {
       return jsonAnswer(200, [{ slug: "alpha", name: "Alpha", root: "/work/alpha", branch: "main" }]);
     }
+    // A local daemon's identity: the choice its stored module is (docs/features/hub-department.md "Acceptance criteria", HD3).
+    if (url === "/api/identity") {
+      return jsonAnswer(200, { login: null });
+    }
     if (url === "/api/projects/alpha/workspaces") {
       return jsonAnswer(200, aWorkspaces([aWorkspace({ name: "writing" })], [aDirection({ name: "scenes", title: "Scenes", kinds: ["scene"] })]));
     }

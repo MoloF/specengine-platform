@@ -116,6 +116,7 @@ function itemOf(project: MockProject, tasks: MockTasks, review: StoredReview): R
     options: review.options,
     recommendation: review.recommendation,
     evidence: review.evidence,
+    pair: review.pair,
     targets: review.target_ids.map((stored) => targetOf(project, review, stored)),
     tasks: waitingOn(project, tasks, review.id),
     worktree: review.worktree ?? project.project.root,

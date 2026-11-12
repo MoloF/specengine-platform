@@ -108,9 +108,10 @@ const CONSENT: &str = "spec: `spec round answer` asks the owner for consent on a
                        stdin is not one (a pipe, a script or an agent's shell): run it in a \
                        terminal; nothing changed\n";
 
-/// The 21 keys of a sheet's item, in order (canon "JSON"): `gist` and
-/// `matters` after `summary` since docs/features/plain-questions.md PQ7.
-const ITEM_KEYS: [&str; 21] = [
+/// The 22 keys of a sheet's item, in order (canon "JSON"): `gist` and
+/// `matters` after `summary` since docs/features/plain-questions.md PQ7;
+/// `pair` after `evidence` since docs/features/collision-pairs.md PP1.
+const ITEM_KEYS: [&str; 22] = [
     "id",
     "kind",
     "severity",
@@ -123,6 +124,7 @@ const ITEM_KEYS: [&str; 21] = [
     "options",
     "recommendation",
     "evidence",
+    "pair",
     "targets",
     "tasks",
     "worktree",

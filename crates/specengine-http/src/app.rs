@@ -21,7 +21,9 @@
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `…/workspaces` a read of the config
 //! alone, no turn, locally and on a hub alike
-//! (docs/features/workspaces.md); a hub has its own fence ([`crate::hub`]),
+//! (docs/features/workspaces.md), a hub's adding its login's `default`
+//! alone (task spec `hub-department` HD1); a hub has its own fence
+//! ([`crate::hub`]),
 //! and `…/team`, the asker's own row of a project's `[team]`, and
 //! `…/proposals/<id>/confirm` ([`crate::confirm`]) are routes of a hub alone
 //! (docs/features/hub-team.md, docs/features/hub-confirm.md): locally they are
@@ -81,8 +83,8 @@ use specengine_cli::{
     GraphRequest, HealthRequest, InboxRequest, IndexTrust, LastChangeCache, LockDiffRequest,
     Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
     SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow,
-    TraceRequest, TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags,
-    round_limit, team_read, utc_now,
+    TraceRequest, TreeRequest, UnstageRequest, View, WorkspaceRequest, process_git, project_entry,
+    roadmap_flags, round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -591,15 +593,22 @@ async fn projects(State(app): State<Shared>, uri: Uri) -> Result<Response, Refus
 
 /// `GET …/workspaces`: `spec workspace --json` byte for byte, the
 /// project's workspaces and modules as its config reads now
-/// (docs/features/workspaces.md "Data"). No query and no turn: it
-/// reads the config alone, as `/api/projects` does, never `[team]` or the
-/// index, so a local daemon and every hub login get the same document. The
-/// tables never refuse it; a config the discovery refuses is a 503.
-async fn workspaces(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
-    let (project, _) = app.project_of(&uri)?;
-    args("workspaces", &[], &uri)?;
-    let outcome = answer::read(project, |env, globals, _| {
-        specengine_cli::workspace(env, globals)
+/// (docs/features/workspaces.md "Data"); on a hub `spec workspace --json
+/// --login <login>`, the request's login, so its `default` is that login's
+/// alone and no other login is served (task spec `hub-department` HD1,
+/// HD6). No query and no turn: it reads the config alone, as
+/// `/api/projects` does, never `[team]` or the index, so `[team]` missing,
+/// bad or silent on the login changes nothing (HD2). The tables never
+/// refuse it; a config the discovery refuses is a 503.
+async fn workspaces(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let uri = request.uri();
+    let (project, _) = app.project_of(uri)?;
+    args("workspaces", &[], uri)?;
+    let asked = WorkspaceRequest {
+        login: login_of(&request).map(|Login(login)| login),
+    };
+    let outcome = answer::read(project, move |env, globals, _| {
+        specengine_cli::workspace(env, globals, &asked)
     })
     .await?;
     let document = answer::document(&Outcome::Workspace(Box::new(outcome)));

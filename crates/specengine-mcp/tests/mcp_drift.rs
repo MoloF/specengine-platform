@@ -289,8 +289,9 @@ fn report_drift_answers_as_its_twin_and_writes_only_the_queue() {
     let document = &result(&reply)["structuredContent"];
     // 50 since docs/features/card-questions.md L1 (`card_id`, `why`); 51
     // since docs/features/intake-similar.md "Acceptance criteria" IS6
-    // (`similar`, `null`); 53 since docs/features/plain-questions.md PQ10.
-    assert_eq!(document.as_object().map(serde_json::Map::len), Some(53));
+    // (`similar`, `null`); 53 since docs/features/plain-questions.md PQ10;
+    // 54 since docs/features/collision-pairs.md PP8 (`pair`, `null`).
+    assert_eq!(document.as_object().map(serde_json::Map::len), Some(54));
     assert_eq!(document["similar"], Value::Null);
     assert_eq!(document["kind"], json!("drift"));
     assert_eq!(document["preview"], Value::Null);

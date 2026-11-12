@@ -23,6 +23,23 @@
 //!   table included (M7), and refuses `[[workspaces]]` at its line. M18: a key
 //!   missing from `RawFile`.
 //!
+//! docs/features/hub-department.md (RM-0089) "Acceptance criteria", the pure
+//! half:
+//!
+//! - HD5: card-press's tables with the spec's two `logins` lines give `mira`
+//!   -> `newsroom`, `ann` -> `pressroom` and exactly the four notes, by line
+//!   (`logins[1]` `agent`, `logins[2]` twice, `logins[3]` white space,
+//!   pressroom's `logins[0]` already in `newsroom`); `logins = "mira"`, an
+//!   entry no string and 257 entries each the implicit workspace and one
+//!   note; 256 distinct entries no note; `agent`, `local`, `-` in any case
+//!   left out with `hub_login_problem`'s message. M: `agent` accepted; a
+//!   later workspace winning a repeated login.
+//! - HD1, the pure half: `default_for` compares byte for byte (`Mira`,
+//!   `mira ` none); no `logins` key, an empty list and the implicit
+//!   workspace give none.
+//! - HD6, the pure half: no note holds a login `hub_login_problem` accepts;
+//!   `Workspace` is unchanged (its JSON holds no `logins`).
+//!
 //! Two projects of different nature: `fixtures/card-press` (a print shop) and
 //! `fixtures/studio-lamp` (a lighthouse game), and the game's brief
 //! `fixtures/spec-a` with no table (ADR-0008).
@@ -37,18 +54,19 @@ mod workspaces_common;
 use std::fs;
 
 use common::{corpus_scheme, fixture, repository_root};
+use specengine_core::card::hub_login_problem;
 use specengine_core::card_toml::{MAX_NAME_BYTES, MAX_TITLE_BYTES, name_problem};
 use specengine_core::workspace_toml::{
-    IMPLICIT_NAME, IMPLICIT_SECTIONS, IMPLICIT_TITLE, MAX_LIST, MAX_MODULES, MAX_ROOT_BYTES,
-    MAX_WORKSPACES, OVERVIEW, SECTIONS,
+    IMPLICIT_NAME, IMPLICIT_SECTIONS, IMPLICIT_TITLE, MAX_LIST, MAX_LOGINS, MAX_MODULES,
+    MAX_ROOT_BYTES, MAX_WORKSPACES, OVERVIEW, SECTIONS,
 };
 use specengine_core::{
     CardConfig, ProjectConfig, Workspace, WorkspaceConfig, WorkspaceModule, WorkspaceSource,
     card_from_toml, workspace_from_toml,
 };
 use workspaces_common::{
-    CONFIG, changed, line_holding, misspelt, nth_line_holding, press_config, variants,
-    without_tables,
+    CONFIG, NEWSROOM_LOGINS, PRESSROOM_LOGINS, changed, line_holding, misspelt, nth_line_holding,
+    press_config, press_with_logins, variants, with_logins, without_tables,
 };
 
 /// The nine section IDs of "Data", in `sections.ts`'s order.
@@ -1610,4 +1628,315 @@ fn ws8_project_config_name_checks_both_keys_and_refuses_a_misspelt_one() {
             );
         }
     }
+}
+
+// ------------------------------------------- hub-department: `logins`
+
+/// docs/features/hub-department.md HD5: `<config>:<line>: workspace `<w>`:
+/// logins[<i>]: <problem>: left out`.
+fn refused_login(line: usize, workspace: &str, index: usize, problem: &str) -> String {
+    note(
+        line,
+        &format!("workspace `{workspace}`: logins[{index}]: {problem}: left out"),
+    )
+}
+
+/// HD5: `... logins[<i>] is listed twice: the second left out`.
+fn twice(line: usize, workspace: &str, index: usize) -> String {
+    note(
+        line,
+        &format!("workspace `{workspace}`: logins[{index}] is listed twice: the second left out"),
+    )
+}
+
+/// HD5: `... logins[<i>] already lands in `<v>`: left out`.
+fn already(line: usize, workspace: &str, index: usize, first: &str) -> String {
+    note(
+        line,
+        &format!("workspace `{workspace}`: logins[{index}] already lands in `{first}`: left out"),
+    )
+}
+
+/// `config`'s login map as `login -> workspace` lines.
+fn landings(config: &WorkspaceConfig) -> Vec<String> {
+    config
+        .logins
+        .iter()
+        .map(|(login, workspace)| format!("{login} -> {workspace}"))
+        .collect()
+}
+
+/// HD5: the example gives `mira` -> `newsroom`, `ann` -> `pressroom` and
+/// exactly its four notes, by line, the tables otherwise as written. M:
+/// `agent` accepted; a later workspace winning a repeated login.
+#[test]
+fn hd5_the_example_lands_two_logins_with_four_notes() {
+    let text = press_with_logins();
+    let config = read(&text);
+    assert_eq!(config.source, WorkspaceSource::Config);
+    assert_eq!(rows(&config), press_rows(), "the tables as written");
+    assert_eq!(module_rows(&config), press_modules());
+    assert_eq!(landings(&config), ["ann -> pressroom", "mira -> newsroom"]);
+    assert_eq!(config.default_for("mira"), Some("newsroom"));
+    assert_eq!(config.default_for("ann"), Some("pressroom"));
+    for login in ["agent", "ann ", "eve", ""] {
+        assert_eq!(config.default_for(login), None, "{login:?}");
+    }
+    let news = line_holding(&text, NEWSROOM_LOGINS);
+    let press = line_holding(&text, PRESSROOM_LOGINS);
+    assert!(news < press);
+    let agent = hub_login_problem("agent").expect("agent is refused");
+    let spaced = hub_login_problem("ann ").expect("a trailing space is refused");
+    assert_eq!(spaced, "white space around the login");
+    assert_eq!(
+        config.notes_at(CONFIG),
+        [
+            refused_login(news, "newsroom", 1, &agent),
+            twice(news, "newsroom", 2),
+            refused_login(news, "newsroom", 3, &spaced),
+            already(press, "pressroom", 0, "newsroom"),
+        ]
+    );
+    // The reader is pure: a second read is equal.
+    assert_eq!(read(&text), config);
+}
+
+/// HD1, the pure half: a login is compared byte for byte; no `logins`, an
+/// empty list and the implicit workspace land nobody.
+#[test]
+fn hd1_a_default_is_found_byte_for_byte() {
+    let config = read(&press_with_logins());
+    for login in [
+        "Mira",
+        "MIRA",
+        "mira ",
+        " mira",
+        "mira\u{200b}",
+        "ann\n",
+        "Ann",
+    ] {
+        assert_eq!(config.default_for(login), None, "{login:?}");
+    }
+    let plain = read(&press_config());
+    assert!(plain.logins.is_empty(), "no `logins` key: none");
+    assert_eq!(plain.default_for("mira"), None);
+    assert!(plain.notes.is_empty());
+    let empty = read(&with_logins(&press_config(), "logins = []", "logins = []"));
+    assert!(empty.logins.is_empty(), "an empty list: none");
+    assert!(empty.notes.is_empty(), "{:?}", empty.notes_at(CONFIG));
+    assert_eq!(rows(&empty), press_rows());
+    let implicit = read(&without_tables(&press_with_logins()));
+    assert_implicit(&implicit, "no table");
+    assert!(implicit.logins.is_empty());
+    let spec_a = read(&fs::read_to_string(fixture("spec-a").join(CONFIG)).expect("spec-a"));
+    assert!(spec_a.logins.is_empty());
+    assert_eq!(spec_a.default_for("mira"), None);
+}
+
+/// HD5: each word `hub_login_problem` refuses, in any case, is left out
+/// with its message; the others land. M: `agent` accepted.
+#[test]
+fn hd5_every_refused_login_is_left_out_with_its_message() {
+    let refused = [
+        "agent",
+        "AGENT",
+        "Agent",
+        "local",
+        "Local",
+        "-",
+        "",
+        " mira",
+        "eve,mira",
+        "nora\u{200b}",
+        "line\nbreak",
+    ];
+    let listed: Vec<String> = refused
+        .iter()
+        .map(|login| format!("{login:?}").replace("\\u{200b}", "\\u200b"))
+        .collect();
+    let newsroom = format!("logins = [\"tomas\", {}]", listed.join(", "));
+    let text = with_logins(&press_config(), &newsroom, "logins = [\"lena\"]");
+    let config = read(&text);
+    assert_eq!(rows(&config), press_rows(), "the workspace is served");
+    assert_eq!(
+        landings(&config),
+        ["lena -> pressroom", "tomas -> newsroom"]
+    );
+    let line = line_holding(&text, "logins = [\"tomas\"");
+    let want: Vec<String> = refused
+        .iter()
+        .enumerate()
+        .map(|(index, login)| {
+            let problem =
+                hub_login_problem(login).unwrap_or_else(|| panic!("{login:?} is refused"));
+            refused_login(line, "newsroom", index + 1, &problem)
+        })
+        .collect();
+    assert_eq!(config.notes_at(CONFIG), want);
+    for login in refused {
+        assert_eq!(config.default_for(login), None, "{login:?}");
+    }
+}
+
+/// HD5: a repeat inside one workspace is noted at its own index; one in an
+/// earlier workspace keeps the first, whichever comes first in the config,
+/// and a third table naming it again is noted too. M: a later workspace
+/// winning a repeated login.
+#[test]
+fn hd5_the_first_workspace_in_config_order_wins() {
+    // Swapped: pressroom's list moved to newsroom and back.
+    let text = with_logins(
+        &press_config(),
+        "logins = [\"ann\", \"nora\", \"ann\", \"nora\"]",
+        "logins = [\"nora\", \"mira\", \"ann\"]",
+    );
+    let config = read(&text);
+    assert_eq!(
+        landings(&config),
+        ["ann -> newsroom", "mira -> pressroom", "nora -> newsroom"]
+    );
+    let news = line_holding(&text, "logins = [\"ann\"");
+    let press = line_holding(&text, "logins = [\"nora\", \"mira\"");
+    assert_eq!(
+        config.notes_at(CONFIG),
+        [
+            twice(news, "newsroom", 2),
+            twice(news, "newsroom", 3),
+            already(press, "pressroom", 0, "newsroom"),
+            already(press, "pressroom", 2, "newsroom"),
+        ]
+    );
+    // A third workspace: its repeat names the first workspace.
+    let third = format!(
+        "{text}\n[[workspace]]\nname = \"bindery\"\ntitle = \"Bindery\"\nlogins = [\"mira\", \
+         \"ann\", \"ivo\"]\n"
+    );
+    let config = read(&third);
+    let bindery = line_holding(&third, "logins = [\"mira\", \"ann\", \"ivo\"]");
+    let notes = config.notes_at(CONFIG);
+    assert_eq!(
+        notes[notes.len() - 2..],
+        [
+            already(bindery, "bindery", 0, "pressroom"),
+            already(bindery, "bindery", 1, "newsroom"),
+        ]
+    );
+    assert_eq!(config.default_for("ivo"), Some("bindery"));
+}
+
+/// HD5: `logins` that is no array of strings, or holds 257 entries, is a
+/// malformed table: the implicit workspace and one note at its line, which
+/// names no login (HD6); 256 distinct entries read with no note.
+#[test]
+fn hd5_a_malformed_logins_serves_the_implicit_workspace_with_one_note() {
+    assert_eq!(MAX_LOGINS, 256);
+    let many = |n: usize| -> String {
+        let all: Vec<String> = (0..n).map(|index| format!("\"reader{index}\"")).collect();
+        format!("logins = [{}]", all.join(", "))
+    };
+    for (label, newsroom) in [
+        ("a string", "logins = \"mira\"".to_owned()),
+        ("an integer", "logins = 5".to_owned()),
+        ("an entry no string", "logins = [\"mira\", 5]".to_owned()),
+        ("a table", "logins = { mira = true }".to_owned()),
+        ("257 entries", many(MAX_LOGINS + 1)),
+    ] {
+        let text = with_logins(&press_config(), &newsroom, PRESSROOM_LOGINS);
+        let config = read(&text);
+        assert_implicit(&config, label);
+        assert!(config.logins.is_empty(), "{label}: no login lands");
+        assert_eq!(config.default_for("ann"), None, "{label}");
+        assert_eq!(module_rows(&config), press_modules(), "{label}");
+        let all = config.notes_at(CONFIG);
+        assert_eq!(all.len(), 1, "{label}: one note: {all:?}");
+        let line = line_holding(&text, &newsroom[..newsroom.len().min(16)]);
+        assert!(
+            all[0].starts_with(&format!("{CONFIG}:{line}: ")) && all[0].ends_with(IMPLICIT_SERVED),
+            "{label}: {all:?}"
+        );
+        if label == "257 entries" {
+            assert!(
+                all[0].contains("`logins` holds at most 256 entries"),
+                "{label}: {all:?}"
+            );
+        }
+        for login in ["mira", "ann", "reader0"] {
+            assert!(!all[0].contains(login), "{label}: names {login}: {all:?}");
+        }
+        assert!(
+            ProjectConfig::from_toml(&text).is_ok(),
+            "{label}: nothing is refused"
+        );
+    }
+    let text = with_logins(&press_config(), &many(MAX_LOGINS), "logins = []");
+    let config = read(&text);
+    assert_eq!(rows(&config), press_rows(), "256 entries");
+    assert!(config.notes.is_empty(), "{:?}", config.notes_at(CONFIG));
+    assert_eq!(config.logins.len(), MAX_LOGINS);
+    assert_eq!(config.default_for("reader255"), Some("newsroom"));
+}
+
+/// HD6, the pure half: no note holds a login `hub_login_problem` accepts,
+/// and a served workspace's JSON holds no `logins`, the document's keys as
+/// before.
+#[test]
+fn hd6_no_note_or_workspace_holds_a_login() {
+    let text = with_logins(
+        &press_config(),
+        "logins = [\"zeta\", \"Agent\", \"zeta\", \"omar \"]",
+        "logins = [\"zeta\", \"omar\", \"omar\"]",
+    );
+    let config = read(&text);
+    let notes = config.notes_at(CONFIG);
+    assert_eq!(notes.len(), 5, "{notes:?}");
+    for login in config.logins.keys() {
+        assert!(hub_login_problem(login).is_none());
+        for note in &notes {
+            assert!(!note.contains(login.as_str()), "{login}: {note}");
+        }
+    }
+    for workspace in &config.workspaces {
+        let json = serde_json::to_string(workspace).expect("JSON");
+        assert!(!json.contains("logins"), "{json}");
+        assert!(!json.contains("zeta") && !json.contains("omar"), "{json}");
+    }
+    assert_eq!(
+        serde_json::to_value(&config.workspaces[0])
+            .expect("JSON")
+            .as_object()
+            .map(|object| object.keys().cloned().collect::<Vec<_>>()),
+        serde_json::to_value(&read(&press_config()).workspaces[0])
+            .expect("JSON")
+            .as_object()
+            .map(|object| object.keys().cloned().collect::<Vec<_>>()),
+        "Workspace is unchanged"
+    );
+}
+
+/// HD5 on the second project: studio-lamp's preset with a `logins` line
+/// added to its first workspace lands it there, the rest as before.
+#[test]
+fn hd5_the_game_s_preset_takes_logins_too() {
+    let text = workspaces_common::fixture_config("studio-lamp");
+    let before = read(&text);
+    let anchor = "[[workspace]]\nname = \"writing\"\n";
+    assert_eq!(text.matches(anchor).count(), 1, "the writing table");
+    let added = text.replacen(
+        anchor,
+        &format!("{anchor}logins = [\"lior\", \"local\"]\n"),
+        1,
+    );
+    let config = read(&added);
+    assert_eq!(rows(&config), rows(&before));
+    assert_eq!(landings(&config), ["lior -> writing"]);
+    let line = line_holding(&added, "logins = [\"lior\"");
+    assert_eq!(
+        config.notes_at(CONFIG),
+        [refused_login(
+            line,
+            "writing",
+            1,
+            &hub_login_problem("local").expect("local is refused")
+        )]
+    );
 }

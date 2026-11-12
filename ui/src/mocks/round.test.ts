@@ -63,6 +63,8 @@ describe("the normal scenario", () => {
       "options",
       "recommendation",
       "evidence",
+      // A two-sided collision's documents (docs/features/collision-pairs.md "Acceptance criteria", PP8).
+      "pair",
       "targets",
       "tasks",
       "worktree",

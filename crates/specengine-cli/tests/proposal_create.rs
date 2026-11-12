@@ -779,18 +779,21 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
     // docs/features/intake-similar.md "Acceptance criteria" IS6: the JSON
     // gains `similar` after `why` (51 keys, `null` in a review); the text
     // has no line for it.
+    // docs/features/collision-pairs.md PP8: the JSON gains `pair` after
+    // `evidence` (`null` on an update); the text has no line for it.
     let json_keys: Vec<&str> = REVIEW_KEYS
         .iter()
-        .flat_map(|key| {
-            if *key == "why" {
-                vec![*key, "similar"]
-            } else {
-                vec![*key]
-            }
+        .flat_map(|key| match *key {
+            "why" => vec![*key, "similar"],
+            "evidence" => vec![*key, "pair"],
+            _ => vec![*key],
         })
         .collect();
-    // 53 since docs/features/plain-questions.md PQ10.
-    assert_eq!(json_keys.len(), 53);
+    // 53 since docs/features/plain-questions.md PQ10; 54 since
+    // docs/features/collision-pairs.md PP8.
+    assert_eq!(json_keys.len(), 54);
+    assert!(value["pair"].is_null(), "{json}");
+    assert!(!text.contains("\npair"), "{text}");
     assert!(value["similar"].is_null(), "{json}");
     assert!(!text.contains("\nsimilar"), "{text}");
     let mut want = json_keys.clone();

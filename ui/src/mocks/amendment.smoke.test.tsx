@@ -131,9 +131,10 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     // Kinds are raw strings: spelled only in mocks and tests (ADR-0031).
     expect(reviews.filter((review) => review.kind === "amendment").map((review) => review.id)).toEqual([AMENDMENT]);
     const review = await client.getProposal(SLUG, AMENDMENT);
-    // A new file's review document: the 53 keys of any review, the card and why since card-questions (L1), similar since intake-similar (IS10),
-    // the gist and why it matters since plain-questions (docs/features/plain-questions.md "Acceptance criteria", PQ10).
-    expect(Object.keys(review)).toHaveLength(53);
+    // A new file's review document: the 54 keys of any review, the card and why since card-questions (L1), similar since intake-similar (IS10),
+    // the gist and why it matters since plain-questions (docs/features/plain-questions.md "Acceptance criteria", PQ10),
+    // the pair since collision-pairs (docs/features/collision-pairs.md "Acceptance criteria", PP8).
+    expect(Object.keys(review)).toHaveLength(54);
     expect(review).toMatchObject({
       id: AMENDMENT,
       project: SLUG,

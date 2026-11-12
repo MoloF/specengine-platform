@@ -29,7 +29,9 @@
 //!   `record_text`, `choice` (an object); then `task_id`, the task it was
 //!   raised for (canon `tasks`, "Task-bound proposals"); after
 //!   `interpretation`, `card_id`, the card a deciding kind was raised for,
-//!   and a decision's `why` (canon `card-questions`, "The rule"). A create (task spec
+//!   and a decision's `why` (canon `card-questions`, "The rule"). After
+//!   `evidence`, `pair`: a two-target `contradicts` discrepancy's sides,
+//!   filled by `spec review` alone (task spec `collision-pairs` PP1). A create (task spec
 //!   `proposal-kinds`) is an update's document, `target_ids` as stored; a
 //!   new file's base `null`, its diff from an empty base. An interpretation
 //!   (task spec `kind-interpretation`) is an update's document, its
@@ -61,6 +63,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use specengine_core::drift::{DriftRow, StoredJson};
 use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity, Interpretation};
+use specengine_core::pair::{Pair, PairSide};
 use specengine_core::proposal::{
     Author, ProposalIdError, is_utc_timestamp, look_alike_message, parse_proposal_id, prefix_clash,
 };
@@ -191,6 +194,12 @@ pub struct ProposalDocument {
     pub working_answer: Option<String>,
     pub price_of_other: Option<String>,
     pub evidence: Vec<Evidence>,
+    /// A two-target `contradicts` discrepancy's sides, resolved now, each
+    /// with the positions of the evidence citing its file, and the rest
+    /// under `other`: filled by `spec review` alone; `null` on every other
+    /// item and in every other answer (task spec `collision-pairs` PP1,
+    /// PP2).
+    pub pair: Option<Pair>,
     pub options: Vec<IntakeOption>,
     /// An index into `options`.
     pub recommendation: Option<u64>,
@@ -293,6 +302,7 @@ impl ProposalDocument {
             evidence: intake
                 .map(|intake| intake.evidence.clone())
                 .unwrap_or_default(),
+            pair: None,
             options: intake
                 .map(|intake| intake.options.clone())
                 .unwrap_or_default(),
@@ -958,6 +968,7 @@ fn review_text(document: &ProposalDocument) -> String {
         "evidence",
         Some(document.evidence.iter().map(evidence_line).collect()),
     );
+    pair_text(&mut out, document.pair.as_ref());
     list(
         &mut out,
         "options",
@@ -1068,6 +1079,49 @@ fn interpretation_text(out: &mut String, interpretation: Option<&Interpretation>
             }
         }
     }
+}
+
+/// The review text's `pair` (task spec `collision-pairs` PP5): `pair:`,
+/// then indented `left <side>`, `right <side>` and `other | evidence
+/// <positions>`; no line at all when null, so every other item's text is
+/// as before.
+fn pair_text(out: &mut String, pair: Option<&Pair>) {
+    let Some(pair) = pair else {
+        return;
+    };
+    out.push_str("pair:\n");
+    for (label, side) in [("left", &pair.left), ("right", &pair.right)] {
+        out.push_str(&format!("  {label} {}\n", pair_side_line(side)));
+    }
+    out.push_str(&format!(
+        "  other | evidence {}\n",
+        positions_text(&pair.other)
+    ));
+}
+
+/// One side: `<id, else the path> | <title, else -> | <path, else -> |
+/// evidence <positions>`, on one line.
+fn pair_side_line(side: &PairSide) -> String {
+    let dash = |value: Option<&str>| value.unwrap_or("-").to_owned();
+    one_line(&format!(
+        "{} | {} | {} | evidence {}",
+        dash(side.id.as_deref().or(side.path.as_deref())),
+        dash(side.title.as_deref()),
+        dash(side.path.as_deref()),
+        positions_text(&side.evidence)
+    ))
+}
+
+/// Evidence positions counted from 0, `, `-separated; `-` when none.
+fn positions_text(positions: &[usize]) -> String {
+    if positions.is_empty() {
+        return "-".to_owned();
+    }
+    positions
+        .iter()
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// One evidence item: `<file>[:<lines>][ <qpath>] | <observed> |

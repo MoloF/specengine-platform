@@ -779,20 +779,71 @@ const TOOLS_LIST_B3: [(Era, &str); 2] = [
     ),
 ];
 
+/// The same listing since docs/features/collision-pairs.md PP7: the review
+/// document's output schema gains `pair`, nothing else changes.
+const TOOLS_LIST_PAIR_B3: [(Era, &str); 2] = [
+    (
+        Era::Legacy,
+        "26f63aaf19a727cef9dc65b7d2fce7d6543633fa00edaef87375b19d7d426aee",
+    ),
+    (
+        Era::Stateless,
+        "6a8007bac542d36f2b1d0157fc8cec43bb1396857a8d53f014a4d1edbeb0b109",
+    ),
+];
+
+/// `list` as collision-pass listed it: no `pair` in any tool's output
+/// schema (docs/features/collision-pairs.md PP7 adds it to the review
+/// document's); the tools whose schema held one.
+fn without_pair(list: &mut Value) -> Vec<String> {
+    let mut held = Vec::new();
+    for tool in list["tools"].as_array_mut().expect("tools") {
+        let name = tool["name"].as_str().unwrap_or_default().to_owned();
+        let Some(schema) = tool.get_mut("outputSchema") else {
+            continue;
+        };
+        let removed = schema
+            .get_mut("properties")
+            .and_then(Value::as_object_mut)
+            .is_some_and(|properties| properties.remove("pair").is_some());
+        if removed {
+            if let Some(required) = schema.get_mut("required").and_then(Value::as_array_mut) {
+                required.retain(|key| key != "pair");
+            }
+            held.push(name);
+        }
+    }
+    held
+}
+
 /// docs/features/collision-names.md CN7, the listing half: the stdio
 /// `tools/list` of both eras hashes as at 8f04ae24 (no description, schema,
 /// annotation or `_meta` byte changed), and `INSTRUCTIONS` and
-/// `HUB_INSTRUCTIONS` as collision-pass pinned them.
+/// `HUB_INSTRUCTIONS` as collision-pass pinned them. Since
+/// docs/features/collision-pairs.md PP7 the listing is
+/// [`TOOLS_LIST_PAIR_B3`], and without the review document's `pair` it
+/// is still 8f04ae24's byte for byte.
 #[test]
 fn cn7_the_tools_list_is_byte_equal_to_collision_pass() {
     assert_eq!(TOOLS_LIST_B3.map(|(era, _)| era), ERAS);
-    for (era, pinned) in TOOLS_LIST_B3 {
+    assert_eq!(TOOLS_LIST_PAIR_B3.map(|(era, _)| era), ERAS);
+    for ((era, pinned), (_, paired)) in TOOLS_LIST_B3.into_iter().zip(TOOLS_LIST_PAIR_B3) {
         let mut session = Session::open(era, &[], None, Home::Fresh);
-        let list = session.tools();
+        let mut list = session.tools();
+        assert_eq!(
+            blake3_hex(canonical(&list).as_bytes()),
+            paired,
+            "{era:?}: tools/list changed"
+        );
+        let held = without_pair(&mut list);
+        assert!(
+            held.contains(&"get_proposal".to_owned()),
+            "{era:?}: get_proposal returns pair: {held:?}"
+        );
         assert_eq!(
             blake3_hex(canonical(&list).as_bytes()),
             pinned,
-            "{era:?}: tools/list changed"
+            "{era:?}: tools/list without `pair` is collision-pass'"
         );
         drop(session.finish());
     }

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Workspaces: a trade's lens on a project
@@ -15,7 +15,7 @@ A workspace is how one trade sees a project, a **Department** in the chrome: the
 
 The chrome's words are the owner's: Department for a workspace, Task for a card, Subtask for a child card, Agent task for a `T-` task. Config keys, the CLI, MCP and the daemon's text keep `workspace`, `module`, `card` and `task`, with no alias key, since a new top-level key would make an older binary refuse the file. A `[[card.flow]]` may carry a `title`, its display name. A hand-off names a department; the card carries a discipline that the new-card rule places in one of that department's flows (`card-flows.md` "Config").
 
-A workspace is never an entitlement, a control point, a filter that hides work or a hidden route. Every section keeps its hash route and its palette entry, every flow stays one Show all flows away, and a workspace changes no right, gate, finding or exit (ADR-0012). `[team]`'s roles stay the acts' entitlements (ADR-0060). Locally the choice is each viewer's own; a hub login's default is RM-0089's. The core names no trade: the presets are files outside the crates (`presets.md`; ADR-0008). ADR-0073, ADR-0076.
+A workspace is never an entitlement, a control point, a filter that hides work or a hidden route. Every section keeps its hash route and its palette entry, every flow stays one Show all flows away, and a workspace changes no right, gate, finding or exit (ADR-0012). `[team]`'s roles stay the acts' entitlements (ADR-0060). Locally the choice is each viewer's own; on a hub each login's, first landing on its `logins` default (`hub-department.md`). The core names no trade: the presets are files outside the crates (`presets.md`; ADR-0008). ADR-0073, ADR-0076.
 
 ## Config
 
@@ -29,10 +29,11 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 | `landing` | `overview` or a kept section; `overview` |
 | `flows` | at most 32 `[[card.flow]]` names; `null`, every flow |
 | `module` | a served module; `null` |
+| `logins` | at most 256 hub logins landing here, judged last: `hub-department.md` "Config"; none |
 
 `[[module]]`: `name` as above; `title` as a workspace's; exactly one of `root`, 1-256 bytes, no control character or end space, a REF in `spec show`'s forms, unresolved, and `kinds`, a direction (`directions.md` "Config"). At most 32 workspaces, 64 modules; an empty array is no key. No `[[workspace]]`: the implicit `all`, "All sections", the eight, `overview`, every flow, no module, no note.
 
-**Judging.** `[[module]]`, then `[[workspace]]`: a malformed table (not an array of tables, an unknown key, a wrong type, `name` missing, neither or both of `root` and `kinds`, a bad name, title, root or `kinds`, a name twice, a limit passed) gives its default, no module or the implicit workspace, and one note, the first problem by line. Then each workspace: an unknown or repeated section or flow is left out, a landing not kept is `overview`, an unserved module `null`, each with a note; no flow left, or `flows = []` (`[card]` unread), is `null`. `[card]` is read once per workspaces read (`card_from_toml`), judging flows and giving `disciplines`; if it does not read, every `disciplines` is `[]` and listed flows are served as written, repeats too, with one note, pushed only there. Not TOML: the implicit workspace, one note (`ProjectConfig` refuses it first). A note's line: the value's, a missing key's header's, else 1. `<config>` as given:
+**Judging.** `[[module]]`, then `[[workspace]]`: a malformed table (not an array of tables, an unknown key, a wrong type, `name` missing, neither or both of `root` and `kinds`, a bad name, title, root or `kinds`, a name twice, a limit passed) gives its default, no module or the implicit workspace, and one note, the first problem by line. `logins` is the seventh key; its notes name a type and a position, never the value (`hub-department.md` "Privacy"). Then each workspace: an unknown or repeated section or flow is left out, a landing not kept is `overview`, an unserved module `null`, each with a note; no flow left, or `flows = []` (`[card]` unread), is `null`. `[card]` is read once per workspaces read (`card_from_toml`), judging flows and giving `disciplines`; if it does not read, every `disciplines` is `[]` and listed flows are served as written, repeats too, with one note, pushed only there. Not TOML: the implicit workspace, one note (`ProjectConfig` refuses it first). A note's line: the value's, a missing key's header's, else 1. `<config>` as given:
 
 ```text
 <config>:<line>: <problem>; the implicit workspace is served
@@ -50,9 +51,9 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 
 ## Read
 
-`spec workspace [--json]` (CLI `workspace.rs`): the config once (`discover_with_text`), no index, no write, no cut. Text: `workspaces <source> | workspaces <n>, modules <m>`; `workspace <name> | <title> | landing <l> | sections <a, b> | flows <a, b> | module <m>`, `(all)` for `null` flows, `(none)` for no module or sections; `module <name> | <title> | root <REF>`, a direction `| kinds <a, b>` (card-press, studio-lamp `expected.json`). JSON `{source, notes, workspaces: [{name, title, landing, sections, flows, disciplines, module}], modules: [{name, title, root, kinds}]}`, every key, that order, `root` or `kinds` null. Notes and lines are one line, controls escaped (a newline a space, ESC `\u{1b}`): `note:` lines equal JSON `notes`. Exit 0 whatever the tables; 2 on usage, no project, a config `ProjectConfig` refuses.
+`spec workspace [--json] [--login L]` (CLI `workspace.rs`): the config once (`discover_with_text`), no index, no write, no cut. Text: `workspaces <source> | workspaces <n>, modules <m>`; `workspace <name> | <title> | landing <l> | sections <a, b> | flows <a, b> | module <m>`, `(all)` for `null` flows, `(none)` for no module or sections; `module <name> | <title> | root <REF>`, a direction `| kinds <a, b>` (card-press, studio-lamp `expected.json`). JSON `{source, notes, workspaces: [{name, title, landing, sections, flows, disciplines, module}], modules: [{name, title, root, kinds}], default}`, every key, that order, `root` or `kinds` null, `default` the asked login's (`hub-department.md` "Read"). Notes and lines are one line, controls escaped (a newline a space, ESC `\u{1b}`): `note:` lines equal JSON `notes`. Exit 0 whatever the tables; 2 on usage, no project, a config `ProjectConfig` refuses.
 
-`GET /api/projects/:p/workspaces` (http `app.rs`): that JSON byte for byte; a query 400, not GET 405 `Allow: GET`, a refused config 503. **No turn**: config only, as `/api/projects` (`serve.md` "Concurrency"). A hub mounts it for every login, never reading `[team]`. Key sets `WorkspaceDocument`, `Workspace`, `WorkspaceModule`. No MCP tool: an agent needs no viewer's nav.
+`GET /api/projects/:p/workspaces` (http `app.rs`): that JSON byte for byte; a query 400, not GET 405 `Allow: GET`, a refused config 503. **No turn**: config only, as `/api/projects` (`serve.md` "Concurrency"). A hub mounts it for every login, passed as `--login`, never reading `[team]`. Key sets `WorkspaceDocument`, `Workspace`, `WorkspaceModule`. No MCP tool: an agent needs no viewer's nav.
 
 **`disciplines`**, JSON only (core `disciplines_of`), what Hand off offers (`card-flows.md` "Hand-off"): the department's flows in its order (`null`: every flow, config order), each flow's disciplines as written, each once, one kept only if the first flow listing it in config order (`CardConfig::flow_for`, the new-card rule) is one of them. Flows `a` `[x, y]`, `b` `[y, z]`: `[b]` gives `[z]`, `[b, a]` `[y, z, x]`. Every listed flow unknown: `flows` `null`, so every discipline; the implicit workspace likewise.
 
@@ -61,7 +62,7 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edit raises no event).
 
 - **Nav** (`routes.ts` `navOf`): Overview, then the workspace's sections that pass `isSectionId`. Pending: a skeleton, `aria-busy`; failed: the nine, or the kept answer's. A section off the nav renders on its route, no redirect, no item `aria-current`; the palette lists all nine.
-- **Keys** (`choice.ts`): `specengine.workspace.<p>`, a name, unserved: the first workspace. `specengine.module.<p>`: `""` All modules; a served name; none or unserved: the workspace's `module`. Choosing a workspace removes it. Storage refusing: held until a reload.
+- **Keys** (`choice.ts`): `specengine.workspace.<p>`, a name, unserved: the `default`, else the first workspace; a hub's keys end `.<login>` (`hub-department.md` "Screen"). `specengine.module.<p>`: `""` All modules; a served name; none or unserved: the workspace's `module`. Choosing a workspace removes it. Storage refusing: held until a reload.
 - **Switcher**: a select "Department" in the header, titles in served order, `workspaceHint` its description and `title`, with two or more. Choosing stores, removes the module key, pushes the landing (`#/<p>` for `overview`).
 - **Landing**: `#/` is replaced, no history entry, by the first project's landing once read, `#/<p>` on failure; a typed `#/<p>` is the Overview, the chosen department's numbers (`card-counts.md` "Overview").
 - **Notes**: `Config notes (n)` beside the switcher or alone: the notes verbatim, in order, or a failed read's message and Retry; else none.
@@ -80,7 +81,7 @@ http `tests/no_domain.rs` takes each `[[workspace]]` and `[[module]]` name and `
 ## Known limits
 
 - **Older binaries.** `RawFile` is `deny_unknown_fields`, so a `spec`, daemon or MCP server older than `workspaces` refuses a whole config holding either table; a `v0.29.1` hub fails every read with 503. One older than `departments` refuses a flow's `title` and drops every module when one holds `kinds`, one note. The rule: **commit no such key before every hub, terminal and plugin serving the project runs a build that reads it**. The gate's hook is unaffected (`gate.md`).
-- Flow draws no direction (RM-0102). A choice is per browser. No `spec check` finding: only the notes.
+- Flow draws no direction (RM-0102). A local choice is per browser. No `spec check` finding: only the notes.
 
 ## Tests
 

@@ -638,6 +638,11 @@ pub(crate) struct ReviewDocument {
     pub working_answer: Option<String>,
     pub price_of_other: Option<String>,
     pub evidence: Vec<Evidence>,
+    // `docs/features/collision-pairs.md` "Acceptance criteria", PP7.
+    /// A two-target contradicts discrepancy's two sides in a review, each
+    /// with the positions of the evidence citing its file; `null` on every
+    /// other item and answer.
+    pub pair: Option<Pair>,
     pub options: Vec<IntakeOption>,
     pub recommendation: Option<u64>,
     pub distinct_from: Vec<String>,
@@ -670,6 +675,30 @@ pub(crate) struct ReviewDocument {
     /// every other kind and in every review.
     pub similar: Option<Vec<SimilarShape>>,
     pub notes: Vec<String>,
+}
+
+/// The two documents a contradicts discrepancy sets against each other:
+/// left its first target, right its second, other the evidence citing
+/// neither file.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct Pair {
+    pub left: PairSide,
+    pub right: PairSide,
+    /// Positions in evidence, ascending.
+    pub other: Vec<usize>,
+}
+
+/// One side of a pair, resolved now: id null for a path target, title
+/// null when gone.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct PairSide {
+    pub id: Option<String>,
+    pub title: Option<String>,
+    pub path: Option<String>,
+    /// Positions in evidence whose file is this path, ascending.
+    pub evidence: Vec<usize>,
 }
 
 /// One entry of a create's `similar` list: a corpus node, or a live

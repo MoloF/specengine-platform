@@ -284,6 +284,8 @@ mod lock_regen;
 mod node_set;
 mod outputs;
 mod package;
+#[cfg(test)]
+mod pair_tests;
 mod preflight;
 mod project;
 mod proposals;
@@ -571,7 +573,7 @@ pub use verify_tests::{
     VerifyTestsLock, VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest,
     VerifyTestsRow, verify_tests,
 };
-pub use workspace::{WorkspaceOutcome, workspace};
+pub use workspace::{WorkspaceOutcome, WorkspaceRequest, workspace};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

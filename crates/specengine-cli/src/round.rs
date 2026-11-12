@@ -11,6 +11,8 @@
 //!   another repository's items, a gone repository's, corrupt rows and the
 //!   items past `--limit` are notes, never items. One database and tree
 //!   state give the same bytes: no clock, no relative age, no read time.
+//!   An item's JSON holds its `pair` over its targets resolved now (task
+//!   spec `collision-pairs` PP1); the sheet prints none.
 //!   The sheet is Markdown; every text of the queue, the index or a task
 //!   is escaped and never starts a line (a multi-line text indented two
 //!   spaces, a one-line slot after a frame word with LF and CR written
@@ -56,6 +58,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use specengine_core::check::CheckInput;
 use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity};
+use specengine_core::pair::{Pair, PairTarget, collision_pair, pair_applies};
 use specengine_core::proposal::{Author, ProposalIdError, parse_proposal_id};
 use specengine_core::round::{
     AnswerLine, Answers, OrderKey, PROJECT_LINE, ROUND_FILE_MAX_BYTES, ROUND_LIMIT_DEFAULT,
@@ -78,6 +81,7 @@ use crate::proposals::{
 };
 use crate::propose::{is_path_target, resolved_node};
 use crate::stage::{StageBody, StageOutcome, StageRequest, stage_with, staged_command};
+use crate::subset::seams::{self, Event as Seam};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// The most IDs a note names; the rest are counted.
@@ -121,7 +125,7 @@ pub struct RoundTask {
     pub title: Option<String>,
 }
 
-/// One item of a sheet: 21 keys, in this order, as stored.
+/// One item of a sheet: 22 keys, in this order, as stored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RoundItem {
     pub id: String,
@@ -138,6 +142,10 @@ pub struct RoundItem {
     pub options: Vec<IntakeOption>,
     pub recommendation: Option<u64>,
     pub evidence: Vec<Evidence>,
+    /// A two-target `contradicts` discrepancy's sides over `targets`, each
+    /// with the positions of the evidence citing its file; `null` on every
+    /// other item (task spec `collision-pairs` PP1, PP2).
+    pub pair: Option<Pair>,
     pub targets: Vec<RoundTarget>,
     /// Every waiting task, by ID.
     pub tasks: Vec<RoundTask>,
@@ -414,11 +422,15 @@ fn item(
     tasks: &[&Task],
 ) -> RoundItem {
     let intake = proposal.intake.as_ref();
-    let targets = proposal
+    let targets: Vec<RoundTarget> = proposal
         .target_ids()
         .iter()
         .map(|stored| target(project, input, proposal, stored))
         .collect();
+    let pair = match targets.as_slice() {
+        [left, right] if pair_served(proposal) => Some(pair_of(proposal, left, right)),
+        _ => None,
+    };
     let staged = proposal.staged.as_ref();
     RoundItem {
         id: proposal.id.clone(),
@@ -439,6 +451,7 @@ fn item(
         evidence: intake
             .map(|intake| intake.evidence.clone())
             .unwrap_or_default(),
+        pair,
         targets,
         tasks: tasks
             .iter()
@@ -458,13 +471,56 @@ fn item(
     }
 }
 
-/// The stored target `stored` of `proposal`, resolved now.
-fn target(
+/// Whether `proposal` serves a pair (task spec `collision-pairs` PP2): a
+/// two-target `contradicts` discrepancy, by its stored fields alone, so no
+/// target is resolved for any other item (PP6).
+pub(crate) fn pair_served(proposal: &Proposal) -> bool {
+    let gap_type = proposal
+        .intake
+        .as_ref()
+        .and_then(|intake| intake.gap_type)
+        .map(GapType::as_str);
+    pair_applies(
+        proposal.kind.as_str(),
+        gap_type,
+        proposal.target_ids().len(),
+    )
+}
+
+/// The pair of `proposal`'s two targets resolved now, `left` its first
+/// stored one (task spec `collision-pairs` PP1, PP3): its evidence by
+/// position, a side's when its `file` is that side's path as resolved.
+pub(crate) fn pair_of(proposal: &Proposal, left: &RoundTarget, right: &RoundTarget) -> Pair {
+    let files: Vec<&str> = proposal
+        .intake
+        .iter()
+        .flat_map(|intake| intake.evidence.iter())
+        .map(|item| item.file.as_str())
+        .collect();
+    collision_pair(left.side(), right.side(), &files)
+}
+
+impl RoundTarget {
+    /// This target as a pair's side reads it.
+    fn side(&self) -> PairTarget<'_> {
+        PairTarget {
+            id: self.id.as_deref(),
+            title: self.title.as_deref(),
+            path: self.path.as_deref(),
+        }
+    }
+}
+
+/// The stored target `stored` of `proposal`, resolved now: `spec round`'s
+/// and a review's pair's one resolver (task spec `collision-pairs` PP6
+/// counts it).
+pub(crate) fn target(
     project: &ProjectRoot,
     input: &CheckInput,
     proposal: &Proposal,
     stored: &str,
 ) -> RoundTarget {
+    seams::note(Seam::PairTarget);
     let path_target = is_path_target(stored);
     let id = (!path_target).then(|| stored.to_owned());
     match resolved_node(project, input, stored) {

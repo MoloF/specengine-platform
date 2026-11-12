@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
-import { useCardWriting, useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
+import { useCardWriting, useIdentity, useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
 import type { Project } from "../api/types";
 import { BoardView, type BoardMemory, type BoardState } from "../board/BoardView";
 import { CardPage } from "../board/CardPage";
@@ -27,7 +27,7 @@ import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
-import { isDirection, landingHash, useWorkspaceChoice } from "../workspace/choice";
+import { choosesByLogin, isDirection, landingHash, useWorkspaceChoice } from "../workspace/choice";
 import { ModuleBar } from "../workspace/ModuleBar";
 import { ConfigNotes, WorkspaceSwitcher } from "../workspace/WorkspaceControls";
 import { isJumpChord, JUMP_KEYSHORTCUTS } from "./chord";
@@ -302,7 +302,16 @@ export function Shell({ scenario }: { scenario: string | null }) {
   // read, no turn; while it is out the nav is a skeleton, and failed it lists every section.
   const workspaces = useWorkspaces(navProject ?? "", navProject !== null);
   const workspacesFailure = useRetainedFailure(workspaces.error, workspaces.isFetching);
-  const choice = useWorkspaceChoice(navProject, workspaces.data);
+  // Whose choice the lens is (docs/features/hub-department.md "Acceptance criteria", HD3): a hub's
+  // login, null locally, once the identity is read; while it is out a lens the login could change waits
+  // with the nav's skeleton; failed, no stored choice is read or written and the lens lands on the
+  // served default.
+  const identity = useIdentity();
+  const identityFailure = useRetainedFailure(identity.error, identity.isFetching);
+  const identityPending = identity.data === undefined && identityFailure === null;
+  /** The workspaces document the lens is chosen over: none while the login it is chosen for is out and could change it. */
+  const lens = identityPending && workspaces.data !== undefined && choosesByLogin(workspaces.data) ? undefined : workspaces.data;
+  const choice = useWorkspaceChoice(navProject, identity.data?.login, lens);
   /** The workspaces read failed with no answer to keep: every section is shown. */
   const workspacesFailed = workspaces.data === undefined && workspacesFailure !== null;
   const navRef = useRef<HTMLElement>(null);
@@ -315,13 +324,14 @@ export function Shell({ scenario }: { scenario: string | null }) {
    * (`moduleKinds`), and Flow reads it as All modules
    * (docs/features/departments.md "Acceptance criteria", DP-11, DP-12).
    */
-  const moduleRoot = workspaces.data !== undefined ? (choice.module?.root ?? null) : workspacesFailed ? null : undefined;
+  const moduleRoot = lens !== undefined ? (choice.module?.root ?? null) : workspacesFailed ? null : undefined;
   const moduleKinds = choice.module !== null && isDirection(choice.module) ? choice.module.kinds : null;
   const landingProject = route.type === "home" ? firstProject : null;
-  const landing = landingProject === null ? null : workspaces.data !== undefined ? landingHash(landingProject, choice.workspace) : workspacesFailed ? homeHash(landingProject) : null;
+  const landing = landingProject === null ? null : lens !== undefined ? landingHash(landingProject, choice.workspace) : workspacesFailed ? homeHash(landingProject) : null;
 
-  // `#/` is the first project's landing in its chosen workspace, once its workspaces are read, or its
-  // home if they cannot be; without a history entry of its own. A typed `#/<p>` is never redirected.
+  // `#/` is the first project's landing in its chosen workspace, once its workspaces and the login are
+  // read (a first visit's, the default's: docs/features/hub-department.md "Acceptance criteria", HD3), or
+  // its home if they cannot be; without a history entry of its own. A typed `#/<p>` is never redirected.
   useEffect(() => {
     if (landing !== null) {
       replaceHash(landing, { keepDoc: false });
@@ -532,12 +542,12 @@ export function Shell({ scenario }: { scenario: string | null }) {
   const inboxHref = navProject === null ? "#/" : sectionHash(navProject, "inbox");
 
   function chooseWorkspace(name: string) {
-    if (navProject === null || workspaces.data === undefined) {
+    if (navProject === null || lens === undefined) {
       return;
     }
     choice.chooseWorkspace(name);
     // Its landing, one history entry (none when it is the hash shown).
-    pushHash(landingHash(navProject, workspaces.data.workspaces.find((workspace) => workspace.name === name) ?? null));
+    pushHash(landingHash(navProject, lens.workspaces.find((workspace) => workspace.name === name) ?? null));
   }
 
   function retryWorkspaces() {
@@ -547,7 +557,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
 
   // The nav: the chosen workspace's sections; every section when the read failed, or with no project
   // to read them for (the projects could not be read, or there are none); a skeleton while it is out.
-  const navPending = navProject === null ? projects.data === undefined && projectsFailure === null : workspaces.data === undefined && !workspacesFailed;
+  const navPending = navProject === null ? projects.data === undefined && projectsFailure === null : lens === undefined && !workspacesFailed;
   const navSections = choice.workspace?.sections ?? ALL_SECTIONS;
   const routeModules = route.type === "section" && route.section === "tree" ? (workspaces.data?.modules ?? []) : [];
 
@@ -600,7 +610,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
         project={route.project}
         workspace={choice.workspace}
         module={choice.module}
-        workspaces={workspaces.data?.workspaces ?? (workspacesFailed ? [] : null)}
+        workspaces={lens?.workspaces ?? (workspacesFailed ? [] : null)}
       />
     );
   } else if (route.section === "inbox") {
@@ -619,7 +629,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
         cardId={route.id}
         memory={boardMemory}
         flows={choice.workspace?.flows ?? null}
-        flowsKnown={workspaces.data !== undefined || workspacesFailed}
+        flowsKnown={lens !== undefined || workspacesFailed}
         lens={choice.workspace?.name ?? null}
       />
     );
@@ -692,8 +702,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
             retrying={projects.isFetching}
             onRetry={retryProjects}
           />
-          {navProject !== null && choice.workspace !== null && workspaces.data !== undefined && (
-            <WorkspaceSwitcher workspaces={workspaces.data.workspaces} chosen={choice.workspace} onChoose={chooseWorkspace} />
+          {navProject !== null && choice.workspace !== null && lens !== undefined && (
+            <WorkspaceSwitcher workspaces={lens.workspaces} chosen={choice.workspace} onChoose={chooseWorkspace} />
           )}
           {navProject !== null && (
             <ConfigNotes

@@ -99,7 +99,7 @@ function chooseMandates(dialog: HTMLElement, value = "binding") {
 describe("the Split dialog (U2 of department-split)", () => {
   it("reads the plan once as it opens, dry_run true and child null; rows in served order under the first department whose flows name theirs, Other flows last; the suggested checked; the suggested line", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ann");
-    window.localStorage.setItem(workspaceKey("alpha"), "studio");
+    window.localStorage.setItem(workspaceKey("alpha", null), "studio");
     const client = splitClient();
     const dialog = await fromDocument(client);
     await planned(dialog);
@@ -139,7 +139,7 @@ describe("the Split dialog (U2 of department-split)", () => {
   });
 
   it("from a document: Title prefilled, Goal empty, Discipline the chosen department's first among every discipline served once, the document's tasks as links to their work items", async () => {
-    window.localStorage.setItem(workspaceKey("alpha"), "studio");
+    window.localStorage.setItem(workspaceKey("alpha", null), "studio");
     const dialog = await fromDocument();
     expect(within(dialog).getByLabelText<HTMLInputElement>("Title").value).toBe("The ferry");
     expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Goal").value).toBe("");

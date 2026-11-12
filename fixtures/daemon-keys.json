@@ -1,7 +1,7 @@
 {
   "Project": ["slug", "name", "root", "branch"],
   "InboxEntry": ["id", "kind", "status", "target_id", "target_ids", "branch", "created_at", "rationale", "severity", "summary", "gist", "record_id", "staged_at"],
-  "Proposal": ["id", "project", "kind", "status", "target_id", "target_path", "worktree", "branch", "base_commit", "base_hash", "base_text", "new_text", "patch_hash", "rationale", "author", "diagnostics", "diff", "preview", "conflict", "revisions", "drift", "decided_by", "decided_at", "decision_note", "applied_commit", "created_at", "updated_at", "target_ids", "severity", "gap_type", "summary", "gist", "matters", "working_answer", "price_of_other", "evidence", "options", "recommendation", "distinct_from", "linked", "record_id", "record_path", "record_title", "record_text", "choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes"],
+  "Proposal": ["id", "project", "kind", "status", "target_id", "target_path", "worktree", "branch", "base_commit", "base_hash", "base_text", "new_text", "patch_hash", "rationale", "author", "diagnostics", "diff", "preview", "conflict", "revisions", "drift", "decided_by", "decided_at", "decision_note", "applied_commit", "created_at", "updated_at", "target_ids", "severity", "gap_type", "summary", "gist", "matters", "working_answer", "price_of_other", "evidence", "pair", "options", "recommendation", "distinct_from", "linked", "record_id", "record_path", "record_title", "record_text", "choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes"],
   "NodeView": ["ref", "reason", "notes", "nodes"],
   "SearchHit": ["id", "kind", "title", "path", "line", "ord", "archived", "snippet"],
   "BundleView": ["refs", "reason", "notes", "task", "budget", "tokens", "chars", "bytes", "bundle_hash", "body", "layers", "tail", "more"],
@@ -34,7 +34,7 @@
   "StagedApprove": ["decision", "option", "answer", "canon", "editorial", "note", "span_hash"],
   "StagedReject": ["decision", "reason"],
   "RoundSheet": ["project", "items", "more", "minutes", "notes"],
-  "RoundItem": ["id", "kind", "severity", "gap_type", "summary", "gist", "matters", "working_answer", "price_of_other", "options", "recommendation", "evidence", "targets", "tasks", "worktree", "branch", "author", "staged", "staged_at", "created_at", "updated_at"],
+  "RoundItem": ["id", "kind", "severity", "gap_type", "summary", "gist", "matters", "working_answer", "price_of_other", "options", "recommendation", "evidence", "pair", "targets", "tasks", "worktree", "branch", "author", "staged", "staged_at", "created_at", "updated_at"],
   "RoundTarget": ["id", "path", "title"],
   "RoundTask": ["id", "status", "title"],
   "RoundAnswersOutcome": ["project", "answers", "notes"],
@@ -109,7 +109,7 @@
   "Team": ["login", "name", "allowed"],
   "ConfirmRead": ["id", "question", "updated_at"],
   "HubSync": ["ahead", "behind", "state", "error", "at"],
-  "WorkspaceDocument": ["source", "notes", "workspaces", "modules"],
+  "WorkspaceDocument": ["source", "notes", "workspaces", "modules", "default"],
   "Workspace": ["name", "title", "landing", "sections", "flows", "disciplines", "module"],
   "WorkspaceModule": ["name", "title", "root", "kinds"],
   "CardTask": ["id", "status", "title", "stale"],
@@ -141,5 +141,7 @@
   "CatalogChange": ["at", "by", "by_name", "commit", "proposal", "of_file"],
   "CardCounts": ["flows", "columns", "by_flow", "agent_tasks", "notes", "truncated", "omitted"],
   "CardColumnCount": ["flow", "column", "open", "accepted", "cancelled", "open_subtasks"],
-  "CardFlowCount": ["flow", "open_items", "oldest_open_item", "ready_parents", "review_agent_tasks"]
+  "CardFlowCount": ["flow", "open_items", "oldest_open_item", "ready_parents", "review_agent_tasks"],
+  "Pair": ["left", "right", "other"],
+  "PairSide": ["id", "title", "path", "evidence"]
 }

@@ -107,6 +107,7 @@ import { lockDiffOf } from "./lockDiff";
 import { deliveryOf } from "./delivery";
 import { catalogOf } from "./catalog";
 import { plainQuestionsScenario } from "./plainQuestions";
+import { collisionPairsScenario } from "./collisionPairs";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
@@ -220,6 +221,9 @@ export class MockClient implements SpecEngineClient {
     }
     if (scenario === "plain-questions") {
       plainQuestionsScenario(this.project("harbor-sim"), this.boards.get("harbor-sim"), at);
+    }
+    if (scenario === "collision-pairs") {
+      collisionPairsScenario(this.project("harbor-sim"), this.boards.get("harbor-sim"), at);
     }
     if (scenario === "aside" || scenario === "aside40") {
       // The pottery workshop of `fixtures/flow-aside` in place of harbor-sim's spec (`docs/canon/spec-flow-screen.md` "Mock"; RM-0094).

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Question rounds
@@ -46,7 +46,7 @@ The sheet, a question and a decision: `round-sheet.md`.
 
 ## JSON
 
-`--json`: `{"project", "items", "more", "minutes", "notes"}`; an item's 21 keys in this order, raw strings as stored, absent `null`, lists `[]`: `id, kind, severity, gap_type, summary, gist, matters, working_answer, price_of_other, options [{label, effect, price}], recommendation, evidence [{file, qpath, lines, observed, documented}], targets [{id, path, title}], tasks [{id, status, title}], worktree, branch, author {type, role, model, run}, staged, staged_at, created_at, updated_at`; a target's `id` `null` for a path, `title` when gone; `tasks` all. `more`: the items past `--limit`; `minutes` 0 with none.
+`--json`: `{"project", "items", "more", "minutes", "notes"}`; an item's 22 keys in this order, raw strings as stored, absent `null`, lists `[]`: `id, kind, severity, gap_type, summary, gist, matters, working_answer, price_of_other, options [{label, effect, price}], recommendation, evidence [{file, qpath, lines, observed, documented}], pair (`agent-intake-documents.md` "Pair"), targets [{id, path, title}], tasks [{id, status, title}], worktree, branch, author {type, role, model, run}, staged, staged_at, created_at, updated_at`; a target's `id` `null` for a path, `title` when gone; `tasks` all. `more`: the items past `--limit`; `minutes` 0 with none.
 
 ## Answers
 

@@ -3,6 +3,7 @@ import type { RoundAnswerEntry, RoundItem } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { AskedFold, ItemLead, RecommendedMark } from "../inbox/ItemLead";
+import { PairSlot } from "../inbox/PairSlot";
 import { severityLook } from "../inbox/labels";
 import { StagedChoice } from "../inbox/StagedChoice";
 import { Badge } from "../ui/Badge";
@@ -118,7 +119,9 @@ function Concern({ project, target }: { project: string; target: RoundItem["targ
  * One item of the round, in the sheet's order and with the text sheet's fields
  * (`docs/canon/round.md` "Sheet"): its ID, kind (raw) and severity, text, working answer, the price
  * of another answer, options, Concerns and Waiting as links; no worktree, branch, gap type, author
- * or evidence. Its controls follow its structure (answersOf): each option it holds; with a price of
+ * or flat evidence: a served collision pair alone lays its evidence out, after the text
+ * (docs/features/collision-pairs.md "Acceptance criteria", PP9). Its controls follow its structure
+ * (answersOf): each option it holds; with a price of
  * another answer, or with no options, Take the working answer (when given) and Your answer; then
  * Reject with a reason, Leave open. Nothing is picked for the owner, the recommended option only
  * marked with who made it (docs/features/plain-questions.md "Acceptance criteria", PQ12). An item
@@ -209,6 +212,8 @@ export const RoundItemCard = memo(function RoundItemCard({
   const asked = (
     <>
       <AgentText text={item.summary} />
+      {/* A two-sided collision's documents, as served, right after the summary (docs/features/collision-pairs.md "Acceptance criteria", PP9). */}
+      {item.pair !== null && <PairSlot pair={item.pair} evidence={item.evidence} />}
 
       {item.working_answer !== null && (
         <div className="round-part">

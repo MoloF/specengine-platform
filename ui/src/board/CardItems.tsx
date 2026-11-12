@@ -7,6 +7,7 @@ import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { confirmedLine, stagedAnnouncement } from "../inbox/decisions";
 import { AskedFold, AskedText, ItemLead, RecommendedMark } from "../inbox/ItemLead";
+import { PairSlot } from "../inbox/PairSlot";
 import { StagedChoice } from "../inbox/StagedChoice";
 import { answersOf, choiceOf, draftOf, type Draft, type DraftPick } from "../round/drafts";
 import { useAnnounce } from "../ui/announcer";
@@ -300,6 +301,8 @@ function AnswerDialog({ project, item, onClose }: { project: string; item: CardI
             <Text text={review.summary} />
           </p>
         )}
+        {/* A two-sided collision's documents, as served, right after the summary (docs/features/collision-pairs.md "Acceptance criteria", PP9). */}
+        {review.pair !== null && <PairSlot pair={review.pair} evidence={review.evidence} />}
         {review.working_answer !== null && (
           <div className="round-part">
             <p className="round-label">{t("round.workingAnswer")}</p>

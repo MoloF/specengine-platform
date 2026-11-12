@@ -923,8 +923,10 @@ fn drift_review_has_no_preview() {
     let (text, json_text, document) = review_of(&repo, &id);
     // 50 since docs/features/card-questions.md D14 (`card_id`, `why`); 51
     // since docs/features/intake-similar.md "Acceptance criteria" IS6
-    // (`similar`, `null`); 53 since docs/features/plain-questions.md PQ10.
-    assert_eq!(document.as_object().unwrap().len(), 53);
+    // (`similar`, `null`); 53 since docs/features/plain-questions.md PQ10;
+    // 54 since docs/features/collision-pairs.md PP8 (`pair`, `null`).
+    assert_eq!(document.as_object().unwrap().len(), 54);
+    assert_eq!(document["pair"], Value::Null);
     assert_eq!(document["similar"], Value::Null);
     assert_eq!(document["kind"], json!("drift"));
     assert_eq!(document["card_id"], Value::Null);

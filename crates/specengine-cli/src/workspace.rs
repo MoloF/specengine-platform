@@ -1,8 +1,15 @@
-//! `spec workspace [--json]` (task spec `workspaces`, "Data"): the project's
-//! `[[workspace]]` and `[[module]]` tables as [`WorkspaceConfig`] reads
-//! them, for the person who writes the config and for `GET .../workspaces`,
-//! whose answer is this document byte for byte. It reads the config once,
-//! opens no index and writes nothing, like `spec team`.
+//! `spec workspace [--json] [--login L]` (task spec `workspaces`, "Data"):
+//! the project's `[[workspace]]` and `[[module]]` tables as
+//! [`WorkspaceConfig`] reads them, for the person who writes the config and
+//! for `GET .../workspaces`, whose answer is this document byte for byte. It
+//! reads the config once, opens no index and writes nothing, like `spec
+//! team`.
+//!
+//! `--login L` adds the one login's `default`, the workspace whose `logins`
+//! holds `L` byte for byte (task spec `hub-department` HD1): `L` is any
+//! string, never refused and never printed, and no other login and no
+//! `logins` list is served (HD6). Without it `default` is `null` and the
+//! text is as before (HD7).
 //!
 //! The tables never fail it: a malformed one serves its default with a
 //! note, and the exit is 0 whatever they say. Exit 2 is only no project or
@@ -17,6 +24,14 @@ use specengine_core::{Workspace, WorkspaceConfig, WorkspaceModule, WorkspaceSour
 use crate::project::discover_with_text;
 use crate::{CliError, Env, Globals, escape_controls, one_line};
 
+/// `spec workspace` options.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorkspaceRequest {
+    /// `--login`: the login whose `default` is served; `None` serves none.
+    /// A hub passes its request's login, a local daemon none.
+    pub login: Option<String>,
+}
+
 /// What `spec workspace` printed: every key present, in this order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceOutcome {
@@ -26,11 +41,22 @@ pub struct WorkspaceOutcome {
     /// At least one: the implicit workspace when none is configured.
     pub workspaces: Vec<Workspace>,
     pub modules: Vec<WorkspaceModule>,
+    /// The asked login's workspace ([`WorkspaceConfig::default_for`]);
+    /// `None` with no login asked or none matching (task spec
+    /// `hub-department` HD1).
+    pub default: Option<String>,
+    /// Whether a login was asked: the text's `default` line alone (HD7).
+    #[serde(skip)]
+    pub asked: bool,
 }
 
 impl WorkspaceOutcome {
-    /// `config`'s document, its notes naming `label`.
-    pub fn of(config: WorkspaceConfig, label: &str) -> Self {
+    /// `config`'s document, its notes naming `label`, with `login`'s
+    /// `default` when one is asked.
+    pub fn of(config: WorkspaceConfig, label: &str, login: Option<&str>) -> Self {
+        let default = login
+            .and_then(|login| config.default_for(login))
+            .map(str::to_owned);
         Self {
             source: config.source,
             notes: config
@@ -40,6 +66,8 @@ impl WorkspaceOutcome {
                 .collect(),
             workspaces: config.workspaces,
             modules: config.modules,
+            default,
+            asked: login.is_some(),
         }
     }
 
@@ -53,11 +81,16 @@ impl WorkspaceOutcome {
 }
 
 /// `spec workspace` (see the module documentation).
-pub fn workspace(env: &Env, globals: &Globals) -> Result<WorkspaceOutcome, CliError> {
+pub fn workspace(
+    env: &Env,
+    globals: &Globals,
+    request: &WorkspaceRequest,
+) -> Result<WorkspaceOutcome, CliError> {
     let (project, text) = discover_with_text(env, globals)?;
     Ok(WorkspaceOutcome::of(
         WorkspaceConfig::from_toml(&text),
         &project.config_label,
+        request.login.as_deref(),
     ))
 }
 
@@ -65,11 +98,12 @@ pub fn workspace(env: &Env, globals: &Globals) -> Result<WorkspaceOutcome, CliEr
 /// and no section ID, so it is never a name.
 const NONE: &str = "(none)";
 
-/// `workspaces <source> | workspaces <n>, modules <m>`, then a line per
-/// workspace and per module (`root <REF>`, or a direction's
-/// `kinds <a, b>`), in served order. Each line is one line and its
-/// control characters escaped: a `[card]` that does not read serves `flows`
-/// as written.
+/// `workspaces <source> | workspaces <n>, modules <m>`, then, with a login
+/// asked, `default <name>` or `default (none)` (task spec `hub-department`
+/// HD7), then a line per workspace and per module (`root <REF>`, or a
+/// direction's `kinds <a, b>`), in served order. Each line is one line and
+/// its control characters escaped: a `[card]` that does not read serves
+/// `flows` as written.
 pub(crate) fn render_text(outcome: &WorkspaceOutcome) -> String {
     let mut lines = vec![format!(
         "workspaces {} | workspaces {}, modules {}",
@@ -77,6 +111,12 @@ pub(crate) fn render_text(outcome: &WorkspaceOutcome) -> String {
         outcome.workspaces.len(),
         outcome.modules.len()
     )];
+    if outcome.asked {
+        lines.push(format!(
+            "default {}",
+            outcome.default.as_deref().unwrap_or(NONE)
+        ));
+    }
     for workspace in &outcome.workspaces {
         let sections = if workspace.sections.is_empty() {
             NONE.to_owned()

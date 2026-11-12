@@ -350,6 +350,18 @@
 //! .../cards/counts` over the spec's scenario (the shared scene of
 //! `specengine-cli`'s `tests/counts_scene`) on a daemon of its own; DO5:
 //! no key of the three holds an age. M: a set left out of the fixture.
+//!
+//! docs/features/hub-department.md (RM-0089) "Acceptance criteria": the
+//! `WorkspaceDocument` gains `default`, last, 5 keys (`null` on a local
+//! daemon), no set added.
+//!
+//! docs/features/collision-pairs.md (RM-0088, the pair half)
+//! "Acceptance criteria", PP8: `Proposal` gains `pair` after `evidence`, 54 keys; two
+//! sets more, 145 in all, last: `Pair` (`left, right, other`) and
+//! `PairSide` (`id, title, path, evidence`), from `GET …/proposals/PR-0001`
+//! over a git copy of `fixtures/spec-a` holding the spec's example (its hit
+//! DEC-0023 named) on a daemon of its own. M: a set left out of the
+//! fixture.
 
 mod common;
 mod task_state;
@@ -735,6 +747,60 @@ fn counts_document() -> String {
         .to_owned()
 }
 
+/// docs/features/collision-pairs.md PP8: `GET …/proposals/PR-0001` over a
+/// git copy of `fixtures/spec-a` holding the spec's example (a two-target
+/// `contradicts` discrepancy, its hit DEC-0023 named) on a daemon of its
+/// own, its body raw (the keys' order kept).
+fn pair_review() -> String {
+    let scratch = Scratch::new("daemon-keys-pair");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let input = serde_json::json!({
+        "node_ids": ["RULE-SPRINT-COST", "RULE-STAM-REGEN"], "gap_type": "contradicts",
+        "severity": "normal",
+        "summary": "Sprint cost and regeneration disagree on when stamina refills",
+        "evidence": [
+            {"file": "docs/spec/movement/sprint.md", "lines": "18-20",
+                "observed": "Sprinting pauses regeneration",
+                "documented": "Cost is drained per second"},
+            {"file": "docs/spec/movement/stamina.md", "lines": "21-23",
+                "observed": "Regeneration never pauses", "documented": "Refill starts after 1.5 s"},
+            {"file": "src/stamina.rs", "qpath": "stamina::regen", "lines": "40-52",
+                "observed": "regen runs during sprint", "documented": "a pause is specified"}],
+        "options": [{"label": "Pause while sprinting", "effect": "Sprint drains faster",
+                "price": "Regeneration rewritten"},
+            {"label": "Never pause", "effect": "Sprint lasts longer",
+                "price": "Sprint cost rewritten"}],
+        "recommendation": 0, "distinct_from": ["DEC-0023"]
+    })
+    .to_string();
+    let run = run_product(
+        &spec_bin(),
+        &home,
+        &a,
+        &[
+            "--root",
+            a.to_str().unwrap(),
+            "propose",
+            "discrepancy",
+            "--input",
+            "-",
+            "--author-role",
+            "developer",
+        ],
+        input.as_bytes(),
+    );
+    run.code(0);
+    assert_eq!(run.stdout.lines().next(), Some("PR-0001"), "{}", run.show());
+    let server = Server::serve(&home, &cwd, &[&a]);
+    server
+        .get("/api/projects/lantern-keep/proposals/PR-0001")
+        .status(200)
+        .text()
+        .to_owned()
+}
+
 /// The raw late row of `id` in a delivery body.
 fn delivery_late(body: &str, id: &str) -> String {
     raw_items(body, "late")
@@ -758,6 +824,11 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         .to_owned();
     // docs/features/direction-catalog.md DC-9: both rows hold a last change.
     let catalog = catalog_document();
+    // docs/features/collision-pairs.md PP8: the example's review, its pair
+    // and the pair's two sides.
+    let paired = pair_review();
+    let pair = raw_object(&paired, "pair");
+    let pair_sides = vec![raw_object(&pair, "left"), raw_object(&pair, "right")];
     let catalog_rows = raw_items(&catalog, "rows");
     let catalog_changes: Vec<String> = catalog_rows
         .iter()
@@ -1728,6 +1799,7 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                     reviews.clone(),
                     interpretations.clone(),
                     drift_reviews.clone(),
+                    vec![paired.clone()],
                 ]
                 .concat(),
                 keys_of,
@@ -2272,6 +2344,12 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 keys_of,
             ),
         ),
+        // docs/features/collision-pairs.md PP8, sets 144 and 145.
+        (
+            "Pair",
+            one_key_set("Pair", std::slice::from_ref(&pair), keys_of),
+        ),
+        ("PairSide", one_key_set("PairSide", &pair_sides, keys_of)),
     ]
 }
 
@@ -2584,8 +2662,17 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // after `why` (null on every route), 51 keys, no set added.
     // docs/features/plain-questions.md "Acceptance criteria" PQ10: `gist`,
     // `matters` after `summary`, 53 keys, no set added.
+    // docs/features/collision-pairs.md "Acceptance criteria" PP8: `pair`
+    // after `evidence`, 54 keys.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 53, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 54, "{:?}", sets[2].1);
+    let evidence = sets[2].1.iter().position(|key| key == "evidence");
+    assert_eq!(
+        sets[2].1[evidence.expect("evidence")..evidence.expect("evidence") + 3],
+        ["evidence", "pair", "options"],
+        "{:?}",
+        sets[2].1
+    );
     let summary = sets[2].1.iter().position(|key| key == "summary");
     assert_eq!(
         sets[2].1[summary.expect("summary")..summary.expect("summary") + 4],
@@ -2601,7 +2688,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         sets[2].1
     );
     assert_eq!(
-        sets[2].1[44..],
+        sets[2].1[45..],
         [
             "choice",
             "task_id",
@@ -2619,7 +2706,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        143,
+        145,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -2627,7 +2714,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114; \
          flow-scenario: 115; card-questions: 118; department-split: 121; task-mandate: 122; \
          node-history: 124; upstream-signal: 126; delivery-analytics: 137; \
-         direction-catalog: 140; department-overview: 143)"
+         direction-catalog: 140; department-overview: 143; collision-pairs: 145)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2738,8 +2825,16 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         ]
     );
     // docs/features/plain-questions.md "Acceptance criteria" PQ10: 21,
-    // `gist` and `matters` after `summary`.
-    assert_eq!(sets[35].1.len(), 21, "{:?}", sets[35].1);
+    // `gist` and `matters` after `summary`; docs/features/collision-pairs.md
+    // PP8: 22, `pair` after `evidence`.
+    assert_eq!(sets[35].1.len(), 22, "{:?}", sets[35].1);
+    let evidence = sets[35].1.iter().position(|key| key == "evidence");
+    assert_eq!(
+        sets[35].1[evidence.expect("evidence")..evidence.expect("evidence") + 3],
+        ["evidence", "pair", "targets"],
+        "{:?}",
+        sets[35].1
+    );
     assert_eq!(
         sets[35].1[4..7],
         ["summary", "gist", "matters"],
@@ -3291,7 +3386,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(sets[109].1, ["ahead", "behind", "state", "error", "at"]);
     // workspaces' three, last: docs/features/workspaces.md "The daemon".
     assert_eq!(sets[110].0, "WorkspaceDocument");
-    assert_eq!(sets[110].1, ["source", "notes", "workspaces", "modules"]);
+    // docs/features/hub-department.md: `default` last.
+    assert_eq!(
+        sets[110].1,
+        ["source", "notes", "workspaces", "modules", "default"]
+    );
     assert_eq!(sets[111].0, "Workspace");
     // docs/features/departments.md DP-4: `disciplines` after `flows`.
     assert_eq!(
@@ -3561,7 +3660,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/department-overview.md DO10: sets 141 to 143, last, in
     // the document's order, each the spec's keys in its order; DO5: none an
     // age. M: a set left out of the fixture; an `oldest_open_item_days` key.
-    let counts: Vec<(&str, Vec<&str>)> = sets[140..]
+    let counts: Vec<(&str, Vec<&str>)> = sets[140..143]
         .iter()
         .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
         .collect();
@@ -3612,6 +3711,19 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             );
         }
     }
+    // docs/features/collision-pairs.md PP8: sets 144 and 145, last, each the
+    // spec's keys in its order. M: a set left out of the fixture.
+    let pairs: Vec<(&str, Vec<&str>)> = sets[143..]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        pairs,
+        [
+            ("Pair", vec!["left", "right", "other"]),
+            ("PairSide", vec!["id", "title", "path", "evidence"]),
+        ]
+    );
     assert_eq!(sets[91].0, "Card");
     // docs/features/card-context.md CC10: 35, `context` right after
     // `history`; docs/features/upstream-signal.md US-12: 36, `upstream`
@@ -3672,7 +3784,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 143 sets (41 until
+/// unchanged, no new key): the fixture holds 145 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3701,7 +3813,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/upstream-signal.md its two, US-12, and
 /// docs/features/delivery-analytics.md its eleven, DA-11, and
 /// docs/features/direction-catalog.md its three, DC-9, and
-/// docs/features/department-overview.md its three, DO10); a decision
+/// docs/features/department-overview.md its three, DO10, and
+/// docs/features/collision-pairs.md its two, PP8); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -3715,8 +3828,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        143,
-        "143 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        145,
+        "145 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3728,7 +3841,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
          task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
          upstream-signal's two (US-12), delivery-analytics' eleven (DA-11), \
-         direction-catalog's three (DC-9) and department-overview's three (DO10)"
+         direction-catalog's three (DC-9), department-overview's three (DO10) and \
+         collision-pairs' two (PP8)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -3742,7 +3856,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
     // docs/features/plain-questions.md "Acceptance criteria" PQ10.
-    assert_eq!(set("Proposal").len(), 53);
+    assert_eq!(set("Proposal").len(), 54);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -3845,7 +3959,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 143 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 145 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3872,7 +3986,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/upstream-signal.md its two, US-12, and
 /// docs/features/delivery-analytics.md its eleven, DA-11, and
 /// docs/features/direction-catalog.md its three, DC-9, and
-/// docs/features/department-overview.md its three, DO10); the amendment of
+/// docs/features/department-overview.md its three, DO10, and
+/// docs/features/collision-pairs.md its two, PP8); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -3889,8 +4004,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        143,
-        "143 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        145,
+        "145 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3902,7 +4017,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
          task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
          upstream-signal's two (US-12), delivery-analytics' eleven (DA-11), \
-         direction-catalog's three (DC-9) and department-overview's three (DO10)"
+         direction-catalog's three (DC-9), department-overview's three (DO10) and \
+         collision-pairs' two (PP8)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -3916,7 +4032,7 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
     // docs/features/plain-questions.md "Acceptance criteria" PQ10.
-    assert_eq!(set("Proposal").len(), 53);
+    assert_eq!(set("Proposal").len(), 54);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

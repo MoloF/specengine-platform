@@ -83,8 +83,9 @@ fn is10_the_daemon_serves_similar_null_among_51_keys() {
         let raw = reply.text().to_owned();
         let document: Value = reply.json();
         let object = document.as_object().expect("an object");
-        // 53 since docs/features/plain-questions.md PQ10 (`gist`, `matters`).
-        assert_eq!(object.len(), 53, "{id}: {raw}");
+        // 53 since docs/features/plain-questions.md PQ10 (`gist`, `matters`);
+        // 54 since docs/features/collision-pairs.md PP8 (`pair`).
+        assert_eq!(object.len(), 54, "{id}: {raw}");
         assert_eq!(document["similar"], Value::Null, "{id}: {raw}");
         let why = raw.find("\"why\":").expect("why");
         let similar = raw.find("\"similar\":").expect("similar");

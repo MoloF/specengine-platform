@@ -270,6 +270,14 @@
 //!   ([`as_of_0_43_0`]). The skills' descriptions 1 197 B together, 3 B of
 //!   the 1 200 left. M: the schema changed with no new `SCHEMA_PINS` entry;
 //!   plugin.json left at 0.43.0.
+//! - collision-pairs (RM-0088, the pair half, PP7,
+//!   docs/features/collision-pairs.md "Acceptance criteria"): 0.44.0 ->
+//!   0.45.0, MINOR: the review document `get_proposal`, `review_proposal`
+//!   and `propose_change` return gains the closed `pair`. A `PINS` entry
+//!   0.45.0, the tree with plugin.json's version set back 0.44.0's (no
+//!   skill or role text changes); a `SCHEMA_PINS` entry 0.45.0, 0.44.0's
+//!   schemas today's without `pair` ([`as_of_0_44_0`]). M: the schema
+//!   changed with no new `SCHEMA_PINS` entry; plugin.json left at 0.44.0.
 //!
 //! The repository is only read.
 
@@ -695,6 +703,14 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.44.0",
         "54c6280df8ec87df4803ea2c5d819a0fdcf8391a91c89b0b7ca28b9326f9504f",
+    ),
+    // collision-pairs (RM-0088, PP7: 0.44.0 -> 0.45.0, MINOR: a key the
+    // review document returns, the closed `pair`): plugin.json's version
+    // alone; set back, the tree hashes as 0.44.0's pin (no skill or role
+    // text changes).
+    (
+        "0.45.0",
+        "a1aca5d7eb6a00ad77e14e33e9a7872a119c2616c0fd6559886252c5e4b55e17",
     ),
 ];
 
@@ -1260,6 +1276,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.44.0",
         "781ef4398c3e68ce6f6cf0cb3753f9e7d1e751c2d73ed3452bd9b9a819b8e0bd",
+    ),
+    // collision-pairs (RM-0088, PP7): `pair` in the review document's output
+    // (`get_proposal`, `review_proposal`, `propose_change` when listed),
+    // `Pair` and `PairSide` closed ([`as_of_0_44_0`] takes it out; no other
+    // tool's schema changed).
+    (
+        "0.45.0",
+        "8255b41c4eb7137e36e6ed3eae15a47a9a88da75ae50065242bd3f556584e08c",
     ),
 ];
 
@@ -2279,7 +2303,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// since intake-similar (RM-0059, IS11), 0.43.0 since plain-questions
 /// (RM-0088), 0.44.0 since collision-pass (RM-0060, CP9: an eighth skill,
 /// `check-collisions`, its description 137 B, `read-spec`'s 140 B shorter:
-/// 1 197 B together, 3 B of room).
+/// 1 197 B together, 3 B of room), 0.45.0 since collision-pairs (RM-0088,
+/// PP7: no skill text changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2302,7 +2327,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.44.0")
+        json!("0.45.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2455,12 +2480,38 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // collision-pairs (RM-0088, PP7: 0.44.0 -> 0.45.0): plugin.json's
+    // version alone; set back, the tree is 0.44.0's pinned content, every
+    // skill and role byte-equal. M: plugin.json left at 0.44.0; another file
+    // changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.45.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.45.0"),
+        "plugin.json's version"
+    );
+    let at_0_44_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.45.0\"",
+        "\"version\": \"0.44.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_44_0),
+        PINS[PINS.len() - 2].1,
+        "0.45.0 changes plugin.json's version only"
+    );
+    let tree = at_0_44_0;
+    let pins_0_44_0 = &PINS[..PINS.len() - 1];
     // collision-pass (RM-0060, CP9: 0.43.0 -> 0.44.0): plugin.json's version
     // and `read-spec`'s description, each once, and `check-collisions`; set
     // back and removed, the tree is 0.43.0's pinned content, every other
     // skill and role byte-equal. M: plugin.json left at 0.43.0; the skill or
     // another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.44.0"));
+    assert_eq!(
+        pins_0_44_0.last().map(|(version, _)| *version),
+        Some("0.44.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.44.0"),
@@ -2484,11 +2535,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_43_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_44_0[pins_0_44_0.len() - 2].1,
         "0.44.0 changes plugin.json's version, read-spec's description and adds the skill only"
     );
     let tree = at_0_43_0;
-    let pins_0_43_0 = &PINS[..PINS.len() - 1];
+    let pins_0_43_0 = &pins_0_44_0[..pins_0_44_0.len() - 1];
     // plain-questions (RM-0088, PQ11: 0.42.0 -> 0.43.0): plugin.json's
     // version and `ask-owner`'s eight edits, each once; set back, the tree is
     // 0.42.0's pinned content, every other skill and role byte-equal. M:
@@ -3816,6 +3867,27 @@ fn as_of_0_41_0(schemas: &mut Value) {
     );
 }
 
+/// collision-pairs (RM-0088, PP7): `schemas` as 0.44.0 listed them: no
+/// `pair` in the review document's output (`get_proposal`, and
+/// `review_proposal` and `propose_change` when listed); no other tool's
+/// schema changed.
+fn as_of_0_44_0(schemas: &mut Value) {
+    let mut dropped = 0;
+    for name in ["propose_change", "get_proposal", "review_proposal"] {
+        if schemas[name]["outputSchema"]["properties"]
+            .get("pair")
+            .is_some()
+        {
+            assert!(
+                without_property(&mut schemas[name]["outputSchema"], "pair"),
+                "{name} returns pair"
+            );
+            dropped += 1;
+        }
+    }
+    assert!(dropped >= 1, "get_proposal returns pair");
+}
+
 /// collision-pass (RM-0060, CP9): `schemas` as 0.43.0 listed them: no
 /// `get_collisions`, no `mark_pairs`; no other tool's schema changed.
 fn as_of_0_43_0(schemas: &mut Value) {
@@ -4705,7 +4777,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[33].0, "0.42.0", "an entry for 0.42.0");
     assert_eq!(SCHEMA_PINS[34].0, "0.43.0", "an entry for 0.43.0");
     assert_eq!(SCHEMA_PINS[35].0, "0.44.0", "an entry for 0.44.0");
-    assert_eq!(SCHEMA_PINS.len(), 36, "0.44.0 the last entry");
+    assert_eq!(SCHEMA_PINS[36].0, "0.45.0", "an entry for 0.45.0");
+    assert_eq!(SCHEMA_PINS.len(), 37, "0.45.0 the last entry");
+    // collision-pairs (RM-0088, PP7): 0.44.0's schemas are today's without
+    // the review document's `pair`. M: `SCHEMA_PINS` not appended.
+    let mut at_0_44_0 = schemas.clone();
+    as_of_0_44_0(&mut at_0_44_0);
+    let at_0_44_0_hash = schema_hash(&at_0_44_0);
+    assert_eq!(
+        at_0_44_0_hash, SCHEMA_PINS[35].1,
+        "0.44.0's schemas are today's without collision-pairs' `pair`"
+    );
+    assert_ne!(
+        at_0_44_0_hash, current,
+        "collision-pairs changed the schemas"
+    );
+    let (schemas, current) = (at_0_44_0, at_0_44_0_hash);
     // collision-pass (RM-0060, CP9): 0.43.0's schemas are today's without
     // `get_collisions` and `mark_pairs`. M: `SCHEMA_PINS` not appended.
     let mut at_0_43_0 = schemas.clone();

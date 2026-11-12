@@ -143,7 +143,8 @@ fn pq10_the_daemon_serves_gist_and_matters() {
     let raw = reply.text().to_owned();
     let document = reply.json();
     let keys = top_keys(&raw);
-    assert_eq!(keys.len(), 53, "{raw}");
+    // 54 since docs/features/collision-pairs.md PP8 (`pair`).
+    assert_eq!(keys.len(), 54, "{raw}");
     let summary = keys
         .iter()
         .position(|key| key == "summary")
@@ -195,7 +196,8 @@ fn pq10_the_daemon_serves_gist_and_matters() {
     for item in items {
         assert_eq!(
             item.as_object().map(serde_json::Map::len),
-            Some(21),
+            // 22 since docs/features/collision-pairs.md PP8 (`pair`).
+            Some(22),
             "{item}"
         );
     }

@@ -1146,8 +1146,9 @@ fn l1_the_raises_take_card_and_review_ends_with_card_id_and_why() {
         "{keys:?}"
     );
     // 53 since docs/features/plain-questions.md PQ10 (`gist`, `matters`
-    // after `summary`).
-    assert_eq!(keys.len(), 53, "{keys:?}");
+    // after `summary`); 54 since docs/features/collision-pairs.md PP8
+    // (`pair` after `evidence`).
+    assert_eq!(keys.len(), 54, "{keys:?}");
 
     // The twin, on a second copy: the same question without the flag.
     let twin = Pair::new("cq-l1-twin", LAMP);
