@@ -163,6 +163,12 @@
 //!   note, never an exit); a `--release` naming no release is an outcome
 //!   with its reason, exit 1; [`roadmap_flags`] its usage check, for the
 //!   daemon;
+//! - [`delivery()`]: `spec delivery [--as-of D]` (task spec
+//!   `delivery-analytics`), what was delivered, what is overdue and why, per
+//!   release and per department, totalled by core per read from the queue
+//!   read once as it is, the config and the plan's groups from the walked
+//!   files; no git, no index, no write; `as_of` an input, today's UTC date
+//!   by default; [`delivery_as_of`] its usage check, for the daemon;
 //! - [`flow()`]: `spec flow [ROOT] [--depth N] [--stage S] [--in-flow]
 //!   [--trace]` (task specs `flow-read`, `trace-views`, `flow-scope`), the
 //!   typed edges, lifted edges, gap rows and in-flow marks core's
@@ -225,6 +231,9 @@ mod confirm;
 mod corpus;
 mod create;
 mod decide;
+mod delivery;
+#[cfg(test)]
+mod delivery_tests;
 mod documents;
 mod drift;
 mod drift_apply;
@@ -343,6 +352,9 @@ pub use corpus::LeftOut;
 pub use create::{
     CreateRequest, propose_create, propose_create_brief, propose_create_brief_with_task,
     propose_create_dry_run, propose_create_dry_run_brief, propose_create_with_task,
+};
+pub use delivery::{
+    DeliveryOutcome, DeliveryRequest, delivery, delivery_as_of, delivery_with_view,
 };
 pub use documents::{DocumentEntry, documents};
 pub use drift::{
@@ -674,6 +686,8 @@ pub enum Outcome {
     Health(HealthOutcome),
     /// `roadmap`: the plan of the `[roadmap]` items.
     Roadmap(Box<RoadmapOutcome>),
+    /// `delivery`: what was delivered, what is overdue and why.
+    Delivery(Box<DeliveryOutcome>),
     /// `flow`: typed edges, lifted edges and gap rows.
     Flow(Box<FlowOutcome>),
     /// `trace`: each node's state against its cards.
@@ -816,6 +830,8 @@ impl Outcome {
             Self::Bump(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
             Self::Roadmap(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            // The notes, escaped, as JSON `notes` holds them raw.
+            Self::Delivery(outcome) => return outcome.stderr_lines(),
             Self::Flow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Impact(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
@@ -946,6 +962,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Bump(outcome) => bump::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
+        Outcome::Delivery(outcome) => delivery::render_text(outcome),
         Outcome::Flow(outcome) => flow::render_text(outcome),
         Outcome::Impact(outcome) => impact::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
@@ -1006,6 +1023,7 @@ impl serde::Serialize for Outcome {
             Self::Bump(outcome) => outcome.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
             Self::Roadmap(outcome) => outcome.serialize(serializer),
+            Self::Delivery(outcome) => outcome.serialize(serializer),
             Self::Flow(outcome) => outcome.serialize(serializer),
             Self::Impact(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),

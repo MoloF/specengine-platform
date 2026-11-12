@@ -1425,7 +1425,14 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// alone (never `[team]`, never the index): the workspaces and modules a project
 /// configures, each a name, a title, sections, flows and a root, which every
 /// login may read (WS-10). A lens entitles no one (ADR-0073).
-const GET_ROUTES: [&str; 28] = [
+///
+/// docs/features/delivery-analytics.md (RM-0107 a) judged
+/// `/api/projects/{p}/delivery`, the 29th: the spec has the hub serve it over
+/// its own queue and checkout (DA-11); a read of counts per release and per
+/// department and the late tasks' reasons, keyed by card, item and
+/// department, never by person: no served key names an assignee, a reviewer
+/// or an actor (DA-6), which every login may read.
+const GET_ROUTES: [&str; 29] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1433,6 +1440,7 @@ const GET_ROUTES: [&str; 28] = [
     "/api/projects/{p}/cards",
     "/api/projects/{p}/cards/{id}",
     "/api/projects/{p}/check",
+    "/api/projects/{p}/delivery",
     "/api/projects/{p}/events",
     "/api/projects/{p}/flow",
     "/api/projects/{p}/graph",
@@ -2228,7 +2236,8 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
         cards, CARD_ROUTES,
         "M23: the card routes as Routes lists them"
     );
-    assert_eq!(GET_ROUTES.len(), 28);
+    // 29 since docs/features/delivery-analytics.md DA-11 (`delivery`).
+    assert_eq!(GET_ROUTES.len(), 29);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

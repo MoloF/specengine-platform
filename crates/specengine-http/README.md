@@ -3,18 +3,18 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-12
 ---
 
 # specengine-http -- SpecEngine over HTTP
 
 An HTTP adapter over the CLI library: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The daemon, one per data directory, `spec serve` launches (`serve.md`), serving the web UI compiled in (`serve-ui.md`); not ADR-0019's: no sole writer, socket bridge, auto-start, gate or watcher. A staged decision is confirmed on a terminal (ADR-0035) or, on a hub, `hub-confirm.md`; no hook consults it (ADR-0039).
 
-Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `specengine-mcp` and `rmcp` (`transport-streamable-http-server`), named in `src/mcp.rs` alone, `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`, `rust-embed` (`debug-embed`), dev `regex`, `serde-saphyr`, `toml`; a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
+Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `specengine-mcp` and `rmcp` (`transport-streamable-http-server`), named in `src/mcp.rs` alone, `axum` (`http1`, `tokio` only), `rust-embed` (`debug-embed`), others `Cargo.toml`'s; a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
 
 ## Binary
 
-`specengine-http --root DIR... [--port N] [--public-origin URL [--push ...]]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`), a hub's floor: `serve.md` "Start", "Lines"; `--push`, `sync.rs`: `hub-git.md`. Exit 1: stopped after listening.
+`specengine-http --root DIR... [--port N] [--public-origin URL [--push ...]]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`), a hub's floor: `serve.md` "Start", "Lines"; `--push`, `sync.rs`: `hub-git.md`. Exit 1: stopped after listening.
 
 ## Fence
 
@@ -39,6 +39,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../check` | -- | `spec check --json`, the plain run |
 | GET `.../health` | -- | `spec health --json` (`health*.md`) |
 | GET `.../roadmap` | `release`, `pool` | `spec roadmap --json`, browser view |
+| GET `.../delivery` | `as_of` | `spec delivery --json`, browser view, `spec-delivery.md` |
 | GET `.../lock-diff` | `ref` | `spec lock diff REF --json` |
 | GET `.../inbox` | -- | `spec inbox --json` |
 | GET `.../proposals/:id` | -- | `spec review PR --json` (not `--brief`) |
@@ -53,7 +54,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 **Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` `links`, `bindings`, `history`, `status` by `TaskStatus::parse`. 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `health`, `tasks/:id` take none), a scalar repeated, a bad value, `release` with `pool=true`, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent`; an empty REF is an unknown route.
 
-**Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`): no `OUTPUT_CAP_CHARS` cut, `graph`, `roadmap`, `flow`, `trace` too (`truncated` false, `omitted` null, `roadmap`'s 0, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty.
+**Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`): no `OUTPUT_CAP_CHARS` cut, `graph`, `roadmap`, `delivery`, `flow`, `trace` too (`truncated` false, `omitted` null, `roadmap`'s 0, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty.
 
 ## Answers and statuses
 
@@ -79,4 +80,4 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]` edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]` edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,delivery,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

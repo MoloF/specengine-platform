@@ -3,6 +3,7 @@ import {
   ClientError,
   type BundleOptions,
   type CardsOptions,
+  type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
   type NodeOptions,
@@ -34,6 +35,7 @@ import type {
   CheckReport,
   ConfirmBody,
   ConfirmRead,
+  DeliveryDocument,
   FlowView,
   GraphView,
   HealthReport,
@@ -65,6 +67,7 @@ import {
   aCardList,
   aCheckReport,
   aCardWrite,
+  aDelivery,
   aFlowView,
   aGraphNode,
   aGraphView,
@@ -206,6 +209,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getRoadmap: vi.fn<(project: string, options?: RoadmapOptions, signal?: AbortSignal) => Promise<RoadmapDocument>>(() =>
       Promise.resolve(aRoadmap([aRoadmapGroup("release", "beta", [aRoadmapItem({ id: "RM-0001", title: "First item" })], { current: true })])),
     ),
+    // What was delivered (docs/features/delivery-analytics.md "Acceptance criteria", DA-11): no task, at the day asked; a test overriding what it answers.
+    getDelivery: vi.fn<(project: string, options: DeliveryOptions, signal?: AbortSignal) => Promise<DeliveryDocument>>((_project, options) => Promise.resolve(aDelivery(options.asOf))),
     // The lock diff (docs/features/lock-diff.md "Data"): the REF's one holder, no drifted row with a lock entry.
     getLockDiff: vi.fn<(project: string, ref: string, signal?: AbortSignal) => Promise<LockDiffView>>((_project, ref) =>
       Promise.resolve({ ref, reason: null, notes: [], nodes: [{ id: ref, path: "docs/spec/doc-1.md", line: 5, rows: [] }] }),

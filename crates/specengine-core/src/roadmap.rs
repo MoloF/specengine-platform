@@ -50,6 +50,9 @@
 //! [`next_order`] tasks by their items' listing order, then number (`spec
 //! task show --next`, advisory). [`plan`], its lines and the view never
 //! read a task: the caller adds the join to its own output.
+//!
+//! [`item_groups`] is steps 1 and 3 alone, every item open or done with its
+//! group's [`GroupRef`]: the release a delivery read places a card in.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -159,6 +162,16 @@ impl GroupKind {
             Self::Unplaced => "unplaced",
         }
     }
+}
+
+/// The group an item, open or done, stands in ([`item_groups`]).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GroupRef {
+    pub kind: GroupKind,
+    /// The release; `None` for the pool and the unplaced items.
+    pub name: Option<String>,
+    /// The group's index in [`Plan::groups`]: plan order.
+    pub order: usize,
 }
 
 /// One group of the plan.
@@ -489,14 +502,52 @@ enum Slot {
     Unplaced,
 }
 
-/// The plan of `input` under `config` (see the module documentation).
-pub fn plan(input: &CheckInput, config: &RoadmapConfig) -> Plan {
+/// Every item of `input` under `config`, open or done, by ID, with the
+/// group it stands in: [`plan`]'s steps 1 and 3 alone, so a done item's
+/// group is its release's as an open one's is
+/// (`docs/features/delivery-analytics.md`
+/// "Acceptance criteria", DA-3). [`plan`] is unchanged by it.
+pub fn item_groups(input: &CheckInput, config: &RoadmapConfig) -> BTreeMap<String, GroupRef> {
+    let (items, _) = read_items(input, config);
+    let releases = release_indexes(config);
+    let pool = config.releases.len();
+    items
+        .iter()
+        .map(|item| {
+            let group = match slot_of(item, &releases) {
+                Slot::Release(at) => GroupRef {
+                    kind: GroupKind::Release,
+                    name: config.releases.get(at).cloned(),
+                    order: at,
+                },
+                Slot::Pool => GroupRef {
+                    kind: GroupKind::Pool,
+                    name: None,
+                    order: pool,
+                },
+                Slot::Unplaced => GroupRef {
+                    kind: GroupKind::Unplaced,
+                    name: None,
+                    order: pool + 1,
+                },
+            };
+            (item.id.to_owned(), group)
+        })
+        .collect()
+}
+
+/// An item defined again by another file: the item read, that file's path,
+/// whether that file is open.
+type Also<'a> = (usize, &'a str, bool);
+
+/// Step 1: the items of `input`, the first by path holding an ID read, and
+/// each other file defining an ID already read.
+fn read_items<'a>(input: &'a CheckInput, config: &RoadmapConfig) -> (Vec<Read<'a>>, Vec<Also<'a>>) {
     let mut files: Vec<&CheckFile> = input.files.iter().collect();
     files.sort_by(|a, b| a.path.cmp(&b.path));
     let mut items: Vec<Read<'_>> = Vec::new();
     let mut by_id: BTreeMap<&str, usize> = BTreeMap::new();
-    // (the item, a path also defining its ID, that file is open)
-    let mut also: Vec<(usize, &str, bool)> = Vec::new();
+    let mut also: Vec<Also<'_>> = Vec::new();
     for file in files {
         let Some(parsed) = &file.parsed else {
             continue;
@@ -518,6 +569,33 @@ pub fn plan(input: &CheckInput, config: &RoadmapConfig) -> Plan {
             }
         }
     }
+    (items, also)
+}
+
+/// Each release of the table by name, with its index.
+fn release_indexes(config: &RoadmapConfig) -> BTreeMap<&str, usize> {
+    config
+        .releases
+        .iter()
+        .enumerate()
+        .map(|(at, release)| (release.as_str(), at))
+        .collect()
+}
+
+/// Step 3: where `item` is placed.
+fn slot_of(item: &Read<'_>, releases: &BTreeMap<&str, usize>) -> Slot {
+    match item.release {
+        Placement::Absent => Slot::Pool,
+        Placement::Mistyped => Slot::Unplaced,
+        Placement::Written(release) => releases
+            .get(release)
+            .map_or(Slot::Unplaced, |&at| Slot::Release(at)),
+    }
+}
+
+/// The plan of `input` under `config` (see the module documentation).
+pub fn plan(input: &CheckInput, config: &RoadmapConfig) -> Plan {
+    let (items, also) = read_items(input, config);
 
     let targets = edges(input, config, &items);
     let waits_on: Vec<Vec<String>> = targets
@@ -530,22 +608,8 @@ pub fn plan(input: &CheckInput, config: &RoadmapConfig) -> Plan {
                 .collect()
         })
         .collect();
-    let releases: BTreeMap<&str, usize> = config
-        .releases
-        .iter()
-        .enumerate()
-        .map(|(at, release)| (release.as_str(), at))
-        .collect();
-    let slots: Vec<Slot> = items
-        .iter()
-        .map(|item| match item.release {
-            Placement::Absent => Slot::Pool,
-            Placement::Mistyped => Slot::Unplaced,
-            Placement::Written(release) => releases
-                .get(release)
-                .map_or(Slot::Unplaced, |&at| Slot::Release(at)),
-        })
-        .collect();
+    let releases = release_indexes(config);
+    let slots: Vec<Slot> = items.iter().map(|item| slot_of(item, &releases)).collect();
 
     let mut notes = BTreeSet::new();
     let mut groups = Vec::with_capacity(config.releases.len() + 2);

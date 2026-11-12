@@ -937,6 +937,40 @@ describe("source policy", () => {
     }
   });
 
+  // DA-12 of docs/features/delivery-analytics.md "Acceptance criteria": a delivery row's group is
+  // told apart in src/roadmap/delivery.ts alone, a word it does not know shown raw; the plan's own
+  // groups keep text.ts. No other Roadmap module spells a group word or branches on a group.
+  it("compares a delivery group in src/roadmap/delivery.ts alone: no other Roadmap module spells a group word or branches on one (DA-12 of delivery-analytics)", () => {
+    const roadmapApp = (path: string) => path.startsWith("/src/roadmap/") && !/\.test\.tsx?$/.test(path);
+    const scanned = (path: string) => !roadmapApp(path) || path === "/src/roadmap/delivery.ts" || path === "/src/roadmap/text.ts";
+    expect(Object.keys(sources).filter((path) => !scanned(path))).toEqual(
+      expect.arrayContaining(["/src/roadmap/RoadmapDelivery.tsx", "/src/roadmap/RoadmapView.tsx", "/src/roadmap/RoadmapLanes.tsx", "/src/roadmap/RoadmapChain.tsx"]),
+    );
+    const field = "\\bgroup\\b";
+    const quote = "[\"'`]";
+    const compared = new RegExp(
+      [
+        `${field}\\s*[!=]==?`,
+        `[!=]==?\\s*[\\w.?]*${field}(?!\\.)`,
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `${field}\\s*(&&|\\|\\|)`,
+        // A lookup by the group, `WORDS[row.group]`; a destructured pair, `[column, group]`, is none.
+        `\\[\\s*(?:[\\w?]+\\.)*group\\s*\\]`,
+        `\\.(includes|has|indexOf|startsWith|endsWith|test)\\([^)]*${field}`,
+        `${quote}(release|pool|unplaced|none)${quote}`,
+      ].join("|"),
+    );
+    expect(offending(compared, scanned)).toEqual([]);
+    // The detector itself: a branch on a group or a group word spelled is caught; the lookup, a key and a data attribute are not.
+    for (const line of ['if (row.group === "pool") {', "switch (row.group) {", "const word = WORDS[row.group];", 'const none = "none";', "const known = row.group ? a : b;", '{"unplaced" === group && <p />}']) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["const label = groupLabel(row, t);", "<tr key={`${String(index)}-${row.group}`} data-group={row.group}>", "if (lane.name === group.name) {", "const group = data.lane.group;", "for (const [column, group] of plan.groups.entries()) {"]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
   it("compares no column, flow, discipline or event word in the Board, labels.ts the one map; reads no clock but in due.ts, never a UTC date there (AC-06, AC-08 of board-ui)", () => {
     const boardSources = (path: string) => path.startsWith("/src/board/") && !/\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter(boardSources)).toEqual(

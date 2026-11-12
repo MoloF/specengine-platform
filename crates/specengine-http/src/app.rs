@@ -73,11 +73,12 @@ use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest,
     CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest, CardSplitBody,
-    CheckRequest, CliError, FlowRequest, GraphRequest, HealthRequest, InboxRequest, IndexTrust,
-    LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest,
-    RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest,
-    TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View, process_git,
-    project_entry, roadmap_flags, round_limit, team_read, utc_now,
+    CheckRequest, CliError, DeliveryRequest, FlowRequest, GraphRequest, HealthRequest,
+    InboxRequest, IndexTrust, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest,
+    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
+    StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest,
+    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, team_read,
+    utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -207,6 +208,7 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/health", read(health))
         .route("/api/projects/{p}/roadmap", read(roadmap))
+        .route("/api/projects/{p}/delivery", read(delivery))
         .route("/api/projects/{p}/lock-diff", read(lock_diff))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
@@ -484,7 +486,7 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events, \
-             workspaces}}, \
+             delivery, workspaces}}, \
              /api/identity; the web UI: / and /assets/<file>",
             uri.path()
         ),
@@ -816,6 +818,24 @@ async fn roadmap(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusa
         };
         specengine_cli::roadmap_with_view(env, globals, &request, View::Browser)
             .map(|outcome| Outcome::Roadmap(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/delivery`: `spec delivery [--as-of D] --json`, the browser view
+/// (no late task cut: `truncated` false, `omitted` `null`), in the
+/// project's turn as `roadmap`; `as_of` passed through as given, the
+/// library's default without it (docs/features/delivery-analytics.md
+/// "Acceptance criteria", DA-11). A bad `as_of` is a 400 naming it, nothing
+/// run; a queue that cannot be read the CLI's exit 2, a 503.
+async fn delivery(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("delivery", &["as_of"], &uri)?;
+    let as_of = args.date("as_of").map_err(Refusal::bad_request)?;
+    Ok(run_read(project, move |env, globals| {
+        let request = DeliveryRequest { as_of };
+        specengine_cli::delivery_with_view(env, globals, &request, View::Browser)
+            .map(|outcome| Outcome::Delivery(Box::new(outcome)))
     })
     .await)
 }

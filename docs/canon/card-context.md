@@ -63,7 +63,7 @@ Writes: the data directory alone (the bundle's index update and code refresh), n
 ## MCP, daemon, hub, plugin
 
 - `GetCardArgs` takes `context`, `budget` (`deny_unknown_fields`). The output schema mirrors the document: `CardContextShape {parent, bundle: BundleDocument, notes}`, `CardContextParentShape {id, title, goal}`, both `deny_unknown_fields`. `GET_DESCRIPTION` is 2 041 of 2 048 B since `upstream` (`card-upstream.md`), its "else 10000)" and "the 40000 characters" tied to `DEFAULT_TASK_BUDGET` and `OUTPUT_CAP_CHARS` by `holds_number` asserts. Stdio's `INSTRUCTIONS` is unchanged.
-- The daemon's `GET .../cards/:id` never asks: `context: null`, `Card` 36 keys (`fixtures/daemon-keys.json`, 126 sets). The UI types `Card.context: null` (`provisional.ts`) and renders nothing.
+- The daemon's `GET .../cards/:id` never asks: `context: null`, `Card` 36 keys (`fixtures/daemon-keys.json`, 137 sets). The UI types `Card.context: null` (`provisional.ts`) and renders nothing.
 - A hub's `/mcp/<slug>` `get_card` is stdio's route as it is: it takes the key with no hub code, the bundle reading the hub's checkout inside the project's turn (`hub-mcp.md` "Turn"); its 18 tools and `INSTRUCTIONS` unchanged. A hub gains it with its next upgrade, the owner's.
 - Plugin 0.39.0 (`plugin-files.md` "Changing it"): `read-spec`'s cards bullet names `context: true`, and `get_context_bundle` for an older server.
 

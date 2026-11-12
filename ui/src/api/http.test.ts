@@ -3,6 +3,7 @@ import { aFlowView } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import {
   aCheckFinding,
+  aDelivery,
   aCheckReport,
   aGraphEdge,
   aGraphNode,
@@ -132,6 +133,37 @@ describe("the workspaces read (docs/features/workspaces.md \"The UI\")", () => {
   it("is judged: a 404 that is no error body rejects too, never read as a document", async () => {
     stubFetch(() => jsonAnswer(404, { proposals: [] }));
     expect((await rejection(new HttpClient().getWorkspaces("alpha"))).status).toBe(404);
+  });
+});
+
+// docs/features/delivery-analytics.md "Acceptance criteria", DA-11 and DA-12: the delivery read GETs
+// its one path with `as_of` the one query, always sent, and its query's AbortSignal; its 200 resolves
+// as sent; it is judged, so a refused day's 400, an older daemon's 404 and any 404 that is no error
+// body reject, never read as a document.
+describe("the delivery read (DA-11, DA-12 of delivery-analytics)", () => {
+  const served = aDelivery("2026-11-20", { notes: ["delivery: no [roadmap] table: every task is in no release"] });
+
+  it("asks `?as_of=D`, its answer resolved as sent, with the caller's AbortSignal", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    const controller = new AbortController();
+    expect(await new HttpClient().getDelivery("my project", { asOf: "2026-11-20" }, controller.signal)).toEqual(served);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/my%20project/delivery?as_of=2026-11-20"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it.each([
+    [400, "`as_of`: `2026-13-01` is no calendar date, YYYY-MM-DD"],
+    [404, "no route /api/projects/alpha/delivery: the routes are /api/projects and the web UI"],
+    [503, "spec delivery: the queue's schema 14 is newer than this binary's 13"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getDelivery("alpha", { asOf: "2026-13-01" })))).toEqual({ status, message });
+  });
+
+  it("is judged: a 404 that is no error body rejects too, never read as a document", async () => {
+    stubFetch(() => jsonAnswer(404, served));
+    expect((await rejection(new HttpClient().getDelivery("alpha", { asOf: "2026-11-20" }))).status).toBe(404);
   });
 });
 

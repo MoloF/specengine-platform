@@ -37,7 +37,7 @@
 //!
 //! The read routes, the one list (`crate::app`): `tree`, `nodes`, `search`,
 //! `bundle`, `graph`, `flow` without `trace`, `check`, `health`,
-//! `lock-diff`, `roadmap`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`,
+//! `lock-diff`, `roadmap`, `delivery`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`,
 //! `cards` (GET) without `marks`, and `cards/<id>` (no marks). Not on it,
 //! so walking: trace data wherever it is shown (`trace`, `flow?trace=true`,
 //! `cards?marks=true`: the rollups and marks a person accepts a card on,

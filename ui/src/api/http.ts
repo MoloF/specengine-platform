@@ -2,6 +2,7 @@ import {
   ClientError,
   type BundleOptions,
   type CardsOptions,
+  type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
   type NodeOptions,
@@ -34,6 +35,7 @@ import type {
   CheckReport,
   ConfirmBody,
   ConfirmRead,
+  DeliveryDocument,
   FlowView,
   GraphView,
   HealthReport,
@@ -71,7 +73,8 @@ import type {
 // "Data", the cards `docs/features/board-ui.md` "Routes" (a card's raise `docs/canon/card-questions.md`
 // "The rule"), the identity `docs/canon/hub.md` "Routes",
 // the confirm `docs/features/hub-confirm.md` "Data", the sync `docs/features/hub-git.md` "Data",
-// the workspaces `docs/features/workspaces.md` "Data"):
+// the workspaces `docs/features/workspaces.md` "Data", the delivery
+// `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -467,6 +470,17 @@ export class HttpClient implements SpecEngineClient {
       ["pool", options?.pool === true ? true : undefined],
     ]);
     return (await request("GET", `${projectPath(project)}/roadmap${query}`, { signal })) as RoadmapDocument;
+  }
+
+  /**
+   * `spec delivery --as-of D --json` as the browser view, uncut (`docs/features/delivery-analytics.md`
+   * "Acceptance criteria", DA-11): `as_of` the one query, always sent. Judged, so only a 200 resolves:
+   * a day the daemon refuses (400), an older daemon's 404 and a 503 reject in the daemon's words.
+   * Takes its query's AbortSignal.
+   */
+  async getDelivery(project: string, options: DeliveryOptions, signal?: AbortSignal): Promise<DeliveryDocument> {
+    const query = queryOf([["as_of", options.asOf]]);
+    return (await request("GET", `${projectPath(project)}/delivery${query}`, { signal, judged: true })) as DeliveryDocument;
   }
 
   /**

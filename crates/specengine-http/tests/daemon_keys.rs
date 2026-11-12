@@ -326,9 +326,25 @@
 //! `Proposal` gains `similar` after `why` (51 keys), `null` on every route
 //! (`intake_similar.rs` asserts the value); no set added. M: `similar` out
 //! of the fixture.
+//!
+//! docs/features/delivery-analytics.md (RM-0107 a) "Acceptance criteria",
+//! DA-11: eleven sets more, 137 in all, last, in the document's order:
+//! `Delivery` (8), `DeliveryRelease` (9), `DeliveryDepartment` (9),
+//! `DeliveryTotal` (7), `LeadDays` (2), `DeliveryLate` (20),
+//! `DeliveryReturn` (3), `DeliveryReestimate` (4), `DeliveryCancelled`
+//! (4), `DeliveryItem` (3), `DeliveryMore` (4), from `GET
+//! .../delivery?as_of=2026-11-20` over the spec's scenario (the shared scene
+//! of `specengine-cli`'s `tests/delivery_scene`) on a daemon of its own. M:
+//! a set left out of the fixture.
 
 mod common;
 mod task_state;
+
+#[path = "../../specengine-cli/tests/common/git.rs"]
+mod git;
+
+#[path = "../../specengine-cli/tests/delivery_scene/mod.rs"]
+mod delivery_scene;
 
 use std::ffi::OsStr;
 use std::fmt;
@@ -649,7 +665,36 @@ fn workspace_documents() -> Vec<String> {
         .to_vec()
 }
 
+/// docs/features/delivery-analytics.md DA-11: `GET .../delivery?as_of=
+/// 2026-11-20` over the spec's scenario on a daemon of its own, its body
+/// raw (the keys' order kept).
+fn delivery_document() -> String {
+    let scene = delivery_scene::Scene::scenario("daemon-keys");
+    let server = Server::serve(&scene.home, &scene.root, &[&scene.root]);
+    server
+        .get(&format!(
+            "/api/projects/{}/delivery?as_of={}",
+            delivery_scene::SLUG,
+            delivery_scene::AS_OF
+        ))
+        .status(200)
+        .text()
+        .to_owned()
+}
+
+/// The raw late row of `id` in a delivery body.
+fn delivery_late(body: &str, id: &str) -> String {
+    raw_items(body, "late")
+        .into_iter()
+        .find(|row| row.starts_with(&format!("{{\"id\":\"{id}\"")))
+        .unwrap_or_else(|| panic!("no late row {id}: {body}"))
+}
+
 fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
+    // docs/features/delivery-analytics.md DA-11: C-0001's late row holds
+    // one of each reason.
+    let delivery = delivery_document();
+    let late = delivery_late(&delivery, "C-0001");
     let scratch = Scratch::new("daemon-keys");
     let a = scratch.repo("spec-a", "a", "main");
     let home = scratch.home("h");
@@ -2053,6 +2098,78 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "CardUpstreamChange",
             one_key_set("CardUpstreamChange", &upstream_changes, keys_of),
         ),
+        // docs/features/delivery-analytics.md DA-11, sets 127 to 137.
+        (
+            "Delivery",
+            one_key_set("Delivery", std::slice::from_ref(&delivery), keys_of),
+        ),
+        (
+            "DeliveryRelease",
+            one_key_set(
+                "DeliveryRelease",
+                &raw_items(&delivery, "releases"),
+                keys_of,
+            ),
+        ),
+        (
+            "DeliveryDepartment",
+            one_key_set(
+                "DeliveryDepartment",
+                &raw_items(&delivery, "departments"),
+                keys_of,
+            ),
+        ),
+        (
+            "DeliveryTotal",
+            one_key_set("DeliveryTotal", &[raw_object(&delivery, "total")], keys_of),
+        ),
+        (
+            "LeadDays",
+            one_key_set(
+                "LeadDays",
+                &[
+                    raw_object(&delivery, "lead_days"),
+                    raw_object(&raw_object(&delivery, "total"), "lead_days"),
+                ],
+                keys_of,
+            ),
+        ),
+        (
+            "DeliveryLate",
+            one_key_set("DeliveryLate", &raw_items(&delivery, "late"), keys_of),
+        ),
+        (
+            "DeliveryReturn",
+            one_key_set("DeliveryReturn", &raw_items(&late, "returns"), keys_of),
+        ),
+        (
+            "DeliveryReestimate",
+            one_key_set(
+                "DeliveryReestimate",
+                &raw_items(&late, "reestimates"),
+                keys_of,
+            ),
+        ),
+        (
+            "DeliveryCancelled",
+            one_key_set(
+                "DeliveryCancelled",
+                &raw_items(&late, "cancelled_subtasks"),
+                keys_of,
+            ),
+        ),
+        (
+            "DeliveryItem",
+            one_key_set("DeliveryItem", &raw_items(&late, "items"), keys_of),
+        ),
+        (
+            "DeliveryMore",
+            one_key_set(
+                "DeliveryMore",
+                &[raw_object(&late, "more"), raw_object(&delivery, "more")],
+                keys_of,
+            ),
+        ),
     ]
 }
 
@@ -2386,14 +2503,14 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        126,
+        137,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
          board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108; \
          hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114; \
          flow-scenario: 115; card-questions: 118; department-split: 121; task-mandate: 122; \
-         node-history: 124; upstream-signal: 126)"
+         node-history: 124; upstream-signal: 126; delivery-analytics: 137)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -3199,6 +3316,80 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "seq", "at", "source", "by", "fields", "item", "kind", "record", "on"
         ]
     );
+    // docs/features/delivery-analytics.md DA-11: sets 127 to 137, last, in
+    // the document's order, each the spec's keys in its order. M: a set left out
+    // of the fixture.
+    let delivery: Vec<(&str, Vec<&str>)> = sets[126..]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    let counts = [
+        "tasks",
+        "delivered",
+        "delivered_late",
+        "open",
+        "overdue",
+        "cancelled",
+        "lead_days",
+    ];
+    let with = |head: &[&'static str]| -> Vec<&'static str> {
+        head.iter().copied().chain(counts).collect()
+    };
+    assert_eq!(
+        delivery,
+        [
+            (
+                "Delivery",
+                vec![
+                    "as_of",
+                    "notes",
+                    "releases",
+                    "departments",
+                    "total",
+                    "late",
+                    "truncated",
+                    "omitted"
+                ]
+            ),
+            ("DeliveryRelease", with(&["group", "release"])),
+            ("DeliveryDepartment", with(&["name", "title"])),
+            ("DeliveryTotal", with(&[])),
+            ("LeadDays", vec!["median", "max"]),
+            (
+                "DeliveryLate",
+                vec![
+                    "id",
+                    "title",
+                    "flow",
+                    "column",
+                    "parent",
+                    "group",
+                    "release",
+                    "departments",
+                    "created_at",
+                    "taken_at",
+                    "accepted_at",
+                    "due",
+                    "days_late",
+                    "lead_days",
+                    "estimate",
+                    "returns",
+                    "reestimates",
+                    "cancelled_subtasks",
+                    "items",
+                    "more"
+                ]
+            ),
+            ("DeliveryReturn", vec!["at", "from", "note"]),
+            ("DeliveryReestimate", vec!["at", "old", "new", "reason"]),
+            ("DeliveryCancelled", vec!["id", "title", "at", "reason"]),
+            ("DeliveryItem", vec!["id", "kind", "status"]),
+            (
+                "DeliveryMore",
+                vec!["returns", "reestimates", "cancelled_subtasks", "items"]
+            ),
+        ]
+    );
     assert_eq!(sets[91].0, "Card");
     // docs/features/card-context.md CC10: 35, `context` right after
     // `history`; docs/features/upstream-signal.md US-12: 36, `upstream`
@@ -3259,7 +3450,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 126 sets (41 until
+/// unchanged, no new key): the fixture holds 137 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3285,7 +3476,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/department-split.md its three, and
 /// docs/features/task-mandate.md its `CardSubtaskItem`, and
 /// docs/features/node-history.md its two, NH12, and
-/// docs/features/upstream-signal.md its two, US-12); a decision
+/// docs/features/upstream-signal.md its two, US-12, and
+/// docs/features/delivery-analytics.md its eleven, DA-11); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -3299,8 +3491,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        126,
-        "126 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        137,
+        "137 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3310,8 +3502,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
-         task-mandate's `CardSubtaskItem`, node-history's two (NH12) and \
-         upstream-signal's two (US-12)"
+         task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
+         upstream-signal's two (US-12) and delivery-analytics' eleven (DA-11)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -3427,7 +3619,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 126 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 137 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3451,7 +3643,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/department-split.md its three, and
 /// docs/features/task-mandate.md its `CardSubtaskItem`, and
 /// docs/features/node-history.md its two, NH12, and
-/// docs/features/upstream-signal.md its two, US-12); the amendment of
+/// docs/features/upstream-signal.md its two, US-12, and
+/// docs/features/delivery-analytics.md its eleven, DA-11); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -3468,8 +3661,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        126,
-        "126 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        137,
+        "137 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3479,8 +3672,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
          workspaces' three (WS-12), card-tasks' `CardTask`, flow-scenario's \
          `ShownAncestor` (FS-11), card-questions' three, department-split's three, \
-         task-mandate's `CardSubtaskItem`, node-history's two (NH12) and \
-         upstream-signal's two (US-12)"
+         task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
+         upstream-signal's two (US-12) and delivery-analytics' eleven (DA-11)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

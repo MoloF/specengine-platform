@@ -106,6 +106,10 @@
 //!   spec `upstream-signal`): the judge over the queue's events, its applied
 //!   items and the parent's mark, by `seq`, computed per read and never
 //!   stored;
+//! - [`delivery`] — what was delivered, what is overdue and why, per
+//!   release and per department, the pure half (task spec
+//!   `delivery-analytics`): one read's cards, moves, re-estimates and items
+//!   against one `as_of` day, no clock, computed per read and never stored;
 //! - [`similar`] — a create's similar step, the pure half (task spec
 //!   `intake-similar`): its five sources, the entry, the search terms, the
 //!   `keywords` check and the caps.
@@ -119,6 +123,7 @@ pub mod card_toml;
 pub mod check;
 pub mod code_toml;
 pub mod create;
+pub mod delivery;
 pub mod drift;
 pub mod flow;
 pub mod flow_toml;
@@ -187,8 +192,8 @@ pub use project_toml::{
 };
 pub use revision::{Revision, revision};
 pub use roadmap::{
-    CutSum, ESTIMATE_MAX, Estimate, GroupKind, Plan, PlanGroup, PlanItem, PlanTask, PlanTasks, Sum,
-    next_order, parse_estimate, plan, plan_tasks, task_item,
+    CutSum, ESTIMATE_MAX, Estimate, GroupKind, GroupRef, Plan, PlanGroup, PlanItem, PlanTask,
+    PlanTasks, Sum, item_groups, next_order, parse_estimate, plan, plan_tasks, task_item,
 };
 pub use roadmap_toml::{MAX_UNIT_BYTES, RoadmapConfig, roadmap_from_toml};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};

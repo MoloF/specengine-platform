@@ -36,7 +36,7 @@ use specengine_cli::{
     CardAcceptRequest, CardAssignRequest, CardCancelRequest, CardClearGroupRequest,
     CardClearOutcome, CardClearRequest, CardEditRequest, CardListRequest, CardMoveRequest,
     CardNewRequest, CardShowRequest, CardSplitRequest, CheckRequest, CheckedTree, CliError,
-    CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit,
+    CreateRequest, DecisionRequest, DeliveryRequest, DiscrepancyRequest, DriftRequest, Env, Exit,
     ExportIndexRequest, ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput,
     GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
     INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
@@ -243,6 +243,12 @@ enum Command {
         /// Only the pool (items without a release) and the unplaced items.
         #[arg(long)]
         pool: bool,
+    },
+    /// Print what was delivered, what is overdue and why, per release and per department: tasks delivered of tasks, open, overdue, delivered late and cancelled, lead days, then every late task with its returns, re-estimates, cancelled subtasks and items; computed per read from the queue, the config and the plan, never stored; read-only, exit 0 whatever is listed, 2 when it cannot run (a bad --as-of, no project, a queue that cannot be read).
+    Delivery {
+        /// The day open tasks are judged at, YYYY-MM-DD (default: today, UTC).
+        #[arg(long = "as-of", value_name = "D")]
+        as_of: Option<String>,
     },
     /// List what in the code names REF: the markers (`@implements`, `@verifies`, `@configures`, `@assumes`) and comment mentions under `[code]`, each with its state and binding; read-only, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run (no `[code]`, a config error, an incomplete walk).
     Refs {
@@ -1342,6 +1348,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 pool,
                 git: process_git(env),
             },
+        )?)),
+        Command::Delivery { as_of } => Outcome::Delivery(Box::new(specengine_cli::delivery(
+            env,
+            globals,
+            &DeliveryRequest { as_of },
         )?)),
         Command::Refs { reference } => Outcome::Refs(Box::new(specengine_cli::refs(
             env,

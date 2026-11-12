@@ -22,9 +22,15 @@ import { emptyPlanText, headerLine, unlistedText } from "./text";
 /** The canvas and its drawing library load when the Chain tab is first shown, not with the app. */
 const RoadmapChain = lazy(() => import("./RoadmapChain").then((module) => ({ default: module.RoadmapChain })));
 
+/** The delivery tables load when the Delivery tab is first shown, a chunk of their own (docs/features/delivery-analytics.md "Acceptance criteria", DA-7). */
+const RoadmapDelivery = lazy(() => import("./RoadmapDelivery").then((module) => ({ default: module.RoadmapDelivery })));
 
-/** The Roadmap's two tabs: Lanes, the text twin and the keyboard's path, and Chain, the canvas. */
-export type RoadmapTab = "lanes" | "chain";
+/**
+ * The Roadmap's three tabs: Lanes, the text twin and the keyboard's path; Chain, the canvas; and
+ * Delivery, what was delivered and what is overdue (docs/features/delivery-analytics.md
+ * "Acceptance criteria", DA-12).
+ */
+export type RoadmapTab = "lanes" | "chain" | "delivery";
 
 /** The chosen tab per project, kept by the Shell for this page's life (as the Graph's options). */
 export interface RoadmapMemory {
@@ -40,7 +46,8 @@ export const NO_ROADMAP_MEMORY: RoadmapMemory = {
 
 /**
  * The Roadmap (`#/<project>/roadmap[/<ID>]`, docs/features/roadmap-screen.md): the daemon's whole
- * plan, one read, drawn as lanes (the default tab) and as a read-only chain canvas. The ID in the
+ * plan, one read, drawn as lanes (the default tab) and as a read-only chain canvas, beside the
+ * delivery of its tasks, a read of its own at a day (the Delivery tab). The ID in the
  * route only selects: its card is marked current and takes focus; an ID no group lists is said so,
  * with a link to its Tree node. Read only: an item moves when its file's front-matter is edited;
  * "Read again" reads the plan once more (a hand edit raises no event).
@@ -166,6 +173,7 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
           tabs={[
             { id: "lanes", label: t("roadmap.lanes") },
             { id: "chain", label: t("roadmap.chain") },
+            { id: "delivery", label: t("roadmap.delivery.tab") },
           ]}
         />
         <TabPanel base={tabsBase} id="lanes" selected={tab === "lanes"}>
@@ -186,6 +194,15 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
                     pushHash(sectionHash(project, "roadmap", id));
                   }}
                 />
+              </Suspense>
+            </RegionBoundary>
+          )}
+        </TabPanel>
+        <TabPanel base={tabsBase} id="delivery" selected={tab === "delivery"}>
+          {tab === "delivery" && (
+            <RegionBoundary name={t("roadmap.boundary.delivery")}>
+              <Suspense fallback={<Skeleton label={t("roadmap.delivery.loading", { project })} lines={4} />}>
+                <RoadmapDelivery project={project} />
               </Suspense>
             </RegionBoundary>
           )}

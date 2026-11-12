@@ -132,6 +132,21 @@ impl Args {
             .collect()
     }
 
+    /// The one value of `name` as a calendar date `YYYY-MM-DD`, if given,
+    /// judged by the CLI library's `delivery_as_of`
+    /// (docs/features/delivery-analytics.md "Acceptance criteria", DA-11).
+    pub(crate) fn date(&self, name: &str) -> Result<Option<String>, String> {
+        let Some(value) = self.text(name)? else {
+            return Ok(None);
+        };
+        if specengine_cli::delivery_as_of(&value).is_err() {
+            return Err(format!(
+                "`{name}`: `{value}` is no calendar date, YYYY-MM-DD"
+            ));
+        }
+        Ok(Some(value))
+    }
+
     /// `with`: each value `links`, `bindings` or `history`; whether each
     /// is given at least once.
     pub(crate) fn with(&self) -> Result<With, String> {

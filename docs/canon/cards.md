@@ -75,12 +75,12 @@ cards(id PRIMARY KEY, project, flow, col, position INTEGER, title, goal, discipl
 
 API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), `card_history`, `change_card(id, seen, change, actor, now)`, `accept_card`, `list_existing_cards`, each write one `Immediate` transaction, one event; refusals `QueueError::CardRefused`.
 
-- **Fields.** Caps as tasks'; title required, a control character stored, printed escaped; `estimate` `parse_estimate`'s, no unit, no sum; `due` `is_calendar_date`; `parent`, `corrects` existing cards, no `parent` cycle, none correcting itself.
+- **Fields.** Caps as tasks'; title required, a control character stored, printed escaped; `estimate` `parse_estimate`'s, no unit, no sum; `due` `is_calendar_date`, feeding overdue (`spec-delivery.md`); `parent`, `corrects` existing cards, no `parent` cycle, none correcting itself.
 - **Evidence.** `--evidence KIND=VALUE`: `url` (`http://`, `https://`), `path` (`<clean relative path>@<blob>`, lower-case hex of any length), `build`, `note`; one line, at most 1024 bytes, 32 entries. Nothing is fetched.
 - **Order.** `position` dense from 1 per (flow, `col`). A move leaves its column at `position` 0, closes it up, then opens the target or goes last. `new` goes last; `--before C`, another card of that column, takes its place. Neighbours take `position` alone, no `revision`, `updated_at` or event: a card passed by loses no compare-and-set. `--to` its own column is a reorder: no flow rule, no `by`. Ties by ID.
 - **IDs.** `C-` and 4 or more digits, highest + 1 in the transaction, never deleted or reused. `card_prefix_clash` as `task_prefix_clash`, for `spec card` alone. Unique per `<slug>.db`: a hub is the one minter, filled by `spec import-state`, never merged.
 - **`revision`**: decimal text from `1`, raised by every change.
-- **Corrupt** (bad JSON, a bad ID, a non-decimal `revision`, a bad `position`, a column that does not read): `show` exit 2 naming the column, `list` a note, never a failed list; the gate reads `tasks` alone, so a corrupt row closes no gate.
+- **Corrupt** (bad JSON, a bad ID, a non-decimal `revision`, a bad `position`, a column that does not read): `show` exit 2 naming the column, `list` a note; the gate reads `tasks` alone, so a corrupt row closes no gate.
 
 ## Documents and events
 

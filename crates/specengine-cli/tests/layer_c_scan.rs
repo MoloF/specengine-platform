@@ -163,6 +163,9 @@ const LATER: &[&str] = &[
     "crates/specengine-cli/src/sync.rs",
     "crates/specengine-store/src/sparse.rs",
     "crates/specengine-store/src/sync.rs",
+    // docs/features/delivery-analytics.md DA-9: a plan place at the root is
+    // named `.` in its note; no SCIP descriptor.
+    "crates/specengine-cli/src/delivery.rs",
 ];
 
 /// R10's Cargo words: no literal of the store, core or CLI holds one.

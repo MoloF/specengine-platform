@@ -40,6 +40,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped
 - [docs/features/decision-apply.md](features/decision-apply.md) shipped
 - [docs/features/decision-staging.md](features/decision-staging.md) shipped
+- [docs/features/delivery-analytics.md](features/delivery-analytics.md) shipped
 - [docs/features/department-split.md](features/department-split.md) shipped
 - [docs/features/departments.md](features/departments.md) shipped
 - [docs/features/design-foundation.md](features/design-foundation.md) shipped

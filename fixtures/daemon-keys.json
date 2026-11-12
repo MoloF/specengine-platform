@@ -124,5 +124,16 @@
   "ShownHistory": ["entries", "truncated", "omitted"],
   "HistoryEntry": ["source", "at", "id", "change", "created", "rev", "rev_before", "by", "by_name", "proposal", "proposed_by", "proposer", "record", "title", "rationale"],
   "CardUpstream": ["parent", "mark", "on", "correction", "changes", "more"],
-  "CardUpstreamChange": ["seq", "at", "source", "by", "fields", "item", "kind", "record", "on"]
+  "CardUpstreamChange": ["seq", "at", "source", "by", "fields", "item", "kind", "record", "on"],
+  "Delivery": ["as_of", "notes", "releases", "departments", "total", "late", "truncated", "omitted"],
+  "DeliveryRelease": ["group", "release", "tasks", "delivered", "delivered_late", "open", "overdue", "cancelled", "lead_days"],
+  "DeliveryDepartment": ["name", "title", "tasks", "delivered", "delivered_late", "open", "overdue", "cancelled", "lead_days"],
+  "DeliveryTotal": ["tasks", "delivered", "delivered_late", "open", "overdue", "cancelled", "lead_days"],
+  "LeadDays": ["median", "max"],
+  "DeliveryLate": ["id", "title", "flow", "column", "parent", "group", "release", "departments", "created_at", "taken_at", "accepted_at", "due", "days_late", "lead_days", "estimate", "returns", "reestimates", "cancelled_subtasks", "items", "more"],
+  "DeliveryReturn": ["at", "from", "note"],
+  "DeliveryReestimate": ["at", "old", "new", "reason"],
+  "DeliveryCancelled": ["id", "title", "at", "reason"],
+  "DeliveryItem": ["id", "kind", "status"],
+  "DeliveryMore": ["returns", "reestimates", "cancelled_subtasks", "items"]
 }

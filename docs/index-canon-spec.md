@@ -22,6 +22,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-refs.md](canon/spec-cli-refs.md) spec refs output: rows, JSON, exits · crates/specengine-cli · tier 2
+- [docs/canon/spec-delivery.md](canon/spec-delivery.md) spec delivery: what was delivered, what is overdue and why · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-flow-bar.md](canon/spec-flow-bar.md) The Flow screen: the bar, Gaps and Records for the AI · ui · tier 2
 - [docs/canon/spec-flow-cuts.md](canon/spec-flow-cuts.md) spec flow: in the flow, the stage and in-flow cuts, types · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
 - [docs/canon/spec-flow-layout.md](canon/spec-flow-layout.md) The Flow screen: layout and forms · ui · tier 2

@@ -632,6 +632,16 @@ pub(crate) mod seams {
         UpstreamEvents,
         /// An upstream read's applied items (US-9).
         UpstreamItems,
+        /// A delivery read's card list (task spec `delivery-analytics`
+        /// DA-10).
+        DeliveryCards,
+        /// A delivery read's `events_of_types` (DA-10).
+        DeliveryEvents,
+        /// A delivery read's item list (DA-10).
+        DeliveryItems,
+        /// A delivery read's plan groups built from the walked files
+        /// (DA-10).
+        DeliveryPlan,
     }
 
     /// Where the stage hook is called.
@@ -676,6 +686,14 @@ pub(crate) mod seams {
         pub upstream_events: usize,
         /// Upstream applied-item reads.
         pub upstream_items: usize,
+        /// Delivery card lists.
+        pub delivery_cards: usize,
+        /// Delivery `events_of_types` calls.
+        pub delivery_events: usize,
+        /// Delivery item lists.
+        pub delivery_items: usize,
+        /// Delivery plan builds.
+        pub delivery_plans: usize,
     }
 
     /// The stage hook, if any.
@@ -765,6 +783,10 @@ pub(crate) mod seams {
             Event::Stat => counts.stats += 1,
             Event::UpstreamEvents => counts.upstream_events += 1,
             Event::UpstreamItems => counts.upstream_items += 1,
+            Event::DeliveryCards => counts.delivery_cards += 1,
+            Event::DeliveryEvents => counts.delivery_events += 1,
+            Event::DeliveryItems => counts.delivery_items += 1,
+            Event::DeliveryPlan => counts.delivery_plans += 1,
         });
     }
 

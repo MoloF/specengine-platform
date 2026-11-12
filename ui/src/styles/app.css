@@ -4761,6 +4761,155 @@ mark {
   gap: var(--space-100);
 }
 
+/* The Delivery tab (docs/features/delivery-analytics.md "Acceptance criteria", DA-12): the as-of
+   field, two tables of the daemon's counts, then the late tasks with their reasons. Figures line up
+   in tabular digits; titles, notes and reasons in any script wrap; a table wider than its column
+   scrolls in its own focusable region, never the page. */
+.delivery {
+  display: grid;
+  gap: var(--space-300);
+  min-width: 0;
+  padding-top: var(--space-150);
+}
+
+.delivery-as-of {
+  display: grid;
+  gap: var(--space-050);
+  max-width: 72ch;
+}
+
+.delivery-as-of-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-100);
+}
+
+.delivery-date {
+  width: auto;
+}
+
+.delivery-hint {
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.delivery-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.delivery-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.delivery-table caption {
+  padding: var(--space-150) var(--space-200) var(--space-100);
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+  text-align: start;
+}
+
+.delivery-table th,
+.delivery-table td {
+  padding: var(--space-075) var(--space-200);
+  border-top: 1px solid var(--border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.delivery-table thead th {
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.delivery-table tbody th {
+  min-width: 10ch;
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.delivery-table td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.delivery-table tfoot th,
+.delivery-table tfoot td {
+  border-top: 2px solid var(--border-control);
+  font-weight: var(--font-weight-semibold);
+}
+
+.delivery-late,
+.delivery-notes {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+.delivery-late-list,
+.delivery-notes ul {
+  display: grid;
+  gap: var(--space-150);
+  padding: 0;
+  list-style: none;
+}
+
+.delivery-late-task {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+  padding: var(--space-150) var(--space-200);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+}
+
+.delivery-late-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.delivery-reasons {
+  display: grid;
+  gap: var(--space-075);
+  padding: var(--space-100) 0 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.delivery-reason {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-025) var(--space-100);
+  min-width: 0;
+}
+
+.delivery-reason-note,
+.delivery-more,
+.delivery-none {
+  color: var(--text-secondary);
+}
+
 /* The chain canvas: lanes' names as text above their boxes, the cut's rule down the gap. */
 .chain-lane {
   display: grid;

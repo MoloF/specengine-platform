@@ -86,9 +86,11 @@ describe("the read and the header (UI-3)", () => {
 
   it("opens on Lanes, each group a lane in served order, the notes last, verbatim", async () => {
     await openRoadmap();
+    // Delivery third since delivery-analytics (docs/features/delivery-analytics.md "Acceptance criteria", DA-12).
     expect(screen.getAllByRole("tab").map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
       ["Lanes", "true"],
       ["Chain", "false"],
+      ["Delivery", "false"],
     ]);
     expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["alpha", "beta", "launch", "Pool", "Unplaced", "Notes"]);
     expect(Array.from(lane("Notes").querySelectorAll("li"), (item) => item.textContent)).toEqual([
@@ -331,7 +333,7 @@ describe("states (UI-3)", () => {
     expect(box?.querySelector(".empty-state-description")?.textContent).toBe("A plan item is a document your [roadmap] table selects; Read again shows it once it is saved.");
     expect(document.querySelector(".roadmap-empty")).toBeNull();
     expect(box?.compareDocumentPosition(screen.getByRole("tablist"))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Lanes", "Chain"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Lanes", "Chain", "Delivery"]);
     expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual([
       "No plan items yet: an item is a file in docs/roadmap whose id starts with RM-",
       "beta",

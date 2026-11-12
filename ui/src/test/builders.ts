@@ -15,6 +15,9 @@ import type {
   CheckCounts,
   CheckFinding,
   CheckReport,
+  DeliveryCounts,
+  DeliveryDocument,
+  DeliveryLate,
   DriftRow,
   FlowEdge,
   FlowGap,
@@ -1023,4 +1026,38 @@ export function anImplicitWorkspaces(notes: string[] = []): WorkspaceDocument {
 /** A configured workspaces document. */
 export function aWorkspaces(workspaces: Workspace[], modules: WorkspaceModule[] = [], fields: Partial<WorkspaceDocument> = {}): WorkspaceDocument {
   return { source: "config", notes: [], workspaces, modules, ...fields };
+}
+
+/** A delivery row's counts: every one 0, no lead time, unless given (docs/features/delivery-analytics.md "Acceptance criteria", DA-11). */
+export function aDeliveryCounts(fields: Partial<DeliveryCounts> = {}): DeliveryCounts {
+  return { tasks: 0, delivered: 0, delivered_late: 0, open: 0, overdue: 0, cancelled: 0, lead_days: null, ...fields };
+}
+
+/** A delivery document judged at `asOf`: no task, no row, uncut, unless given. */
+export function aDelivery(asOf: string, fields: Partial<DeliveryDocument> = {}): DeliveryDocument {
+  return { as_of: asOf, notes: [], releases: [], departments: [], total: aDeliveryCounts(), late: [], truncated: false, omitted: null, ...fields };
+}
+
+/** A late task: open in no release, of no department, with no reason, unless given. */
+export function aDeliveryLate(fields: Partial<DeliveryLate> & Pick<DeliveryLate, "id" | "due" | "days_late">): DeliveryLate {
+  return {
+    title: `Task ${fields.id}`,
+    flow: "work",
+    column: "doing",
+    parent: null,
+    group: "none",
+    release: null,
+    departments: [],
+    created_at: "2026-11-01T09:00:00Z",
+    taken_at: null,
+    accepted_at: null,
+    lead_days: null,
+    estimate: null,
+    returns: [],
+    reestimates: [],
+    cancelled_subtasks: [],
+    items: [],
+    more: { returns: 0, reestimates: 0, cancelled_subtasks: 0, items: 0 },
+    ...fields,
+  };
 }

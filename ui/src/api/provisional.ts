@@ -1944,6 +1944,146 @@ export interface RoadmapPoolTask {
   targets: string[];
 }
 
+// What was delivered, what is overdue and why (RM-0107 a): `spec delivery --as-of D --json` as the
+// daemon's browser view sends it, uncut, every key present, absent null. The counts are the core's,
+// per read, at the `as_of` the page sent; the UI lays them out and never sums, compares or recounts
+// them. A release name, a department's name and title, a flow, a column, an estimate, a note and a
+// reason are project data, shown as written. No key names a person.
+
+/** A delivery row's group: a release, the pool, the unplaced items, or none up a task's chain; told apart in `src/roadmap/delivery.ts` alone. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export type KnownDeliveryGroup = "release" | "pool" | "unplaced" | "none";
+
+/** A delivery group as sent; another word kept and shown raw. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export type DeliveryGroup = KnownDeliveryGroup | Unlisted;
+
+/**
+ * `spec delivery [--as-of D] --json`, the answer of `GET .../delivery?as_of=D`: `as_of` the day the
+ * open tasks were judged at, as sent; `releases` each group holding a task, in plan order, then none;
+ * `departments` every served department in served order, zeros too; `total` every task once; `late`
+ * the tasks delivered late or overdue, most days late first; `omitted` null uncut, as the daemon
+ * always serves it. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11.
+ */
+export interface DeliveryDocument {
+  as_of: string;
+  notes: string[];
+  releases: DeliveryRelease[];
+  departments: DeliveryDepartment[];
+  total: DeliveryCounts;
+  late: DeliveryLate[];
+  truncated: boolean;
+  omitted: number | null;
+}
+
+/** A row's counts: `tasks` its tasks not cancelled, `delivered` of them, `open`, `overdue`, `cancelled` beside them; `lead_days` over the delivered ones, null with none. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryCounts {
+  tasks: number;
+  delivered: number;
+  delivered_late: number;
+  open: number;
+  overdue: number;
+  cancelled: number;
+  lead_days: LeadDays | null;
+}
+
+/** A group's row: `release` the name for a release alone, null otherwise. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryRelease {
+  group: DeliveryGroup;
+  release: string | null;
+  tasks: number;
+  delivered: number;
+  delivered_late: number;
+  open: number;
+  overdue: number;
+  cancelled: number;
+  lead_days: LeadDays | null;
+}
+
+/** A department's row, by department and never by person: its served `name` and `title`. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryDepartment {
+  name: string;
+  title: string;
+  tasks: number;
+  delivered: number;
+  delivered_late: number;
+  open: number;
+  overdue: number;
+  cancelled: number;
+  lead_days: LeadDays | null;
+}
+
+/** Days from made to accepted over a row's delivered tasks: the lower middle and the most. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface LeadDays {
+  median: number;
+  max: number;
+}
+
+/**
+ * A task delivered late or overdue, with its reasons: `departments` names, in served order;
+ * `taken_at` its first move out of the column it was made in, null never taken; `days_late` past
+ * `due` at its accept, or at `as_of` while open; `estimate` as written. Each list keeps its oldest 16,
+ * `more` counting the rest. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11.
+ */
+export interface DeliveryLate {
+  id: string;
+  title: string;
+  flow: string;
+  column: string;
+  parent: string | null;
+  group: DeliveryGroup;
+  release: string | null;
+  departments: string[];
+  created_at: string;
+  taken_at: string | null;
+  accepted_at: string | null;
+  due: string;
+  days_late: number;
+  lead_days: number | null;
+  estimate: string | null;
+  returns: DeliveryReturn[];
+  reestimates: DeliveryReestimate[];
+  cancelled_subtasks: DeliveryCancelled[];
+  items: DeliveryItem[];
+  more: DeliveryMore;
+}
+
+/** A move into the flow's return column from another, with its note. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryReturn {
+  at: string;
+  from: string;
+  note: string | null;
+}
+
+/** A re-estimate as written, old to new, `new` null on a clear; never summed or compared. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryReestimate {
+  at: string;
+  old: string | null;
+  new: string | null;
+  reason: string;
+}
+
+/** A subtask taken out of its column, and why. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryCancelled {
+  id: string;
+  title: string;
+  at: string;
+  reason: string;
+}
+
+/** A question, discrepancy or decision raised on the task: its kind told apart in `src/roadmap/delivery.ts` alone, its state raw. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryItem {
+  id: string;
+  kind: string;
+  status: ProposalStatus;
+}
+
+/** How many of each list were not listed. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */
+export interface DeliveryMore {
+  returns: number;
+  reestimates: number;
+  cancelled_subtasks: number;
+  items: number;
+}
+
 /** A column of a flow: `id` its name, `title` any script, default the ID. Source: `docs/canon/cards.md` "Documents and events". */
 export interface CardColumn {
   id: string;

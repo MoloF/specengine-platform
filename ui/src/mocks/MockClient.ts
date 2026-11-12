@@ -4,6 +4,7 @@ import {
   STAGE_REFUSED,
   type BundleOptions,
   type CardsOptions,
+  type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
   type NodeOptions,
@@ -35,6 +36,7 @@ import type {
   CheckReport,
   ConfirmBody,
   ConfirmRead,
+  DeliveryDocument,
   FlowView,
   GraphView,
   HealthReport,
@@ -97,6 +99,7 @@ import { mockHistory } from "./history";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { lockDiffOf } from "./lockDiff";
+import { deliveryOf } from "./delivery";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
@@ -360,6 +363,17 @@ export class MockClient implements SpecEngineClient {
       return structuredClone({ ...whole, release, reason: `no release "${release}" in [roadmap] releases (${names.join(", ")})`, groups: [] });
     }
     return structuredClone({ ...whole, release, groups: kept });
+  }
+
+  /**
+   * The project's delivery for the scenario at the day asked (src/mocks/delivery.ts), judged as the
+   * core does, read only; the daemon serves its own (`docs/features/delivery-analytics.md`
+   * "Acceptance criteria", DA-11). A day that is none is refused 400 in the daemon's words.
+   */
+  async getDelivery(project: string, options: DeliveryOptions): Promise<DeliveryDocument> {
+    await this.read();
+    this.project(project);
+    return structuredClone(deliveryOf(project, this.scenario, this.at, options.asOf));
   }
 
   /**

@@ -106,6 +106,8 @@ export const queryKeys = {
   round: (project: string, limit: number | null) => ["round", project, { limit }] as const,
   /** The whole plan, `spec roadmap --json` with neither option (`docs/features/roadmap-screen.md`). */
   roadmap: (project: string) => ["roadmap", project] as const,
+  /** What was delivered and what is overdue at a day, `spec delivery --as-of D --json` (`docs/features/delivery-analytics.md` "Acceptance criteria", DA-12): each day its own entry. */
+  delivery: (project: string, asOf: string) => ["delivery", project, asOf] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
   /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does; `parent` is never asked here. */
@@ -162,6 +164,11 @@ export function tracesOf(project: string) {
 /** Every flow read of a project: each carries its boxes' badges. */
 export function flowsOf(project: string) {
   return ["flow", project] as const;
+}
+
+/** Every delivery read of a project, whatever its day. */
+export function deliveryOf(project: string) {
+  return ["delivery", project] as const;
 }
 
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
@@ -469,7 +476,9 @@ const CARD_EVENT = "card.";
  * (`docs/features/board-ui.md` "Rules and edge cases"); it reads the project's flows too, whose boxes
  * carry their rollups (`docs/features/trace-views.md` "Timeline"). A rejected discrepancy settles a
  * departure, so `.approved`, `.rejected` and `.apply_failed` read the trace, the flows and the card
- * lists too (`docs/features/card-trace.md` "Rollup"). No
+ * lists too (`docs/features/card-trace.md` "Rollup"). The delivery reads, at every day asked, are
+ * read again on a `card.*` event, every `proposal.*` event but a stage and a gap, a read in flight
+ * aborted (docs/features/delivery-analytics.md "Acceptance criteria", DA-12). No
  * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads, the round sheets and the cards of the project again. Only the reads on screen are fetched, once each
@@ -544,6 +553,13 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     const readRoundAgain = () => {
       void queryClient.invalidateQueries({ queryKey: roundsOf(project) });
     };
+    // What was delivered and what is overdue counts the cards, their events, the items raised on
+    // them and the plan's groups: a card event, any proposal event but a stage, and a gap read it
+    // again at every day asked, a read in flight aborted (docs/features/delivery-analytics.md
+    // "Acceptance criteria", DA-12). A task event changes none of it.
+    const readDeliveryAgain = () => {
+      void queryClient.invalidateQueries({ queryKey: deliveryOf(project) });
+    };
     /** Marks and rollups: a read of the project's cards against its spec, wherever they show. */
     const readMarksAgain = () => {
       void queryClient.invalidateQueries({ queryKey: tracesOf(project) });
@@ -563,6 +579,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
             void queryClient.invalidateQueries({ queryKey: cardsOf(project), predicate: (query) => namesParent(query.state.data, id) });
           }
           readMarksAgain();
+          readDeliveryAgain();
           return;
         }
         if (event.type.startsWith(TASK_EVENT) || event.type.startsWith(PROPOSAL_EVENT)) {
@@ -599,6 +616,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
           }
           return;
         }
+        readDeliveryAgain();
         readTasksAgain();
         if (event.type === APPLIED) {
           // An apply may move a linked task's `stale` too, which the card read above serves as read now.
@@ -616,6 +634,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         readTasksAgain();
         readRoundAgain();
         void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+        readDeliveryAgain();
       },
     );
     return () => {
@@ -1160,6 +1179,18 @@ export function useRoadmap(project: string) {
 
 /** The plan's read as the Roadmap shares it among its parts. */
 export type RoadmapQuery = ReturnType<typeof useRoadmap>;
+
+/**
+ * What was delivered, what is overdue and why, judged at `asOf` (docs/features/delivery-analytics.md
+ * "Acceptance criteria", DA-12): `spec delivery --as-of D --json`, the day always sent, each day its
+ * own entry, its query's AbortSignal taken. Read on entering the Delivery tab, on a new day and,
+ * while the tab is on screen, after a `card.*` event, a `proposal.*` event but a stage, or a gap
+ * (useLiveQueue); never on window focus. The counts are the daemon's: nothing here recounts them.
+ */
+export function useDelivery(project: string, asOf: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.delivery(project, asOf), queryFn: ({ signal }) => client.getDelivery(project, { asOf }, signal) });
+}
 
 /**
  * The Board's one read (`docs/features/board-ui.md` "Board"): the filters work on its answer, and
