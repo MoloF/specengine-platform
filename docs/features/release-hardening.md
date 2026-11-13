@@ -46,7 +46,7 @@ adrs: []
 - [x] RH-R4 — **A bad split row: a finding, splitting off, nothing else.** One `card-config` line (`` error  specengine.toml:63: card-config: unknown field `disciplnes`, expected `kind` or `disciplines` ``); `CHECK_CODES` 38; every other card surface, the gate, `spec workspace`, `spec delivery`, `spec card counts` byte for byte as without the row; `spec card split` (dry run too) exit 2, the route 503, `split_card` an error result; `spec init --pack` refuses. Mutations red: split errors joined to `[card]`'s; the finding dropped; `init` not judging the split.
 - [ ] RH-R5 — **Delivery reads one snapshot.** Store `queue_snapshot.rs`: a second connection's `card.accepted` and question stay unseen by the handle's reads and seen by a new handle; DA-10's seam counts unchanged. Mutation red: each read on its own transaction. **Owed:** the DT3 re-measure (release); the CLI call site is caught only by the store test.
 - [ ] RH-R6 — **Collision names count every holder.** `R-01` (also Tier 3) and `R-02` (also generated) are W1; `feat/R-97` named; each printed name shows one node. Mutation red: `outside_ids` not counted. **Owed:** the eval `reads.collisions` medians at 1k, 10k, 100k (release).
-- [ ] RH-R7 — **Rust gates.** Clippy clean; `plugin.json` and `PINS` as `usage-orphans` leaves them (0.46.0); `fixtures/daemon-keys.json` unchanged by this release. The full run under load (load average 24-32): 6 037 run, 10 failed, none this release's (see Implementation). The clean run is RH-G1.
+- [x] RH-R7 — **Rust gates.** Clippy clean; `plugin.json` and `PINS` as `usage-orphans` leaves them (0.46.0); `fixtures/daemon-keys.json` unchanged by this release. The full run under load (load average 24-32): 6 037 run, 10 failed, none this release's (see Implementation); the clean run, RH-G1, 0 failed.
 - [x] RH-R8 — **The gate's deadline is 5 s.** `GATE_DEADLINE` 5 s; `spec gate --stdin` with stdin open exits 2 `not read to its end within 5 s` in 5.0-5.5 s; `tests/gate.rs` words its lines through `GATE_DEADLINE.as_secs()`; a test reads `limit=` 7 from `gate.sh` and `timeout` 10 from `hooks.json` and asserts deadline + 400 ms < limit < timeout (`plugin_files.rs` `GATE_DEADLINE_SECONDS` 5). Mutations red: 3 s; 7 s.
 
 **Lane D**
@@ -58,7 +58,7 @@ adrs: []
 
 **Gate**
 
-- [ ] RH-G1 — **One clean full run**, on the owner's commit holding every lane and the canon, nothing else running: `cargo nextest run --workspace --retries 0 --no-fail-fast` (0 failed, skipped equal to the `#[ignore]` count), UI lint and `tsc`, `pnpm test` (no `.skip(`, `.only(`, `.todo(`), `pnpm build`, `export index` and `check`. Runs after the commit, on an idle machine; a failure goes to its lane.
+- [x] RH-G1 — **One clean full run**, on the owner's commit holding every lane and the canon, nothing else running: `cargo nextest run --workspace --retries 0 --no-fail-fast` (0 failed, skipped equal to the `#[ignore]` count), UI lint and `tsc`, `pnpm test` (no `.skip(`, `.only(`, `.todo(`), `pnpm build`, `export index` and `check`. Runs after the commit, on an idle machine; a failure goes to its lane. **Passed** 2026-11-13 at e6f001f6, a clean tree, an idle machine after a restart: nextest `--retries 0` 6 037 of 6 037 passed, 90 skipped, 677 s (the source holds 84 `#[ignore]` attributes; the six apart not traced); UI lint 0, `tsc --noEmit` 0, `pnpm test` 212 files, 5 932 of 5 932 (no `.skip(`, `.only(`, `.todo(` at the commit), `pnpm build` 0; `export index` changed nothing, `check` 546 documents clean; the tree unchanged after.
 
 ## Out of scope
 
@@ -80,7 +80,7 @@ The pair side's found flag (2a.7, a served field); the collision-pass flood and 
 
 **Departures**, accepted at review: a split row whose keys already err names no missing key; no editorial note when an ID-less document's own hash moved, its cards refreshing; R1's check runs before `lines`' grammar; R6's mark wording unchanged; `tree/NodePane.tsx` (outside the plan's files) passes `holders[0]` for RH-U5.
 
-**The full run under load**, 10 failures, none this release's: two `usage-orphans` pins (`kind_amendment` 151, `.env.example` 0.46.0) and MCP `review_form`, re-pinned; three http `ui` t3, `ui/dist` rebuilt mid-run; four wall-clock bounds outside RM-0063, each passing on rerun and watched in RH-G1: core `cost` ×2 (2 s), code `hash_levels_depth` (5 s), http `live` (17 s).
+**The full run under load**, 10 failures, none this release's: two `usage-orphans` pins (`kind_amendment` 151, `.env.example` 0.46.0) and MCP `review_form`, re-pinned; three http `ui` t3, `ui/dist` rebuilt mid-run; four wall-clock bounds outside RM-0063, each passing on rerun and in RH-G1: core `cost` ×2 (2 s), code `hash_levels_depth` (5 s), http `live` (17 s).
 
 **Known limits:** the T2 survivor; R5's CLI call site covered only by the store test; `Names::end` counts universe holders alone; the Inbox's `DecisionDialog` and `ConfirmDialog` draw their summary raw; an item stored before R1 still stages and never applies (`reject:`).
 
