@@ -19,6 +19,15 @@ export const CHAIN_TASKS_SHOWN = 2;
 /** Where the first row of boxes starts: room above for the lane's name, marks and counts. */
 export const LANE_HEAD = 96;
 
+/**
+ * The cut label's height: one line of `.chain-cut-label`'s line height, `--line-height-small: 1rem`
+ * (tokens.css), 16 px at the browser's default root size. That token changing changes this number too.
+ */
+export const CUT_LABEL_HEIGHT = 16;
+
+/** Between the cut label's foot and the lane heads' top; it also holds the label clear under a root size up to 24 px. */
+export const CUT_LABEL_GAP = 8;
+
 /** A box's canvas id: `i:` and the item's ID. */
 export function boxId(item: string): string {
   return `i:${item}`;
@@ -69,6 +78,12 @@ export interface ChainLayout {
   edges: ChainEdge[];
   /** The x of the cut's rule, after the `mvp_cut` release's lane; null when no cut or its lane is not drawn. */
   cutX: number | null;
+  /**
+   * Where the cut's words start, at the rule's x: above every lane head, its foot CUT_LABEL_GAP over
+   * y 0, so no lane's name, marks or counts in [0, LANE_HEAD) runs under it, however long the next
+   * lane's title (docs/features/release-hardening.md "Acceptance criteria", RH-U6); null with no rule.
+   */
+  cutLabel: { x: number; y: number } | null;
   /** The height of the drawn lanes, the rule's length. */
   height: number;
   limit: ChainLimit | null;
@@ -119,11 +134,13 @@ export function chainOf(plan: Pick<RoadmapDocument, "groups" | "cut">): ChainLay
     }
   }
   const cutLane = plan.cut === null ? undefined : lanes.find((lane) => lane.group.mvp_cut);
+  const cutX = cutLane === undefined ? null : cutLane.x + BOX_WIDTH + (COLUMN_STEP - BOX_WIDTH) / 2;
   return {
     lanes,
     boxes,
     edges,
-    cutX: cutLane === undefined ? null : cutLane.x + BOX_WIDTH + (COLUMN_STEP - BOX_WIDTH) / 2,
+    cutX,
+    cutLabel: cutX === null ? null : { x: cutX, y: -(CUT_LABEL_HEIGHT + CUT_LABEL_GAP) },
     height: LANE_HEAD + ROW_STEP * Math.max(rows, 1) - (ROW_STEP - BOX_HEIGHT),
     limit: cut ? { hidden: total - drawnItems, total } : null,
   };

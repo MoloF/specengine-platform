@@ -222,6 +222,7 @@ const AROUND: Readonly<Record<string, string>> = {
   "board.column.count": "count",
   "health.left.queueTotal": "count",
   "health.amendments.total": "count",
+  "health.orphans.total": "count",
   "health.code.rowsOf": "count",
   "health.unboundRow.total": "unbound",
   "health.drift.total": "shown",

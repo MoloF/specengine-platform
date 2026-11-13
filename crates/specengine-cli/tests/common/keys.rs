@@ -18,8 +18,48 @@ pub const FLOW_KEYS: [&str; 3] = ["in_flow", "not_in_flow", "types"];
 
 /// The ones a `spec show` document gains: flow-scenario's `ancestors`
 /// (RM-0094) and node-history's `history` (RM-0035, `null` unless asked),
-/// each a shown node's.
-pub const SHOW_KEYS: [&str; 2] = ["ancestors", "history"];
+/// each a shown node's, and usage-orphans' `usage` (RM-0111, UO6), a links
+/// block's, the one object that holds it.
+pub const SHOW_KEYS: [&str; 3] = ["ancestors", "history", "usage"];
+
+/// A `spec show --links` text as the build before usage-orphans printed it
+/// (docs/features/usage-orphans.md "Acceptance criteria", UO6, its test
+/// churn): each links summary line (`  links <o> out, <i> in`) without the
+/// `; used by <u>, mentioned by <m>` it gained, every other byte kept.
+pub fn without_usage_counts(text: &[u8]) -> Vec<u8> {
+    const SUMMARY: &[u8] = b"  links ";
+    const USED: &[u8] = b"; used by ";
+    const MENTIONED: &[u8] = b", mentioned by ";
+    let digits = |bytes: &[u8], from: usize| {
+        bytes[from..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count()
+    };
+    let mut out = Vec::with_capacity(text.len());
+    for line in text.split_inclusive(|byte| *byte == b'\n') {
+        let found = line.starts_with(SUMMARY).then(|| {
+            line.windows(USED.len())
+                .position(|window| window == USED)
+                .and_then(|at| {
+                    let used = digits(line, at + USED.len());
+                    let after = at + USED.len() + used;
+                    (used > 0 && line[after..].starts_with(MENTIONED)).then(|| {
+                        let mentioned = digits(line, after + MENTIONED.len());
+                        (at, after + MENTIONED.len() + mentioned, mentioned > 0)
+                    })
+                })
+        });
+        match found.flatten() {
+            Some((at, end, true)) => {
+                out.extend_from_slice(&line[..at]);
+                out.extend_from_slice(&line[end..]);
+            }
+            _ => out.extend_from_slice(line),
+        }
+    }
+    out
+}
 
 /// docs/features/doc-modal.md (RM-0095), its test churn: a shown link's
 /// `title` and `end_kind` (D4) and a gap row's `titles` (D5, RM-0101).

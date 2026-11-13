@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-eval]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-13
 ---
 
 # spec check: what it enforces
@@ -14,7 +14,7 @@ Increments 1–4: one check of the convention — §11.1–4 of `docs/canon/docu
 
 - `CheckInput {files: [CheckFile {path, size, parsed?, read_error?, bytes}], problems: [Problem {kind: MissingRoot | UnreadableDir | SkippedName, path}]}`, `CheckFile::{parse, parsed, unreadable}`. `bytes` (the parsed text) give real lines, a parser diagnostic's subject and the written keys (`title`, `kind`, `id` are not in `fields`).
 - `CheckConfig::from_toml` → `{budgets: Budgets {tier0_bytes, tier1_bytes, index_bytes, decision_bytes, canon_bytes?, bundle_node?, bundle_task?}, classes: Classes {canon, decision, spec, generated: ClassContract {required, optional, closed}}, mode: Mode, rules: [CheckRule]}`; `Baseline::from_toml` → `[DebtEntry {code, path, subject, reason, expires, line}]`; both errors `{line?, message}`, `at(file)` → `file:line: message`.
-- `Report {mode, verdict, counts, findings, stale, new_debt?: [NewDebt {DebtEntry, head_expires?}], cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `verdict_in(mode)`, `without_base()` (`enforce-introduced` → `enforce`), `cannot(mode, causes)`, `Finding::blocks_in(mode)`; `CHECK_CODES` (36), `PARSER_SEVERITY` (13 rows); `worst_w(&CheckInput, &Paths, Option<&Generator>) -> u64`.
+- `Report {mode, verdict, counts, findings, stale, new_debt?: [NewDebt {DebtEntry, head_expires?}], cannot_check: [Cause {path, message}]}`, `lines(detail)`, `to_json()`, `exit_code()`, `verdict_in(mode)`, `without_base()` (`enforce-introduced` → `enforce`), `cannot(mode, causes)`, `Finding::blocks_in(mode)`; `CHECK_CODES` (38), `PARSER_SEVERITY` (13 rows); `worst_w(&CheckInput, &Paths, Option<&Generator>) -> u64`.
 - `judge(report, &Baseline, &Base {findings, baseline?, mode?}) -> Report`, pure (`docs/canon/spec-check-git.md` "The base"): a finding is `introduced` unless its (code, path, subject) is a base finding (by set); new debt: an entry the base's baseline lacks by triple or holds with an earlier `expires` (not an earlier one, a new `reason`, a removal; `None`: unjudged); the stricter mode.
 
 ## Configuration
@@ -55,7 +55,7 @@ Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_ta
 - **Walk.** Non-UTF-8 names → one warning `name-skipped` per problem path, its message counting them; a missing written root, an unreadable file or directory → cannot check; a missing default role root is ignored.
 - **Parser codes** pass as themselves through one table, `PARSER_SEVERITY`, with the parser's severity but `homoglyph`, `duplicate-id` (errors).
 
-The check's own codes (`CHECK_CODES`, 37) are the errors named above, `name-skipped`, the seven of `spec-check-graph.md` (§11.5–6, inline mentions, graph), the two file-link warnings of `spec-check-links.md`, the six of `spec-check-process.md`, `rev-not-raised` (`--staged`, `--changed`: `node-revision.md` "Raising") and `team-config` (`hub-team.md` "Check").
+The check's own codes (`CHECK_CODES`, 38) are the errors named above, `name-skipped`, the seven of `spec-check-graph.md` (§11.5–6, inline mentions, graph), the two file-link warnings of `spec-check-links.md`, the six of `spec-check-process.md`, `rev-not-raised` (`--staged`, `--changed`: `node-revision.md` "Raising") `team-config` (`hub-team.md` "Check") and `card-config` (`card-split.md` "Config").
 
 ## Findings, debt, verdict
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Plain questions: a question's gist, why it matters, its options
@@ -82,7 +82,7 @@ A question's `options`, `recommendation` fill the existing keys; every other kin
 ## UI
 
 `src/inbox/ItemLead.tsx` (`ItemLead`, `LeadMatters`, `AskedFold`, `AskedText`, `RecommendedMark`), on the Inbox card and its dialogs, the Questions screen, a card's Activity and Answer…:
-- **The lead**, for an item holding `gist`: the gist on one line in `<bdi>` through `shownSlot` (also the Inbox `h2`, a list row, the not-staged line; the filter searches it), "Why it matters" (`shownText`, line feeds kept), then the options and controls; the text, working answer, price and why in a `Disclosure`, "The question as asked", collapsed. An item without a gist renders as before.
+- **The lead**, for an item holding `gist`: the gist on one line in `<bdi>` through `shownSlot` (also the Inbox `h2`, a list row, the not-staged line; the filter searches it), "Why it matters" (`shownText`, line feeds kept), then the options and controls; the text, working answer, price and why in a `Disclosure`, "The question as asked", collapsed. A question with no options shows its working answer and price after "Why it matters", outside the fold, which keeps the text, the pair and the why. An item without a gist renders as before. Every list draws an entry through `inbox/ProposalSummary.tsx`: a held gist so, else the summary (the Inbox list and a card's others, the Spec tree's proposals, Health's left region, the palette).
 - **Who recommends**: `labels.ts` `recommendedBy(author, t)`, the one place an author's type is compared (`policy.test.ts`): an agent "Recommended by the AI", anyone else "Recommended by the asker". Never preselected, the Inbox's decision dialog included, discrepancies too: Accept stays off with "Pick an answer first" until a pick, which a revision clears.
 - **Controls by structure** (`round/drafts.ts` `answersOf`, shared by `offers`, `RoundItemCard`, `CardItems` `picksOf`): each option; the working answer when `price_of_other` and `working_answer` are held; an own answer with `price_of_other` (not in the Inbox: `decision-staging.md` "UI"); Reject; Leave open on the Questions screen. An item with neither options nor a price offers the working answer and an own answer, as before.
 - **Strings**: `inbox.lead.{matters, asked, recommendedByAgent, recommendedByAsker, pickFirst}` in both catalogs, the Russian a draft for the owner; `.lead-*` CSS on scale tokens. Mock: `?scenario=plain-questions` (`src/mocks/plainQuestions.ts`), the approve lines in `mocks/approveLines.ts`.
@@ -90,8 +90,7 @@ A question's `options`, `recommendation` fill the existing keys; every other kin
 ## Known limits
 
 - **Rollout**: older binaries refuse a schema 13 queue (`SchemaTooNew`; the hook gives no verdict until reinstall) and a format 7 dump; an older hub's `/mcp` refuses the four keys (`unknown field`). Every terminal, plugin and hub upgrades from one commit, a hub dumping first (`card-mandate.md` "Known limits"), the owner's call.
-- Four surfaces draw a gist as they draw a summary, raw, outside `<bdi>` and `shownSlot`: `tree/ProposalsPanel.tsx`, `health/LeftRegion.tsx`, `palette/Palette.tsx` and `ProposalCard`'s list of others.
-- An option-less question with a gist shows "No options attached." while its working answer sits only in the fold: a candidate follow-up for the owner.
+- The Inbox's `DecisionDialog` and `ConfirmDialog` still draw their summary line raw, outside `ProposalSummary`: a follow-up.
 - A stored `options: []` on a question reads as fine, though the intake refuses `[]`.
 - The note flags `QST-031@1` but not `MEC-STAMINA@2`; `../x.md` is named `/x.md`, the trim shedding the dots.
 

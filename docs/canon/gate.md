@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, plugin]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-13
 ---
 
 # Task gate: the write hook
@@ -45,7 +45,7 @@ Under a root whose mode is not `off`: a root-relative path matching a glob of a 
 
 ## Verdict
 
-Each step runs only when the one before decided nothing, all within `GATE_DEADLINE` (3 s) of the start:
+Each step runs only when the one before decided nothing, all within `GATE_DEADLINE` (5 s) of the start:
 
 1. **Input**: `--path`, or the hook's JSON. One naming no file (not JSON, no path, NUL, a relative `cwd` for a relative path, `~` without `HOME`, stdin not closed in time) is decided by the **session's project** (`CLAUDE_PROJECT_DIR`, else the current directory; neither: pass): no config, no `[gate]` or `off` pass; `observe` passes with a note; `selective` or a broken `[gate]`: no verdict naming both causes. Input never refuses a write outside a gated project.
 2. **Config**: per candidate, the first `specengine.toml` walking up from its nearest existing directory. None: pass.
@@ -54,7 +54,7 @@ Each step runs only when the one before decided nothing, all within `GATE_DEADLI
 5. **Git**, reads only, each call killed at the deadline (`WorktreeGit::new_until`): the worktree top, common dir, branch (detached: none, nothing opens).
 6. **Queue**: `<slug>.db` under `HOME`'s data directory (`crates/specengine-cli/README.md` "Database"), read-only (`open_for_gate`): never created, migrated or checkpointed; absent, or a schema without tasks: no task. An opening task passes; else a corrupt row of the repository (id, status or claim undecodable, `in_progress` with no claim, no common dir): no verdict, hint `spec task show T`; else `selective` refuses, `observe` passes and records.
 
-**No verdict**, exit 2, `specengine gate: no verdict (<cause>): the write is refused.` + a hint, never the refusal's text: a config error or an unreadable config; `HOME` unset or relative; git missing, failing or no worktree; a queue of a newer schema (hint: reinstall `spec` and the plugin from one commit); a corrupt row; a lock or any step past the deadline; a dangling chain; a usage error (an unknown argument: the reinstall hint); a panic; `spec` missing, failing or stalled (the wrapper). Past step 3 `observe` turns each into a pass with one `note:`. **Backstop**: a thread at the deadline + 0.4 s and the panic hook exit by the stage reached (`GateProgress`): open 0; `observe` 0 with a note; closed 2; nothing read yet: the session's project (`gate_session`).
+**No verdict**, exit 2, `specengine gate: no verdict (<cause>): the write is refused.` + a hint, never the refusal's text: a config error or an unreadable config; `HOME` unset or relative; git missing, failing or no worktree; a queue of a newer schema (hint: reinstall `spec` and the plugin from one commit); a corrupt row; a lock or any step past the deadline; a dangling chain; a usage error (an unknown argument: the reinstall hint); a panic; `spec` missing, failing or stalled (the wrapper). Past step 3 `observe` turns each into a pass with one `note:`. **Backstop**: a thread at the deadline + 0.4 s (5.4 s, below the wrapper's 7 s and the hook's 10 s, an order `plugin_files.rs` and CLI `gate.rs` pin; causes read `within 5 s`) and the panic hook exit by the stage reached (`GateProgress`): open 0; `observe` 0 with a note; closed 2; nothing read yet: the session's project (`gate_session`).
 
 ## CLI
 

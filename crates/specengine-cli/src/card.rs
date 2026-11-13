@@ -2218,6 +2218,12 @@ fn run_split(
         None => None,
     };
     let mut context = open_cards(env, globals)?;
+    // A bad `[[card.split]]` row turns splitting off alone, a dry run's
+    // too: `<config>:<line>: <message>`, exit 2 (task spec
+    // `release-hardening` RH-R4).
+    if let Some(error) = &context.config.split_problem {
+        return Err(config_error(&context.project.config_label, error));
+    }
     // 3. Fields.
     let problem = field_problem(
         request.title.as_deref(),

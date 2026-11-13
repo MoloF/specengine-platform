@@ -1,9 +1,9 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
 import type { TreeView } from "../api/types";
 import { ASIDE, asideClient } from "../test/asideStub";
-import { anImplicitWorkspaces, aTreeNode, aTreeView } from "../test/builders";
+import { anImplicitWorkspaces, aNode, aTrace, aTraceCard, aTraceNode, aTreeNode, aTreeView } from "../test/builders";
 import { docClient, FERRY, FERRY_FRONT_MATTER, FERRY_LINES, ferryWorkspaces } from "../test/docStub";
 import { renderApp } from "../test/render";
 import { argsOf } from "../test/stubClient";
@@ -89,7 +89,8 @@ describe("the sections (DM-12 of doc-modal)", () => {
     expect([type?.textContent, type?.querySelector(".lozenge-label")?.getAttribute("lang"), type?.getAttribute("data-appearance")]).toEqual(["uses", "en", "neutral"]);
     expect(out.queryByText("MEC-GANGWAY")).toBeNull();
     const into = within(links.getByRole("group", { name: "Links in" }));
-    expect(into.getByRole("link", { name: "Landing" }).closest("li")?.textContent).toBe("followsLanding");
+    // Who uses it, by its place, since usage-orphans (docs/features/usage-orphans.md "Acceptance criteria", UO10).
+    expect(into.getByRole("link", { name: "Landing" }).closest("li")?.textContent).toBe("Landingdocs/ferry/landing.md:5 follows");
     const mentions = links.getByRole("button", { name: "Mentions (1)" });
     expect(mentions.getAttribute("aria-expanded")).toBe("false");
     expect(document.getElementById(mentions.getAttribute("aria-controls") ?? "")?.hidden).toBe(true);
@@ -305,5 +306,58 @@ describe("Inside by direction (DP-13 of departments)", () => {
     await waitFor(() => {
       expect(sets(under).map(([name]) => name)).toEqual(["Records", "Asked"]);
     });
+  });
+});
+
+// docs/features/release-hardening.md "Acceptance criteria", RH-U5: the work state and the cards are the
+// row of the holder the REF resolved to, by its canonical ID (an ID-less holder by its path), never the
+// row named as the REF was written: a document opened by an alias reads as by its ID. M: `node.id ===
+// docRef` in DocMeta or in CardsBlock.
+describe("opened by an alias (RH-U5)", () => {
+  const STAMINA = "MEC-STAMINA";
+  const ALIAS = "MEC-ENDURANCE";
+  const CARD = aTraceCard({ id: "C-0012", title: "Tune the stamina drain", mark: "open" });
+
+  /** The stamina document behind its ID and its alias alike; its trace row, by its ID, whatever REF the read was given. */
+  function staminaClient() {
+    const client = docClient();
+    client.getNode.mockImplementation((_project, ref) =>
+      Promise.resolve(
+        ref === STAMINA || ref === ALIAS
+          ? { ref, reason: null, notes: [], nodes: [aNode({ id: STAMINA, kind: "mechanic", title: "Stamina", path: "docs/spec/stamina.md", status: "accepted", text: "## Stamina\n\nSprinting drains it.\n" })] }
+          : { ref, reason: `\`${ref}\` resolves to no ID and no alias`, notes: [], nodes: [] },
+      ),
+    );
+    client.getTrace.mockImplementation((_project, options) =>
+      Promise.resolve(aTrace(options?.ref === STAMINA || options?.ref === ALIAS ? [aTraceNode(STAMINA, [CARD], { title: "Stamina", path: "docs/spec/stamina.md", rollup: "in work" })] : [], { ref: options?.ref ?? null })),
+    );
+    return client;
+  }
+
+  /** The work state's lozenge under the title and the Tasks block's state and card lines, once read. */
+  async function opened(ref: string) {
+    const client = staminaClient();
+    renderApp(client, `#/alpha/inbox?doc=${ref}`);
+    const dialog = await screen.findByRole("dialog", { name: "Stamina" });
+    const meta = dialog.querySelector(".issue-view-meta");
+    await waitFor(() => {
+      expect(meta?.querySelectorAll(".lozenge")).toHaveLength(2);
+    });
+    const cards = within(dialog).getByRole("region", { name: "Tasks" });
+    await within(cards).findByRole("link", { name: /C-0012/ });
+    const read = {
+      state: meta?.querySelector(".lozenge")?.textContent,
+      tasks: cards.querySelector(".cards-state")?.textContent,
+      cards: Array.from(cards.querySelectorAll(".cards-line-title"), (line) => line.textContent),
+    };
+    expect(client.getTrace.mock.calls.map((call) => call[1])).toContainEqual({ ref });
+    return read;
+  }
+
+  it("shows the holder's row: its rollup, never Not known, and its cards; by the canonical ID the same", async () => {
+    const byAlias = await opened(ALIAS);
+    expect(byAlias).toEqual({ state: "In work", tasks: "In work", cards: ["C-0012 Tune the stamina drain"] });
+    cleanup();
+    expect(await opened(STAMINA)).toEqual(byAlias);
   });
 });

@@ -391,7 +391,9 @@ fn the_one_table_covers_every_parser_code() {
     // (docs/features/spec-check-process.md AC-18), then slice 4b-2's error
     // `rev-not-raised` (docs/features/rev-rule.md RD-2: `CHECK_CODES` 36),
     // then hub-team's error `team-config` (docs/features/hub-team.md:
-    // `CHECK_CODES` 37); a stale entry is no finding.
+    // `CHECK_CODES` 37), then release-hardening's error `card-config`
+    // (docs/features/release-hardening.md "Acceptance criteria" RH-R4:
+    // `CHECK_CODES` 38, the last); a stale entry is no finding.
     assert_eq!(
         check::CHECK_CODES,
         [
@@ -432,8 +434,11 @@ fn the_one_table_covers_every_parser_code() {
             "parent-cycle",
             "rev-not-raised",
             "team-config",
+            "card-config",
         ]
     );
+    assert_eq!(check::CHECK_CODES.len(), 38);
+    assert_eq!(check::CHECK_CODES.last(), Some(&"card-config"));
     // No check code shadows a parser code.
     for code in DiagnosticCode::ALL {
         assert!(

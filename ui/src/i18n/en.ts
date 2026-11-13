@@ -1349,6 +1349,24 @@ export const en = {
       order: "in spec verify's order",
       notes: "Notes from the daemon on the drift",
     },
+    // Row 8 (OrphansPart.tsx; docs/features/usage-orphans.md "Acceptance criteria", UO11).
+    orphans: {
+      title: "Orphan documents",
+      boundary: "orphan documents",
+      measuring: "Measuring the orphan documents of {{project}}",
+      failed: "The orphan documents could not be read",
+      failedAgain: "The orphan documents could not be read again: {{message}}",
+      total_one: "{{count}} orphan document {{over}}",
+      total_other: "{{count}} orphan documents {{over}}",
+      over_one: "over {{count}} live document",
+      over_other: "over {{count}} live documents",
+      meaning: "Linked to nothing: no link to or from another document and no child. Link it in, or set it aside through a proposal.",
+      none: "{{none}}: every live document links or is linked.",
+      measuredOver: "Measured {{over}}.",
+      noTask: "No task",
+      listLabel: "Orphan documents, by direction and kind",
+      notes: "Notes from the daemon on the orphan documents",
+    },
   },
 
   // The Inbox's closed tables (inbox/labels.ts): severities, proposal states, gap types, previews.
@@ -1986,7 +2004,16 @@ export const en = {
       caption_other: "{{direction}}: {{count}} nodes",
       loading: "Loading the table of {{direction}}",
       failed: "The table of {{direction}} could not be read",
-      column: { title: "Title", version: "Version", state: "State", open: "Open items", tasks: "Tasks", changed: "Last change" },
+      column: { title: "Title", version: "Version", state: "State", open: "Open items", tasks: "Tasks", used: "Used by", changed: "Last change" },
+      // The usage column and its filter (docs/features/usage-orphans.md "Acceptance criteria", UO11).
+      mentions_one: "{{count}} mention",
+      mentions_other: "{{count}} mentions",
+      orphan: "Orphan",
+      filter: { undeclared: "No declared use", uncited: "Not cited" },
+      filterLabel: "Filter by use",
+      captionOf_one: "{{direction}}: {{shown}} of {{count}} node",
+      captionOf_other: "{{direction}}: {{shown}} of {{count}} nodes",
+      filterNone: "No node here matches the filter",
       version: "Version {{rev}}",
       noVersion: "No version",
       tasks_one: "{{count}} · {{open}} open",
@@ -2168,6 +2195,10 @@ export const en = {
       none: "No links.",
       mentions_one: "Mentions ({{count}})",
       mentions_other: "Mentions ({{count}})",
+      // Who uses it (docs/features/usage-orphans.md "Acceptance criteria", UO10): the daemon's counts.
+      usage: "Used by {{used}} · Mentioned by {{mentioned}}",
+      unused: "Declared, nothing uses it yet.",
+      sameDocument: "Within this document",
     },
     inside: {
       heading: "Inside",

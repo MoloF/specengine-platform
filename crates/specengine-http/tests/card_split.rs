@@ -357,7 +357,9 @@ fn s7_refusals_are_a_409_and_a_400() {
     }
 }
 
-/// S7, local: a bad `[card]` is a 503 with the CLI's line; GET on the
+/// S7, local: a bad `[card] split` is a 503 with the CLI's line (its `card
+/// split`'s since docs/features/release-hardening.md "Acceptance criteria"
+/// RH-R4 turned splitting off alone, `card list` answering on); GET on the
 /// route is a 405 `Allow: POST`, and `GET .../cards/C-0001` still reads.
 #[test]
 fn s7_a_bad_card_table_is_a_503_and_get_a_405() {
@@ -385,7 +387,17 @@ fn s7_a_bad_card_table_is_a_503_and_get_a_405() {
         "kind = \"print-run\"\ndisciplines = [\"plates\"]",
         "kind = \"print-run\"\ndisciplines = [\"voice\"]",
     );
-    let line = press.cannot(&["card", "list"]);
+    let line = press.cannot(&[
+        "card",
+        "split",
+        "--target",
+        "PRN-WEEKLY",
+        "--title",
+        TITLE,
+        "--discipline",
+        "copy",
+        "--dry-run",
+    ]);
     assert!(line.contains("`voice`"), "{line}");
     let reply = press.post("cards/split", &weekly());
     assert_eq!(reply.status, 503, "{}", reply.text());
@@ -525,4 +537,67 @@ fn s8_a_hubs_split_card_acts_as_the_login() {
         "{refused}"
     );
     assert_eq!(hub.events(), before, "nothing stored");
+}
+
+// ------------------------------------------------- release-hardening RH-R4
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R4, the
+/// daemon's half: twin daemons over card-press, one config with the "Data"
+/// row (`disciplnes`) appended, answer the Board's card routes byte for
+/// byte alike (a new card, the list, the card, its move, the counts); the
+/// split route answers 503 with the CLI's line, a dry run too, nothing
+/// stored. M: split errors joined to `[card]`'s again.
+#[test]
+fn rh_r4_a_bad_split_row_leaves_the_card_routes_and_refuses_the_split() {
+    let with = Press::new("rh-r4-route-with");
+    let without = Press::new("rh-r4-route-without");
+    let mut text = read_text(&with.root, "specengine.toml");
+    text.push_str("\n[[card.split]]\nkind = \"mechanic\"\ndisciplnes = [\"copy\"]\n");
+    write(&with.root, "specengine.toml", text);
+    let posts = [
+        (
+            "cards",
+            json!({"title": "Lead story", "discipline": "copy", "target": ["PRN-WEEKLY"]}),
+        ),
+        ("cards/C-0001/move", json!({"to": "edit", "as": "desk"})),
+    ];
+    let gets = [
+        "cards?with_cancelled=true",
+        "cards/C-0001",
+        "cards/counts",
+        "cards",
+    ];
+    for (path, body) in &posts {
+        let (a, b) = (with.post(path, body), without.post(path, body));
+        assert_eq!(a.status, 200, "{path}: {}", a.text());
+        assert_eq!((a.status, a.text()), (b.status, b.text()), "POST {path}");
+        for get in gets {
+            let (a, b) = (with.get(get), without.get(get));
+            assert_eq!((a.status, a.text()), (b.status, b.text()), "GET {get}");
+        }
+    }
+    let line = with.cannot(&[
+        "card",
+        "split",
+        "--target",
+        "PRN-WEEKLY",
+        "--title",
+        TITLE,
+        "--discipline",
+        "copy",
+        "--dry-run",
+    ]);
+    assert!(
+        line.contains("unknown field `disciplnes`, expected `kind` or `disciplines`"),
+        "{line}"
+    );
+    let before = with.state();
+    for dry_run in [true, false] {
+        let mut body = weekly();
+        body["dry_run"] = json!(dry_run);
+        let reply = with.post("cards/split", &body);
+        assert_eq!(reply.status, 503, "dry run {dry_run}: {}", reply.text());
+        assert_eq!(reply.error_message(), line, "dry run {dry_run}");
+    }
+    assert_eq!(with.state(), before, "nothing stored");
 }

@@ -10,8 +10,9 @@
 //! from the walked files (no index), then the queue once, as it is
 //! ([`SqliteQueue::open_existing`]: no schema step, nothing written): one
 //! card list, one uncapped `events_of_types` read, never a card's capped
-//! history, and one item list (DA-1, DA-10). No git, no index, no write.
-//! A queue with no card reads nothing more.
+//! history, and one item list (DA-1, DA-10), all in one snapshot (task
+//! spec `release-hardening` RH-R5). No git, no index, no write. A queue
+//! with no card reads nothing more.
 //!
 //! `--as-of D` is the day the open cards are judged at, a calendar date
 //! (else exit 2, nothing read); without it, today's UTC date. Given, no
@@ -74,7 +75,7 @@ use specengine_core::{
 use specengine_model::Card;
 use specengine_store::{
     EVENT_CARD_ACCEPTED, EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, Event, Proposal, ProposalFilter,
-    ProposalKind, ProposalQueue as _, SqliteQueue, WorkingTree, check_input, today_utc,
+    ProposalKind, SqliteQueue, WorkingTree, check_input, today_utc,
 };
 
 use crate::cap::{OUTPUT_CAP_CHARS, View};
@@ -389,15 +390,17 @@ impl QueueFacts {
     /// The queue as it is: no database, a note and nothing; a card row
     /// that does not decode, a note each and not counted; no card, nothing
     /// more read. Else one uncapped `events_of_types` read and one item list,
-    /// each item row that does not decode a note, not listed.
+    /// each item row that does not decode a note, not listed. The three
+    /// reads share one snapshot (task spec `release-hardening` RH-R5).
     fn read(env: &Env, slug: &str, notes: &mut BTreeSet<String>) -> Result<Self, CliError> {
         let db = db_path(env, slug)?;
         let Some(queue) = SqliteQueue::open_existing(&db, slug).map_err(queue_cannot)? else {
             notes.insert(NO_QUEUE.to_owned());
             return Ok(Self::default());
         };
+        let queue = queue.snapshot().map_err(queue_cannot)?;
         seams::note(Seam::DeliveryCards);
-        let listed = queue.list_existing_cards().map_err(queue_cannot)?;
+        let listed = queue.existing_cards().map_err(queue_cannot)?;
         notes.extend(listed.unreadable.iter().map(|row| {
             one_line(&format!(
                 "{}: its row does not read ({}: {}); not counted",

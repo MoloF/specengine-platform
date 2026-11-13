@@ -268,7 +268,11 @@ fn check_composed(shown: &str, content: &str) -> Result<(), CliError> {
     };
     let refuse = |error: ProjectError| refusal(shown, pack_line(error.line), &error.message);
     ProjectConfig::from_toml(content).map_err(refuse)?;
-    card_from_toml(content).map_err(refuse)?;
+    // A split row's error is no `Err` of the reader, yet a pack holding one
+    // is refused as before (task spec `release-hardening` RH-R4).
+    if let Some(error) = card_from_toml(content).map_err(refuse)?.split_problem {
+        return Err(refuse(error));
+    }
     let workspaces = WorkspaceConfig::from_toml(content);
     if let Some(note) = workspaces.notes.first() {
         return Err(refusal(shown, pack_line(Some(note.line)), &note.message));

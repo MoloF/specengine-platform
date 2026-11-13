@@ -130,6 +130,11 @@
 
 mod common;
 
+/// The CLI tests' no-verdict-by-deadline retry (docs/features/release-hardening.md
+/// "Acceptance criteria" RH-T3).
+#[path = "../../specengine-cli/tests/common/gate.rs"]
+mod gate_retry;
+
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs;
@@ -2652,19 +2657,25 @@ fn reads(world: &World) -> Reads {
     let setup = &world.setup;
     let check = spec_json(&setup.home, &setup.cwd, &setup.root, &["check"]);
     let health = spec_json(&setup.home, &setup.cwd, &setup.root, &["health"]);
-    let gate = run_product(
-        &spec_bin(),
-        &setup.home,
-        &setup.cwd,
-        &[
-            "gate",
-            "--worktree",
-            text(&setup.root),
-            "--path",
-            BACK_MD,
-            "--json",
-        ],
-        b"",
+    // A verdict the read compares: a no verdict by deadline asked again.
+    let gate = gate_retry::until_verdict(
+        || {
+            run_product(
+                &spec_bin(),
+                &setup.home,
+                &setup.cwd,
+                &[
+                    "gate",
+                    "--worktree",
+                    text(&setup.root),
+                    "--path",
+                    BACK_MD,
+                    "--json",
+                ],
+                b"",
+            )
+        },
+        |done| (done.stdout.as_str(), done.stderr.as_str()),
     );
     let page = |path: &str| {
         let reply = world.get(&format!("{PRESS}/{path}"));

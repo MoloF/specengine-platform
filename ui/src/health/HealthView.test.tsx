@@ -9,6 +9,7 @@ import {
   aCheckFinding,
   aCheckReport,
   aCodeRow,
+  aDirection,
   aDriftIn,
   aDriftRow,
   aHealthReport,
@@ -17,10 +18,14 @@ import {
   anAssumedNode,
   anAssumedProposal,
   anAssumesRow,
+  anOrphan,
+  anOrphans,
   anUnboundMarker,
   anUnboundRow,
   aProposal,
   aTestedRow,
+  aWorkspace,
+  aWorkspaces,
   entryOf,
   measuredAssumes,
   measuredDrift,
@@ -298,7 +303,10 @@ describe("what is left (AC-05)", () => {
       "Code assuming a decision",
       "Unbound nodes",
       "Drift",
+      // Row 8 after Drift, before the Budgets pointer (docs/features/usage-orphans.md "Acceptance criteria", UO11).
+      "Orphan documents",
     ]);
+    expect(region("What is left").querySelector('[data-row="orphans"] + .health-pointer')).not.toBeNull();
   });
 
   it("lists the queue's first five in the Inbox's order, linked, times as stored; severity counts sum to the queue", async () => {
@@ -1798,5 +1806,141 @@ describe("keyboard (AC-10)", () => {
       expect(document.activeElement).not.toBe(document.body);
     });
     expect(document.activeElement?.getAttribute("data-finding")).not.toBeNull();
+  });
+});
+
+// UO11 of docs/features/usage-orphans.md "Acceptance criteria": row 8, the orphan documents, after
+// Drift, from the health read: its three states kept apart as row 3's (being measured, could not be
+// measured, measured); the rows grouped by direction, then raw kind, no kind last; a row's document
+// link, place, raw status and tasks ("No task", "N · M open", none when the queue was not read, the
+// note saying why); ten, then Show all; the zero lines. Named mutation: the part reading 0 while it
+// is still being measured.
+describe("row 8: orphan documents (UO11 of usage-orphans)", () => {
+  const ORPHANS = [
+    anOrphan({ name: "MEC-LANTERN", kind: "mechanic", title: "The lantern", path: "docs/spec/movement/lantern.md", status: "draft", tasks: 1, tasks_open: 1 }),
+    anOrphan({ name: "MEC-LONE-CHILD", kind: "mechanic", title: "A lone child", path: "docs/spec/lone-child.md", tasks: 0, tasks_open: 0 }),
+    anOrphan({ name: "A-102", kind: "requirement", title: "The lantern burns one unit of oil per minute", path: "docs/records/A/A-102.md", status: "accepted" }),
+    anOrphan({ name: "docs/notes/loose.md", id: null, kind: null, title: null, path: "docs/notes/loose.md", status: null, tasks: 2, tasks_open: 0 }),
+  ];
+
+  function orphansOf(rows = ORPHANS, notes: string[] = []) {
+    const client = healthClient();
+    client.getHealth.mockImplementation(() => Promise.resolve(aHealthReport([], { orphans: anOrphans(rows, { live: 12, notes }) })));
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "writing" })], [aDirection({ name: "systems", title: "Systems", kinds: ["mechanic"] })]));
+    return client;
+  }
+
+  function part(): HTMLElement {
+    const found = region("What is left").querySelector<HTMLElement>('[data-row="orphans"]');
+    if (found === null) {
+      throw new Error("no Orphan documents part");
+    }
+    return found;
+  }
+
+  /** Each group's label and its rows' documents, in order. */
+  function groups(): [string | null | undefined, string[]][] {
+    return Array.from(part().querySelectorAll<HTMLElement>(".health-orphans-group"), (group) => [
+      document.getElementById(group.getAttribute("aria-labelledby") ?? "")?.textContent,
+      Array.from(group.querySelectorAll(".health-orphan-link"), (link) => link.textContent),
+    ]);
+  }
+
+  it("measured: n orphan documents over the live ones, what that means; by direction, then raw kind, no kind last", async () => {
+    await openHealth(orphansOf());
+    await waitFor(() => {
+      expect(groups()).toHaveLength(3);
+    });
+    expect(part().querySelector(".health-left-total")?.textContent).toBe("4 orphan documents over 12 live documents");
+    expect(part().querySelector(".health-left-total .health-value.health-measured")?.textContent).toBe("4");
+    expect(within(part()).getByText(/^Linked to nothing: no link to or from another document and no child\./)).toBeTruthy();
+    expect(groups()).toEqual([
+      ["Systems", ["The lantern", "A lone child"]],
+      ["requirement", ["The lantern burns one unit of oil per minute"]],
+      ["No kind", ["docs/notes/loose.md"]],
+    ]);
+    expect(part().querySelectorAll(".health-orphans-label")[1]?.getAttribute("lang")).toBe("en");
+  });
+
+  it("a row: its document link, path:line, its raw status neutral under lang=en, its tasks: No task, N · M open", async () => {
+    await openHealth(orphansOf());
+    const lantern = await within(part()).findByRole("link", { name: "The lantern" });
+    expect(lantern.getAttribute("href")).toBe("#/alpha/tree/MEC-LANTERN/page");
+    const row = lantern.closest("li") as HTMLElement;
+    expect(row.querySelector(".health-orphans-meta .mono")?.textContent).toBe("docs/spec/movement/lantern.md:1");
+    const status = row.querySelector(".lozenge");
+    expect([status?.textContent, status?.getAttribute("data-appearance"), status?.querySelector(".lozenge-label")?.getAttribute("lang")]).toEqual(["draft", "neutral", "en"]);
+    expect(row.querySelector(".health-orphans-tasks")?.textContent).toBe("1 · 1 open");
+    const child = within(part()).getByRole("link", { name: "A lone child" }).closest("li") as HTMLElement;
+    expect(child.querySelector(".health-orphans-tasks")?.textContent).toBe("No task");
+    const loose = within(part()).getByRole("link", { name: "docs/notes/loose.md" }).closest("li") as HTMLElement;
+    expect([loose.querySelector(".lozenge"), loose.querySelector(".health-orphans-tasks")?.textContent]).toEqual([null, "2 · 0 open"]);
+  });
+
+  it("the queue not read: no task line on any row, never No task; the row's note verbatim under lang=en", async () => {
+    const note = "orphans: tasks not read: the proposal queue's tables are of a newer SpecEngine (schema version 15, this build knows 14): upgrade SpecEngine (nothing changed)";
+    await openHealth(orphansOf(ORPHANS.map((row) => ({ ...row, tasks: null, tasks_open: null })), [note]));
+    const listed = await within(part()).findByRole("list", { name: "Notes from the daemon on the orphan documents" });
+    expect(within(listed).getByText(note).getAttribute("lang")).toBe("en");
+    expect(part().querySelectorAll(".health-orphan")).toHaveLength(4);
+    expect(part().querySelectorAll(".health-orphans-tasks")).toHaveLength(0);
+    expect(part().textContent).not.toContain("No task");
+  });
+
+  it("over ten: the first ten in group order, Show all <n> draws the rest and hands the focus to the eleventh; nothing read", async () => {
+    const many = Array.from({ length: 12 }, (_, at) => anOrphan({ name: `REQ-${String(at + 1).padStart(2, "0")}`, title: `Orphan ${String(at + 1)}` }));
+    const client = await openHealth(orphansOf(many));
+    await waitFor(() => {
+      expect(part().querySelectorAll(".health-orphan")).toHaveLength(10);
+    });
+    fireEvent.click(within(part()).getByRole("button", { name: "Show all 12" }));
+    expect(part().querySelectorAll(".health-orphan")).toHaveLength(12);
+    await focused(within(part()).getByRole("link", { name: "Orphan 11" }));
+    expect(within(part()).queryByRole("button", { name: /^Show all/ })).toBeNull();
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("zero: None, said as the rule, then what it measured over, as a measured value; never nothing left", async () => {
+    await openHealth(orphansOf([]));
+    await waitFor(() => {
+      expect(part().querySelector(".health-left-total")?.textContent).toBe("None: every live document links or is linked.");
+    });
+    expect(part().querySelector(".health-orphans-scope")?.textContent).toBe("Measured over 12 live documents.");
+    expect(part().querySelector(".health-value.health-measured")?.textContent).toBe("None");
+    expect(part().querySelectorAll(".health-orphans-group")).toHaveLength(0);
+  });
+
+  it("being measured: a busy skeleton, no digit, no value, never 0 (M: the part reading 0 while it is still being measured)", async () => {
+    const client = orphansOf();
+    client.getHealth.mockImplementation(() => new Promise(() => undefined));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    await waitFor(() => {
+      expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("7 proposals in the queue");
+    });
+    expect(part().getAttribute("aria-busy")).toBe("true");
+    expect(within(part()).getByRole("status").getAttribute("aria-busy")).toBe("true");
+    expect(part().querySelector(".health-value")).toBeNull();
+    expect(part().textContent).not.toMatch(/\d/);
+  });
+
+  it("could not be measured: the daemon's words, shown, not spoken (row 3 speaks them), no value; Retry reads getHealth alone, then the part's heading takes the focus", async () => {
+    const client = orphansOf();
+    client.getHealth.mockRejectedValueOnce(new ClientError({ status: 503, message: "spec: the walk is incomplete: the directory `docs/spec/locks` cannot be listed" }));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    await within(part()).findByText("spec: the walk is incomplete: the directory `docs/spec/locks` cannot be listed");
+    expect(within(part()).queryByRole("alert")).toBeNull();
+    expect(part().querySelector(".health-value")).toBeNull();
+    expect(part().textContent).not.toMatch(/orphan documents over/);
+    fireEvent.click(within(part()).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(part().querySelector(".health-left-total")?.textContent).toBe("4 orphan documents over 12 live documents");
+    });
+    await focused(within(part()).getByRole("heading", { level: 3, name: "Orphan documents" }));
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+    expect(client.getInbox).toHaveBeenCalledTimes(1);
   });
 });

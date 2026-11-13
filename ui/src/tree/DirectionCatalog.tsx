@@ -15,14 +15,31 @@ import { formatUtc } from "../ui/time";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { ariaSort, CATALOG_COLUMNS, CATALOG_SHOWN, pressed, sortedRows, tasksText, titleOf, versionText, type CatalogColumn, type CatalogSort } from "./catalog";
+import {
+  ariaSort,
+  CATALOG_COLUMNS,
+  CATALOG_FILTERS,
+  CATALOG_SHOWN,
+  filteredRows,
+  pressed,
+  sortedRows,
+  tasksText,
+  titleOf,
+  versionText,
+  type CatalogColumn,
+  type CatalogFilter,
+  type CatalogSort,
+} from "./catalog";
 import { placeKey, rowName } from "./rows";
 
 // A kinds direction as a table of its nodes, in the Spec tree's node column while no node is open
 // (docs/features/direction-catalog.md "Acceptance criteria", DC-6, DC-10), a chunk of its own: the
 // daemon's rows, each node's title opening the document modal, its version, state, open items,
 // tasks and last change, the first 50 then Show more. A press on a header orders the served rows;
-// before one they stand as served. Read only: it moves, refuses and gates nothing (ADR-0012).
+// before one they stand as served. Read only: it moves, refuses and gates nothing (ADR-0012). Used by
+// (docs/features/usage-orphans.md "Acceptance criteria", UO11): the served count, its mentions, an
+// orphan's neutral badge; No declared use and Not cited keep the rows the served counts say, the
+// caption saying how many of all. A count of 0 with mentions shows them beside it at full weight.
 
 /** A header: its column's name on a subtle compact button, the order it holds said by `aria-sort`. */
 function SortHead({ column, sort, onPress }: { column: CatalogColumn; sort: CatalogSort | null; onPress: (column: CatalogColumn) => void }) {
@@ -70,6 +87,39 @@ function LastChange({ change }: { change: CatalogChange | null }) {
   );
 }
 
+/**
+ * What uses a row, as served: the count; its mentions, beside a 0 at full weight ("0 · 6 mentions",
+ * so a record cited only through mentions never reads as unused), else small after a "+"; then a
+ * neutral Orphan badge where the core flags one.
+ */
+function UsedCell({ row }: { row: CatalogRow }) {
+  const t = useTranslate();
+  const mentions = t("tree.catalog.mentions", { count: row.mentioned_by });
+  return (
+    <>
+      {row.used_by}
+      {row.mentioned_by > 0 &&
+        (row.used_by === 0 ? (
+          <>
+            {" · "}
+            <span className="catalog-used-cited">{mentions}</span>
+          </>
+        ) : (
+          <>
+            {" "}
+            <span className="catalog-used-mentions">+ {mentions}</span>
+          </>
+        ))}
+      {row.orphan === true && (
+        <>
+          {" "}
+          <Badge look={{ label: t("tree.catalog.orphan"), tone: "usage-orphan", icon: "linkDangling" }} />
+        </>
+      )}
+    </>
+  );
+}
+
 /** One served row: no OID, email or proposal of it is drawn. */
 function CatalogLine({ project, row }: { project: string; row: CatalogRow }) {
   const t = useTranslate();
@@ -88,6 +138,9 @@ function CatalogLine({ project, row }: { project: string; row: CatalogRow }) {
       </td>
       <td className="catalog-count">{row.open_items}</td>
       <td className="catalog-count catalog-tasks">{tasksText(row, t)}</td>
+      <td className="catalog-count catalog-used">
+        <UsedCell row={row} />
+      </td>
       <td className="catalog-changed">
         <LastChange change={row.last_change} />
       </td>
@@ -95,7 +148,10 @@ function CatalogLine({ project, row }: { project: string; row: CatalogRow }) {
   );
 }
 
-/** The table: the first 50 of the current order, then Show more, focus moving to the first row it shows. */
+/**
+ * The table: the first 50 of the current order, then Show more, focus moving to the first row it
+ * shows. Used by 0 pressed keeps the rows nothing uses, the caption "K of N"; none left, an empty state.
+ */
 function CatalogTable({ project, direction, rows }: { project: string; direction: string; rows: readonly CatalogRow[] }) {
   const t = useTranslate();
   const { language } = useLanguage();
@@ -105,7 +161,9 @@ function CatalogTable({ project, direction, rows }: { project: string; direction
   const collator = useMemo(() => new Intl.Collator(language, { numeric: true }), [language]);
   const [sort, setSort] = useState<CatalogSort | null>(null);
   const [shown, setShown] = useState(CATALOG_SHOWN);
-  const ordered = useMemo(() => sortedRows(rows, sort, collator), [rows, sort, collator]);
+  const [filter, setFilter] = useState<CatalogFilter | null>(null);
+  const kept = useMemo(() => filteredRows(rows, filter), [rows, filter]);
+  const ordered = useMemo(() => sortedRows(kept, sort, collator), [kept, sort, collator]);
   const visible = ordered.slice(0, shown);
   const rest = ordered.length - visible.length;
   const ofFile = visible.some((row) => row.last_change?.of_file === true);
@@ -116,11 +174,42 @@ function CatalogTable({ project, direction, rows }: { project: string; direction
     focusLater(() => body.current?.rows.item(first)?.querySelector("a"));
   }
 
+  const caption =
+    filter === null
+      ? t("tree.catalog.caption", { count: rows.length, direction: slot("direction") })
+      : t("tree.catalog.captionOf", { count: rows.length, shown: kept.length, direction: slot("direction") });
+  // One filter at a time: a press takes it, a press on the one held lets it go.
+  const filters = (
+    <div className="catalog-used-filter" role="group" aria-label={t("tree.catalog.filterLabel")}>
+      {CATALOG_FILTERS.map((each) => (
+        <Button
+          key={each}
+          spacing="compact"
+          aria-pressed={filter === each}
+          onClick={() => {
+            setFilter(filter === each ? null : each);
+          }}
+        >
+          {t(`tree.catalog.filter.${each}`)}
+        </Button>
+      ))}
+    </div>
+  );
+  if (kept.length === 0) {
+    return (
+      <>
+        {filters}
+        <EmptyState level={2} title={t("tree.catalog.filterNone")} />
+      </>
+    );
+  }
+
   return (
     <>
+      {filters}
       <div className="catalog-table-wrap" role="region" aria-labelledby={captionId} tabIndex={0}>
         <table className="catalog-table">
-          <caption id={captionId}>{fill(t("tree.catalog.caption", { count: rows.length, direction: slot("direction") }), { direction: <bdi>{direction}</bdi> })}</caption>
+          <caption id={captionId}>{fill(caption, { direction: <bdi>{direction}</bdi> })}</caption>
           <thead>
             <tr>
               {CATALOG_COLUMNS.map((column) => (

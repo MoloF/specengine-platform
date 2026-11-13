@@ -1315,17 +1315,21 @@ fn pq6_an_alias_in_the_gist_reads_as_code() {
 }
 
 /// PQ6: agent text is data: a gist, a `matters` and labels holding
-/// `MEC-STAMINA`, `docs/spec/x.md`, `a::b`, U+202E and (in `matters`) CRLF
-/// round-trip byte-equal through JSON, and the review's and the inbox's
-/// text escape the controls. M: IDs stripped from the stored gist.
+/// `MEC-STAMINA`, `docs/spec/x.md`, `a::b`, and the gist and `matters`
+/// U+202E and (in `matters`) CRLF, round-trip byte-equal through JSON, and
+/// the review's and the inbox's text escape the controls. M: IDs stripped
+/// from the stored gist. An option's fields carry no control since
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R1 refuses
+/// it at intake (a record never carries one); the gist and `matters` keep
+/// their own rules.
 #[test]
 fn pq6_the_fields_are_verbatim_in_json_and_escaped_in_text() {
     let pair = Pair::new("pq-pq6-verbatim", "spec-a");
     let gist = "Does MEC-STAMINA in docs/spec/x.md call a::b \u{202e}now?";
     let matters = "Sprint\u{202e} tuning\r\nand docs/spec/x.md wait on MEC-STAMINA.";
-    let labels = ["MEC-STAMINA a::b", "docs/spec/x.md \u{202e}"];
-    let options = json!([{"label": labels[0], "effect": "e\u{202e}", "price": "p"},
-        {"label": labels[1], "effect": "e", "price": "p\r\n"}]);
+    let labels = ["MEC-STAMINA a::b", "docs/spec/x.md"];
+    let options = json!([{"label": labels[0], "effect": "e", "price": "p"},
+        {"label": labels[1], "effect": "e", "price": "p"}]);
     let mut args = with_flag("--gist", Some(gist));
     let at = args.iter().position(|arg| *arg == "--matters").unwrap();
     args[at + 1] = matters;
@@ -1347,7 +1351,7 @@ fn pq6_the_fields_are_verbatim_in_json_and_escaped_in_text() {
         "no raw control: {text:?}"
     );
     assert!(
-        text.contains("\n  [0] MEC-STAMINA a::b | e\\u{202e} | p (recommended)\n"),
+        text.contains("\n  [0] MEC-STAMINA a::b | e | p (recommended)\n"),
         "{text}"
     );
     assert!(

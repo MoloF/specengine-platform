@@ -70,8 +70,10 @@ function Side({ side, evidence, onOpen }: { side: PairSide; evidence: readonly E
   // With no title the heading is the ID, else the path: the line under it leaves that one out.
   const whereId = gone ? null : side.id;
   const wherePath = gone && side.id === null ? null : side.path;
-  // With no position resolving, it says so in place of an empty list.
+  // With no position resolving, it says so in place of an empty list; a side with no file names no
+  // file to cite, so it says nothing (docs/features/release-hardening.md "Acceptance criteria", RH-U3).
   const held = heldAt(side.evidence, evidence);
+  const noEvidence = side.path === null ? null : <p className="muted">{t("inbox.pair.noEvidence")}</p>;
   return (
     <section className="collision-pair-side">
       <h3 className="collision-pair-title">
@@ -106,7 +108,7 @@ function Side({ side, evidence, onOpen }: { side: PairSide; evidence: readonly E
           )}
         </p>
       )}
-      {held.length === 0 ? <p className="muted">{t("inbox.pair.noEvidence")}</p> : <EvidenceList held={held} />}
+      {held.length === 0 ? noEvidence : <EvidenceList held={held} />}
     </section>
   );
 }

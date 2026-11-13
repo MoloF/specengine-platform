@@ -46,6 +46,8 @@ export const FERRY_LINKS: ShownLinks = {
     link({ type: "uses", written: "MEC-GANGWAY", name: null, state: "dangling", reason: "`MEC-GANGWAY` resolves to no ID and no alias" }),
   ],
   incoming: [link({ type: "follows", written: "DOM-FERRY", name: "MEC-LANDING", title: "Landing", end_kind: "mechanic", path: "docs/ferry/landing.md", line: 5 })],
+  // Landing uses it; the river's mention is its own, out (docs/features/usage-orphans.md "Acceptance criteria", UO6).
+  usage: { used_by: 1, mentioned_by: 0 },
   left_out: { generated: 0, tier3: 0 },
   omitted: 0,
 };
@@ -98,7 +100,7 @@ export function docView(ref: string): NodeView {
     ref,
     reason: null,
     notes: [],
-    nodes: [aNode({ id: ref, kind: other.kind, title: other.title, path: other.path, text: `## ${other.title}\n\nThe ${other.title.toLowerCase()} as written.\n`, ancestors, links: { outgoing: [], incoming: [], left_out: { generated: 0, tier3: 0 }, omitted: 0 } })],
+    nodes: [aNode({ id: ref, kind: other.kind, title: other.title, path: other.path, text: `## ${other.title}\n\nThe ${other.title.toLowerCase()} as written.\n`, ancestors, links: { outgoing: [], incoming: [], usage: { used_by: 0, mentioned_by: 0 }, left_out: { generated: 0, tier3: 0 }, omitted: 0 } })],
   };
 }
 
@@ -166,7 +168,7 @@ export function docClient(proposals: Proposal[] = []) {
   const client = stubClient(proposals);
   client.getNode.mockImplementation((_project, ref, options?: NodeOptions) => Promise.resolve(options?.with?.includes("history") === true ? historyView(ref) : docView(ref)));
   client.getTrace.mockImplementation((_project, options) =>
-    Promise.resolve(options?.ref === FERRY ? aTrace([aTraceNode(FERRY, [FERRY_CARD], { title: "The ferry", rollup: "in work" })], { ref: FERRY }) : aTrace([], { ref: options?.ref ?? null })),
+    Promise.resolve(options?.ref === FERRY ? aTrace([aTraceNode(FERRY, [FERRY_CARD], { title: "The ferry", path: FERRY_PATH, rollup: "in work" })], { ref: FERRY }) : aTrace([], { ref: options?.ref ?? null })),
   );
   client.getTree.mockImplementation((_project, options) =>
     Promise.resolve(options?.root === FERRY ? aTreeView(ferryTree(), { ref: FERRY, depth: 2 }) : aTreeView([], { ref: options?.root ?? null, depth: options?.depth ?? null })),

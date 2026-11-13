@@ -45,6 +45,7 @@ const DOC_LINKS: ShownLinks = {
     }),
   ],
   incoming: [],
+  usage: { used_by: 0, mentioned_by: 0 },
   left_out: { generated: 0, tier3: 0 },
   omitted: 0,
 };

@@ -1050,9 +1050,9 @@ describe("the drift types (UI-1 of health-drift)", () => {
     expect(commentOf(name)).toContain(VERIFY_JSON);
   });
 
-  it("gives the health document its drift after unbound, the seventh and last key, never null; cites the spec's Data on one line", () => {
-    expect(declaredKeys("HealthReport")).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
-    expect(source).toMatch(/^ {2}unbound: HealthUnbound;\n {2}drift: HealthDrift;\n\}$/m);
+  it("gives the health document its drift after unbound, the seventh key, never null, then usage-orphans' orphans last (UO4); cites the spec's Data on one line", () => {
+    expect(declaredKeys("HealthReport")).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift", "orphans"]);
+    expect(source).toMatch(/^ {2}unbound: HealthUnbound;\n {2}drift: HealthDrift;\n {2}orphans: HealthOrphans;\n\}$/m);
     expect(commentOf("HealthReport").split("\n").some((line) => line.includes(HEALTH_DRIFT_DATA))).toBe(true);
   });
 

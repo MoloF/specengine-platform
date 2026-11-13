@@ -30,7 +30,9 @@
 //! [`load_config`] a typo in one table would stop every run. [`load_check`]
 //! reads it apart into [`CheckSetup::team`], the finding `team-config` every
 //! run adds to its report, at the config's line. A run against `HEAD` judges
-//! only the checked side: `HEAD`'s config gives its mode alone.
+//! only the checked side: `HEAD`'s config gives its mode alone. A bad
+//! `[card]` is read alike into [`CheckSetup::card`], `card-config` (task
+//! spec `release-hardening` RH-R4).
 
 use std::fs;
 use std::io;
@@ -44,7 +46,7 @@ use specengine_core::check::{
     ProblemKind, Report,
 };
 use specengine_core::lock::{LOCK_FILE, Lock};
-use specengine_core::{IdSchemeToml, Paths, ProjectConfig, TeamConfig};
+use specengine_core::{CardConfig, IdSchemeToml, Paths, ProjectConfig, TeamConfig};
 use specengine_model::{IdScheme, Severity};
 
 use crate::base::{BaseRun, Head, HeadWalk, Placed};
@@ -150,6 +152,9 @@ pub struct CheckSetup {
     pub baseline: Baseline,
     /// `team-config`, a bad `[team]`; `None` a good one or none.
     pub team: Option<Finding>,
+    /// `card-config`, a bad `[card]`: a flow's error, else a split row's;
+    /// `None` a good one or none.
+    pub card: Option<Finding>,
 }
 
 /// The baseline at the root, [`BASELINE_FILE`], when an entry of that name
@@ -249,6 +254,7 @@ pub fn load_check(
         config: check_config,
         baseline,
         team: team_finding(config),
+        card: card_finding(config),
     })
 }
 
@@ -272,8 +278,33 @@ fn team_finding(config: &NamedBytes) -> Option<Finding> {
     })
 }
 
+/// `[card]` judged apart from the config, an error at its line:
+/// `card-config`, subject `card`, whatever `[check] mode` says of it; the
+/// first error [`CardConfig::from_toml`] returns, else its split problem
+/// (task spec `release-hardening` RH-R4). Bytes that do not read never reach
+/// here ([`load_config`] stopped them).
+fn card_finding(config: &NamedBytes) -> Option<Finding> {
+    let bytes = config.bytes.as_ref().ok()?;
+    let text = std::str::from_utf8(bytes).ok()?;
+    let error = match CardConfig::from_toml(text) {
+        Ok(card) => card.split_problem?,
+        Err(error) => error,
+    };
+    Some(Finding {
+        code: "card-config".to_owned(),
+        severity: Severity::Error,
+        path: config.name.clone(),
+        line: error.line.unwrap_or(1),
+        subject: "card".to_owned(),
+        message: error.message,
+        fix: None,
+        debt: None,
+        introduced: None,
+    })
+}
+
 /// [`check::run`] over `input` as `setup` says, then `setup`'s `team-config`
-/// under its baseline.
+/// and `card-config` under its baseline.
 fn run_setup(input: &CheckInput, setup: &CheckSetup, today: &str) -> Report {
     let report = check::run(
         input,
@@ -285,7 +316,7 @@ fn run_setup(input: &CheckInput, setup: &CheckSetup, today: &str) -> Report {
     );
     check::add_findings(
         report,
-        setup.team.iter().cloned().collect(),
+        setup.team.iter().chain(&setup.card).cloned().collect(),
         &setup.baseline,
         today,
     )

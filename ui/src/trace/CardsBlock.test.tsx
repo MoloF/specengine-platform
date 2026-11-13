@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ClientError, type TraceOptions } from "../api/client";
 import type { QueueEvent, TraceDocument } from "../api/types";
 import { ACTING_KEY } from "../board/acting";
-import { aCard, aCardWrite, aFlowNode, aFlowView, aTrace, aTraceCard, aTraceNode } from "../test/builders";
+import { aCard, aCardWrite, aFlowNode, aFlowView, aNode, aTrace, aTraceCard, aTraceNode } from "../test/builders";
 import { flowClient } from "../test/flowStub";
 import { renderApp } from "../test/render";
 import { TREE, treeClient } from "../test/treeStub";
@@ -14,9 +14,12 @@ import { TREE, treeClient } from "../test/treeStub";
 
 const SUSPECT = aTraceCard({ id: "C-0001", title: "The suspect card", flow: "work", column: "todo", mark: "suspect", on: "A" });
 
-function flowOn(name: string, trace: (options: TraceOptions | undefined) => TraceDocument) {
+/** A flow on `name`, its trace read by `trace`; the node's holder in `path`, by default the file aTraceNode gives its row. */
+function flowOn(name: string, trace: (options: TraceOptions | undefined) => TraceDocument, path = aTraceNode(name, []).path) {
   const client = flowClient(aFlowView([aFlowNode({ id: name, distance: 0 })], []));
   client.getTrace.mockImplementation((_project, options) => Promise.resolve(trace(options)));
+  // The holder in the file its trace row names, as the daemon serves both: the block finds its row by ID and file.
+  client.getNode.mockImplementation((_project, ref) => Promise.resolve({ ref, reason: null, notes: [], nodes: [aNode({ id: ref, path })] }));
   return client;
 }
 
@@ -276,20 +279,22 @@ describe("Clear on the page", () => {
 
 describe("a group's block", () => {
   const counts = { no_card: 1, in_work: 0, suspect: 2, departed: 0, confirmed: 3 };
+  /** A's file: last by path, so the block finds A's row wherever it stands. */
+  const A_PATH = "docs/z.md";
   const group = () =>
     aTrace([
-      aTraceNode("A", [aTraceCard({ id: "C-0001" })], { rollup: "no card", counts, path: "docs/z.md" }),
+      aTraceNode("A", [aTraceCard({ id: "C-0001" })], { rollup: "no card", counts, path: A_PATH }),
       aTraceNode("B", [aTraceCard({ id: "C-0001", mark: "suspect", on: "B" }), aTraceCard({ id: "C-0002", mark: "suspect", on: "B" })], { rollup: "suspect" }),
       aTraceNode("C", [aTraceCard({ id: "C-0002", mark: "suspect", on: "C" })], { rollup: "suspect", uses: [{ id: "U", rollup: "no card", cards: 0 }] }),
     ]);
 
   it("says the counts served for the group, never its own rollup, whose cards may all sit under it", async () => {
-    const shown = await block(flowOn("A", group));
+    const shown = await block(flowOn("A", group, A_PATH));
     expect(shown.querySelector(".cards-state")?.textContent).toBe("3 confirmed, 2 suspect, 1 no task");
   });
 
   it("lists each card of what it holds once, the mark a person can clear standing", async () => {
-    const shown = await block(flowOn("A", group));
+    const shown = await block(flowOn("A", group, A_PATH));
     expect(within(shown).getAllByRole("link", { name: /C-000/ }).map((link) => link.textContent)).toEqual(["C-0001 Card C-0001", "C-0002 Card C-0002"]);
     expect(within(shown).getByRole("button", { name: "Clear C-0001" })).toBeTruthy();
     expect(within(shown).getByRole("link", { name: "U" })).toBeTruthy();
@@ -298,9 +303,9 @@ describe("a group's block", () => {
   it("Clear all posts the group, a reason and a name, no effect only, and finishes here (AC-08)", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
     let trace = group();
-    const client = flowOn("A", () => trace);
+    const client = flowOn("A", () => trace, A_PATH);
     client.clearCardGroup.mockImplementation((_project, body) => {
-      trace = aTrace([aTraceNode("A", [], { rollup: "no card", counts: { ...counts, suspect: 0 } }), aTraceNode("B", [])]);
+      trace = aTrace([aTraceNode("A", [], { rollup: "no card", counts: { ...counts, suspect: 0 }, path: A_PATH }), aTraceNode("B", [])]);
       return Promise.resolve({ group: body.group, cleared: ["C-0001", "C-0002"], notes: [] });
     });
     const shown = await block(client);
@@ -325,7 +330,7 @@ describe("a group's block", () => {
 
   it("a refused Clear all keeps the dialog, the daemon's words in an alert", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
-    const client = flowOn("A", group);
+    const client = flowOn("A", group, A_PATH);
     client.clearCardGroup.mockRejectedValue(new ClientError({ status: 409, message: "no suspect card under `A`: there is no mark to clear; nothing changed" }));
     fireEvent.click(within(await block(client)).getByRole("button", { name: "Clear all" }));
     const dialog = await screen.findByRole("dialog");

@@ -525,3 +525,57 @@ fn s8_both_texts_hold() {
     ));
     assert!(specengine_mcp::HUB_INSTRUCTIONS.len() <= TEXT_LIMIT);
 }
+
+// ------------------------------------------------- release-hardening RH-R4
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R4, stdio:
+/// with the "Data" row (`disciplnes`) appended to card-press's config,
+/// `list_cards` answers byte for byte as a twin without it, before and after
+/// a card is made; `split_card` (a dry run too) is an error result naming
+/// `<config>:<line>: <message>`, nothing stored. M: split errors joined to
+/// `[card]`'s again.
+#[test]
+fn rh_r4_a_bad_split_row_leaves_list_cards_and_refuses_split_card() {
+    let with = Repo::new("mcp-rh-r4-with");
+    let without = Repo::new("mcp-rh-r4-without");
+    let config = with.root.join("specengine.toml");
+    let mut text = std::fs::read_to_string(&config).expect("the config");
+    text.push_str("\n[[card.split]]\nkind = \"mechanic\"\ndisciplnes = [\"copy\"]\n");
+    std::fs::write(&config, &text).expect("the config written");
+    let line = text
+        .lines()
+        .position(|found| found.starts_with("disciplnes"))
+        .expect("the row")
+        + 1;
+    let message = format!("{line}: unknown field `disciplnes`, expected `kind` or `disciplines`");
+    let (mut a, mut b) = (with.session(), without.session());
+    let listed = |session: &mut Session| {
+        let reply = session.call("list_cards", json!({}));
+        let answer = result(&reply).clone();
+        (
+            content_text(&answer).to_owned(),
+            answer["structuredContent"].clone(),
+        )
+    };
+    assert_eq!(listed(&mut a), listed(&mut b), "list_cards, no card");
+    let made = json!({"title": "Lead story", "discipline": "copy", "target": ["PRN-WEEKLY"]});
+    for session in [&mut a, &mut b] {
+        let reply = session.call("create_card", made.clone());
+        assert_ne!(result(&reply)["isError"], json!(true), "{reply}");
+    }
+    assert_eq!(listed(&mut a), listed(&mut b), "list_cards, one card");
+    let events = with.events();
+    for extra in [json!({"dry_run": true}), json!({"reviewer": ANA})] {
+        let reply = a.call("split_card", split_args(&extra));
+        let answer = result(&reply);
+        assert_eq!(answer["isError"], json!(true), "{extra}: {answer}");
+        assert!(
+            content_text(answer).contains(&message),
+            "{extra}: {}",
+            content_text(answer)
+        );
+    }
+    assert_eq!(with.events(), events, "nothing stored");
+    drop(a.finish());
+    drop(b.finish());
+}

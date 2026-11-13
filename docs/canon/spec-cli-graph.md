@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-11-11
+reviewed: 2026-11-13
 ---
 
 # spec tree, spec graph, show --links
@@ -75,10 +75,10 @@ Nodes by (distance, path, ord), then edges by (type, path, line, column) in link
 
 ```text
   <out|in> <type> <name, else written> | <path>:<line>[ | at <section>][ | as <written>][ | kind <kind>][ | when <when>][ | dangling: <reason> | skipped: another project | unchecked]
-  links <o> out, <i> in[; left out: …]
+  links <o> out, <i> in; used by <u>, mentioned by <m>[; left out: …]
 ```
 
-`at`: the nested section holding the link or landed on. `as`: the written form when it is not the name of the node it lands on (for `superseded-by`'s out link: the shown node); `[[X]]` prints `as [[X]]`. JSON: a node's `links` (`null` without `--links`) `{outgoing, incoming, left_out, omitted}`; a link `{type, origin, at, name, title, end_kind, written, path, line, state, reason}`, + `kind`, `when` when labelled, `state` `resolved | dangling | skipped | unchecked`.
+`at`: the nested section holding the link or landed on. `as`: the written form when it is not the name of the node it lands on (for `superseded-by`'s out link: the shown node); `[[X]]` prints `as [[X]]`. JSON: a node's `links` (`null` without `--links`) `{outgoing, incoming, usage, left_out, omitted}`, `usage` `{used_by, mentioned_by}` (`spec-usage.md`); a link `{type, origin, at, name, title, end_kind, written, path, line, state, reason}`, + `kind`, `when` when labelled, `state` `resolved | dangling | skipped | unchecked`.
 
 ## Exit, cap, determinism
 
@@ -91,7 +91,7 @@ Determinism: `BTreeMap`s and the orders above, never rowid, insertion or the abs
 ## API
 
 - model: `Direction {Out, In}` (`as_str`), `IMPACT_LINK_TYPES: [(&str, Direction); 7]`, `graph_direction`, `impact_direction`, `is_weak_link` (`&str -> …`).
-- core `check`: `SpecGraph::new(&CheckInput, &IdScheme, &Paths)`, reads no file; lookups `paths`, `file_of`, `standing`, `is_tier3`, `nodes`, `node`, `document`, `documents`, `name`, `line`, `locate(&Reference, written) -> Endpoint`; tree `parent -> Option<Parent>`, `listed_under`, `children`, `cycles`, `ancestors` (pass 4), `within`; links `edges`, `links(at, admit) -> NodeLinks`, `walk(starts, follow: Fn(&str) -> Option<Direction>, depth, admit) -> Walk`. Types `NodeAt {file, ord}`, `Standing {Live, Generated, Tier3}`, `Parent {None, Node {node, others}, Dangling {written, reason}, Skipped {written}, Cycle {members}}`, `Endpoint {Nodes, Dangling, Skipped, Unchecked}`, `LinkState` (`as_str`), `Edge` (`edge`, `state`, `reason`, `written_end`), `NodeLinks`, `Walk`.
+- core `check`: `SpecGraph::new(&CheckInput, &IdScheme, &Paths)`, reads no file; lookups `paths`, `file_of`, `standing`, `is_tier3`, `nodes`, `node`, `document`, `documents`, `name`, `line`, `locate(&Reference, written) -> Endpoint`; tree `parent -> Option<Parent>`, `listed_under`, `children`, `cycles`, `ancestors` (pass 4), `within`; links `edges`, `links(at, admit) -> NodeLinks`, `walk(starts, follow: Fn(&str) -> Option<Direction>, depth, admit) -> Walk`. Types `NodeAt {file, ord}`, `Standing {Live, Generated, Tier3}`, `Parent {None, Node, Dangling, Skipped, Cycle}`, `Endpoint`, `LinkState` (`as_str`), `Edge` (`edge`, `state`, `reason`, `written_end`), `NodeLinks`, `Walk`.
 - CLI: `tree(&Env, &Globals, &TreeRequest) -> TreeOutcome` (`TreeNode`, `TreeMark`), `graph(.., &GraphRequest) -> GraphOutcome` (`GraphNode`, `GraphEdge`, `FollowedType`), `reach` (`spec impact`'s too: `spec-impact.md`), `ShowRequest {reference, links, archive}`, `ShownNode.links` (`ShownLinks`, `ShownLink`), `LeftOut`, `Outcome::{Tree, Graph}`; `corpus.rs` the input, live rule and REF location. `petgraph` only in core.
 
 Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `read_only.rs`, `freshness.rs`, `show.rs`, `genre.rs` over scratch copies of `fixtures/spec-a`, `-b`; core `spec_graph.rs`; eval `build_graph.rs`.

@@ -133,6 +133,9 @@
   --link-skipped: var(--sync-unbound);
   --link-unchecked: var(--sync-cannot-verify);
   --link-unknown: var(--severity-unknown);
+  /* An orphan document (docs/features/usage-orphans.md "Acceptance criteria", UO11): information,
+     never a finding or a hold, so the neutral of a word no table knows; never ok's or a danger's. */
+  --usage-orphan: var(--severity-unknown);
 
   /* spec check (docs/features/ui-health.md): the verdicts and a finding's severities, none of them a
      hold on work; cannot-check takes cannot-verify's colour and icon, never clean's. */

@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Health: what is left, measured
 
-The corpus-wide read behind Health's "What is left" (06 s7). Row 3 is `amendments` (the unapplied amendments of `proposal-amendment.md` "Unapplied"), described here; rows 4-5 are `assumes` (`@assumes` against a decision) and `unbound` (unbound selected nodes) beside the `code` count, in `health-code.md`. The document **grows by keys**, one per producer (row 6: `health-drift.md`), never a placeholder before it. Rows 1-2 are the queue (`spec inbox`, the Inbox's order: severity, `created_at` oldest first, ID; no age threshold, no clock); row 7 is the check's `budget` findings. Informational (rows 4-6 write the data directory's indexes only): it never blocks, raises no check finding, rule or gate (ADR-0012); the core names no class, status, kind or link type (ADR-0008). No MCP tool or resource, no plugin skill.
+The corpus-wide read behind Health's "What is left" (06 s7). Row 3 is `amendments` (the unapplied amendments of `proposal-amendment.md` "Unapplied"), described here; rows 4-5 are `assumes` (`@assumes` against a decision) and `unbound` (unbound selected nodes) beside the `code` count, in `health-code.md`. The document **grows by keys**, one per producer (row 6: `health-drift.md`), never a placeholder before it. Rows 1-2 are the queue (`spec inbox`, the Inbox's order: severity, `created_at` oldest first, ID; no age threshold, no clock); row 7 is the check's `budget` findings; row 8, `orphans`, documents nothing links: `spec-usage.md` "Health". Informational (rows 4-6 write the data directory's indexes only): it never blocks, raises no check finding, rule or gate (ADR-0012); the core names no class, status, kind or link type (ADR-0008). No MCP tool or resource, no plugin skill.
 
 ## Rule
 
@@ -18,9 +18,9 @@ Listed: a spec `draft` or `in-progress`, a decision `accepted` or without `statu
 
 ## spec health
 
-`spec health [--json]`, global flags only (CLI `health(&Env, &Globals, &HealthRequest)`, `Outcome::Health`). Input as `spec check`'s: `locate`, the store's `load_config`, `WorkingTree`, `check_input` (uncommitted, untracked and ignored files the walk takes). Row 3 reads no database, index, queue, git, clock or baseline. Rows 4-6 (`code`, `assumes`, `unbound`, `drift`) follow it from the same config bytes, refreshing and reading the code index as `spec refs` does, nothing opened without `[code]` (ADR-0051): `health-code.md`, `health-drift.md`. Links: `SpecGraph::new` over the same input, built only when a document is listed; each document's out links as `spec show <path> --links` lists them (its own file admitted, no Tier 3 one), those of the model's `AMENDS` type: exactly its `amended_refs`, every state (`resolved`, `dangling`, `skipped`, `unchecked`), in `show --links` order. Uncut.
+`spec health [--json]`, global flags only (CLI `health(&Env, &Globals, &HealthRequest)`, `Outcome::Health`). Input as `spec check`'s: `locate`, the store's `load_config`, `WorkingTree`, `check_input` (uncommitted, untracked and ignored files the walk takes). Row 3 reads no database, index, queue, git, clock or baseline. Rows 4-6 (`code`, `assumes`, `unbound`, `drift`) follow it from the same config bytes, refreshing and reading the code index as `spec refs` does, nothing opened without `[code]` (ADR-0051): `health-code.md`, `health-drift.md`. Links: `SpecGraph::new` over the same input, built on every call (row 8); each document's out links as `spec show <path> --links` lists them (its own file admitted, no Tier 3 one), those of the model's `AMENDS` type: exactly its `amended_refs`, every state (`resolved`, `dangling`, `skipped`, `unchecked`), in `show --links` order. Uncut.
 
-**Text**, each line one-lined: per amendment `<path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]` (absent parts omitted), then each link as `show --links` prints an out line, two spaces in; then rows 4-6's lines (`health-code.md` "Text"); last, always: `spec health: <d> documents, <n> unapplied amendments`.
+**Text**, each line one-lined: per amendment `<path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]` (absent parts omitted), then each link as `show --links` prints an out line, two spaces in; then rows 4-6's lines (`health-code.md` "Text"), row 8's block; last, always: `spec health: <d> documents, <n> unapplied amendments`.
 
 ```text
 docs/decisions/DEC-0014.md | id DEC-0014 | class decision | status accepted | Quay lights stay amber
@@ -28,13 +28,13 @@ docs/decisions/DEC-0014.md | id DEC-0014 | class decision | status accepted | Qu
 spec health: 41 documents, 1 unapplied amendments
 ```
 
-**JSON**: `{documents, amendments, notes, code, assumes, unbound, drift}` (the last four: rows 4-6's); an amendment `{path, id, title, class, status, links}`: `id` the document's Latin ID, `title` `title:` else the first H1, `class` and `status` raw, each `null` when absent; `links` the `ShownLink` of `show --links` (`spec-cli-graph.md` "spec show --links"), never empty. `documents` = the walked files = `spec check --json`'s `counts.documents`. Every key present, absent `null`, empty `[]`.
+**JSON**: `{documents, amendments, notes, code, assumes, unbound, drift, orphans}`; an amendment `{path, id, title, class, status, links}`: `id` the document's Latin ID, `title` `title:` else the first H1, `class` and `status` raw, each `null` when absent; `links` the `ShownLink` of `show --links` (`spec-cli-graph.md` "spec show --links"), never empty. `documents` = the walked files = `spec check --json`'s `counts.documents`. Every key present, absent `null`, empty `[]`.
 
-**Notes**: one per file not judged, by path: `<path>:<line>: <code>: <message>; not judged` (the parser's code and message), on stderr as `note: ` in both modes and in JSON `notes`; exit 0.
+**Notes**: one per file not judged, by path: `<path>:<line>: <code>: <message>; not judged` (the parser's code and message), on stderr as `note: ` in both modes and in JSON `notes`; row 8's (`orphans.notes`) on stderr after rows 4-6's; exit 0.
 
-**Exit**: 0 answered, whatever is listed, zero too. 2 could not run, stdout empty, never a partial list: usage; discovery (no `specengine.toml`: `spec init`); a config error, `<config>:<line>: message` per cause; `spec: the root cannot be read: <error>: unapplied amendments not measured`; a walk gap (`walk_gap`, the first by path) `spec: the walk is incomplete: <gap>: unapplied amendments not measured`, `<gap>` as `spec export index` words it: `` `<path>` cannot be read (<error>) ``, `` the directory `<path>` cannot be listed ``, `` the `[paths] roots` entry `<path>` names no directory and no `.md` file ``. Never 1.
+**Exit**: 0 answered, whatever is listed, zero too. 2 could not run, stdout empty, never a partial list: usage; discovery (no `specengine.toml`: `spec init`); a config error, `<config>:<line>: message` per cause; `spec: the root cannot be read: <error>: unapplied amendments not measured`; a walk gap (`walk_gap`, the first by path) `spec: the walk is incomplete: <gap>: unapplied amendments not measured`, `<gap>` worded as `spec export index`'s. Never 1.
 
-**Determinism**: one tree and config give byte-identical stdout, stderr and JSON, whatever the absolute root, walk order or starting directory.
+**Determinism**: one tree and config give byte-identical stdout, stderr and JSON, whatever the absolute root, `HOME`, walk order or starting directory.
 
 ## Route
 
@@ -44,7 +44,7 @@ spec health: 41 documents, 1 unapplied amendments
 
 Health's check: the verdict a `Lozenge`, `labels.ts` `verdictLozenge` (clean success, observed warning, fails danger, cannot-check discovery, never clean's; unknown neutral, raw, `lang="en"`); the counts a `PropertyList`; no finding and a no-match filter `EmptyState`s.
 
-Health's "What is left" (`ui/src/health/`): "Proposals in the queue" (rows 1-2), "Unapplied amendments" (row 3, `AmendmentsPart.tsx`), "Code assuming a decision" (row 4, `AssumesPart.tsx`), "Unbound nodes" (row 5, `UnboundPart.tsx`; frame `codeRows.tsx`), "Drift" (row 6, `DriftPart.tsx`; `health-drift.md` "UI"); row 7 is Budgets. The queue has its own read; rows 3-6 share `getHealth`, each its own boundary: one failing leaves the others. Row 3 keeps three states apart:
+Health's "What is left" (`ui/src/health/`): "Proposals in the queue" (rows 1-2), "Unapplied amendments" (row 3, `AmendmentsPart.tsx`), "Code assuming a decision" (row 4, `AssumesPart.tsx`), "Unbound nodes" (row 5, `UnboundPart.tsx`; frame `codeRows.tsx`), "Drift" (row 6, `DriftPart.tsx`; `health-drift.md` "UI"), "Orphan documents" (row 8, `OrphansPart.tsx`; `spec-usage.md` "UI"); row 7 is Budgets. The queue has its own read; rows 3-6 share `getHealth`, each its own boundary: one failing leaves the others. Row 3 keeps three states apart:
 
 - **being measured**: a skeleton, `aria-busy`, no digit;
 - **could not be measured** (a 503, an older daemon's 404, status 0): "The unapplied amendments could not be read", the daemon's message verbatim, a Retry reading `getHealth` alone; no `.health-value`, never 0;
@@ -66,4 +66,4 @@ Health's "What is left" (`ui/src/health/`): "Proposals in the queue" (rows 1-2),
 
 ## Tests
 
-CLI `tests/health.rs` (rows 4-5: `health-code.md` "Tests"); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (81 key sets); UI `health.smoke`, `health.live` (triggers, the trailing read, a failed walk), `HealthView`, `mocks/health`, `daemonKeys`, `policy` (`round/text` confined to `src/round/`), `labels`, `tokens` (nine `--assumed-*`), `MockClient`, `ui/text` (U-09) tests.
+CLI `tests/health.rs` (rows 4-5: `health-code.md` "Tests"); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs`; UI `health.smoke`, `health.live` (triggers, the trailing read, a failed walk), `HealthView`, `mocks/health`, `daemonKeys`, `policy` (`round/text` confined to `src/round/`), `labels`, `tokens` (nine `--assumed-*`), `MockClient`, `ui/text` (U-09) tests.

@@ -28,6 +28,7 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use common::gate::{VERDICT_TRIES, starved, until_verdict};
 use common::proposal::{Pair, sqlite3};
 use common::serve::Daemon;
 use common::{SPEC, data_dir, repository_root};
@@ -93,13 +94,35 @@ fn request(pair: &Pair, cwd: &Path, input: GateInput, session: Option<&Path>) ->
     }
 }
 
-/// The library's verdict on `--worktree dir --path path`.
-fn verdict(pair: &Pair, dir: &Path, path: &str) -> GateOutcome {
+/// The library's verdict on `--worktree dir --path path`, asked once: for a
+/// test whose subject is a no verdict (AC-01, AC-06), which never asks again.
+fn verdict_once(pair: &Pair, dir: &Path, path: &str) -> GateOutcome {
     let input = GateInput::Path {
         dir: dir.to_path_buf(),
         path: PathBuf::from(path),
     };
     gate(&pair.env(dir), &request(pair, dir, input, Some(dir)))
+}
+
+/// `ask`'s library verdict, a no verdict by deadline asked again
+/// (docs/features/release-hardening.md "Acceptance criteria" RH-T3).
+fn outcome_until(mut ask: impl FnMut() -> GateOutcome) -> GateOutcome {
+    until_verdict(
+        || {
+            let outcome = ask();
+            let (document, lines) = (outcome.to_json(), outcome.stderr_lines().join("\n"));
+            (outcome, document, lines)
+        },
+        |(_, document, lines)| (document.as_str(), lines.as_str()),
+    )
+    .0
+}
+
+/// The library's verdict on `--worktree dir --path path`, a no verdict by
+/// deadline asked again (docs/features/release-hardening.md
+/// "Acceptance criteria" RH-T3): every test that expects a verdict.
+fn verdict(pair: &Pair, dir: &Path, path: &str) -> GateOutcome {
+    outcome_until(|| verdict_once(pair, dir, path))
 }
 
 /// The verdict's JSON document, parsed (its keys checked).
@@ -197,6 +220,7 @@ impl Ran {
 }
 
 /// The hook's stdin.
+#[derive(Clone)]
 enum Input {
     Null,
     Bytes(Vec<u8>),
@@ -307,14 +331,32 @@ fn vars(pair: &Pair, extra: &[(&str, &Path)], unset: &[&str]) -> Vec<(OsString, 
 }
 
 /// `spec gate --worktree dir --path path [--json]` with the pair's
-/// variables.
-fn spec_path(pair: &Pair, dir: &Path, path: &str, json: bool) -> Ran {
+/// variables, asked once (a no verdict's own test).
+fn spec_path_once(pair: &Pair, dir: &Path, path: &str, json: bool) -> Ran {
     let dir_text = dir.to_str().unwrap();
     let mut args = vec!["gate", "--worktree", dir_text, "--path", path];
     if json {
         args.push("--json");
     }
     spawn(SPEC, &args, &vars(pair, &[], &[]), dir, Input::Null)
+}
+
+/// A run's two streams, for `until_verdict`.
+fn streams(ran: &Ran) -> (&str, &str) {
+    (
+        std::str::from_utf8(&ran.stdout).unwrap_or(""),
+        ran.stderr.as_str(),
+    )
+}
+
+/// `ask`'s run, a no verdict by deadline asked again (RH-T3).
+fn ran_until(ask: impl FnMut() -> Ran) -> Ran {
+    until_verdict(ask, streams)
+}
+
+/// [`spec_path_once`], a no verdict by deadline asked again (RH-T3).
+fn spec_path(pair: &Pair, dir: &Path, path: &str, json: bool) -> Ran {
+    ran_until(|| spec_path_once(pair, dir, path, json))
 }
 
 /// Claude Code's `PreToolUse` input for `tool` writing `file` from `cwd`.
@@ -339,8 +381,9 @@ fn hook_json(tool: &str, cwd: &Path, file: &str, content_bytes: usize) -> Vec<u8
     .unwrap()
 }
 
-/// `spec gate --stdin` with `input`, `CLAUDE_PROJECT_DIR` `session`.
-fn spec_stdin(pair: &Pair, cwd: &Path, session: Option<&Path>, input: Input) -> Ran {
+/// `spec gate --stdin` with `input`, `CLAUDE_PROJECT_DIR` `session`, asked
+/// once (a no verdict's own test).
+fn spec_stdin_once(pair: &Pair, cwd: &Path, session: Option<&Path>, input: Input) -> Ran {
     let extra: Vec<(&str, &Path)> = session
         .map(|dir| vec![("CLAUDE_PROJECT_DIR", dir)])
         .unwrap_or_default();
@@ -353,6 +396,11 @@ fn spec_stdin(pair: &Pair, cwd: &Path, session: Option<&Path>, input: Input) -> 
     )
 }
 
+/// [`spec_stdin_once`], a no verdict by deadline asked again (RH-T3).
+fn spec_stdin(pair: &Pair, cwd: &Path, session: Option<&Path>, input: Input) -> Ran {
+    ran_until(|| spec_stdin_once(pair, cwd, session, input.clone()))
+}
+
 // ------------------------------------------------------------------ AC-01
 
 /// AC-01: no `[gate]` is off; each bad `[gate]` is no verdict naming
@@ -362,14 +410,14 @@ fn spec_stdin(pair: &Pair, cwd: &Path, session: Option<&Path>, input: Input) -> 
 fn ac01_no_gate_is_off_and_a_bad_gate_is_no_verdict_at_its_line() {
     let pair = pair_with("pg-ac01", "spec-a", None);
     let main = pair.main.clone();
-    let ran = spec_path(&pair, &main, "src/a.rs", false);
+    let ran = spec_path_once(&pair, &main, "src/a.rs", false);
     assert_eq!(
         (ran.code, ran.stdout_text().as_str()),
         (0, "pass: off\n"),
         "{ran:?}"
     );
     assert_eq!(ran.stderr, "");
-    let document = spec_path(&pair, &main, "src/a.rs", true).json();
+    let document = spec_path_once(&pair, &main, "src/a.rs", true).json();
     assert_eq!(document["verdict"], "pass");
     assert_eq!(document["reason"], "off");
     assert_eq!(document["mode"], "off");
@@ -377,7 +425,7 @@ fn ac01_no_gate_is_off_and_a_bad_gate_is_no_verdict_at_its_line() {
     assert_eq!(document["root"], main.to_str().unwrap());
     // No config at all.
     let loose = pair.scratch.dir("loose");
-    let ran = spec_path(&pair, &loose, "x.rs", false);
+    let ran = spec_path_once(&pair, &loose, "x.rs", false);
     assert_eq!(
         (ran.code, ran.stdout_text().as_str()),
         (0, "pass: no-config\n")
@@ -433,7 +481,7 @@ fn ac01_no_gate_is_off_and_a_bad_gate_is_no_verdict_at_its_line() {
             .unwrap_or_else(|| panic!("{label}: {needle}"))
             + 1;
         let at = format!("{}/specengine.toml:{line}", main.display());
-        let ran = spec_path(&pair, &main, "src/a.rs", false);
+        let ran = spec_path_once(&pair, &main, "src/a.rs", false);
         assert_eq!(ran.code, 2, "{label}: {ran:?}");
         assert!(ran.stdout.is_empty(), "{label}");
         assert_eq!(ran.stderr.lines().count(), 1, "{label}: {}", ran.stderr);
@@ -454,7 +502,7 @@ fn ac01_no_gate_is_off_and_a_bad_gate_is_no_verdict_at_its_line() {
         );
         assert!(!ran.stderr.contains(REFUSAL_TEXT), "{label}");
         assert!(ran.took < Duration::from_secs(4), "{label}: {:?}", ran.took);
-        let document = spec_path(&pair, &main, "src/a.rs", true).json();
+        let document = spec_path_once(&pair, &main, "src/a.rs", true).json();
         assert_eq!(
             (document["verdict"].as_str(), document["reason"].as_str()),
             (Some("unavailable"), Some("config")),
@@ -699,11 +747,13 @@ fn ac05_the_path_is_normalised_before_the_zone_match() {
         assert_eq!(document["zone"], "code", "{path}");
         assert_eq!(document["mode"], "selective", "{path}");
         // The same through the hook's JSON (relative to its `cwd`).
-        let input = read_hook_input(
-            Cursor::new(hook_json("Edit", &main, path, 0)),
-            Instant::now() + GATE_DEADLINE,
-        );
-        let hooked = gate(&pair.env(&main), &request(&pair, &main, input, Some(&main)));
+        let hooked = outcome_until(|| {
+            let input = read_hook_input(
+                Cursor::new(hook_json("Edit", &main, path, 0)),
+                Instant::now() + GATE_DEADLINE,
+            );
+            gate(&pair.env(&main), &request(&pair, &main, input, Some(&main)))
+        });
         assert_refused(&hooked, &format!("hook {path}"));
         assert_eq!(hooked.path.as_deref(), Some(*folded), "hook {path}");
     }
@@ -779,8 +829,10 @@ impl Drop for Holder {
     }
 }
 
-/// Asserts the binary's no verdict: exit 2 within 4 s, nothing on stdout,
-/// one stderr line naming the cause (`needle`), never the refusal's text.
+/// Asserts the binary's no verdict: exit 2 within the deadline + 1 s (4 s
+/// at a 3 s deadline; docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R8 moved it to 5 s), nothing on stdout, one stderr line
+/// naming the cause (`needle`), never the refusal's text.
 fn assert_ran_no_verdict(ran: &Ran, needle: &str, context: &str) {
     assert_eq!(ran.code, 2, "{context}: {ran:?}");
     assert!(ran.stdout.is_empty(), "{context}");
@@ -797,14 +849,14 @@ fn assert_ran_no_verdict(ran: &Ran, needle: &str, context: &str) {
     );
     assert!(!ran.stderr.contains(REFUSAL_TEXT), "{context}");
     assert!(
-        ran.took < Duration::from_secs(4),
+        ran.took < GATE_DEADLINE + Duration::from_secs(1),
         "{context}: {:?}",
         ran.took
     );
 }
 
-/// AC-06: each cause of no verdict is exit 2 in under 4 s naming it. M:
-/// one exits 0; an unbounded busy wait.
+/// AC-06: each cause of no verdict is exit 2 within the deadline + 1 s
+/// naming it. M: one exits 0; an unbounded busy wait.
 #[test]
 fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     let pair = gated("pg-ac06", "selective");
@@ -833,7 +885,7 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
 
     // A corrupt claim.
     pair.sql(&format!("UPDATE tasks SET claim = '{{' WHERE id = '{id}';"));
-    let ran = spec_path(&pair, &main, "src/a.rs", false);
+    let ran = spec_path_once(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(
         &ran,
         &format!("Run `spec task show {id}` on a terminal."),
@@ -845,18 +897,18 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     // The queue under an exclusive lock: the deadline, not a hang.
     {
         let _held = Holder::hold(&pair.db());
-        let ran = spec_path(&pair, &main, "src/a.rs", false);
+        let ran = spec_path_once(&pair, &main, "src/a.rs", false);
         assert_ran_no_verdict(&ran, "locked past the deadline", "an exclusive lock");
         assert!(
-            ran.took >= Duration::from_millis(2500),
+            ran.took >= GATE_DEADLINE - Duration::from_millis(500),
             "gave up early: {:?}",
             ran.took
         );
-        let document = spec_path(&pair, &main, "src/a.rs", true).json();
+        let document = spec_path_once(&pair, &main, "src/a.rs", true).json();
         assert_eq!(document["reason"], "deadline");
     }
     // Released: a verdict again.
-    assert_refused(&verdict(&pair, &main, "src/a.rs"), "released");
+    assert_refused(&verdict_once(&pair, &main, "src/a.rs"), "released");
 
     // A queue of a newer schema (this build's is 12 since
     // docs/features/task-mandate.md M5; D15: the path an older build meets
@@ -864,7 +916,7 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     // a62c81c: 11 over 10; 13 since docs/features/plain-questions.md PQ8,
     // its record with 4d52ec3c's build: 13 over 12).
     pair.sql("PRAGMA user_version = 15;");
-    let ran = spec_path(&pair, &main, "src/a.rs", false);
+    let ran = spec_path_once(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(
         &ran,
         "Reinstall spec and the plugin from one commit.",
@@ -876,15 +928,15 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     let loose = pair.scratch.copy("spec-a", "no-git");
     append_config(&loose, &tables("selective"));
     common::write(&loose, "src/a.rs", "fn a() {}\n");
-    let ran = spec_path(&pair, &loose, "src/a.rs", false);
+    let ran = spec_path_once(&pair, &loose, "src/a.rs", false);
     assert_ran_no_verdict(&ran, "git", "outside git");
     assert_eq!(
-        spec_path(&pair, &loose, "src/a.rs", true).json()["reason"],
+        spec_path_once(&pair, &loose, "src/a.rs", true).json()["reason"],
         "git"
     );
 
     // Bad stdin, the session gated.
-    let ran = spec_stdin(
+    let ran = spec_stdin_once(
         &pair,
         &main,
         Some(&main),
@@ -894,7 +946,7 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
 
     // A bad [gate] (AC-01 has every form).
     append_config(&main, "min_files = 3\n");
-    let ran = spec_path(&pair, &main, "src/a.rs", false);
+    let ran = spec_path_once(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(&ran, "min_files", "a bad [gate]");
 }
 
@@ -1395,7 +1447,7 @@ fn ac12_a_refusal_names_the_next_step_and_never_a_title() {
 
 /// The wrapper as the hook runs it: `sh hooks/gate.sh` with `spec` (the
 /// built binary) on a scratch `PATH`, the hook JSON on stdin.
-fn wrapper(pair: &Pair, cwd: &Path, input: Vec<u8>) -> Ran {
+fn wrapper_once(pair: &Pair, cwd: &Path, input: Vec<u8>) -> Ran {
     let bin = pair.scratch.join("bin");
     if !bin.exists() {
         fs::create_dir_all(&bin).unwrap();
@@ -1417,6 +1469,11 @@ fn wrapper(pair: &Pair, cwd: &Path, input: Vec<u8>) -> Ran {
     let left: Vec<_> = fs::read_dir(&tmp).unwrap().collect();
     assert!(left.is_empty(), "the wrapper's temp file removed: {left:?}");
     ran
+}
+
+/// [`wrapper_once`], a no verdict by deadline asked again (RH-T3).
+fn wrapper(pair: &Pair, cwd: &Path, input: Vec<u8>) -> Ran {
+    ran_until(|| wrapper_once(pair, cwd, input.clone()))
 }
 
 /// AC-14: through the wrapper on spec-a under `selective`: closed in
@@ -1495,10 +1552,12 @@ fn a_large_write_is_read_to_its_end_and_decided() {
         })
     );
     assert_passed(
-        &gate(
-            &plain.env(&main),
-            &request(&plain, &main, input, Some(&main)),
-        ),
+        &outcome_until(|| {
+            gate(
+                &plain.env(&main),
+                &request(&plain, &main, input.clone(), Some(&main)),
+            )
+        }),
         GateReason::Off,
         "library",
     );
@@ -1705,7 +1764,7 @@ fn an_input_naming_no_file_is_decided_by_the_session() {
         let (session, code, ran) = handle.join().unwrap();
         assert_eq!(ran.code, code, "{session}, stdin open: {ran:?}");
         assert!(
-            ran.took >= Duration::from_millis(2900),
+            ran.took >= GATE_DEADLINE - Duration::from_millis(100),
             "{session}: {:?}",
             ran.took
         );
@@ -1715,30 +1774,32 @@ fn an_input_naming_no_file_is_decided_by_the_session() {
             ran.took
         );
         if code == 2 {
-            assert!(
-                ran.stderr.contains("not read to its end within 3 s"),
-                "{session}: {}",
-                ran.stderr
-            );
+            // RH-R8: the deadline's seconds, never a literal.
+            let cause = format!("not read to its end within {} s", GATE_DEADLINE.as_secs());
+            assert!(ran.stderr.contains(&cause), "{session}: {}", ran.stderr);
         }
     }
 
     // The library: no session at all passes; an input naming no file is
     // never an input failure outside a gated project.
-    let outcome = gate(
-        &pair.env(&neutral),
-        &request(&pair, &neutral, GateInput::Hook(HookInput::default()), None),
-    );
+    let outcome = outcome_until(|| {
+        gate(
+            &pair.env(&neutral),
+            &request(&pair, &neutral, GateInput::Hook(HookInput::default()), None),
+        )
+    });
     assert_passed(&outcome, GateReason::NoConfig, "no session dir");
     for (session, dir, code, _) in sessions(&pair) {
         let unread = GateInput::Unread {
             cause: "the hook input is not the expected JSON".to_owned(),
             deadline: false,
         };
-        let outcome = gate(
-            &pair.env(&neutral),
-            &request(&pair, &neutral, unread, Some(&dir)),
-        );
+        let outcome = outcome_until(|| {
+            gate(
+                &pair.env(&neutral),
+                &request(&pair, &neutral, unread.clone(), Some(&dir)),
+            )
+        });
         assert_eq!(
             i32::from(outcome.exit_code()),
             code,
@@ -1776,13 +1837,21 @@ fn the_progress_and_the_session_verdict_follow_the_config() {
             dir: dir.clone(),
             path: PathBuf::from(path),
         };
-        let request = request(&pair, &dir, input, Some(&dir));
-        assert_eq!(request.progress.stage(), GateStage::Unknown);
-        let progress = request.progress.clone();
-        gate(&pair.env(&dir), &request);
-        assert_eq!(progress.stage(), stage, "{session}");
+        // The stage of the verdict that answered: a no verdict by deadline
+        // asked again (RH-T3).
+        let mut reached = GateStage::Unknown;
+        outcome_until(|| {
+            let request = request(&pair, &dir, input.clone(), Some(&dir));
+            assert_eq!(request.progress.stage(), GateStage::Unknown);
+            let progress = request.progress.clone();
+            let outcome = gate(&pair.env(&dir), &request);
+            reached = progress.stage();
+            outcome
+        });
+        assert_eq!(reached, stage, "{session}");
     }
-    let cause = "no answer within 3 s".to_owned();
+    // RH-R8: the deadline's seconds, never a literal.
+    let cause = format!("no answer within {} s", GATE_DEADLINE.as_secs());
     let progress = GateProgress::new();
     assert_passed(
         &gate_session(None, cause.clone(), &progress),
@@ -1974,7 +2043,12 @@ fn a_leading_tilde_is_home() {
         if !home {
             env.home = None;
         }
-        gate(&env, &request(&pair, &neutral, input, Some(session)))
+        outcome_until(|| {
+            gate(
+                &env,
+                &request(&pair, &neutral, input.clone(), Some(session)),
+            )
+        })
     };
     let refused = hooked("~/proj/src/a.rs", true, &neutral).tap_refused("~/proj");
     assert_eq!(refused.path.as_deref(), Some("src/a.rs"));
@@ -2000,7 +2074,12 @@ fn a_leading_tilde_is_home() {
         Cursor::new(hook_json("Edit", &main, "~user/x.rs", 0)),
         Instant::now() + GATE_DEADLINE,
     );
-    let outcome = gate(&pair.env(&main), &request(&pair, &main, input, Some(&main)));
+    let outcome = outcome_until(|| {
+        gate(
+            &pair.env(&main),
+            &request(&pair, &main, input.clone(), Some(&main)),
+        )
+    });
     assert_passed(&outcome, GateReason::NotControlled, "~user");
     assert_eq!(outcome.path.as_deref(), Some("~user/x.rs"));
 }
@@ -2150,6 +2229,7 @@ fn serve_d9_the_gate_decides_alike_with_a_daemon_up_or_none() {
 /// stderr)`: the library's document and lines, `spec gate --path` as text
 /// and as `--json`, the hook's `spec gate --stdin`, and the wrapper.
 fn faces(pair: &Pair, dir: &Path) -> Vec<(String, i32, String, String)> {
+    // Each face's verdict, a no verdict by deadline asked again (RH-T3).
     let outcome = verdict(pair, dir, "src/a.rs");
     let mut out = vec![(
         "library".to_owned(),
@@ -2256,4 +2336,197 @@ fn card_tasks_ct3_the_gate_reads_no_link() {
     let none = faces(&pair, &main);
     assert_eq!(linked, none, "passes: a card linking T-0001");
     assert_eq!(corrupt, none, "passes: the card row does not read");
+}
+
+// ------------------------------------------ release-hardening RH-T3, RH-R8
+
+/// One answer of `spec gate`: exit, stdout, stderr.
+type Answer = (i32, String, String);
+
+/// The library's verdict as the binary prints it with `--json`.
+fn answer_of(outcome: &GateOutcome) -> Answer {
+    (
+        i32::from(outcome.exit_code()),
+        outcome.to_json(),
+        outcome.stderr_lines().join("\n"),
+    )
+}
+
+/// `until_verdict` over `script`, one answer per call (the last repeated):
+/// the calls it made and the answer it returned.
+fn scripted(script: &[Answer]) -> (usize, Answer) {
+    let mut calls = 0;
+    let answer = until_verdict(
+        || {
+            let answer = script[calls.min(script.len() - 1)].clone();
+            calls += 1;
+            answer
+        },
+        |(_, stdout, stderr)| (stdout.as_str(), stderr.as_str()),
+    );
+    (calls, answer)
+}
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-T3: only a
+/// no verdict by deadline is asked again. Scripted with the gate's forms
+/// on spec-a (a refusal, the backstop's deadline as `--json` and as text,
+/// the wrapper's line, a stage's `at the queue`, a bad `[gate]`), the
+/// library's where it gives them: deadline, deadline, verdict
+/// is 3 calls and the verdict; a bad `[gate]` and a refusal 1 call each;
+/// five deadlines 5 calls and the fifth answer, the sixth never asked.
+/// M: `starved` true for any exit 2; `VERDICT_TRIES` 1.
+#[test]
+fn rh_t3_only_a_no_verdict_by_deadline_is_asked_again() {
+    let pair = gated("rh-t3", "selective");
+    let main = pair.main.clone();
+    let refusal = answer_of(&verdict(&pair, &main, "src/a.rs").tap_refused("refusal"));
+    let backstop = gate_session(
+        Some(&main),
+        format!("no answer within {} s", GATE_DEADLINE.as_secs()),
+        &GateProgress::new(),
+    );
+    assert_eq!(backstop.reason, GateReason::Deadline, "{backstop:#?}");
+    let deadline_json = answer_of(&backstop);
+    let deadline_text = (2, String::new(), deadline_json.2.clone());
+    let wrapper_line = (
+        2,
+        String::new(),
+        "specengine gate: no verdict (spec gave no answer within 7 s): the write is refused."
+            .to_owned(),
+    );
+    let staged = (
+        2,
+        String::new(),
+        format!(
+            "{NO_VERDICT}no answer within {} s, at the queue): the write is refused.",
+            GATE_DEADLINE.as_secs()
+        ),
+    );
+    let bad = gated("rh-t3-bad", "selective");
+    append_config(&bad.main, "min_files = 3\n");
+    let bad_gate = answer_of(&verdict(&bad, &bad.main, "src/a.rs"));
+    assert_eq!(bad_gate.0, 2, "{bad_gate:?}");
+    assert!(bad_gate.2.starts_with(NO_VERDICT), "{bad_gate:?}");
+    assert!(bad_gate.2.contains("min_files"), "{bad_gate:?}");
+    // The premises: which forms are starved.
+    for (form, want) in [
+        (&deadline_json, true),
+        (&deadline_text, true),
+        (&wrapper_line, true),
+        (&staged, true),
+        (&refusal, false),
+        (&bad_gate, false),
+    ] {
+        assert_eq!(starved(&form.1, &form.2), want, "{form:?}");
+    }
+
+    assert_eq!(
+        scripted(&[
+            deadline_json.clone(),
+            deadline_text.clone(),
+            refusal.clone()
+        ]),
+        (3, refusal.clone()),
+        "deadline, deadline, verdict"
+    );
+    assert_eq!(
+        scripted(std::slice::from_ref(&bad_gate)),
+        (1, bad_gate.clone()),
+        "a bad [gate] is a no verdict of its own: asked once"
+    );
+    assert_eq!(
+        scripted(&[refusal.clone(), deadline_json.clone()]),
+        (1, refusal.clone()),
+        "a refusal is taken at once"
+    );
+    let five = [
+        deadline_json.clone(),
+        deadline_text,
+        wrapper_line,
+        deadline_json,
+        staged.clone(),
+        refusal,
+    ];
+    assert_eq!(VERDICT_TRIES, 5);
+    assert_eq!(
+        scripted(&five),
+        (5, staged),
+        "five deadlines: the fifth answer"
+    );
+}
+
+/// The wrapper's `limit=` (`gate.sh`) and the hook's `timeout`
+/// (`hooks.json`), in seconds.
+fn wrapper_limit_and_hook_timeout() -> (u64, u64) {
+    let hooks = repository_root().join("plugin/specengine/hooks");
+    let script = fs::read_to_string(hooks.join("gate.sh")).unwrap();
+    let limits: Vec<u64> = script
+        .lines()
+        .filter_map(|line| line.strip_prefix("limit="))
+        .map(|value| value.trim().parse().expect("limit= seconds"))
+        .collect();
+    assert_eq!(limits.len(), 1, "one limit= line: {limits:?}");
+    let document: Value =
+        serde_json::from_str(&fs::read_to_string(hooks.join("hooks.json")).unwrap()).unwrap();
+    let timeouts: Vec<u64> = document["hooks"]["PreToolUse"]
+        .as_array()
+        .expect("PreToolUse")
+        .iter()
+        .flat_map(|matcher| matcher["hooks"].as_array().expect("hooks").iter())
+        .map(|hook| hook["timeout"].as_u64().expect("a timeout"))
+        .collect();
+    assert_eq!(timeouts.len(), 1, "one gate hook: {timeouts:?}");
+    (limits[0], timeouts[0])
+}
+
+/// RH-R8: the backstop (the deadline + 0.4 s) stays below the wrapper's
+/// limit (7 s), and that below the hook's timeout (10 s). M:
+/// `GATE_DEADLINE` at 7 s.
+#[test]
+fn rh_r8_the_backstop_stays_below_the_wrapper_and_the_hook() {
+    let (limit, timeout) = wrapper_limit_and_hook_timeout();
+    assert_eq!(
+        (limit, timeout),
+        (7, 10),
+        "gate.sh and hooks.json unchanged"
+    );
+    let backstop = GATE_DEADLINE + Duration::from_millis(400);
+    assert!(
+        backstop < Duration::from_secs(limit),
+        "the backstop {backstop:?} is not below the wrapper's {limit} s"
+    );
+    assert!(
+        limit < timeout,
+        "the wrapper's {limit} s is not below the hook's {timeout} s"
+    );
+}
+
+/// RH-R8: `GATE_DEADLINE` is 5 s: `spec gate --stdin` with its stdin held
+/// open, the session gated, exits 2 naming `not read to its end within 5
+/// s`, in at least 5.0 s and under 5.5 s. A no verdict is the subject:
+/// never asked again. M: `GATE_DEADLINE` at 3 s.
+#[test]
+fn rh_r8_a_held_stdin_is_no_verdict_at_5_s() {
+    assert_eq!(GATE_DEADLINE, Duration::from_secs(5));
+    let pair = gated("rh-r8-stdin", "selective");
+    let main = pair.main.clone();
+    let ran = spec_stdin_once(
+        &pair,
+        &main,
+        Some(&main),
+        Input::HeldOpen(b"{\"cwd\":".to_vec()),
+    );
+    assert_eq!(ran.code, 2, "{ran:?}");
+    assert!(ran.stdout.is_empty(), "{ran:?}");
+    assert!(ran.stderr.starts_with(NO_VERDICT), "{}", ran.stderr);
+    assert!(
+        ran.stderr.contains("not read to its end within 5 s"),
+        "{}",
+        ran.stderr
+    );
+    assert!(
+        ran.took >= Duration::from_secs(5) && ran.took < Duration::from_millis(5500),
+        "{:?}",
+        ran.took
+    );
 }

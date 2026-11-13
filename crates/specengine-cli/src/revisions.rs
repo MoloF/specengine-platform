@@ -37,7 +37,9 @@
 //!   node's `norm_hash` change and each node's `within_hash` change, so a
 //!   section's wording vouches for the document and sections around it,
 //!   whose own hash did not move (task spec `trace-truth`, "Data"). A
-//!   `within_hash` pair goes only over the same members ([`within_pair`]). A
+//!   `within_hash` pair goes only over the same members ([`within_pair`]).
+//!   An ID-less document on both sides is paired by its path for these two
+//!   alone, never raised (task spec `release-hardening` RH-R3). A
 //!   completion ([`named_refresh`]) vouches for what its trailers name alone
 //!   (task spec `trace-truth` D5).
 //! - **Review** ([`rows`]): the document's `revisions`.
@@ -58,8 +60,8 @@ use specengine_core::proposal::{
     editorial_revision,
 };
 use specengine_core::raise::{
-    RaiseRefusal, RevisionRow, closed_against_rev, meaning_changes, paired, raised,
-    revision_change, write_revisions,
+    RaiseRefusal, RevisionRow, closed_against_rev, idless_documents, meaning_changes, paired,
+    raised, revision_change, write_revisions,
 };
 use specengine_core::trace::{HashKind, WithinInput, within_input};
 use specengine_core::{NORM_RECIPE, norm_input};
@@ -297,8 +299,13 @@ pub(crate) struct Revisions {
     /// The nodes whose meaning changes, in file order.
     pub nodes: Vec<NodeRevision>,
     /// Under `--editorial`, each node with an ID in both parses, over the
-    /// same members, whose `within_hash` moved; none for a meaning approve.
+    /// same members, whose `within_hash` moved, and an ID-less document's
+    /// by its path ([`idless_documents`]); none for a meaning approve.
     pub within_moved: Vec<CardRefresh>,
+    /// Under `--editorial`, an ID-less document's own `norm_hash` move,
+    /// named by its path: no node of [`Self::nodes`], never raised (task
+    /// spec `release-hardening` RH-R3).
+    pub document: Option<CardRefresh>,
     /// Under `--editorial` with entries to refresh.
     pub lock: Option<LockWrite>,
     /// Step 5's text with every node's raise written: what a meaning
@@ -348,9 +355,10 @@ impl Revisions {
         part
     }
 
-    /// Under `--editorial` with no node's meaning changing: the note.
+    /// Under `--editorial` with no node's meaning changing, an ID-less
+    /// document's own included: the note.
     pub(crate) fn editorial_note(&self) -> Option<String> {
-        (self.editorial && self.nodes.is_empty())
+        (self.editorial && self.nodes.is_empty() && self.document.is_none())
             .then(|| format!("no node's meaning changes; --{EDITORIAL} changes nothing"))
     }
 
@@ -367,8 +375,9 @@ impl Revisions {
     }
 
     /// What an editorial apply vouches for on the cards: each node's old
-    /// and new `norm_hash`, then its `within_hash` ([`Self::within_moved`]);
-    /// none for a meaning approve, whose raise rightly marks them.
+    /// and new `norm_hash`, an ID-less document's ([`Self::document`]),
+    /// then each `within_hash` ([`Self::within_moved`]); none for a meaning
+    /// approve, whose raise rightly marks them.
     pub(crate) fn card_refresh(&self) -> Vec<CardRefresh> {
         if !self.editorial {
             return Vec::new();
@@ -384,6 +393,7 @@ impl Revisions {
                     new: new.to_owned(),
                 })
             })
+            .chain(self.document.iter().cloned())
             .chain(self.within_moved.iter().cloned())
             .collect()
     }
@@ -538,22 +548,46 @@ pub(crate) struct Step6<'a> {
 /// node with an ID in both parses whose `within_hash` moved over the same
 /// members ([`within_pair`]), a document around a changed section among them,
 /// and a node with no sections, whose pair is its own hash's, by its canonical
-/// ID. A null hash on either side has nothing to vouch for.
+/// ID. A null hash on either side has nothing to vouch for. An ID-less
+/// document on both sides ([`idless_documents`]) is paired too, by its path,
+/// after them (task spec `release-hardening` RH-R3).
 fn within_moved(given: &Step6<'_>) -> Vec<CardRefresh> {
     let old = Hashed::new(given.path, given.before_parsed, given.before);
     let new = Hashed::new(given.path, given.after_parsed, given.after);
+    let document = idless_documents(given.before_parsed, given.after_parsed)
+        .then(|| (given.path.to_owned(), 0, 0));
     paired(given.before_parsed, given.after_parsed)
         .into_iter()
-        .filter_map(|pair| {
-            let (from, to) = within_pair(&old, pair.before, &new, pair.after)?;
+        .map(|pair| ((given.name)(&pair.id), pair.before, pair.after))
+        .chain(document)
+        .filter_map(|(node, before, after)| {
+            let (from, to) = within_pair(&old, before, &new, after)?;
             Some(CardRefresh {
-                node: (given.name)(&pair.id),
+                node,
                 kind: HashKind::Within,
                 old: from,
                 new: to,
             })
         })
         .collect()
+}
+
+/// Under `--editorial`, an ID-less document's own `norm_hash` move, named by
+/// its path ([`idless_documents`]): `None` when either document holds an
+/// `id:`, either hash is null, or it did not move (task spec
+/// `release-hardening` RH-R3).
+fn document_moved(given: &Step6<'_>) -> Option<CardRefresh> {
+    if !idless_documents(given.before_parsed, given.after_parsed) {
+        return None;
+    }
+    let old = norm_hash(given.before_parsed, given.before, 0)?;
+    let new = norm_hash(given.after_parsed, given.after, 0)?;
+    (old != new).then(|| CardRefresh {
+        node: given.path.to_owned(),
+        kind: HashKind::Own,
+        old,
+        new,
+    })
 }
 
 /// Step 6's revisions, every node judged in one pass: per node whose
@@ -649,6 +683,7 @@ pub(crate) fn step_6(given: Step6<'_>) -> Result<Revisions, StepFailure> {
         } else {
             Vec::new()
         },
+        document: given.editorial.then(|| document_moved(&given)).flatten(),
         nodes,
         lock,
         raised: raised_bytes.filter(|_| !refused),

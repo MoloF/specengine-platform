@@ -215,8 +215,11 @@ fn failing_test_removes_evidence() {
     );
     run.has_line("lock | removed | KILN-RAMP");
 
-    // A time-out, KILN-RAMP still failing (no block now: no row).
-    kiln.set_verify(&TEMPLATE, Some(1));
+    // A time-out, KILN-RAMP still failing (no block now: no row). The
+    // timeout is 5 s, not 1 (docs/features/release-hardening.md
+    // "Acceptance criteria" RH-T8): a loaded run's passing tests outlasted
+    // 1 s; the hanging one still hangs past 5.
+    kiln.set_verify(&TEMPLATE, Some(5));
     kiln.plan(&[(RAMP_STOPS_TEST, "fail"), (GLAZE_TEST, "hang")]);
     let run = kiln.run();
     run.code(1);

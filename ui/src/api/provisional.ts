@@ -767,12 +767,28 @@ export interface ShownLink {
   reason: string | null;
 }
 
-/** A shown node's links (`null` without `--links`). Source: `docs/canon/spec-cli-graph.md` "spec show --links". */
+/**
+ * A shown node's links (`null` without `--links`); `usage` the core's count over the In rows from
+ * live files, never widened by `--archive`. Sources: `docs/canon/spec-cli-graph.md` "spec show --links";
+ * `docs/features/usage-orphans.md` "Acceptance criteria" (UO6).
+ */
 export interface ShownLinks {
   outgoing: ShownLink[];
   incoming: ShownLink[];
+  usage: LinkUsage;
   left_out: LeftOut;
   omitted: number;
+}
+
+/**
+ * What uses a node, per read, never stored: the distinct sources in other live files whose resolved
+ * links end on it or a node nested in it, over strong types (`used_by`) and over `mentions`
+ * (`mentioned_by`); a source may count in both. The UI never counts them itself.
+ * Source: `docs/features/usage-orphans.md` "Acceptance criteria" (UO1, UO6).
+ */
+export interface LinkUsage {
+  used_by: number;
+  mentioned_by: number;
 }
 
 /** One node as `spec show --json` prints it. Source: `crates/specengine-cli/README.md` "Output and the cap". */
@@ -1034,9 +1050,11 @@ export interface UnappliedAmendment {
  * `counts.documents` on the same tree), the unapplied amendments by path, then the notes (a
  * front-matter that could not be judged), each without `note: `; after them rows 4-5: `code` the
  * stored code files' count, null unless the rows read the code index, `assumes` row 4, `unbound`
- * row 5, then row 6: `drift`, every key present. Sources: `docs/features/health-left.md` "Data";
+ * row 5, then row 6: `drift`, then row 8: `orphans`, every live document judged wherever it sits,
+ * every key present. Sources: `docs/features/health-left.md` "Data";
  * `docs/features/health-code.md` "Data";
- * `docs/features/health-drift.md` "Data".
+ * `docs/features/health-drift.md` "Data";
+ * `docs/features/usage-orphans.md` "Acceptance criteria" (UO4).
  */
 export interface HealthReport {
   documents: number;
@@ -1046,6 +1064,40 @@ export interface HealthReport {
   assumes: HealthAssumes;
   unbound: HealthUnbound;
   drift: HealthDrift;
+  orphans: HealthOrphans;
+}
+
+// `spec health --json`'s row 8 (docs/features/usage-orphans.md "Acceptance criteria", UO4): the live
+// documents linked to nothing, judged per read by the core, never stored; information, never a hold
+// on work (ADR-0012). Kind, title and status raw (ADR-0031), never compared here.
+
+/**
+ * Row 8: `live` the live documents judged, `rows` the orphans by kind in code-point order (none
+ * last), then by path; `notes` the row's own, each without `note: ` (the queue not read).
+ * Source: `docs/features/usage-orphans.md` "Acceptance criteria" (UO4).
+ */
+export interface HealthOrphans {
+  live: number;
+  rows: HealthOrphan[];
+  notes: string[];
+}
+
+/**
+ * One orphan document: `name` its ID, else its path; `id`, `kind`, `title` and `status` raw, null when
+ * absent; `tasks` its tasks but cancelled ones, `tasks_open` of them open, both null when the queue
+ * was not read (a note says why). A task on it means someone plans to bring it in.
+ * Source: `docs/features/usage-orphans.md` "Acceptance criteria" (UO4).
+ */
+export interface HealthOrphan {
+  name: string;
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  status: string | null;
+  tasks: number | null;
+  tasks_open: number | null;
 }
 
 // `spec health --json`'s rows 4-5 (docs/features/health-code.md "Data"): read from the code index
@@ -2214,6 +2266,8 @@ export interface CatalogDocument {
  * `open_items` the open proposals of this repository naming it; `tasks` its cards but cancelled ones,
  * `tasks_open` of them open; `last_change` its file's newest commit on `HEAD`'s first-parent line,
  * null when none is read. Source: `docs/features/direction-catalog.md` "Acceptance criteria", DC-9.
+ * After `tasks_open`, the core's counts as a shown node's `usage` and its orphan flag, a section's
+ * null; never counted here. Source: `docs/features/usage-orphans.md` "Acceptance criteria" (UO5).
  */
 export interface CatalogRow {
   id: string | null;
@@ -2228,6 +2282,9 @@ export interface CatalogRow {
   open_items: number;
   tasks: number;
   tasks_open: number;
+  used_by: number;
+  mentioned_by: number;
+  orphan: boolean | null;
   last_change: CatalogChange | null;
 }
 

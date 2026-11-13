@@ -2199,6 +2199,9 @@ fn round_stage_checks_and_stages_with_no_walk() {
 }
 
 // A discrepancy's option labels with an LF stay on one line of the sheet.
+// A CR is refused at intake since docs/features/release-hardening.md
+// "Acceptance criteria" RH-R1, so the effect's is set by SQL, as an item
+// stored before that release holds it.
 #[test]
 fn one_line_slots_escape_lf_and_cr() {
     let pair = Pair::new("rd-slots", "spec-a");
@@ -2210,10 +2213,14 @@ fn one_line_slots_escape_lf_and_cr() {
     );
     input.options[1] = IntakeOption {
         label: "Change\nPR-0009: 1".to_owned(),
-        effect: "one\rtwo".to_owned(),
+        effect: "one two".to_owned(),
         price: "\u{2028}cheap".to_owned(),
     };
     let stored = pair.raise_discrepancy(&main, input);
+    pair.sql(&format!(
+        "UPDATE proposals SET options = json_set(options, '$[1].effect', \
+         'one' || char(13) || 'two') WHERE id = '{stored}';"
+    ));
     let (text, _) = printed_sheet(&sheet(&pair, &main, None));
     assert!(
         text.contains("  - [1] Change\\nPR-0009: 1 | one\\rtwo | \\u{2028}cheap\n"),
@@ -2883,7 +2890,11 @@ fn a_fifo_swapped_in_after_the_size_check_never_holds_the_open() {
             swaps
         })
     };
-    let (sender, done) = mpsc::channel();
+    // docs/features/release-hardening.md "Acceptance criteria" RH-T6: the
+    // old budget at least (3 000 rounds or 8 s), then rounds until both
+    // outcomes are seen or 60 s pass (a loaded run once had 3 000 FIFO, 0
+    // regular, 2 swaps); every round is under the hang check.
+    let (sender, rounds) = mpsc::channel::<Result<bool, String>>();
     let worker = {
         let (env, git, path, stop) = (
             pair.env(&pair.main),
@@ -2892,10 +2903,14 @@ fn a_fifo_swapped_in_after_the_size_check_never_holds_the_open() {
             Arc::clone(&stop),
         );
         std::thread::spawn(move || {
-            let (mut fifos, mut regulars, mut others) = (0, 0, Vec::new());
+            let (mut fifos, mut regulars, mut count) = (0_u64, 0_u64, 0_u64);
             let started = Instant::now();
-            for _ in 0..3000 {
-                if stop.load(Ordering::SeqCst) || started.elapsed() > Duration::from_secs(8) {
+            loop {
+                let budget_spent = count >= 3000 || started.elapsed() > Duration::from_secs(8);
+                if stop.load(Ordering::SeqCst)
+                    || (budget_spent && fifos > 0 && regulars > 0)
+                    || started.elapsed() > Duration::from_secs(60)
+                {
                     break;
                 }
                 let mut terminal = Scripted::keys(&[]);
@@ -2909,38 +2924,59 @@ fn a_fifo_swapped_in_after_the_size_check_never_holds_the_open() {
                     },
                     &mut terminal,
                 );
-                match outcome {
-                    Err(error) if error.message.contains(": not a regular file: ") => fifos += 1,
-                    Err(error) if error.message.contains(":2: not UTF-8") => regulars += 1,
-                    other => others.push(format!("{other:?}")),
+                let seen = match outcome {
+                    Err(error) if error.message.contains(": not a regular file: ") => {
+                        fifos += 1;
+                        Ok(true)
+                    }
+                    Err(error) if error.message.contains(":2: not UTF-8") => {
+                        regulars += 1;
+                        Ok(false)
+                    }
+                    other => Err(format!("{other:?}")),
+                };
+                count += 1;
+                if sender.send(seen).is_err() {
+                    break;
                 }
             }
-            let _ = sender.send((fifos, regulars, others));
         })
     };
-    let finished = done.recv_timeout(Duration::from_secs(60));
+    let started = Instant::now();
+    let (mut fifos, mut regulars, mut others) = (0_u64, 0_u64, Vec::new());
+    loop {
+        match rounds.recv_timeout(Duration::from_secs(20)) {
+            Ok(Ok(true)) => fifos += 1,
+            Ok(Ok(false)) => regulars += 1,
+            Ok(Err(other)) => others.push(other),
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Held in `open` on the FIFO: a writer's open (never
+                // waiting) lets it go, so the test ends.
+                stop.store(true, Ordering::SeqCst);
+                let writer = fs::OpenOptions::new()
+                    .write(true)
+                    .custom_flags(NONBLOCK)
+                    .open(&fifo);
+                drop(writer);
+                let _ = rounds.recv_timeout(Duration::from_secs(30));
+                panic!(
+                    "`round answer` held the open of a FIFO swapped in after its size check \
+                     ({fifos} FIFO, {regulars} regular before it)"
+                );
+            }
+        }
+    }
     stop.store(true, Ordering::SeqCst);
     let swaps = swapper.join().expect("the swapper");
-    let (fifos, regulars, others) = match finished {
-        Ok(counts) => counts,
-        Err(_) => {
-            // Held in `open` on the FIFO: a writer's open (never waiting)
-            // lets it go, so the test ends.
-            let writer = fs::OpenOptions::new()
-                .write(true)
-                .custom_flags(NONBLOCK)
-                .open(&fifo);
-            drop(writer);
-            let _ = done.recv_timeout(Duration::from_secs(30));
-            panic!("`round answer` held the open of a FIFO swapped in after its size check");
-        }
-    };
     worker.join().expect("the worker");
-    eprintln!("{fifos} FIFO, {regulars} regular, {swaps} swaps");
+    let took = started.elapsed();
+    eprintln!("{fifos} FIFO, {regulars} regular, {swaps} swaps in {took:?}");
     assert!(others.is_empty(), "{others:?}");
     assert!(
         fifos > 0 && regulars > 0,
-        "{fifos} FIFO, {regulars} regular, {swaps} swaps"
+        "both outcomes not seen within 60 s: {fifos} FIFO, {regulars} regular, {swaps} swaps in \
+         {took:?}"
     );
 }
 

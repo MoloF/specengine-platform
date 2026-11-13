@@ -48,6 +48,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use common::decision::PtyRun;
+use common::gate::until_verdict;
 use common::proposal::{LATER, Pair, refused};
 use common::{Run, read_text, replace, write};
 use serde_json::{Map, Value, json};
@@ -539,25 +540,21 @@ fn gate_ready(pair: &Pair) {
 }
 
 /// A gate's answer on the worktree: exit, stdout, stderr. `spec gate` answers
-/// within 3 s of wall clock: a run a loaded machine starves past that says
-/// `unavailable`, so it is asked again (five tries; the last answer stands,
-/// and a compare shows it).
+/// within `GATE_DEADLINE` of wall clock: a run a loaded machine starves past
+/// that says `unavailable`, so it is asked again
+/// (`common::gate::until_verdict`; the last answer stands, and a compare
+/// shows it).
 fn gate_answer(pair: &Pair) -> (i32, String, String) {
     let main = pair.main.to_str().expect("a UTF-8 path");
-    let mut done = None;
-    for _ in 0..5 {
-        let answer = run(
-            pair,
-            &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
-        );
-        let starved = answer.stdout.contains("\"reason\":\"deadline\"")
-            || answer.stderr.contains("no answer within");
-        done = Some(answer);
-        if !starved {
-            break;
-        }
-    }
-    let done = done.expect("a run");
+    let done = until_verdict(
+        || {
+            run(
+                pair,
+                &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
+            )
+        },
+        |done| (done.stdout.as_str(), done.stderr.as_str()),
+    );
     (done.code, done.stdout, done.stderr)
 }
 
@@ -1827,17 +1824,140 @@ fn ac05_a_completion_with_a_section_moving_out_of_its_holder_keeps_the_mark() {
     reads(&pair, &id, "suspect", Some(PROOF));
 }
 
-/// "Rules and edge cases", `spec-trace.md` "Known limits" holds: `paired` takes
-/// nodes with an ID, so an ID-less document's editorial pass still reads
-/// suspect: marking falsely, never fresh.
+/// Was `spec-trace.md` "Known limits" (`paired` took nodes with an ID, so an
+/// ID-less document's editorial pass read suspect); closed by
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R3: an
+/// editorial pass of a section in an ID-less document vouches for the
+/// document by its path, one `card.refreshed`, the card clean.
 #[test]
-fn ac05_an_id_less_documents_pass_still_reads_suspect() {
+fn ac05_an_id_less_documents_pass_of_its_section_refreshes_by_its_path() {
     let pair = Pair::new("tt-ac05-loose", ALMANAC);
     add_loose(&pair);
     let id = cut(&pair, "Notes kept", &[LOOSE_MD]);
-    editorial(&pair, RULE, ("for a week", "for a month"));
+    let proposal = editorial(&pair, RULE, ("for a week", "for a month"));
+    assert_eq!(
+        events_of(&pair, "card.refreshed"),
+        [json!({"id": id, "node": LOOSE_MD, "proposal": proposal})]
+    );
+    reads(&pair, &id, "open", None);
+}
+
+// ------------------------------------------------- release-hardening RH-R3
+
+/// RH-R3's ID-less document: no `id:`, no section, its own text alone.
+const PLAIN_MD: &str = "docs/notes/plain.md";
+
+/// [`PLAIN_MD`] written and committed (`docs/notes` added to the walked
+/// roots), then `C-0001` cut on it by its path.
+fn plain_card(pair: &Pair) -> String {
+    let config = read_text(&pair.main, "specengine.toml");
+    write(
+        &pair.main,
+        "specengine.toml",
+        format!("{config}\n[paths]\nroots = [\"docs/spec\", \"docs/notes\"]\n"),
+    );
+    write(
+        &pair.main,
+        PLAIN_MD,
+        "---\nclass: canon\ntitle: Plain notes\nowner: owner\nreviewed: 2026-10-01\n---\n\n\
+         # Plain notes\n\nThe hall opens at dawn on market days.\n",
+    );
+    pair.commit_all(&pair.main, "an ID-less document");
+    let id = cut(pair, "Plain notes kept", &[PLAIN_MD]);
+    assert_eq!(id, "C-0001");
+    assert_eq!(entry(pair, &id)["id"], PLAIN_MD, "a target by its path");
+    reads(pair, &id, "open", None);
+    id
+}
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R1: a
+/// departing accept's `--summary` holding U+000D is refused at intake (the
+/// discrepancy it raises could never apply): exit 1 naming the field, the
+/// cards and the queue unchanged; `--observed` and `--documented` alike.
+#[test]
+fn rh_r1_a_departing_accepts_summary_holding_cr_is_refused() {
+    let pair = Pair::new("rh-r1-departs", ALMANAC);
+    let id = cut(&pair, "Pages set", &[SET]);
+    to_review(&pair, &id);
+    for (field, summary, observed, documented) in [
+        ("summary", "Left\rthe brief.", OBSERVED, DOCUMENTED),
+        ("evidence[0].observed", SUMMARY, "Set\rfirst.", DOCUMENTED),
+        ("evidence[0].documented", SUMMARY, OBSERVED, "Stand\rfirst."),
+    ] {
+        let before = state(&pair);
+        let mut consent = |_: &str| true;
+        let outcome = card_accept(
+            &env(&pair),
+            &Globals::default(),
+            &CardAcceptRequest {
+                id: id.clone(),
+                actor: "ben".to_owned(),
+                now: LATER.to_owned(),
+                departs: vec![SET.to_owned()],
+                summary: Some(summary.to_owned()),
+                observed: Some(observed.to_owned()),
+                documented: Some(documented.to_owned()),
+                ..CardAcceptRequest::default()
+            },
+            &mut consent,
+        )
+        .unwrap_or_else(|error| panic!("accept {id}: {error}"));
+        assert_eq!(outcome.exit(), Exit::NotFound, "{field}: {outcome:?}");
+        assert_eq!(
+            outcome.refusal.as_deref(),
+            Some(format!("{field}: holds U+000D: a decision record never carries it").as_str()),
+            "{outcome:?}"
+        );
+        assert_eq!(state(&pair), before, "{field}: nothing changed");
+    }
+}
+
+/// `spec card show id --marks`' mark.
+fn shown_mark(pair: &Pair, id: &str) -> Value {
+    doc(pair, &["card", "show", id, "--marks"])["mark"].clone()
+}
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R3: an
+/// `--editorial` approve of an update to the ID-less `docs/notes/plain.md`
+/// writes one `card.refreshed` naming the path, and `C-0001`, cut on it by
+/// its path, reads no suspect (`spec card show --marks`, the list); the
+/// document still holds no `rev:`. M: pairing by ID only.
+#[test]
+fn rh_r3_an_id_less_documents_editorial_pass_refreshes_its_card() {
+    let pair = Pair::new("rh-r3-editorial", ALMANAC);
+    let id = plain_card(&pair);
+    let before = norm(&pair, PLAIN_MD);
+    let proposal = editorial(&pair, PLAIN_MD, ("at dawn", "at first light"));
+    assert_ne!(
+        norm(&pair, PLAIN_MD),
+        before,
+        "the premise: its own text moved"
+    );
+    assert_eq!(
+        events_of(&pair, "card.refreshed"),
+        [json!({"id": id, "node": PLAIN_MD, "proposal": proposal})]
+    );
+    assert_ne!(shown_mark(&pair, &id), "suspect");
+    reads(&pair, &id, "open", None);
+    let text = read_text(&pair.main, PLAIN_MD);
+    assert!(text.contains("at first light"), "{text}");
+    assert!(!text.contains("rev:"), "no ID, no revision: {text}");
+}
+
+/// RH-R3: a meaning approve of the same update exits 0 (`approve_ok`),
+/// writes no `rev:` and refreshes nothing: the card reads suspect on the
+/// path. M: the path pair passed to the raise.
+#[test]
+fn rh_r3_an_id_less_documents_meaning_approve_raises_nothing_and_marks() {
+    let pair = Pair::new("rh-r3-meaning", ALMANAC);
+    let id = plain_card(&pair);
+    approved(&pair, PLAIN_MD, ("at dawn", "at first light"));
+    let text = read_text(&pair.main, PLAIN_MD);
+    assert!(text.contains("at first light"), "applied: {text}");
+    assert!(!text.contains("rev:"), "no ID, no revision: {text}");
     assert_eq!(events_of(&pair, "card.refreshed"), Vec::<Value>::new());
-    reads(&pair, &id, "suspect", Some(LOOSE_MD));
+    assert_eq!(shown_mark(&pair, &id), "suspect");
+    reads(&pair, &id, "suspect", Some(PLAIN_MD));
 }
 
 /// "`also`, the last `ALSO_MAX`": seventeen passes on a sectioned document,

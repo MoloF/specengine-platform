@@ -1057,3 +1057,32 @@ fn pk7_the_gamedev_preset_opens_with_its_header() {
         "studio-lamp holds the preset verbatim"
     );
 }
+
+// ------------------------------------------------- release-hardening RH-R4
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R4: a split
+/// row's error is no longer the card reader's `Err` but its split problem,
+/// yet `spec init --pack` of the software preset with the "Data" row
+/// (`disciplnes`) appended still refuses at the pack's line, nothing
+/// written. M: `init` not judging the split.
+#[test]
+fn rh_r4_a_pack_holding_a_bad_split_row_is_refused() {
+    let scratch = Scratch::new("rh-r4-pack");
+    let home = scratch.home("h");
+    let pack = format!(
+        "{}\n[[card.split]]\nkind = \"mechanic\"\ndisciplnes = [\"copy\"]\n",
+        preset("software")
+    );
+    let line = pack
+        .lines()
+        .position(|text| text.starts_with("disciplnes"))
+        .expect("the row")
+        + 1;
+    refused_with(
+        &scratch,
+        &home,
+        "split-row",
+        pack.as_bytes(),
+        &format!("pack.toml:{line}: unknown field `disciplnes`, expected `kind` or `disciplines`"),
+    );
+}

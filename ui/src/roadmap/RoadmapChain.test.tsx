@@ -7,7 +7,7 @@ import { renderApp } from "../test/render";
 import { pressAndMove, viewOf } from "../test/press";
 import { aPlan, roadmapClient } from "../test/roadmapStub";
 import appCss from "../styles/app.css?raw";
-import { CHAIN_TASKS_SHOWN, chainOf } from "./chain";
+import { CHAIN_TASKS_SHOWN, chainOf, CUT_LABEL_HEIGHT, LANE_HEAD } from "./chain";
 
 // UI-4 of docs/features/roadmap-screen.md: the Chain tab's canvas is read only, as the Graph's is
 // (no draggable box, no connectable handle, no key listener but the shell's, no word of deleting,
@@ -304,5 +304,52 @@ describe("the cap (UI-4)", () => {
     await openChain();
     await drawn();
     expect(screen.queryByRole("note")).toBeNull();
+  });
+});
+
+// docs/features/release-hardening.md "Acceptance criteria", RH-U6: the cut's words stand in a node of
+// their own above every lane head, at the rule's x, never inside a lane's [0, LANE_HEAD) where the next
+// lane's name, marks and counts are; the rule draws no words. M: the label at `top: 0` again.
+describe("the MVP cut's label in its own place (RH-U6)", () => {
+  /** A node's canvas place, as React Flow's transform writes it. */
+  function placeOf(node: HTMLElement | null | undefined): [number, number] {
+    const placed = /translate\((-?[\d.]+)px, ?(-?[\d.]+)px\)/.exec(node?.style.transform ?? "");
+    return [Number(placed?.[1]), Number(placed?.[2])];
+  }
+
+  it("places the label above the heads, its foot clear of [0, LANE_HEAD), at the rule's x", () => {
+    const layout = chainOf(aPlan());
+    expect(layout.cutX).not.toBeNull();
+    const label = layout.cutLabel;
+    expect(label?.x).toBe(layout.cutX);
+    const top = label?.y ?? 0;
+    // Outside every lane's [0, LANE_HEAD): it ends at or above 0.
+    expect(top + CUT_LABEL_HEIGHT).toBeLessThanOrEqual(0);
+    expect(top >= LANE_HEAD || top + CUT_LABEL_HEIGHT <= 0).toBe(true);
+    expect(chainOf({ ...aPlan(), cut: null }).cutLabel).toBeNull();
+  });
+
+  it("draws the label as that node, not inside the rule or a lane head; the rule holds no words", async () => {
+    await openChain();
+    await drawn();
+    const layout = chainOf(aPlan());
+    const words = document.querySelectorAll<HTMLElement>(".chain-cut-label");
+    expect(words).toHaveLength(1);
+    const node = words[0]?.closest<HTMLElement>(".react-flow__node");
+    expect(node?.dataset.id).toBe("cut-label");
+    expect(words[0]?.closest(".chain-cut, .chain-lane")).toBeNull();
+    const [x, y] = placeOf(node);
+    expect([x, y]).toEqual([layout.cutLabel?.x, layout.cutLabel?.y]);
+    expect(node?.style.height).toBe(`${String(CUT_LABEL_HEIGHT)}px`);
+    expect(y + CUT_LABEL_HEIGHT).toBeLessThanOrEqual(0);
+    // Every lane head starts at 0: the label ends above them all.
+    const heads = Array.from(document.querySelectorAll<HTMLElement>(".chain-lane"), (lane) => placeOf(lane.closest<HTMLElement>(".react-flow__node"))[1]);
+    expect(heads.length).toBeGreaterThan(0);
+    expect(heads.every((head) => head >= y + CUT_LABEL_HEIGHT)).toBe(true);
+    expect(document.querySelector(".chain-cut")?.textContent).toBe("");
+    // Its style places it by the node alone: no offset from the top of its own.
+    const rule = /(^|\n)\.chain-cut-label\s*\{([^}]*)\}/.exec(appCss)?.[2] ?? "";
+    expect(rule).toContain("white-space: nowrap;");
+    expect(rule).not.toMatch(/(^|[^-])top:|position:/);
   });
 });

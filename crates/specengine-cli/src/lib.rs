@@ -399,7 +399,9 @@ pub use gate::{
 pub use graph::{
     FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph, graph_with_view,
 };
-pub use health::{HealthOutcome, HealthRequest, UnappliedAmendment, health};
+pub use health::{
+    HealthOrphan, HealthOrphans, HealthOutcome, HealthRequest, UnappliedAmendment, health,
+};
 pub use health_code::{
     AssumedNode, AssumedProposal, AssumedState, AssumesCounts, AssumesRow, CodeRow, CodeRows,
     RowState, UnboundCounts, UnboundMarker, UnboundRow,
@@ -421,7 +423,7 @@ pub use layer_c::{
     LayerCState, RESOLVE_TIMEOUT_DEFAULT, RESOLVE_TIMEOUT_MAX, RESOLVE_TIMEOUT_MIN, ResolveByState,
     ResolveOutcome, ResolveRequest, ResolvedWorkspace, layer_c_state, resolve,
 };
-pub use links::{ShownLink, ShownLinks};
+pub use links::{LinkUsage, ShownLink, ShownLinks};
 pub use location::{
     OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir, store_hub_floor,
 };
@@ -946,7 +948,9 @@ impl Outcome {
             lines.push(one_line(error));
         }
         // Health's rows 4-5: the refreshes' notes, a `cannot` row's causes;
-        // then row 6's (task spec `health-drift`), as verify escapes its own.
+        // then row 6's (task spec `health-drift`), as verify escapes its own;
+        // then row 8's notes (task spec `usage-orphans` UO4), escaped, as
+        // JSON `orphans.notes` holds them raw.
         if let Self::Health(outcome) = self {
             lines.extend(outcome.code_rows.messages.iter().map(Message::line));
             lines.extend(
@@ -955,6 +959,13 @@ impl Outcome {
                     .messages()
                     .iter()
                     .map(|message| escape_controls(&message.line())),
+            );
+            lines.extend(
+                outcome
+                    .orphans
+                    .notes
+                    .iter()
+                    .map(|note| escape_controls(&Message::Note(note.clone()).line())),
             );
         }
         // The queue's commands quote agent-written text.

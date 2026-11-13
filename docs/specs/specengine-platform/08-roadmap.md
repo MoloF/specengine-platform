@@ -360,7 +360,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 
 #### Owner's word, 2026-11-13
 
-**Released.** On 2026-11-13 the owner pushed `main` and the tag `v0.45.0`: `v5`'s core scope, shipped in full. His pilot pipeline trial and the hub's upgrade to 0.45 (a dump first: `docs/canon/card-mandate.md` "Known limits") still wait on his word.
+**Released.** On 2026-11-13 the owner pushed `main` and the tag `v0.45.0`: `v5`'s core scope, shipped in full. His pilot pipeline trial and the hub's upgrade to 0.45 (a dump first: `docs/canon/card-mandate.md` "Known limits") still wait on his word. **The hub upgraded**, on his word, 2026-11-13 at about 12:12 UTC: to 0.45.0 (queue schema 14, backup format 7), after a dump; its next upgrade, to 0.46.0, has no schema or format step.
 
 **His word** (written in chat in Russian, translated): writers describe only documents, thoroughly, making links and reusing props and mechanics. They see what is used where, how, by which documents and in which places, and they see orphan documents to delete or bring in later. The full development cycle lives in SpecEngine, with implementation as a second layer. He likes Obsidian's dependency map. External editors stay rejected (2026-10-30).
 
@@ -370,18 +370,18 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 - Q2 was not asked; the analyst's working answer stands: no stored state. An open card means "bring in later"; a proposal setting `status: abandoned` means "delete".
 - Extras he chose: scope rings; graph filters (only broken, only orphans, ghost nodes, a fixed colour per kind with a label); and `GATE_DEADLINE` from 3 s to 5 s.
 
-**First, a hardening release**, `release-hardening` (`docs/features/release-hardening.md`): every known flake fixed in the tests, the scan's defects closed, one clean full run. `GATE_DEADLINE` joins it as R8: 5 s, with a backstop of 5.4 s, under the wrapper's 7 s and the hook's 10 s, which stay. No ADR; `docs/canon/gate.md` "Verdict" changes at its ship.
+**First, a hardening release**, `release-hardening` (`docs/features/release-hardening.md`): every known flake fixed in the tests, the scan's defects closed, one clean full run. `GATE_DEADLINE` joins it as R8: 5 s, with a backstop of 5.4 s, under the wrapper's 7 s and the hook's 10 s, which stay. No ADR; `docs/canon/gate.md` "Verdict" changes at its ship. **Shipped 2026-11-13** with `usage-orphans`, in one commit, closing RM-0063; its gate RH-G1, one clean full run, runs on that commit on an idle machine; the R5 and R6 re-measures are owed.
 
 **Then the writer map**, three items; their release is his to name:
 
 | # | Slice | Item | Fixed now |
 |---|---|---|---|
-| 1 | `usage-orphans` (`docs/features/usage-orphans.md`) | RM-0111 | must; one count per read, never stored; plugin 0.46.0 (`get_node`'s links `usage`); no ADR |
+| 1 | `usage-orphans` (`docs/features/usage-orphans.md`) | RM-0111 | must; one count per read, never stored; plugin 0.46.0 (`get_node`'s links `usage`); no ADR; **shipped 2026-11-13** (`docs/canon/spec-usage.md`; owed: UO13's English look) |
 | 2 | `corpus-map` (`docs/features/corpus-map.md`) | RM-0112 | must, after RM-0111's core; ADR-0080 (`d3-force` 3.0.0 on a 2D canvas, a lazy chunk; the allowlist from 19 to 21); no MCP tool, no plugin version |
 | 3 | `scope-rings` (`docs/features/scope-rings.md`) | RM-0113 | should, beside 1 and 2; `[[map.ring]]`, plain SVG; no ADR, no plugin version |
 
 **Order:**
-- `delivery-timeline` (shipped 2026-11-13), then `release-hardening` (lanes T, U and R).
+- `delivery-timeline` (shipped 2026-11-13), then `release-hardening` (lanes T, U and R; shipped 2026-11-13 with `usage-orphans`).
 - Beside them, on files neither touches: `usage-orphans`' core, `scope-rings`' core and UI, and `corpus-map`'s `src/map/` UI.
 - Then registration and the shared seams, one lane at a time.
 

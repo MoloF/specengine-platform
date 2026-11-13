@@ -7,13 +7,18 @@ import { rowName } from "./rows";
 // columns, what a press on each orders the served rows by, and a row's words. The one place a state
 // word is compared: its place in ROLLUP_WORDS, a word this build does not know last; its look is
 // `rollupLook`'s (src/flow/labels.ts). Sorting lays out served values once per press; nothing here
-// counts, judges or reads git (docs/canon/architecture.md#ui).
+// counts, judges or reads git (docs/canon/architecture.md#ui). The Used by column and its filter
+// (docs/features/usage-orphans.md "Acceptance criteria", UO11) lay out the core's served counts:
+// the column sorts by `used_by`; No declared use keeps the rows whose served `used_by` is 0, Not
+// cited those whose served `used_by` and `mentioned_by` are both 0 (the orchestrator's working
+// answer for the owner, 2026-11-13: records are cited mostly through mentions, so a bare "used by 0"
+// misled on nearly every one).
 
 /** The rows shown before Show more, and how many more each press shows. */
 export const CATALOG_SHOWN = 50;
 
 /** The columns, in the table's order; each one's header is `tree.catalog.column.<name>`. */
-export const CATALOG_COLUMNS = ["title", "version", "state", "open", "tasks", "changed"] as const;
+export const CATALOG_COLUMNS = ["title", "version", "state", "open", "tasks", "used", "changed"] as const;
 
 export type CatalogColumn = (typeof CATALOG_COLUMNS)[number];
 
@@ -60,6 +65,23 @@ export function tasksText(row: CatalogRow, t: Translate): string {
   return t("tree.catalog.tasks", { count: row.tasks, open: row.tasks_open });
 }
 
+/** The two filters of the Used by column: no declared use, and not cited at all. */
+export const CATALOG_FILTERS = ["undeclared", "uncited"] as const;
+
+export type CatalogFilter = (typeof CATALOG_FILTERS)[number];
+
+/** The rows a filter keeps, in the order given, by the served counts alone: none, every row. */
+export function filteredRows(rows: readonly CatalogRow[], filter: CatalogFilter | null): readonly CatalogRow[] {
+  switch (filter) {
+    case null:
+      return rows;
+    case "undeclared":
+      return rows.filter((row) => row.used_by === 0);
+    case "uncited":
+      return rows.filter((row) => row.used_by === 0 && row.mentioned_by === 0);
+  }
+}
+
 /** A state's place among the rollups, done first; null for a word this build does not know. */
 function stateRank(state: string): number | null {
   const at = ROLLUP_WORDS.indexOf(state);
@@ -79,6 +101,8 @@ function keyOf(row: CatalogRow, column: CatalogColumn): string | number | null {
       return row.open_items;
     case "tasks":
       return row.tasks;
+    case "used":
+      return row.used_by;
     case "changed":
       return row.last_change?.at ?? null;
   }

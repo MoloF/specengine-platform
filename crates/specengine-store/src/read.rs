@@ -71,6 +71,12 @@ const GENERATED_FILES: &str = "SELECT f.file_id FROM files f JOIN nodes d ON d.f
      WHERE f.wt = ?1 AND f.tier3 = 0 AND d.ord = 0
        AND json_extract(d.node, '$.fields.class') = ?2";
 
+/// The IDs the worktree `?1`'s nodes outside the universe hold, in a Tier 3
+/// file or with no kind; a generated file's are read with the universe's rows
+/// (task spec `release-hardening` RH-R6).
+const OUTSIDE_IDS: &str = "SELECT DISTINCT n.id FROM files f JOIN nodes n ON n.file_id = f.file_id
+     WHERE f.wt = ?1 AND n.id IS NOT NULL AND (f.tier3 <> 0 OR n.kind IS NULL)";
+
 /// The resolved ends of the edges a node of a live file holds, the holder
 /// their source, any type but `?2`, each with its end's ID when it has one.
 const COLLISION_EDGES: &str = "SELECT f.path, e.holder, e.end_path, e.end_ord, tn.id
@@ -107,6 +113,10 @@ pub(crate) fn collision_input(index: &SqliteIndex) -> Result<CollisionRows, Stor
         let mut found = statement.query([wt]).db()?;
         while let Some(row) = found.next().db()? {
             if generated.contains(&row.get::<_, i64>(0).db()?) {
+                // Outside the universe, yet a holder the resolver counts.
+                if let Some(id) = row.get::<_, Option<String>>(3).db()? {
+                    rows.outside_ids.insert(id);
+                }
                 continue;
             }
             let node = CollisionNode {
@@ -119,6 +129,12 @@ pub(crate) fn collision_input(index: &SqliteIndex) -> Result<CollisionRows, Stor
             };
             rows.skipped += usize::from(node.norm_hash.is_none());
             rows.nodes.push(node);
+        }
+        drop(found);
+        let mut statement = tx.prepare(OUTSIDE_IDS).db()?;
+        let mut found = statement.query([wt]).db()?;
+        while let Some(row) = found.next().db()? {
+            rows.outside_ids.insert(row.get(0).db()?);
         }
         drop(found);
         let held: BTreeSet<(&str, usize)> = rows

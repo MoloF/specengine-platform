@@ -894,9 +894,14 @@ fn ac14_every_mostly_null_key_is_non_null_once_with_its_exact_keys() {
         );
         assert!(cut["omitted"]["sections_more"].as_u64().unwrap() > 0);
         let linked = &era[1]["structuredContent"]["nodes"][0]["links"];
+        // docs/features/usage-orphans.md UO6: the block's `usage`.
         assert_eq!(
             key_set(linked, "links"),
-            set_of(&["outgoing", "incoming", "left_out", "omitted"])
+            set_of(&["outgoing", "incoming", "usage", "left_out", "omitted"])
+        );
+        assert_eq!(
+            key_set(&linked["usage"], "usage"),
+            set_of(&["used_by", "mentioned_by"])
         );
         assert_eq!(
             key_set(&linked["left_out"], "left_out"),

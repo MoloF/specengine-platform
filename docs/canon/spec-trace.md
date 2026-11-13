@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # spec trace: suspect marks, clearing, verdicts, rollup
@@ -14,7 +14,7 @@ ADR-0056, ADR-0057, built by `card-trace` (RM-0047), read by `trace-views` (RM-0
 
 A card is **suspect** on a direct target whose compared hash now is neither its entry's nor in its `also`, or which no longer resolves. An entry compares `within_hash`, over the target and the ID sections nested in it, so a change in a section marks the card on its document; one stored with none compares `norm_hash` (`spec-trace-record.md` "Within"). A mark stops at the file: `parent:` and sibling sections stay clean. A `null` hash on either side, or a card with no snapshot: not suspect, a note (`mark_notes`).
 
-Whitespace leaves both hashes equal. **`--editorial` does not**: it changes text, keeping only the revision. So the transaction recording `applied` (`applied_vouching`) adds each changed node's new hash to `also` of every entry comparing its old one, on cards not cancelled, one `card.refreshed` per (card, node), `revision` one more per card, so a `--revision` held across an editorial apply goes stale. `also`, not a replace: a worktree without that commit stays clean. A section's wording vouches for the document around it; a new `{#ID}` section vouches nothing and marks. A completion reads the commit's `Revision: <ID> <rev> (editorial)` trailers, hashing each named node's `norm_hash` and, under the rule of `spec-trace-record.md` "Within", its `within_hash`, at its first parent and at it; anything unread vouches for nothing, and the mark stays for a person. A hand edit marks: nobody vouched for it.
+Whitespace leaves both hashes equal. **`--editorial` does not**: it changes text, keeping only the revision. So the transaction recording `applied` (`applied_vouching`) adds each changed node's new hash to `also` of every entry comparing its old one, on cards not cancelled (an ID-less document pairs by its path, `proposal-revisions.md` "The raise"), one `card.refreshed` per (card, node), `revision` one more per card, so a `--revision` held across an editorial apply goes stale. `also`, not a replace: a worktree without that commit stays clean. A section's wording vouches for the document around it; a new `{#ID}` section vouches nothing and marks. A completion reads the commit's `Revision: <ID> <rev> (editorial)` trailers, hashing each named node's `norm_hash` and, under the rule of `spec-trace-record.md` "Within", its `within_hash`, at its first parent and at it; anything unread vouches for nothing, and the mark stays for a person. A hand edit marks: nobody vouched for it.
 
 `uses` carries no mark, direct targets only, avoiding floods. B uses D; D changes: D's cards are suspect, B's hash holds, B's stay clean. `spec trace D` lists incoming `uses`, one level, as consequences; `spec impact D` the whole reach. A definition with no card marks nothing, so a consequence needs its REF.
 
@@ -103,7 +103,6 @@ Scope: REF's holders and what they hold by `parent:`; no REF: every live documen
 
 ## Known limits
 
-- `raise.rs` `meaning_changes` pairs nodes with an ID only, so a card on an id-less document by path gets no `card.refreshed` on `--editorial` and reads suspect: marking falsely, never fresh.
 - A card departed on one row and suspect on another is taken by a group clear, and if its departed target is also suspect that entry re-freezes too, because `clear_cards` takes one scope for all cards.
 - Stage lines are never cut, as `spec flow`'s gap rows: a project with more stages than the cap holds passes `OUTPUT_CAP_CHARS`.
 - A literal `stage: "-"` cannot be reached by `--stage`, where `-` asks the steps with none; its line reads as theirs, and JSON tells them apart.

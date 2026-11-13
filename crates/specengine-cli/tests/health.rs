@@ -406,6 +406,17 @@ fn health_json(home: &Path, root: &Path) -> (Run, J) {
     (run, document)
 }
 
+/// Row 8's stderr line with no queue yet (docs/features/usage-orphans.md
+/// UO4, iteration 2): printed after the other notes when `document` holds
+/// an orphan row, else nothing.
+fn no_queue_note(document: &J) -> &'static str {
+    if document.get("orphans").get("rows").items().is_empty() {
+        ""
+    } else {
+        "note: orphans: no queue yet: no task read\n"
+    }
+}
+
 /// `spec check --json`'s `counts.documents` in `root`.
 fn check_documents(home: &Path, root: &Path) -> usize {
     let run = spec(home, root, &["check", "--json"]);
@@ -658,6 +669,7 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
     ] {
         let (run, document) = health_json(&fresh, root);
         let context = root.display().to_string();
+        // docs/features/usage-orphans.md UO4: row 8, `orphans`, last.
         assert_eq!(
             document.keys(),
             [
@@ -667,7 +679,8 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 "code",
                 "assumes",
                 "unbound",
-                "drift"
+                "drift",
+                "orphans"
             ],
             "{context}"
         );
@@ -706,6 +719,8 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
             }
         }
         // Empty `[]`, never absent: `notes` on A, `amendments` on A plain.
+        // docs/features/usage-orphans.md UO4: row 8 last, A-102 the one
+        // orphan, its tasks `null` with the note (a fresh HOME, no queue).
         if root == &plain {
             assert_eq!(document.get("amendments"), &J::Arr(Vec::new()));
             assert_eq!(document.get("notes"), &J::Arr(Vec::new()));
@@ -713,7 +728,12 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 run.stdout,
                 format!(
                     "{{\"documents\":13,\"amendments\":[],\"notes\":[],\"code\":null,\
-                     \"assumes\":{off},\"unbound\":{off},\"drift\":{drift}}}\n",
+                     \"assumes\":{off},\"unbound\":{off},\"drift\":{drift},\"orphans\":\
+                     {{\"live\":12,\"rows\":[{{\"name\":\"A-102\",\"id\":\"A-102\",\"kind\":\
+                     \"requirement\",\"title\":\"The lantern burns one unit of oil per minute\",\
+                     \"path\":\"docs/records/A/A-102.md\",\"line\":1,\"status\":\"open\",\
+                     \"tasks\":null,\"tasks_open\":null}}],\"notes\":[\"orphans: no queue yet: no \
+                     task read\"]}}}}\n",
                     off = off_json(),
                     drift = off_drift_json()
                 ),
@@ -744,14 +764,36 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
             format!("spec health: {documents} documents, {rows} unapplied amendments"),
             "{context}: the count line, always"
         );
+        // docs/features/usage-orphans.md UO4: row 8's block between rows
+        // 4-6 and the last line; without it the text is as before.
+        let (kept, block) = orphans_block(&text.stdout);
         assert!(
-            text.stdout.ends_with(&format!("{}{last}\n", off_lines())),
+            block
+                .first()
+                .is_some_and(|line| line.starts_with("orphans: ")
+                    && line.ends_with(" live documents link to nothing")),
+            "{context}: row 8's header:\n{}",
+            text.stdout
+        );
+        if root == &plain {
+            assert_eq!(
+                block,
+                [
+                    "orphans: 1 of 12 live documents link to nothing",
+                    "  A-102 | requirement | The lantern burns one unit of oil per minute | \
+                     docs/records/A/A-102.md:1"
+                ],
+                "{context}"
+            );
+        }
+        assert!(
+            kept.ends_with(&format!("{}{last}\n", off_lines())),
             "{context}: rows 4-6 `off`, then the last line:\n{}",
             text.stdout
         );
         if rows == 0 {
             assert_eq!(
-                text.stdout,
+                kept,
                 format!("{}{last}\n", off_lines()),
                 "{context}: zero rows"
             );
@@ -769,6 +811,8 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 && !line.starts_with("assumes: ")
                 && !line.starts_with("unbound: ")
                 && !line.starts_with("drift: ")
+                // docs/features/usage-orphans.md UO4: row 8's header.
+                && !line.starts_with("orphans: ")
         })
         .collect();
     assert_eq!(
@@ -785,9 +829,11 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
         "{}",
         text.stdout
     );
-    assert!(text.stderr.is_empty(), "{}", text.show());
     // Sorted by path, not by title (the titles sort otherwise).
     let (_, document) = health_json(&fresh, &pair.main);
+    // No note but row 8's with no queue yet (docs/features/usage-orphans.md
+    // UO4, iteration 2).
+    assert_eq!(text.stderr, no_queue_note(&document), "{}", text.show());
     let titles: Vec<Option<&str>> = document
         .get("amendments")
         .items()
@@ -830,7 +876,9 @@ fn ac_r3_many_amendments_are_listed_uncut_by_path() {
         .collect();
     assert_eq!(paths, want, "every row, by path");
     assert!(run.stdout.len() > 100_000, "{} bytes", run.stdout.len());
-    assert!(run.stderr.is_empty(), "{}", run.show());
+    // No note but row 8's with no queue yet (docs/features/usage-orphans.md
+    // UO4, iteration 2).
+    assert_eq!(run.stderr, no_queue_note(&document), "{}", run.show());
     let text = health_run(&home, &root, false);
     text.code(0);
     assert_eq!(
@@ -990,11 +1038,21 @@ fn ac_r4_a_broken_front_matter_is_a_note_not_a_row() {
             &J::Arr(vec![J::Str(note.clone())]),
             "one note"
         );
-        assert_eq!(run.stderr, format!("note: {note}\n"), "{}", run.show());
+        let orphans = no_queue_note(&document);
+        assert_eq!(
+            run.stderr,
+            format!("note: {note}\n{orphans}"),
+            "{}",
+            run.show()
+        );
         let text = health_run(&home, root, false);
         text.code(0);
-        assert_eq!(text.stderr, format!("note: {note}\n"));
-        assert!(!text.stdout.contains(path), "{}", text.stdout);
+        assert_eq!(text.stderr, format!("note: {note}\n{orphans}"));
+        // docs/features/usage-orphans.md "Rules and edge cases": a failed
+        // front-matter is live and judged by its parse, so row 8's block may
+        // name it; the amendments' lines before it never do.
+        let amendments_part = text.stdout.split("orphans: ").next().unwrap_or_default();
+        assert!(!amendments_part.contains(path), "{}", text.stdout);
     }
     // Two broken files: one note each, by path whatever the write order.
     let earlier = "docs/features/another-broken.md";
@@ -1022,8 +1080,35 @@ fn ac_r4_a_broken_front_matter_is_a_note_not_a_row() {
     assert_eq!(listed(&document).len(), 4, "{document:?}");
     assert_eq!(
         run.stderr,
-        format!("note: {}\nnote: {}\n", notes[0], notes[1])
+        format!(
+            "note: {}\nnote: {}\n{}",
+            notes[0],
+            notes[1],
+            no_queue_note(&document)
+        )
     );
+}
+
+/// Health's text without row 8's block (docs/features/usage-orphans.md
+/// UO4: its `orphans: ` header and the two-space rows under it), and the
+/// block's lines.
+fn orphans_block(stdout: &str) -> (String, Vec<String>) {
+    let mut kept = String::new();
+    let mut block = Vec::new();
+    let mut inside = false;
+    for line in stdout.split_inclusive('\n') {
+        if line.starts_with("orphans: ") {
+            inside = true;
+        } else if inside && !line.starts_with("  ") {
+            inside = false;
+        }
+        if inside {
+            block.push(line.trim_end_matches('\n').to_owned());
+        } else {
+            kept.push_str(line);
+        }
+    }
+    (kept, block)
 }
 
 // ------------------------------------------------------------ AC-R5
@@ -1068,7 +1153,42 @@ fn ac_r5_read_only_and_byte_identical() {
     first.1.code(0);
     let queue_run = pair.spec_piped(&pair.main, &["health", "--json"], b"");
     queue_run.code(0);
-    assert_eq!(queue_run.stdout, first.0.stdout, "whatever the HOME");
+    // docs/features/usage-orphans.md D8, UO4: row 8 reads its tasks from the
+    // queue, which lives under `HOME`: the queue's `HOME` reads them, a fresh
+    // one reads none (`null`, the note). Everything else is the same bytes
+    // whatever the HOME.
+    let without_orphans = |stdout: &str| {
+        let mut value: serde_json::Value = serde_json::from_str(stdout).expect("JSON");
+        let orphans = value
+            .as_object_mut()
+            .expect("an object")
+            .remove("orphans")
+            .expect("row 8");
+        (value, orphans)
+    };
+    let (queued, queued_orphans) = without_orphans(&queue_run.stdout);
+    let (fresh_document, fresh_orphans) = without_orphans(&first.0.stdout);
+    assert_eq!(queued, fresh_document, "whatever the HOME");
+    assert_eq!(queued_orphans["live"], fresh_orphans["live"]);
+    assert_eq!(
+        fresh_orphans["notes"],
+        serde_json::json!(["orphans: no queue yet: no task read"]),
+        "{fresh_orphans}"
+    );
+    assert_eq!(
+        queued_orphans["notes"],
+        serde_json::json!([]),
+        "{queued_orphans}"
+    );
+    let places = |orphans: &serde_json::Value| -> Vec<serde_json::Value> {
+        orphans["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .map(|row| serde_json::json!([row["path"], row["line"]]))
+            .collect()
+    };
+    assert_eq!(places(&queued_orphans), places(&fresh_orphans));
     for _ in 0..2 {
         assert_eq!(health_run(&fresh, &pair.main, true).stdout, first.0.stdout);
         assert_eq!(health_run(&fresh, &pair.main, false).stdout, first.1.stdout);

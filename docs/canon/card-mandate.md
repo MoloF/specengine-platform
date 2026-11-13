@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Card mandate: a subtask is binding, or its department decides
 
-ADR-0079, built by `task-mandate` (RM-0104, plugin 0.38.0). Related pages: the card, `cards.md`; a hand-off, `card-flows.md`; a split, `card-split.md`; a card's questions and decisions, `card-questions.md`; a parent's subtasks, `card-progress.md`. Code: model, core `card.rs`; store `queue/{cards,state}.rs`; CLI `card.rs`, `state_file.rs`; MCP `cards.rs`, `mirror.rs`; UI `src/board/{labels.ts,CardPanel.tsx,CardItems.tsx}`.
+ADR-0079, built by `task-mandate` (RM-0104, plugin 0.38.0). Related: the card, `cards.md`; a hand-off, `card-flows.md`; a split, `card-split.md`; a card's questions and decisions, `card-questions.md`; a parent's subtasks, `card-progress.md`. Code: model, core `card.rs`; store `queue/{cards,state}.rs`; CLI `card.rs`, `state_file.rs`; MCP `cards.rs`, `mirror.rs`; UI `src/board/{labels.ts,CardPanel.tsx,CardItems.tsx}`.
 
 <a id="the-rule"></a>
 ## The rule
@@ -102,7 +102,7 @@ Words `board.mandate.*`, `board.split.mandate*`, `board.history.mandate`, `board
 ## Known limits
 
 - **Rollout.** Older binaries refuse schema 12 (`spec` exit 2, a daemon's queue routes 503, MCP's queue tools fail), format 6 and a `mandate` key or flag; the hook's gate gives no verdict, so `selective` refuses controlled writes until reinstall. Every terminal, plugin and hub upgrades from one commit (`card-tasks.md` "Known limits"' steps); the old build and the last format-5 dump are the way back.
-- **The hub's upgrade**, on the owner's word (`hub-ops.md` "Upgrade"): on `v0.36.0`, `dump-queue queue once`, `dump-door door once`, `backup upload once`, dumps copied off the host when no `backup` service runs; then the new tag, `SPECENGINE_VERSION`, `pull`, `up -d`, every service healthy (11 to 12 in one `migrate`); then any `[[card.split]]` rows. A format-6 dump fits only this build or later.
+- **The hub's upgrade**, on the owner's word, by `hub-ops.md` "Upgrade": on the old tag `dump-queue queue once`, `dump-door door once`, `backup upload once`, copied off the host with no `backup` service; then the new tag, `SPECENGINE_VERSION`, `pull`, `up -d`, all healthy. The hub runs 0.45.0 (schema 14, format 7) since 2026-11-13; its next upgrade, to 0.46.0, has no schema or format step.
 - **A slip-stop, not a control.** The compare trusts `--as` on a terminal (ADR-0057); anyone may `assign` themselves reviewer first, both writes in the history. With no reviewer nobody changes it.
 - **The departure mark** reads the child's current mandate, not the one it held when the decision was recorded.
 - **Health's row 4** fails on a schema-11 queue, below this build's schema, until a queue command steps it.

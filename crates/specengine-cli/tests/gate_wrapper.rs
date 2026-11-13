@@ -483,7 +483,9 @@ fn an_old_spec_is_decided_by_the_session_project() {
 // ------------------------------------------------------------ the limit
 
 /// A `spec` that ignores `TERM` and never answers: 2 within the limit +
-/// 0.5 s, every pipe closed, nothing of the run left.
+/// 2.5 s (9.5 s, under the hook's 10 s: docs/features/release-hardening.md
+/// "Acceptance criteria" RH-T2; loaded runs took 7.7 s), every pipe closed,
+/// nothing of the run left.
 #[test]
 fn a_stalled_spec_is_2_within_the_limit() {
     let bench = Bench::new("pg-w-slow");
@@ -498,7 +500,7 @@ fn a_stalled_spec_is_2_within_the_limit() {
     );
     assert!(ran.took >= LIMIT, "{:?}", ran.took);
     assert!(
-        ran.took < LIMIT + Duration::from_millis(500),
+        ran.took < LIMIT + Duration::from_millis(2500),
         "pipes closed late: {:?}",
         ran.took
     );
@@ -531,7 +533,8 @@ fn watchdog_of(wrapper: u32) -> Option<u32> {
 }
 
 /// `HUP`, `INT`, `TERM` to the wrapper (Claude Code stopping the hook): 2,
-/// no temp file, no process of the run after 1.1 s.
+/// no temp file, `spec` and the watchdog gone after 1.1 s, the watchdog's
+/// orphaned `sleep 1`s (by design, `gate.sh`) after 3 s (RH-T2).
 #[test]
 fn a_stopped_hook_leaves_nothing_behind() {
     for name in ["HUP", "INT", "TERM"] {
@@ -574,18 +577,23 @@ fn a_stopped_hook_leaves_nothing_behind() {
                 Vec::<String>::new(),
                 "{context}: the temp file"
             );
-            let all_gone = || {
-                !running(spec) && !running(dog) && bench.sleeps().iter().all(|pid| !running(*pid))
-            };
             let gone = within(
                 Duration::from_millis(1100).saturating_sub(stopped.elapsed()),
-                all_gone,
+                || !running(spec) && !running(dog),
             );
             assert!(
                 gone,
-                "{context}: left after 1.1 s: spec {spec} {}, watchdog {dog} {}, sleeps {:?}",
+                "{context}: left after 1.1 s: spec {spec} {}, watchdog {dog} {}",
                 running(spec),
                 running(dog),
+            );
+            let sleeps_gone = within(
+                Duration::from_secs(3).saturating_sub(stopped.elapsed()),
+                || bench.sleeps().iter().all(|pid| !running(*pid)),
+            );
+            assert!(
+                sleeps_gone,
+                "{context}: watchdog sleeps left after 3 s: {:?}",
                 bench
                     .sleeps()
                     .iter()

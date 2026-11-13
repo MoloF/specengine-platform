@@ -36,8 +36,10 @@ use std::time::{Duration, Instant};
 use common::{Frame, Scratch, Server, Stream, ask, beyond_daemon, data_dir};
 use serde_json::{Value, json};
 
-/// Within this of the storing process's exit.
-const LIVE: Duration = Duration::from_secs(1);
+/// Within this of the storing process's exit: 3 s against the stream's
+/// 250 ms poll (one loaded run measured 1.03 s against 1 s):
+/// docs/features/release-hardening.md "Acceptance criteria" RH-T5.
+const LIVE: Duration = Duration::from_secs(3);
 
 const EVENTS: &str = "/api/projects/lantern-keep/events";
 

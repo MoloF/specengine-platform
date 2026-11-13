@@ -39,6 +39,7 @@ use std::fs;
 use std::path::Path;
 
 use common::decision::{PtyRun, flags, with_records};
+use common::gate::until_verdict;
 use common::proposal::{CASES, LATER, Pair};
 use common::{
     FIXTURES, NON_RUST, Run, Scratch, read, read_text, replace, spec_with, with_ids_line, write,
@@ -2088,25 +2089,21 @@ fn a_definition_with_no_card_lists_its_users() {
 // --------------------------------------------------------------- AC-09
 
 /// A gate's answer on the worktree: exit, stdout, stderr. `spec gate` answers
-/// within 3 s of wall clock (`GATE_DEADLINE`): a run a loaded machine starves
-/// past that says `unavailable` and nothing of the cards, so it is asked again
-/// (five tries; the last answer stands, and a compare shows it).
+/// within `GATE_DEADLINE` of wall clock: a run a loaded machine starves past
+/// that says `unavailable` and nothing of the cards, so it is asked again
+/// (`common::gate::until_verdict`; the last answer stands, and a compare
+/// shows it).
 fn gate_answer(pair: &Pair) -> (i32, String, String) {
-    let main = pair.main.to_str().unwrap();
-    let mut done = None;
-    for _ in 0..5 {
-        let run = run(
-            pair,
-            &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
-        );
-        let starved = run.stdout.contains("\"reason\":\"deadline\"")
-            || run.stderr.contains("no answer within");
-        done = Some(run);
-        if !starved {
-            break;
-        }
-    }
-    let done = done.expect("a run");
+    let main = pair.main.to_str().expect("a UTF-8 path");
+    let done = until_verdict(
+        || {
+            run(
+                pair,
+                &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
+            )
+        },
+        |done| (done.stdout.as_str(), done.stderr.as_str()),
+    );
     (done.code, done.stdout, done.stderr)
 }
 

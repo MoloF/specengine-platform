@@ -60,9 +60,10 @@ use specengine_model::{
 use super::state::{TASK_LINKS_SCHEMA, stored_text};
 use super::{
     CARD_COLUMNS, CARD_ITEMS_SCHEMA, EVENT_CREATED, Event, ID_ORDER, IntakeResult, MANDATE_SCHEMA,
-    NewIntake, Proposal, ProposalKind, ProposalStatus, QueueError, RawRow, SqliteQueue,
-    UnreadableRow, check_time, columns_of, created_payload, existing, index_only, insert_intake,
-    link_problem, log, log_text, queue_matches, to_json, user_version,
+    NewIntake, Proposal, ProposalFilter, ProposalKind, ProposalList, ProposalStatus, QueueError,
+    RawRow, SqliteQueue, UnreadableRow, check_time, columns_of, created_payload, existing,
+    index_only, insert_intake, link_problem, log, log_text, queue_matches, raw_rows_in, readable,
+    to_json, user_version,
 };
 use crate::error::{Db, StoreError};
 use crate::floor::read_floor;
@@ -499,26 +500,19 @@ impl SqliteQueue {
     /// [`QueueError::SchemaTooNew`].
     pub fn list_existing_cards(&self) -> Result<CardList, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
-        let version = super::user_version(&tx)?;
-        if version > super::QUEUE_SCHEMA_VERSION {
-            return Err(QueueError::SchemaTooNew { found: version });
-        }
-        let list = if schema::has_table(&tx, "cards")? {
-            // A queue at schema 9 holds no `tasks` yet: its cards link none;
-            // one below 12 holds no `mandate`: its cards hold none.
-            let select = if version < TASK_LINKS_SCHEMA {
-                CARD_SELECT_9
-            } else if version < MANDATE_SCHEMA {
-                CARD_SELECT_10
-            } else {
-                CARD_SELECT
-            };
-            listed_from(&tx, &self.project, select)?
-        } else {
-            CardList::default()
-        };
+        let list = existing_cards(&tx, &self.project)?;
         tx.commit().db()?;
         Ok(list)
+    }
+
+    /// One deferred read transaction over the queue ([`QueueSnapshot`]),
+    /// as the index's `SqliteIndex::snapshot` is over the index.
+    pub fn snapshot(&self) -> Result<QueueSnapshot<'_>, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        Ok(QueueSnapshot {
+            tx,
+            project: &self.project,
+        })
     }
 
     /// The project's card counts (task spec `department-overview` DO1, DO8,
@@ -574,38 +568,7 @@ impl SqliteQueue {
     /// JSON is passed over. No type asked: none, nothing read
     /// (`docs/features/upstream-signal.md` "Acceptance criteria", US-5).
     pub fn events_of_types(&self, types: &[&str]) -> Result<Vec<Event>, QueueError> {
-        if types.is_empty() {
-            return Ok(Vec::new());
-        }
-        let marks = (0..types.len())
-            .map(|place| format!("?{}", place + 2))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let mut statement = self
-            .conn
-            .prepare(&format!(
-                "SELECT seq, project, type, payload, at FROM main.events \
-                 WHERE project = ?1 AND type IN ({marks}) ORDER BY seq"
-            ))
-            .db()?;
-        let values = std::iter::once(self.project.as_str()).chain(types.iter().copied());
-        let mut rows = statement.query(rusqlite::params_from_iter(values)).db()?;
-        let mut events = Vec::new();
-        while let Some(row) = rows.next().db()? {
-            let text: Option<String> = row.get(3).db()?;
-            let Some(payload) = text.and_then(|text| serde_json::from_str::<Value>(&text).ok())
-            else {
-                continue;
-            };
-            events.push(Event {
-                seq: row.get(0).db()?,
-                project: row.get::<_, Option<String>>(1).db()?.unwrap_or_default(),
-                event_type: row.get::<_, Option<String>>(2).db()?.unwrap_or_default(),
-                payload,
-                at: row.get::<_, Option<String>>(4).db()?.unwrap_or_default(),
-            });
-        }
-        Ok(events)
+        events_of_types(&self.conn, &self.project, types)
     }
 
     /// The questions, discrepancies and decisions whose `card_id` is the
@@ -992,6 +955,98 @@ pub(super) fn check_card(tx: &Transaction<'_>, project: &str, id: &str) -> Resul
         .optional()
         .db()?;
     found.map(|_| ()).ok_or_else(|| refused(id, no_card(id)))
+}
+
+/// One deferred read transaction over the queue (task spec
+/// `release-hardening` RH-R5): every row read through it comes from the one
+/// snapshot its first read takes, even while another connection writes, so
+/// a card list, its events and its items agree. It ends when dropped,
+/// nothing written.
+pub struct QueueSnapshot<'q> {
+    tx: Transaction<'q>,
+    project: &'q str,
+}
+
+impl QueueSnapshot<'_> {
+    /// [`SqliteQueue::list_existing_cards`] in this snapshot.
+    pub fn existing_cards(&self) -> Result<CardList, QueueError> {
+        existing_cards(&self.tx, self.project)
+    }
+
+    /// [`SqliteQueue::events_of_types`] in this snapshot.
+    pub fn events_of_types(&self, types: &[&str]) -> Result<Vec<Event>, QueueError> {
+        events_of_types(&self.tx, self.project, types)
+    }
+
+    /// `ProposalQueue::list_readable` in this snapshot.
+    pub fn list_readable(&self, filter: &ProposalFilter) -> Result<ProposalList, QueueError> {
+        Ok(readable(
+            raw_rows_in(&self.tx, self.project, filter)?,
+            filter,
+        ))
+    }
+}
+
+/// [`SqliteQueue::list_existing_cards`] inside the caller's read: a queue
+/// with no cards' table holds none; a newer build's is
+/// [`QueueError::SchemaTooNew`].
+fn existing_cards(tx: &Transaction<'_>, project: &str) -> Result<CardList, QueueError> {
+    let version = super::user_version(tx)?;
+    if version > super::QUEUE_SCHEMA_VERSION {
+        return Err(QueueError::SchemaTooNew { found: version });
+    }
+    if !schema::has_table(tx, "cards")? {
+        return Ok(CardList::default());
+    }
+    // A queue at schema 9 holds no `tasks` yet: its cards link none; one
+    // below 12 holds no `mandate`: its cards hold none.
+    let select = if version < TASK_LINKS_SCHEMA {
+        CARD_SELECT_9
+    } else if version < MANDATE_SCHEMA {
+        CARD_SELECT_10
+    } else {
+        CARD_SELECT
+    };
+    listed_from(tx, project, select)
+}
+
+/// [`SqliteQueue::events_of_types`] over `conn`, inside its caller's read
+/// when one is open.
+fn events_of_types(
+    conn: &Connection,
+    project: &str,
+    types: &[&str],
+) -> Result<Vec<Event>, QueueError> {
+    if types.is_empty() {
+        return Ok(Vec::new());
+    }
+    let marks = (0..types.len())
+        .map(|place| format!("?{}", place + 2))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut statement = conn
+        .prepare(&format!(
+            "SELECT seq, project, type, payload, at FROM main.events \
+             WHERE project = ?1 AND type IN ({marks}) ORDER BY seq"
+        ))
+        .db()?;
+    let values = std::iter::once(project).chain(types.iter().copied());
+    let mut rows = statement.query(rusqlite::params_from_iter(values)).db()?;
+    let mut events = Vec::new();
+    while let Some(row) = rows.next().db()? {
+        let text: Option<String> = row.get(3).db()?;
+        let Some(payload) = text.and_then(|text| serde_json::from_str::<Value>(&text).ok()) else {
+            continue;
+        };
+        events.push(Event {
+            seq: row.get(0).db()?,
+            project: row.get::<_, Option<String>>(1).db()?.unwrap_or_default(),
+            event_type: row.get::<_, Option<String>>(2).db()?.unwrap_or_default(),
+            payload,
+            at: row.get::<_, Option<String>>(4).db()?.unwrap_or_default(),
+        });
+    }
+    Ok(events)
 }
 
 /// `project`'s cards by number, inside the caller's read; a row that does

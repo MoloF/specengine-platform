@@ -288,9 +288,10 @@ fn show_json_has_exactly_the_data_keys() {
         .collect();
     assert_eq!(with_links, keys, "{json}");
     let links = node["links"].as_object().expect("`links` is an object");
+    // docs/features/usage-orphans.md UO6: the block's `usage`.
     assert_eq!(
         links.keys().map(String::as_str).collect::<BTreeSet<_>>(),
-        BTreeSet::from(["outgoing", "incoming", "left_out", "omitted"]),
+        BTreeSet::from(["outgoing", "incoming", "usage", "left_out", "omitted"]),
         "{json}"
     );
     // Nothing cut: `omitted` is 0, never `null`.

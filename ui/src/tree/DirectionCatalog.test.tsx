@@ -117,12 +117,12 @@ describe("a row (DC-10)", () => {
     const link = within(arrival).getByRole("link", { name: "Arrival" });
     expect(link.getAttribute("href")).toBe("#/alpha/tree/SCN-ARRIVAL/page");
     expect(arrival.querySelector(".catalog-id.mono")?.textContent).toBe("SCN-ARRIVAL");
-    expect(Array.from(arrival.cells, (cell) => cell.textContent)).toEqual(["ArrivalSCN-ARRIVAL", "Version 1", "In work", "1", "1 · 1 open", "2026-01-02 10:00 UTC by Ann Owner"]);
+    expect(Array.from(arrival.cells, (cell) => cell.textContent)).toEqual(["ArrivalSCN-ARRIVAL", "Version 1", "In work", "1", "1 · 1 open", "1", "2026-01-02 10:00 UTC by Ann Owner"]);
     expect(arrival.querySelector("time")?.getAttribute("dateTime")).toBe("2026-01-02T10:00:00Z");
     expect(arrival.querySelector(".catalog-changed bdi")?.textContent).toBe("Ann Owner");
     expect(arrival.querySelector("th")?.getAttribute("scope")).toBe("row");
     const storm = document.querySelector<HTMLTableRowElement>('tr[data-row="SCN-STORM"]');
-    expect(Array.from(storm?.cells ?? [], (cell) => cell.textContent)).toEqual(["The stormSCN-STORM", "Version 1", "No task", "0", "0", "2026-01-03 10:00 UTC by Bob Hand"]);
+    expect(Array.from(storm?.cells ?? [], (cell) => cell.textContent)).toEqual(["The stormSCN-STORM", "Version 1", "No task", "0", "0", "0", "2026-01-03 10:00 UTC by Bob Hand"]);
   });
 
   it("draws no email, OID or proposal of a change (M: `by` drawn)", async () => {
@@ -220,11 +220,11 @@ describe("a header's press (DC-10)", () => {
     expect(shownRows()).toEqual(["C", "A", "D", "B"]);
   });
 
-  it("each header is a subtle compact button inside its th, six in the table's order", async () => {
+  it("each header is a subtle compact button inside its th, seven in the table's order, Used by after Tasks (UO11 of usage-orphans)", async () => {
     const table = await openDirection(catalogClient(ROWS));
     const heads = Array.from(table.querySelectorAll("thead th"));
-    expect(heads.map((head) => head.textContent)).toEqual(["Title", "Version", "State", "Open items", "Tasks", "Last change"]);
-    expect(heads.map((head) => head.querySelector("button")?.className)).toEqual(Array.from({ length: 6 }, () => "button button-quiet button-compact"));
+    expect(heads.map((head) => head.textContent)).toEqual(["Title", "Version", "State", "Open items", "Tasks", "Used by", "Last change"]);
+    expect(heads.map((head) => head.querySelector("button")?.className)).toEqual(Array.from({ length: 7 }, () => "button button-quiet button-compact"));
     expect(heads.every((head) => head.getAttribute("scope") === "col")).toBe(true);
   });
 
@@ -238,6 +238,101 @@ describe("a header's press (DC-10)", () => {
       expect(shownRows()).toEqual(["A", "B", "C", "D"]);
     });
     expect(Array.from(document.querySelectorAll("th[aria-sort]"))).toEqual([]);
+  });
+});
+
+// UO11 of docs/features/usage-orphans.md "Acceptance criteria": the served count, its mentions, an
+// orphan's neutral badge, never wrapping; a press puts the highest first. The orchestrator's working
+// answer for the owner (2026-11-13): a 0 with mentions shows them beside it at full weight, "0 · 6
+// mentions"; two filters, No declared use (served used_by 0) and Not cited (served used_by and
+// mentioned_by 0), one at a time, the caption saying how many of all, none an empty state. Named
+// mutations: No declared use on `mentioned_by`; Not cited on `used_by` alone.
+describe("Used by (UO11 of usage-orphans)", () => {
+  const USED = [
+    aCatalogRow({ id: "A", title: "Anchor", used_by: 2, mentioned_by: 3 }),
+    aCatalogRow({ id: "B", title: "Buoy", used_by: 0, mentioned_by: 6 }),
+    aCatalogRow({ id: "C", title: "Capstan", used_by: 5, mentioned_by: 0 }),
+    aCatalogRow({ id: "D", title: "Dredge", used_by: 0, mentioned_by: 0, orphan: true }),
+    aCatalogRow({ id: "E", title: "Notes on the dredge", used_by: 0, mentioned_by: 0, orphan: null }),
+    aCatalogRow({ id: "F", title: "Fender", used_by: 0, mentioned_by: 1 }),
+  ];
+
+  function usedCell(id: string): HTMLElement | null {
+    return document.querySelector<HTMLElement>(`tr[data-row="${id}"] .catalog-used`);
+  }
+
+  function caption(): string | undefined {
+    return screen.getByRole("table").querySelector("caption")?.textContent;
+  }
+
+  it("a 0 with mentions shows them beside it at full weight, 0 · 6 mentions, never the small +; a count above 0 keeps + M mentions in small text", async () => {
+    await openDirection(catalogClient(USED));
+    expect(usedCell("B")?.textContent).toBe("0 \u00b7 6 mentions");
+    expect(usedCell("B")?.querySelector(".catalog-used-cited")?.textContent).toBe("6 mentions");
+    expect(usedCell("B")?.querySelector(".catalog-used-mentions")).toBeNull();
+    expect(usedCell("F")?.textContent).toBe("0 \u00b7 1 mention");
+    expect(rulesOf(".catalog-used-cited")).not.toMatch(/font-size/);
+    expect(usedCell("A")?.textContent).toBe("2 + 3 mentions");
+    expect(usedCell("A")?.querySelector(".catalog-used-mentions")?.textContent).toBe("+ 3 mentions");
+    expect(usedCell("C")?.textContent).toBe("5");
+  });
+
+  it("the Orphan badge on a flagged document alone, neutral, never on a section; the cell on one line", async () => {
+    await openDirection(catalogClient(USED));
+    const orphan = usedCell("D")?.querySelector(".badge");
+    expect([usedCell("D")?.textContent, orphan?.getAttribute("data-tone"), orphan?.querySelector("svg") !== null]).toEqual(["0 Orphan", "usage-orphan", true]);
+    expect(usedCell("E")?.textContent).toBe("0");
+    expect(document.querySelectorAll(".catalog-used .badge")).toHaveLength(1);
+    expect(rulesOf(".catalog-used .badge")).toMatch(/white-space:\s*nowrap;/);
+    expect(usedCell("A")?.className).toContain("catalog-count");
+  });
+
+  it("a press on Used by puts the highest first, aria-sort descending; ties in served order", async () => {
+    await openDirection(catalogClient(USED));
+    fireEvent.click(screen.getByRole("button", { name: "Used by" }));
+    expect(shownRows()).toEqual(["C", "A", "B", "D", "E", "F"]);
+    expect(header("Used by").getAttribute("aria-sort")).toBe("descending");
+  });
+
+  it("No declared use keeps the rows the daemon counts no use for, a mentioned one too; the caption K of N; pressed again, all (M: the filter on mentioned_by)", async () => {
+    await openDirection(catalogClient(USED));
+    const undeclared = screen.getByRole("button", { name: "No declared use" });
+    expect(undeclared.getAttribute("aria-pressed")).toBe("false");
+    // The two toggles in one group named for what they filter by.
+    const group = screen.getByRole("group", { name: "Filter by use" });
+    expect(within(group).getAllByRole("button").map((button) => button.textContent)).toEqual(["No declared use", "Not cited"]);
+    fireEvent.click(undeclared);
+    expect(undeclared.getAttribute("aria-pressed")).toBe("true");
+    expect(shownRows()).toEqual(["B", "D", "E", "F"]);
+    expect(caption()).toBe("Scenes: 4 of 6 nodes");
+    expect(screen.getByRole("region", { name: "Scenes: 4 of 6 nodes" })).toBeTruthy();
+    fireEvent.click(undeclared);
+    expect(shownRows()).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(caption()).toBe("Scenes: 6 nodes");
+  });
+
+  it("Not cited keeps the rows neither used nor mentioned, never a mentioned one; one filter at a time (M: Not cited on used_by alone)", async () => {
+    await openDirection(catalogClient(USED));
+    const undeclared = screen.getByRole("button", { name: "No declared use" });
+    const uncited = screen.getByRole("button", { name: "Not cited" });
+    fireEvent.click(uncited);
+    expect([uncited.getAttribute("aria-pressed"), undeclared.getAttribute("aria-pressed")]).toEqual(["true", "false"]);
+    expect(shownRows()).toEqual(["D", "E"]);
+    expect(caption()).toBe("Scenes: 2 of 6 nodes");
+    fireEvent.click(undeclared);
+    expect([uncited.getAttribute("aria-pressed"), undeclared.getAttribute("aria-pressed")]).toEqual(["false", "true"]);
+    expect(shownRows()).toEqual(["B", "D", "E", "F"]);
+  });
+
+  it("none kept: an empty state in the table's place, the filter kept pressed to undo", async () => {
+    await openDirection(catalogClient(USED.filter((row) => row.mentioned_by > 0)));
+    fireEvent.click(screen.getByRole("button", { name: "Not cited" }));
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "No node here matches the filter" })).toBeTruthy();
+    const uncited = screen.getByRole("button", { name: "Not cited" });
+    expect(uncited.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(uncited);
+    expect(shownRows()).toEqual(["A", "B", "F"]);
   });
 });
 

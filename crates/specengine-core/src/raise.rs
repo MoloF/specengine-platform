@@ -6,7 +6,8 @@
 //! - **Pairs** ([`paired`]): the nodes with an ID in two parses of one
 //!   file, the k-th holder of an ID before with the k-th after, in the
 //!   order of the second; a node in one parse only (a create's new
-//!   section) has none.
+//!   section) has none. An ID-less document on both sides
+//!   ([`idless_documents`]) pairs by its path, for the card refresh alone.
 //! - **A revision changed** ([`revision_change`]): creation's check 3 and
 //!   apply's step 6 refuse a text changing a revision as [`revision`] reads
 //!   it, the variant and its value both (`Unwritten` against `Written(1)`
@@ -84,6 +85,16 @@ pub fn paired(before: &ParsedFile, after: &ParsedFile) -> Vec<Paired> {
         }
     }
     pairs
+}
+
+/// Neither parse's document (node 0) holds an `id:`: what an editorial
+/// apply's card refresh pairs by the file's path (task spec
+/// `release-hardening` RH-R3). Never a raise: such a document has no
+/// revision, so [`paired`] and [`meaning_changes`] keep it out. A document
+/// that gains or loses its `id:` is not one.
+pub fn idless_documents(before: &ParsedFile, after: &ParsedFile) -> bool {
+    let idless = |parsed: &ParsedFile| parsed.document().is_some_and(|node| node.id.is_none());
+    idless(before) && idless(after)
 }
 
 /// A revision as a message names it: `3`, `none written`, `unreadable`.

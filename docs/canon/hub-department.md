@@ -34,7 +34,7 @@ Every login reads the notes, so none names a login: a refused entry echoes only 
 
 ## Read
 
-`spec workspace [--json] [--login L]` (CLI `workspace.rs`, `WorkspaceRequest {login}`): `L` any string, never refused, never printed. JSON `{source, notes, workspaces, modules, default}`, `default` last (`WorkspaceOutcome.default`): `default_for(L)`; `null` without `--login`, with no match, or when the implicit workspace is served. Text: with `--login`, line 2 `default <name>` or `default (none)`; without it, as before. `--login` takes hyphen values, so `--login --json` takes `--json` as the login: `--login=VALUE`.
+`spec workspace [--json] [--login L]` (CLI `workspace.rs`, `WorkspaceRequest {login}`): `L` any string, never refused, never printed. JSON `{source, notes, workspaces, modules, default}`, `default` last (`WorkspaceOutcome.default`): `default_for(L)`; `null` without `--login`, with no match, or when the implicit workspace is served. Text: with `--login`, line 2 `default <name>` or `default (none)`; without it, as before. `--login` takes no value starting with `-` (`--login --json`: clap's `a value is required`, exit 2): a hyphen login is written `--login=-x`.
 
 `GET /api/projects/:p/workspaces`: on a hub `spec workspace --json --login <login>`, the login of the fence's `Login` extension (`login_of`, as every hub route); a local daemon has none, so `default` `null`. Still config only: no turn, no query, no `[team]` read, so a bad `[team]` leaves it 200 while `…/team` is 503. `WorkspaceDocument` 5 keys (`fixtures/daemon-keys.json`).
 

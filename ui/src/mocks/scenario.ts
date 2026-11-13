@@ -32,8 +32,11 @@
  * three-target item on C-0001 (docs/features/collision-pairs.md "Acceptance criteria", PP9, PP11;
  * src/mocks/collisionPairs.ts). `hub` also serves the login's department, `foundry`, which is not the
  * first (docs/features/hub-department.md "Acceptance criteria", HD8; src/mocks/workspaces.ts).
+ * `orphan-notes`: as `normal` but Health's orphan documents read no task, the queue of a newer build:
+ * each row's tasks null and the row's note why (docs/features/usage-orphans.md "Acceptance criteria",
+ * UO4; src/mocks/orphans.ts).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions", "collision-pairs"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions", "collision-pairs", "orphan-notes"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

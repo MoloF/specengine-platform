@@ -127,6 +127,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/queue-path-targets.md](features/queue-path-targets.md) shipped
 - [docs/features/read-trust.md](features/read-trust.md) shipped
 - [docs/features/ref-superseded-records.md](features/ref-superseded-records.md) shipped
+- [docs/features/release-hardening.md](features/release-hardening.md) shipped
 - [docs/features/rev-discipline.md](features/rev-discipline.md) shipped
 - [docs/features/rev-rule.md](features/rev-rule.md) shipped
 - [docs/features/review-form.md](features/review-form.md) shipped
@@ -189,6 +190,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/ui-tree-drift.md](features/ui-tree-drift.md) shipped
 - [docs/features/ui-tree-node.md](features/ui-tree-node.md) shipped
 - [docs/features/upstream-signal.md](features/upstream-signal.md) shipped
+- [docs/features/usage-orphans.md](features/usage-orphans.md) shipped
 - [docs/features/verify-node.md](features/verify-node.md) shipped
 - [docs/features/verify-task.md](features/verify-task.md) shipped
 - [docs/features/verify-tests.md](features/verify-tests.md) shipped
@@ -227,6 +229,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0059.md](roadmap/RM-0059.md) shipped
 - [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) shipped
 - [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) shipped
+- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) shipped
 - [docs/roadmap/RM-0064.md](roadmap/RM-0064.md) shipped
 - [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) shipped
 - [docs/roadmap/RM-0066.md](roadmap/RM-0066.md) shipped
@@ -269,4 +272,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0106.md](roadmap/RM-0106.md) shipped
 - [docs/roadmap/RM-0107.md](roadmap/RM-0107.md) shipped
 - [docs/roadmap/RM-0108.md](roadmap/RM-0108.md) shipped
+- [docs/roadmap/RM-0111.md](roadmap/RM-0111.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

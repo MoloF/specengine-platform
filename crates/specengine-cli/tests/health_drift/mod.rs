@@ -57,8 +57,9 @@ use crate::verify_common::{
 
 // ------------------------------------------------------------ the words
 
-/// "Data": the document's keys, `drift` the 7th.
-const HEALTH_KEYS: [&str; 7] = [
+/// "Data": the document's keys, `drift` the 7th; `orphans` the 8th since
+/// docs/features/usage-orphans.md (UO4).
+const HEALTH_KEYS: [&str; 8] = [
     "documents",
     "amendments",
     "notes",
@@ -66,6 +67,7 @@ const HEALTH_KEYS: [&str; 7] = [
     "assumes",
     "unbound",
     "drift",
+    "orphans",
 ];
 
 /// "Data": `HealthDrift`'s keys, in order.
@@ -308,10 +310,11 @@ fn plain_printed(plain: &Run) -> Vec<String> {
 }
 
 /// Where a line of Health's text sits ("Text and stderr": the row lines of
-/// rows 4, 5, 6, their summaries in that order, `code:`, the last line);
-/// row 3's lines first. A sub-line (two spaces in) is its row's.
+/// rows 4, 5, 6, their summaries in that order, `code:`, row 8's block
+/// (docs/features/usage-orphans.md UO4), the last line); row 3's lines
+/// first. A sub-line (two spaces in) is its row's.
 fn ranks(stdout: &str) -> Vec<(u8, String)> {
-    const RANKS: [(&str, u8); 8] = [
+    const RANKS: [(&str, u8); 9] = [
         ("assumes | ", 1),
         ("unbound | ", 2),
         ("drift | ", 3),
@@ -319,7 +322,9 @@ fn ranks(stdout: &str) -> Vec<(u8, String)> {
         ("unbound: ", 5),
         ("drift: ", 6),
         ("code: ", 7),
-        ("spec health: ", 8),
+        // docs/features/usage-orphans.md UO4: row 8's block after `code:`.
+        ("orphans: ", 8),
+        ("spec health: ", 9),
     ];
     let mut out: Vec<(u8, String)> = Vec::new();
     for line in stdout.lines() {

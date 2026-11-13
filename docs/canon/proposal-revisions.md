@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-13
 ---
 
 # Proposal apply: revisions and the editorial approve
@@ -16,7 +16,7 @@ Creation's check 3 (`proposal-queue.md` "Creation"), so apply's step 6 and an in
 
 ## The raise
 
-Step 6, after the structure check. Nodes with an ID in both the file as read (step 3) and step 5's text are paired by canonical ID, the k-th holder with the k-th. A pair whose `norm_hash` input changes (both null: its own text compared) is raised to the current revision + 1, "current" from the file at apply (a rebase over a raise raises from it), never lowered; a whitespace-, heading- or move-only change keeps it (ADR-0040). Written: a section's readable `rev=N` in place, else ` rev=N` before its heading's `}`; a document's `rev:` value, else `rev: N` after its `id:` line with that line's ending. The result is parsed again and kept only when each raised node reads its new revision, every other node its old one, the structure and every meaning input as before; else the write is refused (a flow-style front-matter), never half done. `write_revisions` writes every raise together; failing, each alone, blaming the ones failing alone (all, with the joint reason, when each passes alone).
+Step 6, after the structure check. Nodes with an ID in both the file as read (step 3) and step 5's text are paired by canonical ID, the k-th holder with the k-th. When neither parse's document has an `id:`, the two documents pair by the file's path for the editorial card refresh alone (`raise::idless_documents`, `Revisions.document`; `spec-trace.md` "Suspect"): never raised, no `rev:` written (no ID, no revision); a document gaining or losing its `id:` pairs nothing. A pair whose `norm_hash` input changes (both null: its own text compared) is raised to the current revision + 1, "current" from the file at apply (a rebase over a raise raises from it), never lowered; a whitespace-, heading- or move-only change keeps it (ADR-0040). Written: a section's readable `rev=N` in place, else ` rev=N` before its heading's `}`; a document's `rev:` value, else `rev: N` after its `id:` line with that line's ending. The result is parsed again and kept only when each raised node reads its new revision, every other node its old one, the structure and every meaning input as before; else the write is refused (a flow-style front-matter), never half done. `write_revisions` writes every raise together; failing, each alone, blaming the ones failing alone (all, with the joint reason, when each passes alone).
 
 Every node is judged in one pass; refusals exit 1 before the prompt, the first in file order named:
 
@@ -27,7 +27,7 @@ Question `apply PR-0007 to docs/spec/combat.md on main in /w (applies; raises R-
 
 ## Editorial approve
 
-`spec approve PR --editorial [--note T]` (`approve_editorial`), or a staged `editorial: true` ("Stage and UI"), keeps every revision. On a kind writing no existing node: exit 2 `` `--editorial` keeps the revisions of the nodes an apply changes; `PR` is a <kind>, which writes no existing node: `spec approve PR` without it; nothing changed ``. No node's meaning changing: the note `no node's meaning changes; --editorial changes nothing`, above the question and in the outcome's notes.
+`spec approve PR --editorial [--note T]` (`approve_editorial`), or a staged `editorial: true` ("Stage and UI"), keeps every revision. On a kind writing no existing node: exit 2 `` `--editorial` keeps the revisions of the nodes an apply changes; `PR` is a <kind>, which writes no existing node: `spec approve PR` without it; nothing changed ``. No node's meaning changing: the note `no node's meaning changes; --editorial changes nothing`, above the question and in the outcome's notes; an ID-less document whose hash moved gives none, its cards refreshing.
 
 - **Step 3** also reads `<root>/spec.lock`: none, the text alone; modified, staged, deleted, untracked or not tracked -> exit 1 `` `spec.lock` <state>: --editorial sets its entries from its committed bytes; commit it first; nothing written ``; parsed by `parse_lock(text, None)`, another `norm_recipe` -> exit 2 naming both. `code_recipe` is not compared, unlike accept's `read_lock`: no code field is written.
 - **Step 6, the refresh**: each changed node's **vouching** entries (core `vouches`: at its revision R, `spec_hash` its old `norm_hash`) and vouching `[[tested]]` block (`Tested::vouches`; `spec-lock-tested.md` "Readings": one entry in every count) take the new one (`refresh_editorial` with that filter; `spec lock accept --editorial` passes none: every entry at R). A node with a null hash refreshes none. An entry at R with another `spec_hash` (an earlier unreviewed change), the code fields, `file_blob`, `commit`, `verified_*`, other entries and the header stay byte-identical. Format 1 is never rendered: an entry to refresh exits 2 at step 6, accept's format-1 text (`spec-lock.md` "Entry"); none, it stays untouched.

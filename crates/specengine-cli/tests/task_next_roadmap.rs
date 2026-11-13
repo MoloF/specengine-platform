@@ -38,6 +38,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use common::gate::until_verdict;
 use common::git::Sandbox;
 use common::proposal::Pair;
 use common::{Scratch, fixture, read_text, write};
@@ -586,17 +587,22 @@ fn unfinished_predecessor_never_holds_a_task() {
         "{}",
         claim.show()
     );
-    let gated = pair.spec_piped(
-        &main,
-        &[
-            "gate",
-            "--worktree",
-            worktree,
-            "--path",
-            "src/a.rs",
-            "--json",
-        ],
-        b"",
+    let gated = until_verdict(
+        || {
+            pair.spec_piped(
+                &main,
+                &[
+                    "gate",
+                    "--worktree",
+                    worktree,
+                    "--path",
+                    "src/a.rs",
+                    "--json",
+                ],
+                b"",
+            )
+        },
+        |done| (done.stdout.as_str(), done.stderr.as_str()),
     );
     gated.code(0);
     let document = gated.json();
@@ -604,19 +610,26 @@ fn unfinished_predecessor_never_holds_a_task() {
     assert_eq!(document["reason"], json!("claimed"), "{}", gated.show());
     assert_eq!(document["task"], json!("T-0001"), "{}", gated.show());
 
-    let verdict = gate(
-        &pair.env(&main),
-        &GateRequest {
-            input: GateInput::Path {
-                dir: main.clone(),
-                path: PathBuf::from("src/a.rs"),
-            },
-            session: Some(main.clone()),
-            git: pair.git_env(&main),
-            now: CLOCK.to_owned(),
-            deadline: Instant::now() + GATE_DEADLINE,
-            progress: GateProgress::new(),
+    let (verdict, _, _) = until_verdict(
+        || {
+            let verdict = gate(
+                &pair.env(&main),
+                &GateRequest {
+                    input: GateInput::Path {
+                        dir: main.clone(),
+                        path: PathBuf::from("src/a.rs"),
+                    },
+                    session: Some(main.clone()),
+                    git: pair.git_env(&main),
+                    now: CLOCK.to_owned(),
+                    deadline: Instant::now() + GATE_DEADLINE,
+                    progress: GateProgress::new(),
+                },
+            );
+            let (document, lines) = (verdict.to_json(), verdict.stderr_lines().join("\n"));
+            (verdict, document, lines)
         },
+        |(_, document, lines)| (document.as_str(), lines.as_str()),
     );
     assert_eq!(verdict.verdict, GateVerdict::Pass, "{verdict:#?}");
     assert_eq!(verdict.reason, GateReason::Claimed, "{verdict:#?}");

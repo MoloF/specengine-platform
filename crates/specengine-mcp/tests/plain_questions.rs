@@ -771,3 +771,65 @@ async fn pq9_a_hub_stores_the_fields() {
     assert_eq!(description.len(), 2044, "{description}");
     assert_eq!(blake3_hex(HUB_INSTRUCTIONS.as_bytes()), HUB_INSTRUCTIONS_B3);
 }
+
+// ------------------------------------------------- release-hardening RH-R1
+
+/// The intake's refusal of a CR in `text` (`record::is_escaped`).
+const CR_LINE: &str = "text: holds U+000D: a decision record never carries it";
+
+/// The "Data" example with `text` `"a\r\nb"`.
+fn with_cr() -> Value {
+    let mut args = example();
+    args["text"] = json!("a\r\nb");
+    args
+}
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R1, stdio:
+/// `ask_question` with `text` `"a\r\nb"` is an error result whose content
+/// holds the CLI's line, its document's last note the same, as its twin;
+/// nothing stored (the mutations are the CLI's, `intake.rs`).
+#[test]
+fn rh_r1_ask_question_refuses_a_cr_over_stdio() {
+    let repo = Repo::new("mpq-rh-r1");
+    let twin_home = repo.scratch.home("twin");
+    let mut session = repo.session();
+    let reply = session.call("ask_question", with_cr());
+    let got = result(&reply);
+    assert_eq!(got["isError"], json!(true), "{reply}");
+    assert_eq!(
+        got["structuredContent"]["notes"],
+        json!([CR_LINE]),
+        "{reply}"
+    );
+    assert_eq!(got["structuredContent"]["id"], Value::Null, "{reply}");
+    assert!(content_text(got).contains(CR_LINE), "{reply}");
+    assert_twin(&reply, &repo.twin(&with_cr(), &twin_home), "a CR");
+    let read = session.call("get_proposal", json!({"proposal_id": "PR-0001"}));
+    assert_eq!(
+        result(&read)["isError"],
+        json!(true),
+        "nothing stored: {read}"
+    );
+    drop(session.finish());
+}
+
+/// RH-R1, a hub's `/mcp`: its `ask_question` with the same text gives the
+/// same line as an error result; nothing stored.
+#[tokio::test]
+async fn rh_r1_a_hubs_ask_question_refuses_a_cr() {
+    let remote = Repo::new("mpq-rh-r1-hub");
+    let calls = [
+        ("ask_question", with_cr()),
+        ("get_proposal", json!({"proposal_id": "PR-0001"})),
+    ];
+    let hub = hub_answers(&remote.main, &remote.home, &calls).await;
+    let asked = &hub[1];
+    assert_eq!(asked["isError"], json!(true), "{asked}");
+    assert_eq!(
+        asked["structuredContent"]["notes"],
+        json!([CR_LINE]),
+        "{asked}"
+    );
+    assert!(content_text(asked).contains(CR_LINE), "{asked}");
+    assert_eq!(hub[2]["isError"], json!(true), "nothing stored: {}", hub[2]);
+}

@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { CatalogRow } from "../api/types";
 import { enT, ruT } from "../test/text";
 import { aCatalogChange, aCatalogRow } from "../test/builders";
-import { ariaSort, CATALOG_COLUMNS, CATALOG_SHOWN, pressed, sortedRows, tasksText, titleOf, versionText, type CatalogColumn } from "./catalog";
+import { ariaSort, CATALOG_COLUMNS, CATALOG_FILTERS, CATALOG_SHOWN, filteredRows, pressed, sortedRows, tasksText, titleOf, versionText, type CatalogColumn } from "./catalog";
 
 // DC-10 of docs/features/direction-catalog.md "Acceptance criteria": what a press on each header
 // orders the served rows by. Title and State ascending first, the rest descending first; a second
 // press reverses; ties keep served order in either direction; a missing value stands last either way;
-// Title by the viewer's collation, State by the rollups' order, an unknown word last.
+// Title by the viewer's collation, State by the rollups' order, an unknown word last. UO11 of
+// docs/features/usage-orphans.md "Acceptance criteria": Used by, after Tasks, by the served count,
+// most first; No declared use keeps the rows whose served `used_by` is 0, Not cited those whose
+// `used_by` and `mentioned_by` are both 0 (the orchestrator's working answer, 2026-11-13). Named
+// mutations: No declared use on `mentioned_by`; Not cited on `used_by` alone.
 
 const EN = new Intl.Collator("en", { numeric: true });
 
@@ -24,8 +28,8 @@ function sortBy(rows: readonly CatalogRow[], column: CatalogColumn, presses = 1,
 }
 
 describe("a press's order (DC-10)", () => {
-  it("names six columns in the table's order and shows 50 at a time", () => {
-    expect(CATALOG_COLUMNS).toEqual(["title", "version", "state", "open", "tasks", "changed"]);
+  it("names seven columns in the table's order, Used by after Tasks, and shows 50 at a time", () => {
+    expect(CATALOG_COLUMNS).toEqual(["title", "version", "state", "open", "tasks", "used", "changed"]);
     expect(CATALOG_SHOWN).toBe(50);
   });
 
@@ -36,6 +40,7 @@ describe("a press's order (DC-10)", () => {
       ["state", false],
       ["open", true],
       ["tasks", true],
+      ["used", true],
       ["changed", true],
     ]);
     expect(pressed({ column: "version", descending: true }, "version")).toEqual({ column: "version", descending: false });
@@ -45,7 +50,7 @@ describe("a press's order (DC-10)", () => {
 
   it("says aria-sort on the ordering column alone", () => {
     const sort = pressed(null, "version");
-    expect(CATALOG_COLUMNS.map((column) => ariaSort(sort, column))).toEqual([undefined, "descending", undefined, undefined, undefined, undefined]);
+    expect(CATALOG_COLUMNS.map((column) => ariaSort(sort, column))).toEqual([undefined, "descending", undefined, undefined, undefined, undefined, undefined]);
     expect(ariaSort(pressed(sort, "version"), "version")).toBe("ascending");
     expect(ariaSort(null, "title")).toBeUndefined();
   });
@@ -114,6 +119,17 @@ describe("each column's order (DC-10)", () => {
     expect(ids(sortBy(rows, "tasks", 2))).toEqual(["B", "A", "C"]);
   });
 
+  it("Used by: the served count, most first, ties in served order; reversed, least first (UO11)", () => {
+    const rows = [
+      aCatalogRow({ id: "A", used_by: 2, mentioned_by: 0 }),
+      aCatalogRow({ id: "B", used_by: 0, mentioned_by: 9 }),
+      aCatalogRow({ id: "C", used_by: 5, mentioned_by: 1 }),
+      aCatalogRow({ id: "D", used_by: 2, mentioned_by: 4 }),
+    ];
+    expect(ids(sortBy(rows, "used"))).toEqual(["C", "A", "D", "B"]);
+    expect(ids(sortBy(rows, "used", 2))).toEqual(["B", "A", "D", "C"]);
+  });
+
   it("Last change: the newest stored time first, none read last in either direction", () => {
     const rows = [
       aCatalogRow({ id: "OLD", last_change: aCatalogChange({ at: "2026-01-02T10:00:00Z" }) }),
@@ -123,6 +139,31 @@ describe("each column's order (DC-10)", () => {
     ];
     expect(ids(sortBy(rows, "changed"))).toEqual(["NEW", "MID", "OLD", "NONE"]);
     expect(ids(sortBy(rows, "changed", 2))).toEqual(["OLD", "MID", "NEW", "NONE"]);
+  });
+});
+
+describe("the Used by filters (UO11)", () => {
+  const ROWS = [
+    aCatalogRow({ id: "USED", used_by: 1, mentioned_by: 0 }),
+    aCatalogRow({ id: "MENTIONED", used_by: 0, mentioned_by: 3 }),
+    aCatalogRow({ id: "ORPHAN", used_by: 0, mentioned_by: 0, orphan: true }),
+    aCatalogRow({ id: "SECTION", used_by: 0, mentioned_by: 0, orphan: null }),
+    aCatalogRow({ id: "BOTH", used_by: 2, mentioned_by: 2 }),
+  ];
+
+  it("names two, No declared use and Not cited; none held keeps every row, the same array", () => {
+    expect(CATALOG_FILTERS).toEqual(["undeclared", "uncited"]);
+    expect(filteredRows(ROWS, null)).toBe(ROWS);
+  });
+
+  it("No declared use: the rows whose served used_by is 0, in the order given, a mentioned one too, a section alike (M: the filter on mentioned_by)", () => {
+    expect(ids(filteredRows(ROWS, "undeclared"))).toEqual(["MENTIONED", "ORPHAN", "SECTION"]);
+    expect(filteredRows([aCatalogRow({ id: "A", used_by: 1 })], "undeclared")).toEqual([]);
+  });
+
+  it("Not cited: the rows whose served used_by and mentioned_by are both 0, never a mentioned one (M: Not cited on used_by alone)", () => {
+    expect(ids(filteredRows(ROWS, "uncited"))).toEqual(["ORPHAN", "SECTION"]);
+    expect(filteredRows([aCatalogRow({ id: "A", used_by: 0, mentioned_by: 1 })], "uncited")).toEqual([]);
   });
 });
 

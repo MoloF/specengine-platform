@@ -66,10 +66,16 @@ pub const CLEO: Ident = Ident {
 };
 
 /// The pinned text, `{applied}`-free: OIDs never print.
+///
+/// docs/features/usage-orphans.md "Acceptance criteria", UO5: each row gains
+/// its uses after its tasks, the new field alone: SCN-STORM `follows`
+/// SCN-ARRIVAL (one strong source in another file); SCN-STORM is used by
+/// nothing and links out, so neither is an orphan.
 pub const PINNED_TEXT: &str = "catalog scene | rows 2\nSCN-ARRIVAL | version 1 | in work | open \
-                               items 1 | tasks 1, open 1 | 2026-01-02T10:00:00Z | Ann Owner \
-                               <ann@example.org> | PR-0001 | Arrival\nSCN-STORM | version 1 | no \
-                               card | open items 0 | tasks 0, open 0 | 2026-01-03T10:00:00Z | Bob \
+                               items 1 | tasks 1, open 1 | used by 1, mentioned by 0 | \
+                               2026-01-02T10:00:00Z | Ann Owner <ann@example.org> | PR-0001 | \
+                               Arrival\nSCN-STORM | version 1 | no card | open items 0 | tasks 0, \
+                               open 0 | used by 0, mentioned by 0 | 2026-01-03T10:00:00Z | Bob \
                                Hand <bob@example.org> | hand | The storm\n";
 
 /// The pinned JSON, compact, with the two commits' OIDs in place: one line
@@ -79,12 +85,14 @@ pub fn pinned_json(applied: &str, hand: &str) -> String {
         "{{\"kinds\":[\"scene\"],\"archive\":false,\"notes\":[],\"rows\":[\
          {{\"id\":\"SCN-ARRIVAL\",\"kind\":\"scene\",\"title\":\"Arrival\",\"path\":\"{ARRIVAL}\",\
          \"line\":1,\"rev\":1,\"status\":null,\"archived\":false,\"state\":\"in work\",\
-         \"open_items\":1,\"tasks\":1,\"tasks_open\":1,\"last_change\":{{\"at\":\
+         \"open_items\":1,\"tasks\":1,\"tasks_open\":1,\"used_by\":1,\"mentioned_by\":0,\
+         \"orphan\":false,\"last_change\":{{\"at\":\
          \"2026-01-02T10:00:00Z\",\"by\":\"Ann Owner <ann@example.org>\",\"by_name\":\"Ann Owner\",\
          \"commit\":\"{applied}\",\"proposal\":\"PR-0001\",\"of_file\":false}}}},\
          {{\"id\":\"SCN-STORM\",\"kind\":\"scene\",\"title\":\"The storm\",\"path\":\"{STORM}\",\
          \"line\":1,\"rev\":1,\"status\":null,\"archived\":false,\"state\":\"no card\",\
-         \"open_items\":0,\"tasks\":0,\"tasks_open\":0,\"last_change\":{{\"at\":\
+         \"open_items\":0,\"tasks\":0,\"tasks_open\":0,\"used_by\":0,\"mentioned_by\":0,\
+         \"orphan\":false,\"last_change\":{{\"at\":\
          \"2026-01-03T10:00:00Z\",\"by\":\"Bob Hand <bob@example.org>\",\"by_name\":\"Bob Hand\",\
          \"commit\":\"{hand}\",\"proposal\":null,\"of_file\":false}}}}],\
          \"truncated\":false,\"omitted\":null}}\n"

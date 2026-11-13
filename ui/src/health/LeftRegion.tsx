@@ -6,7 +6,7 @@ import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { severityLook } from "../inbox/labels";
 import { queueOrder } from "../inbox/order";
-import { summaryOf } from "../inbox/summary";
+import { ProposalSummary } from "../inbox/ProposalSummary";
 import { Notes, Stored } from "../ui/served";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
@@ -17,6 +17,7 @@ import { UnappliedAmendments } from "./AmendmentsPart";
 import { AssumesPart } from "./AssumesPart";
 import { DriftPart } from "./DriftPart";
 import { severityCountsOf } from "./findings";
+import { OrphansPart } from "./OrphansPart";
 import { HealthRegion } from "./parts";
 import { UnboundPart } from "./UnboundPart";
 import { useTranslate } from "../i18n";
@@ -60,7 +61,10 @@ function Queue({ project, answer }: { project: string; answer: Inbox }) {
         {ordered.slice(0, LEFT_ROWS).map((proposal) => (
           <li key={proposal.id} className="health-left-row">
             <a className="health-left-link" href={sectionHash(project, "inbox", proposal.id)}>
-              <span className="mono">{proposal.id}</span>: <span>{summaryOf(proposal, t)}</span>
+              <span className="mono">{proposal.id}</span>:{" "}
+              <span>
+                <ProposalSummary proposal={proposal} />
+              </span>
             </a>
             <span className="health-left-meta">
               <Badge name={t("health.left.severity")} look={severityLook(proposal.severity, t)} />
@@ -77,7 +81,8 @@ function Queue({ project, answer }: { project: string; answer: Inbox }) {
  * Region 2, What is left (06 §7): the high-severity and the oldest proposals from the Inbox's read
  * (rows 1 and 2), the unapplied amendments, the code assuming a decision, the unbound nodes and the
  * drift from the health read (rows 3 to 6: UnappliedAmendments, AssumesPart, UnboundPart,
- * DriftPart), and a pointer to Budgets (row 7). One `getInbox` and the view's `getHealth`, each part
+ * DriftPart), the orphan documents from it too (row 8, OrphansPart; docs/features/usage-orphans.md
+ * "Acceptance criteria", UO11), and a pointer to Budgets (row 7). One `getInbox` and the view's `getHealth`, each part
  * with its own states, boundary and Retry, which reads its read alone: a failing one leaves the
  * other standing, and one health row that cannot be measured leaves the others as they are.
  */
@@ -89,7 +94,7 @@ export function LeftRegion({ project, health }: { project: string; health: Healt
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(inbox.data, () => heading.current);
   const queueBusy = inbox.data === undefined ? failure === null : inbox.isFetching;
-  // The health read's busy flag, computed here once: rows 3 to 6 show it, the region adds it to the queue's.
+  // The health read's busy flag, computed here once: rows 3 to 6 and 8 show it, the region adds it to the queue's.
   const healthBusy = health.data === undefined ? healthFailure === null : health.isFetching;
 
   let queue;
@@ -144,6 +149,7 @@ export function LeftRegion({ project, health }: { project: string; health: Healt
       <AssumesPart project={project} health={health} failure={healthFailure} busy={healthBusy} />
       <UnboundPart project={project} health={health} failure={healthFailure} busy={healthBusy} />
       <DriftPart project={project} health={health} failure={healthFailure} busy={healthBusy} />
+      <OrphansPart project={project} health={health} failure={healthFailure} busy={healthBusy} />
       <p className="health-pointer">
         {fill(t("health.left.pointer", { region: slot("region") }), { region: <span className="health-pointer-name">{t("health.debt.title")}</span> })}
       </p>

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Card split: a task and a subtask per department, in one act
@@ -15,7 +15,7 @@ ADR-0078, built by `department-split` (RM-0100, plugin 0.37.0). The card: `cards
 
 A split hands one piece of work to several departments at once. It makes a parent task on a document, or takes a stored task as the parent, and one subtask per chosen discipline: each a hand-off (`card-flows.md` "The rule"), its `parent` the parent, its `reviewer` the split's (named, else the parent's, else the acting name), its flow and first column the new-card rule's for its discipline. It is one write: one transaction, all cards or none, one `card.created` each, the parent first. It writes no stored card: a parent that exists keeps its row, revision and history, and makes no card wait on another (ADR-0074).
 
-A `[[card.split]]` row under `[card]` names a node kind and the disciplines its work usually needs. Rows only pre-select: the disciplines of the rows whose kind a node of the parent's targets, or a node under them, holds; and a subtask's targets, the nodes of its rows' kinds found there, else the parent's targets. A row never refuses, requires or orders a split, and no move, accept, rollup, gate or check reads one (ADR-0012). Kinds and disciplines are the project's words; the core names none (ADR-0008). ADR-0078.
+A `[[card.split]]` row under `[card]` names a node kind and the disciplines its work usually needs. Rows only pre-select: the disciplines of the rows whose kind a node of the parent's targets, or a node under them, holds; and a subtask's targets, the nodes of its rows' kinds found there, else the parent's targets. A row never refuses, requires or orders a split, and no move, accept, rollup or gate reads one, the check its form alone (ADR-0012). Kinds and disciplines are the project's words; the core names none (ADR-0008). ADR-0078.
 
 ## Config
 
@@ -30,7 +30,7 @@ disciplines = ["copy", "plates"]
 - `kind`: one row per kind, `directions.md` "Config"'s checks (1-64 bytes, no control character, no end space), matched byte for byte, never checked against `[ids]`.
 - `disciplines`: 1-32 (`MAX_SPLIT_DISCIPLINES`) through the flows' list reader (`name_problem`, each once), each listed by some `[[card.flow]]`; `PLAIN_FLOW` lists none, so under it no row reads. At most 64 rows (`MAX_SPLITS`); an empty array is no key.
 
-A bad row is a bad `[card]` (`card-flows.md` "Config"): `spec card` exits 2, the card routes answer 503, the workspaces read serves `disciplines` empty with a note; nothing else changes. The listing check runs once every flow reads, so a flow's own error stands alone. Messages mirror `[[card.flow]]`'s (`` unknown field `<x>`, expected `flow` or `split` ``, the array's and a row's type, the 65th table, a missing `kind` or `disciplines` at the table's line), a kind's as a direction's prefixed `` `kind`: ``, and: `` `[[card.split]]` kind `<k>` is written twice ``; `` `disciplines` lists none; a row lists 1 to 32 `` (`lists <n>` past 32); `` `[[card.split]]` `<k>`: no `[[card.flow]]` lists the discipline `<d>` ``.
+A bad row, or the listing check's error, turns splitting off alone: `CardConfig.split_problem` holds the first error, `splits` stays empty. `spec card split` (dry run too) exits 2 `<config>:<line>: <message>`, the route 503, `split_card` an error result, `spec init --pack` refuses; the rest reads as without the row. A bad flow errs first and stops the card surfaces (`card-flows.md` "Config"); `spec check`: `card-config`. Messages mirror `[[card.flow]]`'s (`` unknown field `<x>`, expected `flow` or `split` ``, the array's and a row's type, the 65th table, a missing `kind` or `disciplines` at the table's line, unnamed when the row's keys already err), a kind's as a direction's prefixed `` `kind`: ``, and: `` `[[card.split]]` kind `<k>` is written twice ``; `` `disciplines` lists none; a row lists 1 to 32 `` (`lists <n>` past 32); `` `[[card.split]]` `<k>`: no `[[card.flow]]` lists the discipline `<d>` ``.
 
 ## The plan
 
@@ -51,7 +51,7 @@ spec card split --parent C [--child D]... [--mandate D=M]... [--reviewer N] [--a
 ```
 
 `card_split(&Env, &Globals, &CardSplitRequest)` -> `CardSplitOutcome`; the daemon's `CardSplitBody`. Checks in order, each stopping:
-1. **Usage**, exit 2: `--parent` with `--target`, `--title`, `--goal` or `--discipline`; no `--parent` and no `--title`; no `--child` without `--dry-run` (``name each subtask's discipline with --child, or plan with --dry-run``), `--mandate`'s line first; `--as`; a look-alike `--parent`; `C` in `[ids]`. Then a bad `[card]`, exit 2.
+1. **Usage**, exit 2: `--parent` with `--target`, `--title`, `--goal` or `--discipline`; no `--parent` and no `--title`; no `--child` without `--dry-run` (``name each subtask's discipline with --child, or plan with --dry-run``), `--mandate`'s line first; `--as`; a look-alike `--parent`; `C` in `[ids]`. Then a bad `[card]` or split row, exit 2.
 2. Exit 1: `field_problem`, `discipline: <problem>`, then `split_mandates` (`card-mandate.md`); the stored parent, in any state (`parent: no card C-0099`); a write's reviewer: named, else the stored parent's, else the acting name, then `assign`'s grammar and `reviewer_problem` (`agent`, `local` refused); `--target` by `resolved_targets` and the scope read; the plan, then a new parent's `flow_for`; the store.
 
 A dry run stops before the store and judges no person. The flag's name is `SPLIT_DRY_RUN_FLAG`: `proposal_genre`'s guard bans the literal in `card.rs`.
@@ -87,7 +87,7 @@ note: <note>
 
 ## MCP
 
-`split_card` on stdio (32 tools) and a hub's `/mcp` (18): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `mandate`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card with one; a hub as the login. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, the determinism sentence: stdio 1 749 B, hub 1 764 ("You act as your login"). `INSTRUCTIONS`, `HUB_INSTRUCTIONS` (`mcp-read.md`, `hub-mcp.md` "Tools") and `read-spec` name it.
+`split_card` on stdio (32 tools) and a hub's `/mcp` (18): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `mandate`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card with one; a hub as the login. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, with the determinism sentence: stdio 1 749 B, hub 1 764. `INSTRUCTIONS`, `HUB_INSTRUCTIONS` (`mcp-read.md`, `hub-mcp.md` "Tools") and `read-spec` name it.
 
 ## Screen
 
@@ -96,12 +96,11 @@ note: <note>
 - **The form.** A new parent's Title (prefilled), Goal, Discipline (the department's first); Reviewer as Hand off's (`handOffReviewer`; a hub's login, read-only); Subtasks, a checkbox per plan child, `suggested` checked, grouped under the first department whose `flows` names the row's flow, the rest last: its `flow_title`, the raw discipline when it differs, "By kind: <n> documents" or "The task's targets", the targets in a `Disclosure`; checked, a required mandate, "Mandate for <flow title>", with the raw discipline as above (`mandateForDiscipline`). From a document, "Tasks on this document" from the held trace read under its REF (`heldTraceRef`).
 - **Split**, off until each checked row has one (`mandateNeeded`), posts the checked disciplines, `mandate` as `D=M`, in row order (`useCardSplit`): 200 closes with "Split into C-0012 and 3 subtasks" ("3 subtasks for C-0012" from a task); 409, 400 the reason in the alert, the fields kept; 503 the daemon's words.
 
-The page computes no target, suggestion or placement. Words `board.split.*`. Mock (harbor-sim): rows `mechanic` `[copy, plates]`, `rule` `[plates]`; `?scenario=conflict` refuses the first write.
+The page computes no target, suggestion or placement. Words `board.split.*`. Mock: harbor-sim's two rows (`mechanic`, `rule`); `?scenario=conflict` refuses the first write.
 
 ## Known limits
 
-- **Older binaries** refuse `split` (`` unknown field `split`, expected `flow` ``), their card surfaces alone (`card-flows.md` "Known limits"): commit a row only once every terminal, plugin and hub of the project reads it. The preset's rows stay commented.
-- **A typo in a row** stops the card surfaces; `spec card list` names its line, `spec check` does not.
+- **Older binaries** refuse `split` (`` unknown field `split`, expected `flow` ``), their card surfaces alone (`card-flows.md` "Known limits"): commit a row once every terminal, plugin and hub reads it. The preset's rows stay commented.
 - **No dedup**: two splits make two sets; the dialog lists the document's tasks. A split names cards of one store.
 - **A stored parent is read outside the transaction**: a concurrent edit can leave its children the old title or goal.
 - **A dry run's reviewer**: the route judges its format (`persons_named`), the CLI does not.

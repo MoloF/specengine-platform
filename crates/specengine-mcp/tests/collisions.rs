@@ -792,6 +792,70 @@ const TOOLS_LIST_PAIR_B3: [(Era, &str); 2] = [
     ),
 ];
 
+/// The same listing since docs/features/usage-orphans.md (RM-0111) UO6:
+/// `get_node`'s links gain `usage`, nothing else changes.
+const TOOLS_LIST_USAGE_B3: [(Era, &str); 2] = [
+    (
+        Era::Legacy,
+        "2e2c06dd221fea7722d510b5abb39bd544395d0747379cb6a80515cc0707068d",
+    ),
+    (
+        Era::Stateless,
+        "d6168077af38d5bc925b5f1e6f1f318bf94a5b9f173fa69ba69622436836e679",
+    ),
+];
+
+/// `list` as collision-pairs listed it: no `usage` in any links block of
+/// an output schema (every object schema holding `outgoing`, `incoming` and
+/// `usage`; docs/features/usage-orphans.md UO6 adds it to `get_node`'s);
+/// the tools whose schema held one.
+fn without_usage(list: &mut Value) -> Vec<String> {
+    fn strip(value: &mut Value) -> usize {
+        let mut found = 0;
+        let links = value
+            .get("properties")
+            .and_then(Value::as_object)
+            .is_some_and(|properties| {
+                ["outgoing", "incoming", "usage"]
+                    .iter()
+                    .all(|key| properties.contains_key(*key))
+            });
+        if links {
+            if let Some(properties) = value.get_mut("properties").and_then(Value::as_object_mut) {
+                properties.remove("usage");
+            }
+            if let Some(required) = value.get_mut("required").and_then(Value::as_array_mut) {
+                required.retain(|key| key != "usage");
+            }
+            found += 1;
+        }
+        match value {
+            Value::Object(object) => {
+                for (_, inner) in object.iter_mut() {
+                    found += strip(inner);
+                }
+            }
+            Value::Array(items) => {
+                for inner in items {
+                    found += strip(inner);
+                }
+            }
+            _ => {}
+        }
+        found
+    }
+    let mut held = Vec::new();
+    for tool in list["tools"].as_array_mut().expect("tools") {
+        let name = tool["name"].as_str().unwrap_or_default().to_owned();
+        if let Some(schema) = tool.get_mut("outputSchema")
+            && strip(schema) > 0
+        {
+            held.push(name);
+        }
+    }
+    held
+}
+
 /// `list` as collision-pass listed it: no `pair` in any tool's output
 /// schema (docs/features/collision-pairs.md PP7 adds it to the review
 /// document's); the tools whose schema held one.
@@ -822,18 +886,32 @@ fn without_pair(list: &mut Value) -> Vec<String> {
 /// `HUB_INSTRUCTIONS` as collision-pass pinned them. Since
 /// docs/features/collision-pairs.md PP7 the listing is
 /// [`TOOLS_LIST_PAIR_B3`], and without the review document's `pair` it
-/// is still 8f04ae24's byte for byte.
+/// is still 8f04ae24's byte for byte. Since docs/features/usage-orphans.md
+/// UO6 the listing is [`TOOLS_LIST_USAGE_B3`], and without `get_node`'s
+/// links `usage` it is collision-pairs' byte for byte.
 #[test]
 fn cn7_the_tools_list_is_byte_equal_to_collision_pass() {
     assert_eq!(TOOLS_LIST_B3.map(|(era, _)| era), ERAS);
     assert_eq!(TOOLS_LIST_PAIR_B3.map(|(era, _)| era), ERAS);
-    for ((era, pinned), (_, paired)) in TOOLS_LIST_B3.into_iter().zip(TOOLS_LIST_PAIR_B3) {
+    assert_eq!(TOOLS_LIST_USAGE_B3.map(|(era, _)| era), ERAS);
+    for (((era, pinned), (_, paired)), (_, used)) in TOOLS_LIST_B3
+        .into_iter()
+        .zip(TOOLS_LIST_PAIR_B3)
+        .zip(TOOLS_LIST_USAGE_B3)
+    {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let mut list = session.tools();
         assert_eq!(
             blake3_hex(canonical(&list).as_bytes()),
-            paired,
+            used,
             "{era:?}: tools/list changed"
+        );
+        let usage = without_usage(&mut list);
+        assert_eq!(usage, ["get_node"], "{era:?}: get_node's links alone");
+        assert_eq!(
+            blake3_hex(canonical(&list).as_bytes()),
+            paired,
+            "{era:?}: tools/list without `usage` is collision-pairs'"
         );
         let held = without_pair(&mut list);
         assert!(

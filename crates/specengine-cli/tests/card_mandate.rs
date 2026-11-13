@@ -48,6 +48,7 @@
 mod common;
 mod task_common;
 
+use common::gate::until_verdict;
 use common::proposal::Pair;
 use common::{read_text, write};
 use serde_json::{Value, json};
@@ -1299,23 +1300,18 @@ fn m4_the_gate_answers_the_same_before_and_after() {
 
 /// `spec gate --worktree main --path src/a.rs --json`: its exit and both
 /// streams; a run a loaded machine starves past the deadline is asked
-/// again (five tries; the last stands), as cards.rs asks it.
+/// again (`common::gate::until_verdict`; the last stands).
 fn gate_answer(pair: &Pair) -> (i32, String, String) {
     let main = pair.main.to_str().expect("a UTF-8 path");
-    let mut done = None;
-    for _ in 0..5 {
-        let answer = run(
-            pair,
-            &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
-        );
-        let starved = answer.stdout.contains("\"reason\":\"deadline\"")
-            || answer.stderr.contains("no answer within");
-        done = Some(answer);
-        if !starved {
-            break;
-        }
-    }
-    let done = done.expect("a run");
+    let done = until_verdict(
+        || {
+            run(
+                pair,
+                &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
+            )
+        },
+        |done| (done.stdout.as_str(), done.stderr.as_str()),
+    );
     (done.code, done.stdout, done.stderr)
 }
 

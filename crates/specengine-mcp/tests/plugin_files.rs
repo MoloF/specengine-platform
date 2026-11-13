@@ -52,7 +52,8 @@
 //! - plugin-gate AC-13: `hooks/hooks.json` is one `PreToolUse` event with
 //!   one entry: `type` `command`, the matcher fully matching `Edit`,
 //!   `Write`, `MultiEdit`, `NotebookEdit` (a plain alternation of tool
-//!   names, nothing else), `timeout` above the gate's 3 s deadline and
+//!   names, nothing else), `timeout` above the gate's deadline (5 s since
+//!   release-hardening RH-R8) and
 //!   above the wrapper's `limit`, the command `sh` on
 //!   `${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh`, which exists. M: `"type":
 //!   "http"`; `Write` dropped.
@@ -278,6 +279,14 @@
 //!   skill or role text changes); a `SCHEMA_PINS` entry 0.45.0, 0.44.0's
 //!   schemas today's without `pair` ([`as_of_0_44_0`]). M: the schema
 //!   changed with no new `SCHEMA_PINS` entry; plugin.json left at 0.44.0.
+//! - usage-orphans (RM-0111, UO6, D6,
+//!   docs/features/usage-orphans.md "Acceptance criteria"): 0.45.0 ->
+//!   0.46.0, MINOR: a key a tool returns, `get_node`'s links `usage`
+//!   (`{used_by, mentioned_by}`). A `PINS` entry 0.46.0, the tree with
+//!   plugin.json's version set back 0.45.0's (no description, skill or role
+//!   text changes); a `SCHEMA_PINS` entry 0.46.0, 0.45.0's schemas today's
+//!   without `usage` ([`as_of_0_45_0`]). M: the schema changed with no new
+//!   `SCHEMA_PINS` entry; plugin.json left at 0.45.0.
 //!
 //! The repository is only read.
 
@@ -711,6 +720,14 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.45.0",
         "a1aca5d7eb6a00ad77e14e33e9a7872a119c2616c0fd6559886252c5e4b55e17",
+    ),
+    // usage-orphans (RM-0111, UO6: 0.45.0 -> 0.46.0, MINOR: a key
+    // `get_node` returns, its links' `usage`): plugin.json's version alone;
+    // set back, the tree hashes as 0.45.0's pin (no description, skill or
+    // role text changes).
+    (
+        "0.46.0",
+        "a18d9890785c97f7538b2467c1f6d80dd995979255b4b32a7614160ddabed694",
     ),
 ];
 
@@ -1284,6 +1301,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.45.0",
         "8255b41c4eb7137e36e6ed3eae15a47a9a88da75ae50065242bd3f556584e08c",
+    ),
+    // usage-orphans (RM-0111, UO6): `usage` (`LinkUsage`: `used_by`,
+    // `mentioned_by`) in `get_node`'s links ([`as_of_0_45_0`] takes it out;
+    // no other tool's schema changed).
+    (
+        "0.46.0",
+        "9aba4ca4440aa9ecdc123adb79d7645bd44e9925ba0704c5bb4c2a0a3b14f0f3",
     ),
 ];
 
@@ -2304,7 +2328,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// (RM-0088), 0.44.0 since collision-pass (RM-0060, CP9: an eighth skill,
 /// `check-collisions`, its description 137 B, `read-spec`'s 140 B shorter:
 /// 1 197 B together, 3 B of room), 0.45.0 since collision-pairs (RM-0088,
-/// PP7: no skill text changed).
+/// PP7: no skill text changed), 0.46.0 since usage-orphans (RM-0111, UO6: no
+/// skill text changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2327,7 +2352,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.45.0")
+        json!("0.46.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2480,11 +2505,36 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // usage-orphans (RM-0111, UO6: 0.45.0 -> 0.46.0): plugin.json's version
+    // alone; set back, the tree is 0.45.0's pinned content, every skill and
+    // role byte-equal. M: plugin.json left at 0.45.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.46.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.46.0"),
+        "plugin.json's version"
+    );
+    let at_0_45_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.46.0\"",
+        "\"version\": \"0.45.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_45_0),
+        PINS[PINS.len() - 2].1,
+        "0.46.0 changes plugin.json's version only"
+    );
+    let tree = at_0_45_0;
+    let pins_0_45_0 = &PINS[..PINS.len() - 1];
     // collision-pairs (RM-0088, PP7: 0.44.0 -> 0.45.0): plugin.json's
     // version alone; set back, the tree is 0.44.0's pinned content, every
     // skill and role byte-equal. M: plugin.json left at 0.44.0; another file
     // changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.45.0"));
+    assert_eq!(
+        pins_0_45_0.last().map(|(version, _)| *version),
+        Some("0.45.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.45.0"),
@@ -2498,11 +2548,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_44_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_45_0[pins_0_45_0.len() - 2].1,
         "0.45.0 changes plugin.json's version only"
     );
     let tree = at_0_44_0;
-    let pins_0_44_0 = &PINS[..PINS.len() - 1];
+    let pins_0_44_0 = &pins_0_45_0[..pins_0_45_0.len() - 1];
     // collision-pass (RM-0060, CP9: 0.43.0 -> 0.44.0): plugin.json's version
     // and `read-spec`'s description, each once, and `check-collisions`; set
     // back and removed, the tree is 0.43.0's pinned content, every other
@@ -3867,6 +3917,51 @@ fn as_of_0_41_0(schemas: &mut Value) {
     );
 }
 
+/// usage-orphans (RM-0111, UO6): `schemas` as 0.45.0 listed them: no
+/// `usage` in `get_node`'s links (every object schema holding `outgoing`,
+/// `incoming` and `usage`, under `get_node` alone); no other tool's schema
+/// changed.
+fn as_of_0_45_0(schemas: &mut Value) {
+    fn strip(value: &mut Value) -> usize {
+        let mut found = 0;
+        let links = value
+            .get("properties")
+            .and_then(Value::as_object)
+            .is_some_and(|properties| {
+                ["outgoing", "incoming", "usage"]
+                    .iter()
+                    .all(|key| properties.contains_key(*key))
+            });
+        if links {
+            assert!(without_property(value, "usage"), "links hold usage");
+            found += 1;
+        }
+        match value {
+            Value::Object(object) => {
+                for (_, inner) in object.iter_mut() {
+                    found += strip(inner);
+                }
+            }
+            Value::Array(items) => {
+                for inner in items {
+                    found += strip(inner);
+                }
+            }
+            _ => {}
+        }
+        found
+    }
+    let tools = schemas.as_object_mut().expect("the schemas by tool");
+    for (name, schema) in tools.iter_mut() {
+        let found = strip(schema);
+        if name == "get_node" {
+            assert_eq!(found, 1, "get_node's links hold `usage` once");
+        } else {
+            assert_eq!(found, 0, "{name}: no links with `usage`");
+        }
+    }
+}
+
 /// collision-pairs (RM-0088, PP7): `schemas` as 0.44.0 listed them: no
 /// `pair` in the review document's output (`get_proposal`, and
 /// `review_proposal` and `propose_change` when listed); no other tool's
@@ -4778,7 +4873,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[34].0, "0.43.0", "an entry for 0.43.0");
     assert_eq!(SCHEMA_PINS[35].0, "0.44.0", "an entry for 0.44.0");
     assert_eq!(SCHEMA_PINS[36].0, "0.45.0", "an entry for 0.45.0");
-    assert_eq!(SCHEMA_PINS.len(), 37, "0.45.0 the last entry");
+    assert_eq!(SCHEMA_PINS[37].0, "0.46.0", "an entry for 0.46.0");
+    assert_eq!(SCHEMA_PINS.len(), 38, "0.46.0 the last entry");
+    // usage-orphans (RM-0111, UO6): 0.45.0's schemas are today's without
+    // `get_node`'s links' `usage`. M: `SCHEMA_PINS` not appended.
+    let mut at_0_45_0 = schemas.clone();
+    as_of_0_45_0(&mut at_0_45_0);
+    let at_0_45_0_hash = schema_hash(&at_0_45_0);
+    assert_eq!(
+        at_0_45_0_hash, SCHEMA_PINS[36].1,
+        "0.45.0's schemas are today's without usage-orphans' `usage`"
+    );
+    assert_ne!(at_0_45_0_hash, current, "usage-orphans changed the schemas");
+    let (schemas, current) = (at_0_45_0, at_0_45_0_hash);
     // collision-pairs (RM-0088, PP7): 0.44.0's schemas are today's without
     // the review document's `pair`. M: `SCHEMA_PINS` not appended.
     let mut at_0_44_0 = schemas.clone();
@@ -5339,8 +5446,9 @@ const GATE_SH: &str = "specengine/hooks/gate.sh";
 /// The tools whose writes the gate sees (plugin-gate "Data", "Plugin").
 const GATED_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
-/// The gate's own deadline in seconds (`docs/canon/gate.md` "Verdict").
-const GATE_DEADLINE_SECONDS: u64 = 3;
+/// The gate's own deadline in seconds (`docs/canon/gate.md` "Verdict"): 5
+/// since docs/features/release-hardening.md RH-R8 raised `GATE_DEADLINE`.
+const GATE_DEADLINE_SECONDS: u64 = 5;
 
 /// The wrapper's `limit=N` line, the seconds it gives `spec`.
 fn wrapper_limit(tree: &Tree) -> Option<u64> {

@@ -352,12 +352,32 @@ fn pp7_the_schema_holds_a_closed_pair() {
 /// Risks, "Size": a two-target `contradicts` discrepancy at every cap, its
 /// eight evidence items ESC-filled (all in `other`) and then on the two
 /// sides' files (each under its side), stays under 300 000 characters and
-/// `MAX_RESULT_CHARS`, `content` at most 48 000.
+/// `MAX_RESULT_CHARS`, `content` at most 48 000. Intake refuses ESC since
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R1, so each
+/// item is stored `z`-filled and its fields ESC-filled by SQL, as an item
+/// stored before that release holds them: still the worst case a reply
+/// meets.
 #[test]
 fn size_a_pair_at_every_cap_stays_within_the_bound() {
     let repo = Repo::new("mcp-cpair-size");
     let mut session = repo.session();
-    let esc = |bytes: usize| "\u{1b}".repeat(bytes);
+    let esc = |bytes: usize| "z".repeat(bytes);
+    let fill = |id: &str| {
+        let db = data_dir(&repo.home).join("lantern-keep.db");
+        let sql = format!(
+            "UPDATE proposals SET summary = replace(summary, 'z', char(27)), \
+             working_answer = replace(working_answer, 'z', char(27)), \
+             evidence = replace(evidence, 'z', '\\u001b'), \
+             options = replace(options, 'z', '\\u001b') WHERE id = '{id}';"
+        );
+        let output = std::process::Command::new("/usr/bin/sqlite3")
+            .arg(&db)
+            .arg(&sql)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("sqlite3 runs");
+        assert!(output.status.success(), "{output:?}");
+    };
     let max_result = usize::try_from(specengine_mcp::MAX_RESULT_CHARS).expect("a usize");
     let option = json!({"label": esc(128), "effect": esc(512), "price": esc(512)});
     // 16 `distinct_from` entries: the hits (DEC-0023, then the first item
@@ -400,7 +420,12 @@ fn size_a_pair_at_every_cap_stays_within_the_bound() {
         });
         let reply = session.call("report_discrepancy", args);
         let id = stored(&reply);
+        fill(&id);
         let read = session.call("get_proposal", json!({"proposal_id": id}));
+        assert!(
+            content_text(result(&read)).contains("\\u{1b}"),
+            "{label}: the ESC fill escaped in text"
+        );
         let document = &result(&read)["structuredContent"];
         assert!(document["pair"].is_object(), "{label}: a pair");
         let chars = result(&read).to_string().chars().count();

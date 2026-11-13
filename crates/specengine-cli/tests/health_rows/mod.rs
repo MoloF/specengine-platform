@@ -73,8 +73,9 @@ const NO_RULE: &str =
     "no [[health.bound]] rule: which nodes must be bound is the project's to declare";
 
 /// "The document": Health's keys since 9a-1, in order;
-/// docs/features/health-drift.md "Data": `drift` the 7th.
-const DOCUMENT_KEYS: [&str; 7] = [
+/// docs/features/health-drift.md "Data": `drift` the 7th;
+/// docs/features/usage-orphans.md (UO4): `orphans` the 8th.
+const DOCUMENT_KEYS: [&str; 8] = [
     "documents",
     "amendments",
     "notes",
@@ -82,6 +83,7 @@ const DOCUMENT_KEYS: [&str; 7] = [
     "assumes",
     "unbound",
     "drift",
+    "orphans",
 ];
 /// `HealthAssumes`, `HealthUnbound`.
 const ROW_KEYS: [&str; 4] = ["state", "causes", "counts", "rows"];
@@ -1054,7 +1056,29 @@ fn assumes_rows_over_the_seeded_queue() {
     );
     // docs/features/health-drift.md "Text and stderr": row 6's summary
     // between rows 4-5's and `code:` (TE-1's tree holds the golden lock).
-    let mut tail: Vec<&str> = run.stdout.lines().rev().take(5).collect();
+    // docs/features/usage-orphans.md UO4: row 8's block between `code:` and
+    // the last line, its header and its rows, taken out here.
+    let all: Vec<&str> = run.stdout.lines().collect();
+    let block = all
+        .iter()
+        .position(|line| line.starts_with("orphans: "))
+        .expect("row 8's block");
+    assert!(
+        all[block - 1].starts_with("code: ")
+            && all[block].ends_with(" live documents link to nothing"),
+        "{}",
+        run.stdout
+    );
+    let rows = all[block + 1..]
+        .iter()
+        .take_while(|line| line.starts_with("  "))
+        .count();
+    let without: Vec<&str> = all[..block]
+        .iter()
+        .chain(&all[block + 1 + rows..])
+        .copied()
+        .collect();
+    let mut tail: Vec<&str> = without.iter().rev().take(5).copied().collect();
     let drift = tail.remove(2);
     assert!(drift.starts_with("drift: "), "{}", run.stdout);
     assert_eq!(
@@ -2819,6 +2843,9 @@ fn cannot_verify_marker_binds_nothing() {
 /// docs/features/health-drift.md "Degrade matrix": the tree holds no
 /// worktree, so row 6 is `cannot` with plain's cause (4), its line after
 /// rows 4-5's summaries.
+/// docs/features/usage-orphans.md UO4: row 8 after `code:`, PREM-001 the
+/// one orphan of code-a's five live documents (no link either way, no
+/// child), its tasks `null` with the note (no queue).
 #[test]
 fn ac_3_tree_document_and_text_are_the_specs_example() {
     let scratch = Scratch::new("health-ac3-golden");
@@ -2832,7 +2859,7 @@ fn ac_3_tree_document_and_text_are_the_specs_example() {
     let documents = check_documents(&scratch.home("checks"), &root);
     let home = scratch.home("fresh");
     let (run, _, _) = document(&home, &root);
-    let want = r#"{"documents":DOCS,"amendments":[],"notes":[],"code":{"files":8,"rs":7,"ron":1,"skipped":0},"assumes":{"state":"measured","causes":[],"counts":{"markers":2,"rows":1,"pending":0,"as_assumed":0,"otherwise":0,"applied":0,"rejected":0,"unknown":1,"archived":0,"in_question":0},"rows":[{"id":"PR-7","state":"unknown","path":"crates/tally/src/lib.rs","line":13,"column":4,"relation":"implements","proposal":null,"node":null}]},"unbound":{"state":"measured","causes":[],"counts":{"rules":1,"selected":5,"bound":3,"unbound":2},"rows":[{"id":"LAW-SOURCE","kind":"law","title":"Source","path":"docs/spec/limits.md","line":12,"rules":[1],"mentions":0,"markers":[]},{"id":"LAW-DEFAULT","kind":"law","title":"Default","path":"docs/spec/limits.md","line":16,"rules":[1],"mentions":0,"markers":[{"path":"crates/tally/src/broken.rs","line":4,"column":4,"relation":"implements","id_state":"resolved","binding":"cannot_verify","reason":"cannot_verify"}]}]},"drift":{"state":"cannot","causes":["no git repository was found for the root, or git could not read it"],"counts":null,"rows":null,"tested":null,"notes":[]}}"#;
+    let want = r#"{"documents":DOCS,"amendments":[],"notes":[],"code":{"files":8,"rs":7,"ron":1,"skipped":0},"assumes":{"state":"measured","causes":[],"counts":{"markers":2,"rows":1,"pending":0,"as_assumed":0,"otherwise":0,"applied":0,"rejected":0,"unknown":1,"archived":0,"in_question":0},"rows":[{"id":"PR-7","state":"unknown","path":"crates/tally/src/lib.rs","line":13,"column":4,"relation":"implements","proposal":null,"node":null}]},"unbound":{"state":"measured","causes":[],"counts":{"rules":1,"selected":5,"bound":3,"unbound":2},"rows":[{"id":"LAW-SOURCE","kind":"law","title":"Source","path":"docs/spec/limits.md","line":12,"rules":[1],"mentions":0,"markers":[]},{"id":"LAW-DEFAULT","kind":"law","title":"Default","path":"docs/spec/limits.md","line":16,"rules":[1],"mentions":0,"markers":[{"path":"crates/tally/src/broken.rs","line":4,"column":4,"relation":"implements","id_state":"resolved","binding":"cannot_verify","reason":"cannot_verify"}]}]},"drift":{"state":"cannot","causes":["no git repository was found for the root, or git could not read it"],"counts":null,"rows":null,"tested":null,"notes":[]},"orphans":{"live":5,"rows":[{"name":"PREM-001","id":"PREM-001","kind":"premise","title":"Callers step from one thread","path":"docs/records/PREM-001.md","line":1,"status":null,"tasks":null,"tasks_open":null}],"notes":["orphans: no queue yet: no task read"]}}"#;
     assert_eq!(
         run.stdout,
         format!("{}\n", want.replace("DOCS", &documents.to_string()))
@@ -2851,6 +2878,8 @@ fn ac_3_tree_document_and_text_are_the_specs_example() {
              unbound: 2 of 5 selected nodes, 1 rules\n\
              drift: cannot: no git repository was found for the root, or git could not read it\n\
              code: 8 files (.rs 7, .ron 1), skipped 0\n\
+             orphans: 1 of 5 live documents link to nothing\n\
+             \x20 PREM-001 | premise | Callers step from one thread | docs/records/PREM-001.md:1\n\
              spec health: {documents} documents, 0 unapplied amendments\n"
         )
     );

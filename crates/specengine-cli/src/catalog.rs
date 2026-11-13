@@ -16,9 +16,13 @@
 //!
 //! ```text
 //! catalog <kinds joined ", "> | rows <n>[ [archive]]
-//! <id> | version <rev or -> | <state> | open items <n> | tasks <t>, open <o> | <at>[ (file)] | <by> | <proposal or hand> | <title>
+//! <id> | version <rev or -> | <state> | open items <n> | tasks <t>, open <o> | used by <u>, mentioned by <m>[, orphan] | <at>[ (file)] | <by> | <proposal or hand> | <title>
 //! [truncated: <k> of <n> rows not shown]
 //! ```
+//!
+//! The uses (task spec `usage-orphans` UO5) come from core's `usage_of`
+//! over the graph the tree's lines were read from, one more pass over its
+//! edges; `orphan` prints only on a document judged one.
 //!
 //! A row with no last change prints `- | - | -` for its three. Every value
 //! is on one line, every line's control characters escaped; the JSON holds
@@ -46,6 +50,7 @@ use specengine_core::catalog::{
 use specengine_core::check::{NodeAt, SpecGraph};
 use specengine_core::revision;
 use specengine_core::trace::Rollup;
+use specengine_core::usage::{NodeUsage, usage_of};
 use specengine_store::{
     GitEnv, LastCommits, LoggedCommit, Proposal, ProposalFilter, ProposalQueue as _,
     ProposalStatus, SqliteQueue, WorktreeGit, same_repository,
@@ -111,6 +116,13 @@ pub struct CatalogRow {
     /// Its cards, cancelled ones never read, and of them the open.
     pub tasks: usize,
     pub tasks_open: usize,
+    /// Core's `usage_of` over the rows' graph (task spec `usage-orphans`
+    /// UO1, UO5): distinct live sources in other files by strong type, by
+    /// the weak one, and for a live document whether nothing links it.
+    pub used_by: u32,
+    pub mentioned_by: u32,
+    /// `None` for a section and a document of a file that is not live.
+    pub orphan: Option<bool>,
     /// Its file's newest commit on `HEAD`'s first-parent line; `None` when
     /// none is read.
     pub last_change: Option<LastChange>,
@@ -173,7 +185,8 @@ struct CatalogJson<'a> {
     omitted: Option<usize>,
 }
 
-/// A row's 13 keys, in this order.
+/// A row's 16 keys, in this order (task spec `usage-orphans` UO5: the three
+/// uses after the tasks, as the text has them).
 #[derive(Serialize)]
 struct RowJson<'a> {
     id: Option<&'a str>,
@@ -188,6 +201,9 @@ struct RowJson<'a> {
     open_items: u64,
     tasks: usize,
     tasks_open: usize,
+    used_by: u32,
+    mentioned_by: u32,
+    orphan: Option<bool>,
     last_change: Option<&'a LastChange>,
 }
 
@@ -216,6 +232,9 @@ impl Serialize for CatalogOutcome {
                     open_items: row.open_items,
                     tasks: row.tasks,
                     tasks_open: row.tasks_open,
+                    used_by: row.used_by,
+                    mentioned_by: row.mentioned_by,
+                    orphan: row.orphan,
                     last_change: row.last_change.as_ref(),
                 })
                 .collect(),
@@ -369,6 +388,13 @@ pub fn catalog_with_view(
         git_read(&project, &process_git(env), &paths, cache)
     };
     let items = open_items(env, &slug, git.common_dir.as_deref())?;
+    // One more pass over the same graph's edges (task spec `usage-orphans`
+    // UO5), never stored (UO7).
+    let usage = if nodes.is_empty() {
+        BTreeMap::new()
+    } else {
+        usage_of(&graph)
+    };
 
     let rows: Vec<CatalogRow> = lines
         .into_iter()
@@ -378,7 +404,8 @@ pub fn catalog_with_view(
                 .file(at.file)
                 .and_then(|file| file.parsed.as_ref())
                 .and_then(|parsed| revision(parsed, at.ord).number());
-            row_of(line, at, rev, work, &items.counts, &git)
+            let uses = usage.get(&at).copied().unwrap_or_default();
+            row_of(line, at, rev, work, uses, &items.counts, &git)
         })
         .collect();
     let shown = match view {
@@ -414,12 +441,14 @@ pub fn catalog_with_view(
     })
 }
 
-/// A tree line joined with its node's work, open items and last change.
+/// A tree line joined with its node's work, uses, open items and last
+/// change.
 fn row_of(
     line: TreeNode,
     at: NodeAt,
     rev: Option<u32>,
     work: NodeWork,
+    uses: NodeUsage,
     counts: &BTreeMap<String, u64>,
     git: &GitRead,
 ) -> CatalogRow {
@@ -450,6 +479,9 @@ fn row_of(
         open_items,
         tasks: work.cards,
         tasks_open: work.open,
+        used_by: uses.used_by,
+        mentioned_by: uses.mentioned_by,
+        orphan: uses.orphan,
         last_change,
     }
 }
@@ -734,13 +766,21 @@ fn row_line(row: &CatalogRow) -> String {
         ),
         None => (ABSENT.to_owned(), ABSENT.to_owned(), ABSENT.to_owned()),
     };
+    // Task spec `usage-orphans` UO5: the word only on a judged orphan.
+    let orphan = if row.orphan == Some(true) {
+        ", orphan"
+    } else {
+        ""
+    };
     escape_controls(&format!(
-        "{} | version {rev} | {} | open items {} | tasks {}, open {} | {at} | {by} | {proposal} | {}",
+        "{} | version {rev} | {} | open items {} | tasks {}, open {} | used by {}, mentioned by {}{orphan} | {at} | {by} | {proposal} | {}",
         one_line(name),
         row.state.as_str(),
         row.open_items,
         row.tasks,
         row.tasks_open,
+        row.used_by,
+        row.mentioned_by,
         held(row.title.as_ref())
     ))
 }

@@ -40,6 +40,10 @@
 //!
 //! Every value is judged and the first error by line is returned
 //! ([`ProjectError`]), so the caller prints `<config>:<line>: <message>`.
+//! A `split` error alone is no `Err`: the first one by line is
+//! [`CardConfig::split_problem`], splitting off and the flows served (task
+//! spec `release-hardening` RH-R4). A row whose keys err names no missing
+//! key.
 //! Pure: the text in, the flows out. No column means anything here: the
 //! words of [`PLAIN_FLOW`] are data, and no code reads a column's name.
 
@@ -177,11 +181,15 @@ pub struct CardSplit {
 }
 
 /// `[card]`, checked: at least one flow, and the split rows in config order
-/// (none without the key).
+/// (none without the key, or with [`Self::split_problem`]).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CardConfig {
     pub flows: Vec<CardFlow>,
     pub splits: Vec<CardSplit>,
+    /// The first error by line of `[card] split`, a row's or the listing
+    /// check's: splitting is off, `splits` empty, and nothing else changes
+    /// (task spec `release-hardening` RH-R4).
+    pub split_problem: Option<ProjectError>,
 }
 
 impl CardConfig {
@@ -270,6 +278,7 @@ pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
         message: error.message().trim().to_owned(),
     })?;
     let mut errors = Errors::new(text);
+    let mut split_errors = Errors::new(text);
     let mut flows: Vec<CardFlow> = Vec::new();
     let mut splits: Vec<CardSplit> = Vec::new();
     let table = root
@@ -278,7 +287,13 @@ pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
         .find(|(key, _)| key.get_ref().as_ref() == TABLE);
     if let Some((_, table)) = table {
         match table.get_ref() {
-            DeValue::Table(entries) => read_card(entries, &mut flows, &mut splits, &mut errors),
+            DeValue::Table(entries) => read_card(
+                entries,
+                &mut flows,
+                &mut splits,
+                &mut errors,
+                &mut split_errors,
+            ),
             other => errors.push(
                 table.span(),
                 format!("`[{TABLE}]` is a table, not {}", type_name(other)),
@@ -288,20 +303,34 @@ pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
     if let Some(error) = errors.first() {
         return Err(error);
     }
-    if flows.is_empty() {
-        return card_from_toml(PLAIN_FLOW);
+    // A bad split row turns splitting off, whole, and nothing else (RH-R4).
+    let split_problem = split_errors.first();
+    if split_problem.is_some() {
+        splits.clear();
     }
-    Ok(CardConfig { flows, splits })
+    if flows.is_empty() {
+        return Ok(CardConfig {
+            split_problem,
+            ..card_from_toml(PLAIN_FLOW)?
+        });
+    }
+    Ok(CardConfig {
+        flows,
+        splits,
+        split_problem,
+    })
 }
 
-/// `[card]`'s keys: each flow pushed or its error, then each split row; a
-/// row's disciplines are judged against the flows only once every flow
-/// reads, so a flow's own error is never masked by a listing error.
+/// `[card]`'s keys: each flow pushed or its error, then each split row, its
+/// errors in `split_errors`; a row's disciplines are judged against the flows
+/// only once every flow reads, so a flow's own error is never masked by a
+/// listing error.
 fn read_card(
     entries: &DeTable<'_>,
     flows: &mut Vec<CardFlow>,
     splits: &mut Vec<CardSplit>,
     errors: &mut Errors<'_>,
+    split_errors: &mut Errors<'_>,
 ) {
     let mut rows = None;
     let mut flows_read = true;
@@ -320,9 +349,9 @@ fn read_card(
     let Some((name, value)) = rows else {
         return;
     };
-    let read = read_splits(name, value, errors);
+    let read = read_splits(name, value, split_errors);
     if flows_read {
-        listed_by_flows(&read, flows, errors);
+        listed_by_flows(&read, flows, split_errors);
     }
     splits.extend(read.into_iter().map(|(split, _)| split));
 }
@@ -448,6 +477,11 @@ fn read_split(
             other => errors.push(key.span(), unknown_field(other, &SPLIT_KEYS)),
         }
     }
+    // A row whose keys already err names no missing key: a misspelt
+    // `disciplines` is its unknown field, not a row without one (RH-R4).
+    if errors.len() != before {
+        return None;
+    }
     if !kind_written {
         errors.push(span, format!("{SPLIT} has no `kind`"));
         return None;
@@ -457,9 +491,6 @@ fn read_split(
         errors.push(span, format!("{SPLIT} `{kind}` has no `disciplines`"));
         return None;
     };
-    if errors.len() != before {
-        return None;
-    }
     let (names, spans) = disciplines.into_iter().unzip();
     Some((
         (

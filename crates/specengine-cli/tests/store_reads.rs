@@ -67,7 +67,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use common::keys::{SHOW_KEYS, without_doc_modal_keys, without_keys};
+use common::keys::{SHOW_KEYS, without_doc_modal_keys, without_keys, without_usage_counts};
 use common::{SPEC, Scratch, fixture, repository_root};
 use serde::{Deserialize, Serialize};
 use specengine_core::ProjectConfig;
@@ -456,8 +456,9 @@ fn placeholders(
 }
 
 /// A `show --json` stream with flow-scenario's `ancestors` taken out
-/// (RM-0094, its test churn) and doc-modal's link `title` and `end_kind`
-/// (RM-0095, DM-1), every other byte kept; a `bundle` stream (its
+/// (RM-0094, its test churn), doc-modal's link `title` and `end_kind`
+/// (RM-0095, DM-1) and usage-orphans' links `usage` (RM-0111, UO6), every
+/// other byte kept; a `bundle` stream (its
 /// own `ancestors` layer stays) and a stream holding no JSON document (exit
 /// 2, or not UTF-8) as they are.
 fn without_show_keys(command: &str, bytes: &[u8]) -> Vec<u8> {
@@ -466,6 +467,17 @@ fn without_show_keys(command: &str, bytes: &[u8]) -> Vec<u8> {
             without_doc_modal_keys(&without_keys(text, &SHOW_KEYS)).into_bytes()
         }
         _ => bytes.to_vec(),
+    }
+}
+
+/// A `show` text stream with usage-orphans' counts out of each links
+/// summary (docs/features/usage-orphans.md UO6, its test churn), every
+/// other byte kept; any other command's as it is.
+fn without_usage_text(command: &str, bytes: &[u8]) -> Vec<u8> {
+    if command == "show" {
+        without_usage_counts(bytes)
+    } else {
+        bytes.to_vec()
     }
 }
 
@@ -552,7 +564,7 @@ fn answer(
         fixture: name.to_owned(),
         args: args.to_vec(),
         code: format!("{} {}", text.code, json.code),
-        text: Stream::of(&streams[0]),
+        text: Stream::of(&without_usage_text(&args[0], &streams[0])),
         json: Stream::of(&without_show_keys(&args[0], &streams[1])),
         stderr: Stream::of(&streams[2]),
     };

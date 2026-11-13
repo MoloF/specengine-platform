@@ -120,8 +120,10 @@ fn open_items(document: &Value, id: &str) -> u64 {
         .unwrap_or_else(|| panic!("{id}: open_items: {document}"))
 }
 
-/// The 13 keys of a row, in order, and the 6 of its last change.
-const ROW_KEYS: [&str; 13] = [
+/// The 16 keys of a row, in order (docs/features/usage-orphans.md
+/// "Acceptance criteria", UO5: `used_by`, `mentioned_by`, `orphan` after
+/// `tasks_open`), and the 6 of its last change.
+const ROW_KEYS: [&str; 16] = [
     "id",
     "kind",
     "title",
@@ -134,6 +136,9 @@ const ROW_KEYS: [&str; 13] = [
     "open_items",
     "tasks",
     "tasks_open",
+    "used_by",
+    "mentioned_by",
+    "orphan",
     "last_change",
 ];
 const CHANGE_KEYS: [&str; 6] = ["at", "by", "by_name", "commit", "proposal", "of_file"];
@@ -344,8 +349,9 @@ fn dc7_no_git_on_path_reads_no_last_change() {
     assert_eq!(
         text.stdout,
         "catalog scene | rows 2\nSCN-ARRIVAL | version 1 | in work | open items 1 | tasks 1, \
-         open 1 | - | - | - | Arrival\nSCN-STORM | version 1 | no card | open items 0 | tasks 0, \
-         open 0 | - | - | - | The storm\n",
+         open 1 | used by 1, mentioned by 0 | - | - | - | Arrival\nSCN-STORM | version 1 | no \
+         card | open items 0 | tasks 0, open 0 | used by 0, mentioned by 0 | - | - | - | The \
+         storm\n",
         "{}",
         text.show()
     );
@@ -482,7 +488,9 @@ fn dc7_the_text_is_cut_after_whole_rows() {
     );
     for line in &lines[1..lines.len() - 1] {
         assert!(
-            line.starts_with("SCN-") && line.split(" | ").count() == 9,
+            // Ten fields since usage-orphans' uses (docs/features/usage-orphans.md
+            // "Acceptance criteria", UO5).
+            line.starts_with("SCN-") && line.split(" | ").count() == 10,
             "a whole row: {line}"
         );
     }

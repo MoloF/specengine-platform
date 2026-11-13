@@ -1841,7 +1841,8 @@ fn ac_r9_tasks_list_it_bound_or_by_the_nodes_it_amends() {
 /// docs/features/health-drift.md added theirs; 76 since
 /// docs/features/ui-node-bindings.md added `ShownNode` and
 /// `ShownBindings`, TE-1; 81 since docs/features/lock-diff.md added its
-/// five, TE-2; the amendment adds none).
+/// five, TE-2; 151 now, the last three docs/features/usage-orphans.md's,
+/// UO9; the amendment adds none).
 /// M: a key added.
 #[test]
 fn ac_r10_the_review_is_a_new_files_46_keys() {
@@ -1867,7 +1868,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        148,
+        151,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1883,8 +1884,10 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          (docs/features/delivery-analytics.md, DA-11), direction-catalog's three \
          (docs/features/direction-catalog.md, DC-9), department-overview's three \
          (docs/features/department-overview.md, DO10), collision-pairs' two \
-         (docs/features/collision-pairs.md, PP8) and delivery-timeline's three \
-         (docs/features/delivery-timeline.md, DT6)"
+         (docs/features/collision-pairs.md, PP8), delivery-timeline's three \
+         (docs/features/delivery-timeline.md, DT6) and usage-orphans' three \
+         (docs/features/usage-orphans.md, UO9: `LinkUsage`, `HealthOrphans`, \
+         `HealthOrphan`)"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

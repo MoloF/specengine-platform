@@ -1,7 +1,9 @@
 //! The pure half of the agent intake (`docs/canon/agent-intake.md` "Tools",
 //! "Stored", "Dedup", "Rules" 2): the three queue kinds that never apply
 //! (a `decision`: task spec `kind-decision`), their closed enums, the caps
-//! every caller checks (UTF-8 bytes), the field checks in input order, and
+//! every caller checks (UTF-8 bytes), the field checks in input order (a
+//! field a decision record carries refusing, after its cap, a character the
+//! record never carries: task spec `release-hardening` RH-R1), and
 //! the normalised text the queue's dedup compares; beside them the names of
 //! the four kinds that apply, and an interpretation's fields
 //! ([`Interpretation`]). Nothing is
@@ -13,6 +15,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::proposal::{TEXT_MAX_BYTES, author_field_problem};
+use crate::record::refused_char;
 
 /// The kind of a proposal replacing one node's span.
 pub const UPDATE_KIND: &str = "update";
@@ -343,7 +346,7 @@ pub fn question_problem(
     author: AuthorInput<'_>,
 ) -> Option<FieldProblem> {
     node_ids_problem(question.node_ids)
-        .or_else(|| required("text", question.text, SUMMARY_MAX))
+        .or_else(|| carried("text", question.text, SUMMARY_MAX))
         .or_else(|| gist_problem(question.gist))
         .or_else(|| optional("matters", question.matters, MATTERS_MAX))
         .or_else(|| {
@@ -356,8 +359,8 @@ pub fn question_problem(
             (Some(_), None) => Some(FieldProblem::new("recommendation", "given without options")),
             (Some(at), Some(options)) => recommendation_problem(at, options.len()),
         })
-        .or_else(|| required("working_answer", question.working_answer, ANSWER_MAX))
-        .or_else(|| required("price_of_other", question.price_of_other, ANSWER_MAX))
+        .or_else(|| carried("working_answer", question.working_answer, ANSWER_MAX))
+        .or_else(|| carried("price_of_other", question.price_of_other, ANSWER_MAX))
         .or_else(|| distinct_problem(question.distinct_from))
         .or_else(|| author_problem(author))
 }
@@ -370,12 +373,12 @@ pub fn discrepancy_problem(
     author: AuthorInput<'_>,
 ) -> Option<FieldProblem> {
     node_ids_problem(&input.node_ids)
-        .or_else(|| required("summary", &input.summary, SUMMARY_MAX))
+        .or_else(|| carried("summary", &input.summary, SUMMARY_MAX))
         .or_else(|| evidence_problem(&input.evidence))
         .or_else(|| options_problem(&input.options, OPTIONS_MAX))
         .or_else(|| recommendation_problem(input.recommendation, input.options.len()))
         .or_else(|| {
-            optional(
+            carried_optional(
                 "working_answer",
                 input.working_answer.as_deref(),
                 ANSWER_MAX,
@@ -391,10 +394,10 @@ pub fn discrepancy_problem(
 /// `distinct_from`, then the author's.
 pub fn decision_problem(input: &DecisionInput, author: AuthorInput<'_>) -> Option<FieldProblem> {
     node_ids_problem(&input.node_ids)
-        .or_else(|| required("text", &input.text, SUMMARY_MAX))
-        .or_else(|| required("working_answer", &input.working_answer, ANSWER_MAX))
-        .or_else(|| required("price_of_other", &input.price_of_other, ANSWER_MAX))
-        .or_else(|| optional("why", input.why.as_deref(), ANSWER_MAX))
+        .or_else(|| carried("text", &input.text, SUMMARY_MAX))
+        .or_else(|| carried("working_answer", &input.working_answer, ANSWER_MAX))
+        .or_else(|| carried("price_of_other", &input.price_of_other, ANSWER_MAX))
+        .or_else(|| carried_optional("why", input.why.as_deref(), ANSWER_MAX))
         .or_else(|| input.proposed_patch.as_ref().and_then(patch_problem))
         .or_else(|| distinct_problem(input.distinct_from.as_deref().unwrap_or_default()))
         .or_else(|| author_problem(author))
@@ -468,13 +471,12 @@ fn evidence_problem(evidence: &[Evidence]) -> Option<FieldProblem> {
     }
     evidence.iter().enumerate().find_map(|(index, item)| {
         let field = |name: &str| format!("evidence[{index}].{name}");
-        required(&field("file"), &item.file, LOCATION_MAX)
-            .or_else(|| optional(&field("qpath"), item.qpath.as_deref(), LOCATION_MAX))
+        carried(&field("file"), &item.file, LOCATION_MAX)
+            .or_else(|| carried_optional(&field("qpath"), item.qpath.as_deref(), LOCATION_MAX))
             .or_else(|| {
-                item.lines
-                    .as_deref()
-                    .filter(|lines| !lines_are_valid(lines))
-                    .map(|lines| {
+                let lines = item.lines.as_deref()?;
+                refused_in(&field("lines"), lines).or_else(|| {
+                    (!lines_are_valid(lines)).then(|| {
                         FieldProblem::new(
                             field("lines"),
                             format!(
@@ -482,9 +484,10 @@ fn evidence_problem(evidence: &[Evidence]) -> Option<FieldProblem> {
                             ),
                         )
                     })
+                })
             })
-            .or_else(|| required(&field("observed"), &item.observed, EVIDENCE_TEXT_MAX))
-            .or_else(|| required(&field("documented"), &item.documented, EVIDENCE_TEXT_MAX))
+            .or_else(|| carried(&field("observed"), &item.observed, EVIDENCE_TEXT_MAX))
+            .or_else(|| carried(&field("documented"), &item.documented, EVIDENCE_TEXT_MAX))
     })
 }
 
@@ -502,9 +505,9 @@ fn options_problem(options: &[IntakeOption], max: usize) -> Option<FieldProblem>
     }
     options.iter().enumerate().find_map(|(index, option)| {
         let field = |name: &str| format!("options[{index}].{name}");
-        required(&field("label"), &option.label, LABEL_MAX)
-            .or_else(|| required(&field("effect"), &option.effect, OPTION_TEXT_MAX))
-            .or_else(|| required(&field("price"), &option.price, OPTION_TEXT_MAX))
+        carried(&field("label"), &option.label, LABEL_MAX)
+            .or_else(|| carried(&field("effect"), &option.effect, OPTION_TEXT_MAX))
+            .or_else(|| carried(&field("price"), &option.price, OPTION_TEXT_MAX))
     })
 }
 
@@ -629,6 +632,32 @@ fn required(field: &str, value: &str, max: usize) -> Option<FieldProblem> {
 /// An optional string: when given, as a required one.
 fn optional(field: &str, value: Option<&str>, max: usize) -> Option<FieldProblem> {
     value.and_then(|value| required(field, value, max))
+}
+
+/// A required string a decision record carries: [`required`], then no
+/// character a record never carries ([`refused_in`]), so an item the intake
+/// stores is one an approve can write (task spec `release-hardening` RH-R1).
+fn carried(field: &str, value: &str, max: usize) -> Option<FieldProblem> {
+    required(field, value, max).or_else(|| refused_in(field, value))
+}
+
+/// An optional string a record carries: when given, as [`carried`].
+fn carried_optional(field: &str, value: Option<&str>, max: usize) -> Option<FieldProblem> {
+    value.and_then(|value| carried(field, value, max))
+}
+
+/// `value`'s first character a record never carries ([`refused_char`]):
+/// `<field>: holds U+000D: a decision record never carries it`.
+fn refused_in(field: &str, value: &str) -> Option<FieldProblem> {
+    refused_char(value).map(|c| {
+        FieldProblem::new(
+            field,
+            format!(
+                "holds U+{:04X}: a decision record never carries it",
+                u32::from(c)
+            ),
+        )
+    })
 }
 
 fn over(field: &str, value: &str, max: usize) -> Option<FieldProblem> {

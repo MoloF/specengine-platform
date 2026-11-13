@@ -4,7 +4,7 @@ import type { InboxQuery } from "../api/queries";
 import type { ShownNode } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { severityLook, statusLook } from "../inbox/labels";
-import { summaryOf } from "../inbox/summary";
+import { ProposalSummary } from "../inbox/ProposalSummary";
 import { Badge } from "../ui/Badge";
 import { EmptyState } from "../ui/EmptyState";
 import { ErrorPanel, Skeleton } from "../ui/states";
@@ -79,7 +79,9 @@ export function ProposalsPanel({
                   {formatAge(proposal.created_at, now, t)}
                 </time>
               </p>
-              <p>{summaryOf(proposal, t)}</p>
+              <p>
+                <ProposalSummary proposal={proposal} />
+              </p>
             </li>
           ))}
         </ul>

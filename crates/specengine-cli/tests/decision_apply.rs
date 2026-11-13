@@ -672,7 +672,10 @@ fn front_matter(record: &str) -> Vec<&str> {
 /// an effect `## X {#RULE-STAM-REGEN}` (a second definition) exits 1
 /// naming `options[1].effect`, no prompt, nothing written; a label
 /// `{{id}}` stays that text; U+202E in the summary exits 1 naming
-/// `summary`, no prompt, no event. M: raw substitution; a re-scan.
+/// `summary`, no prompt, no event. M: raw substitution; a re-scan. Intake
+/// refuses U+202E since docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R1, so the summary's is set by SQL, as an item stored
+/// before that release holds it (`reject:` settles such an item).
 #[test]
 fn ac06_free_text_is_one_pass_and_never_structure() {
     let pair = Pair::new("da-ac06", "spec-a");
@@ -769,10 +772,14 @@ fn ac06_free_text_is_one_pass_and_never_structure() {
         &pair.linked,
         discrepancy(
             &["RULE-STAM-REGEN"],
-            "A summary \u{202e}reversed",
+            "A summary reversed",
             &[("Keep", "e0", "p0"), ("Change", "e1", "p1")],
         ),
     );
+    pair.sql(&format!(
+        "UPDATE proposals SET summary = 'A summary ' || char(8238) || 'reversed' \
+         WHERE id = '{marked}';"
+    ));
     let before = pair.state();
     let events = pair.events().len();
     let (outcome, questions) = pair.decide(&pair.main, &marked, &option(1), None, true);

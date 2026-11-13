@@ -24,7 +24,7 @@ import { arcOver, CLICK_DISTANCE, readableViewport } from "../graph/geometry";
 import { BOX_HANDLES, BOX_HEIGHT, BOX_WIDTH, HANDLE_SIZE } from "../graph/layout";
 import { taskStatusLook } from "../tasks/labels";
 import { Icon } from "../ui/Icon";
-import { CHAIN_TASKS_SHOWN, chainOf, LANE_HEAD, type ChainBox, type ChainEdge, type ChainLane, type ChainLayout } from "./chain";
+import { CHAIN_TASKS_SHOWN, chainOf, CUT_LABEL_HEIGHT, LANE_HEAD, type ChainBox, type ChainEdge, type ChainLane, type ChainLayout } from "./chain";
 import { countsText, currentLook, cutRuleText, inACycleLook, laneName, mvpCutLook, notDrawnText, oneLine } from "./text";
 import { useTranslate, type Translate } from "../i18n";
 
@@ -53,8 +53,9 @@ function chainAriaLabels(t: Translate) {
 
 type ItemData = { box: ChainBox; selected: boolean };
 type LaneData = { lane: ChainLane };
-type CutData = { text: string; height: number };
-type ChainNode = Node<ItemData, "item"> | Node<LaneData, "lane"> | Node<CutData, "cut">;
+type CutData = { height: number };
+type CutLabelData = { text: string };
+type ChainNode = Node<ItemData, "item"> | Node<LaneData, "lane"> | Node<CutData, "cut"> | Node<CutLabelData, "cutLabel">;
 type WaitEdge = Edge<{ edge: ChainEdge }, "wait">;
 
 const SIDES = { left: Position.Left, right: Position.Right, top: Position.Top } as const;
@@ -146,16 +147,19 @@ const LaneLabel = memo(function LaneLabel({ data }: NodeProps<Node<LaneData, "la
   );
 });
 
-/** The cut's rule: a dashed line down the gap after the `mvp_cut` lane, its words at the top. */
+/** The cut's rule: a dashed line down the gap after the `mvp_cut` lane. */
 const CutRule = memo(function CutRule({ data }: NodeProps<Node<CutData, "cut">>) {
+  return <div className="chain-cut" aria-hidden="true" style={{ height: data.height }} />;
+});
+
+/** The cut's words, a node of their own above the lane heads, from the rule's x (chain.ts `cutLabel`). */
+const CutLabel = memo(function CutLabel({ data }: NodeProps<Node<CutLabelData, "cutLabel">>) {
   const t = useTranslate();
   return (
-    <div className="chain-cut" aria-hidden="true" style={{ height: data.height }}>
-      <span className="chain-cut-label">
-        <Icon name={mvpCutLook(t).icon} />
-        {data.text}
-      </span>
-    </div>
+    <p className="chain-cut-label" aria-hidden="true">
+      <Icon name={mvpCutLook(t).icon} />
+      {data.text}
+    </p>
   );
 });
 
@@ -170,7 +174,7 @@ const WaitView = memo(function WaitView({ id, sourceX, sourceY, targetX, targetY
   return <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={0} />;
 });
 
-const NODE_TYPES = { item: ItemBox, lane: LaneLabel, cut: CutRule };
+const NODE_TYPES = { item: ItemBox, lane: LaneLabel, cut: CutRule, cutLabel: CutLabel };
 const EDGE_TYPES = { wait: WaitView };
 
 const ARROW: EdgeMarker = { type: MarkerType.ArrowClosed, width: 14, height: 14 };
@@ -315,7 +319,23 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
         position: { x: layout.cutX, y: 0 },
         width: 2,
         height: layout.height,
-        data: { text: cutText, height: layout.height },
+        data: { height: layout.height },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        deletable: false,
+        focusable: false,
+      });
+    }
+    if (layout.cutLabel !== null && cutText !== null) {
+      // Its own node above the heads, never inside a lane's [0, LANE_HEAD) (docs/features/release-hardening.md "Acceptance criteria", RH-U6).
+      placed.push({
+        id: "cut-label",
+        type: "cutLabel",
+        position: { ...layout.cutLabel },
+        width: BOX_WIDTH,
+        height: CUT_LABEL_HEIGHT,
+        data: { text: cutText },
         draggable: false,
         selectable: false,
         connectable: false,

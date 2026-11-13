@@ -48,6 +48,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-roadmap.md](canon/spec-roadmap.md) spec roadmap: plan items and the computed path · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-trace-record.md](canon/spec-trace-record.md) spec trace: what a card records · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-trace.md](canon/spec-trace.md) spec trace: suspect marks, clearing, verdicts, rollup · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
+- [docs/canon/spec-usage.md](canon/spec-usage.md) spec usage: what uses a document, and which documents nothing links · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-verify-anchors.md](canon/spec-verify-anchors.md) spec verify's anchors: a renamed or moved binding followed · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-output.md](canon/spec-verify-output.md) spec verify's output: rows, hints, summary, JSON · crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-scope.md](canon/spec-verify-scope.md) spec verify's scopes: a node set's rows · crates/specengine-cli · tier 2

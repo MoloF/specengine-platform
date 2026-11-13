@@ -73,6 +73,8 @@ import type {
   HealthAssumes,
   HealthCode,
   HealthDrift,
+  HealthOrphan,
+  HealthOrphans,
   HealthReport,
   HealthUnbound,
   HistoryEntry,
@@ -83,6 +85,7 @@ import type {
   IntakeMatch,
   Interpretation,
   LeadDays,
+  LinkUsage,
   LockDiffCodeSide,
   LockDiffNode,
   LockDiffRow,
@@ -243,10 +246,15 @@ import type {
 // last, 5 keys), each written by its Rust test; and delivery-timeline's three
 // (docs/features/delivery-timeline.md "Acceptance criteria", DT6: the timeline, a marker, a task's
 // row, sets 146 to 148), with the delivery document's `timeline` after `late`, 9 keys, ahead of the
-// file until its Rust test wrote them. A key the types carry ahead of the file
+// file until its Rust test wrote them; and usage-orphans' three
+// (docs/features/usage-orphans.md "Acceptance criteria", UO9: a links block's usage, row 8 of the
+// health document and one orphan, sets 149 to 151), with a catalog row's `used_by`, `mentioned_by`
+// and `orphan` after `tasks_open`, 16 keys, and the health document's `orphans` last, 8, ahead of the
+// file until its Rust test writes them. A key the types carry ahead of the file
 // is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already
 // names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all one hundred and forty-eight written so far, in the slices' order.
+// names all one hundred and forty-eight written so far, in the slices' order, and one hundred and
+// fifty-one once usage-orphans' Rust test writes its three.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -539,7 +547,8 @@ const KEYS = {
   } satisfies Record<keyof RoundAnswerEntry, true>,
   // docs/features/health-left.md "Data": the document, an amendment; a link as
   // docs/canon/spec-cli-graph.md "spec show --links" lists one. docs/features/health-code.md "Data":
-  // `code`, `assumes`, `unbound` after `notes`; docs/features/health-drift.md "Data": `drift` after them.
+  // `code`, `assumes`, `unbound` after `notes`; docs/features/health-drift.md "Data": `drift` after them;
+  // docs/features/usage-orphans.md "Acceptance criteria" (UO9): `orphans` last.
   HealthReport: {
     documents: true,
     amendments: true,
@@ -548,6 +557,7 @@ const KEYS = {
     assumes: true,
     unbound: true,
     drift: true,
+    orphans: true,
   } satisfies Record<keyof HealthReport, true>,
   UnappliedAmendment: { path: true, id: true, title: true, class: true, status: true, links: true } satisfies Record<keyof UnappliedAmendment, true>,
   ShownLink: {
@@ -1096,6 +1106,10 @@ const KEYS = {
     open_items: true,
     tasks: true,
     tasks_open: true,
+    // docs/features/usage-orphans.md "Acceptance criteria" (UO5, UO9): the counts and the flag after `tasks_open`, 16 keys.
+    used_by: true,
+    mentioned_by: true,
+    orphan: true,
     last_change: true,
   } satisfies Record<keyof CatalogRow, true>,
   CatalogChange: { at: true, by: true, by_name: true, commit: true, proposal: true, of_file: true } satisfies Record<keyof CatalogChange, true>,
@@ -1124,6 +1138,11 @@ const KEYS = {
     due: true,
     days_late: true,
   } satisfies Record<keyof DeliveryTask, true>,
+  // docs/features/usage-orphans.md "Acceptance criteria" (UO9): a links block's usage, row 8 and one
+  // orphan, sets 149 to 151 in "Data"'s order, the fixture's names.
+  LinkUsage: { used_by: true, mentioned_by: true } satisfies Record<keyof LinkUsage, true>,
+  HealthOrphans: { live: true, rows: true, notes: true } satisfies Record<keyof HealthOrphans, true>,
+  HealthOrphan: { name: true, id: true, kind: true, title: true, path: true, line: true, status: true, tasks: true, tasks_open: true } satisfies Record<keyof HealthOrphan, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1185,7 +1204,7 @@ const CITED: Record<Named, string> = {
   RoundTask: "id, status, title",
   RoundAnswersOutcome: "project, answers, notes",
   RoundAnswerEntry: "id, outcome, stage, staged_at, replaced, reason",
-  HealthReport: "documents, amendments, notes, code, assumes, unbound, drift",
+  HealthReport: "documents, amendments, notes, code, assumes, unbound, drift, orphans",
   UnappliedAmendment: "path, id, title, class, status, links",
   ShownLink: "type, origin, at, name, title, end_kind, written, path, line, state, reason",
   RevisionRow: "id, rev, to, lock_entries, refused",
@@ -1283,7 +1302,7 @@ const CITED: Record<Named, string> = {
   DeliveryItem: "id, kind, status",
   DeliveryMore: "returns, reestimates, cancelled_subtasks, items",
   Catalog: "kinds, archive, notes, rows, truncated, omitted",
-  CatalogRow: "id, kind, title, path, line, rev, status, archived, state, open_items, tasks, tasks_open, last_change",
+  CatalogRow: "id, kind, title, path, line, rev, status, archived, state, open_items, tasks, tasks_open, used_by, mentioned_by, orphan, last_change",
   CatalogChange: "at, by, by_name, commit, proposal, of_file",
   CardCounts: "flows, columns, by_flow, agent_tasks, notes, truncated, omitted",
   CardColumnCount: "flow, column, open, accepted, cancelled, open_subtasks",
@@ -1293,6 +1312,9 @@ const CITED: Record<Named, string> = {
   DeliveryTimeline: "from, to, markers, tasks",
   DeliveryMarker: "group, release, first_taken_at, last_accepted_at",
   DeliveryTask: "id, title, flow, group, release, departments, created_at, taken_at, accepted_at, due, days_late",
+  LinkUsage: "used_by, mentioned_by",
+  HealthOrphans: "live, rows, notes",
+  HealthOrphan: "name, id, kind, title, path, line, status, tasks, tasks_open",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1616,11 +1638,36 @@ function timelineKey(name: Named, key: string): boolean {
   return DELIVERY_TIMELINE_KEYS.some(([type, ahead]) => type === name && ahead === key);
 }
 
+/** The hundred and forty-eight types the fixture names before usage-orphans. */
+const BEFORE_USAGE_ORPHANS: readonly Named[] = [...BEFORE_DELIVERY_TIMELINE, ...DELIVERY_TIMELINE];
+
+/** usage-orphans' three, sets 149 to 151 in "Data"'s order: a links block's usage, row 8, one orphan (docs/features/usage-orphans.md "Acceptance criteria", UO9). */
+const USAGE_ORPHANS: readonly Named[] = ["LinkUsage", "HealthOrphans", "HealthOrphan"];
+
+/**
+ * usage-orphans' keys on two sets the fixture already names, as pairs
+ * (docs/features/usage-orphans.md "Acceptance criteria", UO5, UO9): a catalog row's counts and flag
+ * after `tasks_open`, 13 to 16, and the health document's `orphans` last, 7 to 8. A links block's
+ * `usage` lands on no set: the file holds none for a block (its rows are `ShownLink`), so its keys
+ * are `LinkUsage`'s alone.
+ */
+const USAGE_ORPHANS_KEYS: readonly (readonly [Named, string])[] = [
+  ["CatalogRow", "used_by"],
+  ["CatalogRow", "mentioned_by"],
+  ["CatalogRow", "orphan"],
+  ["HealthReport", "orphans"],
+];
+
+/** Whether a key is usage-orphans' on a set an earlier slice added. */
+function usageKey(name: Named, key: string): boolean {
+  return USAGE_ORPHANS_KEYS.some(([type, ahead]) => type === name && ahead === key);
+}
+
 /** The types each set names in `provisional.ts`, where the fixture's name is not the type's own. */
 const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument" };
 
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_DELIVERY_TIMELINE, ...DELIVERY_TIMELINE];
+const ALL: readonly Named[] = [...BEFORE_USAGE_ORPHANS, ...USAGE_ORPHANS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1681,6 +1728,9 @@ function served(name: Named): string[] {
  * "Acceptance criteria", HD1), both in one change, then empty again; and delivery-timeline's one key
  * on delivery-analytics' document, as a pair, with its three sets, every key of each, until its Rust
  * test wrote them (docs/features/delivery-timeline.md "Acceptance criteria", DT6), then empty again.
+ * And usage-orphans' four keys on two sets the file names, as pairs, and its three sets, every key
+ * of each, until its Rust test wrote them (docs/features/usage-orphans.md "Acceptance criteria", UO9),
+ * then empty again.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1743,7 +1793,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DEPARTMENT_OVERVIEW.at(-1)).toBe("CatalogChange");
     expect(BEFORE_COLLISION_PAIRS.at(-1)).toBe("CardFlowCount");
     expect(BEFORE_DELIVERY_TIMELINE.at(-1)).toBe("PairSide");
-    expect(ALL.at(-1)).toBe("DeliveryTask");
+    expect(BEFORE_USAGE_ORPHANS.at(-1)).toBe("DeliveryTask");
+    expect(ALL.at(-1)).toBe("HealthOrphan");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1772,7 +1823,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(148);
+    expect(ALL).toHaveLength(151);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1783,7 +1834,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three, nor since department-overview's Rust test wrote its three, nor since plain-questions' Rust test wrote its nine, nor since collision-pairs' and hub-department's Rust tests wrote their two sets and three keys, nor since delivery-timeline's Rust test wrote its one key and three sets (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog, DO10 of department-overview, PQ10 of plain-questions, PP8 of collision-pairs, HD1 of hub-department, DT6 of delivery-timeline)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three, nor since department-overview's Rust test wrote its three, nor since plain-questions' Rust test wrote its nine, nor since collision-pairs' and hub-department's Rust tests wrote their two sets and three keys, nor since delivery-timeline's Rust test wrote its one key and three sets; usage-orphans' four keys and three sets until its Rust test writes them (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog, DO10 of department-overview, PQ10 of plain-questions, PP8 of collision-pairs, HD1 of hub-department, DT6 of delivery-timeline, UO9 of usage-orphans)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1802,10 +1853,12 @@ describe("the daemon's document types (AC-09)", () => {
     const plain = listed(PLAIN_QUESTIONS);
     const pairKey = listed(COLLISION_PAIR_KEYS);
     const department = listed(HUB_DEPARTMENT);
-    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => !DELIVERY_TIMELINE.includes(name) && !timelineKey(name, key))).toEqual([]);
+    // Only usage-orphans' now: its three sets' keys and its four on earlier sets (docs/features/usage-orphans.md "Acceptance criteria", UO9).
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => !USAGE_ORPHANS.includes(name) && !usageKey(name, key))).toEqual([]);
     // None of delivery-analytics' but delivery-timeline's `timeline` on its document, a pair of its own.
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => DELIVERY_ANALYTICS.includes(name) && !timelineKey(name, key))).toHaveLength(0);
-    expect(AHEAD_OF_FIXTURE.filter(([name]) => DIRECTION_CATALOG.includes(name))).toHaveLength(0);
+    // None of direction-catalog's but usage-orphans' three on its row (UO5).
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => DIRECTION_CATALOG.includes(name) && !usageKey(name, key))).toHaveLength(0);
     expect(AHEAD_OF_FIXTURE.filter(([name]) => DEPARTMENT_OVERVIEW.includes(name))).toHaveLength(0);
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => plain(name, key))).toHaveLength(0);
     // collision-pairs' nine and hub-department's one since their Rust tests wrote them
@@ -1817,6 +1870,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => timelineKey(name, key)).map(([name, key]) => `${name}.${key}`)).toEqual([]);
     expect(AHEAD_OF_FIXTURE.filter(([name]) => DELIVERY_TIMELINE.includes(name))).toHaveLength(0);
     // delivery-timeline's 20, its document key and its three sets' 4, 4 and 11, since its Rust test wrote them.
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => DELIVERY_ANALYTICS.includes(name) || timelineKey(name, key))).toEqual([]);
+    // usage-orphans' 18, its four keys on CatalogRow and HealthReport and its three sets' 2, 3 and 9,
+    // since its Rust test wrote them (docs/features/usage-orphans.md "Acceptance criteria", UO9).
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -2019,21 +2075,23 @@ describe("the daemon's document types (AC-09)", () => {
 
   it('types direction-catalog\'s three as the spec writes them: 6, 13, 6 keys in "JSON"\'s order, every one present, a row eight of the tree\'s keys then its five, a state kept whatever its word, each citing `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, none ahead of the file since its Rust test wrote them (DC-9 of direction-catalog)', () => {
     expect(ALL.slice(BEFORE_DIRECTION_CATALOG.length, BEFORE_DEPARTMENT_OVERVIEW.length)).toEqual([...DIRECTION_CATALOG]);
-    expect(DIRECTION_CATALOG.map((name) => served(name).length)).toEqual([6, 13, 6]);
+    // A row's 16 since usage-orphans' three (docs/features/usage-orphans.md "Acceptance criteria", UO5).
+    expect(DIRECTION_CATALOG.map((name) => served(name).length)).toEqual([6, 16, 6]);
+    expect(served("CatalogRow").filter((key) => !usageKey("CatalogRow", key))).toHaveLength(13);
     for (const name of DIRECTION_CATALOG) {
       const type = DECLARED_AS[name] ?? name;
       expect([name, declaredKeys(type)]).toEqual([name, served(name)]);
       const at = source.indexOf(`export interface ${type} {`);
       expect([type, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/direction-catalog.md` "Acceptance criteria", DC-9')]).toEqual([type, true]);
-      // Ahead of the file until its Rust test wrote the set: no key of it now.
-      expect([name, served(name).filter((key) => isAhead(name, key))]).toEqual([name, []]);
+      // Ahead of the file until its Rust test wrote the set: no key of it now but usage-orphans' (UO9).
+      expect([name, served(name).filter((key) => isAhead(name, key) && !usageKey(name, key))]).toEqual([name, []]);
     }
     // A row keeps eight of the tree's keys, in "JSON"'s order (`rev` before `status`), then its own five.
     expect(served("CatalogRow").slice(0, 8)).toEqual(["id", "kind", "title", "path", "line", "rev", "status", "archived"]);
     expect(served("CatalogRow").slice(0, 8).every((key) => declaredKeys("TreeNode").includes(key))).toBe(true);
     expect(source).toMatch(/^export type KnownRollup = "no card" \| "departed" \| "suspect" \| "in work" \| "confirmed";$/m);
     expect(source).toMatch(/^ {2}archived: boolean;\n {2}state: KnownRollup \| Unlisted;\n {2}open_items: number;$/m);
-    expect(source).toMatch(/^ {2}tasks_open: number;\n {2}last_change: CatalogChange \| null;\n\}$/m);
+    expect(source).toMatch(/^ {2}tasks_open: number;\n {2}used_by: number;\n {2}mentioned_by: number;\n {2}orphan: boolean \| null;\n {2}last_change: CatalogChange \| null;\n\}$/m);
     expect(source).toMatch(/^ {2}by_name: string;\n {2}commit: string;\n {2}proposal: string \| null;\n {2}of_file: boolean;\n\}$/m);
     const at = source.indexOf("export type KnownRollup ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/direction-catalog.md` "Acceptance criteria", DC-9');
@@ -2219,8 +2277,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DEPARTMENT_OVERVIEW).toHaveLength(140);
     expect(BEFORE_COLLISION_PAIRS).toHaveLength(143);
     expect(BEFORE_DELIVERY_TIMELINE).toHaveLength(145);
-    expect(ALL).toHaveLength(148);
-    expect(new Set(ALL).size).toBe(148);
+    expect(BEFORE_USAGE_ORPHANS).toHaveLength(148);
+    expect(ALL).toHaveLength(151);
+    expect(new Set(ALL).size).toBe(151);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -2306,7 +2365,8 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it("counts health-left's three: 3 document keys (7 since health-code's three and health-drift's one follow them), 6 amendment keys, 9 link keys (11 since doc-modal's two, DM-2) (AC-U2 of health-left)", () => {
-    expect(HEALTH_LEFT.map((name) => served(name).length)).toEqual([7, 6, 11]);
+    // The document's 8 since usage-orphans' `orphans` (docs/features/usage-orphans.md "Acceptance criteria", UO4).
+    expect(HEALTH_LEFT.map((name) => served(name).length)).toEqual([8, 6, 11]);
     // The other end's title and kind right after `name` (docs/features/doc-modal.md "Acceptance criteria", DM-1).
     expect(served("ShownLink")).toEqual(["type", "origin", "at", "name", "title", "end_kind", "written", "path", "line", "state", "reason"]);
     expect(served("HealthReport").slice(0, 3)).toEqual(["documents", "amendments", "notes"]);
@@ -2332,13 +2392,13 @@ describe("the daemon's document types (AC-09)", () => {
     expect(declaredKeys(type)).toEqual(Object.keys(KEYS[type]));
   });
 
-  it("gives the health document drift after unbound, its seventh and last key, and counts health-drift's six: 6, 7, 17, 2, 3, 3, before ui-node-bindings' two (UI-1 of health-drift)", () => {
-    expect(served("HealthReport")).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
+  it("gives the health document drift after unbound, its seventh key (then usage-orphans' orphans, UO4), and counts health-drift's six: 6, 7, 17, 2, 3, 3, before ui-node-bindings' two (UI-1 of health-drift)", () => {
+    expect(served("HealthReport")).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift", "orphans"]);
     expect(HEALTH_DRIFT.map((name) => served(name).length)).toEqual([6, 7, 17, 2, 3, 3]);
     expect(ALL.slice(BEFORE_HEALTH_DRIFT.length, BEFORE_UI_NODE_BINDINGS.length)).toEqual([...HEALTH_DRIFT]);
     // Row 6 is a code row (state, causes, counts, rows) with verify's tested and its own notes.
     expect(served("HealthDrift")).toEqual([...served("HealthAssumes"), "tested", "notes"]);
-    expect(source).toMatch(/^ {2}unbound: HealthUnbound;\n {2}drift: HealthDrift;\n\}$/m);
+    expect(source).toMatch(/^ {2}unbound: HealthUnbound;\n {2}drift: HealthDrift;\n {2}orphans: HealthOrphans;\n\}$/m);
   });
 
   it("types row 6's row as verify's 17 keys: the binding row's key, then state, category, detail; its anchor the binding row's, its tested TestedRow (UI-1 of health-drift)", () => {
@@ -2438,7 +2498,7 @@ describe("the daemon's document types (AC-09)", () => {
     let at = source.indexOf("export interface DeliveryDocument {");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/delivery-timeline.md` "Acceptance criteria", DT6');
     expect(isAhead("Delivery", "timeline")).toBe(false);
-    expect(ALL.slice(BEFORE_DELIVERY_TIMELINE.length)).toEqual([...DELIVERY_TIMELINE]);
+    expect(ALL.slice(BEFORE_DELIVERY_TIMELINE.length, BEFORE_USAGE_ORPHANS.length)).toEqual([...DELIVERY_TIMELINE]);
     expect(DELIVERY_TIMELINE.map((name) => served(name))).toEqual([
       ["from", "to", "markers", "tasks"],
       ["group", "release", "first_taken_at", "last_accepted_at"],
@@ -2457,6 +2517,37 @@ describe("the daemon's document types (AC-09)", () => {
     // No key names a person, nor carries an estimate or a day offset the UI could divide itself (D6).
     const keys = DELIVERY_TIMELINE.flatMap((name) => served(name));
     expect(keys.filter((key) => ["as", "by", "assignee", "reviewer", "created_by", "decided_by", "estimate"].includes(key) || /_offset$|^offset/.test(key))).toEqual([]);
+  });
+
+  it('types usage-orphans\' three and its keys as the spec writes them: a links block\'s `usage` after `incoming` (its two counts), a catalog row\'s counts and flag after `tasks_open` (16 keys, a section\'s flag null), the health document\'s `orphans` last (8), row 8\'s 3 keys and an orphan\'s 9, its tasks null when the queue was not read; each citing `docs/features/usage-orphans.md` "Acceptance criteria"; every key ahead of the file until its Rust test writes them (UO9 of usage-orphans)', () => {
+    expect(ALL.slice(BEFORE_USAGE_ORPHANS.length)).toEqual([...USAGE_ORPHANS]);
+    expect(USAGE_ORPHANS.map((name) => served(name))).toEqual([
+      ["used_by", "mentioned_by"],
+      ["live", "rows", "notes"],
+      ["name", "id", "kind", "title", "path", "line", "status", "tasks", "tasks_open"],
+    ]);
+    for (const name of USAGE_ORPHANS) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} {`);
+      expect([name, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/usage-orphans.md` "Acceptance criteria"')]).toEqual([name, true]);
+    }
+    expect(declaredKeys("ShownLinks")).toEqual(["outgoing", "incoming", "usage", "left_out", "omitted"]);
+    expect(source).toMatch(/^ {2}incoming: ShownLink\[\];\n {2}usage: LinkUsage;\n {2}left_out: LeftOut;$/m);
+    expect(source).toMatch(/^export interface LinkUsage \{\n {2}used_by: number;\n {2}mentioned_by: number;\n\}$/m);
+    expect(source).toMatch(/^export interface HealthOrphans \{\n {2}live: number;\n {2}rows: HealthOrphan\[\];\n {2}notes: string\[\];\n\}$/m);
+    expect(source).toMatch(/^ {2}status: string \| null;\n {2}tasks: number \| null;\n {2}tasks_open: number \| null;\n\}$/m);
+    const row = served("CatalogRow");
+    expect(row.slice(row.indexOf("tasks_open"), row.indexOf("tasks_open") + 5)).toEqual(["tasks_open", "used_by", "mentioned_by", "orphan", "last_change"]);
+    expect(served("HealthReport").at(-1)).toBe("orphans");
+    for (const type of ["CatalogRow", "HealthReport", "ShownLinks"]) {
+      const at = source.indexOf(`export interface ${type} {`);
+      expect([type, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/usage-orphans.md` "Acceptance criteria"')]).toEqual([type, true]);
+    }
+    // Ahead of the file until its Rust test wrote them: no key of the three sets nor the four on earlier sets now.
+    expect(USAGE_ORPHANS.flatMap((name) => served(name).filter((key) => isAhead(name, key)))).toEqual([]);
+    expect(USAGE_ORPHANS_KEYS.filter(([name, key]) => isAhead(name, key))).toEqual([]);
+    // No key counts rows the UI could re-count: the counts come as numbers, the flag as a word of the core's.
+    expect(served("LinkUsage").every((key) => key.endsWith("_by"))).toBe(true);
   });
 
   it("counts ui-round's six: 5 sheet keys, 22 item keys, 3, 3; 3 answers-document keys, 6 entry keys (T-04 of ui-round, PQ10 of plain-questions, PP8 of collision-pairs)", () => {
@@ -2572,16 +2663,18 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and forty-eight types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two, upstream-signal's two, delivery-analytics' eleven, direction-catalog's three, department-overview's three, collision-pairs' two, delivery-timeline's three (DT6)", () => {
+  it("names exactly the one hundred and forty-eight types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two, upstream-signal's two, delivery-analytics' eleven, direction-catalog's three, department-overview's three, collision-pairs' two, delivery-timeline's three (DT6); then usage-orphans' three once its Rust test writes them (UO9)", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
     // delivery-analytics' eleven since its Rust test wrote them (DA-11); direction-catalog's three
     // since its own did (DC-9); department-overview's three since its own did (DO10); collision-pairs'
     // two since its own did (PP8); delivery-timeline's three since its own did (DT6): it names all
-    // hundred and forty-eight, in the slices' order.
-    expect(ALL.filter((name) => !expected.includes(name))).toEqual([]);
-    expect(expected).toEqual(ALL);
-    expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(148);
+    // hundred and forty-eight, in the slices' order. usage-orphans' three are ahead of it, every key,
+    // until its Rust test writes them (docs/features/usage-orphans.md "Acceptance criteria", UO9).
+    expect(ALL.filter((name) => !expected.includes(name))).toEqual(USAGE_ORPHANS.filter((name) => !Object.hasOwn(sets, name)));
+    expect(expected.slice(0, BEFORE_USAGE_ORPHANS.length)).toEqual(BEFORE_USAGE_ORPHANS);
+    expect(Object.keys(sets)).toEqual([...expected]);
+    expect(Object.keys(sets)).toHaveLength(expected.length);
+    expect([148, 151]).toContain(expected.length);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -2703,8 +2796,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.TaskPackage).toHaveLength(27);
   });
 
-  it("names health-left's keys in the document's order: the health document's three, then health-code's three, then health-drift's drift, an amendment's six (AC-T2; UI-1 of health-code, of health-drift)", () => {
-    expect(sets.HealthReport).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
+  it("names health-left's keys in the document's order: the health document's three, then health-code's three, then health-drift's drift, then usage-orphans' orphans once written, an amendment's six (AC-T2; UI-1 of health-code, of health-drift; UO9 of usage-orphans)", () => {
+    expect((sets.HealthReport ?? []).slice(0, 7)).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
+    expect(sets.HealthReport).toEqual(compared("HealthReport"));
     expect(sets.UnappliedAmendment).toEqual(["path", "id", "title", "class", "status", "links"]);
   });
 
@@ -2740,7 +2834,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(HEALTH_DRIFT.map((name) => sets[name])).toEqual(HEALTH_DRIFT.map((name) => served(name)));
     expect(HEALTH_DRIFT.map((name) => sets[name]?.length)).toEqual([6, 7, 17, 2, 3, 3]);
     const health = sets.HealthReport ?? [];
-    expect([health.indexOf("drift"), health.length]).toEqual([6, 7]);
+    // 8 once usage-orphans' Rust test writes `orphans` after it (docs/features/usage-orphans.md "Acceptance criteria", UO9).
+    expect([health.indexOf("drift"), health.length]).toEqual([6, isAhead("HealthReport", "orphans") ? 7 : 8]);
   });
 
   it("names ui-node-bindings' two after DriftLevels, before lock-diff's five: a shown node's 20 keys, bindings after links, and ShownBindings' 3, in the types' order (UI-8, TE-1 of ui-node-bindings, flow-scenario's `ancestors`)", () => {
@@ -2789,14 +2884,15 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(DELIVERY_ANALYTICS.map((name) => sets[name]?.length)).toEqual([9, 9, 9, 7, 2, 20, 3, 4, 4, 3, 4]);
   });
 
-  it("names direction-catalog's three after DeliveryMore, sets 138 to 140: 6, 13, 6 keys in the types' order, `Catalog` typed by `CatalogDocument` (DC-9 of direction-catalog)", () => {
+  it("names direction-catalog's three after DeliveryMore, sets 138 to 140: 6, 13, 6 keys in the types' order (a row 16 once usage-orphans' three are written), `Catalog` typed by `CatalogDocument` (DC-9 of direction-catalog, UO9 of usage-orphans)", () => {
     expect(Object.keys(sets).slice(BEFORE_DIRECTION_CATALOG.length, BEFORE_DEPARTMENT_OVERVIEW.length)).toEqual([...DIRECTION_CATALOG]);
     expect(Object.keys(sets).indexOf("Catalog")).toBe(137);
     expect(Object.keys(sets).at(BEFORE_DIRECTION_CATALOG.length - 1)).toBe("DeliveryMore");
     expect(Object.keys(sets).at(BEFORE_DEPARTMENT_OVERVIEW.length - 1)).toBe("CatalogChange");
-    expect(DIRECTION_CATALOG.map((name) => sets[name])).toEqual(DIRECTION_CATALOG.map((name) => served(name)));
-    expect(DIRECTION_CATALOG.map((name) => sets[name])).toEqual(DIRECTION_CATALOG.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
-    expect(DIRECTION_CATALOG.map((name) => sets[name]?.length)).toEqual([6, 13, 6]);
+    // A row's `used_by`, `mentioned_by` and `orphan` ahead of the file until usage-orphans' Rust test writes them (docs/features/usage-orphans.md "Acceptance criteria", UO9).
+    expect(DIRECTION_CATALOG.map((name) => sets[name])).toEqual(DIRECTION_CATALOG.map((name) => compared(name)));
+    expect(DIRECTION_CATALOG.map((name) => sets[name])).toEqual(DIRECTION_CATALOG.map((name) => declaredNow(name)));
+    expect(DIRECTION_CATALOG.map((name) => sets[name]?.length)).toEqual([6, isAhead("CatalogRow", "used_by") ? 13 : 16, 6]);
   });
 
   it("names department-overview's three after CatalogChange, sets 141 to 143: 7, 6, 5 keys in the types' order (DO10 of department-overview)", () => {
@@ -2819,14 +2915,25 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(COLLISION_PAIRS.map((name) => sets[name]?.length)).toEqual([3, 4]);
   });
 
-  it("names delivery-timeline's three last, after PairSide, sets 146 to 148: 4, 4, 11 keys in the types' order (DT6 of delivery-timeline)", () => {
-    expect(Object.keys(sets).slice(BEFORE_DELIVERY_TIMELINE.length)).toEqual([...DELIVERY_TIMELINE]);
+  it("names delivery-timeline's three after PairSide, before usage-orphans' three, sets 146 to 148: 4, 4, 11 keys in the types' order (DT6 of delivery-timeline)", () => {
+    expect(Object.keys(sets).slice(BEFORE_DELIVERY_TIMELINE.length, BEFORE_USAGE_ORPHANS.length)).toEqual([...DELIVERY_TIMELINE]);
     expect(Object.keys(sets).indexOf("DeliveryTimeline")).toBe(145);
     expect(Object.keys(sets).at(BEFORE_DELIVERY_TIMELINE.length - 1)).toBe("PairSide");
-    expect(Object.keys(sets).at(-1)).toBe("DeliveryTask");
+    expect(Object.keys(sets).at(BEFORE_USAGE_ORPHANS.length - 1)).toBe("DeliveryTask");
     expect(DELIVERY_TIMELINE.map((name) => sets[name])).toEqual(DELIVERY_TIMELINE.map((name) => served(name)));
     expect(DELIVERY_TIMELINE.map((name) => sets[name])).toEqual(DELIVERY_TIMELINE.map((name) => declaredKeys(name)));
     expect(DELIVERY_TIMELINE.map((name) => sets[name]?.length)).toEqual([4, 4, 11]);
+  });
+
+  it("names usage-orphans' three last, after DeliveryTask, sets 149 to 151: 2, 3, 9 keys in the types' order, once its Rust test writes them; none before (UO9 of usage-orphans)", () => {
+    const named = USAGE_ORPHANS.filter((name) => Object.hasOwn(sets, name));
+    // Ahead of the file, every key, until the Rust test writes the three in one change: none or all.
+    expect([0, USAGE_ORPHANS.length]).toContain(named.length);
+    expect(Object.keys(sets).slice(BEFORE_USAGE_ORPHANS.length)).toEqual(named);
+    expect(Object.keys(sets).at(BEFORE_USAGE_ORPHANS.length - 1)).toBe("DeliveryTask");
+    expect(named.map((name) => sets[name])).toEqual(named.map((name) => served(name)));
+    expect(named.map((name) => sets[name])).toEqual(named.map((name) => declaredKeys(name)));
+    expect(named.map((name) => sets[name]?.length)).toEqual([2, 3, 9].slice(0, named.length));
   });
 
   it("names lock-diff's five after ShownBindings, before flow-read's five: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {

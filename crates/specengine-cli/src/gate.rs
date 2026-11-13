@@ -66,9 +66,11 @@ use specengine_store::{
 use crate::project::{CONFIG_FILE, find_config_dir};
 use crate::{Env, data_dir};
 
-/// How long a verdict may take from the start of the process: below the
-/// hook's timeout, past which Claude Code lets the write through.
-pub const GATE_DEADLINE: Duration = Duration::from_secs(3);
+/// How long a verdict may take from the start of the process: with the
+/// backstop's 0.4 s (`main.rs`), below the wrapper's 7 s limit, itself
+/// below the hook's 10 s timeout, past which Claude Code lets the write
+/// through (task spec `release-hardening` RH-R8).
+pub const GATE_DEADLINE: Duration = Duration::from_secs(5);
 
 /// The most tasks a refusal lists.
 pub const GATE_TASKS_MAX: usize = 8;

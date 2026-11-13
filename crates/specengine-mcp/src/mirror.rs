@@ -354,8 +354,18 @@ pub(crate) struct ShowOmitted {
 pub(crate) struct ShowLinks {
     pub outgoing: Vec<ShowLink>,
     pub incoming: Vec<ShowLink>,
+    pub usage: LinkUsage,
     pub left_out: LeftOut,
     pub omitted: usize,
+}
+
+/// What uses the node: distinct live sources in other files, by strong
+/// type and by `mentions`, over every In row whatever the cut (task spec
+/// `usage-orphans` UO6).
+#[derive(JsonSchema)]
+pub(crate) struct LinkUsage {
+    pub used_by: u32,
+    pub mentioned_by: u32,
 }
 
 #[derive(JsonSchema)]

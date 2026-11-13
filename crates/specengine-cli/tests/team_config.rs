@@ -27,6 +27,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use common::check::line_of;
+use common::gate::until_verdict;
 use common::proposal::Pair;
 use common::{Run, Scratch, read_text, replace, snapshot, spec, write};
 use serde_json::{Value, json};
@@ -352,7 +353,15 @@ fn a1_a_bad_team_leaves_show_card_and_gate_as_they_were() {
         reads
             .iter()
             .map(|args| {
-                let done = run(pair, args);
+                // The gate's verdict, a no verdict by deadline asked again.
+                let done = if args[0] == "gate" {
+                    until_verdict(
+                        || run(pair, args),
+                        |done| (done.stdout.as_str(), done.stderr.as_str()),
+                    )
+                } else {
+                    run(pair, args)
+                };
                 (done.code, done.stdout.clone(), done.stderr.clone())
             })
             .collect()

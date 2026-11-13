@@ -5,7 +5,7 @@ import type { Project } from "../api/types";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { statusLook } from "../inbox/labels";
-import { summaryOf } from "../inbox/summary";
+import { ProposalSummary } from "../inbox/ProposalSummary";
 import { taskStatusLook } from "../tasks/labels";
 import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
@@ -34,7 +34,10 @@ function OptionText({ option }: { option: PaletteOption }) {
       return (
         <>
           <span className="palette-option-main">
-            <span className="mono">{option.proposal.id}</span>: <span>{summaryOf(option.proposal, t)}</span>
+            <span className="mono">{option.proposal.id}</span>:{" "}
+            <span>
+              <ProposalSummary proposal={option.proposal} />
+            </span>
           </span>
           <Badge name={t("palette.status")} look={statusLook(option.proposal.status, t)} />
         </>

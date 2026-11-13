@@ -2,7 +2,7 @@
 //! directory (`proposal-floor`, which its start writes) mints every
 //! number-shape spec ID from 100001, a developer's terminal below it, so the
 //! two meet on one branch with no add/add conflict and no `id-taken`.
-//! Through the real daemon (`--public-origin --push --push-deadline 3`) over
+//! Through the real daemon (`--public-origin --push --push-deadline 30`) over
 //! a clone of a bare repository in the test's scratch, which a developer's
 //! clone pushes to as well: the world of `tests/hub_git.rs`, over
 //! `fixtures/apply-outputs/forge` (a smithing game, `DEC` width 4, its index
@@ -60,8 +60,10 @@ const FORGE: &str = "/api/projects/ember-forge";
 /// The one login of each project's `[team]`: its owner stages and confirms.
 const TEAM: &str = "\n[team.ann]\nrole = \"owner\"\nemail = \"ann@example.org\"\n";
 
-/// The flags of every pushing hub here.
-const PUSH: [&str; 3] = ["--push", "--push-deadline", "3"];
+/// The flags of every pushing hub here: a 30 s push deadline, not 3 (the
+/// product's default is 120): docs/features/release-hardening.md
+/// "Acceptance criteria" RH-T4.
+const PUSH: [&str; 3] = ["--push", "--push-deadline", "30"];
 
 /// A sync a signal starts ends well within this.
 const SYNC_WAIT: Duration = Duration::from_secs(60);
@@ -898,7 +900,7 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
 /// 0.42.0; since plain-questions (RM-0088, PQ11: `ask_question`'s four keys)
 /// 0.43.0; since collision-pass (RM-0060, CP9: `get_collisions`, `mark_pairs`
 /// and `check-collisions`) 0.44.0; since collision-pairs (RM-0088, PP7: the
-/// review document's `pair`) 0.45.0.
+/// review document's `pair`) 0.45.0; since usage-orphans (RM-0111) 0.46.0.
 #[test]
 fn ac8d_the_release_tag_is_the_plugin_version() {
     let scratch = common::Scratch::new("si-tag");
@@ -910,7 +912,7 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
     ];
     let output = alarmed(
         Path::new("/bin/sh"),
-        &[script.as_os_str(), OsStr::new("v0.45.0")],
+        &[script.as_os_str(), OsStr::new("v0.46.0")],
         &env,
     )
     .current_dir(&elsewhere)
@@ -922,13 +924,13 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.45.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.46.0\n");
     let example = read_text(&repository_root(), "scripts/deploy/.env.example");
     assert_eq!(
         example
             .lines()
             .filter(|line| line.starts_with("SPECENGINE_VERSION="))
             .collect::<Vec<_>>(),
-        ["SPECENGINE_VERSION=0.45.0"]
+        ["SPECENGINE_VERSION=0.46.0"]
     );
 }

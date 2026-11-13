@@ -373,6 +373,7 @@ describe("links (AC-08)", () => {
         // Written in DOC-NEW and naming it, the source landing here (superseded-by).
         aLink({ type: "eta_type", written: "DOC-NEW", name: "DOC-NEW", path: "docs/spec/n.md", line: 8 }),
       ],
+      usage: { used_by: 3, mentioned_by: 0 },
       left_out: { generated: 0, tier3: 0 },
       omitted: 0,
     };
@@ -419,7 +420,7 @@ describe("links (AC-08)", () => {
         ref,
         reason: null,
         notes: [],
-        nodes: [aNode({ id: ref, links: options?.with === undefined ? null : { outgoing: [], incoming: [], left_out: { generated: 0, tier3: 0 }, omitted: 0 } })],
+        nodes: [aNode({ id: ref, links: options?.with === undefined ? null : { outgoing: [], incoming: [], usage: { used_by: 0, mentioned_by: 0 }, left_out: { generated: 0, tier3: 0 }, omitted: 0 } })],
       }),
     );
     await openNode(client);

@@ -381,8 +381,9 @@ fn doc_modal_control_title_residue_is_its_measured_size() {
     flow_ring(&ring, &c.repeat(7));
     let flow = residue(&ring, &home, "get_flow", json!({}));
     // docs/features/node-history.md: each node's `"history":null` (15
-    // characters) since node-history.
-    assert_eq!(links, (549_473, 549_473), "get_node with links");
+    // characters) since node-history. docs/features/usage-orphans.md UO6:
+    // 42 more since the links block's `usage`, uncut.
+    assert_eq!(links, (549_515, 549_515), "get_node with links");
     assert_eq!(flow, (576_111, 576_111), "get_flow");
     for (chars, _) in [links, flow] {
         assert!(
@@ -1249,7 +1250,9 @@ fn card_context_stays_under_the_declared_cap() {
 /// docs/features/node-history.md NH14: the largest `get_node` answer with
 /// all three `with` values on NH10's nodes, text plus `structuredContent`,
 /// in characters (UTF-16 units alike: the corpus is ASCII).
-const NODE_HISTORY_MAXIMUM: usize = 110_216;
+/// docs/features/usage-orphans.md UO6: 66 more since each shown node's links
+/// carry `usage` (`{"used_by":…,"mentioned_by":…}`, uncut).
+const NODE_HISTORY_MAXIMUM: usize = 110_282;
 
 /// 2026-01-01T00:00:00Z.
 const EPOCH_2026: i64 = 1_767_225_600;

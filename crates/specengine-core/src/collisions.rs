@@ -22,9 +22,11 @@
 //!   those of every shared trigram.
 //! - **Names** (task spec `collision-names` CN1 to CN6, [`CollisionNaming`]):
 //!   `slug/ID` in a feature document for a feature-scoped ID (the form
-//!   intake stores, `canonical_id`'s) and for an ID more than one node of
-//!   the universe holds (where `canonical_id` keeps a project-scoped one
-//!   bare); else its bare ID, when it names that one node; else, ID-less,
+//!   intake stores, `canonical_id`'s) and for an ID more than one node
+//!   holds, one outside the universe counted (a Tier 3 or generated file, a
+//!   node with no kind: [`CollisionRows::outside_ids`]), where
+//!   `canonical_id` keeps a project-scoped one bare; else its bare ID, when
+//!   it names that one node; else, ID-less,
 //!   its path. A node outside feature documents whose ID more than one node
 //!   holds has no such name: it is not paired, and one note per ID says so.
 //!   A side, a shared target, a mark and the ledger all use these names.
@@ -133,6 +135,11 @@ pub struct CollisionRows {
     pub targets: Vec<CollisionTarget>,
     /// The nodes whose `norm_hash` is `None`.
     pub skipped: usize,
+    /// Each ID a node outside the universe holds (a Tier 3 file, a
+    /// generated file, a node with no kind): a holder the resolver counts,
+    /// so a universe node holding it too has a shared ID (task spec
+    /// `release-hardening` RH-R6).
+    pub outside_ids: BTreeSet<String>,
 }
 
 /// A verdict on a pair: judged apart, or reported to the owner.
@@ -589,7 +596,8 @@ fn side(node: &CollisionNode, name: &str) -> PairSide {
 /// every node of `rows`, whatever kinds a call keeps.
 struct Names<'r> {
     /// Parallel to the rows' nodes: its canonical reference, else its path
-    /// (ID-less); `None` when its ID more than one node holds and it lies
+    /// (ID-less); `None` when its ID more than one node holds, a node outside
+    /// the universe counted ([`CollisionRows::outside_ids`]), and it lies
     /// outside feature documents (W1).
     of: Vec<Option<String>>,
     /// Each ID's holders, indices into the rows' nodes, each `(path, ord)`
@@ -622,7 +630,11 @@ impl<'r> Names<'r> {
                 let Some(id) = node.id.as_deref() else {
                     return Some(node.path.clone());
                 };
-                let shared = holders.get(id).is_some_and(|held| held.len() > 1);
+                // Shared: another holder in the universe, or one outside it
+                // the resolver counts (RH-R6).
+                let shared = holders
+                    .get(id)
+                    .is_some_and(|held| held.len() > 1 || rows.outside_ids.contains(id));
                 match feature_stem(naming.features, &node.path) {
                     Some(slug) if shared || feature_scoped(naming.scheme, id) => {
                         Some(format!("{slug}/{id}"))
@@ -1150,6 +1162,7 @@ mod tests {
             nodes,
             targets,
             skipped: 0,
+            outside_ids: Default::default(),
         }
     }
 
@@ -1181,6 +1194,7 @@ mod tests {
                 .collect(),
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let at = pairs_of(&titled(200), &[], 1);
         assert_eq!(at.left, 200 * 199 / 2 - 1);
@@ -1222,6 +1236,7 @@ mod tests {
                 .collect(),
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let scheme = scheme();
         collision_pairs_capped(
@@ -1260,6 +1275,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         assert!(pairs_of(&rows, &[], 50).pairs.is_empty());
     }
@@ -1303,6 +1319,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let listed = pairs_of(&rows("ABCX"), &[], 50);
         assert_eq!(listed.pairs.len(), 1);
@@ -1342,6 +1359,7 @@ mod tests {
             nodes: vec![x, y],
             targets,
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let pair = &pairs_of(&rows, &[], 50).pairs[0];
         assert_eq!((pair.shared, pair.score, pair.titles), (9, 1000, 0));
@@ -1382,6 +1400,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 2,
+            outside_ids: Default::default(),
         };
         let list = pairs_of(&rows, &[], 50);
         let names: Vec<(&str, &str)> = list
@@ -1435,6 +1454,7 @@ mod tests {
             targets: vec![target(&x, "e"), target(&y, "e"), target(&z, "e")],
             nodes: vec![x, y, z],
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let open = pairs_of(&rows, &[], 1);
         assert_eq!((open.pairs.len(), open.left), (1, 2));
@@ -1487,6 +1507,7 @@ mod tests {
             nodes: vec![a, b, c, d],
             targets,
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let names = |list: &CollisionList| -> Vec<(String, String, u32)> {
             list.pairs
@@ -1597,6 +1618,7 @@ mod tests {
             nodes: vec![y, z],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let scheme = scheme();
         let naming = naming(&scheme);
@@ -1641,6 +1663,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let list = pairs_of(&rows, &[], 50);
         assert_eq!(named(&list), owned(&[("one/PLT-M", "PLT-Y")]), "{list:?}");
@@ -1704,6 +1727,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let list = pairs_of(&rows, &[], 50);
         // ` floor holds ` and ` floor hold `: 9 of 11 + 10 trigrams,
@@ -1732,6 +1756,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let list = pairs_of(&idless, &[], 50);
         // `loose.md` sorts before `notes/…`: it is `a`.
@@ -1763,6 +1788,7 @@ mod tests {
             nodes: vec![one, two, three],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         assert_eq!(
             named(&pairs_of(&rows, &[], 50)),
@@ -1818,6 +1844,7 @@ mod tests {
             nodes: vec![x, y, one],
             targets,
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let list = pairs_of(&rows, &[], 50);
         let pair = list
@@ -1860,6 +1887,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 1,
+            outside_ids: Default::default(),
         };
         let list = pairs_of(&rows, &[], 50);
         assert_eq!(list.pairs, Vec::new(), "{list:?}");
@@ -1885,6 +1913,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let scheme = scheme();
         let only = collision_pairs(
@@ -1924,6 +1953,7 @@ mod tests {
             ],
             targets: Vec::new(),
             skipped: 0,
+            outside_ids: Default::default(),
         };
         let scheme = scheme();
         let naming = naming(&scheme);

@@ -25,8 +25,11 @@ export interface InsideDirection {
   kinds: readonly string[];
 }
 
-/** One set of a holder's children: a direction's, labelled by its title, or a raw kind's (null: no kind). */
-export type InsideSet = { by: "direction"; name: string; title: string; entries: InsideEntry[] } | { by: "kind"; kind: string | null; entries: InsideEntry[] };
+/** One set of entries: a direction's, labelled by its title, or a raw kind's (null: no kind). */
+export type KindSet<T> = { by: "direction"; name: string; title: string; entries: T[] } | { by: "kind"; kind: string | null; entries: T[] };
+
+/** One set of a holder's children. */
+export type InsideSet = KindSet<InsideEntry>;
 
 /** The children listed under one holder: `direct` the document itself, else one of its sections, by its title (else ID). */
 export interface InsideGroup {
@@ -47,14 +50,16 @@ function byCodePoint(a: string, b: string): number {
 }
 
 /**
- * One holder's children as sets: each child whose kind a direction lists joins the first such
+ * Entries as sets by their kind: each entry whose kind a direction lists joins the first such
  * direction in served order; directions first, in served order; then the kinds no direction lists,
- * by code point, no kind last. Entries keep tree order. A node with no kind matches no direction.
+ * by code point, no kind last. Entries keep the order given. An entry with no kind matches no
+ * direction. Inside groups a holder's children so, a document's Links its users
+ * (docs/features/usage-orphans.md "Acceptance criteria", UO10), Health its orphans (UO11).
  */
-function setsOf(named: readonly InsideEntry[], directions: readonly InsideDirection[]): InsideSet[] {
-  const byDirection = new Map<InsideDirection, InsideEntry[]>();
-  const byKind = new Map<string | null, InsideEntry[]>();
-  const add = <K>(held: Map<K, InsideEntry[]>, key: K, entry: InsideEntry) => {
+export function kindSets<T extends { kind: string | null }>(named: readonly T[], directions: readonly InsideDirection[]): KindSet<T>[] {
+  const byDirection = new Map<InsideDirection, T[]>();
+  const byKind = new Map<string | null, T[]>();
+  const add = <K>(held: Map<K, T[]>, key: K, entry: T) => {
     const list = held.get(key);
     if (list === undefined) {
       held.set(key, [entry]);
@@ -71,7 +76,7 @@ function setsOf(named: readonly InsideEntry[], directions: readonly InsideDirect
       add(byDirection, direction, entry);
     }
   }
-  const sets: InsideSet[] = [];
+  const sets: KindSet<T>[] = [];
   for (const direction of directions) {
     const entries = byDirection.get(direction);
     if (entries !== undefined) {
@@ -87,7 +92,7 @@ function setsOf(named: readonly InsideEntry[], directions: readonly InsideDirect
 
 /**
  * The read's groups, the document's first, then its sections' in tree order, each holding a child;
- * within each, the directions' sets, then the raw kinds' (`setsOf`). Children without an ID are
+ * within each, the directions' sets, then the raw kinds' (`kindSets`). Children without an ID are
  * counted in `noId`, for the Spec tree. Own nodes are the rows sharing a depth-0 row's file;
  * children, the other rows whose `parent` is an own node; anything deeper is dropped.
  */
@@ -107,7 +112,7 @@ export function insideOf(tree: TreeView, directions: readonly InsideDirection[] 
       continue;
     }
     const entries = named.map((row): InsideEntry => ({ name: row.id ?? row.path, title: row.title, kind: row.kind, path: row.path }));
-    groups.push({ holder: name, title: holder.title, direct: holder.depth === 0, sets: setsOf(entries, directions) });
+    groups.push({ holder: name, title: holder.title, direct: holder.depth === 0, sets: kindSets(entries, directions) });
   }
   return { groups, noId };
 }

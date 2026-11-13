@@ -2878,3 +2878,97 @@ fn cn_names_are_byte_equal_at_another_root_and_home() {
         );
     }
 }
+
+// ------------------------------------------------- release-hardening RH-R6
+
+/// RH-R6's feature document (slug `feat`) and its outside holders.
+const FEAT: &str = "docs/features/feat.md";
+const OIL_THIRD: &str = "docs/records/R/R-03.md";
+const SHIPPED_LAMPS: &str = "docs/archive/lamps-shipped.md";
+const SHIPPED_FEAT: &str = "docs/archive/feat-shipped.md";
+/// A generated document (`class: generated`) where the walk reaches it:
+/// `docs/generated/` is never walked by default.
+const GENERATED_OIL: &str = "docs/spec/lamp/oil-generated.md";
+
+/// A Tier 3 document (a `shipped` spec) holding `{#id}` titled
+/// [`ONE_NIGHT`].
+fn shipped(title: &str, id: &str) -> String {
+    format!(
+        "---\nclass: spec\nstatus: shipped\nshipped: 2026-10-01\nscope: [lamp]\nref: an old \
+         pass\n---\n\n# {title}\n\nWhat the old pass settled.\n\n## {ONE_NIGHT} {{#{id}}}\n\n\
+         The old wording.\n"
+    )
+}
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R6: the
+/// collision names count every holder the resolver counts. On spec-a, the
+/// live non-feature `R-01` (a record) is also held in a Tier 3 file, the
+/// live non-feature `R-02` in a generated file, and the live feature
+/// `feat/R-97` only in an archived (Tier 3) document; `R-03` shares their
+/// title. `spec collisions --json` leaves `R-01` and `R-02` out (W1: no
+/// name, unpaired, one note each) and names `feat/R-97`, which pairs with
+/// `R-03`; for every name the read prints, `spec show <name> --json`
+/// returns exactly one node. M: `outside_ids` not counted.
+#[test]
+fn rh_r6_collision_names_count_tier_3_and_generated_holders() {
+    let scene = Scene::new("rh-r6-outside");
+    scene.write(
+        OIL_RECORD,
+        &requirement("R-01", "A full lamp burns from dusk to dawn."),
+    );
+    scene.write(SHIPPED_LAMPS, &shipped("Old lamps", "R-01"));
+    scene.write(OIL_NEXT, &requirement("R-02", "No refill before dawn."));
+    scene.write(
+        GENERATED_OIL,
+        &format!(
+            "---\nclass: generated\n---\n\n# Oil\n\n## {ONE_NIGHT} {{#R-02}}\n\nA generated copy.\n"
+        ),
+    );
+    scene.write(
+        OIL_THIRD,
+        &requirement("R-03", "The keeper never tops it up."),
+    );
+    scene.write(
+        FEAT,
+        &feature(
+            "Feat",
+            &format!("\n### {ONE_NIGHT} {{#R-97}}\n\nThe feature's own night.\n"),
+        ),
+    );
+    scene.write(SHIPPED_FEAT, &shipped("Old feat", "R-97"));
+    scene.commit("R-01 in Tier 3, R-02 generated, R-97 archived");
+
+    let document = scene.collisions(&["--kind", "requirement"]);
+    assert_eq!(
+        names(&document),
+        [("feat/R-97".to_owned(), "R-03".to_owned())],
+        "R-01 and R-02 unpaired, feat/R-97 named: {document}"
+    );
+    let notes: Vec<String> = document["notes"]
+        .as_array()
+        .expect("notes")
+        .iter()
+        .map(|note| note.as_str().expect("a note").to_owned())
+        .collect();
+    assert_eq!(notes.len(), 2, "{document}");
+    for (note, id) in notes.iter().zip(["R-01", "R-02"]) {
+        assert!(
+            note.starts_with("1 node(s) outside feature documents not paired: their ID ")
+                && note.contains(&format!("`{id}`")),
+            "{id}: {note}"
+        );
+    }
+    assert_eq!(document["skipped"], json!(0), "{document}");
+    for pair in pairs(&document) {
+        // R6 is `Names::of`'s: no shared target here, so no target name
+        // (`Names::end`, universe holders alone) is printed.
+        assert_eq!(pair["shared_targets"], json!([]), "{pair}");
+        for side in [&pair["a"], &pair["b"]] {
+            let shown = name(side);
+            let run = scene.spec(&["show", &shown, "--json"], b"");
+            run.code(0);
+            let nodes = run.json()["nodes"].as_array().expect("nodes").len();
+            assert_eq!(nodes, 1, "{shown}: {}", run.show());
+        }
+    }
+}

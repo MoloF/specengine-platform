@@ -251,6 +251,55 @@ describe("the Inbox: the card, the row and the dialog (PQ12)", () => {
     expect(Array.from(fold(reject).region.querySelectorAll("bdi"), (bdi) => bdi.textContent)).toEqual([shownText(ASKED), WORKING, PRICE]);
   });
 
+  // docs/features/release-hardening.md "Acceptance criteria", RH-U2: an option-less gist question shows
+  // its working answer and price after why it matters, outside the fold, in the options' place; the fold
+  // keeps the text, the pair and the why, never the working answer. M: the working answer only in the
+  // fold; drawn in both places.
+  it("leads an option-less gist question's card with its working answer and price after why it matters, out of the fold; the fold keeps the text, the pair and the why (RH-U2)", async () => {
+    const why = "The tide table is the only source of the window.";
+    const pair = {
+      left: { id: "RULE-TIDE-WINDOW", title: "The tide window", path: "docs/spec/tides.md", evidence: [] },
+      right: { id: "RULE-DEEP-SHIPS", title: "Deep ships", path: "docs/spec/ships.md", evidence: [] },
+      other: [],
+    };
+    const { card } = await inboxCard([aLeadQuestion({ id: "PR-0059", options: [], recommendation: null, why, pair })], "PR-0059");
+    expect(within(card).queryByText("No options attached.")).toBeNull();
+    expect(within(card).queryByRole("heading", { level: 3, name: "Options" })).toBeNull();
+    const matters = within(card).getByText("Why it matters");
+    const working = within(card).getByRole("heading", { level: 3, name: "Working answer" });
+    const { button, region } = fold(card);
+    expect(region.contains(working)).toBe(false);
+    expect(before(matters, working) && before(working, button)).toBe(true);
+    const answer = working.closest("section");
+    expect(answer?.textContent).toContain(WORKING);
+    expect(answer?.textContent).toContain(PRICE);
+    // Drawn once, out of the fold: the fold holds neither the working answer nor its price.
+    expect(within(card).getAllByText(WORKING)).toHaveLength(1);
+    expect(within(region).queryByRole("heading", { name: "Working answer", hidden: true })).toBeNull();
+    expect(region.textContent).not.toContain(WORKING);
+    expect(region.textContent).not.toContain(PRICE);
+    // The fold keeps the asked text, the pair and the why.
+    expect(Array.from(region.querySelectorAll("bdi"), (bdi) => bdi.textContent)).toContain(shownText(ASKED));
+    expect(await within(region).findByRole("region", { name: "What conflicts with what", hidden: true })).toBeTruthy();
+    expect(within(region).getByRole("heading", { level: 3, name: "Why", hidden: true })).toBeTruthy();
+    expect(region.textContent).toContain(why);
+  });
+
+  it("keeps a gist question with options as it was: its options lead, its working answer in the fold alone (RH-U2)", async () => {
+    const { card } = await inboxCard([aLeadQuestion({ id: "PR-0059" })], "PR-0059");
+    const { region } = fold(card);
+    expect(card.querySelector(".option-list")).not.toBeNull();
+    expect(within(region).getByRole("heading", { level: 3, name: "Working answer", hidden: true })).toBeTruthy();
+    expect(within(card).getAllByText(WORKING)).toHaveLength(1);
+  });
+
+  it("keeps an option-less item without a gist as before: no fold, its options' note, its working answer (RH-U2)", async () => {
+    const { card } = await inboxCard([aLeadQuestion({ id: "PR-0060", gist: null, matters: null, options: [], recommendation: null })], "PR-0060");
+    expect(within(card).queryByRole("button", { name: "The question as asked" })).toBeNull();
+    expect(within(card).getByRole("heading", { level: 3, name: "Options" }).closest("section")?.textContent).toBe("OptionsNo options attached.");
+    expect(within(card).getByRole("heading", { level: 3, name: "Working answer" }).closest("section")?.textContent).toContain(WORKING);
+  });
+
   it("picks nothing for a discrepancy either: its options alone, Accept off until one is picked, then sent by number", async () => {
     const { client, card } = await inboxCard([DISCREPANCY], "PR-0061");
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));

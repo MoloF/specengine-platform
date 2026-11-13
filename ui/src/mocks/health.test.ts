@@ -109,7 +109,8 @@ function byBytes(a: string, b: string): number {
 describe("the mock's health read", () => {
   it("normal: harbor-sim's two, the spec's decision with a dangling link and a draft spec amending RULE-BERTH-DRAFT, resolved", () => {
     const report = healthReportOf("harbor-sim", "normal");
-    expect(Object.keys(report)).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
+    // Row 8's `orphans` last (docs/features/usage-orphans.md "Acceptance criteria", UO4; src/mocks/orphans.test.ts).
+    expect(Object.keys(report)).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift", "orphans"]);
     expect(report.amendments.map((amendment) => Object.keys(amendment))).toEqual([
       ["path", "id", "title", "class", "status", "links"],
       ["path", "id", "title", "class", "status", "links"],

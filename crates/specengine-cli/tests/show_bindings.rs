@@ -69,6 +69,9 @@ const GAME: &str = "verify-ecs";
 /// The cut (`spec-cli-read.md` "The cap"): `OUTPUT_CAP_CHARS`.
 const CAP: usize = 40_000;
 
+/// The racy window's wait (`RACY_NS` is 2 s), as `store/tests/stat_key.rs`.
+const PAST_RACY: Duration = Duration::from_millis(2100);
+
 /// The look-alike of `GOAL-01` (a Cyrillic O).
 const LOOK_ALIKE: &str = "G\u{41E}AL-01";
 
@@ -2925,6 +2928,14 @@ fn show_bindings_without_code_read_as_show_and_the_note() {
         &["M\u{0415}C-STAMINA"],
         &["other:MEC-STAMINA"],
     ];
+    // docs/features/release-hardening.md "Acceptance criteria" RH-T1: the
+    // read-trust racy rule (`RACY_NS`, 2 s) stores a file's stat key only
+    // once 2 s have passed since its write, so a read inside that window
+    // still writes the index. Past it, one warm read stores every key;
+    // the case reads below then write nothing.
+    std::thread::sleep(PAST_RACY);
+    let warm = show_with(&root, &["MEC-STAMINA"], &vars);
+    assert_eq!(warm.code(), 0, "the warm read");
     for args in cases {
         let plain = show_with(&root, args, &vars);
         let data = snapshot(&data_dir(&home));

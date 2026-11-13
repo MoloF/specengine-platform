@@ -946,6 +946,10 @@ fn result_chars(reply: &Value) -> usize {
 /// escaped, `\u001b` in JSON too), 16 nodes, 16 `distinct_from` of 256
 /// bytes, the author's fields at 128: stored; its intake answer and its
 /// `get_proposal` stay within both caps. M: the brief keeping `new_text`.
+/// Intake refuses ESC since docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R1, so the discrepancy is stored `z`-filled and its fields
+/// ESC-filled by SQL, as an item stored before that release holds them:
+/// still the worst case `get_proposal` meets.
 #[test]
 fn ac12_the_largest_answers_stay_within_the_caps() {
     let repo = Repo::new("ai-ac12");
@@ -982,7 +986,7 @@ fn ac12_the_largest_answers_stay_within_the_caps() {
     let refusal = refused_text(&reply, "1 MiB + 1");
     assert!(refusal.contains("1048576"), "{refusal}");
 
-    let esc = |bytes: usize| "\u{1b}".repeat(bytes);
+    let esc = |bytes: usize| "z".repeat(bytes);
     let nodes = [
         "A-101",
         "A-102",
@@ -1017,6 +1021,18 @@ fn ac12_the_largest_answers_stay_within_the_caps() {
     let document = answered(&reply, "every cap");
     assert_eq!(document["id"], json!("PR-0002"), "{document}");
     assert!(result_chars(&reply) <= max_result());
+    let output = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(repo.db())
+        .arg(
+            "UPDATE proposals SET summary = replace(summary, 'z', char(27)), \
+             working_answer = replace(working_answer, 'z', char(27)), \
+             evidence = replace(evidence, 'z', '\\u001b'), \
+             options = replace(options, 'z', '\\u001b') WHERE id = 'PR-0002';",
+        )
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(output.status.success(), "{output:?}");
     let reply = session.call("get_proposal", json!({"proposal_id": "PR-0002"}));
     let chars = result_chars(&reply);
     assert!(chars <= max_result(), "{chars} characters");
@@ -1035,7 +1051,7 @@ fn ac12_the_largest_answers_stay_within_the_caps() {
     );
     assert_eq!(
         result(&reply)["structuredContent"]["summary"],
-        json!(esc(1024)),
+        json!("\u{1b}".repeat(1024)),
         "JSON raw"
     );
     drop(session.finish());

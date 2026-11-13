@@ -166,12 +166,12 @@ describe("Health over the mock", () => {
     expect(region("Findings").querySelector(".finding-total")?.textContent).toBe("3000 findings, by code, errors first");
   });
 
-  it("error: each region in the daemon's words with a Retry, What is left one per part: the queue's and rows 3 to 6's (AC-09; AC-U4 of health-left; health-code-ui; health-drift-ui)", async () => {
+  it("error: each region in the daemon's words with a Retry, What is left one per part: the queue's, rows 3 to 6's and row 8's (AC-09; AC-U4 of health-left; health-code-ui; health-drift-ui; UO11 of usage-orphans)", async () => {
     renderMock("error", "#/harbor-sim/health");
     await screen.findByRole("region", { name: "Debt and budgets" });
     for (const [name, reads] of [
       ["Check", 1],
-      ["What is left", 5],
+      ["What is left", 6],
       ["Findings", 1],
       ["Debt and budgets", 1],
     ] as const) {
@@ -187,9 +187,9 @@ describe("Health over the mock", () => {
     await screen.findByRole("region", { name: "Debt and budgets" });
     for (const name of ["Check", "What is left", "Findings", "Debt and budgets"]) {
       expect(region(name).getAttribute("aria-busy")).toBe("true");
-      // What is left: one skeleton per part, the queue's and rows 3 to 6's (AC-U4 of health-left; health-code-ui; health-drift-ui).
+      // What is left: one skeleton per part, the queue's, rows 3 to 6's and row 8's (AC-U4 of health-left; health-code-ui; health-drift-ui; UO11 of usage-orphans).
       const skeletons = within(region(name)).getAllByRole("status");
-      expect(skeletons).toHaveLength(name === "What is left" ? 5 : 1);
+      expect(skeletons).toHaveLength(name === "What is left" ? 6 : 1);
       expect(skeletons.map((skeleton) => skeleton.getAttribute("aria-busy"))).toEqual(skeletons.map(() => "true"));
     }
     await waitFor(() => {

@@ -823,6 +823,7 @@ textarea.field {
 .tone-sync-ok { --badge-color: var(--sync-ok); }
 .tone-sync-not-judged { --badge-color: var(--sync-not-judged); }
 .tone-sync-unknown { --badge-color: var(--sync-unknown); }
+.tone-usage-orphan { --badge-color: var(--usage-orphan); }
 
 .tone-card-mark-unknown,
 .tone-trace-unknown,
@@ -1269,6 +1270,14 @@ textarea.field {
 
 .pairs dt {
   color: var(--text-secondary);
+}
+
+/* An evidence quote keeps its line feeds and breaks a long word, in the Inbox's list and on both pair
+   sides; the other `.pairs` lists stay as they are
+   (docs/features/release-hardening.md "Acceptance criteria", RH-U1). */
+.evidence .pairs dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 36rem) {
@@ -4422,6 +4431,56 @@ mark {
   gap: var(--space-100) var(--space-150);
 }
 
+/* Row 8, the orphan documents (docs/features/usage-orphans.md "Acceptance criteria", UO11): groups
+   by direction, then kind, each row's link, then its place, raw status and tasks on a wrapping line. */
+.health-orphans-groups,
+.health-orphans-group {
+  display: grid;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
+.health-orphans-groups {
+  gap: var(--space-200);
+}
+
+.health-orphans-label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.health-orphan-link {
+  display: inline-block;
+  min-height: var(--target-min);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration-color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.health-orphans-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.health-orphans-tasks {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.health-orphans-scope {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+}
+
 /* Rows 4 to 6 (docs/features/health-code-ui.md, docs/features/health-drift-ui.md): each line's
    state, ID and place, its relation and the CLI's tail; row 5's markers indented under their node,
    as row 3's links are. Paths, IDs and titles of any script wrap anywhere, never widen the column.
@@ -5323,6 +5382,30 @@ mark {
   line-height: var(--line-height-small);
 }
 
+/* Used by (docs/features/usage-orphans.md "Acceptance criteria", UO11): the count, its mentions in
+   small text and an orphan's badge on one line; the filter above the table, at its end. */
+.catalog-used .badge {
+  white-space: nowrap;
+}
+
+.catalog-used-mentions {
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+/* A 0 with mentions shows them at the count's own size and weight (the orchestrator's working answer, 2026-11-13). */
+.catalog-used-cited {
+  color: var(--text-primary);
+}
+
+.catalog-used-filter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-100);
+}
+
 /* The chain canvas: lanes' names as text above their boxes, the cut's rule down the gap. */
 .chain-lane {
   display: grid;
@@ -5353,7 +5436,7 @@ mark {
 }
 
 .chain-lane .icon,
-.chain-cut .icon {
+.chain-cut-label .icon {
   width: 12px;
   height: 12px;
 }
@@ -5364,20 +5447,23 @@ mark {
   pointer-events: none;
 }
 
+/* The cut's words, a node of their own above the lane heads, starting at the rule's x: no lane's
+   name, marks or counts runs under them
+   (docs/features/release-hardening.md "Acceptance criteria", RH-U6). */
 .chain-cut-label {
-  position: absolute;
-  top: 0;
-  left: var(--space-050);
   display: inline-flex;
   align-items: center;
   gap: var(--space-025);
+  margin-left: var(--space-050);
   padding: 0 var(--space-050);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
   color: var(--roadmap-cut);
   font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .chain-box.is-selected {
@@ -7194,6 +7280,61 @@ mark {
 
 .doc-inside-noid {
   margin: 0;
+}
+
+/* Who uses a document (docs/features/usage-orphans.md "Acceptance criteria", UO10): the daemon's
+   counts, then each group's users, a user's places below it in small mono, any path wrapping. */
+.doc-usage-counts,
+.doc-usage-unused {
+  margin: 0;
+}
+
+.doc-usage-unused {
+  color: var(--text-secondary);
+}
+
+.doc-usage-group {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+}
+
+.doc-usage-label {
+  overflow-wrap: anywhere;
+}
+
+.doc-usage-list,
+.doc-usage-places {
+  display: grid;
+  gap: var(--space-075);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-usage-user {
+  display: grid;
+  gap: var(--space-025);
+  min-width: 0;
+}
+
+.doc-usage-link {
+  display: inline-block;
+  min-height: var(--target-min);
+  overflow-wrap: anywhere;
+}
+
+.doc-usage-places {
+  gap: var(--space-025);
+  padding-left: var(--space-150);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.doc-usage-place {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Inside's toggle stands in a heading at its part's level, sized as the part titles beside it. */

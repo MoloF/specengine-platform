@@ -1,7 +1,7 @@
 import { lazy, Suspense, useId, useRef, useState, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import { useProjects, useTrace, type NodeQuery } from "../api/queries";
-import type { CardSplit, CardWrite, NodeView, ShownNode, TraceDocument } from "../api/types";
+import type { CardSplit, CardWrite, NodeView, ShownNode } from "../api/types";
 import { docPageHash, flowHash, homeHash, sectionHash } from "../app/routes";
 import { NewCardDialog } from "../board/CardDialogs";
 import { rollupLozenge } from "../flow/labels";
@@ -10,6 +10,7 @@ import { fill, slot } from "../i18n/fill";
 import { Prose } from "../markdown/Prose";
 import { splitFrontMatter } from "../markdown/source";
 import { CardsBlock } from "../trace/CardsBlock";
+import { holderRow } from "../trace/holderRow";
 import { rowName } from "../tree/rows";
 import { useAnnounce } from "../ui/announcer";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
@@ -34,19 +35,18 @@ const SplitDialog = lazy(() => import("../board/SplitDialog").then((module) => (
 // frame's title never waits for this chunk, so focus on it never moves. Read only: changes go through
 // the AI, as proposals (ADR-0004); a card is the one write here.
 
-/** The trace read's row of this document, never another's: a read of a group holds what it holds besides. */
-function rowOf(trace: TraceDocument, ref: string) {
-  return trace.nodes.find((node) => node.id === ref);
-}
-
-/** Under the title: the work state, from the node's trace row, none while it is read; then the raw status, none for a section. */
+/**
+ * Under the title: the work state, from the trace row of the node the REF resolved to (by its ID, else
+ * its path, so an alias reads as its canonical ID), none while it is read; then the raw status, none for
+ * a section.
+ */
 export function DocMeta({ project, docRef, holder }: { project: string; docRef: string; holder: ShownNode }) {
   const t = useTranslate();
   const trace = useTrace(project, { ref: docRef });
   const data = trace.data;
   let state: ReactNode = null;
   if (data !== undefined && data.reason === null && trace.error === null) {
-    const row = rowOf(data, docRef);
+    const row = holderRow(data, holder);
     const look = row === undefined ? { appearance: "neutral" as const, icon: "unknown" as const, label: t("doc.notKnown"), served: false } : rollupLozenge(row.rollup, t);
     state = (
       <span className="doc-meta-item">
@@ -303,7 +303,7 @@ export function DocMain({
     <>
       {data.nodes.length > 1 && <p className="note">{t("doc.holders", { ref: docRef, count: data.nodes.length })}</p>}
       <Text project={project} holder={holder} level={level} />
-      <DocLinks project={project} links={holder.links} level={level} />
+      <DocLinks project={project} links={holder.links} path={holder.path} level={level} />
       <DocInside project={project} docRef={docRef} open={insideOpen} onToggle={onInside} level={level} />
       <DocHistory project={project} docRef={docRef} open={historyOpen} onToggle={onHistory} level={level} />
     </>
@@ -314,7 +314,7 @@ export function DocMain({
 export function DocSide({ project, docRef, holder, read, level }: { project: string; docRef: string; holder: ShownNode; read: NodeView; level: PartLevel }) {
   return (
     <>
-      <CardsBlock project={project} nodeRef={docRef} section="doc" heading={level === 2 ? "h2" : "h3"} newCard={false} />
+      <CardsBlock project={project} nodeRef={docRef} holder={holder} section="doc" heading={level === 2 ? "h2" : "h3"} newCard={false} />
       <DocTechnical project={project} holder={holder} read={read} />
     </>
   );

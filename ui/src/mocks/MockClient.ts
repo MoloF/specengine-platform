@@ -100,6 +100,7 @@ import { flowOf, mockFlowOf } from "./flow";
 import { ASIDE_KINDS, ASIDE_STATUSES, asideCorpusLinks, asideDocuments } from "./harbor-sim/aside";
 import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
+import { orphansOf } from "./orphans";
 import { mockHistory } from "./history";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
@@ -439,11 +440,12 @@ export class MockClient implements SpecEngineClient {
    */
   async getHealth(project: string): Promise<HealthReport> {
     await this.read();
-    this.project(project);
+    const entry = this.project(project);
     if (this.scenario === "cannot-check") {
       throw new ClientError({ status: 503, message: walkGapMessage(project) });
     }
-    return structuredClone(healthReportOf(project, this.scenario));
+    // Row 8 from the corpus and the board as they stand (docs/features/usage-orphans.md "Acceptance criteria", UO4).
+    return structuredClone(healthReportOf(project, this.scenario, orphansOf(project, entry.corpus, this.boards.get(project), this.scenario)));
   }
 
   /**

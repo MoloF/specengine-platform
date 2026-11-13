@@ -1,6 +1,8 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Evidence, Pair } from "../api/types";
+import appCss from "../styles/app.css?raw";
+import { EvidenceItem } from "./EvidenceItem";
 import PairView from "./PairView";
 
 // docs/features/collision-pairs.md "Acceptance criteria", PP9, at the component's level: one region
@@ -80,6 +82,27 @@ describe("PairView's evidence, as served", () => {
       expect(side.querySelector("ul")).toBeNull();
     }
     expect(within(region).queryByRole("heading", { level: 3, name: "Other evidence" })).toBeNull();
+  });
+
+  // docs/features/release-hardening.md "Acceptance criteria", RH-U3. M: the line keyed on `held.length` alone.
+  it("says nothing of evidence on a side with no file; a side with a path and no resolving position still says no evidence cites it (RH-U3)", () => {
+    const { region } = draw({
+      ...EXAMPLE,
+      left: { id: "RULE-SPRINT-COST", title: "Cost", path: SPRINT, evidence: [9] },
+      right: { id: "RULE-STAM-PAUSE", title: null, path: null, evidence: [] },
+      other: [],
+    });
+    const fileless = part(region, "RULE-STAM-PAUSE");
+    expect(within(fileless).queryByText("No evidence cites this file")).toBeNull();
+    expect(fileless.querySelector("ul")).toBeNull();
+    // The gone side still says so, its ID heading it once.
+    expect(within(fileless).getByText("Not in the spec now")).toBeTruthy();
+    expect(within(fileless).getAllByText("RULE-STAM-PAUSE")).toHaveLength(1);
+    expect(within(part(region, "Cost")).getByText("No evidence cites this file")).toBeTruthy();
+    // A side known by nothing now has no file either.
+    cleanup();
+    const nothing = draw({ ...EXAMPLE, right: { id: null, title: null, path: null, evidence: [4] } }).region;
+    expect(within(part(nothing, "Not in the spec now")).queryByText("No evidence cites this file")).toBeNull();
   });
 
   it("draws no Other evidence for an empty `other`", () => {
@@ -181,5 +204,44 @@ describe("PairView's served text, as the CLI prints it", () => {
     expect(within(cost).getByRole("button", { name: "Cost" }).querySelector("bdi")?.textContent).toBe("Cost");
     const entry = cost.querySelector(".evidence");
     expect(Array.from(entry?.querySelectorAll("bdi") ?? [], (bdi) => bdi.textContent)).toEqual([SPRINT, "18-20", "Sprinting pauses regeneration", "Cost is drained per second"]);
+  });
+});
+
+// docs/features/release-hardening.md "Acceptance criteria", RH-U1: a quote keeps its line feeds and
+// breaks a long word, in the Inbox's flat list and on both pair sides, by one scoped rule; the other
+// `.pairs` lists stay as they are. M: the rule removed.
+describe("a quote's line feeds (RH-U1)", () => {
+  /** Every rule of app.css whose selector names `.pairs`, with its declarations, comments left out. */
+  function pairsRules(): [string, string][] {
+    const text = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
+    return Array.from(text.matchAll(/([^{}]+)\{([^{}]*)\}/g), (match): [string, string] => [(match[1] ?? "").trim().replace(/\s+/g, " "), match[2] ?? ""]).filter(([selector]) =>
+      selector.includes(".pairs"),
+    );
+  }
+
+  it("keeps line feeds and breaks a long word in an evidence quote, and in no other `.pairs` list", () => {
+    const quotes = pairsRules().filter(([, body]) => /white-space|overflow-wrap/.test(body));
+    expect(quotes.map(([selector]) => selector)).toEqual([".evidence .pairs dd"]);
+    const body = quotes[0]?.[1] ?? "";
+    expect(body).toMatch(/white-space:\s*pre-wrap;/);
+    expect(body).toMatch(/overflow-wrap:\s*anywhere;/);
+  });
+
+  it("is the rule both pair sides' quotes and the Inbox list's take", () => {
+    const three = "line one\nline two\nline three";
+    const quote: Evidence = { file: SPRINT, qpath: null, lines: "1-3", observed: three, documented: three };
+    const { region } = draw({ ...EXAMPLE, left: { ...EXAMPLE.left, evidence: [0] }, right: { ...EXAMPLE.right, evidence: [0] }, other: [] }, [quote]);
+    const taken = (scope: ParentNode) => Array.from(scope.querySelectorAll("dd"), (dd) => [dd.matches(".evidence .pairs dd"), dd.textContent]);
+    expect(taken(region)).toEqual(Array.from({ length: 4 }, () => [true, three]));
+    cleanup();
+    render(
+      <ul className="evidence-list">
+        <EvidenceItem item={quote} />
+      </ul>,
+    );
+    expect(taken(document)).toEqual([
+      [true, three],
+      [true, three],
+    ]);
   });
 });

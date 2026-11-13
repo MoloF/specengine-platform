@@ -276,7 +276,8 @@ fn ac22_eight_thousand_sections_name_twenty_then_count_the_rest() {
         linked.code(0);
         let (before, tail) = split_tail(&linked.stdout);
         assert!(before.chars().count() <= CAP, "{fixture} --links");
-        let block = "  links 0 out, 0 in\n";
+        // docs/features/usage-orphans.md UO6: the summary's counts.
+        let block = "  links 0 out, 0 in; used by 0, mentioned by 0\n";
         let (_header, rest) = before.split_once('\n').expect("a header line");
         let shown = rest.strip_prefix(block).unwrap_or_else(|| {
             panic!(

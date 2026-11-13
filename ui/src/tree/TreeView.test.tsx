@@ -353,6 +353,7 @@ describe("the tree's keys (AC-04)", () => {
           aLink({ type: "zeta_type", written: "DOC-A", name: "DOC-A", line: 3 }),
         ],
         incoming: [],
+        usage: { used_by: 0, mentioned_by: 0 },
         left_out: { generated: 0, tier3: 0 },
         omitted: 0,
       };

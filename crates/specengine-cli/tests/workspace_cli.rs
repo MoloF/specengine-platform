@@ -523,12 +523,17 @@ fn login_notes(config: &str) -> Vec<String> {
     ]
 }
 
-/// `spec workspace --json [--login L]` on `root`: exit 0.
+/// `spec workspace --json [--login L]` on `root`: exit 0. A login starting
+/// with `-` is written `--login=L` (docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R2: `--login` takes no hyphen value).
 fn as_login(home: &Path, root: &Path, login: Option<&str>) -> Run {
-    let mut args = vec!["workspace", "--json"];
-    if let Some(login) = login {
-        args.extend(["--login", login]);
+    let mut args = vec!["workspace".to_owned(), "--json".to_owned()];
+    match login {
+        Some(login) if login.starts_with('-') => args.push(format!("--login={login}")),
+        Some(login) => args.extend(["--login".to_owned(), login.to_owned()]),
+        None => {}
     }
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let run = spec(home, root, &args);
     run.code(0);
     run
@@ -671,4 +676,53 @@ fn hd7_the_text_line() {
     let run = spec(&home, &root, &["workspace", "--login"]);
     run.code(2);
     assert_eq!(run.stdout, "");
+}
+
+// ------------------------------------------------- release-hardening RH-R2
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R2:
+/// `--login` takes no flag. `spec workspace --login --json` exits 2 naming
+/// `--login` (clap's line), stdout empty; `--login mira --json` and `--json
+/// --login mira` print the document with mira's `default`; `--login=-x`
+/// asks for `-x` (no workspace: `null`), while `--login -x` is a usage
+/// error. M: `allow_hyphen_values` back.
+#[test]
+fn rh_r2_login_takes_no_flag() {
+    let scratch = Scratch::new("rh-r2-cli");
+    let home = scratch.home("h");
+    let (root, config) = press_logins(&scratch);
+    let notes = login_notes(&config);
+    let run = spec(&home, &root, &["workspace", "--login", "--json"]);
+    run.code(2);
+    assert_eq!(run.stdout, "", "{}", run.show());
+    assert!(
+        run.stderr
+            .contains("a value is required for '--login <L>' but none was supplied"),
+        "{}",
+        run.show()
+    );
+    for args in [
+        ["workspace", "--login", "mira", "--json"],
+        ["workspace", "--json", "--login", "mira"],
+    ] {
+        let run = spec(&home, &root, &args);
+        run.code(0);
+        assert_eq!(
+            run.stdout,
+            format!("{}\n", press_document(&notes, Some("newsroom"))),
+            "{args:?}: {}",
+            run.show()
+        );
+    }
+    let run = spec(&home, &root, &["workspace", "--json", "--login=-x"]);
+    run.code(0);
+    assert_eq!(
+        run.stdout,
+        format!("{}\n", press_document(&notes, None)),
+        "{}",
+        run.show()
+    );
+    let run = spec(&home, &root, &["workspace", "--json", "--login", "-x"]);
+    run.code(2);
+    assert_eq!(run.stdout, "", "{}", run.show());
 }

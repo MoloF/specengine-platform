@@ -371,15 +371,19 @@ fn row_of(place: &Place, name: &str, args: &[String], [plain, json]: &[Printed; 
         fixture: name.to_owned(),
         args: args.to_vec(),
         code: format!("{} {}", plain.code, json.code),
-        text: Stream::of(&normalised(&plain.stdout, &places)),
+        text: Stream::of(&without_usage_text(
+            args,
+            &normalised(&plain.stdout, &places),
+        )),
         json: Stream::of(&without_show_keys(args, &normalised(&json.stdout, &places))),
         stderr: Stream::of(&normalised(&stderr, &places)),
     }
 }
 
-/// A `show --json` stream with docs/features/flow-scenario.md's `ancestors`
-/// and docs/features/doc-modal.md's link `title` and `end_kind` (DM-1)
-/// taken out, every other byte kept, as `store_reads.rs` compares it; a
+/// A `show --json` stream with docs/features/flow-scenario.md's `ancestors`,
+/// docs/features/doc-modal.md's link `title` and `end_kind` (DM-1) and
+/// docs/features/usage-orphans.md's links `usage` (UO6) taken out, every
+/// other byte kept, as `store_reads.rs` compares it; a
 /// `bundle` stream (its own `ancestors` layer stays) and a stream holding no
 /// JSON document as they are.
 fn without_show_keys(args: &[String], bytes: &[u8]) -> Vec<u8> {
@@ -392,6 +396,17 @@ fn without_show_keys(args: &[String], bytes: &[u8]) -> Vec<u8> {
             .into_bytes()
         }
         _ => bytes.to_vec(),
+    }
+}
+
+/// A `show` text stream with usage-orphans' counts out of each links
+/// summary (docs/features/usage-orphans.md UO6, its test churn), as
+/// `store_reads.rs` compares it; any other command's as it is.
+fn without_usage_text(args: &[String], bytes: &[u8]) -> Vec<u8> {
+    if args.first().map(String::as_str) == Some("show") {
+        common::keys::without_usage_counts(bytes)
+    } else {
+        bytes.to_vec()
     }
 }
 
@@ -793,11 +808,64 @@ fn ac5_a_trusted_read_does_not_walk() {
 /// The interval is 3 s, not 1 s: each step below that must fall within it
 /// asserts so as a premise first, so a loaded run that outlasts it says so
 /// instead of failing on the trust's state (a read past the interval walks,
-/// which clears the very mark the step looks at).
+/// which clears the very mark the step looks at). A failed premise runs
+/// the scenario once more from a fresh place; a state assertion never
+/// retries (docs/features/release-hardening.md "Acceptance criteria"
+/// RH-T7). M: `IndexTrust` walking on every read.
 #[test]
 fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
+    ac6g_tries("reconcile", [Duration::ZERO; 2]);
+}
+
+/// RH-T7: a forced premise failure (a 3.1 s stall on the first try only)
+/// passes on the second try; one on both tries fails naming the premise.
+#[test]
+fn ac6g_a_failed_premise_runs_once_more_from_a_fresh_place() {
+    let stall = Duration::from_millis(3100);
+    assert_eq!(
+        ac6g_tries("stalled-once", [stall, Duration::ZERO]),
+        2,
+        "a stall on the first try only: passed on the second"
+    );
+    let both = std::panic::catch_unwind(|| ac6g_tries("stalled-twice", [stall; 2]))
+        .expect_err("a stall on both tries fails");
+    let message = both
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| both.downcast_ref::<&str>().map(|text| (*text).to_owned()))
+        .unwrap_or_default();
+    assert!(
+        message.contains("premise failed on both tries")
+            && message.contains("premise: the trusted search ran within the interval"),
+        "{message}"
+    );
+}
+
+/// [`ac6g_scenario`] on a fresh place of `label`, once more from another
+/// fresh place when a premise failed (the first try stalled by `stalls[0]`,
+/// the second by `stalls[1]`): the try that passed; both failed: a panic
+/// naming both premises.
+fn ac6g_tries(label: &str, stalls: [Duration; 2]) -> usize {
+    let mut failed = Vec::new();
+    for (at, stall) in stalls.into_iter().enumerate() {
+        match ac6g_scenario(&format!("{label}-{}", at + 1), stall) {
+            Ok(()) => return at + 1,
+            Err(premise) => {
+                eprintln!("try {}: {premise}; once more from a fresh place", at + 1);
+                failed.push(premise);
+            }
+        }
+    }
+    panic!("premise failed on both tries: {}", failed.join("; "));
+}
+
+/// AC-6 (g) on a fresh place: `Err` naming the first premise that failed
+/// (a step that outlasted the interval); a state assertion panics. `stall`
+/// (test-local, zero but in RH-T7's own test) waits before the first
+/// trusted search.
+fn ac6g_scenario(label: &str, stall: Duration) -> Result<(), String> {
     let every = Duration::from_secs(3);
-    let place = notes("reconcile", "\"notes\"");
+    let place = notes(label, "\"notes\"");
     place.index().expect("spec index");
     let trust = IndexTrust::with_every(place.root.clone(), every);
     let walked_at = Instant::now();
@@ -808,11 +876,14 @@ fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
 
     let edited = "notes/r-02.md";
     common::replace(&place.root, edited, WORDS[1], "lomidrax");
+    std::thread::sleep(stall);
     let before = trusted(&[&trust], || Printed::of(place.search("lomidrax"), false));
-    assert!(
-        walked_at.elapsed() < every,
-        "premise: the trusted search ran within the interval"
-    );
+    if walked_at.elapsed() >= every {
+        return Err(format!(
+            "premise: the trusted search ran within the interval ({:?} of {every:?})",
+            walked_at.elapsed()
+        ));
+    }
     assert!(
         !finds(&before, "R-02"),
         "a hand edit is not seen before the reconcile\n{}",
@@ -839,12 +910,13 @@ fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
         Printed::of(place.show("R-02", false, false), false)
     });
     assert_eq!(shown.code, 0, "{}", shown.show());
-    assert!(
-        reconciled_at.elapsed() < every,
-        "premise: the show ran within the interval of the reconcile's walk ({:?} of {every:?}; \
-         a loaded machine: rerun), so it trusted the index and did not walk",
-        reconciled_at.elapsed()
-    );
+    if reconciled_at.elapsed() >= every {
+        return Err(format!(
+            "premise: the show ran within the interval of the reconcile's walk ({:?} of \
+             {every:?}), so it trusted the index and did not walk",
+            reconciled_at.elapsed()
+        ));
+    }
     assert_eq!(trust.walks(), 2, "premise: the show trusted the index");
     assert!(
         shown.text().contains("pevantu") && !shown.text().contains("lomidrax"),
@@ -854,12 +926,13 @@ fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
     assert!(trust.is_dirty(), "a T5 mismatch marks the trust dirty");
     let walks = trust.walks();
     let next = trusted(&[&trust], || Printed::of(place.search(WORDS[0]), false));
-    assert!(
-        reconciled_at.elapsed() < every,
-        "premise: the next read ran within the interval ({:?} of {every:?}; a loaded \
-         machine: rerun), so only the mark can make it walk",
-        reconciled_at.elapsed()
-    );
+    if reconciled_at.elapsed() >= every {
+        return Err(format!(
+            "premise: the next read ran within the interval ({:?} of {every:?}), so only the \
+             mark can make it walk",
+            reconciled_at.elapsed()
+        ));
+    }
     assert!(finds(&next, "R-01"), "{}", next.show());
     assert_eq!(
         trust.walks(),
@@ -867,6 +940,7 @@ fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
         "a dirty trust walks on its next read"
     );
     assert!(!trust.is_dirty(), "the walk clears the mark");
+    Ok(())
 }
 
 // ------------------------------------------------------------------ R13, R14

@@ -29,7 +29,7 @@ import { PairSlot } from "./PairSlot";
 import { gapLabel, previewLabel, severityLook, statusLook, statusLozenge } from "./labels";
 import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
-import { leadingGist, summaryOf } from "./summary";
+import { ProposalSummary } from "./ProposalSummary";
 import { targetsOf } from "./targets";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -237,17 +237,21 @@ function AnswerSections({ project, review }: { project: string; review: Proposal
  * A question's lead on the Inbox card (docs/features/plain-questions.md "Acceptance criteria", PQ12),
  * its gist the card's title: why it matters, its options, then what it said before it had a gist, its
  * text verbatim, a served collision pair right after it, with its working answer, price and why,
- * folded and collapsed; the targets follow.
+ * folded and collapsed; the targets follow. With no option to show, its working answer and price
+ * stand after why it matters in the options' place, and the fold keeps the text, the pair and the why
+ * (docs/features/release-hardening.md "Acceptance criteria", RH-U2).
  */
 function QuestionLead({ project, review }: { project: string; review: Proposal }) {
+  // With no option, the working answer leads and the why stays folded: each place drops the other's part.
+  const optionless = review.options.length === 0;
   return (
     <>
       {review.matters !== null && <LeadMatters matters={review.matters} />}
-      <OptionsSection project={project} review={review} />
+      {optionless ? <AnswerSections project={project} review={{ ...review, why: null }} /> : <OptionsSection project={project} review={review} />}
       <AskedFold>
         {review.summary !== null && <AskedText text={review.summary} />}
         {review.pair !== null && <PairSlot pair={review.pair} evidence={review.evidence} />}
-        <AnswerSections project={project} review={review} />
+        <AnswerSections project={project} review={optionless ? { ...review, working_answer: null } : review} />
       </AskedFold>
     </>
   );
@@ -428,7 +432,9 @@ function ReviewBody({
                   {other.id}
                 </button>
                 <Badge name={t("inbox.statusName")} look={statusLook(other.status, t)} />
-                <span>{summaryOf(other, t)}</span>
+                <span>
+                  <ProposalSummary proposal={other} />
+                </span>
               </li>
             ))}
           </ul>
@@ -595,8 +601,6 @@ export function ProposalCard({
   }
 
   const staged = reviewed !== undefined && reviewed.id === id && reviewed.staged !== null && reviewed.staged_at !== null ? reviewed : null;
-  /** The gist the card is titled by, the agent's words as the lead draws them; null: the summary's line as before. */
-  const titleGist = leadingGist(reviewed ?? entry);
   // One primary per item: a staged choice confirmed here takes it from Accept, as a task's Answer dialog does.
   const acceptLook = staged !== null && onConfirm !== undefined ? "default" : "primary";
   const crumbs: Crumb[] = [
@@ -641,7 +645,8 @@ export function ProposalCard({
         breadcrumbs={<Breadcrumbs items={crumbs} />}
         title={
           <h2 id="card-title" className="card-title">
-            {titleGist === null ? summaryOf(reviewed ?? entry, t) : <bdi>{shownSlot(titleGist)}</bdi>}
+            {/* The gist the card is titled by, the agent's words as the lead draws them; else the summary's line as before. */}
+            <ProposalSummary proposal={reviewed ?? entry} />
           </h2>
         }
         meta={<Lozenge {...statusLozenge(reviewed?.status ?? entry.status, t)} />}

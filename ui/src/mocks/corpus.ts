@@ -375,11 +375,17 @@ function landsOn(corpus: MockCorpus, written: MockLink, node: MockNode): MockNod
   return target === node || within(target, node) ? target : null;
 }
 
-/** A node's links: those written in its span, those landing on it or a section within it. */
+/**
+ * A node's links: those written in its span, those landing on it or a section within it; `usage`
+ * the distinct sources of the In rows written in other live files, strong apart from `mentions`,
+ * whatever `archive` admits (docs/features/usage-orphans.md "Acceptance criteria", UO1, UO2, UO6).
+ */
 export function linksOf(corpus: MockCorpus, node: MockNode, archive: boolean): ShownLinks {
   const leftOut: LeftOut = { generated: 0, tier3: 0 };
   const outgoing: ShownLink[] = [];
   const incoming: ShownLink[] = [];
+  const users = new Set<string>();
+  const mentioners = new Set<string>();
   for (const written of corpus.links) {
     const source = holderOfLine(corpus, written.path, written.line);
     if (source === null) {
@@ -418,6 +424,9 @@ export function linksOf(corpus: MockCorpus, node: MockNode, archive: boolean): S
         leftOut.tier3 += 1;
         continue;
       }
+      if (!sourceFile.archived) {
+        (written.type === WEAK_LINK ? mentioners : users).add(nameOf(source));
+      }
     }
     incoming.push({
       type: written.type,
@@ -433,7 +442,97 @@ export function linksOf(corpus: MockCorpus, node: MockNode, archive: boolean): S
       reason: written.reason,
     });
   }
-  return { outgoing: outgoing.sort(linkOrder), incoming: incoming.sort(linkOrder), left_out: leftOut, omitted: 0 };
+  return {
+    outgoing: outgoing.sort(linkOrder),
+    incoming: incoming.sort(linkOrder),
+    usage: { used_by: users.size, mentioned_by: mentioners.size },
+    left_out: leftOut,
+    omitted: 0,
+  };
+}
+
+/** One node's uses and, for a live document, whether it is linked to nothing; a section's flag null. */
+export interface MockUsage {
+  used_by: number;
+  mentioned_by: number;
+  orphan: boolean | null;
+}
+
+/** The word the convention sets a document aside by: never an orphan (`documentation-system.md`, section 6). */
+const SET_ASIDE = "abandoned";
+
+const usages = new WeakMap<MockCorpus, Map<string, MockUsage>>();
+
+/** A node's place, the key of `usageAt`. */
+function placeOf(path: string, line: number): string {
+  return `${path}:${String(line)}`;
+}
+
+/**
+ * Every node's uses as the core's `usage_of` gives them, built once per corpus
+ * (docs/features/usage-orphans.md "Acceptance criteria", UO1, UO3): a use is a resolved link written
+ * in another live file, ending on the node or one nested in it, counted by its source (the innermost
+ * ID section around it, else the document), strong apart from `mentions`. A live document is an
+ * orphan when it is not set aside, nothing uses or mentions it, no resolved link of its file ends in
+ * another file and no live document of another file has its `parent:` on it or one of its sections.
+ */
+function usagesOf(corpus: MockCorpus): Map<string, MockUsage> {
+  const known = usages.get(corpus);
+  if (known !== undefined) {
+    return known;
+  }
+  const live = (node: MockNode) => !node.archived && !node.generated;
+  const users = new Map<MockNode, Set<string>>();
+  const mentioners = new Map<MockNode, Set<string>>();
+  const linked = new Set<string>();
+  for (const written of corpus.links) {
+    const target = written.state === "resolved" && written.to !== null ? nodeNamed(corpus, written.to) : null;
+    const source = holderOfLine(corpus, written.path, written.line);
+    if (target === null || source === null || target.path === written.path) {
+      continue;
+    }
+    linked.add(written.path);
+    if (!live(fileOf(corpus, source).node)) {
+      continue;
+    }
+    const file = fileOf(corpus, target);
+    for (const holder of [file.node, ...file.sections].filter((node) => node === target || within(target, node))) {
+      const held = written.type === WEAK_LINK ? mentioners : users;
+      held.set(holder, (held.get(holder) ?? new Set<string>()).add(nameOf(source)));
+    }
+  }
+  const parented = new Set<string>();
+  for (const file of corpus.documents) {
+    const parent = file.node.parent === null ? null : nodeNamed(corpus, file.node.parent);
+    if (parent !== null && parent.path !== file.path && live(file.node)) {
+      parented.add(parent.path);
+    }
+  }
+  const built = new Map<string, MockUsage>();
+  for (const file of corpus.documents) {
+    for (const node of [file.node, ...file.sections]) {
+      const used = users.get(node)?.size ?? 0;
+      const mentioned = mentioners.get(node)?.size ?? 0;
+      const judged = node.isDocument && live(node);
+      const orphan = judged ? node.status !== SET_ASIDE && used === 0 && mentioned === 0 && !linked.has(file.path) && !parented.has(file.path) : null;
+      built.set(placeOf(node.path, node.line), { used_by: used, mentioned_by: mentioned, orphan });
+    }
+  }
+  usages.set(corpus, built);
+  return built;
+}
+
+/** The uses of the node at a place, as `usagesOf` gives them; none for a place the corpus does not hold. */
+export function usageAt(corpus: MockCorpus, path: string, line: number): MockUsage | null {
+  return usagesOf(corpus).get(placeOf(path, line)) ?? null;
+}
+
+/** The live documents of a corpus, judged, in file order: each with its uses and its sections' IDs. */
+export function judgedDocuments(corpus: MockCorpus): { node: MockNode; usage: MockUsage; sections: string[] }[] {
+  return corpus.documents.flatMap((file) => {
+    const usage = usageAt(corpus, file.node.path, file.node.line);
+    return usage === null || usage.orphan === null ? [] : [{ node: file.node, usage, sections: file.sections.flatMap((section) => (section.id === null ? [] : [section.id])) }];
+  });
 }
 
 /** The IDs of a shown node's set for its bindings: itself and every section within it (`docs/canon/code-reads.md` "The node sets"). */

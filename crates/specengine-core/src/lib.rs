@@ -127,7 +127,11 @@
 //!   filtered by the verdicts an agent left; a mark's caps and names;
 //! - [`pair`] — a two-sided collision's pair, the pure half (task spec
 //!   `collision-pairs`): which item serves one and which evidence cites
-//!   each side's file, by position; computed per read, never stored.
+//!   each side's file, by position; computed per read, never stored;
+//! - [`usage`] — what uses a node and which documents nothing links, the
+//!   pure half (task spec `usage-orphans`): distinct live sources from other
+//!   files by strong and weak type, and the orphan flag of a live document,
+//!   computed per read and never stored.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -175,6 +179,7 @@ pub mod team_toml;
 pub mod tokens;
 pub mod trace;
 pub mod upstream;
+pub mod usage;
 pub mod verify;
 pub mod walk_scope;
 pub mod workspace_toml;

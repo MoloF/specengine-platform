@@ -118,7 +118,7 @@ impl ProjectConfig {
 }
 
 /// A `specengine.toml` error: the 1-based line when known, and what is wrong.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProjectError {
     pub line: Option<usize>,
     pub message: String,

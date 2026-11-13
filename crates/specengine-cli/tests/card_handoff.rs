@@ -711,10 +711,44 @@ fn lamp_with_return(config: &str, line: &str) -> (String, usize) {
     (text, at)
 }
 
+/// `spec check`'s answer `before` with the one `card-config` error at
+/// `line` naming `message` (docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R4): after the findings before it, its summary one error
+/// more, exit 1 (an error blocks).
+fn with_card_config(before: &(i32, String, String), line: usize, message: &str) -> (i32, String) {
+    let (findings, summary) = before
+        .1
+        .trim_end_matches('\n')
+        .rsplit_once('\n')
+        .map_or(("", before.1.trim_end_matches('\n')), |(head, last)| {
+            (head, last)
+        });
+    let errors = summary
+        .split(", ")
+        .find_map(|part| part.strip_suffix(" errors"))
+        .and_then(|count| count.parse::<usize>().ok())
+        .unwrap_or_else(|| panic!("an error count: {summary}"));
+    let summary = summary
+        .replacen(
+            &format!(", {errors} errors,"),
+            &format!(", {} errors,", errors + 1),
+            1,
+        )
+        .replace(" \u{2014} clean", " \u{2014} blocked");
+    let finding = format!("error  specengine.toml:{line}: card-config: {message}");
+    let lines: Vec<&str> = findings
+        .lines()
+        .chain([finding.as_str(), summary.as_str()])
+        .collect();
+    (1, format!("{}\n", lines.join("\n")))
+}
+
 /// BH-13: each of the five errors of docs/canon/card-flows.md "Config" exits
-/// 2 `<config>:<line>: <message>` at the `return` line, for `spec card` alone: `spec tree` and
-/// `spec check` print what they printed, `spec workspace` its text with the
-/// card's error as its note, and the queue is unchanged. M15.
+/// 2 `<config>:<line>: <message>` at the `return` line, for `spec card` alone: `spec tree`
+/// prints what it printed, `spec check` that plus the one `card-config`
+/// error at that line (docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R4), `spec workspace` its text with the card's error as its
+/// note, and the queue is unchanged. M15.
 #[test]
 fn bh13_each_return_error_exits_2_at_its_line_for_spec_card_alone() {
     let pair = Pair::new("ho-bh13-errors", LAMP);
@@ -777,6 +811,15 @@ fn bh13_each_return_error_exits_2_at_its_line_for_spec_card_alone() {
         }
         for (args, (code, stdout, stderr)) in reads.iter().zip(&before) {
             let done = run(&pair, args);
+            if args == &["check"] {
+                assert_eq!(
+                    (done.code, done.stdout.clone()),
+                    with_card_config(&before[1], at, message),
+                    "{line}: {}",
+                    done.show()
+                );
+                continue;
+            }
             assert_eq!(done.code, *code, "{line}: {args:?}: {}", done.show());
             assert_eq!(done.stdout, *stdout, "{line}: {args:?}");
             assert_eq!(done.stderr, *stderr, "{line}: {args:?}");

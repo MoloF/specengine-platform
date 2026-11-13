@@ -834,34 +834,58 @@ fn s6_a_write_names_each_child() {
 
 // ------------------------------------------------------------- S1, S9
 
-/// S1, the CLI's part: a copy whose `print-run` row names `voice`, which no
-/// flow lists, stops `spec card list` with exit 2 and the line; `spec show
-/// PRN-WEEKLY` and `spec check` exit and print as before.
+/// S1, the CLI's part, as docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R4 changes it: a copy whose `print-run` row names `voice`,
+/// which no flow lists, turns splitting off alone: `spec card split` exits
+/// 2 with the line; `spec card list` and `spec show PRN-WEEKLY` answer as
+/// before; `spec check` adds the one `card-config` error at that line.
 #[test]
-fn s1_a_row_naming_no_flows_discipline_stops_the_card_surfaces_alone() {
+fn s1_a_row_naming_no_flows_discipline_turns_splitting_off_alone() {
     let pair = Pair::new("split-s1-voice", PRESS);
     let before = reads(&pair);
+    let listed = run(&pair, &["card", "list"]);
+    listed.code(0);
     let text = edit_config(
         &pair,
         "kind = \"print-run\"\ndisciplines = [\"plates\"]",
         "kind = \"print-run\"\ndisciplines = [\"voice\"]",
     );
     let line = line_holding(&text, "[\"voice\"]");
-    let stderr = cannot(&pair, &["card", "list"]);
-    assert!(
-        stderr.contains(&format!(
-            "specengine.toml:{line}: `[[card.split]]` `print-run`: no `[[card.flow]]` lists the \
-             discipline `voice`"
-        )),
-        "{stderr}"
+    let message = format!(
+        "specengine.toml:{line}: `[[card.split]]` `print-run`: no `[[card.flow]]` lists the \
+         discipline `voice`"
     );
-    cannot(&pair, &weekly(&[]));
-    assert_eq!(reads(&pair), before, "show and check as before");
+    let stderr = cannot(&pair, &weekly(&[]));
+    assert!(stderr.contains(&message), "{stderr}");
+    let after = run(&pair, &["card", "list"]);
+    assert_eq!(
+        (after.code, &after.stdout, &after.stderr),
+        (listed.code, &listed.stdout, &listed.stderr),
+        "card list as before"
+    );
+    let now = reads(&pair);
+    assert_eq!(now[0], before[0], "show as before");
+    assert_eq!(now[1].0, 1, "{:?}", now[1]);
+    let found: Vec<&str> = now[1]
+        .1
+        .lines()
+        .filter(|line| line.contains("card-config"))
+        .collect();
+    assert_eq!(
+        found,
+        [format!(
+            "error  specengine.toml:{line}: card-config: `[[card.split]]` `print-run`: no \
+             `[[card.flow]]` lists the discipline `voice`"
+        )],
+        "{:?}",
+        now[1]
+    );
 }
 
 /// S9: an unknown `[card]` key, as an older build reads `split`, fails
-/// `spec card list` alone with the unknown-field line; `spec show` and
-/// `spec check` answer as before.
+/// `spec card list` alone with the unknown-field line; `spec show` answers
+/// as before, and `spec check` reports it as `card-config` at that line
+/// (docs/features/release-hardening.md "Acceptance criteria" RH-R4).
 #[test]
 fn s9_an_unknown_card_key_fails_the_card_surfaces_alone() {
     let pair = Pair::new("split-s9-older", PRESS);
@@ -879,7 +903,18 @@ fn s9_an_unknown_card_key_fails_the_card_surfaces_alone() {
         )),
         "{stderr}"
     );
-    assert_eq!(reads(&pair), before, "show and check as before");
+    let now = reads(&pair);
+    assert_eq!(now[0], before[0], "show as before");
+    assert_eq!(now[1].0, 1, "{:?}", now[1]);
+    assert!(
+        now[1].1.lines().any(|found| found
+            == format!(
+                "error  specengine.toml:{line}: card-config: unknown field `bogus`, expected \
+                 `flow` or `split`"
+            )),
+        "{:?}",
+        now[1]
+    );
 }
 
 // ------------------------------------------------------------------ K1
@@ -940,4 +975,143 @@ fn k1_a_parent_with_open_children_is_accepted() {
     assert_eq!(accepted.code, 0, "{}", accepted.output);
     assert_eq!(show(&pair, "C-0001")["column"], json!("filed"));
     assert_eq!(others(&pair, "C-0001"), rest, "both children as they were");
+}
+
+// ------------------------------------------------- release-hardening RH-R4
+
+/// The "Data" example's row, appended after the config's last line.
+const BAD_ROW: &str = "\n[[card.split]]\nkind = \"mechanic\"\ndisciplnes = [\"copy\"]\n";
+
+/// `run`'s three streams, the pair's scratch path written `<scratch>`.
+fn answer(pair: &Pair, done: &common::Run) -> (i32, String, String) {
+    let scratch = pair.scratch.path().to_str().expect("UTF-8").to_owned();
+    (
+        done.code,
+        done.stdout.replace(&scratch, "<scratch>"),
+        done.stderr.replace(&scratch, "<scratch>"),
+    )
+}
+
+/// `spec check`'s `card-config` lines and its exit.
+fn card_config_lines(pair: &Pair) -> (i32, Vec<String>) {
+    let done = run(pair, &["check"]);
+    let lines = done
+        .stdout
+        .lines()
+        .chain(done.stderr.lines())
+        .filter(|line| line.contains("card-config"))
+        .map(str::to_owned)
+        .collect();
+    (done.code, lines)
+}
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R4, the
+/// CLI's half: on the "Data" row (`disciplnes`), `spec check` prints the
+/// one `card-config` line at its line and exits 1; a bad `[[card.flow]]` is
+/// reported alike; card-press as it is, or with no `[card]`, gives none.
+/// With the row, twin projects (one with it, one without) answer `spec
+/// card list`, `new`, `show` and `move`, `spec gate`, `spec workspace`,
+/// `spec delivery` and `spec card counts` byte for byte alike; `spec card
+/// split`, dry run too, exits 2 with `<config>:<line>: <message>`. M: split
+/// errors joined to `[card]`'s again; the finding dropped.
+#[test]
+fn rh_r4_a_bad_split_row_is_a_finding_and_turns_splitting_off_alone() {
+    let with = Pair::new("rh-r4-with", PRESS);
+    let without = Pair::new("rh-r4-without", PRESS);
+    assert_eq!(card_config_lines(&with), (0, Vec::new()), "a good [card]");
+    let text = read_text(&with.main, "specengine.toml");
+    let text = format!("{text}{BAD_ROW}");
+    write(&with.main, "specengine.toml", text.clone());
+    let line = line_holding(&text, "disciplnes");
+    let message = format!(
+        "specengine.toml:{line}: unknown field `disciplnes`, expected `kind` or `disciplines`"
+    );
+    assert_eq!(
+        card_config_lines(&with),
+        (
+            1,
+            vec![format!(
+                "error  specengine.toml:{line}: card-config: unknown field `disciplnes`, \
+                 expected `kind` or `disciplines`"
+            )]
+        )
+    );
+
+    let main = |pair: &Pair| pair.main.to_str().expect("UTF-8").to_owned();
+    let steps: Vec<Vec<String>> = [
+        vec!["card", "list"],
+        vec!["--json", "card", "list"],
+        vec![
+            "--json",
+            "card",
+            "new",
+            "--title",
+            "The weekly run",
+            "--discipline",
+            "copy",
+            "--target",
+            "PRN-WEEKLY",
+        ],
+        vec!["card", "show", "C-0001"],
+        vec!["--json", "card", "show", "C-0001"],
+        vec!["--json", "card", "move", "C-0001", "--to", "edit"],
+        vec!["card", "list"],
+        vec!["workspace"],
+        vec!["--json", "workspace"],
+        vec!["delivery"],
+        vec!["--json", "delivery"],
+        vec!["card", "counts"],
+        vec!["--json", "card", "counts"],
+    ]
+    .iter()
+    .map(|args| args.iter().map(|arg| (*arg).to_owned()).collect())
+    .collect();
+    for args in &steps {
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let a = answer(&with, &run(&with, &args));
+        let b = answer(&without, &run(&without, &args));
+        assert_eq!(a, b, "{args:?}");
+    }
+    let gate = |pair: &Pair| {
+        let root = main(pair);
+        let args = ["gate", "--worktree", &root, "--path", "src/a.rs", "--json"];
+        let done = common::gate::until_verdict(
+            || run(pair, &args),
+            |done| (done.stdout.as_str(), done.stderr.as_str()),
+        );
+        answer(pair, &done)
+    };
+    assert_eq!(gate(&with), gate(&without), "spec gate");
+
+    let state_before = state(&with);
+    for extra in [&["--dry-run"][..], &[][..]] {
+        let stderr = cannot(&with, &weekly(extra));
+        assert!(stderr.contains(&message), "{extra:?}: {stderr}");
+    }
+    assert_eq!(state(&with), state_before, "a refused split writes nothing");
+
+    // A bad flow is reported alike; no `[card]` gives none.
+    let flow = Pair::new("rh-r4-flow", PRESS);
+    let text = edit_config(
+        &flow,
+        "accept = { from = \"checked\", to = \"struck\" }",
+        "accept = { from = \"checked\", to = \"melted\" }",
+    );
+    let melted = line_holding(&text, "melted");
+    assert_eq!(
+        card_config_lines(&flow),
+        (
+            1,
+            vec![format!(
+                "error  specengine.toml:{melted}: card-config: `accept.to`: `melted` is no \
+                 column of this flow"
+            )]
+        )
+    );
+    let plain = Pair::new("rh-r4-plain", "spec-a");
+    assert_eq!(
+        card_config_lines(&plain).1,
+        Vec::<String>::new(),
+        "no [card]: no finding (spec-a's own findings aside)"
+    );
 }

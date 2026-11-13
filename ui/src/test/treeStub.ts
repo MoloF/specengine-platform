@@ -55,6 +55,7 @@ export const LINKS: ShownLinks = {
     }),
   ],
   incoming: [aLink({ type: "delta_type", written: "DOC-A", name: "DOC-X", path: "docs/spec/x.md", line: 7 })],
+  usage: { used_by: 1, mentioned_by: 0 },
   left_out: { generated: 1, tier3: 2 },
   omitted: 0,
 };

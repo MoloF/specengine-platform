@@ -92,4 +92,4 @@ The file: regular (else `<file>: not a regular file: give the filled sheet or a 
 - A U+2010, U+2011 hyphen or an invisible character inside an ID: no answer line, ignored.
 - The sheet is not cut at `OUTPUT_CAP_CHARS` (200 items ~2 MB); a returned one over 8 MiB: return the answer lines. A debug build takes ~7 s at the cap.
 - `O_NONBLOCK`: a constant per target, no `libc` (04 s6; the owner's call); elsewhere 0, the metadata read the only guard.
-- Intake takes CR in a question's text, a record refuses it (`holds U+000D`): its approve stages, never applies; `reject:` settles it (a follow-up task).
+- An item stored before intake refused a record's characters (CR: `holds U+000D`) stages its approve, never applies; `reject:` settles it.

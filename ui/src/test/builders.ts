@@ -35,10 +35,13 @@ import type {
   GraphView,
   HealthAssumes,
   HealthDrift,
+  HealthOrphan,
+  HealthOrphans,
   HealthReport,
   HealthUnbound,
   HistoryEntry,
   InboxEntry,
+  LinkUsage,
   Proposal,
   RoadmapDocument,
   RoadmapGroup,
@@ -795,9 +798,25 @@ export function aDriftIn(state: string, causes: string[]): HealthDrift {
   return { state, causes, counts: null, rows: null, tested: null, notes: [] };
 }
 
-/** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note, rows 4-6 off. */
+/** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note, rows 4-6 off, no orphan over 7 live documents. */
 export function aHealthReport(amendments: UnappliedAmendment[] = [], fields: Partial<Omit<HealthReport, "amendments">> = {}): HealthReport {
-  return { documents: 7, amendments, notes: [], code: null, assumes: aCodeRowOff(), unbound: aCodeRowOff(), drift: aDriftOff(), ...fields };
+  return { documents: 7, amendments, notes: [], code: null, assumes: aCodeRowOff(), unbound: aCodeRowOff(), drift: aDriftOff(), orphans: anOrphans([], { live: 7 }), ...fields };
+}
+
+/** Row 8 for tests: the orphans as given over as many live documents as given, else 12, no note (docs/features/usage-orphans.md "Acceptance criteria", UO4). */
+export function anOrphans(rows: HealthOrphan[], fields: Partial<Omit<HealthOrphans, "rows">> = {}): HealthOrphans {
+  return { live: 12, rows, notes: [], ...fields };
+}
+
+/** One orphan for tests: a requirement at line 1 of its own file, its ID its name, accepted, no task, unless given. */
+export function anOrphan(fields: Partial<HealthOrphan> & Pick<HealthOrphan, "name">): HealthOrphan {
+  const { name, ...rest } = fields;
+  return { name, id: name, kind: "requirement", title: `Title of ${name}`, path: `docs/records/${name.toLowerCase()}.md`, line: 1, status: "accepted", tasks: 0, tasks_open: 0, ...rest };
+}
+
+/** A links block's counts for tests: nothing uses it, nothing mentions it, unless given (docs/features/usage-orphans.md "Acceptance criteria", UO6). */
+export function aUsage(fields: Partial<LinkUsage> = {}): LinkUsage {
+  return { used_by: 0, mentioned_by: 0, ...fields };
 }
 
 /** One item of a round sheet for tests: a question without options, nothing staged; omitted keys as the sheet gives them. */
@@ -1120,6 +1139,9 @@ export function aCatalogRow(fields: Partial<CatalogRow> & Pick<CatalogRow, "id">
     open_items: 0,
     tasks: 0,
     tasks_open: 0,
+    used_by: 0,
+    mentioned_by: 0,
+    orphan: false,
     last_change: null,
     ...fields,
   };

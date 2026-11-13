@@ -14,7 +14,7 @@
 //!
 //! ```text
 //!   <out|in> <type> <name, else written> | <path>:<line>[ | at <section>][ | as <written>][ | kind <kind>][ | when <when>][ | dangling: <reason> | skipped: another project | unchecked]
-//!   links <o> out, <i> in[; left out: <g> generated, <t> archived (--archive)]
+//!   links <o> out, <i> in; used by <u>, mentioned by <m>[; left out: <g> generated, <t> archived (--archive)]
 //! ```
 //!
 //! `name`: the other end, its ID else its path; `at`: the nested section
@@ -22,9 +22,14 @@
 //! is not the name of the node it names; `kind`, `when`: a labelled edge's.
 //! The JSON alone adds `title` and `end_kind` after `name`: that node's title
 //! and kind (task spec `doc-modal` DM-1).
+//!
+//! `used by`, `mentioned by` (JSON `usage`): core's `tally` over the In
+//! rows, live ones only, so `--archive` widens In and never the counts
+//! (task spec `usage-orphans` UO1, UO6).
 
 use serde::Serialize;
-use specengine_core::check::{Endpoint, LinkState, NodeAt, SpecGraph};
+use specengine_core::check::{Endpoint, LinkState, NodeAt, SpecGraph, Standing};
+use specengine_core::usage::{UseRow, tally};
 use specengine_model::{Direction, EdgeLabel, LinkOrigin, is_weak_link};
 
 use crate::corpus::{Admission, LeftOut};
@@ -40,6 +45,17 @@ pub struct ShownLinks {
     /// Links written in files the live rule left out: incoming ones and
     /// an `out supersedes` from a left-out `superseded-by`.
     pub left_out: LeftOut,
+    /// The counts of the In rows' live sources in other files (task spec
+    /// `usage-orphans` UO1, UO6).
+    pub usage: LinkUsage,
+}
+
+/// What uses a shown node: core's `tally` over its In rows, live ones only
+/// (task spec `usage-orphans` UO1, UO6).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct LinkUsage {
+    pub used_by: u32,
+    pub mentioned_by: u32,
 }
 
 impl ShownLinks {
@@ -173,10 +189,34 @@ pub(crate) fn node_links(
     for &index in &found.left_out {
         left_out.add(graph.standing(edges[index].file));
     }
+    let usage = usage_of_rows(graph, &incoming, graph.paths()[at.file]);
     ShownLinks {
         outgoing,
         incoming,
         left_out,
+        usage,
+    }
+}
+
+/// The counts of the In rows (task spec `usage-orphans` UO1, UO6): each a
+/// [`UseRow`], its source the row's name, live when its file is; whatever
+/// the call admitted, only live rows count.
+fn usage_of_rows(graph: &SpecGraph<'_>, incoming: &[ShownLink], own_file: &str) -> LinkUsage {
+    let (used_by, mentioned_by) = tally(
+        incoming.iter().map(|link| UseRow {
+            source: link.name.as_deref().unwrap_or(&link.path),
+            file: &link.path,
+            weak: is_weak_link(&link.link_type),
+            live: graph
+                .file_of(&link.path)
+                .is_some_and(|file| graph.standing(file) == Standing::Live),
+            resolved: link.state == LinkState::Resolved,
+        }),
+        own_file,
+    );
+    LinkUsage {
+        used_by,
+        mentioned_by,
     }
 }
 
@@ -193,7 +233,7 @@ fn order(link: &ShownLink) -> (bool, &str, &str, usize, usize) {
 }
 
 /// The block's lines, without line ends: one per link, outgoing first,
-/// then the count.
+/// then the count and the uses (task spec `usage-orphans` UO6).
 pub(crate) fn block_lines(links: &ShownLinks) -> Vec<String> {
     let mut lines: Vec<String> = links
         .outgoing
@@ -202,9 +242,11 @@ pub(crate) fn block_lines(links: &ShownLinks) -> Vec<String> {
         .map(link_line)
         .collect();
     lines.push(format!(
-        "  links {} out, {} in{}",
+        "  links {} out, {} in; used by {}, mentioned by {}{}",
         links.outgoing.len(),
         links.incoming.len(),
+        links.usage.used_by,
+        links.usage.mentioned_by,
         links.left_out.suffix()
     ));
     lines
@@ -273,6 +315,8 @@ pub(crate) fn state_suffix(state: LinkState, reason: Option<&str>) -> String {
 pub(crate) struct LinksJson<'a> {
     outgoing: Vec<LinkJson<'a>>,
     incoming: Vec<LinkJson<'a>>,
+    /// Uncut: the counts of every In row, whatever the cap shows.
+    usage: LinkUsage,
     left_out: LeftOut,
     /// Links the cap cut (0 when nothing was).
     omitted: usize,
@@ -311,6 +355,7 @@ pub(crate) fn links_json(links: &ShownLinks, kept: usize, omitted: usize) -> Lin
     LinksJson {
         outgoing: links.outgoing[..outgoing].iter().map(link_json).collect(),
         incoming: links.incoming[..incoming].iter().map(link_json).collect(),
+        usage: links.usage,
         left_out: links.left_out,
         omitted,
     }

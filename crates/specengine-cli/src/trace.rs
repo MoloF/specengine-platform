@@ -256,6 +256,14 @@ pub(crate) struct QueueRead {
     schema: i64,
 }
 
+impl QueueRead {
+    /// No queue step has run on it, or there is no queue: no card was read
+    /// (Health's row 8, task spec `usage-orphans` UO4).
+    pub(crate) fn is_unborn(&self) -> bool {
+        self.schema == 0
+    }
+}
+
 /// The queue as `spec roadmap` reads it, no schema step; no queue: empty.
 /// A failure is the caller's: `spec trace` exits, `spec impact` notes it,
 /// `spec flow --trace` too ([`flow_queue`]).

@@ -127,7 +127,8 @@ fn spec_a_links_of_a_document_and_a_section() {
 
     // The JSON: the same links, exactly the keys of "Data"; since
     // docs/features/doc-modal.md DM-1, a link's `title` and `end_kind`, the
-    // other end's.
+    // other end's; since docs/features/usage-orphans.md UO6, the block's
+    // `usage` (RULE-STAM-REGEN: `{2, 3}`, the spec's table).
     let json = spec30(
         &home,
         &root,
@@ -137,7 +138,12 @@ fn spec_a_links_of_a_document_and_a_section() {
     let links = &json["nodes"][0]["links"];
     assert_eq!(
         keys(links),
-        ["outgoing", "incoming", "left_out", "omitted"].into(),
+        ["outgoing", "incoming", "usage", "left_out", "omitted"].into(),
+        "{json}"
+    );
+    assert_eq!(
+        links["usage"],
+        serde_json::json!({"used_by": 2, "mentioned_by": 3}),
         "{json}"
     );
     assert_eq!(links["omitted"], 0, "{json}");
@@ -286,7 +292,7 @@ fn superseded_by_is_outgoing_on_the_superseding_node() {
     assert!(!lines.contains(&named), "{}", run.show());
     assert_eq!(
         *links_block(&run.stdout).last().unwrap(),
-        "  links 4 out, 2 in; left out: 2 archived (--archive)",
+        "  links 4 out, 2 in; used by 1, mentioned by 1; left out: 2 archived (--archive)",
         "{}",
         run.show()
     );
@@ -305,7 +311,7 @@ fn superseded_by_is_outgoing_on_the_superseding_node() {
     assert!(lines.contains(&named), "{}", run.show());
     assert_eq!(
         *links_block(&run.stdout).last().unwrap(),
-        "  links 5 out, 3 in",
+        "  links 5 out, 3 in; used by 1, mentioned by 1",
         "{}",
         run.show()
     );

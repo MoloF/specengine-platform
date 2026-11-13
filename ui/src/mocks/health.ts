@@ -11,6 +11,7 @@ import type {
   HealthAssumes,
   HealthCode,
   HealthDrift,
+  HealthOrphans,
   HealthReport,
   HealthUnbound,
   ShownLink,
@@ -607,12 +608,18 @@ function codeRowsOf(project: string, scenario: Scenario): Pick<HealthReport, "co
   };
 }
 
-/** The report `spec health --json` gives for `project` in `scenario` (`cannot-check`, `error` and `slow` act in the client). */
-export function healthReportOf(project: string, scenario: Scenario): HealthReport {
+/** Row 8 when no corpus is given: none over none (a caller reading another row). */
+const NO_ORPHANS: HealthOrphans = { live: 0, rows: [], notes: [] };
+
+/**
+ * The report `spec health --json` gives for `project` in `scenario` (`cannot-check`, `error` and
+ * `slow` act in the client); row 8 from the project's corpus and board (src/mocks/orphans.ts).
+ */
+export function healthReportOf(project: string, scenario: Scenario, orphans: HealthOrphans = NO_ORPHANS): HealthReport {
   let amendments: UnappliedAmendment[] = [];
   if (project === HARBOR && scenario !== "empty") {
     amendments = scenario === "large" ? largeAmendments() : harborAmendments();
   }
   const { code, assumes, unbound } = codeRowsOf(project, scenario);
-  return { documents: documentsOf(project, scenario), amendments, notes: [], code, assumes, unbound, drift: driftOf(project, scenario) };
+  return { documents: documentsOf(project, scenario), amendments, notes: [], code, assumes, unbound, drift: driftOf(project, scenario), orphans: structuredClone(orphans) };
 }

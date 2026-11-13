@@ -1,7 +1,8 @@
 import type { InboxEntry, Proposal } from "../api/types";
 import type { Translate } from "../i18n";
 
-type Summarised = Pick<InboxEntry | Proposal, "gist" | "summary" | "rationale" | "kind" | "target_id">;
+/** The fields a proposal is listed by, an inbox entry's or a review document's. */
+export type Summarised = Pick<InboxEntry | Proposal, "gist" | "summary" | "rationale" | "kind" | "target_id">;
 
 /**
  * The agent's line a proposal is listed by: a question's gist, its one line of plain words

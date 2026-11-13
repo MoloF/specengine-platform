@@ -1356,22 +1356,38 @@ fn more_than_64_hits_are_a_stated_limit() {
 /// AC-08: ESC, U+0085, U+202E and U+2066 in a summary, a working answer,
 /// `observed` and a label: `inbox` and `review` text escaped (`\u{1b}`,
 /// …), JSON raw; the inbox line `… | question | open | EDGE-STAM-ZERO |
-/// t1 | <created_at> | normal: <text>`. M: one field raw.
+/// t1 | <created_at> | normal: <text>`. M: one field raw. Intake refuses
+/// these characters since docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R1, so the items are stored plain and the marks set by SQL,
+/// as an item stored before that release holds them.
 #[test]
 fn ac08_agent_text_is_escaped_in_text_and_raw_in_json() {
     let pair = Pair::new("ai-ac08", "spec-a");
     let cwd = pair.linked.clone();
     let marks = "\u{1b}[2J\u{85}\u{202e}\u{2066}";
     let escaped = "\\u{1b}[2J\\u{85}\\u{202e}\\u{2066}";
-    let mut request = question(&pair, &cwd, &["EDGE-STAM-ZERO"], &format!("Stop{marks}?"));
-    request.working_answer = format!("yes{marks}");
+    let mut request = question(&pair, &cwd, &["EDGE-STAM-ZERO"], "Stop?");
+    request.working_answer = "yes".to_owned();
     asked(&pair, &cwd, &request);
-    let mut input = discrepancy(&["EDGE-STAM-ZERO"], &format!("Departs{marks}."));
-    input.working_answer = Some(format!("wait{marks}"));
-    input.evidence[0].observed = format!("walks{marks}");
-    input.options[1].label = format!("spec{marks}");
+    let mut input = discrepancy(&["EDGE-STAM-ZERO"], "Departs.");
+    input.working_answer = Some("wait".to_owned());
+    input.evidence[0].observed = "walks".to_owned();
+    input.options[1].label = "spec".to_owned();
     let outcome = report(&pair, &cwd, input).expect("report");
     assert_eq!(outcome.document.id.as_deref(), Some("PR-0002"));
+    // The marks as SQL: ESC `[2J`, U+0085, U+202E, U+2066.
+    let sql_marks = "char(27) || '[2J' || char(133) || char(8238) || char(8294)";
+    pair.sql(&format!(
+        "UPDATE proposals SET summary = 'Stop' || {sql_marks} || '?', \
+         working_answer = 'yes' || {sql_marks} WHERE id = 'PR-0001';"
+    ));
+    pair.sql(&format!(
+        "UPDATE proposals SET summary = 'Departs' || {sql_marks} || '.', \
+         working_answer = 'wait' || {sql_marks}, \
+         evidence = json_set(evidence, '$[0].observed', 'walks' || {sql_marks}), \
+         options = json_set(options, '$[1].label', 'spec' || {sql_marks}) \
+         WHERE id = 'PR-0002';"
+    ));
 
     let (text, json) = printed_inbox(&pair.inbox(&cwd, false).expect("inbox"));
     assert_eq!(
@@ -1612,5 +1628,123 @@ fn the_brief_answers_leave_the_texts_out() {
     assert!(
         reason.starts_with("rationale: 4097 bytes; at most 4096"),
         "{reason}"
+    );
+}
+
+// ------------------------------------------------- release-hardening RH-R1
+
+/// The intake's refusal of `c` at `field`: a character a decision record
+/// never carries (`record::is_escaped`).
+fn never_carried(field: &str, c: char) -> String {
+    format!(
+        "{field}: holds U+{:04X}: a decision record never carries it",
+        u32::from(c)
+    )
+}
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R1, the CLI
+/// half: `spec propose question` with `text` `"a\r\nb"` exits 1 with the
+/// line on stderr (`--json`: the document's last note), nothing stored;
+/// refused alike, each at its own field: a question's `options[1].label`
+/// holding U+202E, a discrepancy's `evidence[0].observed` holding U+0007,
+/// a decision's `why` holding U+000D (the binary); a field over its cap
+/// that holds one is refused by the cap, in input order; an item holding
+/// LF and TAB is stored as `PR-0001` (no refusal took an ID), approves,
+/// and its record is written. M: `evidence[i].observed` left unchecked;
+/// the predicate `== '\r'`.
+#[test]
+fn rh_r1_a_records_refused_character_is_refused_at_intake() {
+    let pair = Pair::new("rh-r1-intake", "spec-a");
+    let cwd = pair.linked.clone();
+    let before = queue_state(&pair);
+    let cr = never_carried("text", '\r');
+    let args = [
+        "propose",
+        "question",
+        "EDGE-STAM-ZERO",
+        "--text",
+        "a\r\nb",
+        "--working-answer",
+        "yes",
+        "--price-of-other",
+        "none",
+        "--author-role",
+        "developer",
+    ];
+    let run = pair.spec_piped(&cwd, &args, b"");
+    assert_eq!(
+        (run.code, run.stdout.as_str(), run.stderr.as_str()),
+        (1, "", format!("spec: {cr}\n").as_str()),
+        "{run:?}"
+    );
+    let run = pair.spec_piped(&cwd, &[&["--json"], &args[..]].concat(), b"");
+    assert_eq!(run.code, 1, "{run:?}");
+    let document: Value = serde_json::from_str(&run.stdout).expect("a document");
+    assert_eq!(document["id"], Value::Null, "{document}");
+    assert_eq!(document["notes"], json!([cr]), "{document}");
+    assert_eq!(queue_state(&pair), before, "nothing stored");
+
+    let mut request = question(&pair, &cwd, &["EDGE-STAM-ZERO"], QUESTION);
+    request.options = Some(vec![option("wait"), option("spec\u{202e}")]);
+    request.recommendation = Some(0);
+    let reason = refused(&pair, &before, &ask(&pair, &cwd, &request), "a label");
+    assert_eq!(reason, never_carried("options[1].label", '\u{202e}'));
+
+    let mut input = discrepancy(&["EDGE-STAM-ZERO"], "Departs.");
+    input.evidence[0].observed = "walks\u{7} at once".to_owned();
+    let reason = refused(&pair, &before, &report(&pair, &cwd, input), "observed");
+    assert_eq!(reason, never_carried("evidence[0].observed", '\u{7}'));
+
+    let decision = json!({"node_ids": ["EDGE-STAM-ZERO"], "text": "Rest restarts the wait.",
+        "working_answer": "It restarts.", "price_of_other": "R-12 rebalanced", "why": "a\rb"});
+    let run = pair.spec_piped(
+        &cwd,
+        &[
+            "propose",
+            "decision",
+            "--input",
+            "-",
+            "--author-role",
+            "developer",
+        ],
+        decision.to_string().as_bytes(),
+    );
+    assert_eq!(
+        (run.code, run.stdout.as_str(), run.stderr.as_str()),
+        (
+            1,
+            "",
+            format!("spec: {}\n", never_carried("why", '\r')).as_str()
+        ),
+        "{run:?}"
+    );
+    assert_eq!(queue_state(&pair), before, "nothing stored");
+
+    // Over its cap and holding CR: the cap answers, in input order.
+    let long = format!("{}\r", "q".repeat(1024));
+    let request = question(&pair, &cwd, &["EDGE-STAM-ZERO"], &long);
+    let reason = refused(&pair, &before, &ask(&pair, &cwd, &request), "the cap");
+    assert_eq!(reason, "text: 1025 bytes; at most 1024");
+
+    // LF and TAB pass; no refusal took an ID; the record is written.
+    let id = pair.raise_question(
+        &cwd,
+        &["EDGE-STAM-ZERO"],
+        "Does rest\nrestart\tthe wait?",
+        "Yes:\tit restarts\nat once.",
+        "R-12 rebalanced",
+    );
+    assert_eq!(id, "PR-0001");
+    let (outcome, _) = pair.decide_ok(
+        &pair.main,
+        &id,
+        &common::decision::flags(None, None, None),
+        None,
+    );
+    assert_eq!(outcome.exit(), Exit::Answered);
+    let record = common::read_text(&pair.linked, "docs/records/DEC/DEC-0024.md");
+    assert!(
+        record.contains("it restarts") && record.contains("the wait?"),
+        "{record}"
     );
 }

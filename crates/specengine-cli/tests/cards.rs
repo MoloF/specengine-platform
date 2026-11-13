@@ -44,6 +44,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use common::gate::until_verdict;
 use common::proposal::Pair;
 use common::{Run, Scratch, data_dir, fixture, read_text, repository_root, with_ids_line, write};
 use serde_json::{Value, json};
@@ -1633,9 +1634,43 @@ fn bad_tables() -> Vec<(&'static str, String, &'static str)> {
     ]
 }
 
+/// `spec check`'s answer `before` with the one `card-config` error at
+/// `line` naming `message` (docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R4): after the findings before it (spec-a's lie under
+/// `docs/`), its summary one error more, exit 1 (an error blocks).
+fn with_card_config(before: &(i32, String, String), line: usize, message: &str) -> (i32, String) {
+    let (findings, summary) = before
+        .1
+        .trim_end_matches('\n')
+        .rsplit_once('\n')
+        .map_or(("", before.1.trim_end_matches('\n')), |(head, last)| {
+            (head, last)
+        });
+    let errors = summary
+        .split(", ")
+        .find_map(|part| part.strip_suffix(" errors"))
+        .and_then(|count| count.parse::<usize>().ok())
+        .unwrap_or_else(|| panic!("an error count: {summary}"));
+    let summary = summary
+        .replacen(
+            &format!(", {errors} errors,"),
+            &format!(", {} errors,", errors + 1),
+            1,
+        )
+        .replace(" \u{2014} clean", " \u{2014} blocked");
+    let finding = format!("error  specengine.toml:{line}: card-config: {message}");
+    let lines: Vec<&str> = findings
+        .lines()
+        .chain([finding.as_str(), summary.as_str()])
+        .collect();
+    (1, format!("{}\n", lines.join("\n")))
+}
+
 /// AC-05: each bad `[card]` exits 2 `<config>:<line>: <message>` for `spec
-/// card` alone: `spec tree`, `spec check` and a task read print what they
-/// printed, nothing changed in the queue.
+/// card` alone: `spec tree` and a task read print what they printed, and
+/// `spec check` what it printed plus the one `card-config` error at that
+/// line (docs/features/release-hardening.md "Acceptance criteria" RH-R4),
+/// nothing changed in the queue.
 #[test]
 fn ac05_a_bad_card_table_stops_spec_card_alone() {
     let pair = Pair::new("cd-ac05-bad", "spec-a");
@@ -1652,6 +1687,7 @@ fn ac05_a_bad_card_table_stops_spec_card_alone() {
     let queue = state(&pair);
     for (label, table, word) in bad_tables() {
         write(&pair.main, "specengine.toml", format!("{base}{table}"));
+        let mut named = None;
         for args in [
             vec!["card", "list"],
             vec!["card", "new", "--title", "Two"],
@@ -1673,9 +1709,21 @@ fn ac05_a_bad_card_table_stops_spec_card_alone() {
                 "{label}: a line of the table: {message}"
             );
             assert!(message.contains(word), "{label}: {word}: {message}");
+            let said = rest[digits.len() + 2..].trim_end_matches('\n').to_owned();
+            named = Some((line, said));
         }
+        let (line, said) = named.expect("a card command's line");
         for (args, (code, stdout, stderr)) in reads.iter().zip(&before) {
             let done = run(&pair, args);
+            if args == &["check"] {
+                assert_eq!(
+                    (done.code, done.stdout.clone()),
+                    with_card_config(&before[1], line, &said),
+                    "{label}: {}",
+                    done.show()
+                );
+                continue;
+            }
             assert_eq!(done.code, *code, "{label}: {args:?}: {}", done.show());
             assert_eq!(done.stdout, *stdout, "{label}: {args:?}");
             assert_eq!(done.stderr, *stderr, "{label}: {args:?}");
@@ -1688,8 +1736,20 @@ fn ac05_a_bad_card_table_stops_spec_card_alone() {
     let message = cannot(&pair, &["card", "list"]);
     assert!(message.contains("specengine.toml:1: "), "{message}");
     assert!(message.contains("card"), "{message}");
+    let said = message[message.find("specengine.toml:1: ").expect("the line") + 19..]
+        .trim_end_matches('\n')
+        .to_owned();
     for (args, (code, stdout, _)) in reads.iter().zip(&before) {
         let done = run(&pair, args);
+        if args == &["check"] {
+            assert_eq!(
+                (done.code, done.stdout.clone()),
+                with_card_config(&before[1], 1, &said),
+                "{}",
+                done.show()
+            );
+            continue;
+        }
         assert_eq!(done.code, *code, "{args:?}: {}", done.show());
         assert_eq!(done.stdout, *stdout, "{args:?}");
     }
@@ -2510,26 +2570,19 @@ fn ac07_the_binary_exports_and_imports_cards() {
 // --------------------------------------------------------------- AC-08
 
 /// `spec gate --worktree main --path src/a.rs --json`, whatever it answers:
-/// its exit and both streams.
+/// its exit and both streams; a no verdict by deadline is asked again
+/// (`common::gate::until_verdict`).
 fn gate_answer(pair: &Pair) -> (i32, String, String) {
-    let main = pair.main.to_str().unwrap();
-    // `spec gate` answers within 3 s of wall clock (`GATE_DEADLINE`): a run a
-    // loaded machine starves past that says `unavailable` and nothing of the
-    // cards, so it is asked again (five tries; the last answer stands).
-    let mut done = None;
-    for _ in 0..5 {
-        let run = run(
-            pair,
-            &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
-        );
-        let starved = run.stdout.contains("\"reason\":\"deadline\"")
-            || run.stderr.contains("no answer within");
-        done = Some(run);
-        if !starved {
-            break;
-        }
-    }
-    let done = done.expect("a run");
+    let main = pair.main.to_str().expect("a UTF-8 path");
+    let done = until_verdict(
+        || {
+            run(
+                pair,
+                &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
+            )
+        },
+        |done| (done.stdout.as_str(), done.stderr.as_str()),
+    );
     (done.code, done.stdout, done.stderr)
 }
 
@@ -4512,15 +4565,20 @@ fn card_questions_k1_no_card_rule_reads_an_item() {
     }
     let list = |pair: &Pair| json_run(pair, &["card", "list", "--with-cancelled"]).stdout;
     let gate = |pair: &Pair| {
-        let done = run(
-            pair,
-            &[
-                "gate",
-                "--worktree",
-                pair.main.to_str().expect("UTF-8"),
-                "--path",
-                "docs/spec/scn-storm.md",
-            ],
+        let done = until_verdict(
+            || {
+                run(
+                    pair,
+                    &[
+                        "gate",
+                        "--worktree",
+                        pair.main.to_str().expect("UTF-8"),
+                        "--path",
+                        "docs/spec/scn-storm.md",
+                    ],
+                )
+            },
+            |done| (done.stdout.as_str(), done.stderr.as_str()),
         );
         (done.code, done.stdout, done.stderr)
     };

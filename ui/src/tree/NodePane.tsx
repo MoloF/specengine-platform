@@ -359,9 +359,9 @@ export function NodePane({
                 {fill(t("tree.node.failedAgain", { ref: nodeRef, message: slot("message") }), { message: <span lang="en">{apiErrorOf(view.error).message}</span> })}
               </p>
             )}
-            {holders.length > 0 && (
+            {holders[0] !== undefined && (
               <RegionBoundary name={t("tree.node.boundary.cards")}>
-                <CardsBlock key={nodeRef} project={project} nodeRef={nodeRef} section="tree" heading="h2" />
+                <CardsBlock key={nodeRef} project={project} nodeRef={nodeRef} holder={holders[0]} section="tree" heading="h2" />
               </RegionBoundary>
             )}
             {body}

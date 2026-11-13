@@ -40,7 +40,7 @@
   "RoundAnswersOutcome": ["project", "answers", "notes"],
   "RoundAnswerEntry": ["id", "outcome", "stage", "staged_at", "replaced", "reason"],
   "Interpretation": ["decision", "how", "why"],
-  "HealthReport": ["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"],
+  "HealthReport": ["documents", "amendments", "notes", "code", "assumes", "unbound", "drift", "orphans"],
   "UnappliedAmendment": ["path", "id", "title", "class", "status", "links"],
   "ShownLink": ["type", "origin", "at", "name", "title", "end_kind", "written", "path", "line", "state", "reason"],
   "RevisionRow": ["id", "rev", "to", "lock_entries", "refused"],
@@ -137,7 +137,7 @@
   "DeliveryItem": ["id", "kind", "status"],
   "DeliveryMore": ["returns", "reestimates", "cancelled_subtasks", "items"],
   "Catalog": ["kinds", "archive", "notes", "rows", "truncated", "omitted"],
-  "CatalogRow": ["id", "kind", "title", "path", "line", "rev", "status", "archived", "state", "open_items", "tasks", "tasks_open", "last_change"],
+  "CatalogRow": ["id", "kind", "title", "path", "line", "rev", "status", "archived", "state", "open_items", "tasks", "tasks_open", "used_by", "mentioned_by", "orphan", "last_change"],
   "CatalogChange": ["at", "by", "by_name", "commit", "proposal", "of_file"],
   "CardCounts": ["flows", "columns", "by_flow", "agent_tasks", "notes", "truncated", "omitted"],
   "CardColumnCount": ["flow", "column", "open", "accepted", "cancelled", "open_subtasks"],
@@ -146,5 +146,8 @@
   "PairSide": ["id", "title", "path", "evidence"],
   "DeliveryTimeline": ["from", "to", "markers", "tasks"],
   "DeliveryMarker": ["group", "release", "first_taken_at", "last_accepted_at"],
-  "DeliveryTask": ["id", "title", "flow", "group", "release", "departments", "created_at", "taken_at", "accepted_at", "due", "days_late"]
+  "DeliveryTask": ["id", "title", "flow", "group", "release", "departments", "created_at", "taken_at", "accepted_at", "due", "days_late"],
+  "LinkUsage": ["used_by", "mentioned_by"],
+  "HealthOrphans": ["live", "rows", "notes"],
+  "HealthOrphan": ["name", "id", "kind", "title", "path", "line", "status", "tasks", "tasks_open"]
 }

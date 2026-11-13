@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # The document view: one modal and page everywhere
@@ -42,8 +42,8 @@ As the card modal's (`board-screen.md` "The card modal and page"):
 
 `DocModal` (`Dialog`, `aria-modal`, labelled by its focused `h2`, the title once read, the REF until then) and `DocPage` (`#/<p>/tree/<REF>/page`, an `h1`, no tools, the nav marking Spec tree) render `DocFrame`, an `IssueView`. The frame, its title and tools, is first load; its slots (`DocCrumbs`, `DocMeta`, `DocActs`, `DocMain`, `DocSide`) come from one lazy chunk, `DocBody.tsx`, never preloaded. The title node never swaps, so focus never leaves it. Width: `ui-design.md` "The work item".
 
-- **Head.** Breadcrumbs: Project (`#/<p>`), each `ancestors` entry top first by title (else ID, else path), the document current; an ancestor's `href` is its page, its plain click in the modal replacing `doc`. Tools (modal): Open as a page, Close. `meta`: the work state, a `Lozenge` of the node's trace row (`rollupLook`), `doc.notKnown` with no row, none while reading; the raw `status:`, neutral, `lang="en"`, none for a section. Acts: New task (primary, `NewCardDialog` preset), Split to departments… (`card-split.md` "Screen"), Open in Flow (`flowHash`, `scope` the last ancestor, null at a root, `select` the node), Open in Spec tree; each a push, closing the modal.
-- **Main.** A REF several holders answer: the first, and `doc.holders`. **Text**: the body without front-matter and without a first heading equal to the title (`{#…}` ignored), through `src/markdown/` at `--font-size-document` and `--reading-width`; its headings one level below the part heading "Text" (`h4` in the modal, `h3` on the page); anchors are `DocLink`s; then `doc.throughAi`. **Links**: Out, then In, the served strong links whose `state` is `resolved`, in served order, a row the raw type (neutral, `lang="en"`) then the end's `title`, else `name`, as a `DocLink`; `mentions` under a collapsed `Disclosure` with their count; none, `doc.links.none`. **Inside**, then **History**, below.
+- **Head.** Breadcrumbs: Project (`#/<p>`), each `ancestors` entry top first by title (else ID, else path), the document current; an ancestor's `href` is its page, its plain click in the modal replacing `doc`. Tools (modal): Open as a page, Close. `meta`: the work state, a `Lozenge` (`rollupLook`) of the resolved holder's trace row, matched by its ID, an ID-less one by its path (`trace/holderRow.ts`, `CardsBlock`'s too), `doc.notKnown` with no row, none while reading; the raw `status:`, neutral, `lang="en"`, none for a section. Acts: New task (primary, `NewCardDialog` preset), Split to departments… (`card-split.md` "Screen"), Open in Flow (`flowHash`, `scope` the last ancestor, null at a root, `select` the node), Open in Spec tree; each a push, closing the modal.
+- **Main.** A REF several holders answer: the first, and `doc.holders`. **Text**: the body without front-matter and without a first heading equal to the title (`{#…}` ignored), through `src/markdown/` at `--font-size-document` and `--reading-width`; its headings one level below the part heading "Text" (`h4` in the modal, `h3` on the page); anchors are `DocLink`s; then `doc.throughAi`. **Links**: Out, then In, the served strong links whose `state` is `resolved`, in served order, a row the raw type (neutral, `lang="en"`) then the end's `title`, else `name`, as a `DocLink`; `mentions` under a collapsed `Disclosure` with their count; none, `doc.links.none`. In opens with the served counts, "Used by N · Mentioned by M", then its users grouped by kind, each with its places (`path:line`, its type, the section): `spec-usage.md` "UI". **Inside**, then **History**, below.
 - **Side**, at most 360 px. Tasks: `CardsBlock`, its own New task off. Technical details, a collapsed `Disclosure` (`ui.technicalDetails`): the ID with a copy button (ID-less: the path; `doc.technical.copyFailed`); `Facts` (`src/tree/Facts.tsx`, `dl.facts` of `factsOf`'s rows, `NodePane`'s `PropertyList` the same): kind, `path:line-end`, status, rev, tokens, span hash, flags; the norm hash; the front-matter verbatim; unresolved links, `<type> <written>`, state and reason, `lang="en"`; `left_out`; the read's notes; `doc.technical.inTree`; Open in Graph.
 - **A 404**: the daemon's reason verbatim, `lang="en"`; only Close and Open in Spec tree stay. A section: its span, no status, Inside rooted at it.
 
@@ -88,7 +88,6 @@ The keys are `READS_OF_THE_SPEC`'s: an apply, a gap or a card event re-reads an 
 - Open in Flow on a document out of the flow acts as any undrawn name (`spec-flow-place.md` "The seek").
 - A project named as its root document repeats in the breadcrumb (data). Prose wiki-style `[[path]]` references render raw.
 - Widths, 320 px and stacking are proven by looks (2026-11-11), not tests: jsdom lays nothing out.
-- `DocMeta` and `CardsBlock` find their own row by `node.id === docRef`, so a document opened by an alias shows its work state as not known (before RM-0100).
 - An open History stays as read after a hand commit (no event names it) and after a task is accepted (card events re-read no node key), until the view is reopened.
 
 ## Tests

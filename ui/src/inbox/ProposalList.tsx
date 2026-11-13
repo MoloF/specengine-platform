@@ -1,10 +1,9 @@
 import type { InboxEntry } from "../api/types";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { shownSlot } from "../ui/text";
 import { formatAge, formatUtc } from "../ui/time";
 import { severityLook, statusLook } from "./labels";
-import { leadingGist, summaryOf } from "./summary";
+import { ProposalSummary } from "./ProposalSummary";
 import { targetsOf } from "./targets";
 import { useTranslate } from "../i18n";
 
@@ -31,8 +30,6 @@ export function ProposalList({
         const selected = proposal.id === selectedId;
         const status = statusLook(proposal.status, t);
         const targets = targetsOf(proposal);
-        // A gist, agent text, drawn as the lead draws it; the summary's line as before.
-        const gist = leadingGist(proposal);
         return (
           <div
             key={proposal.id}
@@ -52,7 +49,9 @@ export function ProposalList({
                 {formatAge(proposal.created_at, now, t)}
               </time>
             </span>
-            <span className="queue-item-summary">{gist === null ? summaryOf(proposal, t) : <bdi>{shownSlot(gist)}</bdi>}</span>
+            <span className="queue-item-summary">
+              <ProposalSummary proposal={proposal} />
+            </span>
             <span className="queue-item-meta">
               <span className="mono">{proposal.kind}</span>
               <span aria-hidden="true"> | </span>

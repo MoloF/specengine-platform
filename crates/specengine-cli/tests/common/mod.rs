@@ -12,6 +12,7 @@
 pub mod bundle;
 pub mod check;
 pub mod decision;
+pub mod gate;
 pub mod git;
 pub mod graph;
 pub mod keys;

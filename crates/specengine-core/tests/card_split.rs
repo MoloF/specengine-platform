@@ -93,11 +93,29 @@ fn read(text: &str) -> CardConfig {
     card_from_toml(text).unwrap_or_else(|error| panic!("{}\n{text}", error.at(CONFIG)))
 }
 
-/// `text`'s first error, `<config>:<line>: <message>`.
+/// `text`'s first error, `<config>:<line>: <message>`: a flow's, which the
+/// reader returns as its `Err`.
 fn refused(text: &str) -> String {
     match card_from_toml(text) {
         Ok(config) => panic!("read, not refused: {:?}\n{text}", config.splits),
         Err(error) => error.at(CONFIG),
+    }
+}
+
+/// `text`'s split problem, `<config>:<line>: <message>`: since
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R4 a bad
+/// `[card] split` is no `Err` but `split_problem`, splitting off whole (no
+/// row read) and the flows served.
+fn split_off(text: &str) -> String {
+    match card_from_toml(text) {
+        Ok(config) => {
+            let problem = config
+                .split_problem
+                .unwrap_or_else(|| panic!("read, no split problem: {:?}\n{text}", config.splits));
+            assert_eq!(config.splits, [], "splitting off whole\n{text}");
+            problem.at(CONFIG)
+        }
+        Err(error) => panic!("refused, not split off: {}\n{text}", error.at(CONFIG)),
     }
 }
 
@@ -368,18 +386,27 @@ fn probes() -> Vec<Probe> {
 }
 
 /// S1: each line of the error table, from a probe config each, at its line:
-/// `<config>:<line>: <message>`, the first error by line. M: the listing
-/// check dropped (`voice` reads); a kind compared trimmed (the two space
-/// probes read).
+/// `<config>:<line>: <message>`, the first error by line, as the split
+/// problem (RH-R4: splitting off, no row read, never the reader's `Err`).
+/// M: the listing check dropped (`voice` reads); a kind compared trimmed
+/// (the two space probes read); split errors joined to `[card]`'s again.
 #[test]
 fn s1_each_error_of_the_table_stands_at_its_line() {
     let mut wrong = Vec::new();
     for probe in probes() {
         let got = match card_from_toml(&probe.text) {
-            Ok(config) => format!("read: {:?}", rows_of(&config)),
-            Err(error) => error.at(CONFIG),
+            Ok(config) => match config.split_problem {
+                Some(problem) if config.splits.is_empty() => problem.at(CONFIG),
+                _ => format!("read: {:?}", rows_of(&config)),
+            },
+            Err(error) => format!("refused whole: {}", error.at(CONFIG)),
         };
-        let expected = note(probe.line, &probe.message);
+        // `[card]`'s own key is no split row: the whole table is refused.
+        let expected = if probe.label == "another key in [card]" {
+            format!("refused whole: {}", note(probe.line, &probe.message))
+        } else {
+            note(probe.line, &probe.message)
+        };
         if got != expected {
             wrong.push(format!("{}:\n  want {expected}\n  got  {got}", probe.label));
         }
@@ -414,7 +441,7 @@ fn s1_a_row_lists_at_most_thirty_two_disciplines() {
     assert_eq!(config.splits.len(), 1);
     assert_eq!(config.splits[0].disciplines, names[..32]);
     let text = probe(33);
-    let message = refused(&text);
+    let message = split_off(&text);
     assert!(
         message.contains("disciplines") && message.contains("32"),
         "{message}"
@@ -491,7 +518,7 @@ fn s1_the_listing_check_waits_for_every_flow() {
 fn s1_under_the_plain_flow_no_row_reads() {
     let text = format!("{HEAD}{}", row("broadsheet", &["copy"]));
     assert_eq!(
-        refused(&text),
+        split_off(&text),
         note(
             line_holding(&text, "disciplines", 1),
             "`[[card.split]]` `broadsheet`: no `[[card.flow]]` lists the discipline `copy`"
@@ -1042,5 +1069,43 @@ fn s2_no_parent_target_plans_manual_children() {
             want_row("sound", SOUND, &[], "parent", false),
             want_row("art", ART, &[], "parent", false),
         ]
+    );
+}
+
+// ------------------------------------------------- release-hardening RH-R4
+
+/// docs/features/release-hardening.md "Acceptance criteria" RH-R4, the pure
+/// half, on Data's row (`kind = "mechanic"`, `disciplnes`): the reader is
+/// `Ok`, its flows those of the text without the row, `splits` empty and
+/// `split_problem` the unknown field at its line; a good row beside it is
+/// not served either (splitting off whole); a bad flow with the row is the
+/// flow's `Err`, as before. M: split errors joined to `[card]`'s again.
+#[test]
+fn rh_r4_a_bad_split_row_turns_splitting_off_alone() {
+    let good = row("broadsheet", &["copy", "plates"]);
+    let bad = "[[card.split]]\nkind = \"mechanic\"\ndisciplnes = [\"copy\"]\n";
+    let text = press(&format!("{good}{bad}"));
+    let config = card_from_toml(&text).unwrap_or_else(|error| panic!("{}", error.at(CONFIG)));
+    let plain = read(&press(""));
+    assert_eq!(config.flows, plain.flows, "the flows served as without it");
+    assert_eq!(config.splits, [], "no row served, the good one neither");
+    assert_eq!(
+        config.split_problem.map(|problem| problem.at(CONFIG)),
+        Some(note(
+            line_holding(&text, "disciplnes", 1),
+            "unknown field `disciplnes`, expected `kind` or `disciplines`"
+        ))
+    );
+    let broken = press(bad).replace(
+        "accept = { from = \"checked\", to = \"struck\" }",
+        "accept = { from = \"checked\", to = \"melted\" }",
+    );
+    assert_eq!(
+        refused(&broken),
+        note(
+            line_holding(&broken, "melted", 1),
+            "`accept.to`: `melted` is no column of this flow"
+        ),
+        "a bad flow with the row: the flow's error"
     );
 }

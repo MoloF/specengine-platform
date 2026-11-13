@@ -997,7 +997,11 @@ fn show_links_on_a_long_node_keeps_its_links_block() {
             format!("  in mentions {back_id} | {back}:8"),
             "{fixture}"
         );
-        assert_eq!(lines[3], "  links 1 out, 1 in", "{fixture}");
+        // docs/features/usage-orphans.md UO6: one mention from another file.
+        assert_eq!(
+            lines[3], "  links 1 out, 1 in; used by 0, mentioned by 1",
+            "{fixture}"
+        );
         let (before, tail) = split_tail(&run.stdout);
         assert!(before.chars().count() <= CAP, "{fixture}");
         let shown = &before[lines[..4].iter().map(|l| l.len() + 1).sum::<usize>()..];

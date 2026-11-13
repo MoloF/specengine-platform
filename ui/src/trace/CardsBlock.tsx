@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import { useCard, useTrace } from "../api/queries";
-import type { CardWrite, TraceCard, TraceDocument, TraceNode, TraceUse } from "../api/types";
+import type { CardWrite, ShownNode, TraceCard, TraceDocument, TraceUse } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { useAllowed } from "../board/acting";
 import { DocLink } from "../doc/DocLink";
@@ -21,17 +21,13 @@ import { shownSlot } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
+import { holderRow } from "./holderRow";
 
 /** A Clear asked for: the card, the button to go back to; `asked` counts the presses, so a read that failed is read again. */
 interface Clearing {
   card: TraceCard;
   trigger: HTMLElement;
   asked: number;
-}
-
-/** The row of the node asked, never another's: a read of a group holds what it holds besides, by (path, position). */
-function rowOf(trace: TraceDocument, nodeRef: string): TraceNode | undefined {
-  return trace.nodes.find((node) => node.id === nodeRef);
 }
 
 /** Each card of a read once: a card on two rows keeps the mark that says something, one a person can clear before any. */
@@ -122,17 +118,21 @@ function ClearCard({ project, clearing, onClose, onDone }: { project: string; cl
  * Clear all, no effect only. Nothing here is counted: a group says the counts served for it. On a hub
  * Clear and Clear all stand idle where `allowed` omits them (`docs/features/hub-team.md`). In the
  * document view (`section` "doc") a using node opens as a document and the head holds New card, so
- * `newCard` is off (docs/features/doc-modal.md "Acceptance criteria", DM-12).
+ * `newCard` is off (docs/features/doc-modal.md "Acceptance criteria", DM-12). Its state is the row of
+ * `holder`, the node `nodeRef` resolved to, so a REF written as an alias reads as its canonical ID does.
  */
 export function CardsBlock({
   project,
   nodeRef,
+  holder,
   section,
   heading: Heading,
   newCard = true,
 }: {
   project: string;
   nodeRef: string;
+  /** The node `nodeRef` resolved to: its row is found by its ID, else its path. */
+  holder: Pick<ShownNode, "id" | "path">;
   section: "flow" | "tree" | "doc";
   heading: "h2" | "h3" | "h4";
   newCard?: boolean;
@@ -192,7 +192,7 @@ export function CardsBlock({
       </p>
     );
   } else {
-    const row = rowOf(trace, nodeRef);
+    const row = holderRow(trace, holder);
     const cards = cardsOf(trace);
     const uses = usesOf(trace);
     const group = trace.nodes.length > 1;

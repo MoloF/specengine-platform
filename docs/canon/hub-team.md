@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-02
+reviewed: 2026-11-13
 ---
 
 # Hub team: who acts past the plain writes
@@ -107,7 +107,7 @@ The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): 
 
 ## Check
 
-`team-config`, an error at the config's line, subject `team`, the last of 37 `CHECK_CODES`, carried by `CheckSetup.team` and added by every store run under the baseline. Never `cannot-check`: through `load_config` a typo would stop every run. `--staged` and `--changed` judge it on the checked side alone, so a bad `[team]` at `HEAD` counts as introduced until fixed. The gate never reads it (ADR-0039).
+`team-config`, an error at the config's line, subject `team`, the 37th of 38 `CHECK_CODES` (`card-config`, `[card]`'s twin, the last), carried by `CheckSetup.team` and added by every store run under the baseline. Never `cannot-check`, which would stop every run on a typo. `--staged` and `--changed` judge it on the checked side alone, so a bad `[team]` at `HEAD` counts as introduced until fixed. The gate never reads it (ADR-0039).
 
 ## Rules
 

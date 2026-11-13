@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # spec catalog: a direction as a table of its documents
@@ -18,6 +18,7 @@ Built by `direction-catalog` (RM-0106), no ADR: it rests on ADR-0076 (a directio
 - **`rev`** is the node's revision number (`node-revision.md` "Revision"): none written is 1, an unreadable one `null`. `spec tree` serves a written `rev` alone, `null` otherwise. Shown as "Version N"; hashes stay out.
 - **`state`** is the trace's `rollup` of the node (`spec-trace.md` "Marks and rollup"), its own cards only, the trace's reading built once for all rows (`node_work`). **`tasks`** are the node's cards, cancelled ones ignored, `tasks_open` the open ones.
 - **`open_items`**: the `open` proposals of this repository (`same_repository` on `git_common_dir`; staged ones included) whose `target_id` is the row's ID or whose `node_ids` hold it, once per node (core `open_items_by_node`). A document row does not count its sections' items. A linked worktree's items count, another clone's do not.
+- **`used_by`**, **`mentioned_by`**, **`orphan`**: core `usage_of` over the graph the rows' tree read built, one more pass over its edges, never stored (`spec-usage.md`); `orphan` `null` on a section.
 - **`last_change`**, per file: the newest commit of `HEAD`'s first-parent line whose diff against its first parent names the row's path, read as node-history's commit entry (core `last_change`: `at`, `by`, `by_name`, `commit`, `proposal`; `spec-history.md` "Sources"); a hand commit's `proposal` is `null`. A section row carries its file's, `of_file: true`. The working tree never counts: an edited file reads `HEAD`'s, a new uncommitted one `null`. A merge on the line is the change.
 
 ## The walk
@@ -38,9 +39,9 @@ No present path: no log runs; none found: the second does not. Every command is 
 
 ## Text and JSON
 
-Header `catalog <kinds joined ", "> | rows <n>`, ` [archive]` appended with `--archive`. A row: `<id, else path> | version <rev or -> | <state> | open items <n> | tasks <t>, open <o> | <at>[ (file)] | <by> | <proposal or hand> | <title or ->`; no last change prints `- | - | -` for its three. Values pass `one_line`, lines escaped, the JSON raw. The cut at `OUTPUT_CAP_CHARS`: the header, rows whole while they fit (the first always), then `[truncated: <k> of <n> rows not shown]`.
+Header `catalog <kinds joined ", "> | rows <n>`, ` [archive]` appended with `--archive`. A row: `<id, else path> | version <rev or -> | <state> | open items <n> | tasks <t>, open <o> | used by <u>, mentioned by <m>[, orphan] | <at>[ (file)] | <by> | <proposal or hand> | <title or ->`, `orphan` only on a judged orphan; no last change prints `- | - | -` for its three. Values pass `one_line`, lines escaped, the JSON raw. The cut at `OUTPUT_CAP_CHARS`: the header, rows whole while they fit (the first always), then `[truncated: <k> of <n> rows not shown]`.
 
-JSON `{kinds, archive, notes, rows, truncated, omitted}`; a row `{id, kind, title, path, line, rev, status, archived, state, open_items, tasks, tasks_open, last_change}`; `last_change` `{at, by, by_name, commit, proposal, of_file}`, or `null`: absent at `HEAD`, not reached, or git not read. `by` is raw, as node-history's CLI and MCP show it. `omitted` counts the rows cut, `null` uncut. The scenario's pinned text and JSON: CLI `tests/catalog_scene/mod.rs`.
+JSON `{kinds, archive, notes, rows, truncated, omitted}`; a row's 16 keys `{id, kind, title, path, line, rev, status, archived, state, open_items, tasks, tasks_open, used_by, mentioned_by, orphan, last_change}`; `last_change` `{at, by, by_name, commit, proposal, of_file}`, or `null`: absent at `HEAD`, not reached, or git not read. `by` is raw, as node-history's CLI and MCP show it. `omitted` counts the rows cut, `null` uncut. The scenario's pinned text and JSON: CLI `tests/catalog_scene/mod.rs`.
 
 ## Notes and exits
 
@@ -56,7 +57,7 @@ These five are scoped to the rows shown: printed only when a row is shown, the f
 
 ## Daemon, hub
 
-`GET /api/projects/:p/catalog?kinds=K[&kinds=…][&archive=true]`: `spec catalog --json` less its final LF, the browser view (never cut), in the project's turn, with the daemon's cache. It walks (`run`, not `run_read`: `spec-read-freshness.md`), its rows showing the trace's state. 400s, nothing run: `` `kinds` is required (repeat it for more) ``; an unknown name `` `<name>` is no query name of catalog: it takes kinds, archive ``. The 404 list names `catalog` after `delivery`. Key sets 138-140 of `fixtures/daemon-keys.json`: `Catalog` (6), `CatalogRow` (13), `CatalogChange` (6). A hub serves the route to every login over its checkout and its own queue (its `--push` clone neither shallow nor partial, `hub-git.md`). No MCP tool; `HUB_TOOLS`, the plugin version, config keys, the queue schema and the backup format unchanged. A daemon before this slice answers 404; the table shows that with Retry.
+`GET /api/projects/:p/catalog?kinds=K[&kinds=…][&archive=true]`: `spec catalog --json` less its final LF, the browser view (never cut), in the project's turn, with the daemon's cache. It walks (`run`, not `run_read`: `spec-read-freshness.md`), its rows showing the trace's state. 400s, nothing run: `` `kinds` is required (repeat it for more) ``; an unknown name `` `<name>` is no query name of catalog: it takes kinds, archive ``. The 404 list names `catalog` after `delivery`. Key sets 138-140 of `fixtures/daemon-keys.json`: `Catalog` (6), `CatalogRow` (16 since `usage-orphans`), `CatalogChange` (6). A hub serves the route to every login over its checkout and its own queue (its `--push` clone neither shallow nor partial, `hub-git.md`). No MCP tool; `HUB_TOOLS`, the plugin version, config keys, the queue schema and the backup format unchanged. A daemon before this slice answers 404; the table shows that with Retry.
 
 ## Known limits
 
@@ -67,7 +68,7 @@ These five are scoped to the rows shown: printed only when a row is shown, the f
 - **Git not read** (git missing, no repository, a failure before the common dir is read): the open items of every repository sharing `<slug>.db` are counted, so nothing is hidden, and no note says so (the orchestrator's ruling, 2026-11-12).
 - **The cache's memory**: one FIFO of four heads for every project, about 3.5 MB a head at 10k files; a fifth head drops the oldest, however busy.
 - **Emails**: `by` carries them in the CLI and the JSON; the UI draws `by_name` (`spec-history.md` "Known limits").
-- **Cost** (DC-11, release, warm, median of 5, all 10 001 commits read): at 10k nodes the whole read 410-588 ms, the git half 312-375 ms, peak 146 MB; at 1k 209-314 ms; at 100k 1.7-2.4 s, the git half 0.6-0.9 s, peak about 619 MB, the lower figures at load ~2.3, the higher at 8-15. The bars (git half ≤ 1 s, whole ≤ 2 s at 10k) hold; past them, the next step is a per-`HEAD` index of last changes.
+- **Cost** (DC-11, release, warm, median of 5, all 10 001 commits read): at 10k nodes the whole read 410-588 ms, the git half 312-375 ms, peak 146 MB; at 1k 209-314 ms; at 100k 1.7-2.4 s, the git half 0.6-0.9 s, peak about 619 MB, the lower figures at load ~2.3, the higher at 8-15. The bars (git half ≤ 1 s, whole ≤ 2 s at 10k) hold, the uses too (UO12, `spec-usage.md` "Known limits": 1.37 s at 10k, the pass 5 ms); past them, the next step is a per-`HEAD` index of last changes.
 
 ## Tests
 

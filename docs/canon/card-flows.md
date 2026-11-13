@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-13
 ---
 
 # Card flows: config, hand-off and return
@@ -12,7 +12,7 @@ ADR-0056, ADR-0074, ADR-0076; `[card]` built by `card-store`, the hand-off and t
 
 ## Config
 
-Core `CardConfig::from_toml` (`flow_toml.rs`' family), the first error by line; `ProjectConfig` name-checks `card`. A bad `[card]` exits 2 `<config>:<line>: <message>` for `spec card` alone, is the card routes' 503 (`board-ui.md` "The door") and fails no other command, finding or gate; `spec workspace` serves its flows unjudged with the note (`workspaces.md` "Config").
+Core `CardConfig::from_toml` (`flow_toml.rs`' family), the first error by line; `ProjectConfig` name-checks `card`. A bad `[card]` exits 2 `<config>:<line>: <message>` for `spec card` alone, is the card routes' 503 (`board-ui.md` "The door") and fails no other command or gate, `spec check`'s `card-config` its one finding; a bad split row, the split alone (`card-split.md` "Config"); `spec workspace` serves its flows unjudged with the note (`workspaces.md` "Config").
 
 ```toml
 [[card.flow]]
@@ -108,7 +108,7 @@ Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `
 
 ## Known limits
 
-- **Older binaries refuse `return`, `title` and `split`** (before `board-handoff`, `departments`, `department-split`): an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools (pinned on today's code by an unknown key: CLI `cards.rs` `dp5_an_unknown_flow_key_exits_2_at_its_line`, `ac05`, MCP `a_bad_card_table_stops_the_card_tools_alone`). Add a key only after every terminal, plugin and hub serving the project runs a build that reads it (ADR-0073's rule); the presets' headers say so.
+- **Older binaries refuse `return`, `title` and `split`** (before `board-handoff`, `departments`, `department-split`): an older `spec card` exits 2, an older daemon or the `v0.29.1` hub answers 503 on the Board, an older MCP server or plugin fails the card tools (pinned on today's code by an unknown key: CLI `cards.rs` `dp5_an_unknown_flow_key_exits_2_at_its_line`, `ac05`, MCP `a_bad_card_table_stops_the_card_tools_alone`). Add a key once every terminal, plugin and hub serving the project reads it (ADR-0073's rule), as the presets' headers say.
 - **History keeps 64 events**: a returned card changed 64 times since has lost its reason; the screen says so.
 - **Hub accepts**: a writer must be a `[team]` login to accept a hand-off's result.
 - No `return_column` on the card row: the reason lives only in the event (ADR-0074 "Cost").

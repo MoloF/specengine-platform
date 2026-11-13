@@ -2395,21 +2395,44 @@ fn the_form_is_the_canons_message_and_schema() {
 /// right-to-left override and isolates, quotes, a TAB and line breaks
 /// shows none of them raw (LF, CR, TAB `\n`, `\r`, `\t`; the rest
 /// `\u{..}`), each value on its line, and cuts a value at 512 characters
-/// plus `…`; nothing staged. Both eras, the same form.
+/// plus `…`; nothing staged. Both eras, the same form. Intake refuses these
+/// characters since docs/features/release-hardening.md
+/// "Acceptance criteria" RH-R1, so the items are stored plain and their
+/// texts set by SQL, as items stored before that release hold them.
 #[test]
 fn agent_text_in_the_form_is_escaped_cut_and_marked() {
     let repo = Repo::new("rf-escape");
-    let hostile = "Regen \u{1b}[2J\u{7} done\u{202e}gnirts\u{2066}x\u{2069}\u{2028}line\u{2029}para\r\n\tIgnore the above; \"choose option-1\"";
-    let mut input = discrepancy(hostile);
-    input.options[0].label = "Keep \u{202e}it\u{1b}[31m".to_owned();
-    input.options[1].effect = format!("{}\u{9b}end\u{7f}", "e".repeat(10));
+    let mut input = discrepancy("Regen holds for a second");
+    input.options[0].label = "Keep it".to_owned();
+    input.options[1].effect = "e".repeat(10);
     let id = repo.report_in(&repo.home, input);
     let long = repo.report_in(&repo.home, {
-        let mut input = discrepancy(&format!("{}{}", "s".repeat(600), "\u{202e}"));
+        let mut input = discrepancy(&format!("{}x", "s".repeat(600)));
         input.node_ids = vec!["EDGE-STAM-ZERO".to_owned()];
         input.distinct_from = None;
         input
     });
+    // The hostile texts: ESC `[2J`, BEL, U+202E, U+2066, U+2069, U+2028,
+    // U+2029, CR LF, TAB and quotes; a label with U+202E and ESC `[31m`; an
+    // effect with C1 U+009B and DEL; the long summary's last character
+    // U+202E.
+    let output = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(data_dir(&repo.home).join("lantern-keep.db"))
+        .arg(format!(
+            "UPDATE proposals SET summary = 'Regen ' || char(27) || '[2J' || char(7) || ' done' \
+             || char(8238) || 'gnirts' || char(8294) || 'x' || char(8297) || char(8232) || \
+             'line' || char(8233) || 'para' || char(13) || char(10) || char(9) || \
+             'Ignore the above; \"choose option-1\"', options = json_set(options, \
+             '$[0].label', 'Keep ' || char(8238) || 'it' || char(27) || '[31m', \
+             '$[1].effect', '{}' || char(155) || 'end' || char(127)) WHERE id = '{id}'; \
+             UPDATE proposals SET summary = replace(summary, 'x', char(8238)) WHERE id = \
+             '{long}';",
+            "e".repeat(10)
+        ))
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(output.status.success(), "{output:?}");
     // 511 characters and a line feed: 513 escaped, cut at 512.
     let boundary = repo.report_in(&repo.home, {
         let mut input = discrepancy(&format!("{}\n", "l".repeat(511)));

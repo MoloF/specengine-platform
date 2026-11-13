@@ -31,7 +31,7 @@ async function settle() {
   });
 }
 
-const NO_LINKS: ShownLinks = { outgoing: [], incoming: [], omitted: 0, left_out: { generated: 0, tier3: 0 } };
+const NO_LINKS: ShownLinks = { outgoing: [], incoming: [], usage: { used_by: 0, mentioned_by: 0 }, omitted: 0, left_out: { generated: 0, tier3: 0 } };
 
 /** A screen of the sweep: where it lives, its read, its heading and words of its own group. */
 interface SweptScreen {

@@ -179,7 +179,7 @@ pub use cards::{
     CardEdit, CardItems, CardList, CardRefresh, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
     EVENT_CARD_CANCELLED, EVENT_CARD_CLEARED, EVENT_CARD_CREATED, EVENT_CARD_EDITED,
     EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, NewCard, NewSplit,
-    NewSplitChild, SplitCards, SplitParent, UnreadableCard,
+    NewSplitChild, QueueSnapshot, SplitCards, SplitParent, UnreadableCard,
 };
 pub use collisions::{CollisionMark, CollisionMarks, MarkResult, NewCollisionMark};
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
@@ -1861,25 +1861,7 @@ impl SqliteQueue {
     /// ([`Self::open_existing`]: no schema step runs; `index_only`).
     fn raw_rows(&self, filter: &ProposalFilter) -> Result<Vec<RawRow>, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
-        if index_only(&tx)? {
-            return Ok(Vec::new());
-        }
-        let columns = columns_of(&tx)?;
-        let mut statement = tx
-            .prepare(&format!(
-                "SELECT {columns} FROM main.proposals \
-                 WHERE project = ?1 AND (?2 IS NULL OR git_common_dir = ?2) {ID_ORDER}"
-            ))
-            .db()?;
-        let raws: Vec<RawRow> = statement
-            .query_map(
-                rusqlite::params![self.project, filter.git_common_dir],
-                RawRow::read,
-            )
-            .db()?
-            .collect::<rusqlite::Result<_>>()
-            .db()?;
-        drop(statement);
+        let raws = raw_rows_in(&tx, &self.project, filter)?;
         tx.commit().db()?;
         Ok(raws)
     }
@@ -2382,6 +2364,54 @@ fn user_version(conn: &Connection) -> Result<i64, QueueError> {
     Ok(conn
         .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
         .db()?)
+}
+
+/// The project's proposal rows as stored, by ID number, of `filter`'s
+/// repository when it names one; none in an index-only DB. Read inside
+/// `conn`'s open transaction: [`SqliteQueue`]'s own, or a
+/// [`QueueSnapshot`]'s (task spec `release-hardening` RH-R5).
+fn raw_rows_in(
+    conn: &Connection,
+    project: &str,
+    filter: &ProposalFilter,
+) -> Result<Vec<RawRow>, QueueError> {
+    if index_only(conn)? {
+        return Ok(Vec::new());
+    }
+    let columns = columns_of(conn)?;
+    let mut statement = conn
+        .prepare(&format!(
+            "SELECT {columns} FROM main.proposals \
+             WHERE project = ?1 AND (?2 IS NULL OR git_common_dir = ?2) {ID_ORDER}"
+        ))
+        .db()?;
+    let raws = statement
+        .query_map(
+            rusqlite::params![project, filter.git_common_dir],
+            RawRow::read,
+        )
+        .db()?
+        .collect::<rusqlite::Result<_>>()
+        .db()?;
+    Ok(raws)
+}
+
+/// `raws` within `filter`'s statuses, each decoded, else named as a row that
+/// does not decode: [`ProposalQueue::list_readable`]'s list.
+fn readable(raws: Vec<RawRow>, filter: &ProposalFilter) -> ProposalList {
+    let admits =
+        |status: ProposalStatus| filter.statuses.is_empty() || filter.statuses.contains(&status);
+    let mut list = ProposalList::default();
+    for raw in raws {
+        if raw.status().is_some_and(|status| !admits(status)) {
+            continue;
+        }
+        match raw.decode() {
+            Ok(proposal) => list.proposals.push(proposal),
+            Err(row) => list.unreadable.push(row),
+        }
+    }
+    list
 }
 
 /// A DB no queue step has run on (`user_version` 0, no `proposals`): the
@@ -4422,20 +4452,7 @@ impl ProposalQueue for SqliteQueue {
     }
 
     fn list_readable(&self, filter: &ProposalFilter) -> Result<ProposalList, QueueError> {
-        let admits = |status: ProposalStatus| {
-            filter.statuses.is_empty() || filter.statuses.contains(&status)
-        };
-        let mut list = ProposalList::default();
-        for raw in self.raw_rows(filter)? {
-            if raw.status().is_some_and(|status| !admits(status)) {
-                continue;
-            }
-            match raw.decode() {
-                Ok(proposal) => list.proposals.push(proposal),
-                Err(row) => list.unreadable.push(row),
-            }
-        }
-        Ok(list)
+        Ok(readable(self.raw_rows(filter)?, filter))
     }
 
     fn approve(

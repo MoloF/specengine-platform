@@ -23,7 +23,7 @@ spec collisions mark --input F|- [--author-role R [--author-model M] [--run ID]]
 
 ## Universe
 
-The root's worktree in the index, live files only (`spec-cli-graph.md` "Live sources"): documents and ID sections with a kind, all of them an ID's holders whatever `--kind`. A node's name is its canonical reference (core `feature_stem`, `feature_scoped`, as the resolver): in a feature document `slug/ID` when the ID is feature-scoped or another node holds it (a repeated `R-97` is `feat/R-97`, `canonical_id` gives `R-97`); else the bare ID; an ID-less document its path. **W1:** one outside feature documents whose ID another node holds has no name, is not paired and is noted; a feature holder keeps `slug/ID`. One with no `norm_hash` (its file does not parse whole) is not paired, counted in `skipped` (kept kinds only). Never paired: two holders of one name (repeats in one feature document); a document with its own sections.
+The root's worktree in the index, live files only (`spec-cli-graph.md` "Live sources"): documents and ID sections with a kind, all of them an ID's holders whatever `--kind`. A node's name is its canonical reference (core `feature_stem`, `feature_scoped`, as the resolver): in a feature document `slug/ID` when the ID is feature-scoped or another node holds it (a repeated `R-97` is `feat/R-97`, `canonical_id` gives `R-97`); else the bare ID; an ID-less document its path. **W1:** one outside feature documents whose ID another node holds (outside the universe too: Tier 3, generated or kindless; `CollisionRows.outside_ids`) has no name, is not paired and is noted; a feature holder keeps `slug/ID`. One with no `norm_hash` (its file does not parse whole) is not paired, counted in `skipped` (kept kinds only). Never paired: two holders of one name (repeats in one feature document); a document with its own sections.
 
 ## Signals and score
 
@@ -82,13 +82,13 @@ Queue schema 14 (`STEP_14`, in `migrate`'s one transaction): `collision_marks (p
 
 ## Measured
 
-`specengine-eval scale` (`scale-eval.md`): `reads.collisions` (default flags, an empty ledger, the warm index) and `collision_planted {planted, found}`: 25 title twins per size, a live section's title copied onto another of its kind, 12 with words reversed, all with case changed, found when among `--limit 200`'s pairs. Release, seed 1, beside the test suites: medians 1k 16.9 ms, 10k 285 ms, 100k 274 ms, under 2 s; twins 25/25, 25/25, 0/25, the 100k generator's 1 296 two-word titles giving 44k identical pairs at `titles` 1000 that rightly come first.
+`specengine-eval scale` (`scale-eval.md`): `reads.collisions` (default flags, an empty ledger, the warm index) and `collision_planted {planted, found}`: 25 title twins per size, a live section's title copied onto another of its kind, 12 with words reversed, all with case changed, found when among `--limit 200`'s pairs. Release, seed 1, under load: medians 1k 16.9 ms, 10k 285 ms, 100k 274 ms, under 2 s; twins 25/25, 25/25, 0/25, the 100k generator's 1 296 two-word titles giving 44k identical pairs at `titles` 1000 that rightly come first.
 
 On a scratch copy of a real game corpus, default `--limit`: 8 502 pairs left, assumptions 5 210 and questions 2 195 from one shared target; criteria 862, title-only, mostly recurring boilerplate titles, 927 under `collision-names` (one ID's holders in two features pair; a pair's bundle 2 nodes, the bare `AC-16` 27; no W1 node).
 
 ## Known limits
 
-- A W1 end in `shared_targets` stays bare. Tier 3 and generated duplicates of a live bare ID are no holders: `spec bundle <bare>` may return an archived second node. Per-ID notes are outside the 40 000-character cap.
+- A W1 end in `shared_targets` stays bare; a link target's name (`Names::end`) counts the universe alone. Per-ID notes are outside the 40 000-character cap.
 - **One shared target qualifies a pair**, flooding a real project (above): whether to require more is the owner's open question.
 - The 200 cap is absolute per group: recall in a huge one-kind group rests on title variety.
 - Trigram sets ignore repeated words: `Ky qy qy` and `Ky qy` score 1000.

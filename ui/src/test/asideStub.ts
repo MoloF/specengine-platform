@@ -217,7 +217,7 @@ export function asideNode(ref: string): NodeView {
   const fallback = held.group === null ? [] : held.group === "ATL-POTTERY" ? ["ATL-POTTERY"] : ["ATL-POTTERY", held.group];
   const ancestors = (CHAINS[ref] ?? fallback).flatMap((name) => (ANCESTOR[name] === undefined ? [] : [ANCESTOR[name]]));
   const text = BISQUE_TEXT[ref] ?? `## ${ref}\n\nCurrent text.\n`;
-  return { ref, reason: null, notes: [], nodes: [aNode({ id: held.id, kind: held.kind, title: held.title, path: held.path, ancestors, text, links: { outgoing: [], incoming: [], omitted: 0, left_out: { generated: 0, tier3: 0 } } })] };
+  return { ref, reason: null, notes: [], nodes: [aNode({ id: held.id, kind: held.kind, title: held.title, path: held.path, ancestors, text, links: { outgoing: [], incoming: [], usage: { used_by: 0, mentioned_by: 0 }, omitted: 0, left_out: { generated: 0, tier3: 0 } } })] };
 }
 
 /** The bisque firing's text as the fixture writes it: front-matter, its title, then two paragraphs. */

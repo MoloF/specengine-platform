@@ -457,7 +457,9 @@ fn dm1_pot_bisque_links_are_datas() {
             "  out uses CONE-BISQUE | docs/workshop/run/bisque.md:11",
             "  in depends_on PUZZLE-0003 | docs/puzzles/PUZZLE-0003.md:9",
             "  in follows POT-GLAZE | docs/workshop/run/glaze.md:11",
-            "  links 3 out, 2 in",
+            // docs/features/usage-orphans.md UO6: PUZZLE-0003 and POT-GLAZE,
+            // two strong sources in other live files.
+            "  links 3 out, 2 in; used by 2, mentioned by 0",
         ],
         "{}",
         text.show()
@@ -683,13 +685,20 @@ fn normalised(text: &str, places: &[(String, &'static str)]) -> String {
 
 /// A JSON stdout with doc-modal's keys out, every other byte kept; a stdout
 /// holding no JSON document as it is. Since docs/features/node-history.md
-/// (NH4) a shown node's `history` (`null`, not asked) is out too.
+/// (NH4) a shown node's `history` (`null`, not asked) is out too, and since
+/// docs/features/usage-orphans.md (UO6) a links block's `usage`.
 fn json_before(stdout: &str) -> String {
     if stdout.starts_with('{') {
-        common::keys::without_keys(&without_doc_modal_keys(stdout), &["history"])
+        common::keys::without_keys(&without_doc_modal_keys(stdout), &["history", "usage"])
     } else {
         stdout.to_owned()
     }
+}
+
+/// A text stdout as the build before usage-orphans printed it: each links
+/// summary without the counts UO6 adds (`common::keys::without_usage_counts`).
+fn text_before(stdout: &str) -> String {
+    String::from_utf8(common::keys::without_usage_counts(stdout.as_bytes())).expect("UTF-8")
 }
 
 /// One read by `program` on `copy`: its row.
@@ -705,7 +714,7 @@ fn play(copy: &Copy, program: &OsStr, fixture: &str, args: &[String]) -> Row {
         fixture: fixture.to_owned(),
         args: args.iter().map(|arg| (*arg).to_owned()).collect(),
         code: format!("{} {}", plain.code, json.code),
-        text: hash(&plain.stdout),
+        text: hash(&text_before(&plain.stdout)),
         json: hash(&json_before(&json.stdout)),
         stderr: hash(&plain.stderr),
     }
