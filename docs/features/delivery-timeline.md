@@ -1,8 +1,9 @@
 ---
 class: spec
-status: draft
+status: shipped
+shipped: 2026-11-13
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, crates/specengine-eval, fixtures, ui]
-ref: RM-0107 part b, v5 core slice 13 (08 s2 Phase 7, "Owner's word, 2026-11-12"); the owner's vision of 2026-11-11; the analyst's analysis of 2026-11-12 (section 3, RM-0107, the timeline); docs/features/delivery-analytics.md (part a); the orchestrator's working answers, the owner's review open
+ref: RM-0107 part b, v5 core slice 13 (08 s2 Phase 7, "Owner's word, 2026-11-12"); the owner's vision of 2026-11-11; docs/features/delivery-analytics.md (part a); the orchestrator's working answers, the owner's review open
 adrs: []
 ---
 
@@ -10,127 +11,40 @@ adrs: []
 
 ## Why
 
-Part a, `delivery-analytics`, counts delivery per release and department and lists late tasks with reasons, but shows no time. The owner asks where we are and what took longer (`08-roadmap.md` Phase 7, "Owner's vision, 2026-11-11"): every task on one axis, created, taken, accepted, against its due date, with when each release started and last delivered.
-
-After this slice `spec delivery --timeline` and `GET …/delivery?timeline=true` add a `timeline` to part a's document from its one read, and the Delivery tab a lazy Timeline view: a row per task on a shared axis in CSS, no chart library, a table of the same dates its text twin, each row reachable by keyboard and read whole by a screen reader. No ADR: part a's (ADR-0052, ADR-0056, ADR-0074, ADR-0076, ADR-0012) and `docs/canon/architecture.md#ui`.
-
-## Description and interactions
-
-### Decisions
-
-- **D1. Part a's read, one more output.** `delivery()` already finds each card's take, accept and release; no new store read or event type (DT3).
-- **D2. Only when asked**: `--timeline`, `timeline=true`; else `timeline: null`, so the tables' read stays light (at 20 000 cards the timeline alone is megabytes).
-- **D3. The daemon reads no clock for it**: `timeline=true` needs `as_of`, else 400. The CLI keeps part a's `today_utc()` default on a terminal.
-- **D4. Rows are part a's `tasks`**: every card not cancelled, subtasks too (part a's W1). A cancelled card stays a count and a reason.
-- **D5. Release markers are derived**: a group's first take and last accept among its tasks; no configured date (part a's Q3).
-- **D6. Served axis, drawn by the UI**: `from`, `to` served; the UI places a day at `(day - from) / (to - from)`, a day being a stored value's first ten characters, the UTC date core's `unix_days` reads, never local time. `days_late` is served; the UI judges no lateness.
-- **D7. No MCP tool, no plugin bump** (part a's D8).
-
-## Data
-
-### Core (`crates/specengine-core/src/delivery.rs`)
-
-```rust
-pub struct DeliveryInput<'a> { /* part a's fields */ pub timeline: bool }
-pub struct Timeline { pub from: Option<String>, pub to: Option<String>, pub markers: Vec<TimelineMarker>, pub tasks: Vec<TimelineTask> }
-pub struct TimelineMarker { pub group: GroupKind, pub release: Option<String>, pub first_taken_at: Option<String>, pub last_accepted_at: Option<String> }
-pub struct TimelineTask { pub id: String, pub title: String, pub flow: String, pub group: GroupKind, pub release: Option<String>,
-  pub departments: Vec<String>, pub created_at: String, pub taken_at: Option<String>, pub accepted_at: Option<String>,
-  pub due: Option<String>, pub days_late: Option<i64> }
-```
-
-`Delivery` gains `timeline: Option<Timeline>`, `None` unless asked. Judge step 7:
-- **Tasks**: every card `total.tasks` counts, but one whose `created_at` is no timestamp (part a's note stands; left out); by group order (part a's step 5), then `created_at`, then ID number; `days_late` part a's step 6, `null` when neither late nor overdue.
-- **Markers**: one per group holding a task, that order; `first_taken_at` the least `taken_at`, `last_accepted_at` the greatest `accepted_at`, each `null` with none.
-- **Axis**: `from` the least `created_at` date; `to` the greatest of `as_of`, every `accepted_at` date and every `due`; both `null` with no task.
-
-CLI: `DeliveryRequest.timeline: bool`, `spec delivery [--as-of D] [--timeline] [--json]`; no git, index or write, as part a.
-
-### JSON
-
-`{as_of, notes, releases, departments, total, late, timeline, truncated, omitted}`. Part a's scenario (`docs/features/delivery-analytics.md` "Data"), C-0005 made 2026-11-06T09:00:00Z (part a leaves it open), `--as-of 2026-11-20 --timeline`:
-
-```json
-"timeline": {"from": "2026-11-01", "to": "2026-11-20",
- "markers": [
-  {"group": "release", "release": "r1", "first_taken_at": "2026-11-03T09:00:00Z", "last_accepted_at": "2026-11-15T09:00:00Z"},
-  {"group": "release", "release": "r2", "first_taken_at": "2026-11-05T09:00:00Z", "last_accepted_at": null},
-  {"group": "none", "release": null, "first_taken_at": "2026-11-05T09:00:00Z", "last_accepted_at": "2026-11-05T09:00:00Z"}],
- "tasks": [
-  {"id": "C-0001", "title": "Write the tide table foreword", "flow": "copy", "group": "release", "release": "r1", "departments": ["words", "print"],
-   "created_at": "2026-11-01T09:00:00Z", "taken_at": "2026-11-03T09:00:00Z", "accepted_at": "2026-11-15T09:00:00Z", "due": "2026-11-10", "days_late": 5},
-  {"id": "C-0003", "title": "Engrave the harbor map", "flow": "plates", "group": "release", "release": "r2", "departments": ["print"],
-   "created_at": "2026-11-04T09:00:00Z", "taken_at": "2026-11-05T09:00:00Z", "accepted_at": null, "due": "2026-11-12", "days_late": 8},
-  {"id": "C-0004", "title": "Fix the index", "flow": "copy", "group": "none", "release": null, "departments": ["words", "print"],
-   "created_at": "2026-11-02T09:00:00Z", "taken_at": "2026-11-05T09:00:00Z", "accepted_at": "2026-11-05T09:00:00Z", "due": null, "days_late": null},
-  {"id": "C-0005", "title": "Record the foghorn", "flow": "sound", "group": "none", "release": null, "departments": [],
-   "created_at": "2026-11-06T09:00:00Z", "taken_at": null, "accepted_at": null, "due": null, "days_late": null}]}
-```
-
-C-0002, cancelled, has no row; C-0004, accepted from its first column, takes at its accept (part a's DA-2). Without `--timeline` the document is part a's plus `"timeline": null`. `truncated` and `omitted` still count late rows; the timeline is never cut in JSON.
-
-### Text
-
-With `--timeline`, after the late rows:
-
-```text
-timeline | 2026-11-01 to 2026-11-20 | tasks 4
-marker release r1 | first taken 2026-11-03T09:00:00Z | last accepted 2026-11-15T09:00:00Z
-marker release r2 | first taken 2026-11-05T09:00:00Z | last accepted -
-marker no release | first taken 2026-11-05T09:00:00Z | last accepted 2026-11-05T09:00:00Z
-task C-0001 | r1 | created 2026-11-01T09:00:00Z | taken 2026-11-03T09:00:00Z | accepted 2026-11-15T09:00:00Z | due 2026-11-10 | late 5d | Write the tide table foreword
-task C-0003 | r2 | created 2026-11-04T09:00:00Z | taken 2026-11-05T09:00:00Z | accepted - | due 2026-11-12 | overdue 8d | Engrave the harbor map
-task C-0004 | - | created 2026-11-02T09:00:00Z | taken 2026-11-05T09:00:00Z | accepted 2026-11-05T09:00:00Z | due - | - | Fix the index
-task C-0005 | - | created 2026-11-06T09:00:00Z | taken - | accepted - | due - | - | Record the foghorn
-```
-
-Group words are part a's (a marker `release <name>`, `pool`, `unplaced`, `no release`; a task the name, `pool`, `unplaced`, `-`); no task: `timeline | - to - | tasks 0`; values pass `one_line`. The cut at `OUTPUT_CAP_CHARS` extends part a's: after the late rows, the head and marker lines whole while they fit, task lines while they fit, then `[truncated: <k> of <n> timeline tasks not shown]`. Without `--timeline`, part a's text byte for byte.
-
-### Daemon
-
-`GET /api/projects/:p/delivery` takes `timeline` (`true`/`false`, `args.boolean`) beside `as_of`. `timeline=true` without `as_of`: 400 `` `timeline` needs `as_of`: the daemon reads no clock for a timeline ``; a bad value the boolean's 400 naming `timeline`. `?as_of=2026-11-20&timeline=true` is byte-equal to `spec delivery --as-of 2026-11-20 --timeline --json`. Key sets (`fixtures/daemon-keys.json`): `Delivery` 8 -> 9; new `DeliveryTimeline` (4), `DeliveryMarker` (4), `DeliveryTask` (11).
-
-### The UI line
-
-- **Types** (`provisional.ts`, citing DT6): `DeliveryTimeline`, `DeliveryMarker`, `DeliveryTask`, `DeliveryDocument.timeline`; `client.ts` `getDelivery(project, {asOf, timeline}, signal)`, `http.ts` `&timeline=true`. `useDelivery(project, asOf, timeline)`, key `["delivery", p, asOf, timeline]`, re-read as part a's. The mock (`src/mocks/delivery.ts`): every shape, an unknown group, an empty timeline; `large`, 2 000 tasks over 5 releases and 4 departments.
-- **The switch**: `RoadmapDelivery` gains a group "View", two `Button`s `aria-pressed`, Tables (first) and Timeline, kept for the visit. Timeline mounts `const RoadmapTimeline = lazy(() => import("./RoadmapTimeline").then(…))` in a `Suspense` with a skeleton and reads with `timeline` true.
-- **The view** (`src/roadmap/RoadmapTimeline.tsx`; day arithmetic in `src/roadmap/timeline.ts`, `dayOf(stored)`, `placeOf(day, from, to)`):
-  - controls: a "Department" select (All, then served departments by title) keeping rows whose `departments` holds the name; a subtle `Button` "Show as table" / "Show as timeline";
-  - an `aria-hidden` axis: UTC ticks on each month's 1st, plus Mondays under a 60-day span, labelled in the viewer's language; an "As of" line; `from`, `to`, `as_of` also as text above it;
-  - a group per marker, served order: a heading with the release (Pool, Unplaced, No release; unknown raw, `lang="en"`) and its markers in words ("First taken 3 Nov 2026, last accepted 15 Nov 2026" or "nothing accepted yet"), two `aria-hidden` lines across its rows;
-  - rows, an `ol` per group: a label (the ID linking `sectionHash(p, "board", id)`, the title in `<bdi>`, part a's "Overdue by N days" or "Delivered N days late" with an icon) and an `aria-hidden` track: waiting from `created_at` to `taken_at` (else `as_of`), work from `taken_at` to `accepted_at` (else `as_of`), an accept mark, a due tick. The link's `aria-describedby` names a hidden line of its dates in words ("Created 1 Nov 2026. Taken 3 Nov 2026. Accepted 15 Nov 2026. Due 10 Nov 2026. Delivered 5 days late."), missing ones left out;
-  - the first 200 rows across groups (`TIMELINE_PAGE`), then "Show 200 more (k left)";
-  - the table: caption "Timeline", columns Task, Release, Created, Taken, Accepted, Due, Late, same rows and paging, dates in `ui/time.ts`'s UTC forms;
-  - below 1100 px the track keeps a token minimum width in a region that scrolls alone (`role="region"`, labelled, `tabindex="0"`); bars placed by percentage `inset-inline-start` and `width`, as `RoadmapLanes.tsx`'s, no other inline size; a backward segment drawn empty; states as part a's, `tasks` `[]` "No task to place in time".
-- **Strings**: about 25 leaves under `roadmap.delivery.timeline` in `en.ts` and `ru.ts` (the Russian a draft, plural forms for `more`), none saying "blocked". **CSS**: `app.css` `.delivery-timeline-*`, scale tokens and `tokens.css` roles, no `SCALE_EXCEPTIONS` entry.
-
-## Rules and edge cases
-
-- WHEN `timeline` is not asked, the system SHALL serve `timeline: null` and build nothing for it; WHEN the route gets `timeline=true` without `as_of`, it SHALL answer 400 and run nothing.
-- WHEN `as_of` precedes a task's `created_at`, its open segments SHALL be drawn empty; `to` still covers every stored date. WHEN a card is accepted from its first column, its work segment SHALL be empty.
-- The UI SHALL NOT compute lateness, a release, a department or a take, and SHALL read a day from a stored value's first ten characters only.
-- One queue, config and file state with one `as_of` SHALL give one text and JSON, byte-identical at other roots and `HOME`s. No key names a person; no estimate is drawn, summed or compared (part a's D6).
-
-**Rollout.** No schema step, backup format, config key or tool. A daemon before this slice answers `timeline=true` with part a's 400 for an unknown parameter; the UI ships inside its daemon; the hub takes it at its next upgrade, the owner's call.
-
-**Test churn.** Part a's JSON golden (`"timeline": null`); `daemon_keys.rs`, `fixtures/daemon-keys.json`, `daemonKeys.test.ts` (four sets); the route's 400 parameter list; the Delivery tab's tests (the switch).
+Part a, `delivery-analytics`, counted delivery per release and department and listed late tasks with their reasons, but it showed no time. The owner asked where we are and what took longer (`08-roadmap.md` Phase 7, "Owner's vision, 2026-11-11"). Now `spec delivery --timeline` and `GET …/delivery?as_of=D&timeline=true` add a `timeline` to part a's document, from its one read: every task not cancelled with its creation, take, accept, due date and days late; a marker per group, its first take and last accept; a served axis. The Delivery tab gains a lazy Timeline view: a row per task on that axis, drawn in CSS with no chart library, with a table twin; every row is reachable by keyboard and read whole by a screen reader. No ADR. Canon: `docs/canon/spec-delivery.md` "Timeline", `docs/canon/spec-delivery-timeline.md`, `docs/canon/spec-roadmap-screen.md` "Delivery".
 
 ## Acceptance criteria
 
-A browser look is marked **[look]**, a timed or counted run **[measure]**. Every other criterion is a test that the named mutation turns red. Rows and events go through the store with fixed `now`s; "the scenario" is part a's, C-0005 made 2026-11-06.
+**[look]** marks a browser look and **[measure]** a timed or counted run; every other criterion is a test that its named mutation turned red. "The scenario" is part a's, with C-0005 made 2026-11-06.
 
-- [ ] DT1 — **Rows.** On the scenario, `--as-of 2026-11-20 --timeline --json` gives Data's `timeline` exactly, and the text "Text"'s lines after part a's: no C-0002 row, C-0004's `taken_at` its `accepted_at`. Mutations, each red: cancelled cards as rows; rows by `created_at` alone; `days_late` on an on-time card.
-- [ ] DT2 — **Markers.** r1 11-03 and 11-15, r2 11-05 and `null`, `none` 11-05 twice; a group whose one task is open and untaken `null` twice; a group of cancelled cards alone no marker. Mutations, each red: the first accept as `last_accepted_at`; markers over cancelled cards.
-- [ ] DT3 — **[measure] One read, still.** Part a's DA-10 seam counts the same store calls and plan builds with and without `--timeline`. Seeded as DA-10 (`delivery_scale.rs`, 20 000 cards), `--timeline --json`, warm, release, ≤ 1.5 s, its bytes and time in "Implementation". Mutation, red: a second `events_of_types` call for the timeline.
-- [ ] DT4 — **Off by default.** Without `--timeline` the text is byte-equal to part a's DA-9 pin and the JSON that pin plus `"timeline": null`; a seam shows no `TimelineTask` built. Mutation, red: the timeline built whatever the flag.
-- [ ] DT5 — **The axis, no clock.** `from` 2026-11-01, `to` 2026-11-20; at `--as-of 2026-11-01`, `to` 2026-11-15. Byte-identical twice, at another root and `HOME`. `GET …/delivery?timeline=true` without `as_of` is the 400. Mutations, each red: `to` as `as_of` alone; the daemon defaulting `as_of` for a timeline.
-- [ ] DT6 — **The daemon serves it, the UI types it.** `?as_of=2026-11-20&timeline=true` is byte-equal to the CLI's `--json`; `timeline=yes` a 400 naming `timeline`. The fixture holds `Delivery` (9) and the three sets; `provisional.ts` types them, `daemonKeys.test.ts` green, `AHEAD_OF_FIXTURE` empty at the end. Mutations, each red: `timeline` not passed through; a set left out.
-- [ ] DT7 — **UTC days** (`timeline.test.ts`, `process.env.TZ` set to `Pacific/Kiritimati`, UTC+14, before any `Date`). `dayOf("2026-11-03T23:30:00Z")` is 2026-11-03's day; `placeOf` puts `from` at 0, `to` at 1, C-0001's take at 2/19; a take before creation an empty segment. Mutations, each red: the day through `new Date(…).getDate()`; a negative width.
-- [ ] DT8 — **The view, on the mock** (`RoadmapTimeline.test.tsx`, the smoke test). Rows in served order under their headings with markers in words; each ID links the Board; each link's description names its dates and lateness; tracks `aria-hidden`; "Show as table" a `table` of the same rows and dates; Department Print keeps C-0001, C-0003, C-0004; an empty timeline its line. `policy.test.ts`, `scale.test.ts`, `words.test.ts` pass. Mutations, each red: lateness computed from `due` in the UI (a mock row whose served `days_late` disagrees with its dates shows the served one); `group` compared outside `delivery.ts`; a `timeline.*` key missing in `ru.ts`.
-- [ ] DT9 — **[measure] Render at 2 000 tasks.** Counted: the `large` document mounts exactly 200 rows, at most 12 elements a row; "Show 200 more" 400. Timed, the orchestrator's: Chrome, a production build, `?scenario=large`, the Performance panel's scripting plus rendering from the Timeline press to the first 200 rows painted, and for one "Show 200 more", each ≤ 100 ms on the owner's laptop, recorded in "Implementation"; past it, `TIMELINE_PAGE` 100 and a "Known limits" line. Mutation, red: every row mounted at once.
-- [ ] DT10 — **Lazy and size.** After `pnpm build` the `RoadmapTimeline` chunk is not in first load; first-load JS grows at most 1.5 kB, within 845 kB, the figure recorded. Mutation, red: a static import of `RoadmapTimeline` in `RoadmapDelivery.tsx` (`lazy.test.ts`).
-- [ ] DT11 — **[look]** The orchestrator's, in Chrome, both themes and languages, 1440x900 and 1100x800: the mock's timeline (markers, an overdue, a late and an untaken row, the As of line), the table, the filter, "Show 200 more" in `large`; keyboard only, Tab reaches the switch, the filter, the scroll region and each row's link in order; VoiceOver reads one row's dates.
-- [ ] DT12 — **Gates.** `cargo nextest run` green for `specengine-core`, `-cli`, `-http`, then the full run once; the eval tests (`doc_pointers`, `ui_policy`, `anonymity`, `workspace_names`) and `spec check` pass; UI lint, `tsc`, `pnpm test`, `pnpm build` pass.
+- [x] DT1 — **Rows.** On the scenario, `--as-of 2026-11-20 --timeline --json` gives the pinned `timeline` (CLI `tests/delivery_scene/data.rs`), and the text gives its lines after part a's. The rows are C-0001, C-0003, C-0004 and C-0005, with no row for C-0002. C-0004 is taken 2026-11-03 by its move to `review` (`copy` accepts only from `review`) and accepted 11-05. An open card whose `created_at` is no timestamp has no row and gets its note. Mutations, each red: cancelled cards as rows; rows by `created_at` alone; `days_late` on an on-time card; the note dropped.
+- [x] DT2 — **Markers.** r1 11-03 and 11-15; r2 11-05 and `null`; `none` 11-03 and 11-05. A group whose one task is open and untaken: `null` twice. A group of cancelled cards alone: no marker. Mutations, each red: the first accept as `last_accepted_at`; markers over cancelled cards.
+- [x] DT3 — **[measure] One read, still.** The DA-10 seam counts 1 each with and without `--timeline`. `delivery_scale.rs` (20 000 cards, 200 000 events, 2 000 items, a 100-item plan, release, warm): `--timeline --json` median 251 ms, 5 234 615 B; without the flag 219 ms, 109 963 B; the library read 249 ms; bar 1.5 s. Mutation, red: a second `events_of_types` call.
+- [x] DT4 — **Off by default.** Without `--timeline`, the text is DA-9's pin byte for byte, and the JSON is that pin plus `"timeline": null`. The seam (`subset.rs` `Event::DeliveryTimeline`, `ReadCounts.delivery_timelines`) records no build. Mutation, red: the timeline built whatever the flag.
+- [x] DT5 — **The axis, no clock.** `from` 2026-11-01, `to` 2026-11-20; at `--as-of 2026-11-01`, `to` is 2026-11-15, the greatest of `as_of` and every stored day of a row. Output is byte-identical twice, and at another root and `HOME`. `timeline=true` without `as_of` gives the 400. Mutations, each red: `to` as `as_of` alone; the daemon defaulting `as_of`.
+- [x] DT6 — **Served and typed.** `?as_of=2026-11-20&timeline=true` is byte-equal to the CLI's `--json`; `timeline=yes` is a 400 naming it. The fixture holds `Delivery` (9 keys) and `DeliveryTimeline` 4, `DeliveryMarker` 4, `DeliveryTask` 11 (sets 146 to 148 of 148). `provisional.ts` types them and `AHEAD_OF_FIXTURE` is empty. Mutations, each red: `timeline` not passed through; a set left out.
+- [x] DT7 — **UTC days** (`timeline.test.ts`, `TZ` `Pacific/Kiritimati`). `dayOf("2026-11-03T23:30:00Z")` is the 3rd, and day numbers equal `unix_days`. `from` sits at 0, `to` at 1, and C-0001's take at 2/19. A take before creation is an empty stretch. Mutations, each red: the day through `new Date(…).getDate()`; a negative width.
+- [x] DT8 — **The view, on the mock** (`RoadmapTimeline.test.tsx`, `timeline.smoke.test.tsx`). It checks:
+  - rows in served order under their headings, with markers in words;
+  - Board links, and each link's description: its title, dates and lateness;
+  - tracks `aria-hidden`, with only start and width inline;
+  - the table, Department Print keeping C-0001, C-0003 and C-0004, the empty timeline, and the daemon's 400 with Retry.
+
+  Mutations, each red: lateness from `due` in the UI; `group` compared outside `delivery.ts`; a `timeline.*` key missing in `ru.ts`; a description without lateness; a track not `aria-hidden`.
+- [x] DT9 — **[measure] 2 000 tasks.** `large` mounts exactly 200 rows, at most 12 elements each; "Show 200 more" gives 400 and moves focus. Timed in Chrome on a production build, `?scenario=large`, with scripted rAF timing rather than the Performance panel:
+  - warm, Tables to Timeline: 49-63 ms to 200 rows painted;
+  - "Show 200 more": 41 ms;
+  - the first press: 368 ms cold, including the lazy chunk's fetch.
+
+  Warm runs are within 100 ms, so `TIMELINE_PAGE` stays 200. Mutation, red: every row mounted at once.
+- [x] DT10 — **Lazy and size.** The `RoadmapTimeline` chunk (11.17 kB) is not in first load. First load is 834.16 kB, up 0.76 kB of the 1.5 kB allowed, under 845. Mutation, red: a static import (`lazy.test.ts`).
+- [x] DT11 — **[look]** The orchestrator's, on a production build over the mock:
+  - `normal`, 1440x900, light, English: dashed markers, C-0005 "Delivered 5 days late", C-0001 "Overdue by 2 days", the untaken C-0013 hatched, the As of line, ticks "Nov 2026 | 9 | 16 | 23" with no overlap;
+  - 1100x800, dark, Russian: the ticks apart, the lateness words translated;
+  - Tab order: the switch, Department, Show as table, the region "Tasks over time", then each row's link.
+
+  VoiceOver was not run. C-0005's accessible description was read from the DOM instead: "Mooring fees table", then "Created 28 Oct 2026. Taken 29 Oct 2026. Accepted 9 Nov 2026. Due 4 Nov 2026. Delivered 5 days late."
+- [x] DT12 — **Gates.** Both reviews returned ACCEPT after iteration 2. The orchestrator ran the Rust tests, UI lint, `tsc`, `pnpm test` (5 852) and `pnpm build`, all green. At ship, `spec check` and eval `doc_pointers`, `ui_policy` and `workspace_names` passed. `anonymity` failed once, on a Russian quote in `docs/roadmap/RM-0112.md`, which is outside this slice.
 
 ## Out of scope
 
@@ -138,43 +52,41 @@ RM-0087's states; configured release dates, a card `release` field, an estimate 
 
 ## Implementation
 
-To be filled in after implementation. The plan follows.
-
-### Roles and files
-
-| Role | Files |
+| Module | What it does |
 |---|---|
-| rust-developer | `crates/specengine-core/src/delivery.rs`; `crates/specengine-cli/src/{delivery,main}.rs`; `crates/specengine-http/src/app.rs` (the parameter, the 400) |
-| test-engineer, Rust | core and CLI `delivery.rs` tests (DT1, DT2, DT4, DT5), DT3's seam and `crates/specengine-eval/tests/delivery_scale.rs`, http (DT5, DT6); `daemon_keys.rs` and `fixtures/daemon-keys.json` (`SPECENGINE_WRITE_DAEMON_KEYS=1`, once) with `daemonKeys.test.ts` in the same change |
-| ui-developer | `provisional.ts`, `client.ts`, `http.ts`, `queries.ts`, `src/mocks/delivery.ts`, `src/roadmap/{RoadmapDelivery,RoadmapTimeline}.tsx`, `src/roadmap/timeline.ts`, `src/app/lazy.test.ts`, `src/styles/app.css`, `en.ts`, `ru.ts` |
-| test-engineer, UI | `timeline.test.ts`, `RoadmapTimeline.test.tsx`, the smoke test; DT7 to DT10's mutations and figures |
+| core `delivery.rs` | step 7: `DeliveryInput.timeline`, `Timeline`, `TimelineMarker`, `TimelineTask`; the open-card note |
+| CLI `delivery.rs`, `main.rs`, `lib.rs`, `subset.rs` | `DeliveryRequest.timeline`, `timeline_shown`, `timeline_omitted()`; the lines and the cut (`timeline_lines`, `fitting`); `--timeline`; the DT4 seam |
+| http `app.rs` | `timeline`, its two 400s, the unknown-name list |
+| tests | core, CLI, http `delivery.rs`; `delivery_scene/`, `delivery_tests.rs`, `kind_amendment.rs`; `daemon_keys.rs` with `fixtures/daemon-keys.json`; eval `delivery_scale.rs` |
+| UI `api/{provisional,client,http,queries}.ts` | three types and `timeline`; `getDelivery({asOf, timeline})`, `&timeline=true`; `useDelivery(p, asOf, timeline)` |
+| UI `roadmap/{RoadmapDelivery,RoadmapTimeline}.tsx`, `roadmap/{timeline,delivery}.ts` | the View switch; the lazy view and its table; day arithmetic and ticks; `groupKey`, `lateMark` |
+| UI `mocks/`, `i18n/`, `styles/` | the mock judge, `large`, `empty`; 24 leaves; `.delivery-timeline-*`, seven colour roles, two sizes |
 
-Comments cite `docs/features/delivery-timeline.md` "Acceptance criteria" with a criterion ID, or a canon heading, never "Data", which compaction drops (`doc_pointers`).
+**Rust departures**, accepted and now canon:
+1. `to` covers every stored day of a row.
+2. The group type is `DeliveryGroup`, which has `none`.
+3. Markers are taken over readable days only.
+4. The text cut keeps both tails.
+5. The DT4 seam lives in the CLI.
+6. Iteration 2: an open card with an unreadable `created_at` is noted, only with `--timeline`.
 
-### Work order
+**UI departures:**
+1. The view choice lives in the tab's state, and leaving the tab resets it.
+2. Part a's leaves are reused for loading, the failure title and five headers.
+3. The as-of line is drawn per group, plus a mark on the axis.
+4. Group headings are `h2`; the empty timeline is an `EmptyState` at `h3`, and an empty department a plain line.
+5. The accept mark is a `::after`.
+6. The table's Due shows the stored day.
+7. The label reads "Show min(200, k) more (k left)".
+8. Part a's notes appear on Tables only.
+9. Iteration 2: ticks thinned to at most 11 labels, Mondays near a month's first dropped, year labels added, and the description starts with the title.
+10. The ui-developer edited `tokens.css`, tests, builders and stubs, and wrote the UI tests, as in part a.
+11. The Russian is a draft.
 
-1. After part a ships and after core slice 12 `hub-department`, one Rust slice at a time; the UI after part a's UI and `design-sweep-b`.
-2. Core, CLI, http; the UI behind `AHEAD_OF_FIXTURE`; tests overlap; reviews; the look (DT11); ship ("Canon at ship"), closing RM-0107. At most three iterations a lane.
+**Corrected at ship:**
+- C-0004's take is 11-03, not 11-05. CLI `data.rs` keeps the old value as `SPEC_TAKE` and rewrites it, while the UI stub and mock still pin 11-05.
+- `to` now has a single wording.
+- `GroupKind` became `DeliveryGroup`.
+- Part a's note stands for delivered cards only.
 
-### Risks
-
-- **Render cost**: DT9 is the bar, paging the lever; a row stays a few elements, no per-row listener but its link.
-- **Day arithmetic in two languages**: `timeline.ts` mirrors `unix_days` by string; DT7 runs in a far zone so a local-time slip turns red.
-- **First load**: about 25 English leaves against DT10's 1.5 kB; past it, they move into the chunk's own catalog part (`ui-languages.md` "Size").
-
-### Canon at ship
-
-| File | Edit |
-|---|---|
-| `docs/canon/spec-delivery.md` (part a's, new at its ship) | "Timeline": flag, rule, markers, axis, JSON and text, the route's 400; "Known limits": paging, the measured figures |
-| `docs/canon/spec-roadmap-screen.md` | "Layout": Delivery's Tables and Timeline views, the timeline lazy |
-| `docs/canon/ui-languages.md` | "Size": the figure. Net |
-| READMEs: cli, http | a pointer each (`--timeline`, `timeline=`). Net |
-| `CLAUDE.md`; 08 "Owner's word, 2026-11-12" row 13; RM-0107 | shipped, both parts |
-| this spec | compacted to at most 3 KB |
-
-### Working answers and the owner's questions
-
-**The orchestrator's**, the analyst's recommendations; the owner has not answered: release markers are the first take and the last accept (part a's Q3); no chart library; a lazy chunk.
-
-**The spec-writer's:** D2 (a flag), D3 (the route needs `as_of`; the CLI keeps part a's UTC default) and D6 (day offsets per row would add four keys a task for a division the UI can make); paging at 200, as the Chain's 200-box cap (`docs/canon/spec-roadmap-screen.md` "Layout"); C-0005's creation, which part a's scenario left open.
+**Open:** the owner's review of the working answers (derived markers, no chart library, a lazy chunk); the Russian draft; a VoiceOver run.

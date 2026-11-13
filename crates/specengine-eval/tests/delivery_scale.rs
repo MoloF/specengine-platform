@@ -21,7 +21,21 @@
 //!   reads), each the median of five after one warm-up run, then asserts
 //!   the 1 s bar on the binary.
 //!
-//! Run the measure: `cargo build --release -p specengine-cli --bin spec`,
+//! docs/features/delivery-timeline.md (RM-0107 b) "Acceptance criteria",
+//! DT3 [measure]: one read, still, with the timeline asked.
+//!
+//! - `dt3_the_timeline_holds_at_1000_cards` (in the default run): the
+//!   browser read with the timeline is the read without it but the
+//!   `timeline`, which holds every card, by group, each group's marker the
+//!   seed's take (11-04) and accept (11-15), the axis 11-01 to 11-30 (the
+//!   later due day); the CLI's cut JSON keeps every timeline row.
+//! - `dt3_measure_20000_cards_timeline` (`#[ignore]`, release): times the
+//!   release `spec delivery --as-of 2026-11-20 --timeline --json`, warm,
+//!   beside the same call without `--timeline`, each the median of five
+//!   after one warm-up run, prints both and the document's bytes, then
+//!   asserts the 1.5 s bar.
+//!
+//! Run the measures: `cargo build --release -p specengine-cli --bin spec`,
 //! then `cargo nextest run -p specengine-eval --release --test
 //! delivery_scale --run-ignored only --no-capture`.
 //!
@@ -60,6 +74,8 @@ const GROUP: usize = 10;
 const ITEMS: usize = 100;
 /// The bar of DA-10.
 const BAR: Duration = Duration::from_secs(1);
+/// The bar of delivery-timeline's DT3.
+const TIMELINE_BAR: Duration = Duration::from_millis(1_500);
 /// Timed runs; the median is kept.
 const RUNS: usize = 5;
 
@@ -447,11 +463,18 @@ impl Seeded {
 
     /// The library's read at `AS_OF` in `view`, as JSON.
     fn read(&self, view: View) -> Value {
+        self.read_with(view, false)
+    }
+
+    /// The library's read at `AS_OF` in `view`, the timeline asked or not
+    /// (delivery-timeline DT3), as JSON.
+    fn read_with(&self, view: View, timeline: bool) -> Value {
         let outcome = delivery_with_view(
             &self.env(),
             &Globals::default(),
             &DeliveryRequest {
                 as_of: Some(AS_OF.to_owned()),
+                timeline,
             },
             view,
         )
@@ -536,6 +559,64 @@ fn da10_the_counts_hold_at_1000_cards() {
     // Each card's nine moves, accepts and re-estimates (its `card.created`
     // is not read), every card and every item.
     assert_eq!(seeded.queue_half(), cards + cards * 9 + seeded.groups);
+}
+
+/// DT3 at 1 000 cards: the timeline asked adds `timeline` alone; it holds
+/// every card, by group (the release rows' order), each marker the seed's
+/// take and accept, the axis from the first creation to the later due day;
+/// the CLI's cut JSON never cuts it.
+#[test]
+fn dt3_the_timeline_holds_at_1000_cards() {
+    let seeded = Seeded::new("timeline", 100);
+    let cards = seeded.groups * GROUP;
+    let without = seeded.read_with(View::Browser, false);
+    let with = seeded.read_with(View::Browser, true);
+    assert_eq!(without["timeline"], Value::Null);
+    let mut rest = with.clone();
+    rest["timeline"] = Value::Null;
+    assert_eq!(rest, without, "the flag adds the timeline alone");
+    let timeline = &with["timeline"];
+    assert_eq!(timeline["from"], "2026-11-01");
+    assert_eq!(timeline["to"], "2026-11-30", "the later due day");
+    let tasks = timeline["tasks"].as_array().expect("tasks");
+    assert_eq!(tasks.len(), cards);
+    let groups: Vec<(Value, Value)> = with["releases"]
+        .as_array()
+        .expect("releases")
+        .iter()
+        .map(|row| (row["group"].clone(), row["release"].clone()))
+        .collect();
+    let markers = timeline["markers"].as_array().expect("markers");
+    assert_eq!(
+        markers
+            .iter()
+            .map(|marker| (marker["group"].clone(), marker["release"].clone()))
+            .collect::<Vec<_>>(),
+        groups,
+        "a marker per release row, in order"
+    );
+    for marker in markers {
+        assert_eq!(marker["first_taken_at"], at(4), "{marker}");
+        assert_eq!(marker["last_accepted_at"], at(15), "{marker}");
+    }
+    let mut seen = Vec::new();
+    for task in tasks {
+        let group = (task["group"].clone(), task["release"].clone());
+        if seen.last() != Some(&group) {
+            assert!(!seen.contains(&group), "rows by group: {task}");
+            seen.push(group);
+        }
+        assert_eq!(task["taken_at"], at(4), "{task}");
+    }
+    assert_eq!(seen, groups);
+    let late = tasks
+        .iter()
+        .filter(|task| !task["days_late"].is_null())
+        .count();
+    assert_eq!(late, cards / 5, "one late and one overdue a group");
+    let capped = seeded.read_with(View::Capped, true);
+    assert_eq!(capped["truncated"], true, "the late rows are cut");
+    assert_eq!(capped["timeline"], with["timeline"], "never the timeline");
 }
 
 /// The release `spec` beside this test binary (`target.noindex/release`).
@@ -657,6 +738,87 @@ fn da10_measure_20000_cards() {
     assert!(
         binary <= BAR,
         "DA-10's bar: {} ms > 1 s",
+        binary.as_millis()
+    );
+}
+
+/// DT3 [measure]: 20 000 cards, 200 000 card events, 2 000 items, a
+/// 100-item plan; `spec delivery --as-of 2026-11-20 --timeline --json` in
+/// release, warm, at most 1.5 s, beside the call without `--timeline`; the
+/// document's bytes printed for DT3's record.
+#[test]
+#[ignore = "DT3 [measure], release: cargo build --release -p specengine-cli --bin spec, then \
+            cargo nextest run -p specengine-eval --release --test delivery_scale --run-ignored \
+            only --no-capture"]
+fn dt3_measure_20000_cards_timeline() {
+    let started = Instant::now();
+    let seeded = Seeded::new("timeline-measure", 2_000);
+    let seeding = started.elapsed();
+    let cards = seeded.groups * GROUP;
+    let spec = release_spec();
+    assert!(
+        spec.exists(),
+        "{}: build the release `spec` first",
+        spec.display()
+    );
+    let call = |timeline: bool| -> (Duration, Vec<Duration>, String) {
+        let mut stdout = String::new();
+        let mut args = vec!["delivery", "--as-of", AS_OF, "--json"];
+        if timeline {
+            args.push("--timeline");
+        }
+        let (median, runs) = timed(|| {
+            let output = Command::new(&spec)
+                .env_clear()
+                .env("HOME", &seeded.home)
+                .current_dir(&seeded.root)
+                .args(&args)
+                .stdin(Stdio::null())
+                .output()
+                .expect("spec runs");
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            stdout = String::from_utf8(output.stdout).expect("UTF-8");
+        });
+        (median, runs, stdout)
+    };
+    let (plain, _, plain_out) = call(false);
+    let (binary, binary_runs, stdout) = call(true);
+    let document: Value = serde_json::from_str(&stdout).expect("JSON");
+    assert_eq!(document["total"], expected_total(cards));
+    assert_eq!(
+        document["timeline"]["tasks"]
+            .as_array()
+            .expect("tasks")
+            .len(),
+        cards
+    );
+    let (library, _) = timed(|| {
+        let _ = seeded.read_with(View::Browser, true);
+    });
+    println!(
+        "DT3: {cards} cards, {} card events, {} items, {ITEMS} plan items; seeding {:.1} s; \
+         spec delivery --timeline --json (release, warm) median {} ms, runs {:?} ms, {} bytes; \
+         without --timeline median {} ms, {} bytes; library read with the timeline median {} ms",
+        cards * 10,
+        seeded.groups,
+        seeding.as_secs_f64(),
+        binary.as_millis(),
+        binary_runs
+            .iter()
+            .map(Duration::as_millis)
+            .collect::<Vec<_>>(),
+        stdout.len(),
+        plain.as_millis(),
+        plain_out.len(),
+        library.as_millis(),
+    );
+    assert!(
+        binary <= TIMELINE_BAR,
+        "DT3's bar: {} ms > 1.5 s",
         binary.as_millis()
     );
 }

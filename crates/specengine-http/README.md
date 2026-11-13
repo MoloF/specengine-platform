@@ -36,10 +36,10 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../bundle` | `node_ids`, `budget` | `spec bundle --json` |
 | GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json` |
 | GET `.../flow` | `spec-flow.md`'s | `spec flow --json` |
-| GET `.../check`, `.../health` | -- | the plain `spec check --json`; `spec health --json` (`health*.md`) |
+| GET `.../check`, `.../health` | -- | plain `spec check --json`; `spec health --json` (`health*.md`) |
 | GET `.../roadmap` | `release`, `pool` | `spec roadmap --json` |
-| GET `.../delivery` | `as_of` | `spec delivery --json`, `spec-delivery.md` |
-| GET `.../catalog` | `kinds`, `archive` | `spec catalog --json`, `App.catalogs` cached per `HEAD`, `spec-catalog.md` |
+| GET `.../delivery` | `as_of`, `timeline` | `spec delivery --json`, `spec-delivery*.md` |
+| GET `.../catalog` | `kinds`, `archive` | `spec catalog --json`, `App.catalogs` per `HEAD`, `spec-catalog.md` |
 | GET `.../lock-diff` | `ref` | `spec lock diff REF --json` |
 | GET `.../inbox`, `.../proposals/:id` | -- | `spec inbox --json`; `spec review PR --json` (not `--brief`) |
 | GET `.../tasks`, `.../tasks/:id` | `status`; -- | `spec task list --json`; `spec task show T --json`, uncut |

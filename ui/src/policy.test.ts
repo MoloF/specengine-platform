@@ -943,8 +943,9 @@ describe("source policy", () => {
   it("compares a delivery group in src/roadmap/delivery.ts alone: no other Roadmap module spells a group word or branches on one (DA-12 of delivery-analytics)", () => {
     const roadmapApp = (path: string) => path.startsWith("/src/roadmap/") && !/\.test\.tsx?$/.test(path);
     const scanned = (path: string) => !roadmapApp(path) || path === "/src/roadmap/delivery.ts" || path === "/src/roadmap/text.ts";
+    // The timeline's view and its day arithmetic among them (docs/features/delivery-timeline.md "Acceptance criteria", DT8).
     expect(Object.keys(sources).filter((path) => !scanned(path))).toEqual(
-      expect.arrayContaining(["/src/roadmap/RoadmapDelivery.tsx", "/src/roadmap/RoadmapView.tsx", "/src/roadmap/RoadmapLanes.tsx", "/src/roadmap/RoadmapChain.tsx"]),
+      expect.arrayContaining(["/src/roadmap/RoadmapDelivery.tsx", "/src/roadmap/RoadmapView.tsx", "/src/roadmap/RoadmapLanes.tsx", "/src/roadmap/RoadmapChain.tsx", "/src/roadmap/RoadmapTimeline.tsx", "/src/roadmap/timeline.ts"]),
     );
     const field = "\\bgroup\\b";
     const quote = "[\"'`]";

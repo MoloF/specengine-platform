@@ -30,6 +30,16 @@
 //! 6. **Late**: every card delivered late or overdue, by days late
 //!    descending, then ID number; each list of its reasons keeps its oldest
 //!    [`REASONS_MAX`], the rest counted (DA-8).
+//! 7. **Timeline**, only when [`DeliveryInput::timeline`] asks (task spec
+//!    `delivery-timeline`, `docs/features/delivery-timeline.md`
+//!    "Acceptance criteria", DT1 to DT5): a row per card `total.tasks`
+//!    counts but one whose `created_at` does not read (an open one noted,
+//!    a delivered one noted by step 4's judge already), by group order, then
+//!    `created_at`, then ID number, its take step 3's and its days late step
+//!    6's; a marker per group holding a row, in that order, its least take
+//!    and greatest accept; the axis from the least `created_at` day to the
+//!    greatest of `as_of` and every row's stored day, both `None` with no
+//!    row. Not asked, nothing of it is built (DT4).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -37,7 +47,7 @@ use serde::Serialize;
 use specengine_model::Card;
 
 use crate::card::card_number;
-use crate::check::is_calendar_date;
+use crate::check::{date_from_unix_days, is_calendar_date};
 use crate::proposal::{is_utc_timestamp, proposal_number};
 use crate::roadmap::{GroupKind, GroupRef};
 use crate::workspace_toml::Workspace;
@@ -86,6 +96,9 @@ pub struct DeliveryInput<'a> {
     pub departments: &'a [Workspace],
     /// Each flow's return column.
     pub returns: &'a BTreeMap<String, String>,
+    /// Build the [`Timeline`]; `false`, none built (task spec
+    /// `delivery-timeline` DT4).
+    pub timeline: bool,
 }
 
 /// A `card.moved` or `card.accepted`.
@@ -277,6 +290,55 @@ pub struct Delivery {
     pub departments: Vec<DeliveryDepartment>,
     pub total: DeliveryCounts,
     pub late: Vec<DeliveryLate>,
+    /// `None` unless [`DeliveryInput::timeline`] asks.
+    pub timeline: Option<Timeline>,
+}
+
+/// Every task on one axis (task spec `delivery-timeline` DT1, DT2, DT5).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct Timeline {
+    /// The least `created_at` day, `YYYY-MM-DD`; `None` with no task.
+    pub from: Option<String>,
+    /// The greatest of `as_of` and every task's stored day; `None` with no
+    /// task.
+    pub to: Option<String>,
+    /// One per group holding a task, in group order.
+    pub markers: Vec<TimelineMarker>,
+    pub tasks: Vec<TimelineTask>,
+}
+
+/// A group's first take and last accept among its tasks, derived, never
+/// configured (task spec `delivery-timeline` DT2).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct TimelineMarker {
+    pub group: DeliveryGroup,
+    /// The release's name, for [`DeliveryGroup::Release`] alone.
+    pub release: Option<String>,
+    /// The least `taken_at`; `None` with none taken.
+    pub first_taken_at: Option<String>,
+    /// The greatest `accepted_at`; `None` with none accepted.
+    pub last_accepted_at: Option<String>,
+}
+
+/// One task's row on the timeline, stored values as written (task spec
+/// `delivery-timeline` DT1).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct TimelineTask {
+    pub id: String,
+    pub title: String,
+    pub flow: String,
+    pub group: DeliveryGroup,
+    /// The release's name, for [`DeliveryGroup::Release`] alone.
+    pub release: Option<String>,
+    /// The departments' names, in served order.
+    pub departments: Vec<String>,
+    pub created_at: String,
+    /// Its first move or accept out of the column it stood in.
+    pub taken_at: Option<String>,
+    pub accepted_at: Option<String>,
+    pub due: Option<String>,
+    /// Delivered late or overdue; `None` when neither.
+    pub days_late: Option<i64>,
 }
 
 /// Where a card stands at `as_of`.
@@ -629,6 +691,9 @@ pub fn delivery(input: &DeliveryInput<'_>) -> Delivery {
             .cmp(&a.days_late)
             .then_with(|| id_key(&a.id).cmp(&id_key(&b.id)))
     });
+    let timeline = input
+        .timeline
+        .then(|| timeline(input, &judged, as_of_days, &in_department, &mut notes));
 
     Delivery {
         as_of: input.as_of.to_owned(),
@@ -637,6 +702,170 @@ pub fn delivery(input: &DeliveryInput<'_>) -> Delivery {
         departments,
         total: total.counts(),
         late,
+        timeline,
+    }
+}
+
+/// The names of the served departments `card` is in, in served order.
+fn departments_of(
+    input: &DeliveryInput<'_>,
+    card: &Card,
+    in_department: &dyn Fn(&Workspace, &Card) -> bool,
+) -> Vec<String> {
+    input
+        .departments
+        .iter()
+        .filter(|department| in_department(department, card))
+        .map(|department| department.name.clone())
+        .collect()
+}
+
+/// A judged card's group order, no release last (step 5).
+fn group_order(judged: &Judged<'_>) -> (bool, usize) {
+    (
+        judged.group.is_none(),
+        judged.group.map_or(0, |group| group.order),
+    )
+}
+
+/// Keeps the least (`Ordering::Less`) or the greatest
+/// (`Ordering::Greater`) of `held` and `value`, of the values that read as
+/// a day; one that does not is passed over.
+fn keep(held: &mut Option<String>, value: Option<&str>, wins: std::cmp::Ordering) {
+    let Some(value) = value.filter(|value| unix_days(value).is_some()) else {
+        return;
+    };
+    if held.as_deref().is_none_or(|held| value.cmp(held) == wins) {
+        *held = Some(value.to_owned());
+    }
+}
+
+/// The note of an open card left off the timeline, its `created_at` no
+/// time stamp (task spec `delivery-timeline` DT1).
+fn not_on_timeline(card: &Card) -> String {
+    format!(
+        "{}: `{}` is no timestamp; not on the timeline",
+        card.id, card.created_at
+    )
+}
+
+/// The timeline of the judged cards at `as_of_days` (the module
+/// documentation, step 7; task spec `delivery-timeline` DT1, DT2, DT5); an
+/// open card whose `created_at` does not read is noted in `notes`, a
+/// delivered one already is.
+fn timeline(
+    input: &DeliveryInput<'_>,
+    judged: &[Judged<'_>],
+    as_of_days: Option<i64>,
+    in_department: &dyn Fn(&Workspace, &Card) -> bool,
+    notes: &mut BTreeSet<String>,
+) -> Timeline {
+    // Each card's take: its first move or accept by `seq` whose `from`
+    // differs from its `to` (step 3), grouped once over every card.
+    let mut taken: BTreeMap<&str, &Moved<'_>> = BTreeMap::new();
+    for moved in input.moves.iter().filter(|moved| moved.from != moved.to) {
+        taken
+            .entry(moved.card)
+            .and_modify(|first| {
+                if moved.seq < first.seq {
+                    *first = moved;
+                }
+            })
+            .or_insert(moved);
+    }
+    let mut rows: Vec<&Judged<'_>> = Vec::new();
+    for card in judged {
+        match card.standing {
+            Standing::Cancelled => {}
+            _ if unix_days(&card.card.created_at).is_some() => rows.push(card),
+            // A delivered card's is noted already (`standing`), once.
+            Standing::Delivered { .. } => {}
+            Standing::Open { .. } => {
+                notes.insert(not_on_timeline(card.card));
+            }
+        }
+    }
+    rows.sort_by(|a, b| {
+        group_order(a)
+            .cmp(&group_order(b))
+            .then_with(|| a.card.created_at.cmp(&b.card.created_at))
+            .then_with(|| id_key(&a.card.id).cmp(&id_key(&b.card.id)))
+    });
+
+    let mut markers: Vec<TimelineMarker> = Vec::new();
+    let mut tasks = Vec::with_capacity(rows.len());
+    let mut marked = None;
+    for judged in rows {
+        let card = judged.card;
+        let (group, release) = placed(judged.group);
+        let task = TimelineTask {
+            id: card.id.clone(),
+            title: card.title.clone(),
+            flow: card.flow.clone(),
+            group,
+            release,
+            departments: departments_of(input, card, in_department),
+            created_at: card.created_at.clone(),
+            taken_at: taken.get(card.id.as_str()).map(|moved| moved.at.to_owned()),
+            accepted_at: card
+                .acceptance
+                .as_ref()
+                .map(|acceptance| acceptance.at.clone()),
+            due: card.due.clone(),
+            days_late: judged.days_late(),
+        };
+        let order = group_order(judged);
+        if marked != Some(order) {
+            marked = Some(order);
+            markers.push(TimelineMarker {
+                group: task.group,
+                release: task.release.clone(),
+                first_taken_at: None,
+                last_accepted_at: None,
+            });
+        }
+        if let Some(marker) = markers.last_mut() {
+            keep(
+                &mut marker.first_taken_at,
+                task.taken_at.as_deref(),
+                std::cmp::Ordering::Less,
+            );
+            keep(
+                &mut marker.last_accepted_at,
+                task.accepted_at.as_deref(),
+                std::cmp::Ordering::Greater,
+            );
+        }
+        tasks.push(task);
+    }
+
+    let from = tasks
+        .iter()
+        .filter_map(|task| unix_days(&task.created_at))
+        .min();
+    // Every stored day of a row, so the axis covers an open card made or
+    // taken after `as_of` too (task spec `delivery-timeline` DT5).
+    let to = from.and_then(|_| {
+        tasks
+            .iter()
+            .flat_map(|task| {
+                [
+                    Some(task.created_at.as_str()),
+                    task.taken_at.as_deref(),
+                    task.accepted_at.as_deref(),
+                    task.due.as_deref(),
+                ]
+            })
+            .flatten()
+            .filter_map(unix_days)
+            .chain(as_of_days)
+            .max()
+    });
+    Timeline {
+        from: from.map(date_from_unix_days),
+        to: to.map(date_from_unix_days),
+        markers,
+        tasks,
     }
 }
 
@@ -719,12 +948,7 @@ fn late_row(
         parent: card.parent.clone(),
         group,
         release,
-        departments: input
-            .departments
-            .iter()
-            .filter(|department| in_department(department, card))
-            .map(|department| department.name.clone())
-            .collect(),
+        departments: departments_of(input, card, in_department),
         created_at: card.created_at.clone(),
         taken_at,
         accepted_at: card

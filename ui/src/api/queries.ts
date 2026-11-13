@@ -106,8 +106,8 @@ export const queryKeys = {
   round: (project: string, limit: number | null) => ["round", project, { limit }] as const,
   /** The whole plan, `spec roadmap --json` with neither option (`docs/features/roadmap-screen.md`). */
   roadmap: (project: string) => ["roadmap", project] as const,
-  /** What was delivered and what is overdue at a day, `spec delivery --as-of D --json` (`docs/features/delivery-analytics.md` "Acceptance criteria", DA-12): each day its own entry. */
-  delivery: (project: string, asOf: string) => ["delivery", project, asOf] as const,
+  /** What was delivered and what is overdue at a day, `spec delivery --as-of D [--timeline] --json` (`docs/features/delivery-analytics.md` "Acceptance criteria", DA-12): each day its own entry, the timeline's its own too (`docs/features/delivery-timeline.md` "Acceptance criteria", DT6). */
+  delivery: (project: string, asOf: string, timeline: boolean) => ["delivery", project, asOf, timeline] as const,
   /** A kinds direction as a table of its nodes, `spec catalog --kind K… [--archive] --json` (`docs/features/direction-catalog.md` "Acceptance criteria", DC-10): each kinds and archive its own entry. */
   catalog: (project: string, kinds: readonly string[], archive: boolean) => ["catalog", project, kinds, archive] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
@@ -1244,10 +1244,15 @@ export function useCatalog(project: string, kinds: readonly string[], archive: b
  * own entry, its query's AbortSignal taken. Read on entering the Delivery tab, on a new day and,
  * while the tab is on screen, after a `card.*` event, a `proposal.*` event but a stage, or a gap
  * (useLiveQueue); never on window focus. The counts are the daemon's: nothing here recounts them.
+ * `timeline` true, the Timeline view's own read, `--timeline` added, an entry of its own and re-read
+ * alike (docs/features/delivery-timeline.md "Acceptance criteria", DT6).
  */
-export function useDelivery(project: string, asOf: string) {
+export function useDelivery(project: string, asOf: string, timeline = false) {
   const client = useClient();
-  return useQuery({ queryKey: queryKeys.delivery(project, asOf), queryFn: ({ signal }) => client.getDelivery(project, { asOf }, signal) });
+  return useQuery({
+    queryKey: queryKeys.delivery(project, asOf, timeline),
+    queryFn: ({ signal }) => client.getDelivery(project, timeline ? { asOf, timeline: true } : { asOf }, signal),
+  });
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
   DeliveryReestimate,
   DeliveryRelease,
   DeliveryReturn,
+  DeliveryTimeline,
   LeadDays,
 } from "../api/types";
 import { stamp } from "./build";
@@ -31,6 +32,16 @@ import type { Scenario } from "./scenario";
 // overdue once the day moves past them. `empty`: no task. ledger-api has no `[roadmap]`: every task
 // in no release, with the note. The spec's own scenario is held too, its JSON at 2026-11-20
 // (src/mocks/delivery.test.ts).
+//
+// Asked with `timeline` (docs/features/delivery-timeline.md "Acceptance criteria", DT1, DT2, DT5,
+// DT9), the document carries every task not cancelled on one axis, as the core's judge step 7 lays
+// them out: by group, then creation, then ID number; a marker per group holding one, its first take
+// and last accept; the axis from the first creation day to the greatest of the day asked and every
+// stored day of a row. harbor-sim's rows hold every shape the view draws: an overdue, a late, an
+// untaken row, a subtask, an accept from the first column (C-0012, its work segment empty) and the
+// unknown `milestone`; `empty` an empty timeline. ledger-api's C-0101, made after every accept and
+// due, ends its axis at that creation on a day asked before it. `large`: harbor-sim's 2 000 tasks
+// over five releases and four departments, the view's paging at its bar.
 
 /** Each list of a late task keeps its oldest this many, `REASONS_MAX`. */
 const REASONS_MAX = 16;
@@ -193,8 +204,63 @@ function idNumber(id: string): number {
   return Number(id.replace(/^\D+/, ""));
 }
 
-/** The document at `asOf`, as the core judges it. */
-function judged(facts: StoredDelivery, asOf: string): DeliveryDocument {
+/** A row's place among the groups: its group's in plan order, no release after them all. */
+function groupOrder(facts: StoredDelivery, stored: StoredTask): number {
+  return stored.group === null || facts.groups[stored.group] === undefined ? facts.groups.length : stored.group;
+}
+
+/** The least, or the greatest, of stored values of one form; null with none. */
+function least(values: readonly (string | null)[]): string | null {
+  return values.reduce<string | null>((low, value) => (value !== null && (low === null || value < low) ? value : low), null);
+}
+
+function greatest(values: readonly (string | null)[]): string | null {
+  return values.reduce<string | null>((high, value) => (value !== null && (high === null || value > high) ? value : high), null);
+}
+
+/** Every task not cancelled on one axis at `asOf`, as the core's judge step 7 lays it out (DT1, DT2, DT5). */
+function timelineOf(facts: StoredDelivery, asOf: string): DeliveryTimeline {
+  const rows = facts.tasks
+    .filter((stored) => !stored.cancelled && unixDays(stored.created_at) !== null)
+    .sort(
+      (a, b) =>
+        groupOrder(facts, a) - groupOrder(facts, b) || (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0) || idNumber(a.id) - idNumber(b.id),
+    );
+  const markers: DeliveryTimeline["markers"] = [];
+  for (const place of new Set(rows.map((stored) => groupOrder(facts, stored)))) {
+    const held = rows.filter((stored) => groupOrder(facts, stored) === place);
+    const first = held[0];
+    if (first !== undefined) {
+      const { group, release } = groupOf(facts, first);
+      markers.push({ group, release, first_taken_at: least(held.map((stored) => stored.taken_at)), last_accepted_at: greatest(held.map((stored) => stored.accepted_at)) });
+    }
+  }
+  const tasks = rows.map((stored) => {
+    const { group, release } = groupOf(facts, stored);
+    const late = deliveredLate(stored) || overdue(stored, asOf);
+    return {
+      id: stored.id,
+      title: stored.title,
+      flow: stored.flow,
+      group,
+      release,
+      departments: facts.departments.filter((department) => inDepartment(department, stored)).map((department) => department.name),
+      created_at: stored.created_at,
+      taken_at: stored.taken_at,
+      accepted_at: stored.accepted_at,
+      due: stored.due,
+      days_late: late ? lateOf(facts, stored, asOf).days_late : null,
+    };
+  });
+  const from = least(rows.map((stored) => stored.created_at.slice(0, 10)));
+  // Every stored day of a row, as the core's: the axis covers a card made or taken after `asOf` too.
+  const days = rows.flatMap((row) => [row.created_at, row.taken_at, row.accepted_at, row.due].flatMap((value) => (value === null || unixDays(value) === null ? [] : [value.slice(0, 10)])));
+  const to = rows.length === 0 ? null : greatest([asOf, ...days]);
+  return { from, to, markers, tasks };
+}
+
+/** The document at `asOf`, as the core judges it; its timeline built only when asked. */
+function judged(facts: StoredDelivery, asOf: string, timeline = false): DeliveryDocument {
   const releases: DeliveryRelease[] = [];
   facts.groups.forEach((stored, index) => {
     const held = facts.tasks.filter((candidate) => candidate.group === index);
@@ -224,6 +290,7 @@ function judged(facts: StoredDelivery, asOf: string): DeliveryDocument {
     })),
     total: countsOf(facts.tasks, asOf),
     late,
+    timeline: timeline ? timelineOf(facts, asOf) : null,
     truncated: false,
     omitted: null,
   };
@@ -349,14 +416,59 @@ function harborTasks(at: number): StoredTask[] {
 /** The note of a project with no `[roadmap]` table. */
 export const NO_ROADMAP_NOTE = "delivery: no [roadmap] table: every task is in no release";
 
+/** `large`'s five releases, in plan order. */
+const LARGE_GROUPS: readonly StoredGroup[] = ["keel", "hull", "sails", "masts", "rigging"].map((release) => ({ group: "release", release }));
+
+/** `large`'s four departments, a flow each. */
+const LARGE_DEPARTMENTS: readonly StoredDepartment[] = [
+  ...HARBOR_DEPARTMENTS,
+  { name: "ropewalk", title: "Ropewalk", flows: ["lines"] },
+];
+
+const LARGE_FLOWS = ["copy", "plates", "rigging", "lines"];
+
+/** How many tasks `large` holds (docs/features/delivery-timeline.md "Acceptance criteria", DT9). */
+export const LARGE_TASKS = 2000;
+
+/**
+ * `large`: 2 000 tasks made over the last 120 days, spread over five releases and four departments by
+ * their number: the older ones mostly accepted, every thirteenth left open, the last 25 days' open;
+ * some recent ones untaken; two in three with a due 10 to 39 days after creation, so a few are late
+ * or overdue. Arithmetic on the number alone, so every read gives the same rows.
+ */
+function largeTasks(at: number): StoredTask[] {
+  return Array.from({ length: LARGE_TASKS }, (_, index) => {
+    const made = 1 + ((index * 7919) % 120);
+    const flow = LARGE_FLOWS[index % LARGE_FLOWS.length] ?? "copy";
+    const taken = index % 10 === 0 && made < 40 ? null : Math.max(0, made - 1 - (index % 4));
+    const open = made < 25 || index % 13 === 0;
+    const accepted = taken === null || open ? null : Math.max(0, taken - 1 - (index % 8));
+    const due = index % 3 === 2 ? null : made - 10 - (index % 30);
+    return task({
+      id: `C-${String(index + 1).padStart(4, "0")}`,
+      title: `${flow} ${String(index + 1)}, berth ${String((index % 40) + 1)}`,
+      flow,
+      column: accepted === null ? (taken === null ? "draft" : "edit") : "filed",
+      group: index % LARGE_GROUPS.length,
+      created_at: time(at, -made),
+      taken_at: taken === null ? null : time(at, -taken, 10),
+      accepted_at: accepted === null ? null : time(at, -accepted, 11),
+      due: due === null ? null : day(at, -due),
+    });
+  });
+}
+
 function harbor(at: number, scenario: Scenario): StoredDelivery {
+  if (scenario === "large") {
+    return { groups: LARGE_GROUPS, departments: LARGE_DEPARTMENTS, tasks: largeTasks(at), notes: [] };
+  }
   return { groups: HARBOR_GROUPS, departments: HARBOR_DEPARTMENTS, tasks: scenario === "empty" ? [] : harborTasks(at), notes: [] };
 }
 
 /** ledger-api: no `[roadmap]`, the implicit department listing every flow. */
 function ledger(at: number, scenario: Scenario): StoredDelivery {
   const tasks = [
-    task({ id: "C-0101", title: "Write the refund runbook", flow: "plain", column: "backlog", group: null, created_at: time(at, -4), estimate: "2" }),
+    task({ id: "C-0101", title: "Write the refund runbook", flow: "plain", column: "backlog", group: null, created_at: time(at, -1), estimate: "2" }),
     task({ id: "C-0102", title: "Retry the failed payouts", flow: "plain", column: "done", group: null, created_at: time(at, -6), taken_at: time(at, -5), accepted_at: time(at, -2), due: day(at, -3) }),
   ];
   return { groups: [], departments: [{ name: "all", title: "All sections", flows: null }], tasks: scenario === "empty" ? [] : tasks, notes: [NO_ROADMAP_NOTE] };
@@ -394,8 +506,10 @@ const PINNED: StoredDelivery = {
     }),
     task({ id: "C-0002", title: "Draw the tide plates", flow: "plates", column: "todo", parent: "C-0001", group: 0, created_at: "2026-11-02T09:00:00Z", cancelled: true }),
     task({ id: "C-0003", title: "Engrave the harbor map", flow: "plates", column: "drawing", group: 1, created_at: "2026-11-04T09:00:00Z", taken_at: "2026-11-05T09:00:00Z", due: "2026-11-12" }),
-    task({ id: "C-0004", title: "Fix the index", flow: "copy", column: "done", group: null, created_at: "2026-11-02T09:00:00Z", taken_at: "2026-11-05T09:00:00Z", accepted_at: "2026-11-05T09:00:00Z" }),
-    task({ id: "C-0005", title: "Record the foghorn", flow: "sound", column: "todo", group: null, created_at: "2026-11-03T09:00:00Z" }),
+    // Taken 2026-11-03 by its move to `review`: `copy` accepts from `review` alone (DT1).
+    task({ id: "C-0004", title: "Fix the index", flow: "copy", column: "done", group: null, created_at: "2026-11-02T09:00:00Z", taken_at: "2026-11-03T09:00:00Z", accepted_at: "2026-11-05T09:00:00Z" }),
+    // Made 2026-11-06, as docs/features/delivery-timeline.md "Acceptance criteria", DT1 settles it.
+    task({ id: "C-0005", title: "Record the foghorn", flow: "sound", column: "todo", group: null, created_at: "2026-11-06T09:00:00Z" }),
   ],
   notes: [],
 };
@@ -403,15 +517,15 @@ const PINNED: StoredDelivery = {
 /** The day the spec's scenario is pinned at. */
 export const PINNED_AS_OF = "2026-11-20";
 
-/** The spec's scenario judged at `asOf`: at PINNED_AS_OF, its JSON. */
-export function pinnedDelivery(asOf: string = PINNED_AS_OF): DeliveryDocument {
-  return judged(PINNED, asOf);
+/** The spec's scenario judged at `asOf`: at PINNED_AS_OF, its JSON; with `timeline`, the timeline's too. */
+export function pinnedDelivery(asOf: string = PINNED_AS_OF, timeline = false): DeliveryDocument {
+  return judged(PINNED, asOf, timeline);
 }
 
-/** A project's delivery at `asOf`; a day that is none is the daemon's 400 naming it, nothing read. */
-export function deliveryOf(slug: string, scenario: Scenario, at: number, asOf: string): DeliveryDocument {
+/** A project's delivery at `asOf`, its timeline when asked; a day that is none is the daemon's 400 naming it, nothing read. */
+export function deliveryOf(slug: string, scenario: Scenario, at: number, asOf: string, timeline = false): DeliveryDocument {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf) || unixDays(asOf) === null) {
     throw new ClientError({ status: 400, message: `\`as_of\`: \`${asOf}\` is no calendar date, YYYY-MM-DD` });
   }
-  return judged(slug === "harbor-sim" ? harbor(at, scenario) : ledger(at, scenario), asOf);
+  return judged(slug === "harbor-sim" ? harbor(at, scenario) : ledger(at, scenario), asOf, timeline);
 }

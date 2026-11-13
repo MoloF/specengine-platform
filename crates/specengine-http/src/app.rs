@@ -850,13 +850,25 @@ async fn roadmap(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusa
 /// project's turn as `roadmap`; `as_of` passed through as given, the
 /// library's default without it (docs/features/delivery-analytics.md
 /// "Acceptance criteria", DA-11). A bad `as_of` is a 400 naming it, nothing
-/// run; a queue that cannot be read the CLI's exit 2, a 503.
+/// run; a queue that cannot be read the CLI's exit 2, a 503. `timeline`,
+/// `true` or `false`, is `--timeline`, and needs `as_of`: the daemon reads
+/// no clock for a timeline, so without it a 400, nothing run
+/// (docs/features/delivery-timeline.md "Acceptance criteria", DT5, DT6).
 async fn delivery(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
-    let args = args("delivery", &["as_of"], &uri)?;
+    let args = args("delivery", &["as_of", "timeline"], &uri)?;
     let as_of = args.date("as_of").map_err(Refusal::bad_request)?;
+    let timeline = args
+        .boolean("timeline")
+        .map_err(Refusal::bad_request)?
+        .unwrap_or(false);
+    if timeline && as_of.is_none() {
+        return Err(Refusal::bad_request(
+            "`timeline` needs `as_of`: the daemon reads no clock for a timeline",
+        ));
+    }
     Ok(run_read(project, move |env, globals| {
-        let request = DeliveryRequest { as_of };
+        let request = DeliveryRequest { as_of, timeline };
         specengine_cli::delivery_with_view(env, globals, &request, View::Browser)
             .map(|outcome| Outcome::Delivery(Box::new(outcome)))
     })

@@ -642,6 +642,9 @@ pub(crate) mod seams {
         /// A delivery read's plan groups built from the walked files
         /// (DA-10).
         DeliveryPlan,
+        /// A delivery read's timeline built, with this many tasks (task
+        /// spec `delivery-timeline` DT4).
+        DeliveryTimeline(usize),
         /// A catalog read's trace reading (task spec `direction-catalog`
         /// DC-8).
         CatalogTrace,
@@ -704,6 +707,8 @@ pub(crate) mod seams {
         pub delivery_items: usize,
         /// Delivery plan builds.
         pub delivery_plans: usize,
+        /// Delivery timelines built, each its task count.
+        pub delivery_timelines: Vec<usize>,
         /// Catalog trace readings.
         pub catalog_traces: usize,
         /// Catalog open proposal lists.
@@ -805,6 +810,7 @@ pub(crate) mod seams {
             Event::DeliveryEvents => counts.delivery_events += 1,
             Event::DeliveryItems => counts.delivery_items += 1,
             Event::DeliveryPlan => counts.delivery_plans += 1,
+            Event::DeliveryTimeline(tasks) => counts.delivery_timelines.push(tasks),
             Event::CatalogTrace => counts.catalog_traces += 1,
             Event::CatalogItems => counts.catalog_items += 1,
             Event::CatalogWalk(paths) => counts.catalog_walks.push(paths.to_vec()),

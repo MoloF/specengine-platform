@@ -168,6 +168,21 @@ describe("the delivery read (DA-11, DA-12 of delivery-analytics)", () => {
     stubFetch(() => jsonAnswer(404, served));
     expect((await rejection(new HttpClient().getDelivery("alpha", { asOf: "2026-11-20" }))).status).toBe(404);
   });
+
+  // docs/features/delivery-timeline.md "Acceptance criteria", DT6: `timeline=true` after `as_of`, only when asked.
+  it("adds `&timeline=true` only when the timeline is asked, never `false` (DT6 of delivery-timeline)", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    await new HttpClient().getDelivery("alpha", { asOf: "2026-11-20", timeline: true });
+    await new HttpClient().getDelivery("alpha", { asOf: "2026-11-20", timeline: false });
+    await new HttpClient().getDelivery("alpha", { asOf: "2026-11-20" });
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/delivery?as_of=2026-11-20&timeline=true", "/api/projects/alpha/delivery?as_of=2026-11-20", "/api/projects/alpha/delivery?as_of=2026-11-20"]);
+  });
+
+  it("rejects an older daemon's 400 on `timeline` in its words", async () => {
+    const message = "unknown query parameter `timeline`: the delivery route takes `as_of`";
+    stubFetch(() => errorAnswer(400, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getDelivery("alpha", { asOf: "2026-11-20", timeline: true })))).toEqual({ status: 400, message });
+  });
 });
 
 // docs/features/direction-catalog.md "Acceptance criteria", DC-9 and DC-10: the catalog read GETs its

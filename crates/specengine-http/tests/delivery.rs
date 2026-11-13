@@ -11,6 +11,19 @@
 //!   listing `as_of`; no queue yet a 200 with the CLI's note.
 //! - An unknown route's 404 lists `delivery`.
 //!
+//! docs/features/delivery-timeline.md (RM-0107 b) "Acceptance criteria",
+//! the daemon's half:
+//!
+//! - DT5: `timeline=true` without `as_of` is the 400 "`timeline` needs
+//!   `as_of`: the daemon reads no clock for a timeline", nothing run;
+//!   `timeline=false` without it is part a's read at today's UTC date. M:
+//!   the daemon defaulting `as_of` for a timeline.
+//! - DT6: `?as_of=D&timeline=true` is byte-equal to `spec delivery --as-of D
+//!   --timeline --json` less its LF, at 2026-11-20 the scenario's document
+//!   (`delivery_scene/data.rs`); `timeline=false` part a's; `timeline=yes`
+//!   a 400 naming `timeline`; an unknown parameter's 400 lists `as_of` and
+//!   `timeline`. M: `timeline` not passed through.
+//!
 //! The key sets are `daemon_keys.rs`'s.
 
 mod common;
@@ -22,7 +35,7 @@ mod git;
 mod delivery_scene;
 
 use common::{Server, spec};
-use delivery_scene::{AS_OF, DATA_JSON, Scene, compact};
+use delivery_scene::{AS_OF, DATA_JSON, Scene, compact, data_timeline_json};
 
 const ROUTE: &str = "/api/projects/tide-almanac/delivery";
 
@@ -32,12 +45,15 @@ fn serve(scene: &Scene) -> Server {
 
 /// `spec --root R delivery --as-of D --json`'s document, less its LF.
 fn cli(scene: &Scene, as_of: &str) -> String {
+    cli_with(scene, as_of, &[])
+}
+
+/// [`cli`] with `more` flags after `--json`.
+fn cli_with(scene: &Scene, as_of: &str, more: &[&str]) -> String {
     let root = scene.root.to_str().expect("UTF-8 root");
-    let run = spec(
-        &scene.home,
-        &scene.root,
-        &["--root", root, "delivery", "--as-of", as_of, "--json"],
-    );
+    let mut args = vec!["--root", root, "delivery", "--as-of", as_of, "--json"];
+    args.extend_from_slice(more);
+    let run = spec(&scene.home, &scene.root, &args);
     run.code(0);
     run.document().to_owned()
 }
@@ -183,4 +199,116 @@ fn da11_the_route_never_cuts() {
     let cut = cli["late"].as_array().expect("late");
     assert!(cut.len() < 200);
     assert_eq!(cut[..], late[..cut.len()]);
+}
+
+// ----------------------------------------------------- delivery-timeline
+
+/// DT6: `?as_of=D&timeline=true`, in either order, is byte-equal to the
+/// CLI's `--as-of D --timeline --json` less its LF; at 2026-11-20 the
+/// scenario's document; `timeline=false` part a's, `"timeline": null`. M:
+/// `timeline` not passed through.
+#[test]
+fn dt6_the_route_with_a_timeline_is_the_clis_json() {
+    let scene = Scene::scenario("http-dt6");
+    let server = serve(&scene);
+    for as_of in [AS_OF, "2026-11-01", "2027-03-01"] {
+        let reply = server.get(&format!("{ROUTE}?as_of={as_of}&timeline=true"));
+        reply.status(200);
+        assert_eq!(
+            reply.text(),
+            cli_with(&scene, as_of, &["--timeline"]),
+            "{as_of}"
+        );
+        assert!(reply.json()["timeline"].is_object(), "{as_of}");
+        let swapped = server.get(&format!("{ROUTE}?timeline=true&as_of={as_of}"));
+        assert_eq!(swapped.status(200).text(), reply.text(), "{as_of}");
+        let off = server.get(&format!("{ROUTE}?as_of={as_of}&timeline=false"));
+        off.status(200);
+        assert_eq!(off.text(), cli(&scene, as_of), "{as_of}");
+        assert_eq!(off.json()["timeline"], serde_json::Value::Null);
+    }
+    let pinned = server.get(&format!("{ROUTE}?as_of={AS_OF}&timeline=true"));
+    assert_eq!(pinned.text(), compact(&data_timeline_json()));
+    let at_first = server
+        .get(&format!("{ROUTE}?as_of=2026-11-01&timeline=true"))
+        .status(200)
+        .json();
+    assert_eq!(at_first["timeline"]["from"], "2026-11-01");
+    assert_eq!(at_first["timeline"]["to"], "2026-11-15");
+}
+
+/// DT5: `timeline=true` without `as_of` is the 400 naming both, the
+/// daemon's clock never read for a timeline; nothing run (no queue made on
+/// a project with none); `timeline=false` without it is today's part a
+/// document. M: the daemon defaulting `as_of` for a timeline.
+#[test]
+fn dt5_a_timeline_without_as_of_is_a_400() {
+    let scene = Scene::scenario("http-dt5");
+    let server = serve(&scene);
+    for query in ["timeline=true", "timeline=true&timeline=true"] {
+        let reply = server.get(&format!("{ROUTE}?{query}"));
+        assert_eq!(reply.status, 400, "{query}: {}", reply.text());
+        let message = reply.error_message();
+        if query == "timeline=true" {
+            assert_eq!(
+                message,
+                "`timeline` needs `as_of`: the daemon reads no clock for a timeline"
+            );
+        } else {
+            assert!(message.contains("timeline"), "{query}: {message}");
+        }
+    }
+    let before = today_utc();
+    let plain = server.get(&format!("{ROUTE}?timeline=false"));
+    let after = today_utc();
+    plain.status(200);
+    let as_of = plain.json()["as_of"].as_str().expect("as_of").to_owned();
+    assert!(as_of == before || as_of == after, "{as_of}");
+    assert_eq!(plain.text(), cli(&scene, &as_of));
+    server
+        .get(&format!("{ROUTE}?as_of={AS_OF}&timeline=true"))
+        .status(200);
+    let empty = Scene::new("http-dt5-empty");
+    let server = serve(&empty);
+    let reply = server.get(&format!("{ROUTE}?timeline=true"));
+    assert_eq!(reply.status, 400, "{}", reply.text());
+    assert!(!empty.db().exists(), "nothing run");
+}
+
+/// DT6: a `timeline` other than `true` or `false` is a 400 naming it, the
+/// value too; an unknown parameter's 400 lists `as_of` and `timeline`; a
+/// bad `as_of` beside a good `timeline` names `as_of`; the daemon serves
+/// the next good read.
+#[test]
+fn dt6_a_bad_timeline_is_a_400_naming_it() {
+    let scene = Scene::scenario("http-dt6-400");
+    let server = serve(&scene);
+    for bad in ["yes", "1", "TRUE", "on", ""] {
+        let reply = server.get(&format!("{ROUTE}?as_of={AS_OF}&timeline={bad}"));
+        assert_eq!(reply.status, 400, "{bad:?}: {}", reply.text());
+        let message = reply.error_message();
+        assert!(
+            message.contains(&format!("`timeline={bad}`")),
+            "{bad:?}: {message}"
+        );
+    }
+    for query in ["timelines=true", "as_of=2026-11-20&tl=true"] {
+        let reply = server.get(&format!("{ROUTE}?{query}"));
+        assert_eq!(reply.status, 400, "{query}: {}", reply.text());
+        let message = reply.error_message();
+        assert!(
+            message.contains("as_of") && message.contains("timeline"),
+            "{query}: {message}"
+        );
+    }
+    let reply = server.get(&format!("{ROUTE}?as_of=2026-13-01&timeline=true"));
+    assert_eq!(reply.status, 400, "{}", reply.text());
+    assert!(
+        reply.error_message().contains("as_of"),
+        "{}",
+        reply.error_message()
+    );
+    server
+        .get(&format!("{ROUTE}?as_of={AS_OF}&timeline=true"))
+        .status(200);
 }

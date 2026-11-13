@@ -126,12 +126,14 @@ export interface RoundOptions {
 export type RoadmapOptions = { release: string; pool?: never } | { pool: true; release?: never };
 
 /**
- * `spec delivery --as-of D`: the day the open tasks are judged at, always sent, the viewer's own
- * calendar day unless the Delivery tab's field moves it (`docs/features/delivery-analytics.md`
- * "Acceptance criteria", DA-12), so the tab and the Board's overdue badge agree.
+ * `spec delivery --as-of D [--timeline]`: the day the open tasks are judged at, always sent, the
+ * viewer's own calendar day unless the Delivery tab's field moves it (`docs/features/delivery-analytics.md`
+ * "Acceptance criteria", DA-12), so the tab and the Board's overdue badge agree; `timeline` sent only
+ * as true, by the Timeline view alone (`docs/features/delivery-timeline.md` "Acceptance criteria", DT6).
  */
 export interface DeliveryOptions {
   asOf: string;
+  timeline?: boolean;
 }
 
 /**
@@ -239,9 +241,11 @@ export interface SpecEngineClient {
   /** GET /api/projects/:p/roadmap (crates/specengine-http/README.md "Endpoints"; = spec roadmap --json, the browser view, uncut; 404 the exit-1 document) */
   getRoadmap(project: string, options?: RoadmapOptions, signal?: AbortSignal): Promise<RoadmapDocument>;
   /**
-   * GET /api/projects/:p/delivery?as_of=D (docs/features/delivery-analytics.md "Acceptance criteria",
-   * DA-11; = spec delivery --as-of D --json, the browser view, uncut): judged, so only a 200 resolves;
-   * a bad day's 400 and an older daemon's 404 reject in the daemon's words.
+   * GET /api/projects/:p/delivery?as_of=D[&timeline=true] (docs/features/delivery-analytics.md
+   * "Acceptance criteria", DA-11; = spec delivery --as-of D [--timeline] --json, the browser view,
+   * uncut; the timeline docs/features/delivery-timeline.md "Acceptance criteria", DT6): judged, so
+   * only a 200 resolves; a bad day's 400, an older daemon's 400 on `timeline` and its 404 reject in
+   * the daemon's words.
    */
   getDelivery(project: string, options: DeliveryOptions, signal?: AbortSignal): Promise<DeliveryDocument>;
   /**

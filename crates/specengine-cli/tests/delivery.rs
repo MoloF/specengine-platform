@@ -30,6 +30,22 @@
 //!   unreadable row; a bad `--as-of`; no queue; a newer queue. M: the upper
 //!   middle as the median.
 //!
+//! docs/features/delivery-timeline.md (RM-0107 b) "Acceptance criteria",
+//! the CLI half, `--timeline`:
+//!
+//! - DT1: the scenario's text is part a's pin then the timeline's lines,
+//!   the JSON part a's with the timeline, each byte for byte (C-0004 taken
+//!   by its move to `review`); group words for
+//!   the pool, an unplaced item and no release; values on one line; past
+//!   `OUTPUT_CAP_CHARS` whole timeline lines then `[truncated: <k> of <n>
+//!   timeline tasks not shown]`, the JSON never cut. M: cancelled cards as
+//!   rows; rows by `created_at` alone.
+//! - DT4: without `--timeline` the text is part a's pin and the JSON that
+//!   pin with `"timeline": null`. M: the timeline built whatever the flag.
+//! - DT5: `from` 2026-11-01, `to` 2026-11-20, at `--as-of 2026-11-01` `to`
+//!   2026-11-15; one text and JSON twice, at another root and `HOME`; no
+//!   `--as-of`: today's UTC date (D3). M: `to` as `as_of` alone.
+//!
 //! Every expected value is worked out from the spec, never read back from a
 //! run of the read under test.
 
@@ -44,8 +60,8 @@ use std::path::Path;
 use common::git;
 use common::{Run, copy_dir, spec};
 use delivery_scene::{
-    AS_OF, DATA_JSON, DATA_TEXT, DEPARTMENTS, Extra, FLOWS, HEAD, ROADMAP, Scene, at, compact,
-    db_under, item, new_card, put, sql_at,
+    AS_OF, DATA_JSON, DATA_TEXT, DEPARTMENTS, Extra, FLOWS, HEAD, ROADMAP, Scene, TIMELINE_JSON,
+    TIMELINE_TEXT, at, compact, data_timeline_json, db_under, item, new_card, put, sql_at,
 };
 use serde_json::{Value, json};
 use specengine_cli::CardNewRequest;
@@ -260,7 +276,9 @@ fn da9_a_bad_as_of_is_exit_2_and_nothing_read() {
 }
 
 /// DA-9 (notes): no queue yet: the note, every count 0, every
-/// department row there, exit 0, and no queue made.
+/// department row there, exit 0, and no queue made; `"timeline": null`
+/// (delivery-timeline DT4). With `--timeline`, no task: `from`, `to`
+/// `null`, the text `timeline | - to - | tasks 0`.
 #[test]
 fn da9_no_queue_yet_is_a_note() {
     let scene = Scene::new("da9-no-queue");
@@ -282,7 +300,23 @@ fn da9_no_queue_yet_is_a_note() {
         run.json(),
         json!({"as_of": AS_OF, "notes": [note], "releases": [],
                "departments": [department("words", "Words"), department("print", "Print")],
-               "total": zeros, "late": [], "truncated": false, "omitted": null})
+               "total": zeros, "late": [], "timeline": null, "truncated": false,
+               "omitted": null})
+    );
+    assert!(!scene.db().exists(), "the read made no queue");
+    let json = delivery(&scene, &["--as-of", AS_OF, "--timeline", "--json"]);
+    json.code(0);
+    assert_eq!(
+        json.json()["timeline"],
+        json!({"from": null, "to": null, "markers": [], "tasks": []})
+    );
+    let text = delivery(&scene, &["--as-of", AS_OF, "--timeline"]);
+    text.code(0);
+    assert_eq!(
+        text.stdout.lines().last(),
+        Some("timeline | - to - | tasks 0"),
+        "{}",
+        text.stdout
     );
     assert!(!scene.db().exists(), "the read made no queue");
 }
@@ -1133,4 +1167,427 @@ fn da8_a_note_that_is_no_text_is_no_note() {
     let mut expected = data();
     expected["late"][1]["returns"][0]["note"] = Value::Null;
     assert_eq!(run.json(), expected);
+}
+
+// ----------------------------------------------------- delivery-timeline
+
+/// The JSON with `--timeline` at `as_of`, which must answer 0.
+fn timeline_document(scene: &Scene, as_of: &str) -> Value {
+    let run = delivery(scene, &["--as-of", as_of, "--timeline", "--json"]);
+    run.code(0);
+    run.json()
+}
+
+/// The timeline's rows' IDs, in served order.
+fn timeline_ids(document: &Value) -> Vec<String> {
+    document["timeline"]["tasks"]
+        .as_array()
+        .expect("tasks")
+        .iter()
+        .map(|row| row["id"].as_str().expect("an ID").to_owned())
+        .collect()
+}
+
+/// DT1: `spec delivery --as-of 2026-11-20 --timeline` prints part a's pin,
+/// then the timeline's lines, byte for byte; `--json` part a's document
+/// with the timeline in place of `null`, byte for byte (C-0004 taken by its
+/// move to `review`); no note, exit 0. M:
+/// cancelled cards as rows; rows by `created_at` alone.
+#[test]
+fn dt1_the_scenarios_timeline_byte_for_byte() {
+    let scene = Scene::scenario("dt1-pinned");
+    let text = delivery(&scene, &["--as-of", AS_OF, "--timeline"]);
+    text.code(0);
+    assert_eq!(
+        text.stdout,
+        format!("{DATA_TEXT}{TIMELINE_TEXT}"),
+        "{}",
+        text.show()
+    );
+    assert_eq!(text.stderr, "", "no note");
+    let json = delivery(&scene, &["--as-of", AS_OF, "--timeline", "--json"]);
+    json.code(0);
+    assert_eq!(
+        json.stdout,
+        format!("{}\n", compact(&data_timeline_json())),
+        "{}",
+        json.show()
+    );
+    assert_eq!(json.stderr, "", "no note");
+    let document = json.json();
+    assert_eq!(
+        timeline_ids(&document),
+        ["C-0001", "C-0003", "C-0004", "C-0005"]
+    );
+    let expected: Value = serde_json::from_str(TIMELINE_JSON).expect("the timeline");
+    assert_eq!(document["timeline"], expected);
+    // The flag before `--as-of` reads the same.
+    let flipped = delivery(&scene, &["--timeline", "--json", "--as-of", AS_OF]);
+    flipped.code(0);
+    assert_eq!(flipped.stdout, json.stdout);
+}
+
+/// DT4: without `--timeline` the text is part a's pin byte for byte and the
+/// JSON that pin with `"timeline": null` after `late`. M: the timeline
+/// built whatever the flag.
+#[test]
+fn dt4_without_the_flag_it_is_part_as_document() {
+    let scene = Scene::scenario("dt4-off");
+    let text = delivery(&scene, &["--as-of", AS_OF]);
+    text.code(0);
+    assert_eq!(text.stdout, DATA_TEXT, "{}", text.show());
+    assert!(!text.stdout.contains("timeline"), "{}", text.stdout);
+    let json = delivery(&scene, &["--as-of", AS_OF, "--json"]);
+    json.code(0);
+    assert_eq!(json.stdout, format!("{}\n", compact(DATA_JSON)));
+    assert!(
+        json.stdout.contains("\"late\":[{\"id\":\"C-0003\"")
+            && json
+                .stdout
+                .contains("}],\"timeline\":null,\"truncated\":false,\"omitted\":null}"),
+        "{}",
+        json.stdout
+    );
+}
+
+/// DT5: `from` the first creation's day, `to` 2026-11-20 at 2026-11-20 and
+/// 2026-11-15 (C-0001's accept) at 2026-11-01; one text and one JSON,
+/// twice, at another root and `HOME` (the repository and the queue copied).
+/// M: `to` as `as_of` alone.
+#[test]
+fn dt5_the_axis_at_any_root_and_home() {
+    let scene = Scene::scenario("dt5-roots");
+    for (as_of, to) in [(AS_OF, AS_OF), ("2026-11-01", "2026-11-15")] {
+        let timeline = &timeline_document(&scene, as_of)["timeline"];
+        assert_eq!(timeline["from"], "2026-11-01", "{as_of}");
+        assert_eq!(timeline["to"], to, "{as_of}");
+        let text = delivery(&scene, &["--as-of", as_of, "--timeline"]);
+        text.code(0);
+        assert!(
+            text.stdout
+                .contains(&format!("\ntimeline | 2026-11-01 to {to} | tasks 4\n")),
+            "{}",
+            text.stdout
+        );
+    }
+    let runs = |home: &Path, root: &Path| {
+        let mut out = Vec::new();
+        for as_of in [AS_OF, "2026-11-01"] {
+            let text = spec(home, root, &["delivery", "--as-of", as_of, "--timeline"]);
+            text.code(0);
+            let json = spec(
+                home,
+                root,
+                &["delivery", "--as-of", as_of, "--timeline", "--json"],
+            );
+            json.code(0);
+            out.push((text.stdout, text.stderr, json.stdout, json.stderr));
+        }
+        out
+    };
+    let first = runs(&scene.home, &scene.root);
+    assert_eq!(runs(&scene.home, &scene.root), first, "twice");
+    let other = scene.home.parent().expect("the scene").join("elsewhere");
+    let (root, home) = (other.join("copy"), other.join("home2"));
+    copy_dir(&scene.root, &root);
+    let source = db_under(&scene.home);
+    let target = db_under(&home);
+    fs::create_dir_all(target.parent().expect("a data dir")).expect("a data dir");
+    sql_at(&source, "PRAGMA wal_checkpoint(TRUNCATE);");
+    fs::copy(&source, &target).expect("the queue copied");
+    assert_eq!(runs(&home, &root), first, "another root and HOME");
+    assert_eq!(first[0].0, format!("{DATA_TEXT}{TIMELINE_TEXT}"));
+}
+
+/// DT5 (D3): the CLI keeps part a's default with `--timeline`: no
+/// `--as-of`, today's UTC date, and `to` never before it.
+#[test]
+fn dt5_without_as_of_the_timeline_is_today() {
+    let scene = Scene::scenario("dt5-today");
+    let before = specengine_store::today_utc();
+    let run = delivery(&scene, &["--timeline", "--json"]);
+    let after = specengine_store::today_utc();
+    run.code(0);
+    let document = run.json();
+    let as_of = document["as_of"].as_str().expect("as_of").to_owned();
+    assert!(
+        as_of == before || as_of == after,
+        "{as_of} {before} {after}"
+    );
+    let to = document["timeline"]["to"].as_str().expect("a day");
+    assert!(to >= as_of.as_str() && to >= "2026-11-15", "{to} {as_of}");
+    assert_eq!(document["timeline"]["from"], "2026-11-01");
+}
+
+/// DT1: the group words of the text: a marker `release <name>`, `pool`,
+/// `unplaced`, `no release`; a task's release its name, `pool`,
+/// `unplaced`, `-`; markers in group order; rows by group, then
+/// `created_at`, then ID number.
+#[test]
+fn dt1_group_words_in_the_text() {
+    let scene = da3_scene("dt1-groups");
+    let document = timeline_document(&scene, AS_OF);
+    assert_eq!(
+        timeline_ids(&document),
+        [
+            "C-0001", "C-0006", "C-0007", "C-0008", "C-0003", "C-0009", "C-0011", "C-0012",
+            "C-0010", "C-0004", "C-0005"
+        ],
+        "{}",
+        document["timeline"]
+    );
+    let text = delivery(&scene, &["--as-of", AS_OF, "--timeline"]);
+    text.code(0);
+    let lines: Vec<&str> = text
+        .stdout
+        .lines()
+        .skip_while(|line| !line.starts_with("timeline | "))
+        .collect();
+    assert_eq!(lines[0], "timeline | 2026-11-01 to 2026-11-20 | tasks 11");
+    let markers: Vec<&str> = lines[1..6]
+        .iter()
+        .map(|line| line.split(" | ").next().expect("a head"))
+        .collect();
+    assert_eq!(
+        markers,
+        [
+            "marker release r1",
+            "marker release r2",
+            "marker pool",
+            "marker unplaced",
+            "marker no release"
+        ],
+        "{}",
+        text.stdout
+    );
+    assert_eq!(
+        lines[3], "marker pool | first taken - | last accepted -",
+        "C-0009, C-0011, C-0012 untaken"
+    );
+    for line in [
+        "task C-0006 | r1 | created 2026-11-01T09:00:00Z | taken - | accepted - | due 2026-11-10 | overdue 10d | Bind both",
+        "task C-0009 | pool | created 2026-11-01T09:00:00Z | taken - | accepted - | due 2026-11-10 | overdue 10d | Trim the lanterns",
+        "task C-0010 | unplaced | created 2026-11-01T09:00:00Z | taken - | accepted - | due 2026-11-10 | overdue 10d | Time the ferry",
+        "task C-0005 | - | created 2026-11-06T09:00:00Z | taken - | accepted - | due - | - | Record the foghorn",
+    ] {
+        assert!(lines.contains(&line), "{line}\n{}", text.stdout);
+    }
+    assert_eq!(lines.len(), 1 + 5 + 11, "{}", text.stdout);
+}
+
+/// DT1: a title with a line break prints on one line in a task line, as
+/// written in the JSON.
+#[test]
+fn dt1_values_print_on_one_line() {
+    let scene = Scene::scenario("dt1-one-line");
+    let id = scene.card(&new_card("Ring the\nnoon bell", "copy", 1));
+    let json = timeline_document(&scene, AS_OF);
+    let row = json["timeline"]["tasks"]
+        .as_array()
+        .expect("tasks")
+        .iter()
+        .find(|row| row["id"] == id.as_str())
+        .unwrap_or_else(|| panic!("no row {id}: {json}"))
+        .clone();
+    assert_eq!(row["title"], "Ring the\nnoon bell");
+    let text = delivery(&scene, &["--as-of", AS_OF, "--timeline"]);
+    text.code(0);
+    let line = text
+        .stdout
+        .lines()
+        .find(|line| line.starts_with(&format!("task {id} | ")))
+        .unwrap_or_else(|| panic!("{}", text.stdout));
+    assert_eq!(
+        line,
+        format!(
+            "task {id} | - | created 2026-11-01T09:00:00Z | taken - | accepted - | due - | - | \
+             Ring the noon bell"
+        )
+    );
+}
+
+/// DT1 (the cut): 200 tasks with long titles and no due day pass
+/// `OUTPUT_CAP_CHARS`: part a's lines whole, the timeline's head and marker
+/// whole, then whole task lines while they fit, then `[truncated: <k> of
+/// <n> timeline tasks not shown]`; the JSON lists every row, `truncated`
+/// false and `omitted` `null` (they count late rows alone).
+#[test]
+fn dt1_the_cut_keeps_whole_timeline_lines() {
+    let scene = Scene::new("dt1-cut");
+    let title = |n: usize| {
+        format!(
+            "Chart {n:03} {}",
+            "of the long harbor wall ".repeat(8).trim_end()
+        )
+    };
+    for n in 1..=200 {
+        let id = scene.card(&new_card(&title(n), "copy", 1));
+        assert_eq!(id, format!("C-{n:04}"));
+    }
+    let text = delivery(&scene, &["--as-of", AS_OF, "--timeline"]);
+    text.code(0);
+    let lines: Vec<&str> = text.stdout.lines().collect();
+    let last = lines.last().expect("a line");
+    let shown = lines
+        .iter()
+        .filter(|line| line.starts_with("task "))
+        .count();
+    assert!(shown > 0 && shown < 200, "{shown}");
+    assert_eq!(
+        *last,
+        format!(
+            "[truncated: {} of 200 timeline tasks not shown]",
+            200 - shown
+        )
+    );
+    assert!(
+        lines.contains(&"timeline | 2026-11-01 to 2026-11-20 | tasks 200"),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        lines.contains(&"marker no release | first taken - | last accepted -"),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        !lines.iter().any(|line| line.starts_with("late ")),
+        "no late row"
+    );
+    let body: usize = lines[..lines.len() - 1]
+        .iter()
+        .map(|line| line.chars().count() + 1)
+        .sum();
+    assert!(body <= specengine_cli::OUTPUT_CAP_CHARS, "{body}");
+    let row = |n: usize| {
+        format!(
+            "task C-{n:04} | - | created 2026-11-01T09:00:00Z | taken - | accepted - | due - | - \
+             | {}",
+            title(n)
+        )
+    };
+    assert!(
+        body + row(shown + 1).chars().count() + 1 > specengine_cli::OUTPUT_CAP_CHARS,
+        "the next row would have fit: {body}"
+    );
+    for (n, line) in lines
+        .iter()
+        .filter(|line| line.starts_with("task "))
+        .enumerate()
+    {
+        assert_eq!(*line, row(n + 1), "a whole row in order");
+    }
+    let json = timeline_document(&scene, AS_OF);
+    assert_eq!(json["truncated"], false);
+    assert_eq!(json["omitted"], Value::Null);
+    assert_eq!(
+        json["timeline"]["tasks"].as_array().expect("tasks").len(),
+        200,
+        "the JSON is never cut"
+    );
+}
+
+/// DT1 (part a's D6, no person, no estimate): the timeline holds no key
+/// naming a person and none holding `estimate`; neither its text nor its
+/// JSON names `Ann` or `Bob`.
+#[test]
+fn dt1_the_timeline_names_no_person_and_no_estimate() {
+    let scene = Scene::scenario("dt1-no-person");
+    let document = timeline_document(&scene, AS_OF);
+    let mut found = Vec::new();
+    keys(&document["timeline"], ".timeline", &mut found);
+    assert!(!found.is_empty());
+    for (path, key) in &found {
+        assert!(
+            !key.contains("estimate")
+                && ![
+                    "as",
+                    "by",
+                    "assignee",
+                    "reviewer",
+                    "created_by",
+                    "decided_by"
+                ]
+                .contains(&key.as_str()),
+            "`{key}` at `{path}`"
+        );
+    }
+    for args in [
+        vec!["--as-of", AS_OF, "--timeline"],
+        vec!["--as-of", AS_OF, "--timeline", "--json"],
+    ] {
+        let run = delivery(&scene, &args);
+        run.code(0);
+        let timeline = run
+            .stdout
+            .find("timeline")
+            .map_or("", |at| &run.stdout[at..]);
+        assert!(!timeline.is_empty(), "{}", run.stdout);
+        assert!(
+            !timeline.contains("Ann") && !timeline.contains("Bob"),
+            "{timeline}"
+        );
+    }
+}
+
+/// DT1 (iteration 2): C-0005 (open) and C-0004 (delivered) made to hold a
+/// `created_at` that does not read, in SQL, under a config with no
+/// `[roadmap]`. With `--timeline` C-0005 is noted ``C-0005: `<created_at>`
+/// is no timestamp; not on the timeline``, one line and escaped as part a's
+/// notes, sorted before the config's `delivery:` note; C-0004 keeps part
+/// a's one `no lead time` note; neither has a row, both still count. Without
+/// `--timeline` no such note. M: the note dropped.
+#[test]
+fn dt1_an_open_card_off_the_timeline_is_noted() {
+    let scene = Scene::with_config("dt1-off-timeline", &format!("{HEAD}{FLOWS}{DEPARTMENTS}"));
+    scene.play(&Extra::default());
+    scene.sql(
+        "UPDATE cards SET created_at = 'yester' || char(10) || 'day' || char(7) WHERE id = \
+         'C-0005'; UPDATE cards SET created_at = 'last week' WHERE id = 'C-0004';",
+    );
+    let part_a = "C-0004: last week is no timestamp; no lead time";
+    let off = "C-0005: `yester day\u{7}` is no timestamp; not on the timeline";
+    let config = "delivery: no [roadmap] table: every task is in no release";
+    let stderr = |notes: &[&str]| -> String {
+        notes
+            .iter()
+            .map(|note| format!("note: {}\n", note.replace('\u{7}', "\\u{7}")))
+            .collect()
+    };
+
+    let with = delivery(&scene, &["--as-of", AS_OF, "--timeline", "--json"]);
+    with.code(0);
+    let document = with.json();
+    assert_eq!(notes_of(&document), [part_a, off, config], "{document}");
+    assert_eq!(with.stderr, stderr(&[part_a, off, config]));
+    assert_eq!(
+        timeline_ids(&document),
+        ["C-0001", "C-0003"],
+        "{}",
+        document["timeline"]
+    );
+    assert_eq!(document["total"]["tasks"], 4, "both still count");
+    let text = delivery(&scene, &["--as-of", AS_OF, "--timeline"]);
+    text.code(0);
+    assert_eq!(text.stderr, with.stderr);
+    assert!(
+        text.stdout
+            .contains("\ntimeline | 2026-11-01 to 2026-11-20 | tasks 2\n"),
+        "{}",
+        text.stdout
+    );
+
+    let without = delivery(&scene, &["--as-of", AS_OF, "--json"]);
+    without.code(0);
+    let plain = without.json();
+    assert_eq!(notes_of(&plain), [part_a, config], "{plain}");
+    assert_eq!(without.stderr, stderr(&[part_a, config]));
+    assert_eq!(plain["timeline"], Value::Null);
+    let mut rest = document.clone();
+    rest["timeline"] = Value::Null;
+    rest["notes"] = plain["notes"].clone();
+    assert_eq!(rest, plain, "the flag adds the timeline and its note alone");
+    let text = delivery(&scene, &["--as-of", AS_OF]);
+    text.code(0);
+    assert_eq!(text.stderr, without.stderr);
 }

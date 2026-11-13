@@ -1,4 +1,4 @@
-import type { DeliveryDepartment, DeliveryItem, DeliveryLate, DeliveryRelease, LeadDays } from "../api/types";
+import type { DeliveryDepartment, DeliveryItem, DeliveryLate, DeliveryRelease, DeliveryTask, LeadDays } from "../api/types";
 import type { Translate } from "../i18n";
 import type { LozengeLook } from "../ui/Lozenge";
 import { oneLine } from "./text";
@@ -31,6 +31,15 @@ export function groupLabel({ group, release }: Pick<DeliveryRelease, "group" | "
   }
 }
 
+/**
+ * A group's identity on the timeline, its word and its release as served, one text: a task's row and
+ * its group's marker share it (docs/features/delivery-timeline.md "Acceptance criteria", DT8). Kept
+ * here, where groups are told apart; the view only looks it up.
+ */
+export function groupKey({ group, release }: Pick<DeliveryRelease, "group" | "release">): string {
+  return JSON.stringify([group, release]);
+}
+
 /** A question, discrepancy or decision by its word; another kind raw. */
 export function itemKindLabel({ kind }: Pick<DeliveryItem, "kind">, t: Translate): DeliveryWord {
   switch (kind) {
@@ -55,6 +64,11 @@ export function lateLook({ accepted_at, days_late }: Pick<DeliveryLate, "accepte
   return accepted_at === null
     ? { appearance: "danger", icon: "cardOverdue", label: t("roadmap.delivery.overdueBy", { count: days_late }) }
     : { appearance: "warning", icon: "taskAccepted", label: t("roadmap.delivery.lateBy", { count: days_late }) };
+}
+
+/** A timeline row's late mark by its served days, as a late task's; none when the daemon serves none (docs/features/delivery-timeline.md "Acceptance criteria", DT8). */
+export function lateMark({ accepted_at, days_late }: Pick<DeliveryTask, "accepted_at" | "days_late">, t: Translate): LozengeLook | null {
+  return days_late === null ? null : lateLook({ accepted_at, days_late }, t);
 }
 
 /** A late task's departments by their served titles, in served order; a name no row holds as written. */

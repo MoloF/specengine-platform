@@ -1,8 +1,9 @@
-//! `spec delivery [--as-of D] [--json]` (task spec `delivery-analytics`):
-//! what was delivered, what is overdue and why, per release and per
-//! department, computed per read from the queue, the config and the plan
-//! (core's [`specengine_core::delivery::delivery`]), never stored. It moves,
-//! refuses and gates nothing.
+//! `spec delivery [--as-of D] [--timeline] [--json]` (task spec
+//! `delivery-analytics`; its timeline task spec `delivery-timeline`): what
+//! was delivered, what is overdue and why, per release and per department,
+//! computed per read from the queue, the config and the plan (core's
+//! [`specengine_core::delivery::delivery`]), never stored. It moves, refuses
+//! and gates nothing.
 //!
 //! One call reads the config's `[roadmap]`, `[card]` and `[[workspace]]`,
 //! each apart (a table that does not read is a note), the plan's groups
@@ -28,7 +29,17 @@
 //!   item <id> | <kind> | <status>
 //!   more returns <a>, re-estimates <b>, cancelled subtasks <c>, items <d>
 //! [truncated: <k> of <n> late tasks not shown]
+//! timeline | <from or -> to <to or -> | tasks <n>
+//! marker <release R | pool | unplaced | no release> | first taken <at or -> | last accepted <at or ->
+//! task <C> | <R, pool, unplaced or -> | created <at> | taken <at or -> | accepted <at or -> | due <D or -> | <late <n>d, overdue <n>d or -> | <title>
+//! [truncated: <k> of <n> timeline tasks not shown]
 //! ```
+//!
+//! `--timeline` (task spec `delivery-timeline` DT1, DT4) adds core's
+//! timeline: the JSON's `timeline` and the `timeline`, `marker` and `task`
+//! lines after the late rows. Without it none is built, the JSON's
+//! `timeline` is `null` and the text has no timeline line. The timeline
+//! reads nothing more (DT3).
 //!
 //! `<counts>`: `tasks <t>, delivered <d>, late <l>, open <o>, overdue <v>,
 //! cancelled <c>`, `late` the delivered late; `<lead>`: `lead median <m>d,
@@ -39,8 +50,12 @@
 //! while everything before the tail is at most [`OUTPUT_CAP_CHARS`]; the
 //! JSON holds the rows the text prints ([`delivery_with_view`] with the
 //! daemon's [`View::Browser`]: nothing cut, `truncated` false, `omitted`
-//! `null`). The notes go to stderr as `note:` lines and into the JSON's
-//! `notes`, sorted, each once; none changes the exit. Exit 2: a bad
+//! `null`). After them the timeline's head, marker and task lines print,
+//! each whole, while the lines but the tails stay within the cap, then its
+//! own tail when a line of it does not; the JSON's timeline is never cut,
+//! and `truncated` and `omitted` count late rows alone (DT1). The notes go
+//! to stderr as `note:` lines and into the JSON's `notes`, sorted, each
+//! once; none changes the exit. Exit 2: a bad
 //! `--as-of`, no project, a config the discovery refuses, or a queue that
 //! cannot be read (a newer build's).
 
@@ -51,7 +66,7 @@ use serde_json::Value;
 use specengine_core::check::{CheckInput, ProblemKind, front_matter_failure, is_calendar_date};
 use specengine_core::delivery::{
     CardItemRef, Delivery, DeliveryCounts, DeliveryDepartment, DeliveryGroup, DeliveryInput,
-    DeliveryLate, DeliveryRelease, Moved, Reestimated,
+    DeliveryLate, DeliveryRelease, Moved, Reestimated, Timeline, TimelineMarker, TimelineTask,
 };
 use specengine_core::{
     GroupRef, Paths, RoadmapConfig, WorkspaceConfig, card_from_toml, is_under, item_groups,
@@ -92,6 +107,9 @@ const ABSENT: &str = "-";
 pub struct DeliveryRequest {
     /// `--as-of D`; `None`: today's UTC date.
     pub as_of: Option<String>,
+    /// `--timeline`: core's timeline built and shown (task spec
+    /// `delivery-timeline` DT4).
+    pub timeline: bool,
 }
 
 /// What `spec delivery` computed and how much of it prints.
@@ -104,6 +122,10 @@ pub struct DeliveryOutcome {
     pub shown: usize,
     /// A late row does not print: the tail, and the JSON's `truncated`.
     pub truncated: bool,
+    /// How many of the timeline's lines print, the first ones of its head,
+    /// marker and task lines in that order; 0 without a timeline (task
+    /// spec `delivery-timeline` DT1).
+    pub timeline_shown: usize,
 }
 
 impl DeliveryOutcome {
@@ -115,6 +137,17 @@ impl DeliveryOutcome {
     /// The late rows that print.
     fn shown_late(&self) -> &[DeliveryLate] {
         &self.delivery.late[..self.shown.min(self.delivery.late.len())]
+    }
+
+    /// The timeline's tasks that do not print (`k` of its tail); 0 without
+    /// a timeline.
+    pub fn timeline_omitted(&self) -> usize {
+        self.delivery.timeline.as_ref().map_or(0, |timeline| {
+            let shown = self
+                .timeline_shown
+                .saturating_sub(1 + timeline.markers.len());
+            timeline.tasks.len().saturating_sub(shown)
+        })
     }
 
     /// One `note:` line per note, in order.
@@ -136,6 +169,8 @@ struct DeliveryJson<'a> {
     departments: &'a [DeliveryDepartment],
     total: &'a DeliveryCounts,
     late: &'a [DeliveryLate],
+    /// Never cut; `null` unless asked.
+    timeline: Option<&'a Timeline>,
     truncated: bool,
     /// The late rows cut; `null` uncut.
     omitted: Option<usize>,
@@ -151,6 +186,7 @@ impl Serialize for DeliveryOutcome {
             departments: &delivery.departments,
             total: &delivery.total,
             late: self.shown_late(),
+            timeline: delivery.timeline.as_ref(),
             truncated: self.truncated,
             omitted: self.truncated.then(|| self.omitted()),
         }
@@ -220,18 +256,26 @@ pub fn delivery_with_view(
         groups: &groups,
         departments: &workspaces.workspaces,
         returns: &returns,
+        timeline: request.timeline,
     });
+    if let Some(timeline) = &delivery.timeline {
+        seams::note(Seam::DeliveryTimeline(timeline.tasks.len()));
+    }
     notes.extend(delivery.notes.iter().map(|note| one_line(note)));
     delivery.notes = notes.into_iter().collect();
 
-    let shown = match view {
+    let (shown, timeline_shown) = match view {
         View::Capped => fitting(&delivery),
-        View::Browser => delivery.late.len(),
+        View::Browser => (
+            delivery.late.len(),
+            delivery.timeline.as_ref().map_or(0, timeline_line_count),
+        ),
     };
     Ok(DeliveryOutcome {
         truncated: shown < delivery.late.len(),
         delivery,
         shown,
+        timeline_shown,
     })
 }
 
@@ -465,10 +509,12 @@ fn item_ref(item: &Proposal) -> Option<CardItemRef<'_>> {
 }
 
 /// How many late rows print within [`OUTPUT_CAP_CHARS`] after the header,
-/// group and department lines, each row whole.
-fn fitting(delivery: &Delivery) -> usize {
-    let cost =
-        |lines: &[String]| -> usize { lines.iter().map(|line| line.chars().count() + 1).sum() };
+/// group and department lines, each row whole; then how many of the
+/// timeline's lines print after them, each whole, the tails outside the cap
+/// (task spec `delivery-timeline` DT1).
+fn fitting(delivery: &Delivery) -> (usize, usize) {
+    let line_cost = |line: &str| line.chars().count() + 1;
+    let cost = |lines: &[String]| -> usize { lines.iter().map(|line| line_cost(line)).sum() };
     let mut used = cost(&head_lines(delivery));
     let mut shown = 0;
     for late in &delivery.late {
@@ -479,7 +525,48 @@ fn fitting(delivery: &Delivery) -> usize {
         used += row;
         shown += 1;
     }
-    shown
+    let mut timeline_shown = 0;
+    if let Some(timeline) = &delivery.timeline {
+        for line in timeline_lines(timeline) {
+            let cost = line_cost(&line);
+            if used + cost > OUTPUT_CAP_CHARS {
+                break;
+            }
+            used += cost;
+            timeline_shown += 1;
+        }
+    }
+    (shown, timeline_shown)
+}
+
+/// The timeline's lines: its head, a line per marker, a line per task.
+fn timeline_line_count(timeline: &Timeline) -> usize {
+    1 + timeline.markers.len() + timeline.tasks.len()
+}
+
+/// `text` on one line, or `-` for none.
+fn held(text: Option<&str>) -> String {
+    text.map_or(ABSENT.to_owned(), one_line)
+}
+
+/// A group on its own line: `release <R>`, `pool`, `unplaced` or `no
+/// release`.
+fn group_words(group: DeliveryGroup, release: Option<&str>) -> String {
+    match group {
+        DeliveryGroup::Release => format!("release {}", held(release)),
+        DeliveryGroup::NoRelease => "no release".to_owned(),
+        DeliveryGroup::Pool | DeliveryGroup::Unplaced => group.as_str().to_owned(),
+    }
+}
+
+/// A task's group on its row: the release's name, `pool`, `unplaced` or
+/// `-`.
+fn release_word(group: DeliveryGroup, release: Option<&str>) -> String {
+    match group {
+        DeliveryGroup::Release => held(release),
+        DeliveryGroup::NoRelease => ABSENT.to_owned(),
+        DeliveryGroup::Pool | DeliveryGroup::Unplaced => group.as_str().to_owned(),
+    }
 }
 
 /// `tasks <t>, delivered <d>, late <l>, open <o>, overdue <v>, cancelled
@@ -508,18 +595,11 @@ fn head_lines(delivery: &Delivery) -> Vec<String> {
         counts_text(&delivery.total)
     )];
     for release in &delivery.releases {
-        let group = match release.group {
-            DeliveryGroup::Release => format!(
-                "release {}",
-                release
-                    .release
-                    .as_deref()
-                    .map_or(ABSENT.to_owned(), one_line)
-            ),
-            DeliveryGroup::NoRelease => "no release".to_owned(),
-            DeliveryGroup::Pool | DeliveryGroup::Unplaced => release.group.as_str().to_owned(),
-        };
-        lines.push(format!("{group} | {}", counts_text(&release.counts)));
+        lines.push(format!(
+            "{} | {}",
+            group_words(release.group, release.release.as_deref()),
+            counts_text(&release.counts)
+        ));
     }
     for department in &delivery.departments {
         lines.push(format!(
@@ -534,12 +614,7 @@ fn head_lines(delivery: &Delivery) -> Vec<String> {
 
 /// A late row's lines: its own, then each reason, then `more`, escaped.
 fn late_lines(late: &DeliveryLate) -> Vec<String> {
-    let held = |text: Option<&str>| text.map_or(ABSENT.to_owned(), one_line);
-    let release = match late.group {
-        DeliveryGroup::Release => held(late.release.as_deref()),
-        DeliveryGroup::NoRelease => ABSENT.to_owned(),
-        DeliveryGroup::Pool | DeliveryGroup::Unplaced => late.group.as_str().to_owned(),
-    };
+    let release = release_word(late.group, late.release.as_deref());
     let (standing, past) = match &late.accepted_at {
         Some(at) => (format!("accepted {}", one_line(at)), "late"),
         None => ("open".to_owned(), "overdue"),
@@ -603,8 +678,54 @@ fn late_lines(late: &DeliveryLate) -> Vec<String> {
     lines.iter().map(|line| escape_controls(line)).collect()
 }
 
+/// The timeline's head, marker and task lines, in that order, escaped
+/// (task spec `delivery-timeline` DT1).
+fn timeline_lines(timeline: &Timeline) -> impl Iterator<Item = String> + '_ {
+    let head = format!(
+        "timeline | {} to {} | tasks {}",
+        held(timeline.from.as_deref()),
+        held(timeline.to.as_deref()),
+        timeline.tasks.len()
+    );
+    std::iter::once(head)
+        .chain(timeline.markers.iter().map(marker_line))
+        .chain(timeline.tasks.iter().map(task_line))
+        .map(|line| escape_controls(&line))
+}
+
+/// `marker <group> | first taken <at or -> | last accepted <at or ->`.
+fn marker_line(marker: &TimelineMarker) -> String {
+    format!(
+        "marker {} | first taken {} | last accepted {}",
+        group_words(marker.group, marker.release.as_deref()),
+        held(marker.first_taken_at.as_deref()),
+        held(marker.last_accepted_at.as_deref())
+    )
+}
+
+/// `task <C> | <group> | created … | taken … | accepted … | due … | <late
+/// or overdue <n>d, or -> | <title>`.
+fn task_line(task: &TimelineTask) -> String {
+    let past = match (task.days_late, &task.accepted_at) {
+        (Some(days), Some(_)) => format!("late {days}d"),
+        (Some(days), None) => format!("overdue {days}d"),
+        (None, _) => ABSENT.to_owned(),
+    };
+    format!(
+        "task {} | {} | created {} | taken {} | accepted {} | due {} | {past} | {}",
+        one_line(&task.id),
+        release_word(task.group, task.release.as_deref()),
+        one_line(&task.created_at),
+        held(task.taken_at.as_deref()),
+        held(task.accepted_at.as_deref()),
+        held(task.due.as_deref()),
+        one_line(&task.title)
+    )
+}
+
 /// The header, release and department lines, the late rows that print,
-/// then the tail when one does not.
+/// then the tail when one does not; with a timeline, its lines that print,
+/// then its tail when one does not.
 pub(crate) fn render_text(outcome: &DeliveryOutcome) -> String {
     let mut lines = head_lines(&outcome.delivery);
     for late in outcome.shown_late() {
@@ -616,6 +737,16 @@ pub(crate) fn render_text(outcome: &DeliveryOutcome) -> String {
             outcome.omitted(),
             outcome.delivery.late.len()
         ));
+    }
+    if let Some(timeline) = &outcome.delivery.timeline {
+        lines.extend(timeline_lines(timeline).take(outcome.timeline_shown));
+        if outcome.timeline_shown < timeline_line_count(timeline) {
+            lines.push(format!(
+                "[truncated: {} of {} timeline tasks not shown]",
+                outcome.timeline_omitted(),
+                timeline.tasks.len()
+            ));
+        }
     }
     lines.iter().map(|line| format!("{line}\n")).collect()
 }

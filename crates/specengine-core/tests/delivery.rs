@@ -30,13 +30,32 @@
 //!   middle.
 //! - Risk "Day arithmetic": `unix_days` inverts `date_from_unix_days` every
 //!   day from 1970 to 2100.
+//!
+//! docs/features/delivery-timeline.md (RM-0107 b) "Acceptance criteria",
+//! the judge's half, the flag on [`Facts::timeline`]:
+//!
+//! - DT1: the scenario's timeline is `data::TIMELINE_JSON` whatever the
+//!   input order; rows by group order, then `created_at`, then ID number;
+//!   `days_late` only on a late or overdue row; an accept from the first
+//!   column is the take; a `created_at` that does not read, no row. M:
+//!   cancelled cards as rows; rows by `created_at` alone; `days_late` on
+//!   an on-time card.
+//! - DT2: a marker per group holding a row, the least take and the greatest
+//!   accept, `null` with none; a group of cancelled cards alone, none. M:
+//!   the first accept as `last_accepted_at`; markers over cancelled cards.
+//! - DT4: without the flag `timeline` is `None` and the rest is the same
+//!   document. M: the timeline built whatever the flag.
+//! - DT5: `from` the least `created_at` day; `to` 2026-11-20 at 11-20,
+//!   2026-11-15 at 11-01, a later `due` or `as_of` when one is greatest,
+//!   and never before a stored day (the axis covers every one); no row, both
+//!   `null`. M: `to` as `as_of` alone.
 
 #[path = "../../specengine-cli/tests/delivery_scene/data.rs"]
 mod data;
 
 use std::collections::BTreeMap;
 
-use data::DATA_JSON;
+use data::{DATA_JSON, TIMELINE_JSON};
 use serde_json::{Value, json};
 use specengine_core::IdSchemeToml as _;
 use specengine_core::check::{CheckFile, CheckInput, date_from_unix_days};
@@ -161,6 +180,8 @@ struct Facts {
     groups: BTreeMap<String, GroupRef>,
     departments: Vec<Workspace>,
     returns: BTreeMap<String, String>,
+    /// delivery-timeline's flag (DT4): `false` unless a case asks.
+    timeline: bool,
     seq: i64,
 }
 
@@ -181,6 +202,7 @@ impl Facts {
                 workspace("print", "Print", Some(&["copy", "plates"])),
             ],
             returns: BTreeMap::from([("copy".to_owned(), "returned".to_owned())]),
+            timeline: false,
             seq: 0,
         }
     }
@@ -320,6 +342,7 @@ impl Facts {
             groups: &self.groups,
             departments: &self.departments,
             returns: &self.returns,
+            timeline: self.timeline,
         })
     }
 }
@@ -333,6 +356,7 @@ fn served(delivery: &Delivery) -> Value {
         "departments": serde_json::to_value(&delivery.departments).expect("departments"),
         "total": serde_json::to_value(delivery.total).expect("total"),
         "late": serde_json::to_value(&delivery.late).expect("late"),
+        "timeline": serde_json::to_value(&delivery.timeline).expect("timeline"),
     })
 }
 
@@ -1028,4 +1052,470 @@ fn unix_days_round_trips_1970_to_2100() {
     ] {
         assert_eq!(unix_days(bad), None, "{bad:?}");
     }
+}
+
+// ------------------------------------------------- delivery-timeline
+
+/// The judged document with the timeline asked, as JSON.
+fn with_timeline(facts: &mut Facts) -> Value {
+    facts.timeline = true;
+    served(&facts.judge())
+}
+
+/// The timeline's rows' IDs, in served order.
+fn row_ids(timeline: &Value) -> Vec<String> {
+    timeline["tasks"]
+        .as_array()
+        .expect("tasks")
+        .iter()
+        .map(|row| row["id"].as_str().expect("an ID").to_owned())
+        .collect()
+}
+
+fn row<'d>(timeline: &'d Value, id: &str) -> &'d Value {
+    timeline["tasks"]
+        .as_array()
+        .expect("tasks")
+        .iter()
+        .find(|row| row["id"] == id)
+        .unwrap_or_else(|| panic!("no row {id}: {timeline}"))
+}
+
+/// The scenario's timeline, the spec's.
+fn pinned_timeline() -> Value {
+    serde_json::from_str(TIMELINE_JSON).expect("the spec's timeline")
+}
+
+/// DT1: the scenario's timeline is the spec's (C-0004 taken by its move to
+/// `review`), whatever order the cards and events come in; no
+/// C-0002 row; the rest of the document unchanged. M: cancelled cards as
+/// rows; rows by `created_at` alone.
+#[test]
+fn dt1_the_scenarios_timeline() {
+    let mut facts = Facts::scenario();
+    let document = with_timeline(&mut facts);
+    assert_eq!(document["timeline"], pinned_timeline(), "{document}");
+    assert_eq!(
+        row_ids(&document["timeline"]),
+        ["C-0001", "C-0003", "C-0004", "C-0005"]
+    );
+    let mut part_a = document.clone();
+    part_a["timeline"] = Value::Null;
+    assert_eq!(part_a, pinned(), "the flag adds the timeline alone");
+    let mut shuffled = Facts::scenario();
+    shuffled.cards.reverse();
+    shuffled.moves.reverse();
+    shuffled.reestimates.reverse();
+    assert_eq!(
+        with_timeline(&mut shuffled)["timeline"],
+        pinned_timeline(),
+        "input order"
+    );
+    // Key order of a serialized row and marker: the spec's.
+    let judged = facts.judge();
+    let timeline = judged.timeline.as_ref().expect("asked");
+    let text = serde_json::to_string(timeline).expect("a timeline");
+    assert!(
+        text.starts_with(
+            "{\"from\":\"2026-11-01\",\"to\":\"2026-11-20\",\"markers\":[{\"group\":\"release\",\
+             \"release\":\"r1\",\"first_taken_at\":\"2026-11-03T09:00:00Z\",\
+             \"last_accepted_at\":\"2026-11-15T09:00:00Z\"},"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "\"tasks\":[{\"id\":\"C-0001\",\"title\":\"Write the tide table foreword\",\
+             \"flow\":\"copy\",\"group\":\"release\",\"release\":\"r1\",\"departments\":\
+             [\"words\",\"print\"],\"created_at\":\"2026-11-01T09:00:00Z\",\"taken_at\":\
+             \"2026-11-03T09:00:00Z\",\"accepted_at\":\"2026-11-15T09:00:00Z\",\"due\":\
+             \"2026-11-10\",\"days_late\":5}"
+        ),
+        "{text}"
+    );
+    assert_eq!(timeline.tasks.len(), judged.total.tasks);
+}
+
+/// DT1: rows by group order (plan order, then `none`), then `created_at`,
+/// then ID number (C-9999 before C-10000 on one `created_at`); a cancelled
+/// card, a subtask's too, has no row and counts as cancelled. M: rows by
+/// `created_at` alone; cancelled cards as rows.
+#[test]
+fn dt1_rows_by_group_then_created_at_then_id_number() {
+    let mut facts = Facts::scenario();
+    facts.groups.insert(
+        "RM-0004".to_owned(),
+        GroupRef {
+            kind: GroupKind::Pool,
+            name: None,
+            order: 2,
+        },
+    );
+    facts.groups.insert(
+        "RM-0005".to_owned(),
+        GroupRef {
+            kind: GroupKind::Unplaced,
+            name: None,
+            order: 3,
+        },
+    );
+    facts.cards.extend([
+        targets(
+            card("C-10000", "Ten thousand", "copy", "todo", 3),
+            &["RM-0004"],
+        ),
+        targets(card("C-9999", "Nine nine", "copy", "todo", 3), &["RM-0004"]),
+        targets(
+            card("C-0006", "Early pool", "copy", "todo", 1),
+            &["RM-0004"],
+        ),
+        targets(card("C-0007", "Ferry", "copy", "todo", 1), &["RM-0005"]),
+        targets(
+            card("C-0008", "Late in r1", "copy", "todo", 9),
+            &["RM-0001"],
+        ),
+        cancelled(
+            targets(card("C-0009", "Dropped", "copy", "todo", 1), &["RM-0001"]),
+            &at(4),
+            "Not needed",
+        ),
+        cancelled(
+            parent(card("C-0010", "Dropped child", "copy", "todo", 1), "C-0008"),
+            &at(4),
+            "Not needed",
+        ),
+    ]);
+    let document = with_timeline(&mut facts);
+    let timeline = &document["timeline"];
+    assert_eq!(
+        row_ids(timeline),
+        [
+            "C-0001", "C-0008", "C-0003", "C-0006", "C-9999", "C-10000", "C-0007", "C-0004",
+            "C-0005"
+        ],
+        "{timeline}"
+    );
+    let groups: Vec<(Value, Value)> = timeline["markers"]
+        .as_array()
+        .expect("markers")
+        .iter()
+        .map(|marker| (marker["group"].clone(), marker["release"].clone()))
+        .collect();
+    assert_eq!(
+        groups,
+        [
+            (json!("release"), json!("r1")),
+            (json!("release"), json!("r2")),
+            (json!("pool"), Value::Null),
+            (json!("unplaced"), Value::Null),
+            (json!("none"), Value::Null),
+        ]
+    );
+    assert_eq!(row(timeline, "C-9999")["group"], "pool");
+    assert_eq!(row(timeline, "C-9999")["release"], Value::Null);
+    assert_eq!(document["total"]["tasks"], 9);
+    assert_eq!(document["total"]["cancelled"], 3);
+    assert_eq!(
+        timeline["tasks"].as_array().expect("tasks").len(),
+        9,
+        "every card `total.tasks` counts"
+    );
+}
+
+/// DT1: `days_late` is part a's step 6 and `null` on a row neither late
+/// nor overdue: accepted before its due day or on it, open with its due
+/// day at `as_of` or after it, no due day. M: `days_late` on an on-time
+/// card.
+#[test]
+fn dt1_days_late_only_on_a_late_or_overdue_row() {
+    let mut facts = Facts::scenario();
+    facts.cards.extend([
+        accepted(
+            due(card("C-0006", "Early", "copy", "done", 1), "2026-11-15"),
+            &at(12),
+        ),
+        accepted(
+            due(
+                card("C-0007", "On the day", "copy", "done", 1),
+                "2026-11-15",
+            ),
+            "2026-11-15T23:59:59Z",
+        ),
+        due(card("C-0008", "Due at as of", "copy", "todo", 1), AS_OF),
+        due(card("C-0009", "Due later", "copy", "todo", 1), "2026-12-01"),
+        accepted(
+            due(
+                card("C-0010", "A day late", "copy", "done", 1),
+                "2026-11-15",
+            ),
+            &at(16),
+        ),
+        due(
+            card("C-0011", "A day over", "copy", "todo", 1),
+            "2026-11-19",
+        ),
+    ]);
+    let document = with_timeline(&mut facts);
+    let timeline = &document["timeline"];
+    for id in ["C-0004", "C-0005", "C-0006", "C-0007", "C-0008", "C-0009"] {
+        assert_eq!(row(timeline, id)["days_late"], Value::Null, "{id}");
+    }
+    for (id, days) in [("C-0001", 5), ("C-0003", 8), ("C-0010", 1), ("C-0011", 1)] {
+        assert_eq!(row(timeline, id)["days_late"], days, "{id}");
+        assert_eq!(late(&document, id)["days_late"], days, "part a's, {id}");
+    }
+    assert_eq!(row(timeline, "C-0008")["due"], AS_OF);
+}
+
+/// DT1 (part a's DA-2): a card accepted straight from its first column
+/// takes at its accept; its work segment is empty. A card whose
+/// `created_at` does not read is counted, noted and has no row.
+#[test]
+fn dt1_an_accept_from_the_first_column_is_the_take() {
+    let mut facts = Facts::scenario();
+    facts.cards.push(accepted(
+        card("C-0006", "Tune the bell", "sound", "done", 7),
+        &at(8),
+    ));
+    facts.moved("C-0006", "todo", "done", None, &at(8));
+    let mut odd = accepted(card("C-0007", "Odd clock", "copy", "done", 1), &at(4));
+    odd.created_at = "yesterday".to_owned();
+    facts.cards.push(odd);
+    let judged = {
+        facts.timeline = true;
+        facts.judge()
+    };
+    let document = served(&judged);
+    let bell = row(&document["timeline"], "C-0006");
+    assert_eq!(bell["taken_at"], at(8));
+    assert_eq!(bell["accepted_at"], at(8));
+    assert_eq!(
+        row_ids(&document["timeline"]),
+        ["C-0001", "C-0003", "C-0004", "C-0005", "C-0006"]
+    );
+    assert_eq!(document["total"]["tasks"], 6, "C-0007 still counts");
+    assert!(
+        judged.notes.iter().any(|note| note.starts_with("C-0007: ")),
+        "{:?}",
+        judged.notes
+    );
+}
+
+/// DT1 (iteration 2): asked, an open card whose `created_at` does not read
+/// is noted `<C>: `<created_at>` is no timestamp; not on the timeline` and
+/// has no row; a delivered one keeps part a's one note, `no lead time`,
+/// alone; not asked, neither gets the timeline's note. Both still count.
+/// M: the note dropped.
+#[test]
+fn dt1_an_open_card_off_the_timeline_is_noted() {
+    let mut facts = Facts::scenario();
+    let mut done = accepted(card("C-0006", "Odd clock", "copy", "done", 1), &at(4));
+    done.created_at = "yesterday".to_owned();
+    let mut open = card("C-0007", "Odd bell", "copy", "todo", 1);
+    open.created_at = "soon".to_owned();
+    facts.cards.extend([done, open]);
+    let part_a = "C-0006: yesterday is no timestamp; no lead time";
+    let off = "C-0007: `soon` is no timestamp; not on the timeline";
+    let without = facts.judge();
+    assert_eq!(without.notes, [part_a], "not asked");
+    facts.timeline = true;
+    let with = facts.judge();
+    assert_eq!(with.notes, [part_a, off], "asked");
+    let document = served(&with);
+    assert_eq!(
+        row_ids(&document["timeline"]),
+        ["C-0001", "C-0003", "C-0004", "C-0005"]
+    );
+    assert_eq!(document["total"]["tasks"], 6, "both still count");
+    assert_eq!(with.total, without.total);
+    assert_eq!(with.late, without.late);
+    assert_eq!(with.releases, without.releases);
+}
+
+/// DT2: r1 11-03 and 11-15, r2 11-05 and `null`, `none` 11-03 and 11-05
+/// (C-0004 taken by its move to `review`); a release of two delivered rows keeps the
+/// least take and the greatest accept, whichever row comes first; a pool
+/// item's one open, untaken row `null` twice; a group of cancelled cards
+/// alone no marker, and a cancelled card's earlier take counts nowhere. M:
+/// the first accept as `last_accepted_at`; markers over cancelled cards.
+#[test]
+fn dt2_markers() {
+    let mut facts = Facts::scenario();
+    facts.groups.insert("RM-0003".to_owned(), release("r3", 2));
+    facts.groups.insert(
+        "RM-0004".to_owned(),
+        GroupRef {
+            kind: GroupKind::Pool,
+            name: None,
+            order: 3,
+        },
+    );
+    facts.groups.insert(
+        "RM-0005".to_owned(),
+        GroupRef {
+            kind: GroupKind::Unplaced,
+            name: None,
+            order: 4,
+        },
+    );
+    // r3: C-0006 first by ID, `created_at` and accept `seq`, taken later
+    // and accepted earlier than C-0007.
+    facts.cards.extend([
+        accepted(
+            targets(
+                card("C-0006", "Chart the shoals", "copy", "done", 1),
+                &["RM-0003"],
+            ),
+            &at(8),
+        ),
+        accepted(
+            targets(
+                card("C-0007", "Chart the reefs", "copy", "done", 2),
+                &["RM-0003"],
+            ),
+            &at(12),
+        ),
+        cancelled(
+            targets(
+                card("C-0008", "Chart the wrecks", "copy", "review", 1),
+                &["RM-0003"],
+            ),
+            &at(9),
+            "Charted last year",
+        ),
+        targets(
+            card("C-0009", "Light the buoys", "copy", "todo", 3),
+            &["RM-0004"],
+        ),
+        cancelled(
+            targets(
+                card("C-0010", "Time the ferry", "copy", "doing", 1),
+                &["RM-0005"],
+            ),
+            &at(9),
+            "No ferry",
+        ),
+    ]);
+    facts.moved("C-0008", "todo", "review", None, &at(2));
+    facts.moved("C-0010", "todo", "doing", None, &at(2));
+    facts.moved("C-0007", "todo", "review", None, &at(3));
+    facts.moved("C-0006", "todo", "review", None, &at(6));
+    facts.moved("C-0006", "review", "done", None, &at(8));
+    facts.moved("C-0007", "review", "done", None, &at(12));
+    let document = with_timeline(&mut facts);
+    let markers = document["timeline"]["markers"].clone();
+    assert_eq!(
+        markers,
+        json!([
+            {"group": "release", "release": "r1", "first_taken_at": at(3), "last_accepted_at": at(15)},
+            {"group": "release", "release": "r2", "first_taken_at": at(5), "last_accepted_at": null},
+            {"group": "release", "release": "r3", "first_taken_at": at(3), "last_accepted_at": at(12)},
+            {"group": "pool", "release": null, "first_taken_at": null, "last_accepted_at": null},
+            {"group": "none", "release": null, "first_taken_at": at(3), "last_accepted_at": at(5)},
+        ]),
+        "{markers}"
+    );
+    let rows = row_ids(&document["timeline"]);
+    assert!(
+        !rows.contains(&"C-0008".to_owned()) && !rows.contains(&"C-0010".to_owned()),
+        "{rows:?}"
+    );
+    // Part a still counts the unplaced group's cancelled card.
+    assert!(
+        document["releases"]
+            .as_array()
+            .expect("releases")
+            .iter()
+            .any(|release| release["group"] == "unplaced" && release["cancelled"] == 1),
+        "{}",
+        document["releases"]
+    );
+}
+
+/// DT4: without the flag `timeline` is `None` and the document is part a's
+/// (the pinned JSON's `"timeline": null`); with it, the same document but
+/// the timeline. M: the timeline built whatever the flag.
+#[test]
+fn dt4_no_timeline_unless_asked() {
+    let facts = Facts::scenario();
+    assert!(!facts.timeline);
+    let judged = facts.judge();
+    assert_eq!(judged.timeline, None);
+    let document = served(&judged);
+    assert_eq!(document["timeline"], Value::Null);
+    assert_eq!(document, pinned());
+    let mut empty = Facts::new();
+    assert_eq!(empty.judge().timeline, None, "no card, no flag");
+    empty.timeline = true;
+    assert!(empty.judge().timeline.is_some(), "no card, the flag");
+}
+
+/// DT5: `from` the least `created_at` day; `to` the greatest of `as_of`,
+/// the accepts and the due days: 2026-11-20 at 11-20, 2026-11-15 (C-0001's
+/// accept) at 11-01, `as_of` past every date, a later due day past `as_of`.
+/// The judge reads no clock: one input, one answer. M: `to` as `as_of`
+/// alone.
+#[test]
+fn dt5_the_axis() {
+    for (as_of, to) in [
+        (AS_OF, AS_OF),
+        ("2026-11-01", "2026-11-15"),
+        ("2026-11-12", "2026-11-15"),
+        ("2027-03-01", "2027-03-01"),
+    ] {
+        let mut facts = Facts::scenario();
+        facts.as_of = as_of.to_owned();
+        let first = with_timeline(&mut facts);
+        assert_eq!(first["timeline"]["from"], "2026-11-01", "{as_of}");
+        assert_eq!(first["timeline"]["to"], to, "{as_of}");
+        assert_eq!(with_timeline(&mut facts), first, "{as_of}: twice");
+    }
+    let mut facts = Facts::scenario();
+    facts.cards.push(due(
+        card("C-0006", "Plan the spring", "copy", "todo", 7),
+        "2026-12-24",
+    ));
+    let document = with_timeline(&mut facts);
+    assert_eq!(document["timeline"]["to"], "2026-12-24");
+    assert_eq!(document["timeline"]["from"], "2026-11-01");
+}
+
+/// DT5, the axis covering every stored date: `as_of` before a row's `created_at`: `to`
+/// still covers every stored date (no `to` before `from`); no row: `from`,
+/// `to` `null`, no marker. M: `to` as `as_of` alone.
+#[test]
+fn dt5_the_axis_covers_every_stored_date() {
+    let mut facts = Facts::new();
+    facts.as_of = "2026-10-01".to_owned();
+    facts
+        .cards
+        .push(card("C-0001", "Sound the fog", "sound", "todo", 6));
+    facts
+        .cards
+        .push(card("C-0002", "Ring the bell", "copy", "doing", 7));
+    facts.moved("C-0002", "todo", "doing", None, &at(9));
+    let document = with_timeline(&mut facts);
+    let timeline = &document["timeline"];
+    assert_eq!(timeline["from"], "2026-11-06", "{timeline}");
+    let to = timeline["to"].as_str().expect("a day");
+    for stored in ["2026-11-06", "2026-11-07", "2026-11-09"] {
+        assert!(to >= stored, "`to` {to} before a stored day {stored}");
+    }
+    let mut empty = Facts::new();
+    let document = with_timeline(&mut empty);
+    assert_eq!(
+        document["timeline"],
+        json!({"from": null, "to": null, "markers": [], "tasks": []})
+    );
+    let mut cancelled_only = Facts::new();
+    cancelled_only.cards.push(cancelled(
+        card("C-0001", "Dropped", "copy", "todo", 1),
+        &at(2),
+        "Not needed",
+    ));
+    assert_eq!(
+        with_timeline(&mut cancelled_only)["timeline"],
+        json!({"from": null, "to": null, "markers": [], "tasks": []}),
+        "a cancelled card alone is no task"
+    );
 }

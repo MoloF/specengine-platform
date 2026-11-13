@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { localToday } from "../board/due";
@@ -167,6 +167,24 @@ describe("the delivery's read on the live tail (DA-12)", () => {
     });
     await settle();
     expect(deliveryReads()).toEqual([asked()]);
+  });
+
+  // docs/features/delivery-timeline.md "Acceptance criteria", DT8: the Timeline view's read is an entry of
+  // the delivery's, read again alike; the Tables' read, off screen, is not.
+  it("on the Timeline view, an event reads the timeline once more, `&timeline=true`, and not the tables", async () => {
+    await onDelivery();
+    fireEvent.click(within(screen.getByRole("group", { name: "View" })).getByRole("button", { name: "Timeline" }));
+    await waitFor(() => {
+      expect(deliveryReads()).toEqual([`${asked()}&timeline=true`]);
+    });
+    await screen.findByRole("heading", { name: "No task to place in time" });
+    fetchStub().mockClear();
+    emit("card.moved", '{"id":"C-0001"}', "42");
+    await waitFor(() => {
+      expect(deliveryReads()).toEqual([`${asked()}&timeline=true`]);
+    });
+    await settle();
+    expect(deliveryReads()).toEqual([`${asked()}&timeline=true`]);
   });
 
   it("an event reads the day the field holds, not the viewer's", async () => {

@@ -253,7 +253,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | v5 | `upstream-signal` | RM-0105 | Shipped 2026-11-12: an open subtask's `upstream`, what changed above it since it was made, by `seq`: its parent's goal, criteria or targets edited, an applied question, discrepancy or decision on their nodes, the parent suspect or correcting; per read, its own key, no mark changed; `card show --marks`, `get_card`, a flag on `list --marks` rows, the tile's "Changed above" and the work item's part; plugin 0.41.0 (`docs/canon/card-upstream.md`) | - | 4-6 | 6c |
 | v5 | `node-history` | RM-0035 | Shipped 2026-11-12: `spec show --history`, `get_node {with: ["history"]}`, the daemon's `with=history`: the commits that changed a node's span with their apply trailers (hand commits marked), the tasks accepted on it and the items applied to it, newest first; a History part in the document view; out of RM-0056 (`docs/canon/spec-history.md`) | - | 5-7 | - |
 | v5 | `direction-catalog` | RM-0106 | Shipped 2026-11-12: `spec catalog --kind K…`, `GET .../catalog` and the Spec tree's lazy table at a direction's start: per node its version, the trace's state, open items, tasks and its file's last commit on `HEAD`'s first-parent line, one git walk cached per `HEAD` in the daemon; per read, never stored; no MCP tool, plugin version or schema step; first-load JS 835.33 kB of 845 (`docs/canon/spec-catalog.md`) | - | 6-9 | 4, RM-0035 |
-| v5 | `delivery-analytics` | RM-0107 | Two parts: (a) `delivery-analytics`, shipped 2026-11-12: `spec delivery [--as-of D]`, `GET .../delivery` and the Roadmap's lazy Delivery tab: per release and per department, tasks delivered of tasks, open, overdue, delivered late, cancelled and lead days, then each late task with its returns, re-estimates, cancelled subtasks and items; per read, never stored; no MCP tool, plugin version or schema step; first-load JS 833.46 kB of 845 (`docs/canon/spec-delivery.md`); (b) `delivery-timeline`, RM-0087's timeline, the last core slice | - | 8-12 | 6 |
+| v5 | `delivery-analytics` | RM-0107 | Two parts: (a) `delivery-analytics`, shipped 2026-11-12: `spec delivery [--as-of D]`, `GET .../delivery` and the Roadmap's lazy Delivery tab: per release and per department, tasks delivered of tasks, open, overdue, delivered late, cancelled and lead days, then each late task with its returns, re-estimates, cancelled subtasks and items; per read, never stored; no MCP tool, plugin version or schema step; first-load JS 833.46 kB of 845 (`docs/canon/spec-delivery.md`); (b) `delivery-timeline`, RM-0087's timeline, the last core slice, shipped 2026-11-13: `spec delivery --timeline` and `timeline=true` put every task not cancelled on one axis, created, taken, accepted and due, with a marker per group (its first take and last accept) from the same read; the tab's lazy Timeline view and its table twin; first-load JS 834.16 kB of 845 (`docs/canon/spec-delivery-timeline.md`) | - | 8-12 | 6 |
 | v5 | `card-context` | RM-0108 | Shipped 2026-11-12: `get_card {context}`, `spec card show --context [--budget N]`: the parent's goal and one bundle of its targets and its own applied records, fitted into the room its lines leave; a bundle not made is a note (`docs/canon/card-context.md`) | - | 4-6 | 5 |
 | v5 | `canvas-clicks` | RM-0103 | Shipped 2026-11-12: Graph and Roadmap's Chain take a short press as a click, Graph's minimap no pointer, Graph centres only on a keyboard focus; a lazy chunk gone after a redeploy reloads the page once per build (`docs/canon/spec-flow-layout.md`, `docs/canon/ui-languages.md` "Size"); UI only | - | 2-3 | 6 |
 | trigger | `code-languages` | RM-0109 | Markers and AST hashes in a second language, once a real project in it exists | one amending ADR-0010, ADR-0018, ADR-0020 | 6-10 | - |
@@ -350,13 +350,40 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | 10 | `collision-pairs`, the pair half | RM-0088 | a served `pair` for a two-target `contradicts`, plugin 0.45.0; shipped 2026-11-13 (`docs/canon/agent-intake-documents.md` "Pair") |
 | 11 | `department-overview` | RM-0086 | no MCP tool, no plugin version; shipped 2026-11-12, ahead of 8-10 (`docs/canon/card-counts.md`) |
 | 12 | `hub-department` | RM-0089 | no MCP tool, no plugin version; shipped 2026-11-13 (`docs/canon/hub-department.md`) |
-| 13 | `delivery-analytics`, part b | RM-0107 | the timeline |
+| 13 | `delivery-timeline`, part b | RM-0107 | the timeline; no MCP tool, no plugin version; shipped 2026-11-13 (`docs/canon/spec-delivery-timeline.md`), closing RM-0107 |
 
-**The order changed, 2026-11-12**, to follow the UI stack: slice 11's UI was built ahead and merged onto `main`, and the slice shipped before 8-10. 8 `plain-questions` (the question half) and 9 `collision-pass` shipped 2026-11-12. 10 `collision-pairs` (the pair half) and 12 `hub-department` shipped side by side 2026-11-13. The rest: 13 `delivery-timeline`, the last core slice of `v5`.
+**The order changed, 2026-11-12**, to follow the UI stack: slice 11's UI was built ahead and merged onto `main`, and the slice shipped before 8-10. 8 `plain-questions` (the question half) and 9 `collision-pass` shipped 2026-11-12. 10 `collision-pairs` (the pair half) and 12 `hub-department` shipped side by side 2026-11-13. 13 `delivery-timeline`, the last core slice, shipped 2026-11-13: **`v5`'s core scope is closed**; the pipeline trial and the hub's upgrade stay the owner's ("Owner's word, 2026-11-13" below).
 
 **The UI lane**, beside core slices 1-5, in the same tree: RM-0103 `canvas-clicks`, shipped 2026-11-12 (no plugin version; `docs/canon/spec-flow-layout.md` "Layout", `docs/canon/ui-languages.md` "Size"), then RM-0099 in two slices, `design-sweep` (a), shipped 2026-11-12 (no plugin version; `docs/canon/ui-design.md` "Guards and exceptions", "The work item"), and `design-sweep-b` (b), shipped 2026-11-12 (no plugin version; `docs/canon/ui-design.md` "Guards and exceptions", "The work item"), which closes RM-0099 and the lane. It shared only documents with the core lane, so the owner committed each slice on its own.
 
 **Not taken:** RM-0109 `code-languages` (its trigger), RM-0087, RM-0070, 10c and RM-0110 `config-proposal`. The taken pool items, RM-0103, RM-0035 and RM-0105 to RM-0108, are `release: v5`; their estimates, and those of steps 7-13, are their analyses' of 2026-11-12.
+
+#### Owner's word, 2026-11-13
+
+**Released.** On 2026-11-13 the owner pushed `main` and the tag `v0.45.0`: `v5`'s core scope, shipped in full. His pilot pipeline trial and the hub's upgrade to 0.45 (a dump first: `docs/canon/card-mandate.md` "Known limits") still wait on his word.
+
+**His word** (written in chat in Russian, translated): writers describe only documents, thoroughly, making links and reusing props and mechanics. They see what is used where, how, by which documents and in which places, and they see orphan documents to delete or bring in later. The full development cycle lives in SpecEngine, with implementation as a second layer. He likes Obsidian's dependency map. External editors stay rejected (2026-10-30).
+
+**His answers.**
+- Q1: an orphan is a document linked to nothing (no link to or from another document, and no child).
+- Q3: the map shows the whole corpus at once, as Obsidian's global graph; he knew this needs a layout engine, a new dependency and an ADR.
+- Q2 was not asked; the analyst's working answer stands: no stored state. An open card means "bring in later"; a proposal setting `status: abandoned` means "delete".
+- Extras he chose: scope rings; graph filters (only broken, only orphans, ghost nodes, a fixed colour per kind with a label); and `GATE_DEADLINE` from 3 s to 5 s.
+
+**First, a hardening release**, `release-hardening` (`docs/features/release-hardening.md`): every known flake fixed in the tests, the scan's defects closed, one clean full run. `GATE_DEADLINE` joins it as R8: 5 s, with a backstop of 5.4 s, under the wrapper's 7 s and the hook's 10 s, which stay. No ADR; `docs/canon/gate.md` "Verdict" changes at its ship.
+
+**Then the writer map**, three items; their release is his to name:
+
+| # | Slice | Item | Fixed now |
+|---|---|---|---|
+| 1 | `usage-orphans` (`docs/features/usage-orphans.md`) | RM-0111 | must; one count per read, never stored; plugin 0.46.0 (`get_node`'s links `usage`); no ADR |
+| 2 | `corpus-map` (`docs/features/corpus-map.md`) | RM-0112 | must, after RM-0111's core; ADR-0080 (`d3-force` 3.0.0 on a 2D canvas, a lazy chunk; the allowlist from 19 to 21); no MCP tool, no plugin version |
+| 3 | `scope-rings` (`docs/features/scope-rings.md`) | RM-0113 | should, beside 1 and 2; `[[map.ring]]`, plain SVG; no ADR, no plugin version |
+
+**Order:**
+- `delivery-timeline` (shipped 2026-11-13), then `release-hardening` (lanes T, U and R).
+- Beside them, on files neither touches: `usage-orphans`' core, `scope-rings`' core and UI, and `corpus-map`'s `src/map/` UI.
+- Then registration and the shared seams, one lane at a time.
 
 ## 3. Product acceptance criteria
 

@@ -4,6 +4,7 @@ import pairSlotSource from "../inbox/PairSlot.tsx?raw";
 import proposalCardSource from "../inbox/ProposalCard.tsx?raw";
 import homeSource from "../overview/HomeView.tsx?raw";
 import roundItemSource from "../round/RoundItemCard.tsx?raw";
+import deliverySource from "../roadmap/RoadmapDelivery.tsx?raw";
 import roadmapSource from "../roadmap/RoadmapView.tsx?raw";
 import treeSource from "../tree/TreeView.tsx?raw";
 import shellSource from "./Shell.tsx?raw";
@@ -52,6 +53,28 @@ describe("the Roadmap's lazy tabs (DA-7 of delivery-analytics)", () => {
 
   it("stands the Delivery tab in a Suspense whose fallback is its skeleton", () => {
     expect(roadmapSource).toMatch(/<Suspense fallback=\{<Skeleton label=\{t\("roadmap\.delivery\.loading", \{ project \}\)\} lines=\{4\} \/>\}>\s*<RoadmapDelivery project=\{project\} \/>/);
+  });
+});
+
+// docs/features/delivery-timeline.md "Acceptance criteria", DT10: the Delivery tab's timeline is a
+// chunk of its own inside the tab's, reached by a dynamic import alone, standing in a Suspense whose
+// fallback is its skeleton, mounted only when Timeline is chosen.
+describe("the Delivery tab's lazy timeline (DT10 of delivery-timeline)", () => {
+  it("RoadmapDelivery reaches ./RoadmapTimeline by lazy(() => import(...)) only, never by a value import (M: a static import of RoadmapTimeline)", () => {
+    const fromIt = importLines(deliverySource).filter((line) => line.endsWith('"./RoadmapTimeline";'));
+    for (const line of fromIt) {
+      expect(line.startsWith("import type ")).toBe(true);
+    }
+    expect(deliverySource).toContain('const RoadmapTimeline = lazy(() => import("./RoadmapTimeline").then((module) => ({ default: module.RoadmapTimeline })));');
+    expect(deliverySource).not.toMatch(/^import \{[^}]*\bRoadmapTimeline\b[^}]*\} from "\.\/RoadmapTimeline";$/m);
+    // Nor any static path to its day arithmetic: it rides in the timeline's chunk.
+    expect(importLines(deliverySource).filter((line) => line.endsWith('"./timeline";'))).toEqual([]);
+  });
+
+  it("stands the timeline in a Suspense whose fallback is its skeleton, mounted when Timeline is chosen", () => {
+    expect(deliverySource).toMatch(
+      /view === "tables" \? \(\s*<DeliveryTables project=\{project\} asOf=\{asOf\} \/>\s*\) : \(\s*<Suspense fallback=\{<Skeleton label=\{t\("roadmap\.delivery\.loading", \{ project \}\)\} lines=\{6\} \/>\}>\s*<RoadmapTimeline project=\{project\} asOf=\{asOf\} \/>/,
+    );
   });
 });
 

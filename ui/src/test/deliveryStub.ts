@@ -1,5 +1,5 @@
-import type { DeliveryDocument } from "../api/types";
-import { aDeliveryCounts, aDeliveryLate } from "./builders";
+import type { DeliveryDocument, DeliveryTimeline } from "../api/types";
+import { aDeliveryCounts, aDeliveryLate, aDeliveryTask } from "./builders";
 import { roadmapClient } from "./roadmapStub";
 
 // The Delivery tab's documents on the stub client
@@ -8,7 +8,8 @@ import { roadmapClient } from "./roadmapStub";
 // other shape the tab draws: the pool, the unplaced items and a group word this build does not know,
 // a department of zeros, an open task with no reason and none taken, a re-estimate to a clear from
 // none, every list cut (`more` above 0), an item kind this build does not know, a non-Latin title,
-// and a note.
+// and a note. The timeline (docs/features/delivery-timeline.md "Acceptance criteria", DT8): the
+// spec's, verbatim, served only when asked; every other shape the view draws; an empty one.
 
 /** The day the spec's scenario is pinned at. */
 export const PINNED_AS_OF = "2026-11-20";
@@ -77,9 +78,103 @@ export function pinnedDelivery(): DeliveryDocument {
         more: { returns: 0, reestimates: 0, cancelled_subtasks: 0, items: 0 },
       },
     ],
+    timeline: null,
     truncated: false,
     omitted: null,
   };
+}
+
+/** The spec's timeline, verbatim: `--as-of 2026-11-20 --timeline` (docs/features/delivery-timeline.md "Acceptance criteria", DT1). */
+export function pinnedTimeline(): DeliveryTimeline {
+  return {
+    from: "2026-11-01",
+    to: "2026-11-20",
+    markers: [
+      { group: "release", release: "r1", first_taken_at: "2026-11-03T09:00:00Z", last_accepted_at: "2026-11-15T09:00:00Z" },
+      { group: "release", release: "r2", first_taken_at: "2026-11-05T09:00:00Z", last_accepted_at: null },
+      { group: "none", release: null, first_taken_at: "2026-11-03T09:00:00Z", last_accepted_at: "2026-11-05T09:00:00Z" },
+    ],
+    tasks: [
+      {
+        id: "C-0001",
+        title: "Write the tide table foreword",
+        flow: "copy",
+        group: "release",
+        release: "r1",
+        departments: ["words", "print"],
+        created_at: "2026-11-01T09:00:00Z",
+        taken_at: "2026-11-03T09:00:00Z",
+        accepted_at: "2026-11-15T09:00:00Z",
+        due: "2026-11-10",
+        days_late: 5,
+      },
+      {
+        id: "C-0003",
+        title: "Engrave the harbor map",
+        flow: "plates",
+        group: "release",
+        release: "r2",
+        departments: ["print"],
+        created_at: "2026-11-04T09:00:00Z",
+        taken_at: "2026-11-05T09:00:00Z",
+        accepted_at: null,
+        due: "2026-11-12",
+        days_late: 8,
+      },
+      {
+        id: "C-0004",
+        title: "Fix the index",
+        flow: "copy",
+        group: "none",
+        release: null,
+        departments: ["words", "print"],
+        created_at: "2026-11-02T09:00:00Z",
+        taken_at: "2026-11-03T09:00:00Z",
+        accepted_at: "2026-11-05T09:00:00Z",
+        due: null,
+        days_late: null,
+      },
+      { id: "C-0005", title: "Record the foghorn", flow: "sound", group: "none", release: null, departments: [], created_at: "2026-11-06T09:00:00Z", taken_at: null, accepted_at: null, due: null, days_late: null },
+    ],
+  };
+}
+
+/** The spec's document with its timeline asked: `--as-of 2026-11-20 --timeline --json`. */
+export function pinnedWithTimeline(): DeliveryDocument {
+  return { ...pinnedDelivery(), timeline: pinnedTimeline() };
+}
+
+/**
+ * The pinned timeline with every other shape the view draws: the pool, the unplaced items and a group
+ * word this build does not know, each with its marker; a Greek title in a Cyrillic department; a
+ * take before its creation (a backward segment, drawn empty); a row whose served `days_late` is not
+ * what its dates would give, shown as served; and a marker with nothing taken.
+ */
+export function everyShapeTimeline(): DeliveryTimeline {
+  const pinned = pinnedTimeline();
+  return {
+    ...pinned,
+    markers: [
+      ...pinned.markers.slice(0, 2),
+      { group: "pool", release: null, first_taken_at: "2026-11-02T09:00:00Z", last_accepted_at: null },
+      { group: "unplaced", release: null, first_taken_at: null, last_accepted_at: null },
+      { group: "milestone", release: null, first_taken_at: "2026-11-08T09:00:00Z", last_accepted_at: "2026-11-09T09:00:00Z" },
+      ...pinned.markers.slice(2),
+    ],
+    tasks: [
+      ...pinned.tasks.slice(0, 2),
+      aDeliveryTask({ id: "C-0007", title: GREEK_TASK_TITLE, group: "pool", departments: ["sound"], created_at: "2026-11-06T09:00:00Z", taken_at: "2026-11-02T09:00:00Z", due: "2026-11-19", days_late: 1 }),
+      aDeliveryTask({ id: "C-0009", title: "Caption the berth plans", group: "unplaced", departments: ["words"], created_at: "2026-11-10T09:00:00Z" }),
+      // Accepted three days past its due by its dates; served two: the served figure is the one shown.
+      aDeliveryTask({ id: "C-0010", title: "Deep-draft entry notice", group: "milestone", departments: ["print"], created_at: "2026-11-07T09:00:00Z", taken_at: "2026-11-08T09:00:00Z", accepted_at: "2026-11-09T09:00:00Z", due: "2026-11-06", days_late: 2 }),
+      ...pinned.tasks.slice(2),
+    ],
+  };
+}
+
+/** No task to place: the axis and every list empty. */
+export function emptyTimeline(): DeliveryTimeline {
+  return { from: null, to: null, markers: [], tasks: [] };
 }
 
 /** A title in Greek, written as escapes (mocks and tests are ASCII). */
@@ -132,9 +227,15 @@ export function noTaskDelivery(asOf: string = PINNED_AS_OF): DeliveryDocument {
   return { ...pinned, as_of: asOf, releases: [], departments: pinned.departments.map(({ name, title }) => ({ name, title, ...aDeliveryCounts() })), total: aDeliveryCounts(), late: [] };
 }
 
-/** The Roadmap's stub client answering `document` at the day asked, as the daemon echoes it. */
-export function deliveryClient(document: DeliveryDocument = pinnedDelivery()) {
+/**
+ * The Roadmap's stub client answering `document` at the day asked, as the daemon echoes it: its
+ * timeline null unless asked, `timeline` when asked
+ * (docs/features/delivery-timeline.md "Acceptance criteria", DT8).
+ */
+export function deliveryClient(document: DeliveryDocument = pinnedDelivery(), timeline: DeliveryTimeline = pinnedTimeline()) {
   const client = roadmapClient();
-  client.getDelivery.mockImplementation((_project, options) => Promise.resolve({ ...structuredClone(document), as_of: options.asOf }));
+  client.getDelivery.mockImplementation((_project, options) =>
+    Promise.resolve({ ...structuredClone(document), as_of: options.asOf, timeline: options.timeline === true ? structuredClone(timeline) : null }),
+  );
   return client;
 }

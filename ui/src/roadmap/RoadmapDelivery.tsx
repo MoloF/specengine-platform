@@ -1,4 +1,4 @@
-import { useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { lazy, Suspense, useId, useState, type ChangeEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDelivery } from "../api/queries";
 import type { DeliveryCounts, DeliveryDepartment, DeliveryDocument, DeliveryLate, DeliveryRelease } from "../api/types";
@@ -21,6 +21,15 @@ import { departmentTitles, groupLabel, itemKindLabel, lateLook, leadText } from 
 // with its reasons. One read per day asked, the viewer's own calendar day unless the field moves it,
 // as the Board judges its overdue badge. Every count is the daemon's, laid out as served: nothing
 // here sums, compares or recounts one. Read only; it moves, refuses and gates nothing (ADR-0012).
+// Two views of the day asked, chosen by a View group and kept while the tab stays open: Tables
+// first, then Timeline, a chunk of its own with a read of its own, `timeline` asked only there
+// (docs/features/delivery-timeline.md "Acceptance criteria", DT8, DT10).
+
+/** The timeline loads when its view is first chosen, a chunk of its own (docs/features/delivery-timeline.md "Acceptance criteria", DT10). */
+const RoadmapTimeline = lazy(() => import("./RoadmapTimeline").then((module) => ({ default: module.RoadmapTimeline })));
+
+/** The tab's two views, Tables first. */
+type DeliveryView = "tables" | "timeline";
 
 /** A stored time as the page shows one, its stored value the machine's. */
 function stamped(at: string, t: Translate): ReactNode {
@@ -283,24 +292,11 @@ function DeliveryBody({ project, document }: { project: string; document: Delive
   );
 }
 
-export function RoadmapDelivery({ project }: { project: string }) {
+/** The tables' read at the day asked, its states, then the tables. */
+function DeliveryTables({ project, asOf }: { project: string; asOf: string }) {
   const t = useTranslate();
-  const today = useToday();
-  // The day the field holds: null follows the viewer's own day, across midnight too.
-  const [chosen, setChosen] = useState<string | null>(null);
-  const asOf = chosen ?? today;
   const delivery = useDelivery(project, asOf);
   const failure = useRetainedFailure(delivery.error, delivery.isFetching);
-  const fieldId = useId();
-  const hintId = useId();
-
-  function onDate(event: ChangeEvent<HTMLInputElement>) {
-    // A date field's value is a whole day or empty; emptied, it keeps the day asked.
-    const value = event.target.value;
-    if (value !== "") {
-      setChosen(value === today ? null : value);
-    }
-  }
 
   function retry() {
     void delivery.refetch({ cancelRefetch: false });
@@ -312,7 +308,62 @@ export function RoadmapDelivery({ project }: { project: string }) {
       <ErrorPanel title={t("roadmap.delivery.failed")} message={apiErrorOf(failure).message} retrying={delivery.isFetching} attempt={delivery.errorUpdateCount} onRetry={retry} />
     );
   return (
-    <div className="delivery" aria-busy={delivery.isFetching}>
+    <div className="delivery-view-body" aria-busy={delivery.isFetching}>
+      {failed}
+      {data === undefined ? failed === null && <Skeleton label={t("roadmap.delivery.loading", { project })} lines={5} /> : <DeliveryBody project={project} document={data} />}
+    </div>
+  );
+}
+
+/** The View group: two pressed-or-not buttons, Tables first. */
+function ViewSwitch({ view, onChange }: { view: DeliveryView; onChange: (view: DeliveryView) => void }) {
+  const t = useTranslate();
+  const labelId = useId();
+  return (
+    <div className="delivery-views" role="group" aria-labelledby={labelId}>
+      <span id={labelId} className="field-label">
+        {t("roadmap.delivery.views.label")}
+      </span>
+      <Button
+        aria-pressed={view === "tables"}
+        onClick={() => {
+          onChange("tables");
+        }}
+      >
+        {t("roadmap.delivery.views.tables")}
+      </Button>
+      <Button
+        aria-pressed={view === "timeline"}
+        onClick={() => {
+          onChange("timeline");
+        }}
+      >
+        {t("roadmap.delivery.views.timeline")}
+      </Button>
+    </div>
+  );
+}
+
+export function RoadmapDelivery({ project }: { project: string }) {
+  const t = useTranslate();
+  const today = useToday();
+  // The day the field holds: null follows the viewer's own day, across midnight too.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [view, setView] = useState<DeliveryView>("tables");
+  const asOf = chosen ?? today;
+  const fieldId = useId();
+  const hintId = useId();
+
+  function onDate(event: ChangeEvent<HTMLInputElement>) {
+    // A date field's value is a whole day or empty; emptied, it keeps the day asked.
+    const value = event.target.value;
+    if (value !== "") {
+      setChosen(value === today ? null : value);
+    }
+  }
+
+  return (
+    <div className="delivery">
       <div className="delivery-as-of">
         <label className="field-label" htmlFor={fieldId}>
           {t("roadmap.delivery.asOf")}
@@ -332,8 +383,14 @@ export function RoadmapDelivery({ project }: { project: string }) {
           {t("roadmap.delivery.asOfHint")}
         </p>
       </div>
-      {failed}
-      {data === undefined ? failed === null && <Skeleton label={t("roadmap.delivery.loading", { project })} lines={5} /> : <DeliveryBody project={project} document={data} />}
+      <ViewSwitch view={view} onChange={setView} />
+      {view === "tables" ? (
+        <DeliveryTables project={project} asOf={asOf} />
+      ) : (
+        <Suspense fallback={<Skeleton label={t("roadmap.delivery.loading", { project })} lines={6} />}>
+          <RoadmapTimeline project={project} asOf={asOf} />
+        </Suspense>
+      )}
     </div>
   );
 }

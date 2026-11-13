@@ -178,6 +178,18 @@
   --roadmap-unestimated: var(--severity-unknown);
   --roadmap-bar: var(--accent);
   --roadmap-bar-track: var(--border-control);
+  /* The Delivery timeline (docs/features/delivery-timeline.md "Acceptance criteria", DT11), each mark
+     a shape too, never colour alone: waiting hatched in the controls' border, work solid in taken's,
+     the accept mark accepted's, a due tick in the text's, the day asked in the accent; a group's
+     first take dashed in taken's, its last accept dotted in accepted's. No mark says late: the row
+     says it in words. */
+  --delivery-waiting: var(--border-control);
+  --delivery-work: var(--card-taken);
+  --delivery-accepted: var(--card-accepted);
+  --delivery-due: var(--text-primary);
+  --delivery-as-of: var(--accent);
+  --delivery-first-taken: var(--card-taken);
+  --delivery-last-accepted: var(--card-accepted);
 
   /* A search hit inside a snippet (with weight and an underline, never colour alone). */
   --highlight-surface: light-dark(#fff7d6, #4a3a10);
@@ -261,6 +273,9 @@
   --flow-edge-label-width: 5.5rem;
   --flow-panel-width: 22rem;
   --flow-canvas-min: 20rem;
+  /* The Delivery timeline's row label column, and its track's least width: narrower, the chart scrolls in its own region. */
+  --delivery-timeline-label: 16rem;
+  --delivery-timeline-min: 36rem;
 
   /* Section diffs. */
   --diff-added-surface: light-dark(#dcfff1, #123628);

@@ -2011,11 +2011,13 @@ export type KnownDeliveryGroup = "release" | "pool" | "unplaced" | "none";
 export type DeliveryGroup = KnownDeliveryGroup | Unlisted;
 
 /**
- * `spec delivery [--as-of D] --json`, the answer of `GET .../delivery?as_of=D`: `as_of` the day the
- * open tasks were judged at, as sent; `releases` each group holding a task, in plan order, then none;
- * `departments` every served department in served order, zeros too; `total` every task once; `late`
- * the tasks delivered late or overdue, most days late first; `omitted` null uncut, as the daemon
- * always serves it. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11.
+ * `spec delivery [--as-of D] [--timeline] --json`, the answer of `GET .../delivery?as_of=D[&timeline=true]`:
+ * `as_of` the day the open tasks were judged at, as sent; `releases` each group holding a task, in
+ * plan order, then none; `departments` every served department in served order, zeros too; `total`
+ * every task once; `late` the tasks delivered late or overdue, most days late first; `timeline` null
+ * unless asked; `omitted` null uncut, as the daemon always serves it. Source:
+ * `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11; `timeline`
+ * `docs/features/delivery-timeline.md` "Acceptance criteria", DT6.
  */
 export interface DeliveryDocument {
   as_of: string;
@@ -2024,8 +2026,51 @@ export interface DeliveryDocument {
   departments: DeliveryDepartment[];
   total: DeliveryCounts;
   late: DeliveryLate[];
+  timeline: DeliveryTimeline | null;
   truncated: boolean;
   omitted: number | null;
+}
+
+/**
+ * Every task on one axis (RM-0107 b): `from` the least creation day, `to` the greatest of `as_of`
+ * and every stored day of a row, both null with no task; `markers` one per group holding a task, in
+ * the tables' group order; `tasks` every task not cancelled, by group, then creation, then ID number,
+ * never cut. The UI places a day between `from` and `to` and judges nothing. Source:
+ * `docs/features/delivery-timeline.md` "Acceptance criteria", DT6.
+ */
+export interface DeliveryTimeline {
+  from: string | null;
+  to: string | null;
+  markers: DeliveryMarker[];
+  tasks: DeliveryTask[];
+}
+
+/** A group's first take and last accept among its tasks, each null with none; no configured date. Source: `docs/features/delivery-timeline.md` "Acceptance criteria", DT6. */
+export interface DeliveryMarker {
+  group: DeliveryGroup;
+  release: string | null;
+  first_taken_at: string | null;
+  last_accepted_at: string | null;
+}
+
+/**
+ * A task's row on the timeline: `departments` names, in served order; `taken_at` its first move out
+ * of the column it was made in, its accept when accepted from there, null never taken; `days_late`
+ * past `due` at its accept or at `as_of` while open, null when neither late nor overdue. No key names
+ * a person. Source: `docs/features/delivery-timeline.md` "Acceptance criteria", DT6.
+ */
+export interface DeliveryTask {
+  id: string;
+  title: string;
+  flow: string;
+  group: DeliveryGroup;
+  release: string | null;
+  departments: string[];
+  created_at: string;
+  taken_at: string | null;
+  accepted_at: string | null;
+  due: string | null;
+  days_late: number | null;
 }
 
 /** A row's counts: `tasks` its tasks not cancelled, `delivered` of them, `open`, `overdue`, `cancelled` beside them; `lead_days` over the delivered ones, null with none. Source: `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11. */

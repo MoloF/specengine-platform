@@ -24,6 +24,7 @@ import type {
   DeliveryCounts,
   DeliveryDocument,
   DeliveryLate,
+  DeliveryTask,
   DriftRow,
   FlowEdge,
   FlowGap,
@@ -1049,9 +1050,26 @@ export function aDeliveryCounts(fields: Partial<DeliveryCounts> = {}): DeliveryC
   return { tasks: 0, delivered: 0, delivered_late: 0, open: 0, overdue: 0, cancelled: 0, lead_days: null, ...fields };
 }
 
-/** A delivery document judged at `asOf`: no task, no row, uncut, unless given. */
+/** A delivery document judged at `asOf`: no task, no row, no timeline asked, uncut, unless given. */
 export function aDelivery(asOf: string, fields: Partial<DeliveryDocument> = {}): DeliveryDocument {
-  return { as_of: asOf, notes: [], releases: [], departments: [], total: aDeliveryCounts(), late: [], truncated: false, omitted: null, ...fields };
+  return { as_of: asOf, notes: [], releases: [], departments: [], total: aDeliveryCounts(), late: [], timeline: null, truncated: false, omitted: null, ...fields };
+}
+
+/** A task's timeline row: made 2026-11-01 in no release, of no department, untaken, not late, unless given (docs/features/delivery-timeline.md "Acceptance criteria", DT6). */
+export function aDeliveryTask(fields: Partial<DeliveryTask> & Pick<DeliveryTask, "id">): DeliveryTask {
+  return {
+    title: `Task ${fields.id}`,
+    flow: "work",
+    group: "none",
+    release: null,
+    departments: [],
+    created_at: "2026-11-01T09:00:00Z",
+    taken_at: null,
+    accepted_at: null,
+    due: null,
+    days_late: null,
+    ...fields,
+  };
 }
 
 /** A late task: open in no release, of no department, with no reason, unless given. */

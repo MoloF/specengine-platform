@@ -244,11 +244,14 @@ enum Command {
         #[arg(long)]
         pool: bool,
     },
-    /// Print what was delivered, what is overdue and why, per release and per department: tasks delivered of tasks, open, overdue, delivered late and cancelled, lead days, then every late task with its returns, re-estimates, cancelled subtasks and items; computed per read from the queue, the config and the plan, never stored; read-only, exit 0 whatever is listed, 2 when it cannot run (a bad --as-of, no project, a queue that cannot be read).
+    /// Print what was delivered, what is overdue and why, per release and per department: tasks delivered of tasks, open, overdue, delivered late and cancelled, lead days, then every late task with its returns, re-estimates, cancelled subtasks and items, and with --timeline every task on one axis; computed per read from the queue, the config and the plan, never stored; read-only, exit 0 whatever is listed, 2 when it cannot run (a bad --as-of, no project, a queue that cannot be read).
     Delivery {
         /// The day open tasks are judged at, YYYY-MM-DD (default: today, UTC).
         #[arg(long = "as-of", value_name = "D")]
         as_of: Option<String>,
+        /// Also list every task not cancelled with when it was created, taken and accepted, its due date and days late, each group's first take and last accept, and the axis from the first creation to the last stored day or the as-of day.
+        #[arg(long)]
+        timeline: bool,
     },
     /// Print a kinds direction as a table: one row per node `tree --kind` lists with no ROOT, in its order, with its version, work state (the trace's rollup), open items of this repository, tasks and open tasks, and its file's last commit on HEAD's first-parent line (when and who); computed per read, never stored; read-only, exit 0 whatever is listed, 2 when it cannot run (no --kind, no project, an index or a queue that cannot be read).
     Catalog {
@@ -1414,11 +1417,9 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 git: process_git(env),
             },
         )?)),
-        Command::Delivery { as_of } => Outcome::Delivery(Box::new(specengine_cli::delivery(
-            env,
-            globals,
-            &DeliveryRequest { as_of },
-        )?)),
+        Command::Delivery { as_of, timeline } => Outcome::Delivery(Box::new(
+            specengine_cli::delivery(env, globals, &DeliveryRequest { as_of, timeline })?,
+        )),
         Command::Catalog { kinds, archive } => Outcome::Catalog(Box::new(specengine_cli::catalog(
             env,
             globals,

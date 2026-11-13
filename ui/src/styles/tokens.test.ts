@@ -146,6 +146,8 @@ const FLOW_GAP = ["none", "found", "not-configured", "unknown"];
 const CARD = ["accepted", "cancelled", "overdue", "drop", "suspect", "departed", "correcting", "mark-unknown", "open", "returned", "handed-off", "taken", "upstream"];
 // docs/features/trace-views.md: a node's states against its cards.
 const TRACE = ["confirmed", "in-work", "suspect", "departed", "no-card", "unknown"];
+// docs/features/delivery-timeline.md "Acceptance criteria", DT11: the timeline's marks, read against the surfaces in both themes.
+const DELIVERY = ["waiting", "work", "accepted", "due", "as-of", "first-taken", "last-accepted"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
   ...LINK.map((value) => `--link-${value}`),
@@ -165,6 +167,7 @@ const STATUS = [
   ...FLOW_GAP.map((value) => `--flow-gap-${value}`),
   ...CARD.map((value) => `--card-${value}`),
   ...TRACE.map((value) => `--trace-${value}`),
+  ...DELIVERY.map((value) => `--delivery-${value}`),
   "--flow-start",
   "--flow-end",
   "--flow-marked",
@@ -354,6 +357,18 @@ describe.each(THEMES)("today's distinctness in the %s theme (AC-09)", (theme) =>
     for (const appearance of ["success", "neutral", "warning", "information"]) {
       for (const surface of SURFACES) {
         expect([appearance, surface, contrast(`--lozenge-${appearance}-text`, surface, theme) >= 3]).toEqual([appearance, surface, true]);
+      }
+    }
+  });
+
+  // docs/features/delivery-timeline.md "Acceptance criteria", DT11: a row's waiting, work and accept apart, the day asked none of them, no mark in an alarm's colour.
+  it("draws the timeline's waiting, work, accept and day asked in four colours, each at least 3:1 on every surface, none the danger's (DT11 of delivery-timeline)", () => {
+    const marks = ["waiting", "work", "accepted", "as-of"].map((mark) => shade(`--delivery-${mark}`));
+    expect(new Set(marks).size).toBe(4);
+    for (const role of DELIVERY) {
+      expect([role, shade(`--delivery-${role}`) === shade("--danger-bold")]).toEqual([role, false]);
+      for (const surface of SURFACES) {
+        expect([role, surface, contrast(`--delivery-${role}`, surface, theme) >= 3]).toEqual([role, surface, true]);
       }
     }
   });

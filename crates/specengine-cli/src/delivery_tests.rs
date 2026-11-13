@@ -13,6 +13,17 @@
 //! M: `card_items` per card (the item read inside a loop over the cards)
 //! turns the 200 cards' item count to 200.
 //!
+//! The delivery-timeline task spec, DT3 and DT4, the same counters and the
+//! `delivery_timelines` seam:
+//!
+//! - DT3: with the timeline asked, still one card list, one
+//!   `events_of_types`, one item list and one plan build, capped and
+//!   browser views alike, over five cards and over 200. M: a second
+//!   `events_of_types` call for the timeline.
+//! - DT4: not asked, no timeline built (no `delivery_timelines` entry) and
+//!   `timeline` `None`; asked, one built with every task `total.tasks`
+//!   counts. M: the timeline built whatever the flag.
+//!
 //! Every case works on a scratch corpus written here under
 //! `std::env::temp_dir()`, with a scratch `HOME`, removed on drop; no git is
 //! run. This file is a CLI source, so the genre rule (`tests/genre.rs`)
@@ -27,8 +38,8 @@ use crate::View;
 use crate::subset::seams;
 use crate::{
     CardAcceptRequest, CardCancelRequest, CardEditRequest, CardMoveRequest, CardNewRequest,
-    DeliveryRequest, Env, Exit, Globals, card_accept, card_cancel, card_edit, card_move, card_new,
-    delivery, delivery_with_view,
+    DeliveryOutcome, DeliveryRequest, Env, Exit, Globals, card_accept, card_cancel, card_edit,
+    card_move, card_new, delivery, delivery_with_view,
 };
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -232,9 +243,16 @@ impl Place {
 
     /// One read at `AS_OF` in `view`: the counts it took.
     fn counted(&self, view: View) -> seams::ReadCounts {
+        self.counted_with(view, false).1
+    }
+
+    /// One read at `AS_OF` in `view`, the timeline asked or not: its
+    /// outcome and the counts it took.
+    fn counted_with(&self, view: View, timeline: bool) -> (DeliveryOutcome, seams::ReadCounts) {
         let _ = seams::take_read_counts();
         let request = DeliveryRequest {
             as_of: Some(AS_OF.to_owned()),
+            timeline,
         };
         let outcome = match view {
             View::Capped => delivery(&self.env, &self.globals, &request),
@@ -242,7 +260,7 @@ impl Place {
         }
         .expect("delivery");
         assert_eq!(outcome.delivery.as_of, AS_OF);
-        seams::take_read_counts()
+        (outcome, seams::take_read_counts())
     }
 }
 
@@ -275,6 +293,7 @@ fn da10_one_read_per_call() {
     }
     let request = DeliveryRequest {
         as_of: Some(AS_OF.to_owned()),
+        timeline: false,
     };
     let outcome = delivery(&place.env, &place.globals, &request).expect("delivery");
     assert_eq!(
@@ -292,4 +311,73 @@ fn da10_no_queue_and_no_plan_read_nothing_more() {
     let bare = Place::new("no-plan", false);
     bare.five();
     assert_eq!(reads(&bare.counted(View::Capped)), (1, 1, 1, 0));
+}
+
+/// DT3: the timeline asked reads what part a reads, once each: five cards,
+/// then 200, capped and browser alike, the same counts as without it. M: a
+/// second `events_of_types` call for the timeline.
+#[test]
+fn dt3_the_timeline_reads_nothing_more() {
+    let place = Place::new("timeline-reads", true);
+    place.five();
+    for view in [View::Capped, View::Browser] {
+        let (_, without) = place.counted_with(view, false);
+        let (outcome, with) = place.counted_with(view, true);
+        assert_eq!(reads(&with), (1, 1, 1, 1), "five cards");
+        assert_eq!(reads(&with), reads(&without), "five cards");
+        assert_eq!(
+            outcome
+                .delivery
+                .timeline
+                .map(|timeline| timeline.tasks.len()),
+            Some(4),
+            "five cards, one cancelled"
+        );
+    }
+    for n in 0..195 {
+        let target = ["TD-0001", "TD-0002"].get(n % 3).copied();
+        let _ = place.card(&format!("Tide line {n}"), target, None);
+    }
+    for view in [View::Capped, View::Browser] {
+        let (_, without) = place.counted_with(view, false);
+        let (outcome, with) = place.counted_with(view, true);
+        assert_eq!(reads(&with), (1, 1, 1, 1), "200 cards");
+        assert_eq!(reads(&with), reads(&without), "200 cards");
+        assert_eq!(with.delivery_timelines, [199], "200 cards");
+        assert_eq!(
+            outcome
+                .delivery
+                .timeline
+                .map(|timeline| timeline.tasks.len()),
+            Some(199)
+        );
+    }
+}
+
+/// DT4: not asked, nothing of the timeline is built and `timeline` is
+/// `None`; asked, one is built, its tasks every one `total.tasks` counts;
+/// no queue yet, asked: one built, empty. M: the timeline built whatever
+/// the flag.
+#[test]
+fn dt4_no_timeline_built_unless_asked() {
+    let place = Place::new("timeline-off", true);
+    place.five();
+    for view in [View::Capped, View::Browser] {
+        let (outcome, counts) = place.counted_with(view, false);
+        assert_eq!(counts.delivery_timelines, Vec::<usize>::new(), "not asked");
+        assert_eq!(outcome.delivery.timeline, None);
+        let (outcome, counts) = place.counted_with(view, true);
+        assert_eq!(counts.delivery_timelines, [4], "asked");
+        assert_eq!(outcome.delivery.total.tasks, 4);
+        assert!(outcome.delivery.timeline.is_some());
+    }
+    let empty = Place::new("timeline-empty", true);
+    let (outcome, counts) = empty.counted_with(View::Capped, false);
+    assert_eq!(counts.delivery_timelines, Vec::<usize>::new());
+    assert_eq!(outcome.delivery.timeline, None);
+    let (outcome, counts) = empty.counted_with(View::Capped, true);
+    assert_eq!(counts.delivery_timelines, [0]);
+    assert_eq!(reads(&counts), (0, 0, 0, 1));
+    let timeline = outcome.delivery.timeline.expect("asked");
+    assert_eq!((timeline.from, timeline.to), (None, None));
 }

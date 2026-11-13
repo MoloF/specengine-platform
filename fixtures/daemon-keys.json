@@ -125,7 +125,7 @@
   "HistoryEntry": ["source", "at", "id", "change", "created", "rev", "rev_before", "by", "by_name", "proposal", "proposed_by", "proposer", "record", "title", "rationale"],
   "CardUpstream": ["parent", "mark", "on", "correction", "changes", "more"],
   "CardUpstreamChange": ["seq", "at", "source", "by", "fields", "item", "kind", "record", "on"],
-  "Delivery": ["as_of", "notes", "releases", "departments", "total", "late", "truncated", "omitted"],
+  "Delivery": ["as_of", "notes", "releases", "departments", "total", "late", "timeline", "truncated", "omitted"],
   "DeliveryRelease": ["group", "release", "tasks", "delivered", "delivered_late", "open", "overdue", "cancelled", "lead_days"],
   "DeliveryDepartment": ["name", "title", "tasks", "delivered", "delivered_late", "open", "overdue", "cancelled", "lead_days"],
   "DeliveryTotal": ["tasks", "delivered", "delivered_late", "open", "overdue", "cancelled", "lead_days"],
@@ -143,5 +143,8 @@
   "CardColumnCount": ["flow", "column", "open", "accepted", "cancelled", "open_subtasks"],
   "CardFlowCount": ["flow", "open_items", "oldest_open_item", "ready_parents", "review_agent_tasks"],
   "Pair": ["left", "right", "other"],
-  "PairSide": ["id", "title", "path", "evidence"]
+  "PairSide": ["id", "title", "path", "evidence"],
+  "DeliveryTimeline": ["from", "to", "markers", "tasks"],
+  "DeliveryMarker": ["group", "release", "first_taken_at", "last_accepted_at"],
+  "DeliveryTask": ["id", "title", "flow", "group", "release", "departments", "created_at", "taken_at", "accepted_at", "due", "days_late"]
 }

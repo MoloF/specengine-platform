@@ -380,14 +380,14 @@ export class MockClient implements SpecEngineClient {
   }
 
   /**
-   * The project's delivery for the scenario at the day asked (src/mocks/delivery.ts), judged as the
-   * core does, read only; the daemon serves its own (`docs/features/delivery-analytics.md`
+   * The project's delivery for the scenario at the day asked, its timeline when asked
+   * (src/mocks/delivery.ts), judged as the core does, read only; the daemon serves its own (`docs/features/delivery-analytics.md`
    * "Acceptance criteria", DA-11). A day that is none is refused 400 in the daemon's words.
    */
   async getDelivery(project: string, options: DeliveryOptions): Promise<DeliveryDocument> {
     await this.read();
     this.project(project);
-    return structuredClone(deliveryOf(project, this.scenario, this.at, options.asOf));
+    return structuredClone(deliveryOf(project, this.scenario, this.at, options.asOf, options.timeline === true));
   }
 
   /**

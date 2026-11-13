@@ -21,7 +21,7 @@ mod data;
 
 // Each including crate uses its own part of the pinned data.
 #[allow(unused_imports)]
-pub use data::{DATA_JSON, DATA_TEXT, compact};
+pub use data::{DATA_JSON, DATA_TEXT, TIMELINE_JSON, TIMELINE_TEXT, compact, data_timeline_json};
 
 use std::ffi::OsString;
 use std::fs;

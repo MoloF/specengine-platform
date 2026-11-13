@@ -23,6 +23,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-refs.md](canon/spec-cli-refs.md) spec refs output: rows, JSON, exits · crates/specengine-cli · tier 2
+- [docs/canon/spec-delivery-timeline.md](canon/spec-delivery-timeline.md) spec delivery --timeline: every task on one axis · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-delivery.md](canon/spec-delivery.md) spec delivery: what was delivered, what is overdue and why · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-flow-bar.md](canon/spec-flow-bar.md) The Flow screen: the bar, Gaps and Records for the AI · ui · tier 2
 - [docs/canon/spec-flow-cuts.md](canon/spec-flow-cuts.md) spec flow: in the flow, the stage and in-flow cuts, types · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
@@ -40,6 +41,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-lock-rebase.md](canon/spec-lock-rebase.md) spec lock rebase: an old lock carried into this build's · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-lock-tested.md](canon/spec-lock-tested.md) [[tested]]: test evidence in spec.lock · crates/specengine-core, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp · tier 2
 - [docs/canon/spec-lock.md](canon/spec-lock.md) spec.lock: the file, its entries, spec lock regen · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
+- [docs/canon/spec-map.md](canon/spec-map.md) The corpus map: every document and its links in one picture · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-read-freshness.md](canon/spec-read-freshness.md) Read freshness: the stat key, and a hub's trusted index · crates/specengine-store, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp · tier 2
 - [docs/canon/spec-read-subset.md](canon/spec-read-subset.md) spec show, show --links, spec bundle: a subset read from the index · crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
 - [docs/canon/spec-roadmap-screen.md](canon/spec-roadmap-screen.md) The Roadmap screen · ui · tier 2

@@ -163,9 +163,10 @@
 //!   note, never an exit); a `--release` naming no release is an outcome
 //!   with its reason, exit 1; [`roadmap_flags`] its usage check, for the
 //!   daemon;
-//! - [`delivery()`]: `spec delivery [--as-of D]` (task spec
-//!   `delivery-analytics`), what was delivered, what is overdue and why, per
-//!   release and per department, totalled by core per read from the queue
+//! - [`delivery()`]: `spec delivery [--as-of D] [--timeline]` (task specs
+//!   `delivery-analytics` and `delivery-timeline`), what was delivered, what
+//!   is overdue and why, per release and per department, and asked, every
+//!   task on one axis, totalled by core per read from the queue
 //!   read once as it is, the config and the plan's groups from the walked
 //!   files; no git, no index, no write; `as_of` an input, today's UTC date
 //!   by default; [`delivery_as_of`] its usage check, for the daemon;

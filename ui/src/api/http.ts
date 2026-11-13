@@ -478,13 +478,17 @@ export class HttpClient implements SpecEngineClient {
   }
 
   /**
-   * `spec delivery --as-of D --json` as the browser view, uncut (`docs/features/delivery-analytics.md`
-   * "Acceptance criteria", DA-11): `as_of` the one query, always sent. Judged, so only a 200 resolves:
-   * a day the daemon refuses (400), an older daemon's 404 and a 503 reject in the daemon's words.
-   * Takes its query's AbortSignal.
+   * `spec delivery --as-of D [--timeline] --json` as the browser view, uncut
+   * (`docs/features/delivery-analytics.md` "Acceptance criteria", DA-11): `as_of` always sent, then
+   * `timeline=true` only when asked (`docs/features/delivery-timeline.md` "Acceptance criteria", DT6).
+   * Judged, so only a 200 resolves: a day the daemon refuses (400), an older daemon's 400 naming
+   * `timeline` or its 404, and a 503 reject in the daemon's words. Takes its query's AbortSignal.
    */
   async getDelivery(project: string, options: DeliveryOptions, signal?: AbortSignal): Promise<DeliveryDocument> {
-    const query = queryOf([["as_of", options.asOf]]);
+    const query = queryOf([
+      ["as_of", options.asOf],
+      ["timeline", options.timeline === true ? true : undefined],
+    ]);
     return (await request("GET", `${projectPath(project)}/delivery${query}`, { signal, judged: true })) as DeliveryDocument;
   }
 

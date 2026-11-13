@@ -86,3 +86,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0077](decisions/ADR-0077.md) A question, discrepancy or decision may name a card, raised from it on the page; the link decides nothing · architecture · accepted
 - [ADR-0078](decisions/ADR-0078.md) A split makes a task and a subtask per discipline in one act; `[[card.split]]` only pre-selects · architecture · accepted
 - [ADR-0079](decisions/ADR-0079.md) A subtask is binding or its department decides, named by the asking side; nothing reads the mandate · architecture · accepted
+- [ADR-0080](decisions/ADR-0080.md) The corpus map lays out with d3-force and draws on a 2D canvas, in a lazy chunk · ui · accepted
