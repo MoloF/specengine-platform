@@ -70,12 +70,17 @@ describe("query keys", () => {
     // docs/features/health-left.md "Data".
     expect(queryKeys.health("p")).toEqual(["health", "p"]);
     // AC-03 of docs/features/ui-graph.md.
-    expect(queryKeys.graph("p", { ref: "R" })).toEqual(["graph", "p", { ref: "R", impact: false, types: [], depth: null, archive: false }]);
+    // `kinds` and `both` since docs/features/corpus-map.md "Acceptance criteria", CM10: Both ways its own entry.
+    expect(queryKeys.graph("p", { ref: "R" })).toEqual(["graph", "p", { ref: "R", kinds: [], impact: false, both: false, types: [], depth: null, archive: false }]);
     expect(queryKeys.graph("p", { ref: "R", impact: true, types: ["t2", "t1"], depth: 3, archive: true })).toEqual([
       "graph",
       "p",
-      { ref: "R", impact: true, types: ["t2", "t1"], depth: 3, archive: true },
+      { ref: "R", kinds: [], impact: true, both: false, types: ["t2", "t1"], depth: 3, archive: true },
     ]);
+    expect(queryKeys.graph("p", { ref: "R", both: true })).toEqual(["graph", "p", { ref: "R", kinds: [], impact: false, both: true, types: [], depth: null, archive: false }]);
+    // docs/features/corpus-map.md "Acceptance criteria", CM8: the map, each archive its own entry.
+    expect(queryKeys.map("p", false)).toEqual(["map", "p", false]);
+    expect(queryKeys.map("p", true)).toEqual(["map", "p", true]);
   });
 
   it("tell graphs apart by every option, types included", () => {

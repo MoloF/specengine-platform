@@ -101,6 +101,8 @@ describe("the walk (AC-13)", () => {
       "1 MEC-PILOTAGE",
       "1 MEC-TIDE-TABLES",
       "1 DOM-WATER",
+      // The fog signal (corpus-map's) depends on DOM-WATER.
+      "2 RULE-FOG-SIGNAL",
     ]);
     expect(lines(view)).toEqual([
       "MEC-TIDES --constrains--> RULE-BERTH-DRAFT",
@@ -108,6 +110,7 @@ describe("the walk (AC-13)", () => {
       "MEC-PILOTAGE --depends_on--> MEC-TIDES",
       "MEC-TIDE-TABLES --depends_on--> MEC-TIDES",
       "DOM-WATER --depends_on--> MEC-TIDES",
+      "RULE-FOG-SIGNAL --depends_on--> DOM-WATER",
     ]);
     expect(view.left_out).toEqual({ generated: 0, tier3: 1 });
     const archived = await graph({ ref: "MEC-TIDES", impact: true, archive: true });
@@ -134,6 +137,8 @@ describe("the walk (AC-13)", () => {
       ref: "R-404",
       reason: "`R-404` resolves to no ID and no alias",
       impact: false,
+      both: false,
+      kinds: null,
       types: [],
       depth: 2,
       archive: false,

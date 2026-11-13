@@ -603,11 +603,12 @@ describe("the department's Board (DP-10 of departments)", () => {
 });
 
 describe("directions in the Spec tree (DP-11 of departments)", () => {
-  it("holds group Modules (All modules, Berths, Harbour waters) and group Directions (Mechanics), one pressed across both", async () => {
+  it("holds group Modules (All modules, Berths, Harbour waters) and group Directions (Mechanics, Rulebook), one pressed across both", async () => {
     renderMock("normal", "#/harbor-sim/tree");
     await screen.findByRole("tree", { name: "Spec tree" });
     expect(within(bar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["All modules", "Berths", "Harbour waters"]);
-    expect(within(directionsBar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["Mechanics"]);
+    // Rulebook since docs/features/corpus-map.md "Acceptance criteria", CM8: the Map's second direction.
+    expect(within(directionsBar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["Mechanics", "Rulebook"]);
     expect(pressedAll()).toEqual(["Berths"]);
   });
 
@@ -678,7 +679,8 @@ describe("directions in the Spec tree (DP-11 of departments)", () => {
     await waitFor(() => {
       expect(within(bar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["All modules"]);
     });
-    expect(within(directionsBar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["Mechanics"]);
+    // Rulebook since docs/features/corpus-map.md "Acceptance criteria", CM8: the Map's second direction.
+    expect(within(directionsBar() ?? document.body).getAllByRole("button").map((button) => button.textContent)).toEqual(["Mechanics", "Rulebook"]);
     cleanup();
     renderMock("normal", "#/harbor-sim/tree", (client) => {
       const served = workspacesOf("harbor-sim", "normal");

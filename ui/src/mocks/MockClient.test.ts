@@ -70,7 +70,7 @@ describe("the normal scenario", () => {
     expect((await rejection(new MockClient("normal", { now: clock }).getTeam())).status).toBe(404);
   });
 
-  it("serves harbor-sim's three workspaces, two rooted modules and a direction, ledger-api the implicit one; config-notes their notes (docs/features/workspaces.md \"The UI\"; DP-11, DP-14 of departments; the lead's, every flow: DO12 of department-overview)", async () => {
+  it("serves harbor-sim's three workspaces, two rooted modules and two directions, ledger-api the implicit one; config-notes their notes (docs/features/workspaces.md \"The UI\"; DP-11, DP-14 of departments; the lead's, every flow: DO12 of department-overview)", async () => {
     const client = new MockClient("normal", { now: clock });
     const harbor = await client.getWorkspaces("harbor-sim");
     expect(harbor.source).toBe("config");
@@ -83,6 +83,8 @@ describe("the normal scenario", () => {
       ["berths", "Berths", "DOM-BERTHS", null],
       ["waters", "Harbour waters", "DOM-WATER", null],
       ["mechanics", "Mechanics", null, ["mechanic"]],
+      // A second direction since docs/features/corpus-map.md "Acceptance criteria", CM8: the Map colours two.
+      ["rulebook", "Rulebook", null, ["rule"]],
     ]);
     // Each department's disciplines are what the daemon's rule gives over the mock's flows: each flow's own.
     const flows = (await client.getCards("harbor-sim")).flows;
@@ -102,7 +104,7 @@ describe("the normal scenario", () => {
     expect(Object.keys(harbor)).toEqual(["source", "notes", "workspaces", "modules", "default"]);
     expect([harbor.default, ledger.default]).toEqual([null, null]);
     expect(Object.keys(harbor.workspaces[0] ?? {})).toEqual(["name", "title", "landing", "sections", "flows", "disciplines", "module"]);
-    expect(harbor.modules.map((module) => Object.keys(module))).toEqual([0, 1, 2].map(() => ["name", "title", "root", "kinds"]));
+    expect(harbor.modules.map((module) => Object.keys(module))).toEqual([0, 1, 2, 3].map(() => ["name", "title", "root", "kinds"]));
     expect(Object.keys((await client.getCards("harbor-sim")).flows[0] ?? {})).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
     expect((await rejection(client.getWorkspaces("nowhere"))).status).toBe(404);
   });

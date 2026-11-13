@@ -71,17 +71,17 @@ describe("who uses what over the mock (UO10, UO11)", () => {
     expect(document.querySelector(".catalog-used-cited")).toBeNull();
   });
 
-  it("Health: five orphan documents over 23 live ones, Mechanics first, then no kind; the mechanics' open tasks", async () => {
+  it("Health: six orphan documents over 26 live ones, Mechanics first, then no kind; the mechanics' open tasks", async () => {
     renderMock("#/harbor-sim/health");
     const part = await orphansPart();
-    expect(part.querySelector(".health-left-total")?.textContent).toBe("5 orphan documents over 23 live documents");
+    expect(part.querySelector(".health-left-total")?.textContent).toBe("6 orphan documents over 26 live documents");
     const groups = Array.from(part.querySelectorAll<HTMLElement>(".health-orphans-group"), (group) => [
       document.getElementById(group.getAttribute("aria-labelledby") ?? "")?.textContent,
       Array.from(group.querySelectorAll(".health-orphans-tasks"), (tasks) => tasks.textContent),
     ]);
     expect(groups).toEqual([
       ["Mechanics", ["1 \u00b7 1 open", "1 \u00b7 1 open"]],
-      ["No kind", ["No task", "No task", "No task"]],
+      ["No kind", ["No task", "No task", "No task", "No task"]],
     ]);
     expect(within(part).getByRole("link", { name: "Cargo cranes" }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-CARGO-CRANES/page");
   });

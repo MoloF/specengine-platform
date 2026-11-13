@@ -7,6 +7,7 @@ import {
   type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
+  type MapOptions,
   type NodeOptions,
   type RoadmapOptions,
   type RoundOptions,
@@ -47,9 +48,11 @@ import type {
   Inbox,
   IntakeDocument,
   LockDiffView,
+  MapDocument,
   NodeView,
   Project,
   Proposal,
+  RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
@@ -72,6 +75,8 @@ import {
   aCheckReport,
   aCardWrite,
   aCatalog,
+  aMap,
+  aRings,
   aDelivery,
   aFlowView,
   aGraphNode,
@@ -156,9 +161,11 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     ),
     getGraph: vi.fn<(project: string, options: GraphOptions, signal?: AbortSignal) => Promise<GraphView>>((_project, options) =>
       Promise.resolve(
-        aGraphView([aGraphNode({ id: options.ref, distance: 0 })], [], {
-          ref: options.ref,
+        aGraphView([aGraphNode({ id: options.ref ?? "R-1", distance: 0 })], [], {
+          ref: options.ref ?? null,
           impact: options.impact ?? false,
+          both: options.both ?? false,
+          kinds: options.kinds ?? null,
           depth: options.depth ?? null,
           archive: options.archive ?? false,
         }),
@@ -218,6 +225,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getDelivery: vi.fn<(project: string, options: DeliveryOptions, signal?: AbortSignal) => Promise<DeliveryDocument>>((_project, options) => Promise.resolve(aDelivery(options.asOf))),
     // A direction's table (docs/features/direction-catalog.md "Acceptance criteria", DC-9): no row, the kinds asked; a test overriding what it answers.
     getCatalog: vi.fn<(project: string, options: CatalogOptions, signal?: AbortSignal) => Promise<CatalogDocument>>((_project, options) => Promise.resolve(aCatalog([], { kinds: [...options.kinds], archive: options.archive }))),
+    // The rings (docs/features/scope-rings.md "Acceptance criteria", SR4): no ring, no note; a test overriding what it answers.
+    getRings: vi.fn<(project: string, signal?: AbortSignal) => Promise<RingsDocument>>(() => Promise.resolve(aRings([]))),
+    // The map (docs/features/corpus-map.md "Acceptance criteria", CM3): no node, the archive asked; a test overriding what it answers.
+    getMap: vi.fn<(project: string, options: MapOptions, signal?: AbortSignal) => Promise<MapDocument>>((_project, options) => Promise.resolve(aMap([], [], { archive: options.archive }))),
     // The lock diff (docs/features/lock-diff.md "Data"): the REF's one holder, no drifted row with a lock entry.
     getLockDiff: vi.fn<(project: string, ref: string, signal?: AbortSignal) => Promise<LockDiffView>>((_project, ref) =>
       Promise.resolve({ ref, reason: null, notes: [], nodes: [{ id: ref, path: "docs/spec/doc-1.md", line: 5, rows: [] }] }),

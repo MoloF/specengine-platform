@@ -9,8 +9,19 @@ import { WEAK_LINK_TYPE } from "../tree/labels";
 
 export type GraphTab = "canvas" | "list";
 
+/**
+ * What the walk follows: each type outgoing (Links), each both ways (Both ways), or the impact table
+ * (Impact) (docs/features/corpus-map.md "Acceptance criteria", CM10).
+ */
+export type GraphMode = "out" | "both" | "impact";
+
+export const GRAPH_MODES: readonly GraphMode[] = ["out", "both", "impact"];
+
+/** The section's home view with no REF (docs/features/corpus-map.md "Acceptance criteria", CM8). */
+export type GraphHomeView = "map" | "rings";
+
 export interface GraphSettings {
-  impact: boolean;
+  mode: GraphMode;
   /** Chips of the mode's unfiltered types the owner released. */
   released: readonly string[];
   /** Whether the `mentions` chip is pressed. */
@@ -20,7 +31,9 @@ export interface GraphSettings {
   archive: boolean;
   tab: GraphTab;
   /** Each mode's unfiltered `types`, from its latest answer without `types`. */
-  bases: { readonly outgoing: readonly FollowedType[] | null; readonly impact: readonly FollowedType[] | null };
+  bases: Readonly<Record<GraphMode, readonly FollowedType[] | null>>;
+  /** The home's view, kept per project for the page's life. */
+  home: GraphHomeView;
 }
 
 export const DEFAULT_DEPTH = 2;
@@ -29,14 +42,20 @@ export const DEFAULT_DEPTH = 2;
 export const DEPTHS = [1, 2, 3, 4, 5, 6] as const;
 
 export const DEFAULT_SETTINGS: GraphSettings = {
-  impact: false,
+  mode: "out",
   released: [],
   mentions: false,
   depth: DEFAULT_DEPTH,
   archive: false,
   tab: "canvas",
-  bases: { outgoing: null, impact: null },
+  bases: { out: null, both: null, impact: null },
+  home: "map",
 };
+
+/** The mode an answer was read in. */
+export function modeOf(answer: { impact: boolean; both: boolean }): GraphMode {
+  return answer.both ? "both" : answer.impact ? "impact" : "out";
+}
 
 /** The Graph's options per project for this page's life (the shell holds it). */
 export interface GraphMemory {
@@ -49,12 +68,12 @@ export const NO_MEMORY: GraphMemory = { recall: () => undefined, remember: () =>
 
 /** The current mode's unfiltered types, once an answer gave them. */
 export function baseOf(settings: GraphSettings): readonly FollowedType[] | null {
-  return settings.impact ? settings.bases.impact : settings.bases.outgoing;
+  return settings.bases[settings.mode];
 }
 
 /** Records an unfiltered answer's `types` as its mode's chips; the same settings when nothing changed. */
-export function withBase(settings: GraphSettings, impact: boolean, types: readonly FollowedType[]): GraphSettings {
-  const known = impact ? settings.bases.impact : settings.bases.outgoing;
+export function withBase(settings: GraphSettings, mode: GraphMode, types: readonly FollowedType[]): GraphSettings {
+  const known = settings.bases[mode];
   const same =
     known !== null &&
     known.length === types.length &&
@@ -66,7 +85,7 @@ export function withBase(settings: GraphSettings, impact: boolean, types: readon
     return settings;
   }
   const copy = types.map((followed) => ({ type: followed.type, direction: followed.direction }));
-  return { ...settings, bases: impact ? { ...settings.bases, impact: copy } : { ...settings.bases, outgoing: copy } };
+  return { ...settings, bases: { ...settings.bases, [mode]: copy } };
 }
 
 export interface Chip {
@@ -77,8 +96,10 @@ export interface Chip {
 }
 
 /**
- * The chips in order: the mode's unfiltered types, then `mentions` (unless already among them).
- * `followed` is the current answer's `types`, which names `mentions`' direction once it is sent.
+ * The chips in order: the mode's unfiltered (type, direction) pairs, as the answer gives them (Both
+ * ways: each type out, then in), then `mentions` (unless already among them). A chip presses and
+ * releases its type, every pair of it at once. `followed` is the current answer's `types`, which
+ * names `mentions`' direction once it is sent.
  */
 export function chipsOf(settings: GraphSettings, followed: readonly FollowedType[]): Chip[] {
   const base = baseOf(settings);
@@ -105,9 +126,8 @@ export function chipsOf(settings: GraphSettings, followed: readonly FollowedType
  * so pressing or releasing a chip never restyles another type. A type the chips do not hold (no
  * unfiltered answer of the mode yet) follows in the answer's order.
  */
-export function patternOrder(bases: GraphSettings["bases"], impact: boolean, answered: readonly FollowedType[]): string[] {
-  const base = impact ? bases.impact : bases.outgoing;
-  const order = (base ?? answered).map((entry) => entry.type);
+export function patternOrder(bases: GraphSettings["bases"], mode: GraphMode, answered: readonly FollowedType[]): string[] {
+  const order = [...new Set((bases[mode] ?? answered).map((entry) => entry.type))];
   const known = new Set(order);
   for (const type of [WEAK_LINK_TYPE, ...answered.map((entry) => entry.type)]) {
     if (!known.has(type)) {
@@ -123,17 +143,22 @@ export function typesToSend(settings: GraphSettings): string[] | undefined {
   if (settings.released.length === 0 && !settings.mentions) {
     return undefined;
   }
-  return chipsOf(settings, []).filter((chip) => chip.pressed).map((chip) => chip.type);
+  return pressedTypes(chipsOf(settings, []));
 }
 
-/** Presses or releases one chip; the last pressed one stays pressed. */
+/** The pressed chips' types, each once, in chip order. */
+export function pressedTypes(chips: readonly Chip[]): string[] {
+  return [...new Set(chips.filter((chip) => chip.pressed).map((chip) => chip.type))];
+}
+
+/** Presses or releases one type's chips; the last pressed type stays pressed. */
 export function toggleChip(settings: GraphSettings, type: string): GraphSettings {
   const chips = chipsOf(settings, []);
   const chip = chips.find((candidate) => candidate.type === type);
   if (chip === undefined) {
     return settings;
   }
-  if (chip.pressed && chips.filter((candidate) => candidate.pressed).length === 1) {
+  if (chip.pressed && pressedTypes(chips).length === 1) {
     return settings;
   }
   const base = baseOf(settings) ?? [];
@@ -144,16 +169,19 @@ export function toggleChip(settings: GraphSettings, type: string): GraphSettings
   return { ...settings, released };
 }
 
-/** A mode switch: the chips go back to the mode's default. */
-export function withMode(settings: GraphSettings, impact: boolean): GraphSettings {
-  return settings.impact === impact ? settings : { ...settings, impact, released: [], mentions: false };
+/** A mode switch: the chips go back to the mode's default; each mode keeps its own base. */
+export function withMode(settings: GraphSettings, mode: GraphMode): GraphSettings {
+  return settings.mode === mode ? settings : { ...settings, mode, released: [], mentions: false };
 }
 
-/** The read the settings ask for at a REF. */
+/** The read the settings ask for at a REF: Impact sends `impact`, Both ways `both` (CM10). */
 export function graphOptions(ref: string, settings: GraphSettings): GraphOptions {
   const options: GraphOptions = { ref };
-  if (settings.impact) {
+  if (settings.mode === "impact") {
     options.impact = true;
+  }
+  if (settings.mode === "both") {
+    options.both = true;
   }
   const types = typesToSend(settings);
   if (types !== undefined) {

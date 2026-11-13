@@ -36,12 +36,12 @@
 //! or cannot run (exit 2) doubts the trust, before the turn is released.
 //!
 //! The read routes, the one list (`crate::app`): `tree`, `nodes`, `search`,
-//! `bundle`, `graph`, `flow` without `trace`, `check`, `health`,
+//! `bundle`, `graph`, `map`, `flow` without `trace`, `check`, `health`,
 //! `lock-diff`, `roadmap`, `delivery`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`,
 //! `cards` (GET) without `marks`, `cards/<id>` (no marks) and
 //! `cards/counts` (no index read). Not on it,
 //! so walking: trace data wherever it is shown (`trace`, `flow?trace=true`,
-//! `cards?marks=true`, `catalog`: the rollups and marks a person accepts a card on,
+//! `cards?marks=true`, `catalog`, `rings`: the rollups and marks a person accepts a card on,
 //! judged on the files as they are now); the round's sheet (it writes a
 //! round), the stage, the round's answers, every card write, the trace's
 //! clear and a confirm's read and write.

@@ -88,8 +88,10 @@ export const queryKeys = {
       "graph",
       project,
       {
-        ref: options.ref,
+        ref: options.ref ?? null,
+        kinds: options.kinds ?? [],
         impact: options.impact ?? false,
+        both: options.both ?? false,
         types: options.types ?? [],
         depth: options.depth ?? null,
         archive: options.archive ?? false,
@@ -110,6 +112,10 @@ export const queryKeys = {
   delivery: (project: string, asOf: string, timeline: boolean) => ["delivery", project, asOf, timeline] as const,
   /** A kinds direction as a table of its nodes, `spec catalog --kind K… [--archive] --json` (`docs/features/direction-catalog.md` "Acceptance criteria", DC-10): each kinds and archive its own entry. */
   catalog: (project: string, kinds: readonly string[], archive: boolean) => ["catalog", project, kinds, archive] as const,
+  /** The project's nodes on concentric rings, `spec rings --json` (`docs/features/scope-rings.md` "Acceptance criteria", SR7): one entry, no option. */
+  rings: (project: string) => ["rings", project] as const,
+  /** The whole corpus as one graph, `spec map [--archive] --json` (`docs/features/corpus-map.md` "Acceptance criteria", CM8): each archive its own entry. */
+  map: (project: string, archive: boolean) => ["map", project, archive] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
   /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does; `parent` is never asked here. */
@@ -233,9 +239,18 @@ function searchRequest(options: SearchOptions): SearchOptions {
 }
 
 function graphRequest(options: GraphOptions): GraphOptions {
-  const sent: GraphOptions = { ref: options.ref };
+  const sent: GraphOptions = {};
+  if (options.ref !== undefined) {
+    sent.ref = options.ref;
+  }
+  if (options.kinds !== undefined && options.kinds.length > 0) {
+    sent.kinds = options.kinds;
+  }
   if (options.impact === true) {
     sent.impact = true;
+  }
+  if (options.both === true) {
+    sent.both = true;
   }
   if (options.types !== undefined && options.types.length > 0) {
     sent.types = options.types;
@@ -401,9 +416,12 @@ function eventId(payload: unknown): string | null {
  * a lock diff's spec side is the node's text against its entry's; `docs/features/card-trace.md`: a
  * mark is a card against the node's text, which `docs/features/trace-views.md` puts on each row of
  * the card list; `docs/features/direction-catalog.md` "Acceptance criteria", DC-10: a direction's
- * table lists the tree's nodes with their versions, states and last changes).
+ * table lists the tree's nodes with their versions, states and last changes;
+ * `docs/features/scope-rings.md` "Acceptance criteria", SR7: the rings list the tree's nodes with
+ * their states; `docs/features/corpus-map.md` "Acceptance criteria", CM8: the map draws every node
+ * and link of the spec).
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards", "catalog"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards", "catalog", "rings", "map"] as const;
 
 /** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
@@ -584,8 +602,12 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     // from the queue: a card event and any proposal event but a stage read it again, a read in
     // flight aborted; an apply and a gap read it as a read of the spec, once
     // (docs/features/direction-catalog.md "Acceptance criteria", DC-10). A task event changes none of it.
+    // The rings serve each node's state from the cards, as the catalog does: they are read again
+    // with it, a read in flight aborted; an apply and a gap read them as a read of the spec, once
+    // (docs/features/scope-rings.md "Acceptance criteria", SR7).
     const readCatalogAgain = () => {
       void queryClient.invalidateQueries({ queryKey: catalogsOf(project) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.rings(project), exact: true });
     };
     /** Marks and rollups: a read of the project's cards against its spec, wherever they show. */
     const readMarksAgain = () => {
@@ -1236,6 +1258,30 @@ export function useCatalog(project: string, kinds: readonly string[], archive: b
     queryFn: ({ signal }) => client.getCatalog(project, { kinds: [...kinds], archive }, signal),
     placeholderData: keepPreviousData,
   });
+}
+
+/**
+ * The project's nodes on concentric rings (docs/features/scope-rings.md "Acceptance criteria", SR7):
+ * `spec rings --json`, its query's AbortSignal taken. Read while the Rings view is on screen; read
+ * again with a direction's catalog (a `card.*` event, a `proposal.*` event but a stage), on an apply
+ * and a gap (useLiveQueue); never on window focus. The rings, their members and the states are the
+ * daemon's: nothing here computes them.
+ */
+export function useRings(project: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.rings(project), queryFn: ({ signal }) => client.getRings(project, signal) });
+}
+
+/**
+ * The whole corpus as one graph (docs/features/corpus-map.md "Acceptance criteria", CM8): `spec map
+ * [--archive] --json`, its query's AbortSignal taken, the last answer kept while Include archive reads
+ * again. Read while the Map is on screen; read again on an apply and a gap (useLiveQueue), never on
+ * window focus. The nodes, links, uses and orphans are
+ * the daemon's: nothing here counts them.
+ */
+export function useMap(project: string, archive: boolean) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.map(project, archive), queryFn: ({ signal }) => client.getMap(project, { archive }, signal), placeholderData: keepPreviousData });
 }
 
 /**

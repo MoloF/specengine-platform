@@ -524,7 +524,7 @@ fn read_workspaces(
 
 /// The tables of the array `value` (absent: none), each with its span, at
 /// most `max`; whatever else, an error each.
-fn tables<'v, 'i>(
+pub(crate) fn tables<'v, 'i>(
     value: Option<&'v Spanned<DeValue<'i>>>,
     table: &str,
     max: usize,
@@ -581,13 +581,13 @@ fn named(
 }
 
 /// A missing key's message.
-fn required(table: &str, key: &str) -> String {
+pub(crate) fn required(table: &str, key: &str) -> String {
     format!("{table} is required to hold `{key}`")
 }
 
 /// Why `root` is none: 1 to [`MAX_ROOT_BYTES`] bytes, no control
 /// character, no space at either end. Never resolved here.
-fn root_problem(root: &str) -> Option<String> {
+pub(crate) fn root_problem(root: &str) -> Option<String> {
     if root.is_empty() || root.len() > MAX_ROOT_BYTES {
         return Some(format!(
             "`root` is {} bytes long; a root has 1 to {MAX_ROOT_BYTES}",
@@ -604,7 +604,7 @@ fn root_problem(root: &str) -> Option<String> {
 /// of [`kind_problem`]'s, each once; the problems pushed. Never checked
 /// against `[ids]`: a kind is the project's word, matched by the reads
 /// (`docs/features/departments.md` "Acceptance criteria", DP-2).
-fn kinds_of(
+pub(crate) fn kinds_of(
     at: Range<usize>,
     listed: Vec<Written>,
     errors: &mut Errors<'_>,
@@ -648,7 +648,7 @@ pub(crate) fn kind_problem(key: &str, kind: &str) -> Option<String> {
 }
 
 /// The string `value` and its span, else the TOML reader's error (pushed).
-fn string(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<Written> {
+pub(crate) fn string(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<Written> {
     if let DeValue::String(text) = value.get_ref() {
         return Some((text.as_ref().to_owned(), value.span()));
     }
@@ -658,7 +658,10 @@ fn string(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<Writt
 
 /// The strings `value` lists, at most [`MAX_LIST`], each with its span;
 /// else the TOML reader's error or the cap's (pushed).
-fn strings(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<Vec<Written>> {
+pub(crate) fn strings(
+    value: &Spanned<DeValue<'_>>,
+    errors: &mut Errors<'_>,
+) -> Option<Vec<Written>> {
     let DeValue::Array(items) = value.get_ref() else {
         misread::<Vec<String>>(value, errors);
         return None;
@@ -719,7 +722,10 @@ fn logins_of(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Option<Ve
 /// The TOML reader's message for `value` read as a `T`, pushed at the span
 /// it names (else `value`'s). Called only once `value` is known to be no
 /// `T`; a reader that took it anyway pushes a plain type line.
-fn misread<'i, T: Deserialize<'i>>(value: &Spanned<DeValue<'i>>, errors: &mut Errors<'_>) {
+pub(crate) fn misread<'i, T: Deserialize<'i>>(
+    value: &Spanned<DeValue<'i>>,
+    errors: &mut Errors<'_>,
+) {
     match T::deserialize(ValueDeserializer::from(value.clone())) {
         Err(error) => errors.push(
             error.span().unwrap_or_else(|| value.span()),

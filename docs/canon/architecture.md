@@ -87,7 +87,7 @@ Layer C, rust-analyzer, is linked only into the separate executable `specengine-
 
 Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. Its chrome is English or Russian per viewer and spec content as written (`ui-languages.md`), so search and token estimates handle any script. ADR-0011, ADR-0072.
 
-The UI reads, stages or confirms decisions (`#apply`) and writes cards and their questions and decisions only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data"; a card write takes a typed name or, on a hub, the proxy's login. It computes no core logic and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036, ADR-0057, ADR-0059, ADR-0077.
+The UI reads, stages or confirms decisions (`#apply`) and writes cards and their questions and decisions only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data"; a card write takes a typed name or, on a hub, the proxy's login. It computes no core logic and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036, ADR-0057, ADR-0059, ADR-0077, ADR-0080.
 
 <a id="checks-migration"></a>
 ## Documentation checks in projects

@@ -47,7 +47,7 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 <config>:<line>: workspace `<w>`: no `[[module]]` is named `<m>`: no default module
 ```
 
-`<problem>`: the TOML reader's (a wrong-typed `name` or `root` too), `name_problem`'s, `` `[[workspace]]` is required to hold `name` `` (`[[module]]`'s, and `kinds`: `directions.md`), `` at most N `[[workspace]]` tables ``, `a list holds at most 32 entries`, `` `title` is N bytes long; a title has 1 to 64 ``, `` `title` holds a control character ``, both for `root` (1 to 256), `` `root` `x` has a space at an end ``, `` `[[workspace]]` `x` is named twice ``.
+`<problem>`: the TOML reader's (a wrong-typed `name` or `root` too), `name_problem`'s, `` `[[workspace]]` is required to hold `name` `` (`[[module]]`'s, and `kinds`: `directions.md`), `` at most N `[[workspace]]` tables ``, `a list holds at most 32 entries`, `` `title` is N bytes long; a title has 1 to 64 ``, `` `title` holds a control character ``, both for `root` (1 to 256), `` `root` `x` has a space at an end ``, `` `[[workspace]]` `x` is named twice ``. `[[map.ring]]` reads its `title`, `root` and `kinds` through these readers, with these messages (`spec-rings.md` "Config").
 
 ## Read
 

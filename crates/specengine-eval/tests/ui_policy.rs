@@ -3,10 +3,10 @@
 //! `ui/README.md` "Dependencies", "Gates", "Laptop rules"), read as text from
 //! `ui/` without running pnpm: the gates themselves stay commands.
 //!
-//! - AC-01: `package.json` names exactly the owner's allowlist (19,
-//!   ADR-0036, ADR-0072), each at an exact `x.y.z`, equal to the README table once it
-//!   holds versions ("pinned at install" is the placeholder until then);
-//!   `react` = `react-dom`, 19.x;
+//! - AC-01: `package.json` names exactly the owner's allowlist (21,
+//!   ADR-0036, ADR-0072, ADR-0080), each at an exact `x.y.z`, equal to the
+//!   README table once it holds versions ("pinned at install" is the
+//!   placeholder until then); `react` = `react-dom`, 19.x;
 //!   `packageManager` an exact pnpm; the lockfile present and its importer
 //!   specifiers equal to `package.json`; `.npmrc` per policy; no install
 //!   script, no `onlyBuiltDependencies`.
@@ -68,15 +68,24 @@
 //!   alone.
 //!
 //! - docs/features/ui-languages.md (RM-0082, ADR-0072) "Acceptance
-//!   criteria", LG-11, its eval half: the allowlist is the 19, `i18next` and
-//!   `react-i18next` among them in `dependencies` at an exact `x.y.z`, the
-//!   README table naming them (written in its "Canon at ship" pass, so the
-//!   table test is red until then); no override and no peer rule in
-//!   `package.json`, `pnpm-workspace.yaml` or the lockfile; only
+//!   criteria", LG-11, its eval half: the allowlist, 21 since ADR-0080 (19
+//!   at LG-11), `i18next` and `react-i18next` among them in `dependencies` at
+//!   an exact `x.y.z`, the README table naming them (written in its "Canon at
+//!   ship" pass, so the table test is red until then); no override and no
+//!   peer rule in `package.json`, `pnpm-workspace.yaml` or the lockfile; only
 //!   `ui/src/i18n/` imports either package (as `src/markdown/` for ADR-0036),
 //!   and something there imports each. Positive controls in memory and on a
 //!   scratch `ui/`, never by editing `ui/`: M26 `react-i18next` imported in
 //!   `src/app/Shell.tsx`, M27 a `^` on a pin, M28 a 20th package.
+//!
+//! - docs/features/corpus-map.md (RM-0112, ADR-0080) "Acceptance criteria",
+//!   CM11, its eval half: the allowlist of 21, `d3-force` beside ADR-0036's
+//!   and ADR-0072's, at exactly `3.0.0` in `dependencies`, `@types/d3-force`
+//!   at an exact pin in `devDependencies`; `d3-quadtree`, `d3-dispatch` and
+//!   `d3-timer` in the lockfile alone; only `ui/src/map/` imports `d3-force`
+//!   (any subpath), and something there does. Positive controls in memory
+//!   and on a scratch `ui/`, never by editing `ui/`: `d3-force` imported in
+//!   `src/graph/`, a `^` on a pin, a 22nd package.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -103,8 +112,10 @@ fn read(path: &Path) -> String {
 /// The owner's allowlist of 2026-10-05, amended by ADR-0036 (2026-10-06)
 /// with `react-markdown` and `remark-gfm` and by ADR-0072 (2026-11-09) with
 /// the last two (`ui/README.md` "Dependencies"; docs/features/ui-languages.md
-/// "Acceptance criteria", LG-11).
-const ALLOWLIST: [&str; 19] = [
+/// "Acceptance criteria", LG-11), and by ADR-0080 (2026-11-13) with the
+/// layout engine and its types (docs/features/corpus-map.md
+/// "Acceptance criteria", CM11).
+const ALLOWLIST: [&str; 21] = [
     "react",
     "react-dom",
     "@tanstack/react-query",
@@ -124,6 +135,8 @@ const ALLOWLIST: [&str; 19] = [
     "remark-gfm",
     "i18next",
     "react-i18next",
+    "d3-force",
+    "@types/d3-force",
 ];
 
 /// The two packages ADR-0072 adds, both runtime code: `dependencies`
@@ -315,13 +328,14 @@ fn package_json_pins_exactly_the_allowlist_at_exact_versions() {
 /// and the runtime packages in `dependencies` (the [`I18N_PACKAGES`] there),
 /// the rest in `devDependencies`.
 fn allowlisted_package() -> Value {
-    const RUNTIME: [&str; 6] = [
+    const RUNTIME: [&str; 7] = [
         "react",
         "react-dom",
         "@tanstack/react-query",
         "@xyflow/react",
         "react-markdown",
         "remark-gfm",
+        "d3-force",
     ];
     let mut package = serde_json::json!({ "dependencies": {}, "devDependencies": {} });
     for name in ALLOWLIST {
@@ -342,7 +356,8 @@ fn allowlisted_package() -> Value {
 #[test]
 fn ui_languages_lg11_the_allowlist_check_sees_a_range_a_twentieth_package_and_the_wrong_list() {
     let holding = allowlisted_package();
-    assert_eq!(ALLOWLIST.len(), 19, "the owner's 19");
+    // 21 since docs/features/corpus-map.md "Acceptance criteria", CM11.
+    assert_eq!(ALLOWLIST.len(), 21, "the owner's 21");
     assert_eq!(allowlist_findings(&holding), Vec::<String>::new());
 
     let mut caret = holding.clone();
@@ -2165,4 +2180,195 @@ fn workspaces_core_sections_are_the_nav_s_ids_in_order() {
     let read_added = section_ids(&added);
     assert_eq!(read_added.len(), 10);
     assert_ne!(core, read_added, "a section added to the UI alone is seen");
+}
+
+// ------------------------------------------------------- corpus-map CM11
+
+/// The layout engine ADR-0080 adds (docs/features/corpus-map.md
+/// "Acceptance criteria", CM11) and its pin.
+const LAYOUT_PACKAGE: &str = "d3-force";
+const LAYOUT_VERSION: &str = "3.0.0";
+
+/// Its types, a dev dependency.
+const LAYOUT_TYPES: &str = "@types/d3-force";
+
+/// What it brings into the lockfile alone, never into `package.json`.
+const LAYOUT_LOCK_ONLY: [&str; 3] = ["d3-quadtree", "d3-dispatch", "d3-timer"];
+
+/// The only folder that may import it, relative to `ui/`.
+const MAP_DIR: &str = "src/map/";
+
+/// Whether a module specifier loads the layout engine or a subpath of it.
+fn loads_layout(specifier: &str) -> bool {
+    specifier
+        .strip_prefix(LAYOUT_PACKAGE)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+}
+
+/// The loads of the layout engine in `files` (paths relative to `ui/`):
+/// those outside [`MAP_DIR`] as `ui/<path>:<line>: <specifier>`, tests and
+/// mocks included, and how many lie inside it.
+fn layout_imports(files: &[(String, String)]) -> (Vec<String>, usize) {
+    let mut wrong = Vec::new();
+    let mut inside = 0;
+    for (path, text) in files {
+        for (index, line) in text.lines().enumerate() {
+            for specifier in module_specifiers(line) {
+                if !loads_layout(specifier) {
+                    continue;
+                }
+                if path.starts_with(MAP_DIR) {
+                    inside += 1;
+                } else {
+                    wrong.push(format!("ui/{path}:{}: {specifier}", index + 1));
+                }
+            }
+        }
+    }
+    (wrong, inside)
+}
+
+/// CM11: `d3-force` at exactly 3.0.0 in `dependencies`, its types at an
+/// exact pin in `devDependencies`, each in its list alone; the three it
+/// brings in the lockfile and not in `package.json`.
+#[test]
+fn corpus_map_cm11_the_layout_engine_and_its_types_are_pinned() {
+    let package = package_json();
+    assert_eq!(
+        package["dependencies"][LAYOUT_PACKAGE],
+        Value::from(LAYOUT_VERSION),
+        "{LAYOUT_PACKAGE} in dependencies at exactly {LAYOUT_VERSION}"
+    );
+    assert!(
+        package["devDependencies"].get(LAYOUT_PACKAGE).is_none(),
+        "{LAYOUT_PACKAGE} is runtime code"
+    );
+    let types = package["devDependencies"][LAYOUT_TYPES]
+        .as_str()
+        .unwrap_or_else(|| panic!("{LAYOUT_TYPES} in devDependencies"));
+    assert!(is_exact_version(types), "{LAYOUT_TYPES} at {types:?}");
+    assert!(
+        package["dependencies"].get(LAYOUT_TYPES).is_none(),
+        "{LAYOUT_TYPES} is a dev dependency"
+    );
+    let declared = declared_dependencies(&package);
+    let lockfile = read(&ui_dir().join("pnpm-lock.yaml"));
+    for name in LAYOUT_LOCK_ONLY {
+        assert!(!declared.contains_key(name), "{name} in package.json");
+        assert!(
+            lockfile
+                .lines()
+                .any(|line| line.starts_with(&format!("  {name}@"))),
+            "{name} not in the lockfile's packages"
+        );
+    }
+    assert!(
+        lockfile
+            .lines()
+            .any(|line| line == format!("  {LAYOUT_PACKAGE}@{LAYOUT_VERSION}:")),
+        "the lockfile holds {LAYOUT_PACKAGE}@{LAYOUT_VERSION}"
+    );
+    let specifiers = lockfile_specifiers(&lockfile);
+    assert_eq!(
+        specifiers.get(LAYOUT_PACKAGE).map(String::as_str),
+        Some(LAYOUT_VERSION)
+    );
+    assert_eq!(
+        specifiers.get(LAYOUT_TYPES).map(String::as_str),
+        Some(types)
+    );
+}
+
+/// CM11's positive control on [`allowlist_findings`], in memory: a `^` on
+/// the `d3-force` pin and a 22nd package (another d3 module) each have
+/// their finding; `d3-force` left out has its own.
+#[test]
+fn corpus_map_cm11_the_allowlist_check_sees_a_range_and_a_22nd_package() {
+    let holding = allowlisted_package();
+    assert_eq!(allowlist_findings(&holding), Vec::<String>::new());
+    let mut caret = holding.clone();
+    caret["dependencies"][LAYOUT_PACKAGE] = Value::from("^3.0.0");
+    assert_eq!(
+        allowlist_findings(&caret),
+        ["d3-force: \"^3.0.0\" is not an exact x.y.z"],
+        "M: a `^` on a pin"
+    );
+    let mut more = holding.clone();
+    more["dependencies"]["d3-zoom"] = Value::from("3.0.0");
+    assert_eq!(
+        allowlist_findings(&more),
+        ["d3-zoom: not on the allowlist"],
+        "M: a 22nd package"
+    );
+    let mut missing = holding.clone();
+    missing["devDependencies"]
+        .as_object_mut()
+        .expect("devDependencies")
+        .remove(LAYOUT_TYPES);
+    assert_eq!(
+        allowlist_findings(&missing),
+        ["@types/d3-force: on the allowlist, not in package.json"]
+    );
+}
+
+/// CM11 (ADR-0080): no file of `ui/src` outside `src/map/` loads
+/// `d3-force`, tests and mocks included, and something there does (so the
+/// reader is not blind). M: `d3-force` imported in `graph/`.
+#[test]
+fn corpus_map_cm11_only_src_map_imports_d3_force() {
+    let (wrong, inside) = layout_imports(&ui_sources());
+    assert!(
+        wrong.is_empty(),
+        "{LAYOUT_PACKAGE} imported outside ui/{MAP_DIR} (corpus-map CM11, ADR-0080):\n{}",
+        wrong.join("\n")
+    );
+    assert!(
+        inside > 0,
+        "nothing under ui/{MAP_DIR} imports {LAYOUT_PACKAGE}: the layout is gone or the import reader is blind"
+    );
+}
+
+/// CM11's positive control on a scratch `ui/` (never by editing `ui/src`):
+/// the layout's imports pass; `d3-force` in `src/graph/`, a subpath in a
+/// test, a mock's `vi.mock` and a sibling folder named like `map` are
+/// flagged; a plain string and a package whose name only starts the same
+/// are no load.
+#[test]
+fn corpus_map_cm11_the_layout_scan_flags_an_import_outside_src_map() {
+    let scratch = ScratchUi::new(
+        "layout-imports",
+        &[
+            (
+                "src/map/layout.ts",
+                "import { forceSimulation, forceLink } from \"d3-force\";\nimport type { Simulation } from 'd3-force';\n",
+            ),
+            (
+                "src/graph/GraphView.tsx",
+                "import { forceManyBody } from \"d3-force\";\n",
+            ),
+            (
+                "src/map-extra/x.ts",
+                "export { forceX } from \"d3-force\";\n",
+            ),
+            (
+                "src/graph/layout.test.ts",
+                "const m = await import(`d3-force/src/simulation.js`);\nvi.mock(\"d3-force\", () => ({}));\n",
+            ),
+            (
+                "src/app/Plain.tsx",
+                "const name = \"d3-force\";\nimport { scale } from \"d3-force-extra\";\n",
+            ),
+        ],
+    );
+    let (wrong, inside) = layout_imports(&ui_sources_in(&scratch.0));
+    assert_eq!(
+        wrong,
+        [
+            "ui/src/graph/GraphView.tsx:1: d3-force",
+            "ui/src/graph/layout.test.ts:1: d3-force/src/simulation.js",
+            "ui/src/graph/layout.test.ts:2: d3-force",
+            "ui/src/map-extra/x.ts:1: d3-force",
+        ]
+    );
+    assert_eq!(inside, 2);
 }

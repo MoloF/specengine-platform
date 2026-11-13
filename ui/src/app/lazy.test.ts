@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import cardItemsSource from "../board/CardItems.tsx?raw";
+import graphHomeSource from "../graph/GraphHome.tsx?raw";
+import graphViewSource from "../graph/GraphView.tsx?raw";
 import pairSlotSource from "../inbox/PairSlot.tsx?raw";
 import proposalCardSource from "../inbox/ProposalCard.tsx?raw";
 import homeSource from "../overview/HomeView.tsx?raw";
@@ -148,5 +150,54 @@ describe("the collision pair's lazy view (PP10 of collision-pairs)", () => {
     expect(text).not.toContain('import("../inbox/PairView")');
     expect(importLines(text).filter((line) => line.endsWith(slot))).toEqual([`import { PairSlot } from ${slot}`]);
     expect(text).toMatch(/<PairSlot pair=\{\w+\.pair\} evidence=\{\w+\.evidence\} \/>/);
+  });
+});
+
+// docs/features/scope-rings.md "Acceptance criteria", SR8: the Rings view is a chunk of its own,
+// reached from the Graph's home by a dynamic import alone, standing in a Suspense whose fallback is
+// its skeleton; the home is the Graph view's, itself out of first load, and nothing else reaches it.
+describe("the Graph home's lazy Rings view (SR8 of scope-rings)", () => {
+  it("GraphHome reaches ../rings/RingsView by lazy(() => import(...)) only, never by a value import", () => {
+    const fromIt = importLines(graphHomeSource).filter((line) => line.endsWith('"../rings/RingsView";'));
+    for (const line of fromIt) {
+      expect(line.startsWith("import type ")).toBe(true);
+    }
+    expect(graphHomeSource).toContain('const RingsView = lazy(() => import("../rings/RingsView").then((module) => ({ default: module.RingsView })));');
+    // M: `import { RingsView } from "../rings/RingsView";` beside the lazy one.
+    expect(graphHomeSource).not.toMatch(/^import \{[^}]*\bRingsView\b[^}]*\} from "\.\.\/rings\/RingsView";$/m);
+    // The Graph view mounts the home; neither it nor the Shell reaches the rings by any import.
+    expect(importLines(graphViewSource).filter((line) => line.endsWith('"./GraphHome";'))).toEqual(['import { GraphHome } from "./GraphHome";']);
+    for (const text of [graphViewSource, shellSource]) {
+      expect(importLines(text).filter((line) => line.includes("rings/"))).toEqual([]);
+      expect(text).not.toContain('import("../rings/');
+    }
+  });
+
+  it("stands the view in a Suspense whose fallback is its skeleton", () => {
+    expect(graphHomeSource).toMatch(/<Suspense fallback=\{<Skeleton label=\{t\("rings\.loading"\)\} lines=\{6\} \/>\}>\s*<RingsView project=\{project\} \/>/);
+  });
+});
+
+// docs/features/corpus-map.md "Acceptance criteria", CM11: the Map view and its layout engine are a
+// chunk of their own, reached from the Graph's home by a dynamic import alone, standing in a Suspense
+// whose fallback is its skeleton; neither the Graph view nor the Shell reaches src/map/ by any import.
+// M: a static import of MapView.
+describe("the Graph home's lazy Map view (CM11 of corpus-map)", () => {
+  it("GraphHome reaches ../map/MapView by lazy(() => import(...)) only, never by a value import", () => {
+    const fromIt = importLines(graphHomeSource).filter((line) => line.includes('"../map/'));
+    for (const line of fromIt) {
+      expect(line.startsWith("import type ")).toBe(true);
+    }
+    expect(graphHomeSource).toContain('const MapView = lazy(() => import("../map/MapView").then((module) => ({ default: module.MapView })));');
+    expect(graphHomeSource).not.toMatch(/^import \{[^}]*\bMapView\b[^}]*\} from "\.\.\/map\/MapView";$/m);
+    for (const text of [graphViewSource, shellSource]) {
+      expect(importLines(text).filter((line) => line.includes("/map/"))).toEqual([]);
+      expect(text).not.toContain('import("../map/');
+    }
+  });
+
+  it("stands the view in a Suspense whose fallback is its skeleton, the Map first", () => {
+    expect(graphHomeSource).toMatch(/<Suspense fallback=\{<Skeleton label=\{t\("map\.loading"\)\} lines=\{6\} \/>\}>\s*<MapView project=\{project\} \/>/);
+    expect(graphHomeSource).toContain('const VIEWS: readonly GraphHomeView[] = ["map", "rings"];');
   });
 });

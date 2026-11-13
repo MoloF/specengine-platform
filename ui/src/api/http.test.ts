@@ -13,8 +13,14 @@ import {
   aGraphView,
   aHealthReport,
   aLink,
+  aMap,
+  aMapEdge,
+  aMapNode,
   anAmendment,
   aProposal,
+  aRing,
+  aRings,
+  aRingSector,
   aRoadmap,
   aRoadmapGroup,
   aRoadmapItem,
@@ -253,6 +259,75 @@ describe("the counts read (DO10 of department-overview)", () => {
   });
 });
 
+// docs/features/scope-rings.md "Acceptance criteria", SR4 and SR7: the rings read GETs its one path, no
+// query, with its query's AbortSignal; its 200 resolves as sent, a bad `[map]`'s note and no ring
+// among them; it is judged, so a query's 400, an older daemon's 404 and a 503 reject in the daemon's
+// words, and a 404 that is no error body is never read as the rings.
+// docs/features/corpus-map.md "Acceptance criteria", CM3: the map read GETs `/map`, `archive` only as
+// true, with its query's AbortSignal; its 200 resolves as sent; it is judged, so a query's 400, an
+// older daemon's 404 and a 503 reject in the daemon's words, and a 404 that is no error body is never
+// read as the map.
+describe("the map read (CM3 of corpus-map)", () => {
+  const served = aMap([aMapNode({ name: "A-1" }), aMapNode({ name: "A-2", used_by: 1 })], [aMapEdge(0, 1)]);
+
+  it("asks `/map`, `?archive=true` only when asked, its answer resolved as sent, with the caller's AbortSignal", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    const controller = new AbortController();
+    expect(await new HttpClient().getMap("my project", { archive: false }, controller.signal)).toEqual(served);
+    expect(await new HttpClient().getMap("my project", { archive: true })).toEqual(served);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/my%20project/map", "/api/projects/my%20project/map?archive=true"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it.each([
+    [400, "query `x`: the map takes `archive` alone"],
+    [404, "no route /api/projects/alpha/map: the routes are /api/projects and the web UI"],
+    [503, "spec map: the queue's schema 14 is newer than this binary's 13"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getMap("alpha", { archive: false })))).toEqual({ status, message });
+  });
+
+  it("is judged: a 404 that is no error body rejects too, never read as the map", async () => {
+    stubFetch(() => jsonAnswer(404, served));
+    expect((await rejection(new HttpClient().getMap("alpha", { archive: false }))).status).toBe(404);
+  });
+});
+
+describe("the rings read (SR4 of scope-rings)", () => {
+  const served = aRings([aRing("Inner", [aRingSector({ name: "SCN-ARRIVAL", state: "in work" })])]);
+
+  it("asks `/rings` with no query, its answer resolved as sent, with the caller's AbortSignal", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    const controller = new AbortController();
+    expect(await new HttpClient().getRings("my project", controller.signal)).toEqual(served);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/my%20project/rings"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it("resolves a bad table's 200 as sent: its note, no ring", async () => {
+    const bad = aRings([], { notes: ["specengine.toml:4: `[map]` holds only `ring`; no ring is served"] });
+    stubFetch(() => jsonAnswer(200, bad));
+    expect(await new HttpClient().getRings("alpha")).toEqual(bad);
+  });
+
+  it.each([
+    [400, "query `x`: the rings take no query"],
+    [404, "no route /api/projects/alpha/rings: the routes are /api/projects and the web UI"],
+    [503, "spec rings: the queue's schema 14 is newer than this binary's 13"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getRings("alpha")))).toEqual({ status, message });
+  });
+
+  it("is judged: a 404 that is no error body rejects too, never read as the rings", async () => {
+    stubFetch(() => jsonAnswer(404, served));
+    expect((await rejection(new HttpClient().getRings("alpha"))).status).toBe(404);
+  });
+});
+
 describe("each method hits its URL (AC-09)", () => {
   let fetchStub: ReturnType<typeof stubFetch>;
 
@@ -319,6 +394,9 @@ describe("each method hits its URL (AC-09)", () => {
       "/api/projects/harbor-sim/graph?ref=MEC-TIDES%23RULE-TIDE-WINDOW&impact=true&types=depends_on&types=constrains&depth=3",
     ],
     ["getGraph, the REF alone", (client) => client.getGraph("alpha", { ref: "MEC-SPRINT" }), "/api/projects/alpha/graph?ref=MEC-SPRINT"],
+    // docs/features/corpus-map.md "Acceptance criteria", CM4, CM5, CM10: `both` only as true, `kinds` repeated in place of a REF.
+    ["getGraph, Both ways", (client) => client.getGraph("alpha", { ref: "MEC-STAMINA", both: true, depth: 1 }), "/api/projects/alpha/graph?ref=MEC-STAMINA&both=true&depth=1"],
+    ["getGraph, a direction start", (client) => client.getGraph("alpha", { kinds: ["mechanic", "rule"], both: false }), "/api/projects/alpha/graph?kinds=mechanic&kinds=rule"],
     [
       "getGraph, impact and archive sent only as true, no empty types",
       (client) => client.getGraph("alpha", { ref: "MEC-SPRINT", impact: false, types: [], archive: false }),
@@ -773,7 +851,8 @@ describe("answers (AC-09)", () => {
   it.each<[string, (client: HttpClient) => Promise<unknown>, number, string]>([
     ["the check's 503", (client) => client.getCheck("alpha"), 503, "spec: `[check] mode` must be one of observe, enforce-introduced, enforce\nsecond line, verbatim"],
     ["the graph's 503 (depth below 0)", (client) => client.getGraph("alpha", { ref: "R", depth: -1 }), 503, "spec: --depth: `-1` is not a number of 0 or more"],
-    ["the graph's 400", (client) => client.getGraph("alpha", { ref: "R" }), 400, "unknown query `x` for /graph: it takes ref, impact, types, depth, archive"],
+    ["the graph's 400 (a query name refused)", (client) => client.getGraph("alpha", { ref: "R" }), 400, "`x` is no query name of graph: it takes ref, impact, both, types, kinds, depth, archive"],
+    ["the graph's 400 (neither a REF nor a kind)", (client) => client.getGraph("alpha", {}), 400, "spec graph: give a REF or `--kind`"],
   ])("rejects %s with a ClientError, the daemon's message verbatim (AC-10 of ui-live)", async (_name, call, status, message) => {
     stubFetch(() => errorAnswer(status, message));
     const error = await rejection(call(new HttpClient()));

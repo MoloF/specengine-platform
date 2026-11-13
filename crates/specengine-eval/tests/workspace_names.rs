@@ -26,6 +26,11 @@
 //! `title` is its own word, as its flow names are. M: the guard reading
 //! `root` instead of `kinds`; preset titles not read.
 //!
+//! docs/features/scope-rings.md (RM-0113) "Acceptance criteria", SR5: the
+//! names gain every `title` and every `kinds` entry of every `[[map.ring]]`
+//! in the same configs and presets ([`ring_words`]): on the repository
+//! plant-diary's two rings. M: a ring title quoted in `ui/src`.
+//!
 //! The daemon's word scan is `specengine-http`'s `tests/no_domain.rs` (WS-6
 //! (a)); the mock's names `ui/src/policy.test.ts`'s (WS-6 (c)).
 
@@ -119,6 +124,31 @@ fn module_kinds(table: &toml::Table) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// docs/features/scope-rings.md SR5: the `title` and every `kinds` entry of
+/// each `[[map.ring]]` of `table`, as written.
+fn ring_words(table: &toml::Table) -> Vec<String> {
+    table
+        .get("map")
+        .and_then(|map| map.get("ring"))
+        .and_then(toml::Value::as_array)
+        .map(|rings| {
+            rings
+                .iter()
+                .flat_map(|ring| {
+                    let title = ring.get("title").and_then(toml::Value::as_str);
+                    let kinds = ring
+                        .get("kinds")
+                        .and_then(toml::Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(toml::Value::as_str);
+                    title.into_iter().chain(kinds).map(str::to_owned)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// docs/features/departments.md DP-6: the `title` of each `[[card.flow]]` of
 /// `card` that has one.
 fn flow_titles(card: Option<&toml::Table>) -> Vec<String> {
@@ -155,6 +185,8 @@ fn names_under(root: &Path) -> (BTreeSet<String>, Vec<PathBuf>) {
         names.extend(table_names(&table, "module"));
         // docs/features/departments.md DP-6: a direction's kinds.
         names.extend(module_kinds(&table));
+        // docs/features/scope-rings.md SR5: a ring's title and kinds.
+        names.extend(ring_words(&table));
         if preset_files.contains(file) {
             let card = table.get("card").and_then(toml::Value::as_table);
             let flows = card
@@ -299,6 +331,11 @@ fn ws6b_no_workspace_module_or_preset_flow_name_is_a_literal() {
         // preset's `sound` flow and workspace, and its title.
         "sound",
         "Sound",
+        // docs/features/scope-rings.md "Acceptance criteria", SR5:
+        // plant-diary's rings' titles and kind.
+        "Reminders",
+        "Household stories",
+        "story",
     ] {
         assert!(names.contains(name), "`{name}` is read: {names:?}");
     }
@@ -309,6 +346,10 @@ fn ws6b_no_workspace_module_or_preset_flow_name_is_a_literal() {
     assert!(
         !names.contains("Copy desk"),
         "a fixture flow's title is its own word (DP-6): {names:?}"
+    );
+    assert!(
+        !names.contains("EPC-WATERING"),
+        "a ring's root is no name (SR5): {names:?}"
     );
     assert!(
         !names.contains("CHP-SHORE") && !names.contains("ISL-LAMP"),
@@ -372,7 +413,18 @@ fn ws6b_the_scan_catches_each_form_and_leaves_each_exemption() {
         "fixtures/press/specengine.toml",
         "[project]\nslug = \"press\"\n\n[[card.flow]]\nname = \"copy\"\ntitle = \"Press \
          desk\"\nreturn = \"blocked\"\n\n[[workspace]]\nname = \"newsroom\"\n\n[[module]]\nname = \
-         \"shore\"\nroot = \"SHT-FRONT\"\n\n[[module]]\nname = \"pit\"\nkinds = [\"quarry\"]\n",
+         \"shore\"\nroot = \"SHT-FRONT\"\n\n[[module]]\nname = \"pit\"\nkinds = [\"quarry\"]\n\n[[map.ring]]\ntitle = \"Bell rooms\"\nroot = \"SHT-BELL\"\nkinds = [\"belfry\"]\n",
+    );
+    // docs/features/scope-rings.md SR5: a ring's title quoted in a
+    // component and its kind in a crate's source are caught; its root is no
+    // name.
+    tree.write(
+        "ui/src/rings/Bell.tsx",
+        "export const bell = (title: string) => title === \"Bell rooms\";\nconst root = \"SHT-BELL\";\n",
+    );
+    tree.write(
+        "crates/core/src/belfry.rs",
+        "const KIND: &str = \"belfry\";\n",
     );
     tree.write("fixtures/broken/specengine.toml", "[[[ broken\n");
     tree.write(
@@ -417,7 +469,9 @@ fn ws6b_the_scan_catches_each_form_and_leaves_each_exemption() {
     tree.write("ui/src/app/Shell.test.tsx", "const name = `writing`;\n");
     let (names, _) = names_under(&tree.0);
     let want: BTreeSet<String> = [
+        "Bell rooms",
         "Kiln work",
+        "belfry",
         "narrative",
         "newsroom",
         "pit",
@@ -435,11 +489,13 @@ fn ws6b_the_scan_catches_each_form_and_leaves_each_exemption() {
         hits,
         [
             "crates/core/src/back.rs:1: sent-back",
+            "crates/core/src/belfry.rs:1: belfry",
             "crates/core/src/kiln.rs:1: Kiln work",
             "crates/core/src/lens.rs:2: narrative",
             "ui/src/app/Quarry.tsx:1: quarry",
             "ui/src/app/Shell.tsx:1: newsroom",
             "ui/src/app/Shell.tsx:2: shore",
+            "ui/src/rings/Bell.tsx:1: Bell rooms",
         ]
     );
 }

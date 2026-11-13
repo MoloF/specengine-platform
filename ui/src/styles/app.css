@@ -8415,3 +8415,730 @@ mark {
     border-radius: 0;
   }
 }
+
+/* The Graph section's home (docs/features/scope-rings.md "Acceptance criteria", SR7): its views under
+   the REF's empty state, a chunk each. */
+.graph-home {
+  display: grid;
+  gap: var(--space-200);
+  min-width: 0;
+  padding-top: var(--space-200);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* The Rings view: plain SVG in a 1000-unit box that fits its column and the window's height, beside
+   a card and the legend; nothing pans or zooms. Fills are the trace's tones (src/flow/labels.ts), the
+   labels a halo of the canvas's surface around primary text, so each reads on any fill. */
+.rings-view {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+.rings-view[aria-busy="true"] .rings-stage,
+.rings-view[aria-busy="true"] .rings-list {
+  opacity: 0.6;
+  transition: opacity var(--duration-normal) ease-out;
+}
+
+.rings-heading {
+  font-size: var(--font-size-heading-m);
+  line-height: var(--line-height-heading-m);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rings-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-150);
+}
+
+.rings-search {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+}
+
+.rings-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-100);
+}
+
+.rings-chip .icon {
+  color: var(--badge-color);
+}
+
+.rings-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
+  gap: var(--space-200);
+  align-items: start;
+  padding-top: var(--space-150);
+}
+
+@media (max-width: 48rem) {
+  .rings-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The drawing's box: the card stands over its corner, never in the page's flow, so showing it moves
+   nothing, the legend least of all; it lets the pointer through to the sectors. */
+.rings-picture {
+  position: relative;
+  justify-self: center;
+  width: min(100%, 76vh);
+  min-width: min(100%, 18rem);
+}
+
+.rings-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  overflow: visible;
+  font-family: var(--font-sans);
+}
+
+.rings-sector {
+  fill: var(--badge-color);
+  fill-rule: evenodd;
+  stroke: var(--surface-canvas);
+  stroke-width: 1;
+  cursor: pointer;
+  transition: fill-opacity var(--duration-fast) ease-out;
+}
+
+.rings-sector:hover {
+  fill-opacity: 0.8;
+}
+
+/* The focused sector's ring is .rings-focus, drawn along its own edge; the box ring around it would
+   be a second one. Transparent, never removed: forced colours still draw it. */
+.rings-sector:focus-visible {
+  outline-color: transparent;
+}
+
+/* A sector the search or a chip leaves out: its outline alone. */
+.rings-sector.is-outlined {
+  fill: transparent;
+  stroke: var(--border-control);
+  stroke-dasharray: 4 3;
+}
+
+.rings-band {
+  fill: var(--surface-sunken);
+  fill-rule: evenodd;
+  stroke: var(--border-control);
+  stroke-dasharray: 4 3;
+}
+
+.rings-words {
+  pointer-events: none;
+}
+
+.rings-label,
+.rings-title,
+.rings-count {
+  fill: var(--text-primary);
+  stroke: var(--surface-canvas);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-size: var(--font-size-heading-m);
+}
+
+.rings-title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.rings-label.is-outlined {
+  fill: var(--text-subtlest);
+}
+
+.rings-focus {
+  fill: none;
+  stroke: var(--focus-ring);
+  stroke-width: 4;
+}
+
+.rings-side {
+  display: grid;
+  gap: var(--space-200);
+  min-width: 0;
+}
+
+.rings-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  width: min(18rem, 100%);
+  max-height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rings-card {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+  padding: var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  overflow-wrap: anywhere;
+}
+
+.rings-card-title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.rings-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-100);
+}
+
+.rings-card-status,
+.rings-card-place {
+  color: var(--text-secondary);
+}
+
+.rings-legend {
+  display: grid;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
+.rings-legend-title {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rings-legend-states,
+.rings-legend-rings {
+  display: grid;
+  gap: var(--space-050);
+  padding: 0;
+  list-style: none;
+}
+
+.rings-legend-states li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-075);
+}
+
+.rings-legend-states .icon {
+  color: var(--badge-color);
+}
+
+.rings-swatch {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid var(--badge-color);
+  border-radius: var(--radius-xs);
+  background: var(--badge-color);
+}
+
+.rings-legend-rings {
+  list-style: decimal inside;
+  overflow-wrap: anywhere;
+}
+
+.rings-legend-count,
+.rings-list-count {
+  color: var(--text-secondary);
+}
+
+.rings-example {
+  padding: var(--space-100) var(--space-150);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.rings-config-notes {
+  display: grid;
+  gap: var(--space-100);
+  max-width: var(--empty-state-width);
+  color: var(--text-secondary);
+}
+
+.rings-list {
+  display: grid;
+  gap: var(--space-200);
+  padding-top: var(--space-150);
+}
+
+.rings-list-ring {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+}
+
+.rings-list-title {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.rings-list-where {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.rings-list-rows {
+  display: grid;
+  gap: var(--space-050);
+  padding: 0;
+  list-style: none;
+}
+
+.rings-list-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-150);
+  min-height: var(--target-min);
+  overflow-wrap: anywhere;
+}
+
+.rings-list-kind,
+.rings-list-status {
+  color: var(--text-secondary);
+}
+
+/* The home's View group (docs/features/corpus-map.md "Acceptance criteria", CM8): two pressed chips. */
+.graph-home-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-100);
+}
+
+/* The corpus map (docs/features/corpus-map.md "Acceptance criteria", CM7, CM8): the controls, the
+   count line, then one canvas beside a card and the legend, stacked below 48rem. The canvas takes
+   its colours from the --map-* roles through hidden swatches; a node's swatch here is its slot's. */
+.map-view {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+.map-heading {
+  font-size: var(--font-size-heading-m);
+  line-height: var(--line-height-heading-m);
+  font-weight: var(--font-weight-semibold);
+}
+
+.map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-150) var(--space-200);
+  padding: var(--space-150) var(--space-200);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.map-search,
+.map-direction {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+}
+
+.map-direction .field {
+  width: auto;
+  min-width: 10rem;
+}
+
+.map-chips {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  gap: var(--space-100);
+}
+
+.map-switches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-200);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.map-switches legend {
+  margin-bottom: var(--space-050);
+  padding: 0;
+}
+
+.map-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+  min-height: var(--target-min);
+  cursor: pointer;
+}
+
+.map-switch input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.map-zoom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050);
+}
+
+.map-swatch {
+  flex: none;
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-full);
+  background: var(--map-colour);
+}
+
+.map-slot-0 { --map-colour: var(--map-kind-other); }
+.map-slot-1 { --map-colour: var(--map-kind-1); }
+.map-slot-2 { --map-colour: var(--map-kind-2); }
+.map-slot-3 { --map-colour: var(--map-kind-3); }
+.map-slot-4 { --map-colour: var(--map-kind-4); }
+.map-slot-5 { --map-colour: var(--map-kind-5); }
+.map-slot-6 { --map-colour: var(--map-kind-6); }
+.map-slot-7 { --map-colour: var(--map-kind-7); }
+.map-slot-8 { --map-colour: var(--map-kind-8); }
+
+.map-summary {
+  display: grid;
+  gap: var(--space-050);
+  justify-items: start;
+}
+
+.map-count {
+  font-weight: var(--font-weight-semibold);
+}
+
+.map-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
+  gap: var(--space-200);
+  align-items: start;
+  padding-top: var(--space-150);
+}
+
+@media (max-width: 48rem) {
+  .map-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.map-laying {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+}
+
+/* The canvas's box: the window's height less the header and controls, never under 20rem; the
+   wheel is the page's, so the box never captures it. */
+.map-canvas {
+  position: relative;
+  height: max(20rem, calc(100dvh - 22rem));
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--map-surface);
+  cursor: grab;
+  touch-action: pan-y pinch-zoom;
+}
+
+.map-canvas:active {
+  cursor: grabbing;
+}
+
+.map-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-swatches {
+  display: none;
+}
+
+.map-side {
+  display: grid;
+  gap: var(--space-200);
+  min-width: 0;
+}
+
+/* The card over the canvas, never in the page's flow: showing it moves nothing, so a hover shifts no
+   layout and never resizes the canvas (docs/features/corpus-map.md "Acceptance criteria", CM12). A
+   hover card lets the pointer through; the lit node's pane, with its acts, takes it. */
+.map-canvas-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.map-overlay {
+  position: absolute;
+  top: var(--space-150);
+  left: var(--space-150);
+  z-index: 1;
+  width: min(20rem, calc(100% - 2 * var(--space-150)));
+  max-height: calc(100% - 2 * var(--space-150));
+  overflow: auto;
+}
+
+.map-overlay.is-passive {
+  pointer-events: none;
+}
+
+/* A hover card while the lit node's pane shows: at the bottom, so the pane and its acts stay seen. */
+.map-overlay.is-below {
+  top: auto;
+  bottom: var(--space-150);
+}
+
+.map-card {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+  padding: var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+  overflow-wrap: anywhere;
+}
+
+.map-card-title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.map-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  color: var(--text-secondary);
+}
+
+.map-card-orphan {
+  font-weight: var(--font-weight-medium);
+}
+
+.map-card-place {
+  color: var(--text-secondary);
+}
+
+.map-card-sources {
+  display: grid;
+  gap: var(--space-025);
+  padding-inline-start: var(--space-200);
+}
+
+.map-card-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050);
+  padding-top: var(--space-050);
+}
+
+.map-legend {
+  display: grid;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
+.map-legend-title {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.map-legend-list {
+  display: grid;
+  gap: var(--space-050);
+  padding: 0;
+  list-style: none;
+}
+
+.map-legend-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-075);
+  overflow-wrap: anywhere;
+}
+
+.map-legend-kind {
+  min-width: 0;
+}
+
+.map-legend-count {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The notes: the first few, the rest behind "Show all N". */
+.map-notes {
+  display: grid;
+  gap: var(--space-050);
+  justify-items: start;
+}
+
+.map-mark {
+  flex: none;
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.map-mark-orphan circle {
+  fill: var(--map-kind-other);
+  stroke: none;
+}
+
+.map-mark-orphan .map-mark-ring {
+  fill: none;
+  stroke: var(--map-label);
+  stroke-dasharray: 2 2;
+}
+
+.map-mark-ghost circle {
+  stroke: var(--map-ghost);
+  stroke-dasharray: 2 2;
+}
+
+.map-mark-strong line {
+  stroke: var(--map-edge);
+}
+
+.map-mark-mention line {
+  stroke: var(--map-edge-weak);
+  stroke-dasharray: 4 3;
+}
+
+.map-mark-parent line {
+  stroke: var(--map-edge);
+  stroke-dasharray: 1 3;
+}
+
+.map-list {
+  display: grid;
+  gap: var(--space-150);
+  justify-items: start;
+  padding-top: var(--space-150);
+}
+
+.map-table-wrap {
+  justify-self: stretch;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.map-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.map-table th,
+.map-table td {
+  padding: var(--space-075) var(--space-100);
+  border-top: 1px solid var(--border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.map-table thead th {
+  vertical-align: bottom;
+  overflow-wrap: break-word;
+}
+
+.map-table .map-number {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.map-name {
+  min-width: 18ch;
+  overflow-wrap: break-word;
+}
+
+.map-name-id {
+  display: block;
+  padding-top: var(--space-025);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.map-kind-direction {
+  display: block;
+}
+
+.map-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050);
+}
+
+.map-marks .badge {
+  white-space: nowrap;
+}
+
+/* The List's Broken links: each ghost as its card tells it, the sources links to their documents. */
+.map-ghosts {
+  display: grid;
+  gap: var(--space-100);
+  justify-self: stretch;
+  min-width: 0;
+}
+
+.map-ghosts-title {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.map-ghost-written {
+  min-width: 14ch;
+  overflow-wrap: anywhere;
+}
+
+.map-ghost-places {
+  white-space: nowrap;
+}
+
+.map-ghost-sources {
+  display: grid;
+  gap: var(--space-025);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

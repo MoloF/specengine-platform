@@ -45,7 +45,8 @@ describe("the mock's trace", () => {
     const at = (id: string) => nodes.find((node) => node.id === id);
     expect([at("RULE-HIGH-WATER")?.stage, at("RULE-HIGH-WATER")?.distance]).toEqual(["landfall", 0]);
     expect(at("DOM-WATER")?.rollup).toBe("in work");
-    expect(at("DOM-WATER")?.counts).toEqual({ no_card: 0, in_work: 2, suspect: 0, departed: 1, confirmed: 2 });
+    // The fog signal (corpus-map's) has no card.
+    expect(at("DOM-WATER")?.counts).toEqual({ no_card: 1, in_work: 2, suspect: 0, departed: 1, confirmed: 2 });
     expect(at("RULE-TIDE-WINDOW")?.distance).toBe(at("MEC-TIDES")?.distance);
   });
 

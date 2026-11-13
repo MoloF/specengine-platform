@@ -278,6 +278,8 @@ const PROSE_ALLOWED: Readonly<Record<string, readonly string[]>> = {
   "/src/tree/lockDiff.ts": ["lock diff:  : no   diff: "],
   // The bootstrap's own error, thrown when the page lacks its root: there is no page to show it in.
   "/src/main.tsx": ["index.html lacks the root element"],
+  // The media query the Map reads its colours again on, never shown (docs/features/corpus-map.md "Acceptance criteria", CM7).
+  "/src/map/MapCanvas.tsx": ["(prefers-color-scheme: dark)"],
 };
 
 /** A node's parent: none at the file's root, which the compiler's types do not say. */
@@ -594,6 +596,8 @@ describe("source policy", () => {
       // The document view's own Open in Spec tree and its count of ID-less children.
       "/src/doc/DocBody.tsx": 1,
       "/src/doc/DocInside.tsx": 1,
+      // The Map's lit node's Show in Spec tree, an explicit act (docs/features/corpus-map.md "Acceptance criteria", CM8).
+      "/src/map/MapStage.tsx": 1,
     };
     const counted: Record<string, number> = {};
     for (const [path, text] of Object.entries(sources)) {
@@ -614,7 +618,7 @@ describe("source policy", () => {
       walk(file);
     }
     expect(counted).toEqual(TREE_LINKS);
-    expect(Object.values(TREE_LINKS).reduce((sum, count) => sum + count, 0)).toBe(17);
+    expect(Object.values(TREE_LINKS).reduce((sum, count) => sum + count, 0)).toBe(18);
   });
 
   it("renders markdown only in src/markdown, raw HTML never interpreted (AC-02 of ui-markdown)", () => {
@@ -1006,6 +1010,79 @@ describe("source policy", () => {
     }
   });
 
+  // SR7 of docs/features/scope-rings.md "Acceptance criteria": a sector's fill and words are its state's
+  // look in src/flow/labels.ts alone. No module of src/rings/ spells a rollup word, branches on a
+  // `state`, reads a clock or a random number, or quotes a colour; a state is only looked up
+  // (`rollupLook`) or placed (ROLLUP_WORDS). M: the fill keyed on a state word outside labels.ts.
+  it("keys a ring sector's fill and words on its state through src/flow/labels.ts alone: no rings module spells a rollup word, branches on a state, reads a clock or random, or holds a colour (SR7 of scope-rings)", () => {
+    const ringsApp = (path: string) => path.startsWith("/src/rings/") && !/\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter(ringsApp).sort()).toEqual(["/src/rings/RingsList.tsx", "/src/rings/RingsPicture.tsx", "/src/rings/RingsView.tsx", "/src/rings/geometry.ts", "/src/rings/view.ts"]);
+    const words = ["no card", "in work", "confirmed", "suspect", "departed"].join("|");
+    const spelled = new RegExp(`["'\`](${words})["'\`]`);
+    expect(offending(spelled, (path) => !ringsApp(path))).toEqual([]);
+    const field = "\\.state\\b";
+    const compared = new RegExp(
+      [
+        `${field}\\s*[!=]==?`,
+        `[!=]==?\\s*[\\w.?]*${field}`,
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `${field}\\s*(&&|\\|\\|)`,
+        `\\[\\s*[\\w?.]*${field}\\s*\\]`,
+        `\\.(includes|indexOf|startsWith|endsWith|test)\\([^)]*${field}`,
+      ].join("|"),
+    );
+    expect(offending(compared, (path) => !ringsApp(path))).toEqual([]);
+    expect(offending(/\b(Date\.now|new Date|Math\.random|performance\.now)\b/, (path) => !ringsApp(path))).toEqual([]);
+    expect(offending(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/, (path) => !ringsApp(path))).toEqual([]);
+    // The look is called on the state; the detectors catch a branch and a spelled word, not the call.
+    expect(spelled.test('const fill = state === "in work" ? a : b;')).toBe(true);
+    for (const line of ['if (sector.state === "suspect") {', "switch (sector.state) {", "const tone = TONES[sector.state];"]) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["const look = rollupLook(sector.state, t);", "counts.set(sector.state, (counts.get(sector.state) ?? 0) + 1);"]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  // docs/features/corpus-map.md "Acceptance criteria", CM11, CM6, CM7; ADR-0080: d3-force is imported
+  // in src/map/ alone, and src/map/ imports it; nothing outside src/map/ but the Graph's home reaches
+  // it, and only by a dynamic import; src/map/ draws from no `Math.random` and reads no date, and
+  // holds no colour: its colours are tokens.css roles. M: d3-force imported in graph/.
+  it("imports d3-force in src/map/ alone, reached from GraphHome's dynamic import only; no random, date or colour in src/map/ (CM11 of corpus-map; ADR-0080)", () => {
+    const d3 = /^d3-force(\/|$)/;
+    const wrong: string[] = [];
+    const inside = new Set<string>();
+    const reachers: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      for (const specifier of importsOf(text)) {
+        if (d3.test(specifier)) {
+          if (path.startsWith("/src/map/")) {
+            inside.add(path);
+          } else {
+            wrong.push(`${path} imports ${specifier}`);
+          }
+        }
+        if (!path.startsWith("/src/map/") && !isTestPath(path) && !path.startsWith("/src/test/") && resolvedFrom(path, specifier).startsWith("/src/map/")) {
+          reachers.push(`${path} ${specifier}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+    expect([...inside]).toEqual(["/src/map/layout.ts"]);
+    expect(reachers).toEqual(["/src/graph/GraphHome.tsx ../map/MapView"]);
+    expect(sources["/src/graph/GraphHome.tsx"]).toContain('lazy(() => import("../map/MapView")');
+    // The lint rule says the same: the package restricted, src/map/ exempt.
+    expect(eslintConfig).toContain(JSON.stringify(d3.source.replaceAll("\\/", "/")));
+    expect(eslintConfig).toMatch(/files:\s*\["src\/map\/\*\*"\]/);
+    const mapApp = (path: string) => path.startsWith("/src/map/") && !isTestPath(path);
+    expect(offending(/\b(Math\.random|Date\.now|new Date)\b/, (path) => !mapApp(path))).toEqual([]);
+    expect(offending(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/, (path) => !mapApp(path))).toEqual([]);
+    // The detector itself: a subpath is caught, a look-alike name is not.
+    expect(["d3-force", "d3-force/src/link.js"].every((name) => d3.test(name))).toBe(true);
+    expect(["d3-forceful", "d3-quadtree", "./d3-force"].some((name) => d3.test(name))).toBe(false);
+  });
+
   it("compares no column, flow, discipline or event word in the Board, labels.ts the one map; reads no clock but in due.ts, never a UTC date there (AC-06, AC-08 of board-ui)", () => {
     const boardSources = (path: string) => path.startsWith("/src/board/") && !/\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter(boardSources)).toEqual(
@@ -1270,7 +1347,8 @@ describe("source policy", () => {
         }
       }
     }
-    expect([...names].sort()).toEqual(["berths", "foundry", "galley", "harbourmaster", "mechanic", "mechanics", "waters"]);
+    // `rule` and `rulebook` since docs/features/corpus-map.md "Acceptance criteria", CM8: harbor-sim's second direction.
+    expect([...names].sort()).toEqual(["berths", "foundry", "galley", "harbourmaster", "mechanic", "mechanics", "rule", "rulebook", "waters"]);
     const appCode = (path: string) =>
       path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
     const quoted = new RegExp(`["'\`](${[...names].join("|")})["'\`]`);
@@ -1331,8 +1409,13 @@ describe("toolchain policy", () => {
         // ADR-0072 amends it again: 17 + 2 (docs/features/ui-languages.md LG-11).
         "i18next",
         "react-i18next",
+        // ADR-0080 amends it again: 19 + 2 (docs/features/corpus-map.md "Acceptance criteria", CM11).
+        "d3-force",
+        "@types/d3-force",
       ].sort(),
     );
+    // The layout engine at runtime, its types at build time, each pinned exactly (ADR-0080).
+    expect([record(pkg.dependencies)["d3-force"], record(pkg.devDependencies)["@types/d3-force"]]).toEqual(["3.0.0", "3.0.10"]);
     expect([pinned["react-markdown"], pinned["remark-gfm"]]).toEqual(["10.1.0", "4.0.1"]);
     // Both in `dependencies`: they ship in the main chunk (D4).
     const runtime = record(pkg.dependencies);

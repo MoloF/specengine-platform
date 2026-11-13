@@ -423,6 +423,27 @@ describe.each(THEMES)("today's distinctness in the %s theme (AC-09)", (theme) =>
   });
 });
 
+// docs/features/corpus-map.md "Acceptance criteria", CM13: the map's roles, each `light-dark()`; each
+// kind's slot, the grey, the ghost and both edges at least 3:1 on the map's surface, the label at
+// least 4.5:1, in both themes; the eight slots and the grey nine colours. M: a kind role at 2.5:1.
+const MAP_KINDS = [...Array.from({ length: 8 }, (_, at) => `--map-kind-${String(at + 1)}`), "--map-kind-other"];
+
+describe.each(THEMES)("the corpus map's roles in the %s theme (CM13 of corpus-map)", (theme) => {
+  it("reads each kind, the ghost and both edges at least 3:1 on the map's surface, the label 4.5:1 (M: a kind role at 2.5:1)", () => {
+    for (const role of [...MAP_KINDS, "--map-ghost", "--map-edge", "--map-edge-weak"]) {
+      expect([role, contrast(role, "--map-surface", theme) >= 3]).toEqual([role, true]);
+    }
+    expect(contrast("--map-label", "--map-surface", theme)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("gives the eight slots and the grey nine colours, each written as light-dark()", () => {
+    expect(new Set(MAP_KINDS.map((role) => resolve(role, theme))).size).toBe(9);
+    for (const role of [...MAP_KINDS, "--map-surface", "--map-ghost", "--map-edge", "--map-edge-weak", "--map-label"]) {
+      expect([role, sidesOf(tokens.get(role) ?? "") !== null]).toEqual([role, true]);
+    }
+  });
+});
+
 describe("the Board's and the trace's tones (trace-views)", () => {
   it("gives a tone class to every state of a node, an unknown word dashed", () => {
     for (const state of TRACE) {

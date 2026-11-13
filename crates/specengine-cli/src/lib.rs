@@ -170,11 +170,20 @@
 //!   read once as it is, the config and the plan's groups from the walked
 //!   files; no git, no index, no write; `as_of` an input, today's UTC date
 //!   by default; [`delivery_as_of`] its usage check, for the daemon;
+//! - [`map()`]: `spec map [--archive]` (task spec `corpus-map`), the whole
+//!   corpus as one map over `spec tree`'s input: core's `corpus_map` nodes,
+//!   merged edges, parents and unresolved targets with `usage_of`'s counts;
+//!   the text cut at the cap ([`MapOutcome::text_within`]), the JSON never;
 //! - [`catalog()`]: `spec catalog --kind K… [--archive]` (task spec
 //!   `direction-catalog`), a kinds direction as a table of its nodes, each
 //!   with its version, the trace's state, open items, tasks and its file's
 //!   last change on `HEAD`'s first-parent line, computed per read and never
 //!   stored; [`catalog_with_view`] takes the daemon's [`LastChangeCache`];
+//! - [`rings()`]: `spec rings` (task spec `scope-rings`), the nodes the
+//!   `[[map.ring]]` tables choose, a tree read per ring, innermost first,
+//!   each node in one ring and filled with the trace's state, computed per
+//!   read and never stored; a bad table or a root naming no node a note,
+//!   never an exit; [`rings_with_view`] for the daemon;
 //! - [`flow()`]: `spec flow [ROOT] [--depth N] [--stage S] [--in-flow]
 //!   [--trace]` (task specs `flow-read`, `trace-views`, `flow-scope`), the
 //!   typed edges, lifted edges, gap rows and in-flow marks core's
@@ -282,6 +291,7 @@ mod lock;
 mod lock_diff;
 mod lock_rebase;
 mod lock_regen;
+mod map;
 mod node_set;
 mod outputs;
 mod package;
@@ -297,6 +307,7 @@ mod refresh;
 mod refs;
 mod review;
 mod revisions;
+mod rings;
 mod roadmap;
 mod roles;
 mod round;
@@ -439,6 +450,7 @@ pub use lock_rebase::{
     LockRebaseRequest, RebaseCounts, RebaseOutcome, RebaseRow, RebaseSide, lock_rebase,
 };
 pub use lock_regen::{LockRegenRequest, RegenOutcome, RegenRow, RegenTestedRow, lock_regen};
+pub use map::{MapOutcome, MapRequest, MapRow, map};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
@@ -452,6 +464,7 @@ pub use refs::{
     BindingRow, CodeCount, MarkerRow, MentionRow, RefsNode, RefsOutcome, RefsRequest, refs,
 };
 pub use review::{ReviewRequest, review, review_brief};
+pub use rings::{RingsOutcome, rings, rings_with_view};
 pub use roadmap::{RoadmapOutcome, RoadmapRequest, roadmap, roadmap_flags, roadmap_with_view};
 pub use roles::{RoleCounts, SubjectCounts, role_counts};
 pub use round::{
@@ -713,6 +726,8 @@ pub enum Outcome {
     Show(ShowOutcome),
     Tree(TreeOutcome),
     Graph(GraphOutcome),
+    /// `map`: the whole corpus, its links, parents and unresolved targets.
+    Map(Box<MapOutcome>),
     Bundle(BundleOutcome),
     Check(CheckOutcome),
     /// `bump`: the nodes changed without a raise.
@@ -725,6 +740,8 @@ pub enum Outcome {
     Delivery(Box<DeliveryOutcome>),
     /// `catalog`: a kinds direction's nodes, their work and last change.
     Catalog(Box<CatalogOutcome>),
+    /// `rings`: the scope rings and their sectors' work.
+    Rings(Box<RingsOutcome>),
     /// `collisions`: the pairs of nodes that may collide.
     Collisions(Box<CollisionsOutcome>),
     /// `collisions mark`: the verdicts written, or why none was.
@@ -869,6 +886,8 @@ impl Outcome {
             Self::Show(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Tree(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Graph(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            // The notes, escaped, as JSON `notes` holds them raw.
+            Self::Map(outcome) => return outcome.stderr_lines(),
             Self::Bundle(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Check(outcome) => (&outcome.messages, None),
             Self::Bump(outcome) => (&outcome.messages, None),
@@ -878,6 +897,8 @@ impl Outcome {
             Self::Delivery(outcome) => return outcome.stderr_lines(),
             // The notes, then the tree's warnings, escaped.
             Self::Catalog(outcome) => return outcome.stderr_lines(),
+            // The notes, then the tree's warnings, escaped.
+            Self::Rings(outcome) => return outcome.stderr_lines(),
             // The walk's lines and the pass's notes, escaped, as JSON
             // `notes` holds the notes raw.
             Self::Collisions(outcome) => return outcome.stderr_lines(),
@@ -969,10 +990,12 @@ impl Outcome {
             );
         }
         // The queue's commands quote agent-written text.
-        // So do the lock's commands: a path, a `qpath`, an ID.
+        // So do the lock's commands: a path, a `qpath`, an ID; and `spec
+        // graph`, a `--kind` as given (task spec `corpus-map` CM5).
         if matches!(
             self,
             Self::Proposal(_)
+                | Self::Graph(_)
                 | Self::Bump(_)
                 | Self::Lock(_)
                 | Self::LockRegen(_)
@@ -1019,6 +1042,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Show(outcome) => cap::render_text(outcome),
         Outcome::Tree(outcome) => tree::render_text(outcome),
         Outcome::Graph(outcome) => graph::render_text(outcome),
+        Outcome::Map(outcome) => map::render_text(outcome),
         Outcome::Bundle(outcome) => bundle::render_text(outcome),
         Outcome::Check(outcome) => check::render_text(outcome),
         Outcome::Bump(outcome) => bump::render_text(outcome),
@@ -1026,6 +1050,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
         Outcome::Delivery(outcome) => delivery::render_text(outcome),
         Outcome::Catalog(outcome) => catalog::render_text(outcome),
+        Outcome::Rings(outcome) => rings::render_text(outcome),
         Outcome::Collisions(outcome) => collisions::render_text(outcome),
         Outcome::PairsMarked(outcome) => collisions::render_mark_text(outcome),
         Outcome::Flow(outcome) => flow::render_text(outcome),
@@ -1084,6 +1109,7 @@ impl serde::Serialize for Outcome {
             Self::Show(outcome) => outcome.serialize(serializer),
             Self::Tree(outcome) => outcome.serialize(serializer),
             Self::Graph(outcome) => outcome.serialize(serializer),
+            Self::Map(outcome) => outcome.serialize(serializer),
             Self::Bundle(outcome) => outcome.serialize(serializer),
             Self::Check(outcome) => outcome.report.serialize(serializer),
             Self::Bump(outcome) => outcome.serialize(serializer),
@@ -1091,6 +1117,7 @@ impl serde::Serialize for Outcome {
             Self::Roadmap(outcome) => outcome.serialize(serializer),
             Self::Delivery(outcome) => outcome.serialize(serializer),
             Self::Catalog(outcome) => outcome.serialize(serializer),
+            Self::Rings(outcome) => outcome.serialize(serializer),
             Self::Collisions(outcome) => outcome.serialize(serializer),
             Self::PairsMarked(outcome) => outcome.serialize(serializer),
             Self::Flow(outcome) => outcome.serialize(serializer),

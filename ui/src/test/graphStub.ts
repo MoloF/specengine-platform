@@ -21,6 +21,12 @@ export const OUTGOING_TYPES: FollowedType[] = [
   { type: "gamma_type", direction: "out" },
 ];
 
+/** Both ways (docs/features/corpus-map.md "Acceptance criteria", CM10): each outgoing type out, then in. */
+export const BOTH_TYPES: FollowedType[] = OUTGOING_TYPES.flatMap((entry): FollowedType[] => [
+  { type: entry.type, direction: "out" },
+  { type: entry.type, direction: "in" },
+]);
+
 export const IMPACT_TYPES: FollowedType[] = [
   { type: "gamma_type", direction: "in" },
   { type: "zeta_type", direction: "out" },
@@ -50,8 +56,9 @@ export const GRAPH_EDGES: GraphEdge[] = [
 /** What the stub's getGraph answers for a read. */
 export function graphOf(options: GraphOptions): GraphView {
   const echo = {
-    ref: options.ref,
+    ref: options.ref ?? null,
     impact: options.impact ?? false,
+    both: options.both ?? false,
     depth: options.depth ?? null,
     archive: options.archive ?? false,
   };
@@ -66,11 +73,14 @@ export function graphOf(options: GraphOptions): GraphView {
   if (options.ref === "LONE") {
     return aGraphView([aGraphNode({ id: "LONE", distance: 0 })], [], { ...echo, types: options.impact === true ? IMPACT_TYPES : OUTGOING_TYPES });
   }
-  const table = options.impact === true ? IMPACT_TYPES : OUTGOING_TYPES;
+  const table = options.both === true ? BOTH_TYPES : options.impact === true ? IMPACT_TYPES : OUTGOING_TYPES;
+  const given = options.types;
   const types =
-    options.types === undefined
+    given === undefined
       ? table
-      : options.types.map((type) => table.find((entry) => entry.type === type) ?? { type, direction: options.impact === true ? "in" : "out" });
+      : options.both === true
+        ? table.filter((entry) => given.includes(entry.type))
+        : given.map((type) => table.find((entry) => entry.type === type) ?? { type, direction: options.impact === true ? "in" : "out" });
   const followed = new Set(types.map((entry) => entry.type));
   const edges = GRAPH_EDGES.filter((edge) => followed.has(edge.type));
   const names = new Set(edges.flatMap((edge) => [edge.src, edge.dst]));

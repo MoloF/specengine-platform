@@ -5,10 +5,13 @@ import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { directionLabel } from "../tree/labels";
 import { directionIcon } from "./lines";
-import { DEPTHS, type Chip, type GraphSettings } from "./settings";
+import { DEPTHS, GRAPH_MODES, pressedTypes, type Chip, type GraphMode, type GraphSettings } from "./settings";
 import { useTranslate } from "../i18n";
 
 const ALL = "all";
+
+/** Each mode's words in the group: Links, Both ways, Impact (docs/features/corpus-map.md "Acceptance criteria", CM10). */
+const MODE_WORDS = { out: "graph.controls.outgoing", both: "graph.controls.both", impact: "graph.controls.impact" } as const satisfies Record<GraphMode, string>;
 
 /**
  * The form "Graph options" (docs/features/ui-graph.md "Implementation", Controls): the REF field
@@ -35,7 +38,7 @@ export function GraphControls({
   /** The empty state's words, read with the field while no REF is given. */
   emptyHintId: string | null;
   onChange: (next: (current: GraphSettings) => GraphSettings) => void;
-  onMode: (impact: boolean) => void;
+  onMode: (mode: GraphMode) => void;
   onChip: (type: string) => void;
 }) {
   const t = useTranslate();
@@ -50,7 +53,7 @@ export function GraphControls({
     setTyped(nodeRef ?? "");
     setMissing(false);
   }
-  const pressed = chips.filter((chip) => chip.pressed).length;
+  const pressed = pressedTypes(chips).length;
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,28 +103,19 @@ export function GraphControls({
       </div>
       <fieldset className="graph-mode">
         <legend className="field-label">{t("graph.controls.mode")}</legend>
-        <label className="graph-radio">
-          <input
-            type="radio"
-            name={`${base}-mode`}
-            checked={!settings.impact}
-            onChange={() => {
-              onMode(false);
-            }}
-          />
-          <span>{t("graph.controls.outgoing")}</span>
-        </label>
-        <label className="graph-radio">
-          <input
-            type="radio"
-            name={`${base}-mode`}
-            checked={settings.impact}
-            onChange={() => {
-              onMode(true);
-            }}
-          />
-          <span>{t("graph.controls.impact")}</span>
-        </label>
+        {GRAPH_MODES.map((mode) => (
+          <label key={mode} className="graph-radio">
+            <input
+              type="radio"
+              name={`${base}-mode`}
+              checked={settings.mode === mode}
+              onChange={() => {
+                onMode(mode);
+              }}
+            />
+            <span>{t(MODE_WORDS[mode])}</span>
+          </label>
+        ))}
       </fieldset>
       <div className="graph-depth">
         <label className="field-label" htmlFor={`${base}-depth`}>
@@ -170,7 +164,7 @@ export function GraphControls({
               const last = chip.pressed && pressed === 1;
               return (
                 <button
-                  key={chip.type}
+                  key={`${chip.type}\u0000${chip.direction ?? ""}`}
                   type="button"
                   className="graph-chip"
                   aria-pressed={chip.pressed}

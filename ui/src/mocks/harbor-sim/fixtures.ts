@@ -527,6 +527,31 @@ function harborCorpus(): MockCorpus {
         "The inner gate opens when the lock level matches the basin.",
       ],
     }),
+    // The corpus map's own three documents (docs/features/corpus-map.md "Acceptance criteria", CM8;
+    // src/mocks/map.ts): a lock keeper, an ID-less note nothing links, and a fog signal, so each
+    // opens from the map as every other node does.
+    specFile({
+      path: "docs/spec/locks/keeper.md",
+      id: "MEC-LOCK-KEEPER",
+      kind: "mechanic",
+      title: "Lock keeper's watch",
+      status: "draft",
+      parent: "MEC-LOCK-A",
+      lines: [
+        ...frontMatter({ id: "MEC-LOCK-KEEPER", kind: "mechanic", status: "draft", parent: "MEC-LOCK-A", depends_on: "[MEC-LOCK-A]", rev: 1 }),
+        "",
+        "# Lock keeper's watch",
+        "",
+        "A keeper stands at the outer gate from the first ship of the tide to the last.",
+      ],
+    }),
+    specFile({
+      path: "docs/spec/notes/harbour-cats.md",
+      id: null,
+      kind: null,
+      title: "Harbour cats",
+      lines: ["# Harbour cats", "", "The cats of the fish quay keep the sheds free of rats; no rule names them."],
+    }),
     specFile({
       path: PILOT_FILE,
       id: "MEC-PILOTAGE",
@@ -743,6 +768,21 @@ function harborCorpus(): MockCorpus {
       ],
     }),
     specFile({
+      path: "docs/spec/water/fog.md",
+      id: "RULE-FOG-SIGNAL",
+      kind: "rule",
+      title: "Fog signal",
+      status: "draft",
+      parent: "DOM-WATER",
+      lines: [
+        ...frontMatter({ id: "RULE-FOG-SIGNAL", kind: "rule", status: "draft", parent: "DOM-WATER", depends_on: "[DOM-WATER]", amends: "[RULE-QUAY-LIGHTS]", rev: 1 }),
+        "",
+        "# Fog signal",
+        "",
+        "In fog the horn sounds every two minutes; MEC-NIGHT-PASSAGE keeps to the lit buoys.",
+      ],
+    }),
+    specFile({
       path: QUAY_DECISION_FILE,
       id: "DEC-0014",
       // No kind: harbor-sim's `[ids]` names no prefix for decisions (as DEC-0012).
@@ -927,6 +967,17 @@ function harborCorpus(): MockCorpus {
         reason: "`RULE-QUAY-LIGHTS` resolves to no ID and no alias",
       }),
       link({ type: "amends", origin: frontmatter, written: "RULE-BERTH-DRAFT", path: DEEP_BERTH_FILE, line: linkAt(DEEP_BERTH_FILE, "amends:"), to: "RULE-BERTH-DRAFT" }),
+      link({ type: "depends_on", origin: frontmatter, written: "MEC-LOCK-A", path: "docs/spec/locks/keeper.md", line: linkAt("docs/spec/locks/keeper.md", "depends_on:"), to: "MEC-LOCK-A" }),
+      link({ type: "depends_on", origin: frontmatter, written: "DOM-WATER", path: "docs/spec/water/fog.md", line: linkAt("docs/spec/water/fog.md", "depends_on:"), to: "DOM-WATER" }),
+      link({
+        type: "amends",
+        origin: frontmatter,
+        written: "RULE-QUAY-LIGHTS",
+        path: "docs/spec/water/fog.md",
+        line: linkAt("docs/spec/water/fog.md", "amends:"),
+        reason: "`RULE-QUAY-LIGHTS` resolves to no ID and no alias",
+      }),
+      link({ type: "mentions", origin: inline, written: "MEC-NIGHT-PASSAGE", path: "docs/spec/water/fog.md", line: linkAt("docs/spec/water/fog.md", "MEC-NIGHT-PASSAGE keeps"), to: "MEC-NIGHT-PASSAGE" }),
       link({
         type: "depends_on",
         origin: inline,

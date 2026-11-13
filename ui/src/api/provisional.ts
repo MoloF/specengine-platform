@@ -1501,11 +1501,18 @@ export interface GraphEdge {
   reason: string | null;
 }
 
-/** `spec graph --json`: what the walk reached, or why REF names nothing (exit 1). Source: `docs/canon/spec-cli-graph.md` "spec graph". */
+/**
+ * `spec graph --json`: what the walk reached, or why REF names nothing (exit 1). `both` and `kinds`
+ * since corpus-map: `both` the walk followed each type both ways; `kinds` the kinds it started from,
+ * null with a REF, under which `ref` is null. Source: `docs/canon/spec-cli-graph.md` "spec graph";
+ * `both`, `kinds`: `docs/features/corpus-map.md` "Acceptance criteria", CM4, CM5.
+ */
 export interface GraphView {
-  ref: string;
+  ref: string | null;
   reason: string | null;
   impact: boolean;
+  both: boolean;
+  kinds: string[] | null;
   types: FollowedType[];
   depth: number | null;
   archive: boolean;
@@ -2302,6 +2309,127 @@ export interface CatalogChange {
   commit: string;
   proposal: string | null;
   of_file: boolean;
+}
+
+// The whole live corpus as one graph (RM-0112): `spec map --json` as the daemon's browser view
+// sends it, never cut, every key present, absent null. A node is a document (ID-less ones by path)
+// or an ID section, in (path, ord) order; an edge, a parent and a ghost name nodes by their index
+// in `nodes`. The uses and the orphan flag are core `usage_of`'s: the UI sizes and marks by them,
+// it never counts a use, finds an orphan or resolves a link. A kind, a title, a status and a link
+// type are project data, shown as written.
+
+/**
+ * `spec map [--archive] --json`, the answer of `GET .../map[?archive=true]`: `archive` as asked;
+ * `notes` the walk's warnings verbatim, sorted, each once; `counts` the live files' totals; `nodes`
+ * every admitted node in (path, ord) order; `edges` sorted by (src, dst, type); `parents` by child;
+ * `ghosts` by `written`. Source: `docs/features/corpus-map.md` "Acceptance criteria", CM1, CM3.
+ */
+export interface MapDocument {
+  archive: boolean;
+  notes: string[];
+  counts: MapCounts;
+  nodes: MapNode[];
+  edges: MapEdge[];
+  parents: MapParent[];
+  ghosts: MapGhost[];
+}
+
+/** The map's totals as served, never counted again. Source: `docs/features/corpus-map.md` "Acceptance criteria", CM1. */
+export interface MapCounts {
+  documents: number;
+  sections: number;
+  edges: number;
+  parents: number;
+  ghosts: number;
+  orphans: number;
+}
+
+/**
+ * One node: `name` its ID, else its path, the REF the document view opens; `of` its document's index
+ * for an ID section, null for a document; `used_by` and `mentioned_by` its live sources' counts;
+ * `orphan` set on a document, null on a section. Source: `docs/features/corpus-map.md` "Acceptance criteria", CM1.
+ */
+export interface MapNode {
+  name: string;
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  of: number | null;
+  status: string | null;
+  archived: boolean;
+  used_by: number;
+  mentioned_by: number;
+  orphan: boolean | null;
+}
+
+/** A resolved link between two nodes by index, one per (src, dst, type), `src` never `dst`; `weak` for `mentions`; `places` its written places. Source: `docs/features/corpus-map.md` "Acceptance criteria", CM1. */
+export interface MapEdge {
+  src: number;
+  dst: number;
+  type: string;
+  weak: boolean;
+  places: number;
+}
+
+/** A document whose `parent:` resolves to a node, both by index. Source: `docs/features/corpus-map.md` "Acceptance criteria", CM1. */
+export interface MapParent {
+  child: number;
+  parent: number;
+}
+
+/** An unresolved target as written: the distinct `sources` by index, sorted; `reason` the first place's, verbatim; `places` its written places. Source: `docs/features/corpus-map.md` "Acceptance criteria", CM2. */
+export interface MapGhost {
+  written: string;
+  reason: string | null;
+  sources: number[];
+  places: number;
+}
+
+// The project's nodes on concentric rings, the radius their scope (RM-0113): `spec rings --json` as
+// the daemon's browser view sends it, uncut, every key present, absent null. Each ring is a
+// `[[map.ring]]` row of the project's config; its sectors are the tree's lines for its root and
+// kinds, in the tree's order, less a node an inner ring holds; the state is the trace's rollup. The
+// UI draws the served rings and sectors in order; it never computes a member or a state. A title, a
+// kind and a status are project data, shown as written.
+
+/**
+ * `spec rings --json`, the answer of `GET .../rings`: `notes` the config's and the read's lines
+ * verbatim, sorted; `rings` innermost first, none without `[map]` or with a bad table.
+ * Source: `docs/features/scope-rings.md` "Acceptance criteria", SR4.
+ */
+export interface RingsDocument {
+  notes: string[];
+  rings: Ring[];
+}
+
+/**
+ * One `[[map.ring]]`: `title` any script; `root` the REF as written, null when none; `kinds` as
+ * written, null when none; `sectors` its nodes in the tree's order, none when its root resolves to
+ * no node. Source: `docs/features/scope-rings.md` "Acceptance criteria", SR4.
+ */
+export interface Ring {
+  title: string;
+  root: string | null;
+  kinds: string[] | null;
+  sectors: RingSector[];
+}
+
+/**
+ * One node of a ring: `name` its ID, else its path, the REF the document view opens; the tree's
+ * `id`, `kind`, `title`, `path`, `line` and raw `status`; `state` the trace's rollup, another word
+ * kept and shown raw. Source: `docs/features/scope-rings.md` "Acceptance criteria", SR4.
+ */
+export interface RingSector {
+  name: string;
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  status: string | null;
+  state: KnownRollup | Unlisted;
 }
 
 /** A column of a flow: `id` its name, `title` any script, default the ID. Source: `docs/canon/cards.md` "Documents and events". */

@@ -44,6 +44,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-map.md](canon/spec-map.md) The corpus map: every document and its links in one picture · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-read-freshness.md](canon/spec-read-freshness.md) Read freshness: the stat key, and a hub's trusted index · crates/specengine-store, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp · tier 2
 - [docs/canon/spec-read-subset.md](canon/spec-read-subset.md) spec show, show --links, spec bundle: a subset read from the index · crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
+- [docs/canon/spec-rings.md](canon/spec-rings.md) Scope rings: the project's nodes on concentric rings, the radius their scope · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-roadmap-screen.md](canon/spec-roadmap-screen.md) The Roadmap screen · ui · tier 2
 - [docs/canon/spec-roadmap.md](canon/spec-roadmap.md) spec roadmap: plan items and the computed path · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-trace-record.md](canon/spec-trace-record.md) spec trace: what a card records · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2

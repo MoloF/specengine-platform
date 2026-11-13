@@ -66,7 +66,7 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
 
   it("names the options exactly as the MCP tools do", () => {
     // `get_node`'s `with` takes `history` since node-history (docs/features/node-history.md "Acceptance criteria", NH12).
-    for (const option of ["root?: string;", "depth?: number;", "kinds?: string[];", "archive?: boolean;", 'with?: ("links" | "bindings" | "history")[];', "query: string;", "limit?: number;", "node_ids: string[];", "budget?: number;", "ref: string;", "impact?: boolean;", "types?: string[];"]) {
+    for (const option of ["root?: string;", "depth?: number;", "kinds?: string[];", "archive?: boolean;", 'with?: ("links" | "bindings" | "history")[];', "query: string;", "limit?: number;", "node_ids: string[];", "budget?: number;", "ref?: string;", "impact?: boolean;", "both?: boolean;", "types?: string[];"]) {
       expect([option, source.includes(option)]).toEqual([option, true]);
     }
   });
@@ -75,9 +75,13 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
 describe("the graph's options (AC-01 of ui-graph)", () => {
   it("name `spec graph`'s JSON echo keys", () => {
     const block = /export interface GraphOptions \{([^}]*)\}/.exec(source)?.[1] ?? "";
+    // `both` and `kinds` since docs/features/corpus-map.md "Acceptance criteria", CM4, CM5: a REF or
+    // the kinds, never both.
     expect(block.split("\n").map((line) => line.trim()).filter((line) => line !== "")).toEqual([
-      "ref: string;",
+      "ref?: string;",
       "impact?: boolean;",
+      "both?: boolean;",
+      "kinds?: string[];",
       "types?: string[];",
       "depth?: number;",
       "archive?: boolean;",

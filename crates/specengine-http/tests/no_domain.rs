@@ -60,6 +60,12 @@
 //! docs/features/pack.md (RM-0061) "Acceptance criteria", PK3 (f): the
 //! software preset's return column `reopened` joins the gamedev preset's
 //! `sent-back`.
+//!
+//! docs/features/scope-rings.md (RM-0113) "Acceptance criteria", SR5: the
+//! words gain every `kinds` entry of every `[[map.ring]]` of the same configs
+//! and presets, lowercased, and each ring's `title` as a phrase, word-bounded
+//! and without case ([`ring_words`], [`title_hits`]): on the repository
+//! plant-diary's two rings. A planted title in a probe source is red.
 
 mod common;
 
@@ -468,6 +474,57 @@ fn preset_return_columns() -> BTreeSet<String> {
     columns
 }
 
+/// docs/features/scope-rings.md (RM-0113) SR5: every `[[map.ring]]` of the
+/// repository's config, every config under `fixtures/` and every preset
+/// under `scripts/presets/`: its `title`s and its `kinds` entries, each
+/// lowercased. A file the TOML reader refuses holds none.
+fn ring_words() -> (BTreeSet<String>, BTreeSet<String>) {
+    let root = repository_root();
+    let mut files = vec![root.join("specengine.toml")];
+    configs(&root.join("fixtures"), &mut files);
+    files.extend(toml_files(&root.join("scripts/presets")));
+    files.sort();
+    let mut titles = BTreeSet::new();
+    let mut kinds = BTreeSet::new();
+    for file in &files {
+        let text = fs::read_to_string(file).expect("a config");
+        let Ok(table) = text.parse::<toml::Table>() else {
+            continue;
+        };
+        let rings = table
+            .get("map")
+            .and_then(|map| map.get("ring"))
+            .and_then(toml::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        for ring in rings {
+            if let Some(title) = ring.get("title").and_then(toml::Value::as_str) {
+                titles.insert(title.to_lowercase());
+            }
+            for kind in ring
+                .get("kinds")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(toml::Value::as_str)
+            {
+                kinds.insert(kind.to_lowercase());
+            }
+        }
+    }
+    (titles, kinds)
+}
+
+/// The `titles` `literal` holds as a phrase: its words, in a row.
+fn title_hits(literal: &str, titles: &BTreeSet<String>) -> Vec<String> {
+    let held = format!(" {} ", words(literal).join(" "));
+    titles
+        .iter()
+        .filter(|title| held.contains(&format!(" {} ", words(title).join(" "))))
+        .cloned()
+        .collect()
+}
+
 /// The words of `literal` that are one of `columns`.
 fn return_words(literal: &str, columns: &BTreeSet<String>) -> Vec<String> {
     words(literal)
@@ -648,6 +705,18 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
         "the `kinds` of every `[[module]]` (M: `root` read instead)"
     );
     kinds.extend(directions);
+    // docs/features/scope-rings.md SR5: the rings' kinds join the kinds,
+    // their titles are scanned as phrases.
+    let (ring_titles, ring_kinds) = ring_words();
+    assert_eq!(
+        (ring_titles.clone(), ring_kinds.clone()),
+        (
+            BTreeSet::from(["household stories".to_owned(), "reminders".to_owned()]),
+            BTreeSet::from(["story".to_owned()])
+        ),
+        "plant-diary's two rings"
+    );
+    kinds.extend(ring_kinds);
     // docs/features/board-handoff.md BH-13: the preset's return column.
     let returns = preset_return_columns();
     assert!(returns.contains("sent-back"), "{returns:?}");
@@ -694,6 +763,12 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
             for word in return_words(&literal.text, &returns) {
                 found.push(format!(
                     "{relative}:{}: {:?} holds `{word}`, a preset return column",
+                    literal.line, literal.text
+                ));
+            }
+            for title in title_hits(&literal.text, &ring_titles) {
+                found.push(format!(
+                    "{relative}:{}: {:?} holds `{title}`, a `[[map.ring]]` title",
                     literal.line, literal.text
                 ));
             }
@@ -972,5 +1047,33 @@ fn department_split_s9_a_commented_kind_is_no_kind() {
     assert_eq!(
         kinds,
         BTreeSet::from(["broadsheet".to_owned(), "sheet".to_owned()])
+    );
+}
+
+/// docs/features/scope-rings.md (RM-0113) SR5: a ring's title is caught as
+/// a phrase in any case, its kind as a word; a word holding a title's word,
+/// a title's words apart and a comment are not.
+#[test]
+fn scope_rings_sr5_the_scan_sees_a_ring_title_in_a_literal() {
+    let titles = BTreeSet::from(["bell rooms".to_owned(), "reminders".to_owned()]);
+    let probe = r#"
+// A comment naming the Bell rooms is no literal.
+fn ring(title: &str) -> u16 {
+    if title == "Bell rooms" { return 1; }
+    let _ = "the reminders ring";
+    let _ = "bell-rooms and the rooms of a bell";
+    let _ = "/api/projects/{p}/rings";
+    0
+}
+"#;
+    let mut hits = Vec::new();
+    for literal in literals(probe) {
+        for title in title_hits(&literal.text, &titles) {
+            hits.push((literal.line, title));
+        }
+    }
+    assert_eq!(
+        hits,
+        [(4, "bell rooms".to_owned()), (5, "reminders".to_owned())]
     );
 }

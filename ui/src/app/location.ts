@@ -52,8 +52,8 @@ export function replaceHash(hash: string, options: { keepDoc?: boolean } = {}): 
 /** The document modal's entry was pushed by this page: its close goes back. Forgotten once the modal is gone. */
 let docPushed = false;
 
-/** What opened the modal: focus goes back to it on close while it stands and is not inert. */
-let docOpener: HTMLElement | null = null;
+/** What opened the modal, a drawn sector among them: focus goes back to it on close while it stands and is not inert. */
+let docOpener: HTMLElement | SVGElement | null = null;
 
 /** The element focus stands on, when it stands on one: the opener of a modal opened by a key or a menu. */
 function focused(): HTMLElement | null {
@@ -68,7 +68,7 @@ function focused(): HTMLElement | null {
  * current route shows no modal of that project). The entry counts as this page's to go back from only
  * when its route can show the modal.
  */
-export function openDocFrom(ref: string, opener: HTMLElement | null, base: string = window.location.hash): void {
+export function openDocFrom(ref: string, opener: HTMLElement | SVGElement | null, base: string = window.location.hash): void {
   const current = window.location.hash;
   if (base === current && docOf(current) !== null) {
     replaceHash(withDoc(current, ref));
@@ -96,7 +96,7 @@ export function closeDoc(): void {
 }
 
 /** The modal is gone (closed, Back, a push): its entry and opener are no longer this page's to go back to. */
-export function forgetDoc(): HTMLElement | null {
+export function forgetDoc(): HTMLElement | SVGElement | null {
   const opener = docOpener;
   docPushed = false;
   docOpener = null;

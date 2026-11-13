@@ -380,6 +380,19 @@
 //! from the health documents above. The fixture holds no set for a links
 //! block itself (its rows are `ShownLink`), so "Data"'s "the links set gains
 //! `usage`" lands on `LinkUsage` alone. M: a set left out of the fixture.
+//!
+//! docs/features/scope-rings.md (RM-0113) "Acceptance criteria", SR4: three
+//! sets more, 154 in all, after `HealthOrphan`, in "Data"'s order: `Rings`
+//! (2), `Ring` (4) and `RingSector` (8), from `GET .../rings` over a git copy
+//! of A with "Data"'s config and a card on MEC-STAMINA (a ring rooted and
+//! one not, a section's `status` null).
+//!
+//! docs/features/corpus-map.md (RM-0112) "Acceptance criteria", CM3:
+//! `GraphView` gains `both` and `kinds` right after `impact` (13 keys), and
+//! six sets more, 160 in all, last, in "Data"'s order: `MapDocument` (7),
+//! `MapCounts` (6), `MapNode` (12), `MapEdge` (5), `MapParent` (2) and
+//! `MapGhost` (4), from `GET .../map` over a git copy of A holding CM2's
+//! ghost. M: a set left out of the fixture.
 
 mod common;
 mod task_state;
@@ -829,6 +842,78 @@ fn delivery_late(body: &str, id: &str) -> String {
         .unwrap_or_else(|| panic!("no late row {id}: {body}"))
 }
 
+/// docs/features/scope-rings.md SR4: `GET .../rings` over a git copy of A
+/// with "Data"'s config and a card on MEC-STAMINA, on a daemon of its own,
+/// its body raw (the keys' order kept).
+fn rings_document() -> String {
+    let scratch = Scratch::new("daemon-keys-rings");
+    let root = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let config = read_text(&root, "specengine.toml");
+    write(
+        &root,
+        "specengine.toml",
+        format!(
+            "{config}\n[[map.ring]]\ntitle = \"Movement\"\nroot  = \"DOM-MOVEMENT\"\nkinds = [\"mechanic\"]\n\n[[map.ring]]\ntitle = \"Rules\"\nkinds = [\"rule\"]\n"
+        ),
+    );
+    let root_text = root.to_str().expect("UTF-8 root");
+    let run = spec(
+        &home,
+        &cwd,
+        &[
+            "--root",
+            root_text,
+            "card",
+            "new",
+            "--title",
+            "Tune the stamina",
+            "--target",
+            "MEC-STAMINA",
+        ],
+    );
+    assert_eq!(run.code, 0, "{}", run.show());
+    let server = Server::serve(&home, &cwd, &[&root]);
+    server
+        .get("/api/projects/lantern-keep/rings")
+        .status(200)
+        .text()
+        .to_owned()
+}
+
+/// docs/features/corpus-map.md CM3: `GET .../map` over a git copy of A
+/// holding CM2's ghost (MEC-GONE, from MEC-SPRINT and MEC-STAMINA), on a
+/// daemon of its own, its body raw (the keys' order kept).
+fn map_document() -> String {
+    let scratch = Scratch::new("daemon-keys-map");
+    let root = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    for (path, from, to) in [
+        (
+            "docs/spec/movement/sprint.md",
+            "depends_on: [MEC-STAMINA]",
+            "depends_on: [MEC-STAMINA, MEC-GONE]",
+        ),
+        (
+            "docs/spec/movement/stamina.md",
+            "\n## Regeneration {#RULE-STAM-REGEN}",
+            "\nOnce paired with [[MEC-GONE]].\n\n## Regeneration {#RULE-STAM-REGEN}",
+        ),
+    ] {
+        let text = read_text(&root, path);
+        assert_eq!(text.matches(from).count(), 1, "{path}");
+        write(&root, path, text.replacen(from, to, 1));
+    }
+    let server = Server::serve(&home, &cwd, &[&root]);
+    server
+        .get("/api/projects/lantern-keep/map")
+        .status(200)
+        .text()
+        .to_owned()
+}
+
 fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     // docs/features/delivery-analytics.md DA-11: C-0001's late row holds
     // one of each reason.
@@ -845,6 +930,21 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         .expect("the rows after flows")
         + 3..]
         .to_owned();
+    // docs/features/scope-rings.md SR4: the rings document, its two rings
+    // and their six sectors.
+    let rings = rings_document();
+    let ring_items = raw_items(&rings, "rings");
+    assert_eq!(ring_items.len(), 2, "{rings}");
+    let ring_sectors: Vec<String> = ring_items
+        .iter()
+        .flat_map(|ring| raw_items(ring, "sectors"))
+        .collect();
+    assert_eq!(ring_sectors.len(), 6, "{rings}");
+    // docs/features/corpus-map.md CM3: the map, its counts, nodes, edges,
+    // parents and its one ghost.
+    let map = map_document();
+    let map_ghosts = raw_items(&map, "ghosts");
+    assert_eq!(map_ghosts.len(), 1, "{map}");
     // docs/features/direction-catalog.md DC-9: both rows hold a last change.
     let catalog = catalog_document();
     // docs/features/collision-pairs.md PP8: the example's review, its pair
@@ -2416,6 +2516,42 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "HealthOrphan",
             one_key_set("HealthOrphan", &orphan_rows, keys_of),
         ),
+        // docs/features/scope-rings.md SR4, sets 152 to 154.
+        (
+            "Rings",
+            one_key_set("Rings", std::slice::from_ref(&rings), keys_of),
+        ),
+        ("Ring", one_key_set("Ring", &ring_items, keys_of)),
+        (
+            "RingSector",
+            one_key_set("RingSector", &ring_sectors, keys_of),
+        ),
+        // docs/features/corpus-map.md CM3, sets 155 to 160.
+        (
+            "MapDocument",
+            one_key_set("MapDocument", std::slice::from_ref(&map), keys_of),
+        ),
+        (
+            "MapCounts",
+            one_key_set(
+                "MapCounts",
+                std::slice::from_ref(&raw_object(&map, "counts")),
+                keys_of,
+            ),
+        ),
+        (
+            "MapNode",
+            one_key_set("MapNode", &raw_items(&map, "nodes"), keys_of),
+        ),
+        (
+            "MapEdge",
+            one_key_set("MapEdge", &raw_items(&map, "edges"), keys_of),
+        ),
+        (
+            "MapParent",
+            one_key_set("MapParent", &raw_items(&map, "parents"), keys_of),
+        ),
+        ("MapGhost", one_key_set("MapGhost", &map_ghosts, keys_of)),
     ]
 }
 
@@ -2772,7 +2908,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        151,
+        160,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -2781,7 +2917,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          flow-scenario: 115; card-questions: 118; department-split: 121; task-mandate: 122; \
          node-history: 124; upstream-signal: 126; delivery-analytics: 137; \
          direction-catalog: 140; department-overview: 143; collision-pairs: 145; \
-         delivery-timeline: 148; usage-orphans: 151)"
+         delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2790,7 +2926,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(
         counts,
         [
-            ("GraphView", 11),
+            // docs/features/corpus-map.md CM4, CM5: `both`, `kinds`.
+            ("GraphView", 13),
             ("GraphNode", 7),
             ("GraphEdge", 8),
             ("FollowedType", 2),
@@ -3850,7 +3987,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/usage-orphans.md UO9: sets 149 to 151, last, in "Data"'s
     // order, each the spec's keys in its order. M: a set left out of the
     // fixture.
-    let usage: Vec<(&str, Vec<&str>)> = sets[148..]
+    let usage: Vec<(&str, Vec<&str>)> = sets[148..151]
         .iter()
         .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
         .collect();
@@ -3874,6 +4011,71 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 ]
             ),
         ]
+    );
+    // docs/features/scope-rings.md SR4 and docs/features/corpus-map.md CM3:
+    // sets 152 to 160, last, in "Data"'s order, each the spec's keys in its
+    // order. M: a set left out of the fixture.
+    let added: Vec<(&str, Vec<&str>)> = sets[151..]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        added,
+        [
+            ("Rings", vec!["notes", "rings"]),
+            ("Ring", vec!["title", "root", "kinds", "sectors"]),
+            (
+                "RingSector",
+                vec![
+                    "name", "id", "kind", "title", "path", "line", "status", "state"
+                ]
+            ),
+            (
+                "MapDocument",
+                vec![
+                    "archive", "notes", "counts", "nodes", "edges", "parents", "ghosts"
+                ]
+            ),
+            (
+                "MapCounts",
+                vec![
+                    "documents",
+                    "sections",
+                    "edges",
+                    "parents",
+                    "ghosts",
+                    "orphans"
+                ]
+            ),
+            (
+                "MapNode",
+                vec![
+                    "name",
+                    "id",
+                    "kind",
+                    "title",
+                    "path",
+                    "line",
+                    "of",
+                    "status",
+                    "archived",
+                    "used_by",
+                    "mentioned_by",
+                    "orphan"
+                ]
+            ),
+            ("MapEdge", vec!["src", "dst", "type", "weak", "places"]),
+            ("MapParent", vec!["child", "parent"]),
+            ("MapGhost", vec!["written", "reason", "sources", "places"]),
+        ]
+    );
+    // docs/features/corpus-map.md CM4, CM5: `both` and `kinds` right after
+    // `impact`.
+    assert_eq!(
+        sets[6].1[..6],
+        ["ref", "reason", "impact", "both", "kinds", "types"],
+        "{:?}",
+        sets[6].1
     );
     assert_eq!(sets[91].0, "Card");
     // docs/features/card-context.md CC10: 35, `context` right after
@@ -3935,7 +4137,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 151 sets (41 until
+/// unchanged, no new key): the fixture holds 160 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -3967,7 +4169,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/department-overview.md its three, DO10, and
 /// docs/features/collision-pairs.md its two, PP8, and
 /// docs/features/delivery-timeline.md its three, DT6, and
-/// docs/features/usage-orphans.md its three, UO9); a decision
+/// docs/features/usage-orphans.md its three, UO9, and
+/// docs/features/scope-rings.md its three, SR4, and
+/// docs/features/corpus-map.md its six, CM3); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -3981,8 +4185,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        151,
-        "151 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        160,
+        "160 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -3995,8 +4199,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
          upstream-signal's two (US-12), delivery-analytics' eleven (DA-11), \
          direction-catalog's three (DC-9), department-overview's three (DO10), \
-         collision-pairs' two (PP8), delivery-timeline's three (DT6) and \
-         usage-orphans' three (UO9)"
+         collision-pairs' two (PP8), delivery-timeline's three (DT6), \
+         usage-orphans' three (UO9), scope-rings' three (SR4) and corpus-map's six (CM3)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -4113,7 +4317,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 151 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 160 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4143,7 +4347,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/department-overview.md its three, DO10, and
 /// docs/features/collision-pairs.md its two, PP8, and
 /// docs/features/delivery-timeline.md its three, DT6, and
-/// docs/features/usage-orphans.md its three, UO9); the amendment of
+/// docs/features/usage-orphans.md its three, UO9, and
+/// docs/features/scope-rings.md its three, SR4, and
+/// docs/features/corpus-map.md its six, CM3); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -4160,8 +4366,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        151,
-        "151 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        160,
+        "160 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4174,8 +4380,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          task-mandate's `CardSubtaskItem`, node-history's two (NH12), \
          upstream-signal's two (US-12), delivery-analytics' eleven (DA-11), \
          direction-catalog's three (DC-9), department-overview's three (DO10), \
-         collision-pairs' two (PP8), delivery-timeline's three (DT6) and \
-         usage-orphans' three (UO9)"
+         collision-pairs' two (PP8), delivery-timeline's three (DT6), \
+         usage-orphans' three (UO9), scope-rings' three (SR4) and corpus-map's six (CM3)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

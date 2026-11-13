@@ -219,7 +219,7 @@ pub fn tree_with_view(
 /// The lines of the walk from `roots` ([`walked`]), each with its node, a
 /// warning per node met into `messages`; `kinds` keeps the lines of those
 /// kinds after the walk (none given: every line).
-fn lines_of(
+pub(crate) fn lines_of(
     graph: &SpecGraph<'_>,
     admission: &Admission<'_, '_>,
     roots: &[NodeAt],
@@ -354,7 +354,7 @@ fn default_roots(
 
 /// The warning of a node met in the walk: the cycle broken at it, or the
 /// several holders of its parent.
-fn parent_warning(graph: &SpecGraph<'_>, at: NodeAt) -> Option<Message> {
+pub(crate) fn parent_warning(graph: &SpecGraph<'_>, at: NodeAt) -> Option<Message> {
     match graph.parent(at)? {
         Parent::Cycle { members } => {
             let names: Vec<String> = members.iter().map(|&node| graph.name(node)).collect();

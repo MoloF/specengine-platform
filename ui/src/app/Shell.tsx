@@ -96,7 +96,7 @@ const DOC_STATE: DocState = { insideOpen: false, historyOpen: false };
  * Where focus goes once the document modal is gone: its opener while it stands and is not inert;
  * else the dialog left on top (a card's modal: its title); else the view's `h1`.
  */
-function afterDocModal(opener: HTMLElement | null, main: HTMLElement | null): HTMLElement | null {
+function afterDocModal(opener: HTMLElement | SVGElement | null, main: HTMLElement | null): HTMLElement | SVGElement | null {
   if (opener !== null && opener.isConnected && opener.closest("[inert]") === null) {
     return opener;
   }

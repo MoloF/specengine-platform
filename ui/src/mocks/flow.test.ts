@@ -64,7 +64,8 @@ describe("harbor-sim's flow", () => {
     const at = (name: string) => group.nodes.find((node) => node.id === name);
     expect(at("DOM-WATER")?.distance).toBe(0);
     expect(at("DOM-WATER")?.group).toBe("DOM-HARBOR");
-    expect(at("DOM-WATER")?.holds).toBe(4);
+    // Its four, and the fog signal (corpus-map's).
+    expect(at("DOM-WATER")?.holds).toBe(5);
     expect(at("DOM-HARBOR")?.distance).toBeNull();
     expect(at("DOM-HARBOR")?.holds).toBe(0);
   });

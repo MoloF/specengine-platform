@@ -129,3 +129,14 @@ root = "EPC-WATERING"
 [[card.split]]
 kind = "epic"
 disciplines = ["product", "experience", "engineering", "quality"]
+
+# Its scope rings, innermost first (docs/features/scope-rings.md "Acceptance
+# criteria", SR5): their titles and kinds are this project's words, read by
+# the domain scans of `tests/no_domain.rs` and `tests/workspace_names.rs`.
+[[map.ring]]
+title = "Reminders"
+root = "EPC-WATERING"
+
+[[map.ring]]
+title = "Household stories"
+kinds = ["story"]

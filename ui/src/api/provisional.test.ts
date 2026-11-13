@@ -251,13 +251,16 @@ const KEYS = {
  * AC-02 of docs/features/ui-graph.md: `docs/canon/spec-cli-graph.md` "spec graph": JSON {ref,
  * reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges}; `types`
  * [{type, direction}]; a node {id, kind, title, path, line, distance, archived}; an edge {src,
- * type, dst, written, path, line, state, reason}.
+ * type, dst, written, path, line, state, reason}. `both` and `kinds` after `impact` since
+ * docs/features/corpus-map.md "Acceptance criteria", CM4, CM5.
  */
 const GRAPH_KEYS = {
   GraphView: {
     ref: true,
     reason: true,
     impact: true,
+    both: true,
+    kinds: true,
     types: true,
     depth: true,
     archive: true,
@@ -285,7 +288,7 @@ const GRAPH_KEYS = {
 };
 
 const GRAPH_CITED: Record<keyof typeof GRAPH_KEYS, string> = {
-  GraphView: "ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges",
+  GraphView: "ref, reason, impact, both, kinds, types, depth, archive, notes, left_out, truncated, nodes, edges",
   FollowedType: "type, direction",
   GraphNode: "id, kind, title, path, line, distance, archived",
   GraphEdge: "src, type, dst, written, path, line, state, reason",

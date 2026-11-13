@@ -1902,9 +1902,11 @@ fn whole_read(place: &Place, command: &str, reference: &str) -> String {
             &place.env,
             &place.globals,
             &GraphRequest {
-                reference: reference.to_owned(),
+                reference: Some(reference.to_owned()),
                 impact: false,
+                both: false,
                 types: Vec::new(),
+                kinds: Vec::new(),
                 depth: None,
                 archive: false,
             },

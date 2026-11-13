@@ -21,12 +21,19 @@ function brief(row: HealthOrphan): string {
 }
 
 describe("the mock's orphan documents (UO4)", () => {
-  it("normal: harbor-sim's five over its 23 live documents, by kind then path, no kind last; two mechanics with an open task each, three decisions with none; each row its 9 keys", async () => {
+  it("normal: harbor-sim's six over its 26 live documents, by kind then path, no kind last; two mechanics with an open task each, three decisions and the harbour cats' note with none; each row its 9 keys", async () => {
     const { orphans } = await client("normal").getHealth("harbor-sim");
-    expect([orphans.live, orphans.notes]).toEqual([23, []]);
-    expect(orphans.rows.map(brief)).toEqual(["MEC-CARGO-CRANES mechanic 1/1", "MEC-LOCK-B mechanic 1/1", "DEC-0014 - 0/0", "DEC-0012 - 0/0", "DEC-0013 - 0/0"]);
+    expect([orphans.live, orphans.notes]).toEqual([26, []]);
+    expect(orphans.rows.map(brief)).toEqual(["MEC-CARGO-CRANES mechanic 1/1", "MEC-LOCK-B mechanic 1/1", "DEC-0014 - 0/0", "docs/spec/notes/harbour-cats.md - 0/0", "DEC-0012 - 0/0", "DEC-0013 - 0/0"]);
     expect(orphans.rows.map((row) => Object.keys(row))).toEqual(orphans.rows.map(() => KEYS));
-    expect(orphans.rows.map((row) => row.path)).toEqual(["docs/spec/cranes.md", "docs/spec/locks/lock-b.md", "docs/decisions/DEC-0014.md", "docs/spec/records/DEC-0012-simulated-weather.md", "docs/spec/records/DEC-0013-crane-reach.md"]);
+    expect(orphans.rows.map((row) => row.path)).toEqual([
+      "docs/spec/cranes.md",
+      "docs/spec/locks/lock-b.md",
+      "docs/decisions/DEC-0014.md",
+      "docs/spec/notes/harbour-cats.md",
+      "docs/spec/records/DEC-0012-simulated-weather.md",
+      "docs/spec/records/DEC-0013-crane-reach.md",
+    ]);
   });
 
   it("normal: ledger-api none over its five; empty: none over none", async () => {
@@ -52,7 +59,7 @@ describe("the mock's orphan documents (UO4)", () => {
 
   it("orphan-notes: the rows as normal, each one's tasks null, the note why", async () => {
     const { orphans } = await client("orphan-notes").getHealth("harbor-sim");
-    expect(orphans.rows.map((row) => row.name)).toEqual(["MEC-CARGO-CRANES", "MEC-LOCK-B", "DEC-0014", "DEC-0012", "DEC-0013"]);
+    expect(orphans.rows.map((row) => row.name)).toEqual(["MEC-CARGO-CRANES", "MEC-LOCK-B", "DEC-0014", "docs/spec/notes/harbour-cats.md", "DEC-0012", "DEC-0013"]);
     expect(orphans.rows.every((row) => row.tasks === null && row.tasks_open === null)).toBe(true);
     expect(orphans.notes).toEqual([ORPHANS_QUEUE_NOTE]);
   });

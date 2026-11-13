@@ -7,8 +7,9 @@ import type { Scenario } from "./scenario";
 // `harbourmaster`, whose `flows` is null (every flow, so the Overview sets the departments side by
 // side: docs/features/department-overview.md "Acceptance criteria", DO12) and who takes no hand-off
 // (`disciplines` empty), two rooted modules, `berths` and
-// `waters`, and one direction, `mechanics`, by the kind `mechanic` (docs/features/departments.md
-// "Acceptance criteria", DP-11); their names are no repository's and no preset's (the spec's
+// `waters`, and two directions, `mechanics`, by the kind `mechanic` (docs/features/departments.md
+// "Acceptance criteria", DP-11), and `rulebook`, by the kind `rule`, so the Map colours two
+// directions' kinds (docs/features/corpus-map.md "Acceptance criteria", CM8); their names are no repository's and no preset's (the spec's
 // "Disjoint names"), and no app code spells one (policy.test.ts). Each department serves the
 // disciplines a hand-off to it may carry, as the daemon's rule gives them over cards.ts' flows. ledger-api configures none: the implicit workspace, every section but
 // Tasks. `config-notes`: harbor-sim's tables with two wrong values, each left out with its note, and
@@ -35,7 +36,7 @@ function implicit(notes: string[]): WorkspaceDocument {
   };
 }
 
-/** harbor-sim's two trades and its lead, two rooted modules and a direction, the notes as the scenario leaves them. */
+/** harbor-sim's two trades and its lead, two rooted modules and two directions, the notes as the scenario leaves them. */
 function harbor(notes: string[]): WorkspaceDocument {
   return {
     source: "config",
@@ -49,6 +50,7 @@ function harbor(notes: string[]): WorkspaceDocument {
       { name: "berths", title: "Berths", root: "DOM-BERTHS", kinds: null },
       { name: "waters", title: "Harbour waters", root: "DOM-WATER", kinds: null },
       { name: "mechanics", title: "Mechanics", root: null, kinds: ["mechanic"] },
+      { name: "rulebook", title: "Rulebook", root: null, kinds: ["rule"] },
     ],
     default: null,
   };

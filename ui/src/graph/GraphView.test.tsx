@@ -377,7 +377,7 @@ describe("modes, chips, legend (AC-04)", () => {
     await waitFor(() => {
       expect(chips()).toHaveLength(3);
     });
-    fireEvent.click(screen.getByLabelText("Outgoing"));
+    fireEvent.click(screen.getByLabelText("Links"));
     fireEvent.change(screen.getByLabelText("Depth"), { target: { value: "3" } });
     await waitFor(() => {
       expect(lastCall(client)).toEqual({ ref: "R-0", depth: 3 });
@@ -980,5 +980,89 @@ describe("hostile text and links (AC-12)", () => {
     for (const anchor of Array.from(screen.getByRole("main").querySelectorAll("a[href]"))) {
       expect(anchor.getAttribute("href")?.startsWith("#/")).toBe(true);
     }
+  });
+});
+
+// docs/features/corpus-map.md "Acceptance criteria", CM10: the local graph's Both ways mode. The mode
+// group reads Links, Both ways, Impact; Both ways sends `both=true`, never `impact`; its chips name
+// each (type, direction) pair as the answer gives them, a chip pressing its type's pairs; Links and
+// Impact keep their own chips; another REF and a return to the section keep the mode.
+// M: Both ways sending `impact`.
+describe("Both ways (CM10)", () => {
+  function modes(): string[] {
+    const group = screen.getByRole("group", { name: "Mode" });
+    return within(group).getAllByRole("radio").map((radio) => radio.closest("label")?.textContent ?? "");
+  }
+
+  it("reads Links, Both ways, Impact; Both ways sends both=true and never impact (M: Both ways sending impact)", async () => {
+    const client = graphClient();
+    renderApp(client, "#/alpha/graph/R-0");
+    await drawn();
+    expect(modes()).toEqual(["Links", "Both ways", "Impact"]);
+    fireEvent.click(screen.getByLabelText("Both ways"));
+    await calls(client, 2);
+    expect(lastCall(client)).toEqual({ ref: "R-0", both: true, depth: 2 });
+    expect(lastCall(client)?.impact).toBeUndefined();
+  });
+
+  it("names each (type, direction) pair as a chip, a chip releasing its type's two; Links and Impact keep their own chips", async () => {
+    const client = graphClient();
+    renderApp(client, "#/alpha/graph/R-0");
+    await drawn();
+    fireEvent.click(screen.getByLabelText("Both ways"));
+    await waitFor(() => {
+      expect(chips().map((button) => button.textContent.replace(/\s+/g, " ").trim())).toEqual([
+        "zeta_type outgoing",
+        "zeta_type incoming",
+        "alpha_type outgoing",
+        "alpha_type incoming",
+        "gamma_type outgoing",
+        "gamma_type incoming",
+        "mentions",
+      ]);
+    });
+    fireEvent.click(chip("alpha_type"));
+    await waitFor(() => {
+      expect(lastCall(client)).toEqual({ ref: "R-0", both: true, types: ["zeta_type", "gamma_type"], depth: 2 });
+    });
+    expect(chips().filter((button) => button.getAttribute("aria-pressed") === "false").map((button) => button.textContent.replace(/\s+/g, " ").trim())).toEqual([
+      "alpha_type outgoing",
+      "alpha_type incoming",
+      "mentions",
+    ]);
+    fireEvent.click(screen.getByLabelText("Impact"));
+    await waitFor(() => {
+      expect(chips().map((button) => button.textContent.replace(/\s+/g, " ").trim())).toEqual(["gamma_type incoming", "zeta_type outgoing", "mentions"]);
+    });
+    fireEvent.click(screen.getByLabelText("Links"));
+    await waitFor(() => {
+      expect(chips().map((button) => button.textContent.replace(/\s+/g, " ").trim())).toEqual(["zeta_type outgoing", "alpha_type outgoing", "gamma_type outgoing", "mentions"]);
+    });
+  });
+
+  it("keeps Both ways on another REF and back from another section", async () => {
+    const client = graphClient();
+    renderApp(client, "#/alpha/graph/R-0");
+    await drawn();
+    fireEvent.click(screen.getByLabelText("Both ways"));
+    await calls(client, 2);
+    act(() => {
+      window.location.hash = "#/alpha/graph/LONE";
+    });
+    await waitFor(() => {
+      expect(lastCall(client)).toEqual({ ref: "LONE", both: true, depth: 2 });
+    });
+    act(() => {
+      window.location.hash = "#/alpha/tree";
+    });
+    await screen.findByRole("heading", { level: 1, name: /Spec tree/ });
+    act(() => {
+      window.location.hash = "#/alpha/graph/R-0";
+    });
+    await screen.findByLabelText("Both ways");
+    expect(screen.getByRole("radio", { name: "Both ways", checked: true })).toBeTruthy();
+    await waitFor(() => {
+      expect(lastCall(client)).toEqual({ ref: "R-0", both: true, depth: 2 });
+    });
   });
 });

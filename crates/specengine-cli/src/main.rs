@@ -170,21 +170,33 @@ enum Command {
         #[arg(long)]
         summary: bool,
     },
-    /// Walk the typed links from REF: what it depends on, or with --impact what an edit of it reaches.
+    /// Walk the typed links from REF, or from every node of the --kind kinds: what it depends on, with --both what it uses and what uses it, or with --impact what an edit of it reaches.
     Graph {
-        /// Any form `show` takes.
+        /// Any form `show` takes; give it or --kind, not both.
         #[arg(value_name = "REF")]
-        reference: String,
+        reference: Option<String>,
         /// Follow the impact table: depends_on, derived_from, verifies, uses_term, uses back; constrains, supplies forward.
         #[arg(long)]
         impact: bool,
+        /// Follow each type both ways: what the start uses and what uses it; not with --impact.
+        #[arg(long)]
+        both: bool,
         /// Follow only this link type (repeatable): outgoing; with --impact in its table direction, else incoming.
         #[arg(long = "type", value_name = "T")]
         types: Vec<String>,
-        /// Distance from REF at most; default unbounded.
+        /// Start from every node of this kind instead of a REF (repeatable; matched whole, as tree --kind).
+        #[arg(long = "kind", value_name = "K")]
+        kinds: Vec<String>,
+        /// Distance from the starts at most; default unbounded.
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         depth: Option<i64>,
         /// Include links written in Tier 3 (archived) documents.
+        #[arg(long)]
+        archive: bool,
+    },
+    /// Print the whole corpus as one map: every live document and ID section with its use counts, orphan flag and document, the resolved links between them merged per (source, target, type), the documents' parents and the unresolved targets; computed per read, never stored; read-only, exit 0 whatever is listed, 2 when it cannot run (no project, an index that cannot be read). The text is cut at the output cap, the JSON never.
+    Map {
+        /// Include Tier 3 (archived) documents and their links; the counts stay those of live sources.
         #[arg(long)]
         archive: bool,
     },
@@ -262,6 +274,8 @@ enum Command {
         #[arg(long)]
         archive: bool,
     },
+    /// Print the scope rings the `[[map.ring]]` tables of the config choose, innermost first: per ring the nodes `tree [ROOT] --kind K…` lists for its root and kinds, live files only, less those an inner ring holds, each with its work state (the trace's rollup); computed per read, never stored; read-only, exit 0 whatever is listed (a bad table, or a root naming no node, is a note), 2 when it cannot run (no project, an index or a queue that cannot be read).
+    Rings,
     /// List pairs of spec nodes that may collide, for an agent to judge: within a kind, those sharing a link target (but `mentions`; a target too many nodes of the kind hold skipped) or with alike titles by title trigrams, scored and ordered; a pair an agent marked stays hidden until either side's norm_hash changes. Computed per read; writes nothing but the index. Exit 0 whatever is listed, 2 when it cannot run (a bad --limit, no project, an index or a queue that cannot be read).
     #[command(args_conflicts_with_subcommands = true)]
     Collisions {
@@ -1334,7 +1348,9 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         Command::Graph {
             reference,
             impact,
+            both,
             types,
+            kinds,
             depth,
             archive,
         } => Outcome::Graph(specengine_cli::graph(
@@ -1343,11 +1359,18 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             &GraphRequest {
                 reference,
                 impact,
+                both,
                 types,
+                kinds,
                 depth,
                 archive,
             },
         )?),
+        Command::Map { archive } => Outcome::Map(Box::new(specengine_cli::map(
+            env,
+            globals,
+            &specengine_cli::MapRequest { archive },
+        )?)),
         Command::Impact {
             reference,
             symbol,
@@ -1425,6 +1448,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             globals,
             &CatalogRequest { kinds, archive },
         )?)),
+        Command::Rings => Outcome::Rings(Box::new(specengine_cli::rings(env, globals)?)),
         Command::Collisions {
             command: None,
             kinds,

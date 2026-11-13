@@ -1868,7 +1868,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        151,
+        160,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1887,7 +1887,8 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          (docs/features/collision-pairs.md, PP8), delivery-timeline's three \
          (docs/features/delivery-timeline.md, DT6) and usage-orphans' three \
          (docs/features/usage-orphans.md, UO9: `LinkUsage`, `HealthOrphans`, \
-         `HealthOrphan`)"
+         `HealthOrphan`), scope-rings' three (docs/features/scope-rings.md, SR4) and \
+         corpus-map's six (docs/features/corpus-map.md, CM3)"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

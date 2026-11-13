@@ -16,8 +16,11 @@
 //! a read, the counts, never a card, on a hub too, any login's (task spec
 //! `department-overview` DO10).
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md);
+//! `…/map` a read, the whole corpus as one map (task spec `corpus-map`
+//! CM3);
 //! `…/catalog` a read, its last changes cached per `HEAD` in [`App`]
-//! (docs/features/direction-catalog.md).
+//! (docs/features/direction-catalog.md); `…/rings` a read, the scope rings
+//! (task spec `scope-rings` SR4).
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `…/workspaces` a read of the config
 //! alone, no turn, locally and on a hub alike
@@ -216,11 +219,13 @@ pub(crate) fn router(app: Shared) -> Router {
             post(clear_group).fallback(only_post),
         )
         .route("/api/projects/{p}/graph", read(graph))
+        .route("/api/projects/{p}/map", read(map))
         .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/health", read(health))
         .route("/api/projects/{p}/roadmap", read(roadmap))
         .route("/api/projects/{p}/delivery", read(delivery))
         .route("/api/projects/{p}/catalog", read(catalog))
+        .route("/api/projects/{p}/rings", read(rings))
         .route("/api/projects/{p}/lock-diff", read(lock_diff))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
@@ -502,7 +507,7 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, cards/counts, round, \
-             events, delivery, catalog, workspaces}}, \
+             events, delivery, catalog, map, rings, workspaces}}, \
              /api/identity; the web UI: / and /assets/<file>",
             uri.path()
         ),
@@ -698,28 +703,55 @@ async fn bundle(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
     .await)
 }
 
-/// `GET …/graph`: `spec graph REF --json`, the browser view (every node
-/// and edge); `ref` required, `types` repeated, in order; a link type is
-/// never judged here.
+/// `GET …/graph`: `spec graph (REF | --kind K…) --json`, the browser view
+/// (every node and edge); `ref` or `kinds` (repeated), `types` repeated, in
+/// order, `both=true` its `--both`; a link type or a kind is never judged
+/// here. The CLI's usage refusal is a 400 with its line, nothing run (task
+/// spec `corpus-map` CM4, CM5).
 async fn graph(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     let args = args(
         "graph",
-        &["ref", "impact", "types", "depth", "archive"],
+        &[
+            "ref", "impact", "both", "types", "kinds", "depth", "archive",
+        ],
         &uri,
     )?;
     let request = (|| {
         Ok::<_, String>(GraphRequest {
-            reference: args.required_text("ref")?,
+            reference: args.text("ref")?,
             impact: args.boolean("impact")?.unwrap_or(false),
+            both: args.boolean("both")?.unwrap_or(false),
             types: args.texts("types"),
+            kinds: args.texts("kinds"),
             depth: args.integer("depth")?,
             archive: args.boolean("archive")?.unwrap_or(false),
         })
     })()
     .map_err(Refusal::bad_request)?;
+    if let Some(refusal) = request.refusal() {
+        return Err(Refusal::bad_request(refusal));
+    }
     Ok(run_read(project, move |env, globals| {
         specengine_cli::graph_with_view(env, globals, &request, View::Browser).map(Outcome::Graph)
+    })
+    .await)
+}
+
+/// `GET …/map`: `spec map [--archive] --json`, whole as the CLI's JSON
+/// always is, in the project's turn as `tree` is served (task spec
+/// `corpus-map` CM3); `archive` its one query name; the CLI's exit 2 a 503.
+async fn map(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("map", &["archive"], &uri)?;
+    let request = specengine_cli::MapRequest {
+        archive: args
+            .boolean("archive")
+            .map_err(Refusal::bad_request)?
+            .unwrap_or(false),
+    };
+    Ok(run_read(project, move |env, globals| {
+        specengine_cli::map(env, globals, &request).map(|outcome| Outcome::Map(Box::new(outcome)))
     })
     .await)
 }
@@ -903,6 +935,22 @@ async fn catalog(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusa
             Some(&shared.catalogs),
         )
         .map(|outcome| Outcome::Catalog(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/rings`: `spec rings --json`, the browser view (no line cut), in
+/// the project's turn, walking as `catalog` does, since its sectors show the
+/// trace's state (task spec `scope-rings` SR4). No query: any name is a
+/// 400, nothing run. A bad `[map]` or a root naming no node is a note, never
+/// a refusal; an index or a queue that cannot be read is the CLI's exit 2, a
+/// 503.
+async fn rings(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    args("rings", &[], &uri)?;
+    Ok(run(project, |env, globals| {
+        specengine_cli::rings_with_view(env, globals, View::Browser)
+            .map(|outcome| Outcome::Rings(Box::new(outcome)))
     })
     .await)
 }

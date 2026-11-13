@@ -21,7 +21,7 @@
 //! - Top-level keys: `project`, `paths`, `ids`, `decision_records`, then
 //!   `budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code`,
 //!   `verify`, `health`, `roadmap`, `flow`, `card`, `team`, `workspace`,
-//!   `module`, which are only name-checked here
+//!   `module`, `map`, which are only name-checked here
 //!   (their readers are the check's, [`crate::gate`]'s for `zones` and
 //!   `gate`, [`crate::code_toml`]'s and [`crate::verify`]'s, read only where
 //!   code is read, [`crate::health_toml`]'s and [`crate::roadmap_toml`]'s,
@@ -30,9 +30,11 @@
 //!   [`crate::flow_toml`]'s, read only by `spec flow`, [`crate::card_toml`]'s,
 //!   read only by `spec card`, [`crate::team_toml`]'s, read only by a hub's
 //!   acts and the check's `team-config`, [`crate::workspace_toml`]'s, read
-//!   only by `spec workspace` and its route, which never fails): a bad
-//!   `[gate]`, `[verify]`, `[roadmap]`, `[flow]`, `[card]`, `[team]`,
-//!   `[[workspace]]` or `[[module]]` fails no read; any other key
+//!   only by `spec workspace` and its route, which never fails, and
+//!   [`crate::map_toml`]'s, read only by `spec rings` and its route, which
+//!   never fails either: task spec `scope-rings` SR1): a bad `[gate]`,
+//!   `[verify]`, `[roadmap]`, `[flow]`, `[card]`, `[team]`,
+//!   `[[workspace]]`, `[[module]]` or `[map]` fails no read; any other key
 //!   is an error at its line, so a `[path]` typo cannot silently fall back to
 //!   the default walk.
 //!
@@ -324,6 +326,8 @@ struct RawFile {
     workspace: Option<IgnoredAny>,
     #[serde(default)]
     module: Option<IgnoredAny>,
+    #[serde(default)]
+    map: Option<IgnoredAny>,
 }
 
 /// `[project]`; any other key is an error.

@@ -46,5 +46,3 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0102.md](roadmap/RM-0102.md) flow-directions (Phase 7, v5 pool): Flow drawn through a kind direction · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0109.md](roadmap/RM-0109.md) code-languages (Phase 7, pool, on a trigger): bind code in a second language · crates/specengine-code, crates/specengine-core · draft
 - [docs/roadmap/RM-0110.md](roadmap/RM-0110.md) config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0112.md](roadmap/RM-0112.md) corpus-map (Phase 7, the writer map): the whole corpus as one map · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0113.md](roadmap/RM-0113.md) scope-rings (Phase 7, the writer map): nodes on concentric rings, the radius their scope · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft

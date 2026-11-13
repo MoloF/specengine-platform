@@ -15,7 +15,8 @@ export function PatternSwatch({ position }: { position: number }) {
 
 /**
  * The canvas's legend (docs/features/ui-graph.md "Implementation", Legend): what an arrow and a
- * column mean; each followed type in the answer's order with its pattern (by its place in the
+ * column mean; each followed (type, direction) pair in the answer's order, Both ways naming a type
+ * twice (docs/features/corpus-map.md "Acceptance criteria", CM10), with its pattern (by its place in the
  * mode's chip `order`, as the canvas draws it), direction icon and words; the marks; the drawing
  * library's credit.
  */
@@ -27,7 +28,7 @@ export function GraphLegend({ types, order }: { types: readonly FollowedType[]; 
       <p className="graph-legend-about">{t("graph.legend.about")}</p>
       <ul className="graph-legend-list">
         {types.map((followed) => (
-          <li key={followed.type} className="graph-legend-item">
+          <li key={`${followed.type}\u0000${followed.direction}`} className="graph-legend-item">
             <PatternSwatch position={order.indexOf(followed.type)} />
             <Icon name={directionIcon(followed.direction)} />
             <span className="mono">{followedLabel(followed.type, followed.direction, t)}</span>

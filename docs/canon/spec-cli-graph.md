@@ -8,7 +8,7 @@ reviewed: 2026-11-13
 
 # spec tree, spec graph, show --links
 
-CLI pass 3 (`docs/features/spec-cli-graph.md`): a node's ancestors, children, links and an edit's reach without opening files; the shapes feed MCP `get_tree`, `get_node(with: [links])` (`docs/canon/mcp-read.md`) and pass 4's bundle (05 §6). Read-only; each command is one library function returning a struct (`render_text`, `render_json`). As `spec show` (`crates/specengine-cli/README.md`): discovery, `--json`, freshness, REF forms and resolution (several holders → all by (path, ord), one `warning:`), streams, the one-line rule, writes only in the data directory. A node is named by its ID, else its path.
+CLI pass 3: a node's ancestors, children, links and an edit's reach without opening files; the shapes feed MCP `get_tree`, `get_node(with: [links])` (`mcp-read.md`) and the bundle. Read-only; each command is one library function returning a struct. As `spec show` (CLI README): discovery, `--json`, freshness, REF forms and resolution (several holders → all by (path, ord), one `warning:`), streams, the one-line rule, writes only in the data directory. A node is named by its ID, else its path.
 
 ## Input
 
@@ -59,7 +59,7 @@ A line's tail: ` | status <s>`, ` | archived`, then ` | parent <written> danglin
 
 ## spec graph
 
-`spec graph REF [--impact] [--type T]… [--depth N] [--archive]`: breadth-first from REF's holders (distance 0), each node visited once, a visited node's edge still listed. A node's links include its nested sections'; a nested section reached by itself is a separate node. Default: every strong type outgoing; `--impact`: the impact column; `--type T` (free, repeatable) replaces the set: outgoing, under `--impact` in its table direction, else incoming. `--depth N` stops at distance N (not expanded); default unbounded. A dangling, `project:` or unchecked edge of a followed type from a reached node is listed, its end as written plus the `--links` state suffix, never followed.
+`spec graph (REF | --kind K…) [--impact | --both] [--type T]… [--depth N] [--archive]`: breadth-first from REF's holders, or `--kind`'s live nodes (distance 0), each node visited once, a visited node's edge still listed. A node's links include its nested sections'; a nested section reached by itself is a separate node. Default: every strong type outgoing; `--impact`: the impact column; `--both`: both ways (`spec-map.md` "Graph flags"); `--type T` (free, repeatable) replaces the set: outgoing, under `--impact` in its table direction, else incoming. `--depth N` stops at distance N (not expanded); default unbounded. A dangling, `project:` or unchecked edge of a followed type from a reached node is listed, its end as written plus the `--links` state suffix, never followed.
 
 ```text
 <distance> <name> | <kind or -> | <title or -> | <path>:<line>[ | archived]
@@ -67,7 +67,7 @@ A line's tail: ` | status <s>`, ` | archived`, then ` | parent <written> danglin
 nodes <n>, edges <e>[; left out: …]
 ```
 
-Nodes by (distance, path, ord), then edges by (type, path, line, column) in link direction, `path:line` where written. JSON `{ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges}`; `types` `[{type, direction}]` as followed, in order: the `--type`s given (a repeat once); else `IMPACT_LINK_TYPES`; else `LINK_TYPES`, then every unknown declared type of the corpus by name; a node `{id, kind, title, path, line, distance, archived}`; an edge `{src, type, dst, written, path, line, state, reason}`, + `kind`, `when` when labelled.
+Nodes by (distance, path, ord), then edges by (type, path, line, column) in link direction, `path:line` where written. JSON `{ref, reason, impact, both, kinds, types, depth, archive, notes, left_out, truncated, nodes, edges}`; `types` `[{type, direction}]` as followed, in order: the `--type`s given (a repeat once); else `IMPACT_LINK_TYPES`; else `LINK_TYPES`, then every unknown declared type of the corpus by name; a node `{id, kind, title, path, line, distance, archived}`; an edge `{src, type, dst, written, path, line, state, reason}`, + `kind`, `when` when labelled.
 
 ## spec show --links
 
@@ -98,6 +98,6 @@ Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `re
 
 ## Open
 
-- Every call re-reads and re-parses every used file; measured through MCP (`docs/canon/mcp-read.md` "Latency"): a lighter resolver input, or the indexed parse when the bytes match.
+- Every call re-reads and re-parses every used file; measured through MCP (`mcp-read.md` "Latency"): a lighter resolver input, or the indexed parse when the bytes match.
 - The same-size edit race (`freshness.rs`) is probabilistic on its red side: no seam between the index update and the re-read.
 - The unreadable and parser-panic fallback (lines 1, `warning:`) is untested.

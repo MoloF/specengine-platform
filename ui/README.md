@@ -31,12 +31,12 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 - **Dialogs** in-app (`role="dialog"`, `aria-modal`, focus trap, Esc but mid-IME, focus back to the trigger; a scrim click closes only the palette and a work item's modal; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while pending no dialog closes or opens; a refusal keeps the dialog, the typed text and a `role="alert"`; a proposal revised meanwhile shows as changed.
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4), letters by `letterOf`; `?` lists them. Cmd/Ctrl-K opens the palette over no dialog but the document modal: the shell's keydown listener, the only one on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never on `body` nor under a sticky bar (scroll padding).
 - **Text**: chrome from `src/i18n/` (`ui-languages.md`); data is text, no HTML sink, a proposal's login escaped (`ProposalCard`), each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`); anything cut is seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
-- **Canvas** (`@xyflow/react`, lazy, hand-laid): read-only, key options `null`, the wheel scrolls the page, a press of up to 5 px a click; Flow's pans, zooms by key; `base.css` only, each `--xy-*` from a token; a List its text twin; attribution hidden, credited as text.
+- **Canvas** (`@xyflow/react`, lazy, hand-laid; the Map: `spec-map.md`): read-only, key options `null`, the wheel scrolls the page, a press up to 5 px a click; Flow's pans, zooms by key; `base.css` only, each `--xy-*` from a token; a List its text twin; attribution hidden, credited as text.
 - **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: home; Flow: `spec-flow-place.md`; `/page`, `doc`: `doc-view.md`), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), but the Tree's Show drift, `specengine.{board.as,board.lanes.<p>,workspace.<p>[.<login>],module.<p>[.<login>],language,theme}` in `localStorage`; a root error boundary, one per view.
 
 ## Dependencies
 
-The owner's allowlist: the 19 below (2026-10-05; the last four ADR-0036, ADR-0072). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree. Inter 4.001 (OFL-1.1) is files, no package: `ui/fonts/inter/` (the owner, 2026-11-10).
+The owner's allowlist: the 21 below (2026-10-05; then ADR-0036, ADR-0072, ADR-0080). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree. Inter 4.001 (OFL-1.1) is files, no package: `ui/fonts/inter/`.
 
 | Package | Version | Role |
 |---|---|---|
@@ -53,12 +53,14 @@ The owner's allowlist: the 19 below (2026-10-05; the last four ADR-0036, ADR-007
 | `typescript-eslint` | 8.70.1 | TS lint |
 | `eslint-plugin-react-hooks` | 7.1.1 | hooks rules |
 | `vitest` | 5.0.2 | test runner |
-| `@testing-library/react` | 16.3.3 | component tests; peer `@testing-library/dom` lockfile only |
+| `@testing-library/react` | 16.3.3 | component tests; `@testing-library/dom` lockfile only |
 | `jsdom` | 29.1.1 | test DOM |
 | `react-markdown` | 10.1.0 | markdown, `src/markdown/` only |
 | `remark-gfm` | 4.0.1 | GFM for it |
 | `i18next` | 26.5.11 | strings, `src/i18n/` only |
 | `react-i18next` | 17.1.9 | React for it |
+| `d3-force` | 3.0.0 | layout, `src/map/` only |
+| `@types/d3-force` | 3.0.10 | types |
 
 **Held back.** TypeScript 7 (outside `typescript-eslint`'s peers), jsdom 30 (Node >= 24.15, here 24.14).
 
@@ -81,7 +83,6 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 
 - Role runs never start `pnpm dev`, `vite`, `vite preview`, bare `vitest` or any watcher. Wrap each gate: `perl -e 'alarm 600; exec @ARGV' pnpm --dir ui test`.
 - Vitest: `watch: false`, at most 2 workers.
-- The docs walk descends `node_modules`: cheap only in pnpm's isolated layout.
 
 ## Owner's manual steps
 

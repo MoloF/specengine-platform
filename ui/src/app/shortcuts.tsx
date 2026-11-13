@@ -65,6 +65,15 @@ const GRAPH_KEYS: readonly Shortcut[] = [
   [[typed("o")], (t) => t("app.shortcuts.graph.tree")],
   [[typed("c")], (t) => t("app.shortcuts.graph.centre")],
   [["esc"], (t) => t("app.shortcuts.graph.esc")],
+  // The Map's canvas (docs/features/corpus-map.md "Acceptance criteria", CM7): never the wheel.
+  [[typed("+"), typed("-"), typed("0")], (t) => t("app.shortcuts.graph.mapZoom")],
+  [["up", "down", "left", "right"], (t) => t("app.shortcuts.graph.mapPan")],
+  [["esc"], (t) => t("app.shortcuts.graph.mapClear")],
+  // The Rings' sectors (docs/features/scope-rings.md "Acceptance criteria", SR7): one tab stop, walked.
+  [["left", "right"], (t) => t("app.shortcuts.graph.ringsAlong")],
+  [["up", "down"], (t) => t("app.shortcuts.graph.ringsAcross")],
+  [["home", "end"], (t) => t("app.shortcuts.graph.ringsEnds")],
+  [["enter"], (t) => t("app.shortcuts.graph.ringsEnter")],
   JUMP,
   SHOW_LIST,
 ];

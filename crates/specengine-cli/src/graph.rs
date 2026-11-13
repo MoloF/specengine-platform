@@ -1,7 +1,8 @@
-//! `spec graph REF [--impact] [--type T]… [--depth N] [--archive]` (task
-//! spec `spec-cli-graph`): a breadth-first walk along typed links from
-//! `REF`'s holders (distance 0), each node visited once, over the
-//! index-fed spec graph. A node's links include its nested sections'.
+//! `spec graph (REF | --kind K…) [--both | --impact] [--type T]… [--depth
+//! N] [--archive]` (task specs `spec-cli-graph`, `corpus-map`): a
+//! breadth-first walk along typed links from `REF`'s holders (distance 0),
+//! each node visited once, over the index-fed spec graph. A node's links
+//! include its nested sections'.
 //!
 //! The types followed (one table for every project, `specengine-model`):
 //! by default every strong type outgoing (`mentions` not followed); with
@@ -9,10 +10,18 @@
 //! `verifies`, `uses_term`, `uses` incoming, `constrains`, `supplies`
 //! outgoing. `--type T` replaces the set: outgoing; with `--impact` in its
 //! table direction, else incoming (so `--impact --type follows` walks the
-//! flow forward). `--depth N` stops at distance N; default unbounded.
-//! Edges written in a file the live rule leaves out are not followed,
-//! counted. A dangling, `project:` or unchecked edge of a followed type is
-//! listed, never followed.
+//! flow forward). `--both` takes each type of the set both ways, its `out`
+//! listed before its `in` (task spec `corpus-map` CM4). `--depth N` stops
+//! at distance N; default unbounded. Edges written in a file the live rule
+//! leaves out are not followed, counted. A dangling, `project:` or
+//! unchecked edge of a followed type is listed, never followed.
+//!
+//! `--kind K` (repeatable, matched whole as `spec tree --kind`) starts from
+//! every node of those kinds in a file the live rule admits, in (path,
+//! position) order, instead of a REF; a kind no node has is a note, never
+//! an exit (CM5). A REF and `--kind` together, neither, or `--both` with
+//! `--impact` exit 2 before anything is read ([`GraphRequest::refusal`],
+//! the daemon's 400).
 //!
 //! ```text
 //! <distance> <name> | <kind or -> | <title or -> | <path>:<line>[ | archived]
@@ -27,7 +36,8 @@
 //! nodes first, a node cut drops every edge); the daemon's
 //! [`View::Browser`] shows every node and edge (task spec `ui-live`).
 
-use std::collections::BTreeSet;
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::Serialize;
 use specengine_core::check::{Endpoint, LinkState, NodeAt, SpecGraph, Walk};
@@ -44,29 +54,62 @@ use crate::search::notes;
 use crate::show::classify;
 use crate::{CliError, Env, Globals, Message, one_line};
 
+/// The refusal of a REF given with `--kind` (task spec `corpus-map` CM5).
+const REF_AND_KIND: &str = "spec graph: give a REF or `--kind`, not both";
+
+/// The refusal of a call with neither a REF nor `--kind` (CM5).
+const NO_START: &str = "spec graph: give a REF or `--kind`";
+
+/// The refusal of `--both` with `--impact` (CM4).
+const BOTH_AND_IMPACT: &str = "spec graph: `--both` and `--impact` exclude each other";
+
 /// `spec graph` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GraphRequest {
-    /// `REF` as given.
-    pub reference: String,
+    /// `REF` as given; `None` with `--kind`.
+    pub reference: Option<String>,
     /// `--impact`: the impact table instead of the outgoing default.
     pub impact: bool,
+    /// `--both`: each followed type both ways (task spec `corpus-map` CM4).
+    pub both: bool,
     /// `--type`: the types to follow instead; empty: the table.
     pub types: Vec<String>,
+    /// `--kind`: start from every admitted node of these kinds instead of
+    /// a REF (CM5); empty: a REF.
+    pub kinds: Vec<String>,
     /// `--depth N`; `None`: unbounded.
     pub depth: Option<i64>,
-    /// `--archive`: edges written in Tier 3 files too.
+    /// `--archive`: edges written in Tier 3 files too; with `--kind`, Tier
+    /// 3 starts too.
     pub archive: bool,
+}
+
+impl GraphRequest {
+    /// Why the request cannot run (exit 2; the daemon's 400 with the same
+    /// line), if it cannot: a REF and `--kind` together, neither, or
+    /// `--both` with `--impact` (task spec `corpus-map` CM4, CM5).
+    pub fn refusal(&self) -> Option<&'static str> {
+        match (self.reference.is_some(), !self.kinds.is_empty()) {
+            (true, true) => Some(REF_AND_KIND),
+            (false, false) => Some(NO_START),
+            _ if self.both && self.impact => Some(BOTH_AND_IMPACT),
+            _ => None,
+        }
+    }
 }
 
 /// What `spec graph` reached, or why `REF` names nothing (exit 1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraphOutcome {
-    /// `REF` as given.
-    pub reference: String,
+    /// `REF` as given; `None` with `--kind`.
+    pub reference: Option<String>,
     pub reason: Option<String>,
     pub messages: Vec<Message>,
     pub impact: bool,
+    /// `--both`.
+    pub both: bool,
+    /// `--kind` as given; empty: a REF.
+    pub kinds: Vec<String>,
     /// The (type, direction) pairs followed, in table or given order; the
     /// default lists the shared types, then the unknown declared types of
     /// the corpus, by name.
@@ -150,17 +193,21 @@ pub fn graph_with_view(
     request: &GraphRequest,
     view: View,
 ) -> Result<GraphOutcome, CliError> {
+    if let Some(refusal) = request.refusal() {
+        return Err(CliError::cannot(refusal));
+    }
     let depth = depth_of(request.depth)?;
     let project = discover(env, globals)?;
     project.slug()?;
     let scheme = &project.config.scheme;
-    let written = request.reference.trim();
     let mut messages = Vec::new();
     let mut outcome = GraphOutcome {
         reference: request.reference.clone(),
         reason: None,
         messages: Vec::new(),
         impact: request.impact,
+        both: request.both,
+        kinds: request.kinds.clone(),
         types: Vec::new(),
         depth,
         archive: request.archive,
@@ -170,28 +217,37 @@ pub fn graph_with_view(
         shown_nodes: 0,
         shown_edges: 0,
     };
-    let target = match classify(
-        written,
-        scheme,
-        &mut messages,
-        "`spec graph` reads the current files",
-    )? {
-        Ok(target) => target,
-        Err(reason) => return Ok(not_found(outcome, reason, messages)),
+    let target = match request.reference.as_deref().map(str::trim) {
+        None => None,
+        Some(written) => match classify(
+            written,
+            scheme,
+            &mut messages,
+            "`spec graph` reads the current files",
+        )? {
+            Ok(target) => Some((target, written)),
+            Err(reason) => return Ok(not_found(outcome, reason, messages)),
+        },
     };
 
     let input = indexed(env, &project, &mut messages, true)?;
     let graph = SpecGraph::new(&input, scheme, &project.config.paths);
-    let starts = match locate(&graph, &target, written)? {
-        Ok(nodes) => nodes,
-        Err(reason) => return Ok(not_found(outcome, reason, messages)),
+    let starts = match target {
+        Some((target, written)) => {
+            let starts = match locate(&graph, &target, written)? {
+                Ok(nodes) => nodes,
+                Err(reason) => return Ok(not_found(outcome, reason, messages)),
+            };
+            messages.extend(holders_warning(
+                &graph,
+                written,
+                &starts,
+                "all at distance 0",
+            ));
+            starts
+        }
+        None => of_kinds(&graph, &request.kinds, request.archive, &mut messages),
     };
-    messages.extend(holders_warning(
-        &graph,
-        written,
-        &starts,
-        "all at distance 0",
-    ));
     outcome.types = followed(&graph, request);
     let Reach { walk, left_out } = reach(&graph, &starts, request, depth);
     outcome.left_out = left_out;
@@ -241,12 +297,22 @@ pub(crate) fn reach(
     depth: Option<usize>,
 ) -> Reach {
     let admission = Admission::new(graph, request.archive, starts.iter().map(|at| at.file));
-    let walk = graph.walk(
-        starts,
-        |link_type| follow(request, link_type),
-        depth,
-        |file| admission.admits(file),
-    );
+    let walk = if request.both {
+        walk_both(
+            graph,
+            starts,
+            |link_type| follows_both(request, link_type),
+            depth,
+            |file| admission.admits(file),
+        )
+    } else {
+        graph.walk(
+            starts,
+            |link_type| follow(request, link_type),
+            depth,
+            |file| admission.admits(file),
+        )
+    };
     let mut left_out = LeftOut::default();
     for &edge in &walk.left_out {
         left_out.add(graph.standing(graph.edges()[edge].file));
@@ -266,6 +332,110 @@ pub(crate) fn impact_reach(
         ..GraphRequest::default()
     };
     reach(graph, starts, &request, depth)
+}
+
+/// `--kind K…`'s starts (task spec `corpus-map` CM5): every node whose
+/// kind is one of `kinds`, matched whole, in a file the live rule admits
+/// (Tier 3 with `archive`), in (path, position) order; a note per kind no
+/// such node has.
+fn of_kinds(
+    graph: &SpecGraph<'_>,
+    kinds: &[String],
+    archive: bool,
+    messages: &mut Vec<Message>,
+) -> Vec<NodeAt> {
+    let admission = Admission::new(graph, archive, Vec::new());
+    let mut starts = Vec::new();
+    let mut found: BTreeSet<&str> = BTreeSet::new();
+    for file in (0..graph.paths().len()).filter(|&file| admission.admits(file)) {
+        for (ord, node) in graph.nodes(file).iter().enumerate() {
+            if let Some(kind) = node.kind.as_deref()
+                && kinds.iter().any(|wanted| wanted == kind)
+            {
+                found.insert(kind);
+                starts.push(NodeAt { file, ord });
+            }
+        }
+    }
+    let mut noted = BTreeSet::new();
+    for kind in kinds {
+        if !found.contains(kind.as_str()) && noted.insert(kind.as_str()) {
+            messages.push(Message::Note(format!("graph: no node of kind `{kind}`")));
+        }
+    }
+    starts
+}
+
+/// [`SpecGraph::walk`] with each followed type taken both ways (task spec
+/// `corpus-map` CM4): breadth-first from `starts` (distance 0), from each
+/// reached node and its nested sections ([`SpecGraph::links`]) out to the
+/// targets and in to the sources of the edges whose type `follows` takes;
+/// a node is visited once, an edge to a visited node still listed. Nodes at
+/// distance `depth` are not expanded. Edges written in a file `admit`
+/// refuses are counted, never followed.
+fn walk_both(
+    graph: &SpecGraph<'_>,
+    starts: &[NodeAt],
+    follows: impl Fn(&str) -> bool,
+    depth: Option<usize>,
+    admit: impl Fn(usize) -> bool,
+) -> Walk {
+    let mut distance: BTreeMap<NodeAt, usize> = BTreeMap::new();
+    let mut queue = VecDeque::new();
+    for &start in starts {
+        if graph.node(start).is_some() && !distance.contains_key(&start) {
+            distance.insert(start, 0);
+            queue.push_back(start);
+        }
+    }
+    let mut edges = BTreeSet::new();
+    let mut left_out = BTreeSet::new();
+    while let Some(at) = queue.pop_front() {
+        let Some(&reached) = distance.get(&at) else {
+            continue;
+        };
+        if depth.is_some_and(|depth| reached >= depth) {
+            continue;
+        }
+        let links = graph.links(at, &admit);
+        let out = links.outgoing.iter().map(|&(index, _)| (index, true));
+        let back = links.incoming.iter().map(|&(index, _)| (index, false));
+        for (index, forward) in out.chain(back) {
+            let edge = &graph.edges()[index];
+            if !follows(&edge.link_type) {
+                continue;
+            }
+            if !admit(edge.file) {
+                left_out.insert(index);
+                continue;
+            }
+            edges.insert(index);
+            let far = if forward { &edge.target } else { &edge.source };
+            let Endpoint::Nodes(nodes) = far else {
+                continue;
+            };
+            for &next in nodes {
+                if let Entry::Vacant(entry) = distance.entry(next) {
+                    entry.insert(reached + 1);
+                    queue.push_back(next);
+                }
+            }
+        }
+        left_out.extend(
+            links
+                .left_out
+                .iter()
+                .copied()
+                .filter(|&index| follows(&graph.edges()[index].link_type)),
+        );
+    }
+    let mut nodes: Vec<(NodeAt, usize)> = distance.into_iter().collect();
+    nodes.sort_by_key(|&(at, distance)| (distance, at));
+    Walk {
+        nodes,
+        edges: edges.into_iter().collect(),
+        left_out: left_out.into_iter().collect(),
+    }
 }
 
 /// How many nodes, then edges, fit within the cap: the nodes first; a node
@@ -321,10 +491,38 @@ fn follow(request: &GraphRequest, link_type: &str) -> Option<Direction> {
     })
 }
 
-/// The pairs followed: `--type` in the order given (repeats once), the
-/// impact table, or the shared types and the corpus's unknown declared
-/// ones, outgoing.
+/// `--both` follows `link_type` (task spec `corpus-map` CM4): one of
+/// `--type`, else a strong type.
+fn follows_both(request: &GraphRequest, link_type: &str) -> bool {
+    if request.types.is_empty() {
+        graph_direction(link_type).is_some()
+    } else {
+        request.types.iter().any(|wanted| wanted == link_type)
+    }
+}
+
+/// The pairs followed: [`one_way`]'s; with `--both` each type's `out`, then
+/// its `in` (task spec `corpus-map` CM4).
 fn followed(graph: &SpecGraph<'_>, request: &GraphRequest) -> Vec<FollowedType> {
+    let pairs = one_way(graph, request);
+    if !request.both {
+        return pairs;
+    }
+    pairs
+        .into_iter()
+        .flat_map(|pair| {
+            [Direction::Out, Direction::In].map(|direction| FollowedType {
+                link_type: pair.link_type.clone(),
+                direction,
+            })
+        })
+        .collect()
+}
+
+/// The pairs followed one way: `--type` in the order given (repeats once),
+/// the impact table, or the shared types and the corpus's unknown declared
+/// ones, outgoing.
+fn one_way(graph: &SpecGraph<'_>, request: &GraphRequest) -> Vec<FollowedType> {
     let pair = |link_type: &str, direction| FollowedType {
         link_type: link_type.to_owned(),
         direction,
@@ -468,12 +666,17 @@ pub(crate) fn render_text(outcome: &GraphOutcome) -> String {
     out
 }
 
+/// The document's 13 keys, in this order: `both` and `kinds` (task spec
+/// `corpus-map` CM4, CM5) after `impact`.
 #[derive(Serialize)]
 struct GraphJson<'a> {
     #[serde(rename = "ref")]
-    reference: &'a str,
+    reference: Option<&'a str>,
     reason: Option<&'a str>,
     impact: bool,
+    both: bool,
+    /// `--kind` as given; `null` with a REF.
+    kinds: Option<&'a [String]>,
     types: &'a [FollowedType],
     depth: Option<usize>,
     archive: bool,
@@ -529,9 +732,11 @@ struct EdgeJson<'a> {
 
 fn view(outcome: &GraphOutcome) -> GraphJson<'_> {
     GraphJson {
-        reference: &outcome.reference,
+        reference: outcome.reference.as_deref(),
         reason: outcome.reason.as_deref(),
         impact: outcome.impact,
+        both: outcome.both,
+        kinds: (!outcome.kinds.is_empty()).then_some(outcome.kinds.as_slice()),
         types: &outcome.types,
         depth: outcome.depth,
         archive: outcome.archive,

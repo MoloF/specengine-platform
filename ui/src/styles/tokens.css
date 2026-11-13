@@ -216,6 +216,25 @@
   --graph-selection-surface: light-dark(rgba(79, 70, 229, 0.08), rgba(165, 180, 252, 0.12));
   --graph-selection-border: 1px dotted var(--accent);
 
+  /* The corpus map (docs/features/corpus-map.md "Acceptance criteria", CM7, CM13): one 2D canvas, its
+     colours read from these roles through hidden swatches. A kind takes its direction's slot, 1 to 8,
+     any other kind the grey; every colour comes with words (legend, card, List). Each kind, the
+     ghost and the edges at least 3:1 on the map's surface, the label 4.5:1, in both themes. */
+  --map-surface: light-dark(#fafbfc, #18191a);
+  --map-kind-1: light-dark(#2f6fc0, #7fb8ff);
+  --map-kind-2: light-dark(#b8457f, #f0a6c8);
+  --map-kind-3: light-dark(#2b7d4f, #6fd39a);
+  --map-kind-4: light-dark(#a54800, #f2bb5c);
+  --map-kind-5: light-dark(#7c4dbd, #c2b0f5);
+  --map-kind-6: light-dark(#1f7287, #6fcbdc);
+  --map-kind-7: light-dark(#b03a3a, #ff9a8a);
+  --map-kind-8: light-dark(#6e6a12, #d4d46a);
+  --map-kind-other: light-dark(#6b6e76, #a3a6ad);
+  --map-edge: light-dark(#5f6b84, #8796b3);
+  --map-edge-weak: light-dark(#848c9c, #6c7484);
+  --map-ghost: light-dark(#7d818a, #8c8f97);
+  --map-label: light-dark(#292a2e, #cecfd2);
+
   /* The Flow (docs/features/flow-canvas.md): an edge's colour goes by its type's place, never its
      name, and four are told apart by hue so a dash is never the only difference; none is a state
      colour's. A gap row stops nothing, so "found" draws attention and no alarm; a row that cannot be

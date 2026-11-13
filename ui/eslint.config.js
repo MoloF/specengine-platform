@@ -3,6 +3,7 @@
 // the provisional types; app code imports domain types from src/api/types.ts. Markdown
 // (docs/features/ui-markdown.md, ADR-0036): only src/markdown/ imports react-markdown or remark-gfm.
 // Languages (docs/features/ui-languages.md D3, ADR-0072): only src/i18n/ imports i18next or react-i18next.
+// The corpus map (docs/features/corpus-map.md "Acceptance criteria", CM11; ADR-0080): only src/map/ imports d3-force.
 import reactHooks from "eslint-plugin-react-hooks";
 import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
@@ -25,6 +26,11 @@ const I18N = {
   regex: "^(i18next|react-i18next)(/|$)",
   message: "Only src/i18n/ imports i18next (ADR-0072): read `t` from its useTranslate(), or take a Translate argument.",
 };
+const D3 = {
+  // The layout engine and any of its subpaths: d3-force, d3-force/...; never another d3 package.
+  regex: "^d3-force(/|$)",
+  message: "Only src/map/ lays out the corpus map with d3-force (ADR-0080).",
+};
 const PROVISIONAL = {
   // With or without an extension: ./provisional, ../api/provisional.js, ./provisional.ts.
   regex: "(^|/)provisional(\\.[jt]sx?)?$",
@@ -44,23 +50,27 @@ export default defineConfig([
       "no-restricted-globals": ["error", "alert", "confirm", "prompt"],
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
-      "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN, I18N] }],
+      "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN, I18N, D3] }],
     },
   },
   {
     files: ["src/main.tsx", "src/mocks/**"],
-    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [PROVISIONAL, MARKDOWN, I18N] }] },
+    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [PROVISIONAL, MARKDOWN, I18N, D3] }] },
   },
   {
     files: ["src/api/**"],
-    rules: { "no-restricted-imports": ["error", { patterns: [MOCKS, MARKDOWN, I18N] }] },
+    rules: { "no-restricted-imports": ["error", { patterns: [MOCKS, MARKDOWN, I18N, D3] }] },
   },
   {
     files: ["src/markdown/**"],
-    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, I18N] }] },
+    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, I18N, D3] }] },
   },
   {
     files: ["src/i18n/**"],
-    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN] }] },
+    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN, D3] }] },
+  },
+  {
+    files: ["src/map/**"],
+    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN, I18N] }] },
   },
 ]);

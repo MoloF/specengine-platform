@@ -394,7 +394,8 @@ describe("the studio over the mock's scenarios", () => {
     renderMock(LENS);
     await drawn("DOM-BERTHS");
     expect(box("MEC-PILOTAGE").querySelector(".badge")?.textContent).toBe("No task");
-    expect(box("DOM-WATER").querySelector(".flow-box-state")?.textContent).toBe("2 confirmed, 2 in work, 1 departed");
+    // The fog signal (corpus-map's), a rule with no card, is the fifth.
+    expect(box("DOM-WATER").querySelector(".flow-box-state")?.textContent).toBe("2 confirmed, 2 in work, 1 departed, 1 no task");
     expect(box("DOM-WATER").querySelector(".flow-mark-start")?.textContent).toBe("Entry");
     expect(box("DOM-BERTHS").querySelector(".flow-mark-end")?.textContent).toBe("End");
     await waitFor(() => {

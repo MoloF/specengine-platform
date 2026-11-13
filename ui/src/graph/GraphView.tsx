@@ -23,6 +23,7 @@ import { leftOutText } from "../tree/LinksPanel";
 import type { BoxCommand } from "./GraphCanvas";
 import { GraphControls } from "./GraphControls";
 import { GraphDetails } from "./GraphDetails";
+import { GraphHome } from "./GraphHome";
 import { GraphLegend } from "./GraphLegend";
 import { GraphList } from "./GraphList";
 import { layoutGraph, type BoxContent, type Layout } from "./layout";
@@ -31,18 +32,24 @@ import {
   chipsOf,
   DEFAULT_SETTINGS,
   graphOptions,
+  modeOf,
   NO_MEMORY,
   patternOrder,
   toggleChip,
   withBase,
   withMode,
+  type GraphHomeView,
   type GraphMemory,
+  type GraphMode,
   type GraphSettings,
   type GraphTab,
 } from "./settings";
 
 /** The forms a REF takes, written as typed: code in every language. */
 const REF_FORMS = { slug: "slug/ID", section: "ID#SECTION", md: ".md" } as const;
+
+/** What an answer with no edge says, per mode. */
+const NO_EDGE_WORDS = { out: "graph.noOutgoing", both: "graph.noBoth", impact: "graph.noImpact" } as const satisfies Record<GraphMode, string>;
 
 /** The canvas and its drawing library load with the first answer drawn, not with the app. */
 const GraphCanvas = lazy(() => import("./GraphCanvas").then((module) => ({ default: module.GraphCanvas })));
@@ -114,7 +121,7 @@ function NoEdge({
   // above the canvas: the mode, the type chips, the archive (docs/features/design-sweep-b.md
   // "Acceptance criteria", DB2).
   const acts = [
-    settings.impact ? null : { key: "impact", label: t("graph.showImpact"), onClick: onImpact },
+    settings.mode === "impact" ? null : { key: "impact", label: t("graph.showImpact"), onClick: onImpact },
     mentionsChip ? { key: "mentions", label: t("graph.followMentions"), onClick: onMentions } : null,
     settings.archive ? null : { key: "archive", label: t("graph.includeArchive"), onClick: onArchive },
   ].filter((act) => act !== null);
@@ -126,7 +133,7 @@ function NoEdge({
       description={
         <>
           <p>
-            {settings.impact ? t("graph.noImpact", { ref: nodeRef }) : t("graph.noOutgoing", { ref: nodeRef })} {t("graph.countLine", { counts: countText(answer, t) })}
+            {t(NO_EDGE_WORDS[settings.mode], { ref: nodeRef })} {t("graph.countLine", { counts: countText(answer, t) })}
           </p>
           <p>{t("graph.noEdgeNext")}</p>
         </>
@@ -182,8 +189,8 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
 
   // An answer read without `types` names its mode's chips, in its order.
   const fresh = nodeRef !== null && !graph.isPlaceholderData ? graph.data : undefined;
-  if (fresh !== undefined && fresh.reason === null && options?.types === undefined && fresh.impact === settings.impact) {
-    const learned = withBase(settings, settings.impact, fresh.types);
+  if (fresh !== undefined && fresh.reason === null && options?.types === undefined && modeOf(fresh) === settings.mode) {
+    const learned = withBase(settings, settings.mode, fresh.types);
     if (learned !== settings) {
       setSettings(learned);
     }
@@ -193,7 +200,7 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
   // Each type's line keeps its pattern while chips are pressed or released: the order is the
   // answer's mode's chips, learned once per mode.
   const bases = settings.bases;
-  const order = useMemo(() => (answer === undefined ? [] : patternOrder(bases, answer.impact, answer.types)), [bases, answer]);
+  const order = useMemo(() => (answer === undefined ? [] : patternOrder(bases, modeOf(answer), answer.types)), [bases, answer]);
   const layout = useMemo<Layout | null>(
     () => (answer !== undefined && answer.reason === null && answer.edges.length > 0 ? layoutGraph(answer, order) : null),
     [answer, order],
@@ -203,7 +210,7 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
   const rovingId = roving !== null && drawn.has(roving) ? roving : focusId;
   const selectedBox = selected === null ? undefined : layout?.boxes.find((box) => box.id === selected);
   // `mentions` takes its direction only from an answer of this mode read with these options.
-  const current = answer !== undefined && !graph.isPlaceholderData && answer.impact === settings.impact ? answer : undefined;
+  const current = answer !== undefined && !graph.isPlaceholderData && modeOf(answer) === settings.mode ? answer : undefined;
   const chips = chipsOf(settings, current?.types ?? []);
   const busy = nodeRef !== null && graph.isFetching;
 
@@ -230,8 +237,11 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
   const change = useCallback((next: (current: GraphSettings) => GraphSettings) => {
     setSettings(next);
   }, []);
-  const onMode = useCallback((impact: boolean) => {
-    setSettings((current) => withMode(current, impact));
+  const onMode = useCallback((mode: GraphMode) => {
+    setSettings((current) => withMode(current, mode));
+  }, []);
+  const onHome = useCallback((home: GraphHomeView) => {
+    setSettings((current) => ({ ...current, home }));
   }, []);
   const onChip = useCallback((type: string) => {
     setSettings((current) => toggleChip(current, type));
@@ -316,24 +326,29 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
 
   let body;
   if (nodeRef === null) {
+    // No REF: what a REF draws, then the section's home and its views
+    // (docs/features/scope-rings.md "Acceptance criteria", SR7).
     body = (
-      <EmptyState
-        level={2}
-        title={t("graph.empty")}
-        titleId={emptyId}
-        description={
-          <>
-            <p>
-              {fill(t("graph.emptyRef", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
-                slug: <span className="mono">{REF_FORMS.slug}</span>,
-                section: <span className="mono">{REF_FORMS.section}</span>,
-                md: <span className="mono">{REF_FORMS.md}</span>,
-              })}
-            </p>
-            <p>{t("graph.emptyNext")}</p>
-          </>
-        }
-      />
+      <>
+        <EmptyState
+          level={2}
+          title={t("graph.empty")}
+          titleId={emptyId}
+          description={
+            <>
+              <p>
+                {fill(t("graph.emptyRef", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
+                  slug: <span className="mono">{REF_FORMS.slug}</span>,
+                  section: <span className="mono">{REF_FORMS.section}</span>,
+                  md: <span className="mono">{REF_FORMS.md}</span>,
+                })}
+              </p>
+              <p>{t("graph.emptyNext")}</p>
+            </>
+          }
+        />
+        <GraphHome project={project} view={settings.home} onView={onHome} />
+      </>
     );
   } else if (answer === undefined) {
     body =
@@ -378,7 +393,7 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
           settings={settings}
           mentionsChip={chips.some((chip) => chip.type === WEAK_LINK_TYPE && !chip.pressed)}
           onImpact={() => {
-            onMode(true);
+            onMode("impact");
           }}
           onMentions={() => {
             onChip(WEAK_LINK_TYPE);

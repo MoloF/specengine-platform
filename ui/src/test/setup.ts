@@ -54,3 +54,11 @@ class StillResizeObserver implements ResizeObserver {
   }
 }
 globalThis.ResizeObserver = StillResizeObserver;
+
+// jsdom draws nothing and reports `getContext` as not implemented on the console; the Map's canvas
+// asks for a 2D context and draws nothing without one
+// (docs/features/corpus-map.md "Acceptance criteria", CM7). A test that reads the drawing stubs a
+// recording context of its own.
+HTMLCanvasElement.prototype.getContext = function getContext() {
+  return null;
+} as typeof HTMLCanvasElement.prototype.getContext;

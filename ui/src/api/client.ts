@@ -31,10 +31,12 @@ import type {
   Inbox,
   IntakeDocument,
   LockDiffView,
+  MapDocument,
   NodeView,
   Project,
   Proposal,
   QueueEvent,
+  RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
@@ -86,10 +88,16 @@ export interface BundleOptions {
   budget?: number;
 }
 
-/** `spec graph`: REF, `--impact`, `--type T`..., `--depth N`, `--archive`. */
+/**
+ * `spec graph`: REF or `--kind K`..., `--impact` or `--both`, `--type T`..., `--depth N`, `--archive`.
+ * `both` sent only as true; `kinds` in place of a REF, each repeated (`docs/features/corpus-map.md`
+ * "Acceptance criteria", CM4, CM5, CM10). The screen always gives a REF.
+ */
 export interface GraphOptions {
-  ref: string;
+  ref?: string;
   impact?: boolean;
+  both?: boolean;
+  kinds?: string[];
   types?: string[];
   depth?: number;
   archive?: boolean;
@@ -146,6 +154,11 @@ export interface CatalogOptions {
   archive: boolean;
 }
 
+/** `spec map`: `--archive`, sent only as true, the Map's Include archive (`docs/features/corpus-map.md` "Acceptance criteria", CM3, CM8). */
+export interface MapOptions {
+  archive: boolean;
+}
+
 /**
  * `spec card list`: `--with-cancelled`, `--marks`, each sent only as true. The Board reads every card
  * of the project once and filters that answer, so no other flag is sent
@@ -177,7 +190,7 @@ export interface TraceOptions {
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
  * "Route", the flow's `docs/features/flow-canvas.md` "Data", the cards' `docs/features/board-ui.md`
  * "Routes", the identity's `docs/canon/hub.md` "Routes", the team's `docs/features/hub-team.md` "Data",
- * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog's `docs/features/direction-catalog.md` "Acceptance criteria", DC-9; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog's `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the rings' `docs/features/scope-rings.md` "Acceptance criteria", SR4, the map's `docs/features/corpus-map.md` "Acceptance criteria", CM3; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
  * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
@@ -254,6 +267,18 @@ export interface SpecEngineClient {
    * so only a 200 resolves; no kind's 400, an older daemon's 404 and a 503 reject in the daemon's words.
    */
   getCatalog(project: string, options: CatalogOptions, signal?: AbortSignal): Promise<CatalogDocument>;
+  /**
+   * GET /api/projects/:p/rings (docs/features/scope-rings.md "Acceptance criteria", SR4; = spec
+   * rings --json, the browser view, uncut): judged, so only a 200 resolves; a query's 400, an older
+   * daemon's 404 and a 503 reject in the daemon's words. A bad `[map]` is a 200 with its note.
+   */
+  getRings(project: string, signal?: AbortSignal): Promise<RingsDocument>;
+  /**
+   * GET /api/projects/:p/map[?archive=true] (docs/features/corpus-map.md "Acceptance criteria", CM3;
+   * = spec map [--archive] --json, never cut): judged, so only a 200 resolves; a query's 400, an
+   * older daemon's 404 and a 503 reject in the daemon's words.
+   */
+  getMap(project: string, options: MapOptions, signal?: AbortSignal): Promise<MapDocument>;
   /** GET /api/projects/:p/lock-diff (docs/features/lock-diff.md "Route"; = spec lock diff REF --json, uncut; 404 the exit-1 document) */
   getLockDiff(project: string, ref: string, signal?: AbortSignal): Promise<LockDiffView>;
   // The stage's two writes: `stage` replaces any staged choice, the body exactly `stage` plus

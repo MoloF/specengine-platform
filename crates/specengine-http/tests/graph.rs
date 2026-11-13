@@ -402,10 +402,16 @@ fn ac03_the_graph_query_404_400_503() {
 
     // 400, nothing run: (target, the message, exactly or the name it
     // must quote in backticks).
-    let names = "it takes ref, impact, types, depth, archive";
+    // docs/features/corpus-map.md "Acceptance criteria", CM4, CM5: the two
+    // names the route grows; with neither a REF nor kinds the CLI's exit-2
+    // line is the 400.
+    let names = "it takes ref, impact, both, types, kinds, depth, archive";
     let exact: [(&str, String); 7] = [
-        ("", "`ref` is required".to_owned()),
-        ("?impact=true&depth=2", "`ref` is required".to_owned()),
+        ("", "spec graph: give a REF or `--kind`".to_owned()),
+        (
+            "?impact=true&depth=2",
+            "spec graph: give a REF or `--kind`".to_owned(),
+        ),
         (
             "?ref=MEC-SPRINT&ref=MEC-STAMINA",
             "`ref` is given 2 times: it takes one value".to_owned(),
@@ -442,7 +448,7 @@ fn ac03_the_graph_query_404_400_503() {
         ("?ref=MEC-SPRINT&archive=true&archive=true", "`archive`"),
         ("?ref=MEC-SPRINT&archive=1", "`archive=1`"),
         ("?ref=MEC-SPRINT&depth=1.5", "`depth=1.5`"),
-        ("?ref=MEC-SPRINT&kinds=rule", "`kinds`"),
+        ("?ref=MEC-SPRINT&kinds=rule", "`--kind`"),
         ("?ref=MEC-SPRINT&types=depends_on&staged=true", "`staged`"),
     ] {
         let path = format!("{P}/graph{query}");
@@ -500,5 +506,100 @@ fn ac03_the_graph_query_404_400_503() {
         let reply = server.get(&path);
         assert_eq!(reply.status, 503, "{path}: {}", reply.text());
         assert_eq!(reply.error_message(), line, "{path}: the CLI's line");
+    }
+}
+
+/// docs/features/corpus-map.md (RM-0112) "Acceptance criteria", CM4, CM5,
+/// the route's half: `both=true` and `kinds=K&kinds=L` are byte-equal to
+/// `spec graph … --both` and `--kind K --kind L`; a kind with no node is a
+/// 200 with its note; the CLI's three exit-2 lines are 400s with the line;
+/// `both=yes` is a 400 naming it.
+#[test]
+fn corpus_map_cm4_cm5_both_and_kinds_on_the_route() {
+    let scratch = Scratch::new("graph-both-kinds");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&a]);
+    for (query, args) in [
+        (
+            "?ref=MEC-STAMINA&both=true&depth=1",
+            &["graph", "MEC-STAMINA", "--both", "--depth", "1"][..],
+        ),
+        (
+            "?ref=MEC-STAMINA&both=true&types=canon&types=uses_term",
+            &[
+                "graph",
+                "MEC-STAMINA",
+                "--both",
+                "--type",
+                "canon",
+                "--type",
+                "uses_term",
+            ],
+        ),
+        ("?ref=MEC-STAMINA&both=false", &["graph", "MEC-STAMINA"]),
+        (
+            "?kinds=mechanic&depth=0",
+            &["graph", "--kind", "mechanic", "--depth", "0"],
+        ),
+        (
+            "?kinds=decision&kinds=term&archive=true",
+            &["graph", "--kind", "decision", "--kind", "term", "--archive"],
+        ),
+        (
+            "?kinds=mechanic&both=true&depth=1",
+            &["graph", "--kind", "mechanic", "--both", "--depth", "1"],
+        ),
+        ("?kinds=nothing", &["graph", "--kind", "nothing"]),
+    ] {
+        let reply = same(&server, &home, &cwd, &a, &format!("{P}/graph{query}"), args);
+        assert_eq!(reply.status, 200, "{query}");
+    }
+    let document = server
+        .get(&format!("{P}/graph?ref=MEC-STAMINA&both=true&depth=1"))
+        .json();
+    assert_eq!(document["both"], true, "{document}");
+    assert!(
+        document["nodes"]
+            .as_array()
+            .expect("nodes")
+            .iter()
+            .any(|node| node["id"] == "DEC-0023"),
+        "the in direction: {document}"
+    );
+    let document = server.get(&format!("{P}/graph?kinds=mechanic")).json();
+    assert!(document["ref"].is_null(), "{document}");
+    assert_eq!(document["kinds"], serde_json::json!(["mechanic"]));
+    let document = server.get(&format!("{P}/graph?kinds=nothing")).json();
+    assert_eq!(
+        document["notes"],
+        serde_json::json!(["graph: no node of kind `nothing`"])
+    );
+    for (query, line) in [
+        (
+            "?ref=MEC-STAMINA&both=true&impact=true",
+            "spec graph: `--both` and `--impact` exclude each other",
+        ),
+        (
+            "?ref=MEC-STAMINA&kinds=mechanic",
+            "spec graph: give a REF or `--kind`, not both",
+        ),
+        ("?both=true", "spec graph: give a REF or `--kind`"),
+    ] {
+        let path = format!("{P}/graph{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+        assert_eq!(reply.error_message(), line, "{path}");
+    }
+    for (query, name) in [
+        ("?ref=MEC-STAMINA&both=yes", "`both=yes`"),
+        ("?ref=MEC-STAMINA&both=true&both=true", "`both`"),
+        ("?kinds=mechanic&kind=rule", "`kind`"),
+    ] {
+        let path = format!("{P}/graph{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+        assert!(reply.error_message().contains(name), "{path}");
     }
 }

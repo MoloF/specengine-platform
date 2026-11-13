@@ -1448,7 +1448,14 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// flow and column, never by person; agent tasks `local_only`, every
 /// `review_agent_tasks` `null` (DO4), so it names no task. The Board's list,
 /// which every login reads, holds every card it counts.
-const GET_ROUTES: [&str; 31] = [
+///
+/// docs/features/corpus-map.md (RM-0112) judged `/api/projects/{p}/map`,
+/// the 32nd, and docs/features/scope-rings.md (RM-0113)
+/// `/api/projects/{p}/rings`, the 33rd: both mounted for every login, reads
+/// of the spec files a login already reads through `tree` and `graph` (the
+/// rings' states the trace's, which `trace` serves every login), never
+/// `[team]`.
+const GET_ROUTES: [&str; 33] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1465,9 +1472,11 @@ const GET_ROUTES: [&str; 31] = [
     "/api/projects/{p}/health",
     "/api/projects/{p}/inbox",
     "/api/projects/{p}/lock-diff",
+    "/api/projects/{p}/map",
     "/api/projects/{p}/nodes/{*ref}",
     "/api/projects/{p}/proposals/{id}",
     "/api/projects/{p}/proposals/{id}/confirm",
+    "/api/projects/{p}/rings",
     "/api/projects/{p}/roadmap",
     "/api/projects/{p}/round",
     "/api/projects/{p}/search",
@@ -2259,8 +2268,10 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
     );
     // 29 since docs/features/delivery-analytics.md DA-11 (`delivery`); 30
     // since docs/features/direction-catalog.md DC-9 (`catalog`); 31 since
-    // docs/features/department-overview.md DO10 (`cards/counts`).
-    assert_eq!(GET_ROUTES.len(), 31);
+    // docs/features/department-overview.md DO10 (`cards/counts`); 33 since
+    // docs/features/corpus-map.md CM3 (`map`) and
+    // docs/features/scope-rings.md SR4 (`rings`).
+    assert_eq!(GET_ROUTES.len(), 33);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

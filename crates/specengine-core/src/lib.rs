@@ -131,7 +131,15 @@
 //! - [`usage`] — what uses a node and which documents nothing links, the
 //!   pure half (task spec `usage-orphans`): distinct live sources from other
 //!   files by strong and weak type, and the orphan flag of a live document,
-//!   computed per read and never stored.
+//!   computed per read and never stored;
+//! - [`map`] — the whole corpus as one map, the pure half (task spec
+//!   `corpus-map`): the admitted nodes, the resolved links between them
+//!   merged per (source, target, type), the parents and the unresolved
+//!   targets, with [`usage`]'s counts; computed per read, never stored;
+//! - [`rings`] — the scope rings, the pure half (task spec `scope-rings`):
+//!   the document a read serves and a ring's members once inner rings took
+//!   theirs, over `[[map.ring]]` as [`map_toml`] reads it, computed per read
+//!   and never stored.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -157,6 +165,8 @@ pub mod history;
 pub mod intake;
 mod lines;
 pub mod lock;
+pub mod map;
+pub mod map_toml;
 mod markdown;
 mod norm;
 mod own_text;
@@ -168,6 +178,7 @@ pub mod proposal;
 pub mod raise;
 pub mod record;
 mod revision;
+pub mod rings;
 pub mod roadmap;
 pub mod roadmap_toml;
 pub mod round;
@@ -208,6 +219,7 @@ pub use flow_toml::{FlowConfig, FlowRule, FlowTable, flow_from_toml};
 pub use front_matter::{KeyType, TYPED_KEYS};
 pub use gate::{GateConfig, GateMode};
 pub use health_toml::{BoundRule, HealthConfig, health_from_toml};
+pub use map_toml::{MAP_RINGS_MAX, MapConfig, MapNote, RingConfig, map_from_toml};
 pub use norm::{NORM_RECIPE, norm_input};
 pub use own_text::own_spans;
 pub use paths_toml::{Paths, PathsError, paths_from_toml};

@@ -1121,12 +1121,16 @@ fn ac14_both_fixtures_give_one_key_set() {
         ])
     );
     let graph = spec30(&home, &root, &["--json", "graph", "MEC-STAMINA"]).json();
+    // docs/features/corpus-map.md "Acceptance criteria", CM4, CM5: `both`
+    // and `kinds`.
     assert_eq!(
         keys(&graph),
         BTreeSet::from([
             "ref",
             "reason",
             "impact",
+            "both",
+            "kinds",
             "types",
             "depth",
             "archive",

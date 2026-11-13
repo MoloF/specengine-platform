@@ -1055,6 +1055,22 @@ function impactDirection(type: string): Direction | null {
   return IMPACT_LINK_TYPES.find(([name]) => name === type)?.[1] ?? null;
 }
 
+/**
+ * `graph.rs` `follow` under `--both` (docs/features/corpus-map.md "Acceptance criteria", CM4): every
+ * strong type, or each given one, out and in; otherwise the one direction `followOf` gives.
+ */
+function followsOf(options: GraphOptions): (type: string) => readonly Direction[] {
+  if (options.both !== true) {
+    const follow = followOf(options);
+    return (type) => {
+      const direction = follow(type);
+      return direction === null ? [] : [direction];
+    };
+  }
+  const given = options.types ?? [];
+  return (type) => ((given.length === 0 ? type !== WEAK_LINK : given.includes(type)) ? ["out", "in"] : []);
+}
+
 /** `graph.rs` `follow`: the direction a type is followed in, if at all. */
 function followOf(options: GraphOptions): (type: string) => Direction | null {
   const given = options.types ?? [];
@@ -1078,6 +1094,11 @@ function followOf(options: GraphOptions): (type: string) => Direction | null {
  * else the twelve shared types, then the corpus's unknown declared types by name.
  */
 function followedOf(corpus: MockCorpus, options: GraphOptions): FollowedType[] {
+  if (options.both === true) {
+    // Each type's `out` before its `in` (CM4).
+    const one = followedOf(corpus, { ...options, both: false, impact: false });
+    return one.flatMap((followed) => (followed.type === WEAK_LINK && (options.types ?? []).length === 0 ? [] : [{ type: followed.type, direction: "out" }, { type: followed.type, direction: "in" }]));
+  }
   const follow = followOf(options);
   const given = options.types ?? [];
   if (given.length > 0) {
@@ -1166,20 +1187,40 @@ export function graphOf(corpus: MockCorpus, options: GraphOptions): GraphView {
   if (options.depth !== undefined && (!Number.isInteger(options.depth) || options.depth < 0)) {
     throw refusal(`--depth ${String(options.depth)}: the depth is an integer of 0 or more`);
   }
+  if (options.both === true && options.impact === true) {
+    throw refusal("spec graph: `--both` and `--impact` exclude each other");
+  }
+  const kinds = options.kinds !== undefined && options.kinds.length > 0 ? options.kinds : null;
+  if (kinds !== null && options.ref !== undefined) {
+    throw refusal("spec graph: give a REF or `--kind`, not both");
+  }
+  if (kinds === null && options.ref === undefined) {
+    throw refusal("spec graph: give a REF or `--kind`");
+  }
   const answer = {
-    ref: options.ref,
+    ref: options.ref ?? null,
     impact: options.impact ?? false,
+    both: options.both ?? false,
+    kinds,
     depth: options.depth ?? null,
     archive: options.archive ?? false,
-    notes: [],
+    notes: [] as string[],
     truncated: false,
   };
-  const resolved = resolveRef(corpus, options.ref);
+  // A direction start (CM5): every live node of the kinds, matched exactly, in (path, line) order.
+  const resolved: Resolved =
+    kinds === null
+      ? resolveRef(corpus, options.ref ?? "")
+      : { holders: allNodes(corpus).filter((node) => node.kind !== null && kinds.includes(node.kind) && !node.generated && (!node.archived || answer.archive)) };
   if ("reason" in resolved) {
     return { ...answer, reason: resolved.reason, types: [], left_out: { generated: 0, tier3: 0 }, nodes: [], edges: [] };
   }
+  if (resolved.holders.length === 0) {
+    const notes = (kinds ?? []).map((kind) => `graph: no node of kind \`${kind}\``);
+    return { ...answer, notes, reason: null, types: followedOf(corpus, options), left_out: { generated: 0, tier3: 0 }, nodes: [], edges: [] };
+  }
   const types = followedOf(corpus, options);
-  const follow = followOf(options);
+  const follows = followsOf(options);
   const asked = new Set(resolved.holders.map((holder) => holder.path));
   const leftOutEdges = new Map<MockLink, MockDocument>();
   const admits = (written: MockLink): boolean => {
@@ -1216,10 +1257,10 @@ export function graphOf(corpus: MockCorpus, options: GraphOptions): GraphView {
     }
     for (const node of nested(corpus, at)) {
       const out = (index.from.get(node) ?? [])
-        .filter((link) => follow(link.written.type) === "out")
+        .filter((link) => follows(link.written.type).includes("out"))
         .map((link) => [link, link.targets] as const);
       const back = (index.into.get(node) ?? [])
-        .filter((link) => follow(link.written.type) === "in")
+        .filter((link) => follows(link.written.type).includes("in"))
         .map((link) => [link, [link.source]] as const);
       for (const [link, far] of [...out, ...back]) {
         if (!admits(link.written)) {

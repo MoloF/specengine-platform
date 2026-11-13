@@ -5,7 +5,7 @@
   "NodeView": ["ref", "reason", "notes", "nodes"],
   "SearchHit": ["id", "kind", "title", "path", "line", "ord", "archived", "snippet"],
   "BundleView": ["refs", "reason", "notes", "task", "budget", "tokens", "chars", "bytes", "bundle_hash", "body", "layers", "tail", "more"],
-  "GraphView": ["ref", "reason", "impact", "types", "depth", "archive", "notes", "left_out", "truncated", "nodes", "edges"],
+  "GraphView": ["ref", "reason", "impact", "both", "kinds", "types", "depth", "archive", "notes", "left_out", "truncated", "nodes", "edges"],
   "GraphNode": ["id", "kind", "title", "path", "line", "distance", "archived"],
   "GraphEdge": ["src", "type", "dst", "written", "path", "line", "state", "reason"],
   "FollowedType": ["type", "direction"],
@@ -149,5 +149,14 @@
   "DeliveryTask": ["id", "title", "flow", "group", "release", "departments", "created_at", "taken_at", "accepted_at", "due", "days_late"],
   "LinkUsage": ["used_by", "mentioned_by"],
   "HealthOrphans": ["live", "rows", "notes"],
-  "HealthOrphan": ["name", "id", "kind", "title", "path", "line", "status", "tasks", "tasks_open"]
+  "HealthOrphan": ["name", "id", "kind", "title", "path", "line", "status", "tasks", "tasks_open"],
+  "Rings": ["notes", "rings"],
+  "Ring": ["title", "root", "kinds", "sectors"],
+  "RingSector": ["name", "id", "kind", "title", "path", "line", "status", "state"],
+  "MapDocument": ["archive", "notes", "counts", "nodes", "edges", "parents", "ghosts"],
+  "MapCounts": ["documents", "sections", "edges", "parents", "ghosts", "orphans"],
+  "MapNode": ["name", "id", "kind", "title", "path", "line", "of", "status", "archived", "used_by", "mentioned_by", "orphan"],
+  "MapEdge": ["src", "dst", "type", "weak", "places"],
+  "MapParent": ["child", "parent"],
+  "MapGhost": ["written", "reason", "sources", "places"]
 }

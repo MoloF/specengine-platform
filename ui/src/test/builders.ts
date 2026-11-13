@@ -42,7 +42,13 @@ import type {
   HistoryEntry,
   InboxEntry,
   LinkUsage,
+  MapDocument,
+  MapEdge,
+  MapNode,
   Proposal,
+  Ring,
+  RingSector,
+  RingsDocument,
   RoadmapDocument,
   RoadmapGroup,
   RoadmapItem,
@@ -547,6 +553,8 @@ export function aGraphView(nodes: GraphNode[], edges: GraphEdge[], fields: Parti
     ref: nodes[0]?.id ?? "R-1",
     reason: null,
     impact: false,
+    both: false,
+    kinds: null,
     types: [
       { type: "zeta_type", direction: "out" },
       { type: "alpha_type", direction: "out" },
@@ -1160,4 +1168,77 @@ export function aColumnCount(fields: Partial<CardColumnCount> & Pick<CardColumnC
 /** One flow's counts: no open item, no ready parent, no agent task in review, unless given. */
 export function aFlowCount(fields: Partial<CardFlowCount> & Pick<CardFlowCount, "flow">): CardFlowCount {
   return { open_items: 0, oldest_open_item: null, ready_parents: 0, review_agent_tasks: [], ...fields };
+}
+
+/** The rings read: the rings given, no note, unless given (docs/features/scope-rings.md "Acceptance criteria", SR4). */
+export function aRings(rings: Ring[], fields: Partial<RingsDocument> = {}): RingsDocument {
+  return { notes: [], rings, ...fields };
+}
+
+/** A ring of the kind `scene` alone, no root, holding the sectors given, unless given. */
+export function aRing(title: string, sectors: RingSector[], fields: Partial<Ring> = {}): Ring {
+  return { title, root: null, kinds: ["scene"], sectors, ...fields };
+}
+
+/** A sector of the kind `scene`: its document at line 1, its title from its name, no status, no card, unless given. */
+export function aRingSector(fields: Partial<RingSector> & Pick<RingSector, "name">): RingSector {
+  return {
+    id: fields.name,
+    kind: "scene",
+    title: `Title of ${fields.name}`,
+    path: `docs/spec/${fields.name.toLowerCase()}.md`,
+    line: 1,
+    status: null,
+    state: "no card",
+    ...fields,
+  };
+}
+
+/**
+ * A map answer for tests (docs/features/corpus-map.md "Acceptance criteria", CM1): the nodes, edges,
+ * parents and ghosts given, the counts taken from them as the daemon would serve them, unless given.
+ */
+export function aMap(nodes: MapNode[], edges: MapEdge[] = [], fields: Partial<MapDocument> = {}): MapDocument {
+  const parents = fields.parents ?? [];
+  const ghosts = fields.ghosts ?? [];
+  return {
+    archive: false,
+    notes: [],
+    counts: {
+      documents: nodes.filter((node) => node.of === null).length,
+      sections: nodes.filter((node) => node.of !== null).length,
+      edges: edges.length,
+      parents: parents.length,
+      ghosts: ghosts.length,
+      orphans: nodes.filter((node) => node.orphan === true).length,
+    },
+    nodes,
+    edges,
+    parents,
+    ghosts,
+    ...fields,
+  };
+}
+
+/** A live document of the kind `scene` at line 1, its title from its name, used by none and no orphan, unless given. */
+export function aMapNode(fields: Partial<MapNode> & Pick<MapNode, "name">): MapNode {
+  return {
+    id: fields.name,
+    kind: "scene",
+    title: `Title of ${fields.name}`,
+    path: `docs/spec/${fields.name.toLowerCase()}.md`,
+    line: 1,
+    of: null,
+    status: null,
+    archived: false,
+    used_by: 0,
+    mentioned_by: 0,
+    orphan: false,
+    ...fields,
+  };
+}
+
+/** A strong link of an invented type, one place, unless given. */
+export function aMapEdge(src: number, dst: number, fields: Partial<MapEdge> = {}): MapEdge {
+  return { src, dst, type: "alpha_type", weak: false, places: 1, ...fields };
 }

@@ -52,7 +52,11 @@ describe("getTree", () => {
     expect(view.nodes.find((node) => node.id === "MEC-CARGO-CRANES")?.mark).toBe("dangling-parent");
     const lockA = view.nodes.findIndex((node) => node.id === "MEC-LOCK-A");
     expect(view.nodes[lockA]?.mark).toBe("parent-cycle");
-    expect([view.nodes[lockA + 1]?.id, view.nodes[lockA + 1]?.depth, view.nodes[lockA + 1]?.parent]).toEqual(["MEC-LOCK-B", 1, "MEC-LOCK-A"]);
+    // Its children by path: the map's lock keeper (corpus-map), then MEC-LOCK-B, the cycle's other end.
+    expect([1, 2].map((step) => [view.nodes[lockA + step]?.id, view.nodes[lockA + step]?.depth, view.nodes[lockA + step]?.parent])).toEqual([
+      ["MEC-LOCK-KEEPER", 1, "MEC-LOCK-A"],
+      ["MEC-LOCK-B", 1, "MEC-LOCK-A"],
+    ]);
     expect(view.nodes.filter((node) => node.id === "RULE-FAIRWAY-SPEED")).toHaveLength(2);
     expect(view.nodes.some((node) => node.archived)).toBe(false);
   });

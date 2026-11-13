@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Target = () => HTMLElement | null | undefined;
+type Target = () => HTMLElement | SVGElement | null | undefined;
 
 /**
  * Focus an element after the next commit: once a dialog has unmounted and the page is no longer

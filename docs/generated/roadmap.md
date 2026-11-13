@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 36 open, 77 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
+roadmap: 34 open, 79 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -31,16 +31,14 @@ roadmap: 36 open, 77 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 une
 
 ## release v5 | 0 open, 23 done | 0 days
 
-## pool | 29 open, 3 done | 7-12 days, 25 unestimated
+## pool | 27 open, 5 done | 7-12 days, 23 unestimated
 
-- [RM-0112](../roadmap/RM-0112.md) | corpus-map (Phase 7, the writer map): the whole corpus as one map | draft | must | -
 - [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | -
 - [RM-0040](../roadmap/RM-0040.md) | check-parity: what pilot A's own docs check still does beside spec check | draft | should | -
 - [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch | draft | should | -
 - [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | -
 - [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0036
 - [RM-0070](../roadmap/RM-0070.md) | trial-followups (Phase 7): what the second trial and earlier review left | draft | should | -
-- [RM-0113](../roadmap/RM-0113.md) | scope-rings (Phase 7, the writer map): nodes on concentric rings, the radius their scope | draft | should | -
 - [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | -
 - [RM-0019](../roadmap/RM-0019.md) | roadmap-moves (Phase 6, 3b): moves from the Roadmap screen | draft | could | -
 - [RM-0021](../roadmap/RM-0021.md) | bevy-dump (10b): the project's schedule dump annotates symbols | draft | could | 3-5

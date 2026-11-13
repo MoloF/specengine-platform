@@ -8,6 +8,7 @@ import {
   type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
+  type MapOptions,
   type NodeOptions,
   type RoadmapOptions,
   type RoundOptions,
@@ -49,9 +50,11 @@ import type {
   IntakeDocument,
   IntakeMatch,
   LockDiffView,
+  MapDocument,
   NodeView,
   Project,
   Proposal,
+  RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
@@ -110,6 +113,8 @@ import { catalogOf } from "./catalog";
 import { plainQuestionsScenario } from "./plainQuestions";
 import { collisionPairsScenario } from "./collisionPairs";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
+import { mockMap } from "./map";
+import { mockRings } from "./rings";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
 import { traceOf, withTrace } from "./trace";
@@ -403,6 +408,24 @@ export class MockClient implements SpecEngineClient {
       throw new ClientError({ status: 400, message: "`kinds`: give at least one kind (mock)" });
     }
     return structuredClone(catalogOf(entry.corpus, project, this.scenario, options.kinds, options.archive));
+  }
+
+  /**
+   * The project's map for the scenario (src/mocks/map.ts), read only; the daemon serves its own
+   * (docs/features/corpus-map.md "Acceptance criteria", CM3).
+   */
+  async getMap(project: string, options: MapOptions): Promise<MapDocument> {
+    await this.read();
+    return structuredClone(mockMap(this.project(project).corpus, project, this.scenario, options.archive));
+  }
+
+  /**
+   * The project's rings for the scenario (src/mocks/rings.ts), read only; the daemon serves its own
+   * (docs/features/scope-rings.md "Acceptance criteria", SR4). A bad table is a 200 with its note.
+   */
+  async getRings(project: string): Promise<RingsDocument> {
+    await this.read();
+    return structuredClone(mockRings(this.project(project).corpus, project, this.scenario));
   }
 
   /**

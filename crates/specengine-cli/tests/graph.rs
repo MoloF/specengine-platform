@@ -66,6 +66,10 @@ nodes 6, edges 6
             "ref",
             "reason",
             "impact",
+            // docs/features/corpus-map.md "Acceptance criteria", CM4, CM5:
+            // the two the graph grows.
+            "both",
+            "kinds",
             "types",
             "depth",
             "archive",
@@ -890,5 +894,271 @@ fn a_canon_path_without_an_anchor_lands_on_the_document() {
                 "{context}: {code} at {decision}:{line}: {check}"
             );
         }
+    }
+}
+
+// ------------------------------------------------- corpus-map CM4, CM5
+
+/// The followed `(type, direction)` pairs of a graph document.
+fn followed(json: &serde_json::Value) -> Vec<(String, String)> {
+    json["types"]
+        .as_array()
+        .unwrap_or_else(|| panic!("types: {json}"))
+        .iter()
+        .map(|pair| {
+            (
+                pair["type"].as_str().expect("a type").to_owned(),
+                pair["direction"].as_str().expect("a direction").to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// docs/features/corpus-map.md (RM-0112) "Acceptance criteria", CM4:
+/// `--both --depth 1` from MEC-STAMINA reaches MEC-SPRINT, DEC-0023 (`canon`
+/// in, to its RULE-STAM-REGEN), A-101 and R-12 (`derived_from` out) and
+/// TERM-exhausted (`uses_term` out), each at distance 1 and nothing else;
+/// `types` lists each type of the default walk `out` then `in`, `--type`
+/// those alone; `both` true, `kinds` null; `--both --impact` exits 2 with
+/// its line. M: the in direction not followed (DEC-0023 missing).
+#[test]
+fn corpus_map_cm4_both_ways_follows_each_type_out_and_in() {
+    let scratch = Scratch::new("graph-both");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+    let run = spec30(
+        &home,
+        &root,
+        &["graph", "MEC-STAMINA", "--both", "--depth", "1"],
+    );
+    run.code(0);
+    assert_eq!(
+        distances(&run.stdout),
+        at(&[
+            (0, "MEC-STAMINA"),
+            (1, "A-101"),
+            (1, "DEC-0023"),
+            (1, "R-12"),
+            (1, "TERM-exhausted"),
+            (1, "MEC-SPRINT"),
+        ]),
+        "by (distance, path, position): {}",
+        run.show()
+    );
+    for edge in [
+        "DEC-0023 --canon--> RULE-STAM-REGEN | docs/records/DEC/DEC-0023.md:6",
+        "MEC-SPRINT --depends_on--> MEC-STAMINA | docs/spec/movement/sprint.md:9",
+        "MEC-STAMINA --derived_from--> R-12 | docs/spec/movement/stamina.md:12",
+        "MEC-STAMINA --uses_term--> TERM-exhausted | docs/spec/movement/stamina.md:14",
+    ] {
+        assert!(
+            graph_edges(&run.stdout).contains(&edge),
+            "{edge}: {}",
+            run.show()
+        );
+    }
+    let json = spec30(
+        &home,
+        &root,
+        &["--json", "graph", "MEC-STAMINA", "--both", "--depth", "1"],
+    )
+    .json();
+    assert_eq!(json["both"], true, "{json}");
+    assert_eq!(json["impact"], false, "{json}");
+    assert!(json["kinds"].is_null(), "{json}");
+    assert_eq!(json["ref"], "MEC-STAMINA");
+    let reached: Vec<(u64, String)> = json["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .map(|node| {
+            (
+                node["distance"].as_u64().expect("a distance"),
+                node["id"].as_str().expect("an ID").to_owned(),
+            )
+        })
+        .collect();
+    assert!(
+        reached.contains(&(1, "DEC-0023".to_owned())),
+        "M: the in direction not followed: {json}"
+    );
+    // `types`: the default walk's, each `out` then `in`.
+    let plain = spec30(&home, &root, &["--json", "graph", "MEC-STAMINA"]).json();
+    let want: Vec<(String, String)> = followed(&plain)
+        .into_iter()
+        .flat_map(|(kind, _)| [(kind.clone(), "out".to_owned()), (kind, "in".to_owned())])
+        .collect();
+    assert_eq!(followed(&json), want, "a type's out before its in");
+    let typed = spec30(
+        &home,
+        &root,
+        &[
+            "--json",
+            "graph",
+            "MEC-STAMINA",
+            "--both",
+            "--type",
+            "canon",
+            "--type",
+            "uses_term",
+            "--depth",
+            "1",
+        ],
+    )
+    .json();
+    assert_eq!(
+        followed(&typed),
+        [
+            ("canon".to_owned(), "out".to_owned()),
+            ("canon".to_owned(), "in".to_owned()),
+            ("uses_term".to_owned(), "out".to_owned()),
+            ("uses_term".to_owned(), "in".to_owned()),
+        ]
+    );
+    assert_eq!(
+        field(&typed["nodes"], "id"),
+        ["MEC-STAMINA", "DEC-0023", "TERM-exhausted"],
+        "{typed}"
+    );
+    for args in [
+        &["graph", "MEC-STAMINA", "--both", "--impact"][..],
+        &["--json", "graph", "MEC-STAMINA", "--impact", "--both"],
+    ] {
+        let run = spec30(&home, &root, args);
+        run.code(2);
+        assert_eq!(run.stdout, "", "{}", run.show());
+        assert!(
+            run.stderr
+                .lines()
+                .any(|line| line == "spec graph: `--both` and `--impact` exclude each other"),
+            "{}",
+            run.show()
+        );
+    }
+}
+
+/// docs/features/corpus-map.md (RM-0112) "Acceptance criteria", CM5:
+/// `--kind mechanic --depth 0` starts at MEC-SPRINT and MEC-STAMINA, `ref`
+/// null and `kinds` `["mechanic"]`; `--kind decision` takes Tier 3 only
+/// under `--archive`; a kind with no node answers `nodes 0, edges 0` with
+/// its note, exit 0; a REF with `--kind`, and neither, exit 2 with their
+/// lines. M: kinds matched by prefix (`--kind mech` finds both).
+#[test]
+fn corpus_map_cm5_a_direction_start() {
+    let scratch = Scratch::new("graph-kind");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+    let run = spec30(
+        &home,
+        &root,
+        &["graph", "--kind", "mechanic", "--depth", "0"],
+    );
+    run.code(0);
+    assert_eq!(
+        distances(&run.stdout),
+        at(&[(0, "MEC-SPRINT"), (0, "MEC-STAMINA")]),
+        "{}",
+        run.show()
+    );
+    let json = spec30(
+        &home,
+        &root,
+        &["--json", "graph", "--kind", "mechanic", "--depth", "0"],
+    )
+    .json();
+    assert!(json["ref"].is_null(), "{json}");
+    assert_eq!(json["kinds"], serde_json::json!(["mechanic"]), "{json}");
+    assert_eq!(json["both"], false, "{json}");
+    assert_eq!(
+        field(&json["nodes"], "id"),
+        ["MEC-SPRINT", "MEC-STAMINA"],
+        "{json}"
+    );
+    // Two kinds: every start of each, live only.
+    let json = spec30(
+        &home,
+        &root,
+        &[
+            "--json", "graph", "--kind", "decision", "--kind", "term", "--depth", "0",
+        ],
+    )
+    .json();
+    assert_eq!(json["kinds"], serde_json::json!(["decision", "term"]));
+    assert_eq!(
+        field(&json["nodes"], "id"),
+        ["DEC-0023", "TERM-exhausted"],
+        "live only: {json}"
+    );
+    let json = spec30(
+        &home,
+        &root,
+        &[
+            "--json",
+            "graph",
+            "--kind",
+            "decision",
+            "--depth",
+            "0",
+            "--archive",
+        ],
+    )
+    .json();
+    assert_eq!(
+        field(&json["nodes"], "id"),
+        ["DEC-0007", "DEC-0023"],
+        "--archive: Tier 3 too: {json}"
+    );
+    for kind in ["nothing", "mech", "Mechanic"] {
+        let run = spec30(&home, &root, &["graph", "--kind", kind]);
+        run.code(0);
+        assert_eq!(
+            summary_line(&run.stdout),
+            "nodes 0, edges 0",
+            "{}",
+            run.show()
+        );
+        let note = format!("graph: no node of kind `{kind}`");
+        assert!(
+            run.stdout.contains(&note) || run.stderr.contains(&note),
+            "{kind}: {}",
+            run.show()
+        );
+        let json = spec30(&home, &root, &["--json", "graph", "--kind", kind]).json();
+        assert_eq!(json["notes"], serde_json::json!([note]), "{json}");
+        assert_eq!(json["nodes"], serde_json::json!([]), "M: by prefix: {json}");
+    }
+    // Iteration 2: the note on stderr is escaped.
+    let run = spec30(&home, &root, &["graph", "--kind", "a\u{1b}b"]);
+    run.code(0);
+    assert!(
+        run.stderr
+            .lines()
+            .any(|line| line == "note: graph: no node of kind `a\\u{1b}b`"),
+        "{}",
+        run.show()
+    );
+    for (args, line) in [
+        (
+            &["graph", "MEC-STAMINA", "--kind", "mechanic"][..],
+            "spec graph: give a REF or `--kind`, not both",
+        ),
+        (
+            &["--json", "graph", "--kind", "mechanic", "MEC-STAMINA"],
+            "spec graph: give a REF or `--kind`, not both",
+        ),
+        (
+            &["graph", "--depth", "1"],
+            "spec graph: give a REF or `--kind`",
+        ),
+        (&["--json", "graph"], "spec graph: give a REF or `--kind`"),
+    ] {
+        let run = spec30(&home, &root, args);
+        run.code(2);
+        assert_eq!(run.stdout, "", "{}", run.show());
+        assert!(
+            run.stderr.lines().any(|seen| seen == line),
+            "{line}: {}",
+            run.show()
+        );
     }
 }

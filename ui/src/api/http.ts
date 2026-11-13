@@ -6,6 +6,7 @@ import {
   type DeliveryOptions,
   type FlowOptions,
   type GraphOptions,
+  type MapOptions,
   type NodeOptions,
   type RoadmapOptions,
   type RoundOptions,
@@ -47,10 +48,12 @@ import type {
   Inbox,
   IntakeDocument,
   LockDiffView,
+  MapDocument,
   NodeView,
   Project,
   Proposal,
   QueueEvent,
+  RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
   RoundAnswersOutcome,
@@ -79,7 +82,9 @@ import type {
 // the workspaces `docs/features/workspaces.md` "Data", the delivery
 // `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog
 // `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the counts
-// `docs/features/department-overview.md` "Acceptance criteria", DO10):
+// `docs/features/department-overview.md` "Acceptance criteria", DO10, the rings
+// `docs/features/scope-rings.md` "Acceptance criteria", SR4, the map
+// `docs/features/corpus-map.md` "Acceptance criteria", CM3):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -394,15 +399,18 @@ export class HttpClient implements SpecEngineClient {
   }
 
   /**
-   * `spec graph REF --json` as the browser view, uncut: the five options under their JSON echo
+   * `spec graph REF --json` as the browser view, uncut: the options under their JSON echo
    * names (`docs/features/ui-graph.md` "Data"), the REF a query value (`#` as %23), `types`
-   * repeated in order, `impact` and `archive` sent only as true, an absent option left out. A 404
-   * is the exit-1 document (an unknown REF), resolved as data.
+   * repeated in order, `impact`, `both` and `archive` sent only as true, `kinds` repeated in place
+   * of a REF (`docs/features/corpus-map.md` "Acceptance criteria", CM4, CM5), an absent option left
+   * out. A 404 is the exit-1 document (an unknown REF), resolved as data.
    */
   async getGraph(project: string, options: GraphOptions, signal?: AbortSignal): Promise<GraphView> {
     const query = queryOf([
       ["ref", options.ref],
+      ["kinds", options.kinds],
       ["impact", options.impact === true ? true : undefined],
+      ["both", options.both === true ? true : undefined],
       ["types", options.types],
       ["depth", options.depth],
       ["archive", options.archive === true ? true : undefined],
@@ -504,6 +512,27 @@ export class HttpClient implements SpecEngineClient {
       ["archive", options.archive ? true : undefined],
     ]);
     return (await request("GET", `${projectPath(project)}/catalog${query}`, { signal, judged: true })) as CatalogDocument;
+  }
+
+  /**
+   * `spec map [--archive] --json` as the browser view, never cut
+   * (`docs/features/corpus-map.md` "Acceptance criteria", CM3): `archive` sent only as true. Judged,
+   * so only a 200 resolves: a query's 400, an older daemon's 404 and a 503 reject in the daemon's
+   * words. Takes its query's AbortSignal.
+   */
+  async getMap(project: string, options: MapOptions, signal?: AbortSignal): Promise<MapDocument> {
+    const query = queryOf([["archive", options.archive ? true : undefined]]);
+    return (await request("GET", `${projectPath(project)}/map${query}`, { signal, judged: true })) as MapDocument;
+  }
+
+  /**
+   * `spec rings --json` as the browser view, uncut
+   * (`docs/features/scope-rings.md` "Acceptance criteria", SR4): no query. Judged, so only a 200 resolves: a query's 400, an older daemon's 404
+   * and a 503 reject in the daemon's words; a bad `[map]` is a 200 holding its note. Takes its
+   * query's AbortSignal.
+   */
+  async getRings(project: string, signal?: AbortSignal): Promise<RingsDocument> {
+    return (await request("GET", `${projectPath(project)}/rings`, { signal, judged: true })) as RingsDocument;
   }
 
   /**

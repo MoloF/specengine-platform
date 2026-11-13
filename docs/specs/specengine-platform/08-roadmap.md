@@ -377,8 +377,10 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 | # | Slice | Item | Fixed now |
 |---|---|---|---|
 | 1 | `usage-orphans` (`docs/features/usage-orphans.md`) | RM-0111 | must; one count per read, never stored; plugin 0.46.0 (`get_node`'s links `usage`); no ADR; **shipped 2026-11-13** (`docs/canon/spec-usage.md`; owed: UO13's English look) |
-| 2 | `corpus-map` (`docs/features/corpus-map.md`) | RM-0112 | must, after RM-0111's core; ADR-0080 (`d3-force` 3.0.0 on a 2D canvas, a lazy chunk; the allowlist from 19 to 21); no MCP tool, no plugin version |
-| 3 | `scope-rings` (`docs/features/scope-rings.md`) | RM-0113 | should, beside 1 and 2; `[[map.ring]]`, plain SVG; no ADR, no plugin version |
+| 2 | `corpus-map` (`docs/features/corpus-map.md`) | RM-0112 | must, after RM-0111's core; ADR-0080 (`d3-force` 3.0.0 on a 2D canvas, a lazy chunk; the allowlist from 19 to 21); no MCP tool, no plugin version; **shipped 2026-11-13** (`docs/canon/spec-map.md`) |
+| 3 | `scope-rings` (`docs/features/scope-rings.md`) | RM-0113 | should, beside 1 and 2; `[[map.ring]]`, plain SVG; no ADR, no plugin version; **shipped 2026-11-13** (`docs/canon/spec-rings.md`) |
+
+**The writer map shipped**, 2026-11-13: 2 and 3 in one commit, their code sharing files, after a look on a scratch copy of a real game corpus that turned four findings into rulings (canonical node names, colour per kind, mentions off by default, notes folded). The plugin stays 0.46.0. A hub runs tagged images, so the map and rings reach the hub only with a tag at or after that commit. What is left of Phase 7 is the owner's: the hub's upgrade, gate 11b-3, the pipeline trial.
 
 **Order:**
 - `delivery-timeline` (shipped 2026-11-13), then `release-hardening` (lanes T, U and R; shipped 2026-11-13 with `usage-orphans`).

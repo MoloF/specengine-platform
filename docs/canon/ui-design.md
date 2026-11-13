@@ -20,8 +20,8 @@ One file, `src/styles/tokens.css`, holds every colour literal, in both themes, a
 - **System.** `:root` has `color-scheme: light dark`: with no choice the page follows `prefers-color-scheme` (light when it states none), no script; a change applies at once.
 - **Choice.** The header's Theme select (System, Light, Dark) writes `localStorage` `specengine.theme`, `light` or `dark` (System removes it), and sets `<html data-theme>`; `:root[data-theme="light"|"dark"]` pins `color-scheme`. Another value or a throwing storage reads System, silently. Per browser profile; a hub keeps none.
 - **First paint.** `src/main.tsx` runs `applyTheme(storedTheme())` before `createRoot`; `index.html` has `<meta name="color-scheme" content="light dark">`, no inline script.
-- **Palette.** Neutral grey surfaces in both themes: canvas, sunken (board columns, wells), panel (header, nav), raised (tiles, `--shadow-raised`), overlay (dialogs, menus, `--shadow-overlay`), hovered, selected. Accent indigo `#4f46e5` / `#a5b4fc`, not the information blue. Six lozenge pairs `--lozenge-<a>-surface`, `-text`: neutral, information, success, warning, danger, discovery.
-- **Canvases.** Flow's, Graph's and Roadmap's `--xy-*` resolve to `light-dark()` roles; `@xyflow/react`'s `colorMode` is never set.
+- **Palette.** Neutral grey surfaces, both themes: canvas, sunken (board columns, wells), panel (header, nav), raised (tiles, `--shadow-raised`), overlay (dialogs, menus, `--shadow-overlay`), hovered, selected. Accent indigo `#4f46e5` / `#a5b4fc`, not the information blue. Six lozenge pairs `--lozenge-<a>-surface`, `-text`: neutral, information, success, warning, danger, discovery.
+- **Canvases.** Flow's, Graph's and Roadmap's `--xy-*` resolve to `light-dark()` roles, `colorMode` never set; the Map's: `spec-map.md`.
 
 ## Contrast
 

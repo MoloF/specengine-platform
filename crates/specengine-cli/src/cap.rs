@@ -438,12 +438,23 @@ fn history_closing(history: &ShownHistory) -> String {
 /// fewer than one when there is a line.
 pub(crate) fn lines_within(
     lines: impl IntoIterator<Item = usize>,
+    used: usize,
+    first_whole: bool,
+) -> (usize, usize) {
+    lines_fit(lines, used, first_whole, OUTPUT_CAP_CHARS)
+}
+
+/// [`lines_within`] at `cap` characters (`spec map`'s text, cut at a cap
+/// a test may force: task spec `corpus-map` CM3).
+pub(crate) fn lines_fit(
+    lines: impl IntoIterator<Item = usize>,
     mut used: usize,
     first_whole: bool,
+    cap: usize,
 ) -> (usize, usize) {
     let mut fit = 0;
     for cost in lines {
-        if used + cost > OUTPUT_CAP_CHARS && !(first_whole && fit == 0) {
+        if used + cost > cap && !(first_whole && fit == 0) {
             break;
         }
         used += cost;

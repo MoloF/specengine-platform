@@ -91,6 +91,12 @@ import type {
   LockDiffRow,
   LockDiffSpecSide,
   LockDiffView,
+  MapCounts,
+  MapDocument,
+  MapEdge,
+  MapGhost,
+  MapNode,
+  MapParent,
   NodeView,
   OwnerNote,
   Pair,
@@ -99,6 +105,9 @@ import type {
   Proposal,
   QueueEvent,
   RevisionChange,
+  Ring,
+  RingSector,
+  RingsDocument,
   RoadmapCounts,
   RoadmapCut,
   RoadmapDocument,
@@ -250,11 +259,17 @@ import type {
 // (docs/features/usage-orphans.md "Acceptance criteria", UO9: a links block's usage, row 8 of the
 // health document and one orphan, sets 149 to 151), with a catalog row's `used_by`, `mentioned_by`
 // and `orphan` after `tasks_open`, 16 keys, and the health document's `orphans` last, 8, ahead of the
-// file until its Rust test writes them. A key the types carry ahead of the file
-// is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed key the file already
-// names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all one hundred and forty-eight written so far, in the slices' order, and one hundred and
-// fifty-one once usage-orphans' Rust test writes its three.
+// file until its Rust test wrote them; and scope-rings' three
+// (docs/features/scope-rings.md "Acceptance criteria", SR4: the rings document, a ring and a
+// sector, sets 152 to 154), ahead of the file until its Rust test writes them; and corpus-map's six
+// (docs/features/corpus-map.md "Acceptance criteria", CM3: the map document, its counts, a node, an
+// edge, a parent and a ghost, sets 155 to 160), with the graph JSON's `both` and `kinds` after
+// `impact`, 13 keys (CM4, CM5), ahead of the file until its Rust test writes them. A key the types
+// carry ahead of the file is listed in AHEAD_OF_FIXTURE until the change that writes it; a listed
+// key the file already names fails. While that file is absent the comparison is skipped, saying
+// so; once it exists it names all one hundred and fifty-one written so far, in the slices' order,
+// one hundred and fifty-four once scope-rings' Rust test writes its three, and one hundred and
+// sixty once corpus-map's writes its six.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -386,11 +401,14 @@ const KEYS = {
     tail: true,
     more: true,
   } satisfies Record<keyof BundleView, true>,
-  // docs/canon/spec-cli-graph.md "spec graph": the JSON, a node, an edge, `types`' entries.
+  // docs/canon/spec-cli-graph.md "spec graph": the JSON, a node, an edge, `types`' entries; the JSON's
+  // `both` and `kinds` after `impact` since docs/features/corpus-map.md "Acceptance criteria", CM4, CM5.
   GraphView: {
     ref: true,
     reason: true,
     impact: true,
+    both: true,
+    kinds: true,
     types: true,
     depth: true,
     archive: true,
@@ -1143,6 +1161,32 @@ const KEYS = {
   LinkUsage: { used_by: true, mentioned_by: true } satisfies Record<keyof LinkUsage, true>,
   HealthOrphans: { live: true, rows: true, notes: true } satisfies Record<keyof HealthOrphans, true>,
   HealthOrphan: { name: true, id: true, kind: true, title: true, path: true, line: true, status: true, tasks: true, tasks_open: true } satisfies Record<keyof HealthOrphan, true>,
+  // docs/features/scope-rings.md "Acceptance criteria" (SR4): the rings document, a ring and a sector,
+  // sets 152 to 154 in "JSON"'s order, the fixture's names; `Rings` is the document's type `RingsDocument`.
+  Rings: { notes: true, rings: true } satisfies Record<keyof RingsDocument, true>,
+  Ring: { title: true, root: true, kinds: true, sectors: true } satisfies Record<keyof Ring, true>,
+  RingSector: { name: true, id: true, kind: true, title: true, path: true, line: true, status: true, state: true } satisfies Record<keyof RingSector, true>,
+  // docs/features/corpus-map.md "Acceptance criteria" (CM1, CM2, CM3): the map document, its counts, a
+  // node, an edge, a parent and a ghost, sets 155 to 160 in "Data"'s order, the fixture's names.
+  MapDocument: { archive: true, notes: true, counts: true, nodes: true, edges: true, parents: true, ghosts: true } satisfies Record<keyof MapDocument, true>,
+  MapCounts: { documents: true, sections: true, edges: true, parents: true, ghosts: true, orphans: true } satisfies Record<keyof MapCounts, true>,
+  MapNode: {
+    name: true,
+    id: true,
+    kind: true,
+    title: true,
+    path: true,
+    line: true,
+    of: true,
+    status: true,
+    archived: true,
+    used_by: true,
+    mentioned_by: true,
+    orphan: true,
+  } satisfies Record<keyof MapNode, true>,
+  MapEdge: { src: true, dst: true, type: true, weak: true, places: true } satisfies Record<keyof MapEdge, true>,
+  MapParent: { child: true, parent: true } satisfies Record<keyof MapParent, true>,
+  MapGhost: { written: true, reason: true, sources: true, places: true } satisfies Record<keyof MapGhost, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1170,7 +1214,7 @@ const CITED: Record<Named, string> = {
   NodeView: "ref, reason, notes, nodes",
   SearchHit: "id, kind, title, path, line, ord, archived, snippet",
   BundleView: "refs, reason, notes, task, budget, tokens, chars, bytes, bundle_hash, body, layers, tail, more",
-  GraphView: "ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges",
+  GraphView: "ref, reason, impact, both, kinds, types, depth, archive, notes, left_out, truncated, nodes, edges",
   GraphNode: "id, kind, title, path, line, distance, archived",
   GraphEdge: "src, type, dst, written, path, line, state, reason",
   FollowedType: "type, direction",
@@ -1315,6 +1359,15 @@ const CITED: Record<Named, string> = {
   LinkUsage: "used_by, mentioned_by",
   HealthOrphans: "live, rows, notes",
   HealthOrphan: "name, id, kind, title, path, line, status, tasks, tasks_open",
+  Rings: "notes, rings",
+  Ring: "title, root, kinds, sectors",
+  RingSector: "name, id, kind, title, path, line, status, state",
+  MapDocument: "archive, notes, counts, nodes, edges, parents, ghosts",
+  MapCounts: "documents, sections, edges, parents, ghosts, orphans",
+  MapNode: "name, id, kind, title, path, line, of, status, archived, used_by, mentioned_by, orphan",
+  MapEdge: "src, dst, type, weak, places",
+  MapParent: "child, parent",
+  MapGhost: "written, reason, sources, places",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1663,11 +1716,29 @@ function usageKey(name: Named, key: string): boolean {
   return USAGE_ORPHANS_KEYS.some(([type, ahead]) => type === name && ahead === key);
 }
 
+/** The hundred and fifty-one types the fixture names before scope-rings. */
+const BEFORE_SCOPE_RINGS: readonly Named[] = [...BEFORE_USAGE_ORPHANS, ...USAGE_ORPHANS];
+
+/** scope-rings' three, sets 152 to 154 in "JSON"'s order: the rings document, a ring, a sector (docs/features/scope-rings.md "Acceptance criteria", SR4). */
+const SCOPE_RINGS: readonly Named[] = ["Rings", "Ring", "RingSector"];
+
+/** The hundred and fifty-four types the fixture names before corpus-map, scope-rings' three among them. */
+const BEFORE_CORPUS_MAP: readonly Named[] = [...BEFORE_SCOPE_RINGS, ...SCOPE_RINGS];
+
+/** corpus-map's six, sets 155 to 160 in "Data"'s order: the map document, its counts, a node, an edge, a parent, a ghost (docs/features/corpus-map.md "Acceptance criteria", CM3). */
+const CORPUS_MAP: readonly Named[] = ["MapDocument", "MapCounts", "MapNode", "MapEdge", "MapParent", "MapGhost"];
+
+/** corpus-map's two keys on a set the file names, as pairs: the graph JSON's `both` and `kinds` (docs/features/corpus-map.md "Acceptance criteria", CM4, CM5). */
+const CORPUS_MAP_KEYS: readonly (readonly [Named, string])[] = [
+  ["GraphView", "both"],
+  ["GraphView", "kinds"],
+];
+
 /** The types each set names in `provisional.ts`, where the fixture's name is not the type's own. */
-const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument" };
+const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument", Rings: "RingsDocument" };
 
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_USAGE_ORPHANS, ...USAGE_ORPHANS];
+const ALL: readonly Named[] = [...BEFORE_CORPUS_MAP, ...CORPUS_MAP];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1730,7 +1801,11 @@ function served(name: Named): string[] {
  * test wrote them (docs/features/delivery-timeline.md "Acceptance criteria", DT6), then empty again.
  * And usage-orphans' four keys on two sets the file names, as pairs, and its three sets, every key
  * of each, until its Rust test wrote them (docs/features/usage-orphans.md "Acceptance criteria", UO9),
- * then empty again.
+ * then empty again. And scope-rings' three sets, every key of each, until its Rust test wrote them
+ * (docs/features/scope-rings.md "Acceptance criteria", SR4); and corpus-map's six sets, every key of
+ * each, with its two keys on GraphView as pairs, until its Rust test wrote them
+ * (docs/features/corpus-map.md "Acceptance criteria", CM3, CM4, CM5); both in one change, then empty
+ * again.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1794,7 +1869,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_COLLISION_PAIRS.at(-1)).toBe("CardFlowCount");
     expect(BEFORE_DELIVERY_TIMELINE.at(-1)).toBe("PairSide");
     expect(BEFORE_USAGE_ORPHANS.at(-1)).toBe("DeliveryTask");
-    expect(ALL.at(-1)).toBe("HealthOrphan");
+    expect(BEFORE_SCOPE_RINGS.at(-1)).toBe("HealthOrphan");
+    expect(BEFORE_CORPUS_MAP.at(-1)).toBe("RingSector");
+    expect(ALL.at(-1)).toBe("MapGhost");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1823,7 +1900,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(151);
+    expect(ALL).toHaveLength(160);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1834,7 +1911,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three, nor since department-overview's Rust test wrote its three, nor since plain-questions' Rust test wrote its nine, nor since collision-pairs' and hub-department's Rust tests wrote their two sets and three keys, nor since delivery-timeline's Rust test wrote its one key and three sets; usage-orphans' four keys and three sets until its Rust test writes them (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog, DO10 of department-overview, PQ10 of plain-questions, PP8 of collision-pairs, HD1 of hub-department, DT6 of delivery-timeline, UO9 of usage-orphans)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since card-questions' test wrote its three sets and three keys into the file, nor since intake-similar's Rust test wrote `similar`, nor since delivery-analytics' Rust test wrote its eleven sets, nor since direction-catalog's Rust test wrote its three, nor since department-overview's Rust test wrote its three, nor since plain-questions' Rust test wrote its nine, nor since collision-pairs' and hub-department's Rust tests wrote their two sets and three keys, nor since delivery-timeline's Rust test wrote its one key and three sets, nor since usage-orphans' Rust test wrote its four keys and three sets; scope-rings' three sets and corpus-map's six sets and two keys until their Rust tests write them (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal, DP-4 of departments, K1, L1, L3 of card-questions, IS10 of intake-similar, DA-11 of delivery-analytics, DC-9 of direction-catalog, DO10 of department-overview, PQ10 of plain-questions, PP8 of collision-pairs, HD1 of hub-department, DT6 of delivery-timeline, UO9 of usage-orphans, SR4 of scope-rings, CM3 to CM5 of corpus-map)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1853,8 +1930,11 @@ describe("the daemon's document types (AC-09)", () => {
     const plain = listed(PLAIN_QUESTIONS);
     const pairKey = listed(COLLISION_PAIR_KEYS);
     const department = listed(HUB_DEPARTMENT);
-    // Only usage-orphans' now: its three sets' keys and its four on earlier sets (docs/features/usage-orphans.md "Acceptance criteria", UO9).
-    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => !USAGE_ORPHANS.includes(name) && !usageKey(name, key))).toEqual([]);
+    // usage-orphans' four keys as pairs and its three sets, every key, until its Rust test wrote them, then empty again (docs/features/usage-orphans.md "Acceptance criteria", UO9).
+    // scope-rings' three sets, every key (docs/features/scope-rings.md "Acceptance criteria", SR4), and corpus-map's six sets, every key,
+    // and its two GraphView keys as pairs (docs/features/corpus-map.md "Acceptance criteria", CM3 to CM5), until their Rust tests wrote them; then empty again.
+    const mapKey = listed(CORPUS_MAP_KEYS);
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => !SCOPE_RINGS.includes(name) && !CORPUS_MAP.includes(name) && !mapKey(name, key))).toEqual([]);
     // None of delivery-analytics' but delivery-timeline's `timeline` on its document, a pair of its own.
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => DELIVERY_ANALYTICS.includes(name) && !timelineKey(name, key))).toHaveLength(0);
     // None of direction-catalog's but usage-orphans' three on its row (UO5).
@@ -1873,6 +1953,12 @@ describe("the daemon's document types (AC-09)", () => {
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => DELIVERY_ANALYTICS.includes(name) || timelineKey(name, key))).toEqual([]);
     // usage-orphans' 18, its four keys on CatalogRow and HealthReport and its three sets' 2, 3 and 9,
     // since its Rust test wrote them (docs/features/usage-orphans.md "Acceptance criteria", UO9).
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => USAGE_ORPHANS.includes(name) || usageKey(name, key)).map(([name, key]) => `${name}.${key}`)).toEqual([]);
+    // scope-rings' 14 (the document's 2, a ring's 4, a sector's 8) since its Rust test wrote them.
+    expect(AHEAD_OF_FIXTURE.filter(([name]) => SCOPE_RINGS.includes(name))).toHaveLength(0);
+    // corpus-map's 36 (the document's 7, the counts' 6, a node's 12, an edge's 5, a parent's 2, a ghost's 4) and GraphView's two since its Rust test wrote them.
+    expect(AHEAD_OF_FIXTURE.filter(([name]) => CORPUS_MAP.includes(name))).toHaveLength(0);
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => mapKey(name, key)).map(([name, key]) => `${name}.${key}`)).toEqual([]);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -2228,8 +2314,9 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it("counts the daemon's keys of ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 (AC-09 of ui-live)", () => {
+    // GraphView's 13 since corpus-map's `both` and `kinds` (docs/features/corpus-map.md "Acceptance criteria", CM4, CM5).
     expect(Object.fromEntries(UI_LIVE.map((name) => [name, served(name).length]))).toEqual({
-      GraphView: 11,
+      GraphView: 13,
       GraphNode: 7,
       GraphEdge: 8,
       FollowedType: 2,
@@ -2278,8 +2365,10 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_COLLISION_PAIRS).toHaveLength(143);
     expect(BEFORE_DELIVERY_TIMELINE).toHaveLength(145);
     expect(BEFORE_USAGE_ORPHANS).toHaveLength(148);
-    expect(ALL).toHaveLength(151);
-    expect(new Set(ALL).size).toBe(151);
+    expect(BEFORE_SCOPE_RINGS).toHaveLength(151);
+    expect(BEFORE_CORPUS_MAP).toHaveLength(154);
+    expect(ALL).toHaveLength(160);
+    expect(new Set(ALL).size).toBe(160);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -2520,7 +2609,7 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it('types usage-orphans\' three and its keys as the spec writes them: a links block\'s `usage` after `incoming` (its two counts), a catalog row\'s counts and flag after `tasks_open` (16 keys, a section\'s flag null), the health document\'s `orphans` last (8), row 8\'s 3 keys and an orphan\'s 9, its tasks null when the queue was not read; each citing `docs/features/usage-orphans.md` "Acceptance criteria"; every key ahead of the file until its Rust test writes them (UO9 of usage-orphans)', () => {
-    expect(ALL.slice(BEFORE_USAGE_ORPHANS.length)).toEqual([...USAGE_ORPHANS]);
+    expect(ALL.slice(BEFORE_USAGE_ORPHANS.length, BEFORE_SCOPE_RINGS.length)).toEqual([...USAGE_ORPHANS]);
     expect(USAGE_ORPHANS.map((name) => served(name))).toEqual([
       ["used_by", "mentioned_by"],
       ["live", "rows", "notes"],
@@ -2548,6 +2637,57 @@ describe("the daemon's document types (AC-09)", () => {
     expect(USAGE_ORPHANS_KEYS.filter(([name, key]) => isAhead(name, key))).toEqual([]);
     // No key counts rows the UI could re-count: the counts come as numbers, the flag as a word of the core's.
     expect(served("LinkUsage").every((key) => key.endsWith("_by"))).toBe(true);
+  });
+
+  it('types scope-rings\' three as the spec writes them: 2, 4, 8 keys in "JSON"\'s order, every one present, a ring\'s root and kinds nullable, a sector\'s state the catalog\'s rollup or any word, each citing `docs/features/scope-rings.md` "Acceptance criteria", SR4; all three in the file since its Rust test wrote them (SR4 of scope-rings)', () => {
+    expect(ALL.slice(BEFORE_SCOPE_RINGS.length, BEFORE_CORPUS_MAP.length)).toEqual([...SCOPE_RINGS]);
+    expect(SCOPE_RINGS.map((name) => served(name))).toEqual([
+      ["notes", "rings"],
+      ["title", "root", "kinds", "sectors"],
+      ["name", "id", "kind", "title", "path", "line", "status", "state"],
+    ]);
+    for (const name of SCOPE_RINGS) {
+      const type = DECLARED_AS[name] ?? name;
+      expect([name, declaredKeys(type)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${type} {`);
+      expect([type, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/scope-rings.md` "Acceptance criteria", SR4')]).toEqual([type, true]);
+      // Every key ahead of the file until the Rust test wrote the set; none since.
+      expect([name, served(name).filter((key) => isAhead(name, key))]).toEqual([name, []]);
+    }
+    expect(source).toMatch(/^export interface RingsDocument \{\n {2}notes: string\[\];\n {2}rings: Ring\[\];\n\}$/m);
+    expect(source).toMatch(/^export interface Ring \{\n {2}title: string;\n {2}root: string \| null;\n {2}kinds: string\[\] \| null;\n {2}sectors: RingSector\[\];\n\}$/m);
+    expect(source).toMatch(/^ {2}status: string \| null;\n {2}state: KnownRollup \| Unlisted;\n\}$/m);
+    // No member or state the UI could compute: no parent, depth, angle or count on any set (D2, D3).
+    const keys = SCOPE_RINGS.flatMap((name) => served(name));
+    expect(keys.filter((key) => ["parent", "depth", "angle", "count", "weight", "rollup"].includes(key))).toEqual([]);
+  });
+
+  it('types corpus-map\'s six as the spec writes them: 7, 6, 12, 5, 2, 4 keys in "Data"\'s order, every one present, a node\'s `kind`, `title`, `of`, `status` and `orphan` nullable, ends by index, each citing `docs/features/corpus-map.md` "Acceptance criteria"; all six in the file, and GraphView\'s `both` and `kinds` after `impact`, since its Rust test wrote them (CM1 to CM5 of corpus-map)', () => {
+    expect(ALL.slice(BEFORE_CORPUS_MAP.length)).toEqual([...CORPUS_MAP]);
+    expect(CORPUS_MAP.map((name) => served(name))).toEqual([
+      ["archive", "notes", "counts", "nodes", "edges", "parents", "ghosts"],
+      ["documents", "sections", "edges", "parents", "ghosts", "orphans"],
+      ["name", "id", "kind", "title", "path", "line", "of", "status", "archived", "used_by", "mentioned_by", "orphan"],
+      ["src", "dst", "type", "weak", "places"],
+      ["child", "parent"],
+      ["written", "reason", "sources", "places"],
+    ]);
+    for (const name of CORPUS_MAP) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} {`);
+      expect([name, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/corpus-map.md` "Acceptance criteria"')]).toEqual([name, true]);
+      expect([name, served(name).filter((key) => isAhead(name, key))]).toEqual([name, []]);
+    }
+    expect(source).toMatch(/^ {2}of: number \| null;\n {2}status: string \| null;\n {2}archived: boolean;\n {2}used_by: number;\n {2}mentioned_by: number;\n {2}orphan: boolean \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface MapEdge \{\n {2}src: number;\n {2}dst: number;\n {2}type: string;\n {2}weak: boolean;\n {2}places: number;\n\}$/m);
+    expect(source).toMatch(/^export interface MapGhost \{\n {2}written: string;\n {2}reason: string \| null;\n {2}sources: number\[\];\n {2}places: number;\n\}$/m);
+    // GraphView's two after `impact`, `ref` null under a direction start.
+    expect(served("GraphView").slice(0, 6)).toEqual(["ref", "reason", "impact", "both", "kinds", "types"]);
+    expect(declaredKeys("GraphView")).toEqual(served("GraphView"));
+    expect(source).toMatch(/^export interface GraphView \{\n {2}ref: string \| null;\n {2}reason: string \| null;\n {2}impact: boolean;\n {2}both: boolean;\n {2}kinds: string\[\] \| null;\n/m);
+    expect([isAhead("GraphView", "both"), isAhead("GraphView", "kinds"), isAhead("GraphView", "impact")]).toEqual([false, false, false]);
+    // No count the UI could make: the uses and the orphan flag are served (D3).
+    expect(served("MapNode").slice(-3)).toEqual(["used_by", "mentioned_by", "orphan"]);
   });
 
   it("counts ui-round's six: 5 sheet keys, 22 item keys, 3, 3; 3 answers-document keys, 6 entry keys (T-04 of ui-round, PQ10 of plain-questions, PP8 of collision-pairs)", () => {
@@ -2663,18 +2803,21 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and forty-eight types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two, upstream-signal's two, delivery-analytics' eleven, direction-catalog's three, department-overview's three, collision-pairs' two, delivery-timeline's three (DT6); then usage-orphans' three once its Rust test writes them (UO9)", () => {
+  it("names exactly the one hundred and fifty-one types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one, card-questions' three, department-split's three, task-mandate's one, node-history's two, upstream-signal's two, delivery-analytics' eleven, direction-catalog's three, department-overview's three, collision-pairs' two, delivery-timeline's three (DT6), usage-orphans' three (UO9); then scope-rings' three (SR4) and corpus-map's six (CM3) once their Rust tests write them", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
     // delivery-analytics' eleven since its Rust test wrote them (DA-11); direction-catalog's three
     // since its own did (DC-9); department-overview's three since its own did (DO10); collision-pairs'
-    // two since its own did (PP8); delivery-timeline's three since its own did (DT6): it names all
-    // hundred and forty-eight, in the slices' order. usage-orphans' three are ahead of it, every key,
-    // until its Rust test writes them (docs/features/usage-orphans.md "Acceptance criteria", UO9).
-    expect(ALL.filter((name) => !expected.includes(name))).toEqual(USAGE_ORPHANS.filter((name) => !Object.hasOwn(sets, name)));
-    expect(expected.slice(0, BEFORE_USAGE_ORPHANS.length)).toEqual(BEFORE_USAGE_ORPHANS);
+    // two since its own did (PP8); delivery-timeline's three since its own did (DT6); usage-orphans'
+    // three since its own did (UO9): it names all hundred and fifty-one, in the slices' order.
+    // scope-rings' three since its Rust test wrote them
+    // (docs/features/scope-rings.md "Acceptance criteria", SR4) and corpus-map's six since its own did
+    // (docs/features/corpus-map.md "Acceptance criteria", CM3): all hundred and sixty.
+    expect(ALL.filter((name) => !expected.includes(name))).toEqual([...SCOPE_RINGS, ...CORPUS_MAP].filter((name) => !Object.hasOwn(sets, name)));
+    expect(expected.slice(0, BEFORE_SCOPE_RINGS.length)).toEqual(BEFORE_SCOPE_RINGS);
     expect(Object.keys(sets)).toEqual([...expected]);
     expect(Object.keys(sets)).toHaveLength(expected.length);
-    expect([148, 151]).toContain(expected.length);
+    expect(expected).toEqual([...ALL]);
+    expect(expected).toHaveLength(160);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -2925,15 +3068,41 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(DELIVERY_TIMELINE.map((name) => sets[name]?.length)).toEqual([4, 4, 11]);
   });
 
-  it("names usage-orphans' three last, after DeliveryTask, sets 149 to 151: 2, 3, 9 keys in the types' order, once its Rust test writes them; none before (UO9 of usage-orphans)", () => {
+  it("names usage-orphans' three after DeliveryTask, before scope-rings' three, sets 149 to 151: 2, 3, 9 keys in the types' order, once its Rust test writes them; none before (UO9 of usage-orphans)", () => {
     const named = USAGE_ORPHANS.filter((name) => Object.hasOwn(sets, name));
     // Ahead of the file, every key, until the Rust test writes the three in one change: none or all.
     expect([0, USAGE_ORPHANS.length]).toContain(named.length);
-    expect(Object.keys(sets).slice(BEFORE_USAGE_ORPHANS.length)).toEqual(named);
+    expect(Object.keys(sets).slice(BEFORE_USAGE_ORPHANS.length, BEFORE_SCOPE_RINGS.length)).toEqual(named);
     expect(Object.keys(sets).at(BEFORE_USAGE_ORPHANS.length - 1)).toBe("DeliveryTask");
     expect(named.map((name) => sets[name])).toEqual(named.map((name) => served(name)));
     expect(named.map((name) => sets[name])).toEqual(named.map((name) => declaredKeys(name)));
     expect(named.map((name) => sets[name]?.length)).toEqual([2, 3, 9].slice(0, named.length));
+  });
+
+  it("names scope-rings' three after HealthOrphan, before corpus-map's six, sets 152 to 154: 2, 4, 8 keys in the types' order, once its Rust test writes them; none before (SR4 of scope-rings)", () => {
+    const named = SCOPE_RINGS.filter((name) => Object.hasOwn(sets, name));
+    // Ahead of the file, every key, until the Rust test writes the three in one change: none or all.
+    expect([0, SCOPE_RINGS.length]).toContain(named.length);
+    expect(Object.keys(sets).slice(BEFORE_SCOPE_RINGS.length, BEFORE_CORPUS_MAP.length)).toEqual(named);
+    expect(Object.keys(sets).at(BEFORE_SCOPE_RINGS.length - 1)).toBe("HealthOrphan");
+    expect(named.map((name) => sets[name])).toEqual(named.map((name) => served(name)));
+    expect(named.map((name) => sets[name])).toEqual(named.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
+    expect(named.map((name) => sets[name]?.length)).toEqual([2, 4, 8].slice(0, named.length));
+  });
+
+  it("names corpus-map's six last, after RingSector, sets 155 to 160: 7, 6, 12, 5, 2, 4 keys in the types' order, and GraphView's `both` and `kinds` after `impact`, once its Rust test writes them; none before (CM3 to CM5 of corpus-map)", () => {
+    const named = CORPUS_MAP.filter((name) => Object.hasOwn(sets, name));
+    // Ahead of the file, every key, until the Rust test writes the six in one change: none or all.
+    expect([0, CORPUS_MAP.length]).toContain(named.length);
+    expect(Object.keys(sets).slice(BEFORE_CORPUS_MAP.length)).toEqual(named);
+    expect(named.map((name) => sets[name])).toEqual(named.map((name) => served(name)));
+    expect(named.map((name) => sets[name])).toEqual(named.map((name) => declaredKeys(name)));
+    expect(named.map((name) => sets[name]?.length)).toEqual([7, 6, 12, 5, 2, 4].slice(0, named.length));
+    // GraphView's two land with the six: the file names both or neither, after `impact`.
+    const graph = sets.GraphView ?? [];
+    const written = CORPUS_MAP_KEYS.filter(([, key]) => graph.includes(key)).map(([, key]) => key);
+    expect([[], ["both", "kinds"]]).toContainEqual(written);
+    expect(graph).toEqual(compared("GraphView"));
   });
 
   it("names lock-diff's five after ShownBindings, before flow-read's five: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {
