@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-14
 ---
 
 # specengine-mcp — the MCP server over stdio, and a hub's
@@ -40,14 +40,14 @@ Verified on v2.1.283 by script and by hand (Phase 0); the read-tool items checke
 
 ## Feature `probes`
 
-The measurement build, never default: `probe_output {tokens}` -> `tokens` × 4 bytes of filler (max 200 000) and `probe_sleep {seconds}` (max 900, ends early on cancellation), both `readOnlyHint: true`. A hub's server also routes `probe_panic`, a panic in the turn (`HUB_PROBES`).
+The measurement build, never default: `probe_output {tokens}` -> `tokens` × 4 bytes of filler (max 200 000) and `probe_sleep {seconds}` (max 900, ends early on cancellation), both `readOnlyHint: true`. A hub's server also routes `HUB_PROBES`: `probe_panic`, a panic in the turn; `probe_hold {ms, tag}` (`ms` <= 10 000), the turn held, answering `tag` and `seq`, its run's count.
 
 ## Modules
 
 | Module | What it does |
 |---|---|
-| `lib.rs` | crate doc; re-exports `Lifecycle`, `SpecEngineServer`, `serve_stdio`, `ServeError`, `INSTRUCTIONS`, `MAX_RESULT_CHARS`; the hub's `HubSeam`, `Command`, `TurnFuture`, `HUB_TOOLS`, `HUB_READ_TOOLS`, `HUB_PROBES`, `HUB_INSTRUCTIONS` |
-| `hub.rs` | the hub mode: `SpecEngineServer::hub(Arc<dyn HubSeam>)`; `HubSeam` (`login`, `turn(Command) -> TurnFuture`, the daemon's); `turned`, the turn raced with the request's cancellation; `HUB_TOOLS` (18), `HUB_READ_TOOLS`, `reads_trust` (`spec-read-freshness.md`), `HUB_ROUTER` (a `static`), `HUB_INSTRUCTIONS` and nine descriptions, their asserts; hub argument types without `task_id`; the login into requests and card actors |
+| `lib.rs` | crate doc; re-exports `Lifecycle`, `SpecEngineServer`, `serve_stdio`, `ServeError`, `INSTRUCTIONS`, `MAX_RESULT_CHARS`; the hub's `HubSeam`, `Command`, `TurnFuture`, `HUB_TOOLS`, `HUB_READ_TOOLS`, `HUB_PROBES`, `HUB_INSTRUCTIONS`, `call_extensions` |
+| `hub.rs` | the hub mode: `SpecEngineServer::hub(Arc<dyn HubSeam>)`; `HubSeam` (`login`, `turn(login, Command) -> TurnFuture`, the daemon's); `turned`, the turn raced with the request's cancellation; `call_extensions` (the call's request extensions, for the daemon's slow lines); `HUB_TOOLS` (18), `HUB_READ_TOOLS`, `reads_trust` (`spec-read-freshness.md`), `HUB_ROUTER` (a `static`), `HUB_INSTRUCTIONS` and nine descriptions, their asserts; hub argument types without `task_id`; the login into requests and card actors |
 | `server.rs` | `SpecEngineServer` (`ServerHandler`, no project state): `INSTRUCTIONS` (bytes: `mcp-read.md` **Texts**) and their asserts, the tool routers (`read_tools`, `code_tools`, `intake_tools`, `task_tools`, `card_tools`, `collision_tools`, `review_tools`), `get_info` (tools, resources), `Lifecycle` -> `supported_protocol_versions`, `list_resource{s,_templates}`, `read_resource` (blocking pool, 2026-07-28 cache hints); `serve_stdio` (clean exit on closed stdin, `ServeError`) |
 | `read.rs` | the read tools (`read_tools` router; `get_impact`: `spec-impact.md`; `get_trace`: `spec-trace.md`): argument types (`with`: `code-reads.md`, `spec-history.md`), descriptions (a hub's four too) and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `answer_of`, `Answer` -> the tool result; text helpers shared with `intake.rs` |
 | `code.rs` | the code tools (`code_tools`): arguments, the form checks before any call, descriptions, asserts; `read.rs`' `call` |
@@ -56,9 +56,9 @@ The measurement build, never default: `probe_output {tokens}` -> `tokens` × 4 b
 | `cards.rs` | the card tools (`card_tools`, `cards.md` "MCP", `card-upstream.md`): arguments, descriptions, asserts; `{id, reason}`, no `structuredContent` |
 | `collisions.rs` | the collision tools (`collision_tools`, `collision-pass.md`): arguments, descriptions, asserts |
 | `resources.rs` | `list` (200 per page), the node template, `parse`, `read`, `percent_encode`, `percent_decode`, the error codes |
-| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (review, `SimilarShape`, intake, drift, code, a record's keys, a one-key `Choice`, `BundleRowShape` (`BindingRowShape` + `tokens_est`), `ImpactDocument`, `TraceDocument`, layer C's `SymbolsLayerC`, `SymbolsTier`, `SnapshotState`, `SnapshotFreshness`; `kind` free), schema only |
-| `review.rs` | the owner's form (`review_tools`, its description and asserts): `review` (`stage_form` first, the form-capability check, the era; legacy `send_cancellable_request`, stateless `input_required` with the unsealed `requestState`), `resume` (round 2), `answered` (the answer -> `StageBody`), `after` (`stage`, the read after it, the outcome lines); `form_of` (by family), `value` (one line, escaped, cut) |
-| `probes.rs` | `probes` only: `probe_output`, `probe_sleep`, a hub's `probe_panic` |
+| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (review, `SimilarShape`, intake, drift, code, a record's keys, a one-key `Choice`, `BundleRowShape`, `ImpactDocument`, `TraceDocument`, layer C's; `kind` free), schema only |
+| `review.rs` | the owner's form (`review_tools`, its description and asserts): `review` (`stage_form` first, the capability check, the era: `review-form.md`), `resume` (round 2), `answered` (the answer -> `StageBody`), `after` (`stage`, the read after it, the outcome lines); `form_of` (by family), `value` (one line, escaped, cut) |
+| `probes.rs` | `probes` only: `probe_output`, `probe_sleep`, a hub's `HUB_PROBES` |
 | `main.rs` | clap CLI, the quiet panic hook, current-thread tokio runtime, exit codes |
 
 ## Open minors

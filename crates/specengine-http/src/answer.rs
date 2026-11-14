@@ -58,6 +58,7 @@ use specengine_cli::{
 };
 
 use crate::start::Project;
+use crate::{slow, turn};
 
 /// The content type of every JSON body.
 const JSON: &str = "application/json; charset=utf-8";
@@ -278,7 +279,9 @@ where
     F: FnOnce(&Env, &Globals) -> Result<Outcome, CliError> + Send + 'static,
 {
     // Dropped here, with the request, while waiting: the call never runs.
-    let turn = Arc::clone(&project.turn).lock_owned().await;
+    // Its wait and hold go to the request's slow record (`crate::turn`).
+    let holder = turn::Holder::page(&project, slow::current());
+    let turn = turn::take(&project, holder).await;
     let joined = tokio::task::spawn_blocking(move || {
         let _turn = turn;
         let trust = project.trust.clone();

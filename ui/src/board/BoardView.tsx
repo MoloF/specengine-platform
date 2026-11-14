@@ -50,6 +50,7 @@ import {
   type BoardFilters,
 } from "./filter";
 import { movesFrom, noCards, noteNames, rowMark } from "./labels";
+import { BOARD_LEVELS, matchesLevel, recallLevel, rememberLevel, type BoardLevel } from "./level";
 import { MoveMenu } from "./MoveMenu";
 import { rollupsOf, type Rollup } from "./rollup";
 import { LANE_MODES, recallLaneMode, rememberLaneMode, swimlanesOf, type LaneMode, type Swimlane } from "./swimlanes";
@@ -279,6 +280,7 @@ export function BoardView({
   const actingLineId = useId();
   const cancelledId = useId();
   const lanesId = useId();
+  const levelId = useId();
   const tabsBase = useId();
   const headBase = useId();
   const [remembered] = useState(() => memory.recall(project));
@@ -287,6 +289,8 @@ export function BoardView({
   const [withCancelled, setWithCancelled] = useState(remembered?.withCancelled ?? false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(remembered?.collapsed ?? []));
   const [laneMode, setLaneMode] = useState<LaneMode>(() => recallLaneMode(project));
+  /** Show: every card, the tasks without a parent, or the subtasks; stored per viewer and project, as the lane mode is. */
+  const [level, setLevel] = useState<BoardLevel>(() => recallLevel(project));
   /** Show all flows was pressed for this visit, under the workspace `shownFor` names. */
   const [allFlows, setAllFlows] = useState(false);
   const [shownFor, setShownFor] = useState(lens);
@@ -404,7 +408,16 @@ export function BoardView({
   /** Some flows are left out of the tabs by the workspace. */
   const flowsHidden = lensTabs.length < everyTab.length;
   const tabs = allFlows ? everyTab : lensTabs;
-  const visible = useMemo(() => all.filter((row) => matchesFilters(row, filters)), [all, filters]);
+  // The level is one more cut ANDed with the filters: the lanes, the cells' counts and the keys follow the rows shown; the heads and the rollups take the whole list.
+  const visible = useMemo(() => all.filter((row) => matchesFilters(row, filters) && matchesLevel(row, level)), [all, filters, level]);
+  /** Each card's title by its ID, from the whole list, any flow: a subtask's parent line names its parent by it. */
+  const titles = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const row of all) {
+      byId.set(row.id, row.title);
+    }
+    return byId;
+  }, [all]);
 
   // A new ID in the route opens its flow, once its row or its card has said which.
   const routed = panel.data !== undefined && isCard(panel.data) && panel.data.id === cardId ? panel.data.flow : (all.find((row) => row.id === cardId)?.flow ?? null);
@@ -545,8 +558,8 @@ export function BoardView({
     failedBefore.current = boardFailed;
   });
 
-  /** A card opened from the board: one history entry, its tab kept. */
-  function openCard(id: string) {
+  /** A card opened from the board: one history entry, its tab kept; `from` the tile focus goes back to, when another card's link opened it. */
+  function openCard(id: string, from?: string) {
     if (writing) {
       return;
     }
@@ -554,7 +567,7 @@ export function BoardView({
       modalHeading()?.focus();
       return;
     }
-    openedFrom.current ??= id;
+    openedFrom.current ??= from ?? id;
     setOpenedInside(id);
     pushed.current = true;
     pushHash(sectionHash(project, "board", id));
@@ -851,8 +864,8 @@ export function BoardView({
   // One object for the board's life, so a memoised card redraws only when its own row or marks do.
   const cardActions = useMemo<CardActions>(
     () => ({
-      onOpen: (id) => {
-        latest.current?.onOpen(id);
+      onOpen: (id, from) => {
+        latest.current?.onOpen(id, from);
       },
       onMove: (row, button) => {
         latest.current?.onMove(row, button);
@@ -891,6 +904,11 @@ export function BoardView({
   function chooseLanes(mode: LaneMode) {
     setLaneMode(mode);
     rememberLaneMode(project, mode);
+  }
+
+  function chooseLevel(chosen: BoardLevel) {
+    setLevel(chosen);
+    rememberLevel(project, chosen);
   }
 
   function closeDialog() {
@@ -960,6 +978,12 @@ export function BoardView({
 
   function clearFilters() {
     setFilters(NO_FILTERS);
+    focusLater(() => cardElement(rovingId ?? "") ?? results.current);
+  }
+
+  /** The level's empty state's Show all: every card again, stored; the filters as they were. */
+  function showEveryLevel() {
+    chooseLevel("all");
     focusLater(() => cardElement(rovingId ?? "") ?? results.current);
   }
 
@@ -1067,6 +1091,8 @@ export function BoardView({
                         returned={flow !== undefined && flow.return !== null && row.column === flow.return}
                         handOffs={rollup.children.length}
                         returnedChildren={rollup.returned}
+                        parent={level === "subtasks" ? row.parent : null}
+                        parentTitle={row.parent === null ? null : (titles.get(row.parent) ?? null)}
                         actions={cardActions}
                       />
                     );
@@ -1113,17 +1139,30 @@ export function BoardView({
           )}
           {!boardFailed && all.length > 0 && visible.length === 0 && (
             <div className="board-notice">
-              <EmptyState
-                level={2}
-                title={t("board.view.noMatch")}
-                primary={
-                  filtered ? (
-                    <Button appearance="primary" onClick={clearFilters}>
-                      {t("board.view.clearFilters")}
+              {filtered || level === "all" ? (
+                // Clear filters resets Discipline and Assignee and leaves the level as chosen.
+                <EmptyState
+                  level={2}
+                  title={t("board.view.noMatch")}
+                  primary={
+                    filtered ? (
+                      <Button appearance="primary" onClick={clearFilters}>
+                        {t("board.view.clearFilters")}
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                <EmptyState
+                  level={2}
+                  title={level === "tasks" ? t("board.level.noTasks") : t("board.level.noSubtasks")}
+                  primary={
+                    <Button appearance="primary" onClick={showEveryLevel}>
+                      {t("board.level.showAll")}
                     </Button>
-                  ) : undefined
-                }
-              />
+                  }
+                />
+              )}
             </div>
           )}
           {refusal !== null && refusal.place === "board" && (
@@ -1230,6 +1269,28 @@ export function BoardView({
           setFilters((current) => ({ ...current, assignee }));
         }}
       />
+      <div className="board-tool">
+        <label className="field-label" htmlFor={levelId}>
+          {t("board.level.label")}
+        </label>
+        <select
+          id={levelId}
+          className="field"
+          value={level}
+          onChange={(event) => {
+            const chosen = BOARD_LEVELS.find((candidate) => candidate === event.target.value);
+            if (chosen !== undefined) {
+              chooseLevel(chosen);
+            }
+          }}
+        >
+          {BOARD_LEVELS.map((candidate) => (
+            <option key={candidate} value={candidate}>
+              {t(`board.level.${candidate}`)}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="board-tool">
         <label className="field-label" htmlFor={lanesId}>
           {t("board.lanes.label")}

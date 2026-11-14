@@ -21,6 +21,7 @@
 
 pub mod hub;
 pub mod mcp_http;
+pub mod slow;
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};

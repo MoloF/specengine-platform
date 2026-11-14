@@ -2188,3 +2188,220 @@ describe("flow titles (DP-10 of departments)", () => {
     expect(flow?.nextElementSibling?.textContent).toBe("Copy desk");
   });
 });
+
+// docs/features/board-subtasks.md "Acceptance criteria", BS3-BS10: the Show select, one more cut of the
+// one list read. The fixture: parent C-0001 "Weekly run" with subtasks C-0002 and C-0003, lone task
+// C-0004, and subtask C-0005 whose parent C-0009 the list does not hold, all in one flow.
+describe("Show: all tasks, tasks only or subtasks only (board-subtasks)", () => {
+  const LEVEL_ROWS = [
+    aCardRow({ id: "C-0001", title: "Weekly run", discipline: "copy" }),
+    aCardRow({ id: "C-0002", parent: "C-0001", column: "doing", discipline: "copy" }),
+    aCardRow({ id: "C-0003", parent: "C-0001", column: "check", discipline: "plates" }),
+    aCardRow({ id: "C-0004", title: "Lone task", discipline: "lead" }),
+    aCardRow({ id: "C-0005", parent: "C-0009" }),
+  ];
+  const LEVEL_LIST = aCardList(LEVEL_ROWS);
+  const LEVEL_CARDS = { "C-0001": aCard({ id: "C-0001", title: "Weekly run" }), "C-0004": aCard({ id: "C-0004", title: "Lone task" }) };
+
+  function levelSelect(): HTMLSelectElement {
+    return screen.getByLabelText<HTMLSelectElement>("Show");
+  }
+
+  function showLevel(level: string) {
+    fireEvent.change(levelSelect(), { target: { value: level } });
+  }
+
+  /** Each head's label and count as its heading reads them, in order. */
+  function headTexts(): string[] {
+    return Array.from(document.querySelectorAll<HTMLElement>(".board-head > h2")).map((one) => one.textContent);
+  }
+
+  /** Each head's column label alone, in order. */
+  function headLabels(): string[] {
+    return Array.from(document.querySelectorAll<HTMLElement>(".board-head > h2 .lozenge-label")).map((one) => one.textContent);
+  }
+
+  /** Each head's count against the tiles drawn under it, in the one lane of None. */
+  function countsAndTiles(): [number, number][] {
+    return Array.from(document.querySelectorAll<HTMLElement>(".board-head > h2")).map((one) => {
+      const key = one.dataset.columnHead ?? "";
+      const cell = Array.from(document.querySelectorAll<HTMLElement>("section.board-cell")).find((candidate) => candidate.dataset.lane?.endsWith(`|${key}`) === true);
+      return [Number(/(\d+) tasks?$/.exec(one.textContent)?.[1] ?? "-1"), cell?.querySelectorAll("[data-card]").length ?? -1];
+    });
+  }
+
+  function laneHeadTexts(): string[] {
+    return Array.from(document.querySelectorAll(".board-lane-head h2")).map((one) => one.textContent);
+  }
+
+  async function shownBoard(client = boardClient(LEVEL_LIST, LEVEL_CARDS), hash = "#/alpha/board") {
+    await open(client, hash);
+    await waitFor(() => {
+      expect(document.querySelectorAll("[data-card]").length).toBeGreaterThan(0);
+    });
+    return client;
+  }
+
+  it("Tasks only draws the rows with no parent; the parent's rollup still counts both subtasks; each head counts the tiles drawn under it (BS3)", async () => {
+    await shownBoard();
+    expect(Array.from(levelSelect().options).map((option) => [option.value, option.textContent])).toEqual([
+      ["all", "All tasks"],
+      ["tasks", "Tasks only"],
+      ["subtasks", "Subtasks only"],
+    ]);
+    showLevel("tasks");
+    expect(shown()).toEqual(["C-0001", "C-0004"]);
+    expect(card("C-0001").querySelector(".board-card-handoffs")?.textContent).toBe("2 subtasks");
+    expect(countsAndTiles()).toEqual([
+      [2, 2],
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ]);
+  });
+
+  it("Subtasks only draws the subtasks, each naming its parent with a link to its modal; a parent the list lacks by its ID alone (BS4)", async () => {
+    await shownBoard();
+    showLevel("subtasks");
+    expect(shown()).toEqual(["C-0005", "C-0002", "C-0003"]);
+    const line = card("C-0002").querySelector<HTMLElement>(".board-card-parent");
+    expect(line?.textContent).toContain("Subtask of");
+    const link = within(line as HTMLElement).getByRole("link");
+    expect(link.getAttribute("href")).toBe("#/alpha/board/C-0001");
+    expect(link.textContent).toContain("C-0001");
+    expect(link.textContent).toContain("Weekly run");
+    const lacking = within(card("C-0005")).getByRole("link", { name: "C-0009" });
+    expect([lacking.textContent, lacking.getAttribute("href")]).toEqual(["C-0009", "#/alpha/board/C-0009"]);
+    // The parent's link is out of the Tab order: the tile's own name says the parent.
+    expect(["C-0002", "C-0005"].map((id) => card(id).getAttribute("aria-label"))).toEqual(["C-0002: Card C-0002, Subtask of C-0001 Weekly run", "C-0005: Card C-0005, Subtask of C-0009"]);
+    expect(countsAndTiles()).toEqual([
+      [1, 1],
+      [1, 1],
+      [1, 1],
+      [0, 0],
+    ]);
+    // The parent's link opens its modal, one entry pushed, though its tile is not drawn; closing gives focus back to the subtask's tile.
+    const length = window.history.length;
+    fireEvent.click(link);
+    expect(await modal("Weekly run")).toBeTruthy();
+    expect([window.location.hash, window.history.length]).toEqual(["#/alpha/board/C-0001", length + 1]);
+    expect(document.querySelector('[data-card="C-0001"]')).toBeNull();
+    fireEvent.keyDown(await modal("Weekly run"), { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(card("C-0002"));
+    });
+  });
+
+  it("All tasks draws the board as with no level stored: the same tiles and heads, and no parent line (BS5)", async () => {
+    await shownBoard();
+    const before = [shown(), headTexts()];
+    expect(levelSelect().value).toBe("all");
+    showLevel("subtasks");
+    expect(document.querySelectorAll(".board-card-parent")).toHaveLength(3);
+    showLevel("all");
+    expect([shown(), headTexts()]).toEqual(before);
+    expect(document.querySelectorAll(".board-card-parent")).toHaveLength(0);
+    expect(card("C-0002").getAttribute("aria-label")).toBe("C-0002: Card C-0002");
+    expect(document.querySelector(".board-grid")?.textContent).not.toContain("Subtask of");
+  });
+
+  it("composes with the lanes, Discipline and Show cancelled (BS6)", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "parent");
+    const cancelled = aCardRow({ id: "C-0006", parent: "C-0001", column: "doing", cancelled: true });
+    const client = boardClient(LEVEL_LIST, LEVEL_CARDS);
+    client.getCards.mockImplementation((_project, options) => Promise.resolve(aCardList(options?.with_cancelled === true ? [...LEVEL_ROWS, cancelled] : LEVEL_ROWS)));
+    await shownBoard(client);
+    showLevel("subtasks");
+    expect(Array.from(document.querySelectorAll(".board-lane-head a.mono")).map((link) => link.textContent)).toEqual(["C-0001", "C-0009"]);
+    expect(laneHeadTexts()).not.toContain("Everything else");
+    showLevel("tasks");
+    expect(laneHeadTexts()).toEqual(["Everything else"]);
+    expect(shown()).toEqual(["C-0001", "C-0004"]);
+    // No lanes: Discipline set to C-0002's, with Subtasks only.
+    fireEvent.change(screen.getByLabelText("Lanes"), { target: { value: "none" } });
+    showLevel("subtasks");
+    fireEvent.change(screen.getByLabelText("Discipline"), { target: { value: "copy" } });
+    expect(shown()).toEqual(["C-0002"]);
+    fireEvent.change(screen.getByLabelText("Discipline"), { target: { value: "" } });
+    // A cancelled subtask: drawn only with Show cancelled and Subtasks only both on.
+    expect(document.querySelector('[data-card="C-0006"]')).toBeNull();
+    fireEvent.click(screen.getByLabelText("Show cancelled"));
+    await waitFor(() => {
+      expect(document.querySelector('[data-card="C-0006"]')).not.toBeNull();
+    });
+    showLevel("tasks");
+    expect(document.querySelector('[data-card="C-0006"]')).toBeNull();
+    showLevel("subtasks");
+    expect(document.querySelector('[data-card="C-0006"]')).not.toBeNull();
+  });
+
+  it("is stored per project: chosen, kept through a remount and applied; another project's board reads All tasks (BS7)", async () => {
+    await shownBoard();
+    showLevel("subtasks");
+    expect(window.localStorage.getItem("specengine.board.level.alpha")).toBe("subtasks");
+    cleanup();
+    await shownBoard();
+    expect(levelSelect().value).toBe("subtasks");
+    expect(shown()).toEqual(["C-0005", "C-0002", "C-0003"]);
+    cleanup();
+    await shownBoard(boardClient(LEVEL_LIST, LEVEL_CARDS), "#/beta/board");
+    expect(levelSelect().value).toBe("all");
+    expect(shown()).toHaveLength(5);
+  });
+
+  it("says when the level hides every card, and offers Show all tasks; with a filter set, today's line and Clear filters, the level kept (BS8)", async () => {
+    // No subtask in the list.
+    await shownBoard(boardClient(aCardList([aCardRow({ id: "C-0001" }), aCardRow({ id: "C-0004" })])));
+    showLevel("subtasks");
+    expect(shown()).toEqual([]);
+    expect(screen.getByRole("heading", { level: 2, name: "No subtask here." })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show all tasks" }));
+    expect(shown()).toEqual(["C-0001", "C-0004"]);
+    expect([levelSelect().value, window.localStorage.getItem("specengine.board.level.alpha")]).toEqual(["all", "all"]);
+    cleanup();
+    // Subtasks alone in the list, under Tasks only.
+    await shownBoard(boardClient(aCardList([aCardRow({ id: "C-0002", parent: "C-0001" })])));
+    showLevel("tasks");
+    expect(screen.getByRole("heading", { level: 2, name: "No task without a parent here." })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show all tasks" })).toBeTruthy();
+    cleanup();
+    // A filter matching none of the subtasks: today's words; Clear filters leaves the level.
+    await shownBoard();
+    showLevel("subtasks");
+    fireEvent.change(screen.getByLabelText("Discipline"), { target: { value: "lead" } });
+    expect(shown()).toEqual([]);
+    expect(screen.getByRole("heading", { level: 2, name: "No task matches the filters." })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Show all tasks" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(levelSelect().value).toBe("subtasks");
+    expect(window.localStorage.getItem("specengine.board.level.alpha")).toBe("subtasks");
+    expect(shown()).toEqual(["C-0005", "C-0002", "C-0003"]);
+  });
+
+  it("a routed card the level hides opens its modal; closing gives focus to the board's heading, the level kept (BS9)", async () => {
+    window.localStorage.setItem("specengine.board.level.alpha", "subtasks");
+    await shownBoard(boardClient(LEVEL_LIST, LEVEL_CARDS), "#/alpha/board/C-0004");
+    const dialog = await modal("Lone task");
+    expect(document.querySelector('[data-card="C-0004"]')).toBeNull();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Board" }));
+    expect(levelSelect().value).toBe("subtasks");
+  });
+
+  it("keeps the head row still: a stranded subtask's Not in the flow stands under every level (BS10)", async () => {
+    const stranded = aCardList(LEVEL_ROWS.map((row) => (row.id === "C-0003" ? { ...row, column: "inked" } : row)));
+    await shownBoard(boardClient(stranded, LEVEL_CARDS));
+    const heads = headLabels();
+    expect(heads).toEqual(["To do", "Doing", "Check", "Closed", "Not in the flow"]);
+    showLevel("tasks");
+    expect(headLabels()).toEqual(heads);
+    showLevel("subtasks");
+    expect(headLabels()).toEqual(heads);
+  });
+});

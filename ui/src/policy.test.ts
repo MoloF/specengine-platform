@@ -222,8 +222,12 @@ function literalWords(path: string, text: string): string[] {
 const PHRASE = /\b[A-Za-z][a-z]+[ ,;:]+[a-z]{2,}\b/;
 const CAPITALISED = /^[A-Z][a-z]+[.:]?$/;
 
-/** The attributes and properties whose value is never shown: a class, a key, an ID, a link, a language, a role, a type. */
-const NOT_SHOWN: readonly string[] = ["className", "key", "id", "href", "lang", "role", "type"];
+/**
+ * The attributes and properties whose value is never shown: a class, a key, an ID, a link and its
+ * relation (`rel`, the door's new tab: docs/features/door-step-up.md "Description and interactions"),
+ * a language, a role, a type.
+ */
+const NOT_SHOWN: readonly string[] = ["className", "key", "id", "href", "rel", "lang", "role", "type"];
 
 /**
  * The DOM, storage, string and collection methods whose first argument is code: a selector, a

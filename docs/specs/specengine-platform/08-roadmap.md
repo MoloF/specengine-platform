@@ -387,6 +387,23 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 - Beside them, on files neither touches: `usage-orphans`' core, `scope-rings`' core and UI, and `corpus-map`'s `src/map/` UI.
 - Then registration and the shared seams, one lane at a time.
 
+#### Owner's word, 2026-11-14
+
+**From real use of the hub** (0.46.0, project `dorm`), reported in Russian. His word that day was "do all the fixes and release a new version". Six items, each with its spec, go into a patch release, **0.46.1**. None needs a schema or format step. A hub runs tagged images and `tag-check.sh` requires the tag to equal the plugin's version, so the plugin's version is bumped with no plugin text change.
+
+| Item | Slice | What |
+|---|---|---|
+| RM-0114 | `board-subtasks` (`docs/features/board-subtasks.md`) | the Board's Show: all tasks, tasks only, subtasks only; UI-only; **shipped** (`docs/canon/board-lanes.md`) |
+| RM-0115 | `door-step-up` (`docs/features/door-step-up.md`) | a fix: the door's 401 on a step-up act becomes a notice and a link, never its body; **shipped** (`docs/canon/hub-confirm.md` "Screen"; owed: DS10 on the live hub) |
+| RM-0116 | `question-accept-note` (`docs/features/question-accept-note.md`) | a fix: a question's Accept says its note is not the answer, takes an own answer, and warns on a diverging note; **shipped** (`docs/canon/plain-questions.md` "UI") |
+| RM-0117 | `inbox-closed-link` (`docs/features/inbox-closed-link.md`) | a fix: a link to a decided proposal shows it read-only, not another; **shipped** (`docs/canon/proposal-review.md` "Inbox") |
+| RM-0118 | `slow-requests` (`docs/features/slow-requests.md`) | the daemon's slow-request and long-turn lines, and Traefik's access log; the hub hung about 14:01-14:12 UTC with no evidence; **shipped** (`docs/canon/serve-slow.md`) |
+| RM-0119 | `hub-turn-fairness` (`docs/features/hub-turn-fairness.md`) | a fix, from the analyst's diagnosis: a line per login before the turn for `/mcp`, and a live event never aborts a read in flight; the page answers within 10 s under 8 parallel agent writes; **shipped** (`docs/canon/hub-mcp.md` "Turn"; owed: TF14 on the live hub) |
+
+**The orchestrator's working answers** for RM-0119, his review open: the page goes before an agent's queued calls; no busy refusal; two agents under one login share a line. The next slices are planned and not specified: cutting a write's cost (the full check twice per proposal, the tree re-parsed, the trailer lookup), concurrent trusted reads (an ADR), and measuring the memory growth (422 MB to 498 MB after 8 writes).
+
+**Shipped 2026-11-14**, the six in one commit, plugin 0.46.1 (a version-only bump: `docs/canon/plugin-files.md` "Changing it"), the next tag `v0.46.1`. No queue schema or backup format step: a hub upgrades from 0.46.0 as `docs/canon/hub-ops.md` "Upgrade" says, a dump first, and runs the fixes only from an image of that tag. Owed, the owner's on the live hub after the upgrade: DS10 (the step-up link and Retry) and TF14 (8 parallel agent writes with the Inbox open, read from the daemon's lines: `docs/canon/serve-slow.md` "Reading them"). The three next slices stay plan text above, unspecified.
+
 ## 3. Product acceptance criteria
 
 | # | Criterion | How it is checked |

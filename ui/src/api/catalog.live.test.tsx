@@ -8,8 +8,9 @@ import { HttpClient, REOPEN_FIRST_MS } from "./http";
 // DC-10 of docs/features/direction-catalog.md "Acceptance criteria" over HttpClient, the daemon a
 // stubbed `fetch` and `EventSource`: a direction's table reads `?kinds=` once on screen, with its
 // query's signal; while it is on screen a `card.*` event (naming a card or none), any `proposal.*`
-// event but a stage, an apply and a gap each read it once more; a burst during a read aborts the
-// read in flight and one read is answered; a stage and a task event read nothing of it.
+// event but a stage, an apply and a gap each read it once more; a burst during a read keeps the read
+// in flight and one more follows it (docs/features/hub-turn-fairness.md, TF12); a stage and a task
+// event read nothing of it.
 
 const STREAM = "/api/projects/alpha/events";
 const CATALOG = "/api/projects/alpha/catalog";
@@ -207,7 +208,8 @@ describe("the catalog's read on the live tail (DC-10)", () => {
     expect(catalogReads()).toEqual([]);
   });
 
-  it("a burst during a read aborts the read in flight: one catalog read answered", async () => {
+  // TF12 of docs/features/hub-turn-fairness.md: a live event never aborts a read in flight.
+  it("a burst during a read keeps the read in flight: it is answered, then exactly one more catalog read", async () => {
     const { fates } = await onCatalog();
     const before = fates.answered;
     fates.hold();
@@ -217,12 +219,14 @@ describe("the catalog's read on the live tail (DC-10)", () => {
     });
     emit("card.edited", '{"id":"C-0001"}', "51");
     emit("proposal.created", '{"id":"PR-0002"}', "52");
-    await waitFor(() => {
-      expect(fates.aborted).toBe(2);
-    });
-    fates.release();
     await settle();
-    expect(catalogReads()).toHaveLength(3);
-    expect(fates.answered - before).toBe(1);
+    expect([catalogReads(), fates.aborted]).toEqual([[ASKED], 0]);
+    fates.release();
+    await waitFor(() => {
+      expect(catalogReads()).toHaveLength(2);
+    });
+    await settle();
+    expect(catalogReads()).toHaveLength(2);
+    expect([fates.aborted, fates.answered - before]).toEqual([0, 2]);
   });
 });

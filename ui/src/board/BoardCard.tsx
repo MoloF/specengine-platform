@@ -1,6 +1,6 @@
 import { memo, type DragEvent, type MouseEvent } from "react";
 import type { CardRow } from "../api/types";
-import { cardPageHash } from "../app/routes";
+import { cardPageHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -13,7 +13,8 @@ import { acceptedLook, byHand, cancelledLook, markLook, markNames, overdueLook, 
 
 /** What a card asks of its board. */
 export interface CardActions {
-  onOpen: (id: string) => void;
+  /** Opens a card's modal: the tile's own, or the parent its line names, `from` the tile focus goes back to. */
+  onOpen: (id: string, from?: string) => void;
   /** Its Move button was pressed, or `m` on the card (button null). */
   onMove: (row: CardRow, button: HTMLElement | null) => void;
   onFocus: (id: string) => void;
@@ -48,6 +49,39 @@ function Source({ project, targets }: { project: string; targets: readonly strin
 }
 
 /**
+ * A subtask's parent, named under Subtasks only
+ * (docs/features/board-subtasks.md "Description and interactions"): its ID and title, a link to its
+ * modal standing above the tile's stretched title, out of the Tab order as the source's link is; a
+ * parent the list does not hold, its ID alone, still linked.
+ */
+function Parent({ project, id, title, from, onOpen }: { project: string; id: string; title: string | null; from: string; onOpen: CardActions["onOpen"] }) {
+  const t = useTranslate();
+  const link = (
+    <a
+      className="board-card-parent-link"
+      href={sectionHash(project, "board", id)}
+      tabIndex={-1}
+      draggable={false}
+      onClick={(event) => {
+        if (isPlainClick(event)) {
+          event.preventDefault();
+          onOpen(id, from);
+        }
+      }}
+    >
+      <bdi className="mono">{shownSlot(id)}</bdi>
+      {title !== null && (
+        <>
+          {" "}
+          <bdi>{shownSlot(title)}</bdi>
+        </>
+      )}
+    </a>
+  );
+  return <p className="board-card-parent">{fill(t("board.level.parentOf", { parent: slot("parent") }), { parent: link })}</p>;
+}
+
+/**
  * One card (`ui/README.md` "Screen rules"): title, assignee, due, estimate, its source. A mark stands
  * first and names what it is on, the list's own, so a card on a gone target has it too; an accepted
  * card's word yields to it. Changed above follows it, first with none, when the read flags what changed
@@ -71,6 +105,8 @@ export const BoardCard = memo(function BoardCard({
   returned,
   handOffs,
   returnedChildren,
+  parent = null,
+  parentTitle = null,
   actions,
 }: {
   project: string;
@@ -87,6 +123,10 @@ export const BoardCard = memo(function BoardCard({
   handOffs: number;
   /** Of those, the ones in their flow's return column. */
   returnedChildren: number;
+  /** The parent the tile names under Subtasks only; null: no parent line. */
+  parent?: string | null;
+  /** That parent's title from the whole list; null when the list does not hold it. */
+  parentTitle?: string | null;
   actions: CardActions;
 }) {
   const t = useTranslate();
@@ -121,7 +161,9 @@ export const BoardCard = memo(function BoardCard({
     actions.onDragStart(row);
   }
 
-  const said = [markShown?.label, upstreamShown?.label, returnedShown?.label].filter((label) => label !== undefined).join(", ");
+  // Under Subtasks only the tile's name says its parent too: the parent's link is out of the Tab order.
+  const parentSaid = parent === null ? undefined : t("board.level.parentOf", { parent: parentTitle === null ? shownSlot(parent) : `${shownSlot(parent)} ${shownSlot(parentTitle)}` });
+  const said = [markShown?.label, upstreamShown?.label, returnedShown?.label, parentSaid].filter((label) => label !== undefined).join(", ");
   const classes = ["board-card", selected && "board-card-selected", closed && "board-card-closed"].filter(Boolean).join(" ");
   return (
     <li className={dropAbove ? "board-slot board-slot-drop" : "board-slot"}>
@@ -198,6 +240,7 @@ export const BoardCard = memo(function BoardCard({
             </Button>
           )}
         </div>
+        {parent !== null && <Parent project={project} id={parent} title={parentTitle} from={row.id} onOpen={actions.onOpen} />}
       </article>
     </li>
   );

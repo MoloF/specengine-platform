@@ -8,8 +8,9 @@ import { targetsOf } from "./targets";
 import { useTranslate } from "../i18n";
 
 /**
- * The queue as one Tab stop: a listbox whose selected option alone is tabbable. Moving with the
- * keys belongs to the queue around it. A proposal with a staged choice stays listed, marked
+ * The queue as one Tab stop: a listbox whose selected option alone is tabbable, its first option when
+ * none is selected (a routed proposal out of the inbox). Moving with the keys belongs to the queue
+ * around it. A proposal with a staged choice stays listed, marked
  * Staged (`docs/canon/decision-staging.md` "UI").
  */
 export function ProposalList({
@@ -19,15 +20,17 @@ export function ProposalList({
   onSelect,
 }: {
   proposals: readonly InboxEntry[];
-  selectedId: string;
+  /** null: no option is selected. */
+  selectedId: string | null;
   now: number;
   onSelect: (id: string) => void;
 }) {
   const t = useTranslate();
   return (
     <div role="listbox" aria-label={t("inbox.listLabel")} className="queue-list">
-      {proposals.map((proposal) => {
+      {proposals.map((proposal, index) => {
         const selected = proposal.id === selectedId;
+        const tabStop = selectedId === null ? index === 0 : selected;
         const status = statusLook(proposal.status, t);
         const targets = targetsOf(proposal);
         return (
@@ -35,7 +38,7 @@ export function ProposalList({
             key={proposal.id}
             role="option"
             aria-selected={selected}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={tabStop ? 0 : -1}
             data-proposal={proposal.id}
             className="queue-item"
             onClick={() => {

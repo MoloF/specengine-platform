@@ -569,7 +569,9 @@ export class HttpClient implements SpecEngineClient {
    * What a terminal would ask of a staged proposal (`docs/features/hub-confirm.md` "Data"): a hub's
    * read, asked when a Confirm dialog opens, judged as the POST is, so a refusal rejects in the
    * daemon's words whatever its body and no 404 resolves as data. A one-factor session's `fetch`
-   * meets the login door's redirect: status 0 (`docs/canon/hub.md` "Known limits").
+   * meets the login door: observed, a 401 whose `text/html` body is one anchor to the door's login
+   * page, rejected here as `{status: 401, message: <the body verbatim>}`, never shown as such
+   * (docs/features/door-step-up.md "Data"); no answer at all is status 0.
    */
   async getConfirm(project: string, id: string, signal?: AbortSignal): Promise<ConfirmRead> {
     return (await request("GET", confirmPath(project, id), { signal, judged: true })) as ConfirmRead;

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useInbox, useProposal, useStageDecision, withActing } from "../api/queries";
+import { useInbox, useProposal, useStageDecision, withActing, type ProposalQuery } from "../api/queries";
 import type { ApiError, Proposal, StageChoice, Team } from "../api/types";
 import { replaceHash } from "../app/location";
 import { sectionHash } from "../app/routes";
@@ -19,6 +19,7 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useNow } from "../ui/useNow";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
+import { useRetryFocus } from "../ui/useRetryFocus";
 import { confirmedLine, DECISION_KEYS, isStaged, stagedAnnouncement, type DecisionKind } from "./decisions";
 import { matchesFilter } from "./filter";
 import { severityRank } from "./labels";
@@ -36,6 +37,9 @@ const DecisionDialog = lazy(() => import("./DecisionDialog").then((module) => ({
 /** The Confirm dialog, a hub's alone, so a local page never loads its chunk. */
 const ConfirmDialog = lazy(() => import("./ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 
+/** A routed proposal the inbox no longer lists, shown to read: a chunk of its own, loaded only for such a route. */
+const ClosedProposal = lazy(() => import("./ClosedProposal").then((module) => ({ default: module.ClosedProposal })));
+
 const LETTERS = new Map<string, DecisionKind>(DECISION_KEYS.map(([kind, key]) => [key, kind]));
 
 /** A line the view shows after a write, worded in the language shown when it renders. */
@@ -49,6 +53,55 @@ interface OpenDecision {
   id: string;
   proposal: Proposal;
   kind: DecisionKind;
+}
+
+/**
+ * Where a routed proposal the inbox does not list stands: a skeleton while it is read, the daemon's
+ * words and Retry when the read fails, its read-only pane once its review document is in; nothing for
+ * the exit-1 document, which the note under the filter names. It reads nothing of its own: `review` is
+ * the view's one query for the ID.
+ */
+function ClosedRead({ project, id, review }: { project: string; id: string; review: ProposalQuery }) {
+  const t = useTranslate();
+  const failure = useRetainedFailure(review.error, review.isFetching);
+  const place = useRef<HTMLDivElement>(null);
+  const retried = useRetryFocus(review.data, () => place.current);
+  const reading = (
+    <div aria-busy="true">
+      <Skeleton label={t("inbox.closed.reading", { id })} lines={4} />
+    </div>
+  );
+  let shown;
+  if (review.data === undefined) {
+    shown =
+      failure === null ? (
+        reading
+      ) : (
+        <ErrorPanel
+          title={t("inbox.card.reviewFailed", { id })}
+          message={apiErrorOf(failure).message}
+          retrying={review.isFetching}
+          attempt={review.errorUpdateCount}
+          onRetry={() => {
+            retried();
+            void review.refetch({ cancelRefetch: false });
+          }}
+        />
+      );
+  } else if (review.data.id === null) {
+    return null;
+  } else {
+    shown = (
+      <Suspense fallback={reading}>
+        <ClosedProposal project={project} proposal={review.data} />
+      </Suspense>
+    );
+  }
+  return (
+    <div ref={place} className="closed-read" tabIndex={-1}>
+      {shown}
+    </div>
+  );
 }
 
 /**
@@ -95,12 +148,14 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
 
   const ordered = inbox.data === undefined ? [] : queueOrder(inbox.data.proposals);
   const visible = ordered.filter((proposal) => matchesFilter(proposal, query));
-  const selected = visible.find((proposal) => proposal.id === selectedId) ?? visible[0] ?? null;
-  const absentId =
-    selectedId !== null && inbox.data !== undefined && !ordered.some((proposal) => proposal.id === selectedId)
-      ? selectedId
-      : null;
-  const review = useProposal(project, selected?.id ?? null);
+  // A routed ID the inbox lists, or none: today's selection, the first visible item for none or one the
+  // filter hides. One it does not list selects nothing: it is read on its own and shown to read
+  // (docs/features/inbox-closed-link.md "Data"), and the route stays.
+  const listed = selectedId !== null && ordered.some((proposal) => proposal.id === selectedId);
+  const selected = selectedId === null || listed ? (visible.find((proposal) => proposal.id === selectedId) ?? visible[0] ?? null) : null;
+  const closedId = selectedId !== null && inbox.data !== undefined && !listed ? selectedId : null;
+  // One query per ID: the selected item's review document, or the closed one's, which the same events read again.
+  const review = useProposal(project, selected?.id ?? closedId);
   /** The selected proposal's review document, once read (not the exit-1 document). */
   const reviewed = review.data !== undefined && review.data.id !== null && review.data.id === selected?.id ? review.data : null;
 
@@ -162,6 +217,11 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
    * decision that stages where a hub's `allowed` omits `stage`: its key says that too.
    */
   function openDialog(kind: DecisionKind) {
+    if (selected === null && closedId !== null) {
+      // Nothing selected: a proposal out of the inbox is there to read, with nothing to decide.
+      announce(t("inbox.closed.noDecision", { id: closedId }));
+      return;
+    }
     if (selected === null || reviewed === null || reviewed.updated_at === null || openDecision.current !== null || confirming !== null || deciding.current || decide.isPending) {
       return;
     }
@@ -256,13 +316,17 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     focusLater(() => (back?.isConnected === true ? back : null));
   }
 
-  /** The daemon's answer, spoken and shown; the item has left the queue, so focus goes to the one now selected. */
+  /**
+   * The daemon's answer, spoken and shown; the item has left the queue, so the route drops its ID (a
+   * routed ID out of the inbox would show it closed) and focus goes to the item now selected.
+   */
   function confirmed(id: string, answered: Proposal) {
     const said: Said = (shown) => confirmedLine(id, answered, shown);
     announce(said(t));
     if (!mounted.current) {
       return;
     }
+    replaceHash(sectionHash(project, "inbox"));
     setUnstageRefusal(null);
     setResult(() => said);
     setConfirming(null);
@@ -323,6 +387,14 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     event.preventDefault();
   }
 
+  // The review's exit-1 document for a routed ID the inbox does not list: no proposal by it, so no pane.
+  const unknown = closedId !== null && review.data !== undefined && review.data.id === null && (
+    <p className="note" role="status">
+      <Icon name="info" />
+      <span>{t("inbox.unknown", { id: closedId })}</span>
+    </p>
+  );
+
   let body;
   if (inbox.data === undefined) {
     body =
@@ -343,7 +415,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
         />
       );
   } else if (ordered.length === 0) {
-    body = (
+    const clear = (
       <EmptyState
         level={2}
         title={t("inbox.clearTitle")}
@@ -355,6 +427,19 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
         }
       />
     );
+    // A clear queue still shows a routed proposal it no longer lists, beside the empty state.
+    body =
+      closedId === null ? (
+        clear
+      ) : (
+        <div className="queue" ref={queue} onKeyDown={onQueueKeyDown}>
+          <div className="queue-pane">
+            {clear}
+            {unknown}
+          </div>
+          <ClosedRead project={project} id={closedId} review={review} />
+        </div>
+      );
   } else {
     const high = ordered.filter((proposal) => severityRank(proposal.severity) === 0).length;
     body = (
@@ -376,12 +461,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
               setQuery(event.target.value);
             }}
           />
-          {absentId !== null && (
-            <p className="note" role="status">
-              <Icon name="info" />
-              <span>{t("inbox.absent", { id: absentId })}</span>
-            </p>
-          )}
+          {unknown}
           {inbox.data.notes.length > 0 && (
             <ul className="note-list" aria-label={t("inbox.notes")}>
               {inbox.data.notes.map((note) => (
@@ -391,7 +471,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
               ))}
             </ul>
           )}
-          {selected === null ? (
+          {visible.length === 0 ? (
             // Under the view's h1: no proposal is shown, so no h2 stands between.
             <EmptyState
               level={2}
@@ -410,7 +490,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
           ) : (
             <ProposalList
               proposals={visible}
-              selectedId={selected.id}
+              selectedId={selected?.id ?? null}
               now={now}
               onSelect={(id) => {
                 select(id, true);
@@ -449,6 +529,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             }}
           />
         )}
+        {closedId !== null && <ClosedRead project={project} id={closedId} review={review} />}
       </div>
     );
   }

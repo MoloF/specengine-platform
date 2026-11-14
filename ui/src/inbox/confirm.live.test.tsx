@@ -9,8 +9,9 @@ import { renderApp } from "../test/render";
 // docs/features/hub-confirm.md over HttpClient, the daemon a stubbed `fetch` and `EventSource`: a
 // local daemon's page asks no team and no confirm route; a hub's asks both, the POST's body exactly
 // `{question, updated_at}`, the review document's commit shown; a refused review document shows its
-// last note, an error body its message; a `fetch` the login door's redirect fails, status 0, says to
-// read again (a drop after the commit is status 0 too), the read at dialog open first of all.
+// last note, an error body its message; a `fetch` with no answer, status 0, says to read again (a
+// drop after the commit is status 0 too), the read at dialog open first of all. The login door's 401:
+// src/inbox/ConfirmDialog.test.tsx (docs/features/door-step-up.md "Acceptance criteria").
 
 const AT = "2026-11-02T09:00:00Z";
 const QUESTION = `staged ${AT}: spec approve PR-0007\napply PR-0007 to docs/spec/maps/hold.md on main in /work/alpha (applies, staged)? [y/N]`;
@@ -143,7 +144,7 @@ describe("over the daemon", () => {
     expect((await within(dialog).findByRole("alert")).querySelector(".verbatim")?.textContent).toBe(line);
   });
 
-  it("a one-factor session's read meets the login door: status 0, read again, and the POST never goes", async () => {
+  it("a read with no answer: status 0, read again, and the POST never goes", async () => {
     const fetched = daemon("mira", { proposal: STAGED }, () => {
       throw new TypeError("Failed to fetch");
     });

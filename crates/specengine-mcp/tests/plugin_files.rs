@@ -287,6 +287,14 @@
 //!   text changes); a `SCHEMA_PINS` entry 0.46.0, 0.45.0's schemas today's
 //!   without `usage` ([`as_of_0_45_0`]). M: the schema changed with no new
 //!   `SCHEMA_PINS` entry; plugin.json left at 0.45.0.
+//! - The 0.46.1 patch (docs/features/board-subtasks.md "Implementation",
+//!   shared by RM-0114 to RM-0119: board-subtasks, door-step-up,
+//!   question-accept-note, inbox-closed-link, slow-requests,
+//!   hub-turn-fairness): 0.46.0 -> 0.46.1, PATCH: plugin.json's version
+//!   alone, no description, skill, role or schema change. A `PINS` entry
+//!   0.46.1, the tree with plugin.json's version set back 0.46.0's; no
+//!   `SCHEMA_PINS` entry, the last still 0.46.0 (as 0.29.1). M: plugin.json
+//!   left at 0.46.0; another file changed.
 //!
 //! The repository is only read.
 
@@ -728,6 +736,13 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.46.0",
         "a18d9890785c97f7538b2467c1f6d80dd995979255b4b32a7614160ddabed694",
+    ),
+    // The 0.46.1 patch (RM-0114 to RM-0119, board-subtasks.md
+    // "Implementation": 0.46.0 -> 0.46.1, PATCH, a hub's tag): plugin.json's
+    // version alone; set back, the tree hashes as 0.46.0's pin.
+    (
+        "0.46.1",
+        "1ae5a8a52ec3c55683db61faebd6fb08bff7d3cece9c9eb2cc4867289611e4b6",
     ),
 ];
 
@@ -2329,7 +2344,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// `check-collisions`, its description 137 B, `read-spec`'s 140 B shorter:
 /// 1 197 B together, 3 B of room), 0.45.0 since collision-pairs (RM-0088,
 /// PP7: no skill text changed), 0.46.0 since usage-orphans (RM-0111, UO6: no
-/// skill text changed).
+/// skill text changed), 0.46.1 since the patch of RM-0114 to RM-0119 (no skill
+/// text changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2352,7 +2368,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.46.0")
+        json!("0.46.1")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2505,10 +2521,36 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // The 0.46.1 patch (RM-0114 to RM-0119: 0.46.0 -> 0.46.1, PATCH):
+    // plugin.json's version alone; set back, the tree is 0.46.0's pinned
+    // content, every skill and role byte-equal. M: plugin.json left at
+    // 0.46.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.46.1"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.46.1"),
+        "plugin.json's version"
+    );
+    let at_0_46_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.46.1\"",
+        "\"version\": \"0.46.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_46_0),
+        PINS[PINS.len() - 2].1,
+        "0.46.1 changes plugin.json's version only"
+    );
+    let tree = at_0_46_0;
+    let pins_0_46_0 = &PINS[..PINS.len() - 1];
     // usage-orphans (RM-0111, UO6: 0.45.0 -> 0.46.0): plugin.json's version
     // alone; set back, the tree is 0.45.0's pinned content, every skill and
     // role byte-equal. M: plugin.json left at 0.45.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.46.0"));
+    assert_eq!(
+        pins_0_46_0.last().map(|(version, _)| *version),
+        Some("0.46.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.46.0"),
@@ -2522,11 +2564,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_45_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_46_0[pins_0_46_0.len() - 2].1,
         "0.46.0 changes plugin.json's version only"
     );
     let tree = at_0_45_0;
-    let pins_0_45_0 = &PINS[..PINS.len() - 1];
+    let pins_0_45_0 = &pins_0_46_0[..pins_0_46_0.len() - 1];
     // collision-pairs (RM-0088, PP7: 0.44.0 -> 0.45.0): plugin.json's
     // version alone; set back, the tree is 0.44.0's pinned content, every
     // skill and role byte-equal. M: plugin.json left at 0.44.0; another file

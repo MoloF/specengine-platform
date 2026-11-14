@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-14
 ---
 
 # Board screen: a still grid, the card modal and page, lanes, hand-off and return
@@ -28,12 +28,12 @@ On one tab no column header moves on open, close, a write, a refusal, notes, Sho
 ## Flows, filters, lanes
 
 - A tab per flow the chosen department shows (`workspaces.md` "Screen"). A flow's served `title` labels its tab, the board's name, a Parent lane head, the side Flow row and a Subtasks row; the hand-off's line and a document's Cards block keep raw `<flow>/<column>`. Discipline and Assignee (with Unassigned) AND, per-project screen state. A cell ends "Show all <n>" past 200 tiles.
-- **Lanes**: a select, None (the default), Assignee or Parent, in `localStorage` `specengine.board.lanes.<p>`; unknown or missing reads None. Assignee lanes by name folded with `normalize("NFC").toLowerCase()`, ties by the raw name, then Unassigned. Parent lanes by the parent ID's number, each head the parent's ID (a link to its modal), title, flow title and status lozenge, a hidden flow's too, then Everything else. Unassigned and Everything else stand only when they hold a card. A same-flow parent is both a head and a tile. A head spans the grid, label sticky at the left. A lane collapses (`aria-expanded`) to its cells' counts, no tile, and stays collapsed through re-reads for the visit (Shell screen state).
+- **Lanes** (None, Assignee, Parent) and **Show** (All tasks, Tasks only, Subtasks only): `board-lanes.md`.
 
 ## The card modal and page
 
 - **Modal** at `#/<p>/board/<C>`: `role="dialog"`, `aria-modal`, labelled by its `h2`, the card's title, focus on it (`focusTitle`); a work item, `CardView`, at most `100dvh - 2rem` tall, its columns scrolling apart, under 36rem the whole (layout, width, acts' order, the trap: `ui-design.md` "The work item", "The focus trap"). Region and toolbar are `inert` under it; a scrim click closes it. Targets open their document over it (`doc-view.md`), `parent` and `corrects` link their cards; evidence as kind, value, by, at, a `url` text never an `href`; `history` by `seq`, move notes included; **Subtasks** (`card-progress.md`); **Agent tasks** (`card-tasks.md` "Screen"). Each act (`CardActs.tsx`), Clear and Move open a dialog or menu over it; Move offers Up and Down only when the card is drawn on the current tab. A write from it reports inside it: a refusal as its `role="alert"`, a 400 naming `--as`, the write's notes. What it holds is the shown card's: another card, or none, starts clean.
-- **History**: opening from the board pushes one entry; a card link inside replaces and never switches the tab; Esc and Close go back when this board pushed, else replace with `#/<p>/board`; Back closes it, and with a dialog or menu over it closes both. Arriving by URL selects the card's flow once, a hidden one by Show all flows. Closing returns focus to the tile, in its current column; one not drawn (another tab, a collapsed lane, filtered out) sends it to the board's heading.
+- **History**: opening from the board pushes one entry; a card link inside replaces and never switches the tab; Esc and Close go back when this board pushed, else replace with `#/<p>/board`; Back closes it, and with a dialog or menu over it closes both. Arriving by URL selects the card's flow once, a hidden one by Show all flows. Closing returns focus to the tile, in its current column; one not drawn (another tab, a collapsed lane, filtered out) sends it to the board's heading; a parent opened from a subtask's line returns it to that tile (`board-lanes.md`).
 - **Page** `#/<p>/board/<C>/page` (`cardPageHash`; `parseHash` gives `view: "page"` for exactly `board`, `<C>`, `page`, any other fourth segment not found): no columns, the same work item, its `h1` the title, and "Open on the board" to `#/<p>/board/<C>`. The nav marks Board; a reload keeps it. Its moves come from `allowed`, Up and Down from the list; a 400 naming `--as` is its refusal. No such card shows `no card C-9999` verbatim under `lang="en"`, page and modal alike.
 - **Nothing opens while a card write is out**: every card write in the project shares one mutation key (`useCardWriting`); a click meanwhile is dropped, not delayed, and no dialog closes while its submit is pending.
 

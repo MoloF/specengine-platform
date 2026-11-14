@@ -10,8 +10,8 @@ import { HttpClient, REOPEN_FIRST_MS } from "./http";
 // stubbed `fetch` and `EventSource`: entering the Delivery tab reads `?as_of=` the viewer's day once,
 // with its query's signal; while it is on screen a `card.*` event (naming a card or none), any
 // `proposal.*` event but a stage, and a gap each read it once more, at the day on screen; a burst
-// during a read aborts the read in flight and one read is answered; a stage and a task event read
-// nothing of it.
+// during a read keeps the read in flight and one more follows it (docs/features/hub-turn-fairness.md,
+// TF12); a stage and a task event read nothing of it.
 
 const STREAM = "/api/projects/alpha/events";
 const DELIVERY = "/api/projects/alpha/delivery";
@@ -233,7 +233,8 @@ describe("the delivery's read on the live tail (DA-12)", () => {
     expect(deliveryReads()).toEqual([]);
   });
 
-  it("a burst during a read aborts the read in flight: one delivery read answered", async () => {
+  // TF12 of docs/features/hub-turn-fairness.md: a live event never aborts a read in flight.
+  it("a burst during a read keeps the read in flight: it is answered, then exactly one more delivery read", async () => {
     const { fates } = await onDelivery();
     const before = fates.answered;
     fates.hold();
@@ -243,12 +244,14 @@ describe("the delivery's read on the live tail (DA-12)", () => {
     });
     emit("card.edited", '{"id":"C-0001"}', "51");
     emit("proposal.applied", '{"id":"PR-0001","commit":"abc1234"}', "52");
-    await waitFor(() => {
-      expect(fates.aborted).toBe(2);
-    });
-    fates.release();
     await settle();
-    expect(deliveryReads()).toHaveLength(3);
-    expect(fates.answered - before).toBe(1);
+    expect([deliveryReads().length, fates.aborted]).toEqual([1, 0]);
+    fates.release();
+    await waitFor(() => {
+      expect(deliveryReads()).toHaveLength(2);
+    });
+    await settle();
+    expect(deliveryReads()).toHaveLength(2);
+    expect([fates.aborted, fates.answered - before]).toEqual([0, 2]);
   });
 });

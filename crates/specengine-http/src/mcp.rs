@@ -69,7 +69,9 @@ use tokio::sync::{Mutex, oneshot};
 use crate::answer::{self, error};
 use crate::app::{Shared, unknown_route_of};
 use crate::hub::{Hub, Login, STREAM_LIFE, lived};
+use crate::slow::Exchange;
 use crate::start::Project;
+use crate::turn;
 
 /// Sessions one login may hold in one project (S1).
 pub(crate) const MCP_SESSIONS_PER_LOGIN: usize = 4;
@@ -95,7 +97,7 @@ const TOOL_NOT_FOUND: &str = "tool not found";
 const OPEN_FAILED: &str = "internal error: the MCP request failed";
 
 /// The daemon's half of the hub server for one project: the login a
-/// request's fence judged, and the project's turn.
+/// request's fence judged, and the project's turn behind the login's line.
 struct Seam {
     project: Arc<Project>,
 }
@@ -111,17 +113,34 @@ impl HubSeam for Seam {
             .map(|Login(login)| login.clone())
     }
 
-    /// As [`answer::run`]: the project's turn awaited by the request's own
-    /// task (dropped while waiting, the command never runs), then the
-    /// blocking pool with the turn, the process's `Env`, the project's
-    /// globals, the slug found again, the one call.
-    fn turn(&self, command: Command) -> TurnFuture {
+    /// As [`answer::run`], behind `login`'s line for the project (task spec
+    /// `hub-turn-fairness`): the call's place at the head of that FIFO
+    /// line, then the project's turn, both awaited by the request's own
+    /// task (dropped while waiting in either, the command never runs and
+    /// the line moves on), then the blocking pool with the turn and the
+    /// place, the process's `Env`, the project's globals, the slug found
+    /// again, the one call; at its end the turn is released, then the
+    /// place, even when its request was cancelled meanwhile.
+    fn turn(&self, login: &str, command: Command) -> TurnFuture {
         let project = Arc::clone(&self.project);
+        let login = login.to_owned();
+        // The call runs in rmcp's task: the request's slow record is found in
+        // its parts, which rmcp hands the call (task spec `slow-requests`).
+        let exchange = specengine_mcp::call_extensions(|extensions| {
+            extensions
+                .get::<Parts>()
+                .and_then(|parts| parts.extensions.get::<Exchange>().cloned())
+        })
+        .flatten();
         Box::pin(async move {
-            let turn = Arc::clone(&project.turn).lock_owned().await;
+            let place = project.lines.line_up(&login, exchange.as_ref()).await;
+            let holder = turn::Holder::call(&project, exchange);
+            let turn = turn::take(&project, holder).await;
             // A panic in the call leaves its answer unset: the hub server
             // answers it as an internal error.
             let _ = tokio::task::spawn_blocking(move || {
+                // Dropped in reverse: the turn, then the line's place.
+                let _place = place;
                 let _turn = turn;
                 // As `answer::run`: the call in the trust's `walking`
                 // scope (a read tool opts into trust in the MCP crate); a
@@ -319,7 +338,11 @@ impl Mounts {
             let (parts, body) = request.into_parts();
             let cap = mount.service.config.max_request_body_bytes;
             let (body, read) = buffered(body, cap).await;
-            match read.as_deref().map(sent).unwrap_or(Sent::Other) {
+            let (judged, tool) = read.as_deref().map_or((Sent::Other, None), sent);
+            if let (Some(exchange), Some(tool)) = (parts.extensions.get::<Exchange>(), tool) {
+                exchange.tool(tool);
+            }
+            match judged {
                 Sent::UnknownTool(Some(id)) => return unknown_tool(id, named.is_some()),
                 Sent::UnknownTool(None) => return accepted(),
                 Sent::Initialize if named.is_none() => {
@@ -554,7 +577,13 @@ enum Sent {
 /// notification included. A body the peek cannot read (`params` or a name
 /// of another type, a duplicated key) is read as rmcp reads it, typed and
 /// then as JSON; one rmcp cannot read either is rmcp's to refuse.
-fn sent(read: &[u8]) -> Sent {
+///
+/// With it, from the same read, the tool its slow lines name (task spec
+/// `slow-requests`): a `tools/call`'s name when it is one of [`HUB_TOOLS`]
+/// or [`HUB_PROBES`], else `?` (no name a client chose reaches a log);
+/// `resources/read` for a resource read; `None` for anything else. Never
+/// an argument.
+fn sent(read: &[u8]) -> (Sent, Option<String>) {
     let (method, name, id) = match serde_json::from_slice::<Peek<'_>>(read) {
         Ok(peek) => (
             peek.method.map(Cow::into_owned),
@@ -566,15 +595,15 @@ fn sent(read: &[u8]) -> Sent {
         ),
         Err(_) => {
             let Ok(message) = serde_json::from_slice::<ClientJsonRpcMessage>(read) else {
-                return Sent::Other;
+                return (Sent::Other, None);
             };
             let id = match &message {
                 ClientJsonRpcMessage::Request(request) => Some(request.id.clone()),
                 ClientJsonRpcMessage::Notification(_) => None,
-                _ => return Sent::Other,
+                _ => return (Sent::Other, None),
             };
             let Ok(value) = serde_json::to_value(&message) else {
-                return Sent::Other;
+                return (Sent::Other, None);
             };
             let text = |value: Option<&Value>| value.and_then(Value::as_str).map(str::to_owned);
             (
@@ -584,15 +613,22 @@ fn sent(read: &[u8]) -> Sent {
             )
         }
     };
-    match (method.as_deref(), name) {
-        (Some("tools/call"), Some(name))
-            if !HUB_TOOLS.contains(&name.as_str()) && !HUB_PROBES.contains(&name.as_str()) =>
-        {
-            Sent::UnknownTool(id)
-        }
+    let known = name
+        .as_deref()
+        .is_some_and(|name| HUB_TOOLS.contains(&name) || HUB_PROBES.contains(&name));
+    let tool = match method.as_deref() {
+        Some("tools/call") => name
+            .as_ref()
+            .map(|name| if known { name.clone() } else { "?".to_owned() }),
+        Some(method @ "resources/read") => Some(method.to_owned()),
+        _ => None,
+    };
+    let judged = match (method.as_deref(), &name) {
+        (Some("tools/call"), Some(_)) if !known => Sent::UnknownTool(id),
         (Some("initialize"), _) if initialize(read) => Sent::Initialize,
         _ => Sent::Other,
-    }
+    };
+    (judged, tool)
 }
 
 /// `read` is an `initialize` request as rmcp types it: the one message that
@@ -800,6 +836,8 @@ mod tests {
             root: std::env::temp_dir(),
             turn: Arc::new(Mutex::new(())),
             trust: None,
+            lines: Default::default(),
+            seats: Default::default(),
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         let mounts = Mounts::with_idle(&[project], &hub, Some(IDLE));
@@ -907,6 +945,8 @@ mod tests {
             root: std::env::temp_dir(),
             turn: Arc::new(Mutex::new(())),
             trust: None,
+            lines: Default::default(),
+            seats: Default::default(),
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         let mounts = Mounts::with_ends(&[project], &hub, None, LIFE);
@@ -993,6 +1033,8 @@ mod tests {
             root: std::env::temp_dir(),
             turn: Arc::new(Mutex::new(())),
             trust: None,
+            lines: Default::default(),
+            seats: Default::default(),
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         Mounts::with_idle(&[project], &hub, None)

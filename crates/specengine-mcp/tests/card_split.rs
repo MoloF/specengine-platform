@@ -438,7 +438,7 @@ impl HubSeam for Idle {
         None
     }
 
-    fn turn(&self, command: Command) -> TurnFuture {
+    fn turn(&self, _login: &str, command: Command) -> TurnFuture {
         drop(command);
         Box::pin(async {})
     }

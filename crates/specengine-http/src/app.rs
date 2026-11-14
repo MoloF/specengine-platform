@@ -96,7 +96,7 @@ use crate::hub::{Hub, Login};
 use crate::mcp::{self, Mounts};
 use crate::start::Project;
 use crate::sync::{Push, RepoSync, Syncs};
-use crate::{confirm, hub, tail, ui};
+use crate::{confirm, hub, slow, tail, ui};
 
 /// What every handler shares.
 #[derive(Debug)]
@@ -204,111 +204,221 @@ impl App {
 /// layer is the fence, so the fence sees every request before the routes'
 /// router does (a `layer` on the routes' router itself would wrap each
 /// route after routing, and miss a route added after it).
+///
+/// Each route's methods, its fallback too, end in `.noted(<its path>)`: the
+/// template a slow line names (task spec `slow-requests`), given again since
+/// axum's `MatchedPath` is off in the pinned build.
 pub(crate) fn router(app: Shared) -> Router {
     let routes = Router::new()
-        .route("/api/identity", read(identity))
-        .route("/api/projects", read(projects))
-        .route("/api/projects/{p}/tree", read(tree))
-        .route("/api/projects/{p}/nodes/{*ref}", read(nodes))
-        .route("/api/projects/{p}/search", read(search))
-        .route("/api/projects/{p}/bundle", read(bundle))
-        .route("/api/projects/{p}/flow", read(flow))
-        .route("/api/projects/{p}/trace", read(trace))
+        .route("/api/identity", read(identity).noted("/api/identity"))
+        .route("/api/projects", read(projects).noted("/api/projects"))
+        .route(
+            "/api/projects/{p}/tree",
+            read(tree).noted("/api/projects/{p}/tree"),
+        )
+        .route(
+            "/api/projects/{p}/nodes/{*ref}",
+            read(nodes).noted("/api/projects/{p}/nodes/{*ref}"),
+        )
+        .route(
+            "/api/projects/{p}/search",
+            read(search).noted("/api/projects/{p}/search"),
+        )
+        .route(
+            "/api/projects/{p}/bundle",
+            read(bundle).noted("/api/projects/{p}/bundle"),
+        )
+        .route(
+            "/api/projects/{p}/flow",
+            read(flow).noted("/api/projects/{p}/flow"),
+        )
+        .route(
+            "/api/projects/{p}/trace",
+            read(trace).noted("/api/projects/{p}/trace"),
+        )
         .route(
             "/api/projects/{p}/trace/clear",
-            post(clear_group).fallback(only_post),
+            post(clear_group)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/trace/clear"),
         )
-        .route("/api/projects/{p}/graph", read(graph))
-        .route("/api/projects/{p}/map", read(map))
-        .route("/api/projects/{p}/check", read(check))
-        .route("/api/projects/{p}/health", read(health))
-        .route("/api/projects/{p}/roadmap", read(roadmap))
-        .route("/api/projects/{p}/delivery", read(delivery))
-        .route("/api/projects/{p}/catalog", read(catalog))
-        .route("/api/projects/{p}/rings", read(rings))
-        .route("/api/projects/{p}/lock-diff", read(lock_diff))
-        .route("/api/projects/{p}/inbox", read(inbox))
-        .route("/api/projects/{p}/proposals/{id}", read(proposal))
-        .route("/api/projects/{p}/tasks", read(tasks))
-        .route("/api/projects/{p}/tasks/{id}", read(task))
+        .route(
+            "/api/projects/{p}/graph",
+            read(graph).noted("/api/projects/{p}/graph"),
+        )
+        .route(
+            "/api/projects/{p}/map",
+            read(map).noted("/api/projects/{p}/map"),
+        )
+        .route(
+            "/api/projects/{p}/check",
+            read(check).noted("/api/projects/{p}/check"),
+        )
+        .route(
+            "/api/projects/{p}/health",
+            read(health).noted("/api/projects/{p}/health"),
+        )
+        .route(
+            "/api/projects/{p}/roadmap",
+            read(roadmap).noted("/api/projects/{p}/roadmap"),
+        )
+        .route(
+            "/api/projects/{p}/delivery",
+            read(delivery).noted("/api/projects/{p}/delivery"),
+        )
+        .route(
+            "/api/projects/{p}/catalog",
+            read(catalog).noted("/api/projects/{p}/catalog"),
+        )
+        .route(
+            "/api/projects/{p}/rings",
+            read(rings).noted("/api/projects/{p}/rings"),
+        )
+        .route(
+            "/api/projects/{p}/lock-diff",
+            read(lock_diff).noted("/api/projects/{p}/lock-diff"),
+        )
+        .route(
+            "/api/projects/{p}/inbox",
+            read(inbox).noted("/api/projects/{p}/inbox"),
+        )
+        .route(
+            "/api/projects/{p}/proposals/{id}",
+            read(proposal).noted("/api/projects/{p}/proposals/{id}"),
+        )
+        .route(
+            "/api/projects/{p}/tasks",
+            read(tasks).noted("/api/projects/{p}/tasks"),
+        )
+        .route(
+            "/api/projects/{p}/tasks/{id}",
+            read(task).noted("/api/projects/{p}/tasks/{id}"),
+        )
         .route(
             "/api/projects/{p}/cards",
             get(cards)
                 .post(new_card)
                 .head(only_cards)
-                .fallback(only_cards),
+                .fallback(only_cards)
+                .noted("/api/projects/{p}/cards"),
         )
-        .route("/api/projects/{p}/cards/{id}", read(card))
+        .route(
+            "/api/projects/{p}/cards/{id}",
+            read(card).noted("/api/projects/{p}/cards/{id}"),
+        )
         // A static segment beside `{id}`: the router matches it ahead of
         // `{id}` whatever the order the routes are added in, so the counts
         // are never read as a card (task spec `department-overview` DO10).
-        .route("/api/projects/{p}/cards/counts", read(counts))
+        .route(
+            "/api/projects/{p}/cards/counts",
+            read(counts).noted("/api/projects/{p}/cards/counts"),
+        )
         // A static segment beside `{id}`, which no card ID spells
         // (`docs/features/department-split.md` "Acceptance criteria", S7).
         .route(
             "/api/projects/{p}/cards/split",
-            post(split_card).fallback(only_post),
+            post(split_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/split"),
         )
         .route(
             "/api/projects/{p}/cards/{id}/move",
-            post(move_card).fallback(only_post),
+            post(move_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/{id}/move"),
         )
         .route(
             "/api/projects/{p}/cards/{id}/edit",
-            post(edit_card).fallback(only_post),
+            post(edit_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/{id}/edit"),
         )
         .route(
             "/api/projects/{p}/cards/{id}/assign",
-            post(assign_card).fallback(only_post),
+            post(assign_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/{id}/assign"),
         )
         .route(
             "/api/projects/{p}/cards/{id}/cancel",
-            post(cancel_card).fallback(only_post),
+            post(cancel_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/{id}/cancel"),
         )
         .route(
             "/api/projects/{p}/cards/{id}/accept",
-            post(accept_card).fallback(only_post),
+            post(accept_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/{id}/accept"),
         )
         .route(
             "/api/projects/{p}/cards/{id}/clear",
-            post(clear_card).fallback(only_post),
+            post(clear_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/{id}/clear"),
         )
         .route(
             "/api/projects/{p}/cards/{id}/items",
-            post(raise_on_card).fallback(only_post),
+            post(raise_on_card)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/cards/{id}/items"),
         )
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
-            post(stage).delete(unstage).fallback(only_stage),
+            post(stage)
+                .delete(unstage)
+                .fallback(only_stage)
+                .noted("/api/projects/{p}/proposals/{id}/decision"),
         )
-        .route("/api/projects/{p}/round", read(round))
+        .route(
+            "/api/projects/{p}/round",
+            read(round).noted("/api/projects/{p}/round"),
+        )
         .route(
             "/api/projects/{p}/round/answers",
-            post(round_answers).fallback(only_round_answers),
+            post(round_answers)
+                .fallback(only_round_answers)
+                .noted("/api/projects/{p}/round/answers"),
         )
-        .route("/api/projects/{p}/events", read(tail::events))
-        .route("/api/projects/{p}/workspaces", read(workspaces))
+        .route(
+            "/api/projects/{p}/events",
+            read(tail::events).noted("/api/projects/{p}/events"),
+        )
+        .route(
+            "/api/projects/{p}/workspaces",
+            read(workspaces).noted("/api/projects/{p}/workspaces"),
+        )
         // The web UI (docs/features/ui-embed.md "Data"): reads like the
         // API's, no config, no turn.
-        .route("/", read(ui::page))
-        .route("/assets/{file}", read(ui::asset));
+        .route("/", read(ui::page).noted("/"))
+        .route("/assets/{file}", read(ui::asset).noted("/assets/{file}"));
     // A hub's alone: a local daemon has no such route, on any method. MCP's
     // every method goes to its handler, past the fence's class `Mcp`
     // (docs/features/hub-mcp.md S3).
     let routes = if app.hub.is_some() {
         routes
-            .route("/api/projects/{p}/team", read(team))
+            .route(
+                "/api/projects/{p}/team",
+                read(team).noted("/api/projects/{p}/team"),
+            )
             .route(
                 "/api/projects/{p}/proposals/{id}/confirm",
-                get(confirm::read).post(confirm::write),
+                get(confirm::read)
+                    .post(confirm::write)
+                    .noted("/api/projects/{p}/proposals/{id}/confirm"),
             )
-            .route("/mcp/{p}", any(mcp::serve))
+            // Its template is `slow::MCP`: the path's one literal here stays
+            // the one a hub's unit test moves (H12).
+            .route("/mcp/{p}", any(mcp::serve).noted(slow::MCP))
     } else {
         routes
     };
     // A `--push` hub's alone (docs/features/hub-git.md): elsewhere no route.
     let routes = if app.syncs.is_some() {
-        routes.route("/api/projects/{p}/sync", read(sync_status))
+        routes.route(
+            "/api/projects/{p}/sync",
+            read(sync_status).noted("/api/projects/{p}/sync"),
+        )
     } else {
         routes
     };
@@ -318,9 +428,26 @@ pub(crate) fn router(app: Shared) -> Router {
         // `Allow`.
         .method_not_allowed_fallback(method_not_allowed)
         .with_state(Arc::clone(&app));
+    // The slow record outermost, before the fence: a request's `ms` from its
+    // first sight.
     Router::new()
         .fallback_service(routes)
         .layer(middleware::from_fn_with_state(app, fence))
+        .layer(middleware::from_fn(slow::watch))
+}
+
+/// A route's methods with their template noted on each request's slow
+/// record ([`slow::routed`]), every method and the fallback alike.
+trait Noted {
+    fn noted(self, template: &'static str) -> Self;
+}
+
+impl Noted for MethodRouter<Shared> {
+    fn noted(self, template: &'static str) -> Self {
+        self.layer(middleware::from_fn(move |request: Request, next: Next| {
+            slow::routed(template, request, next)
+        }))
+    }
 }
 
 /// A read route: `handler` on GET; any other method, `HEAD` included, a 405

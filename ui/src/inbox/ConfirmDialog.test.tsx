@@ -1,13 +1,17 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError, type SpecEngineClient } from "../api/client";
+import { HttpClient } from "../api/http";
 import { ApiProvider } from "../api/provider";
 import type { ConfirmRead, Proposal, QueueEvent, Stage, Team } from "../api/types";
 import { TEAM_ACTS } from "../board/labels";
 import { en } from "../i18n/en";
 import { aProposal, aRoundItem, aRoundSheet } from "../test/builders";
+import { errorAnswer, jsonAnswer, stubFetch, type Answering } from "../test/daemonStub";
+import { doorAnswer, doorBody, HUB_ORIGIN, standAt, TEST_ORIGIN } from "../test/doorStub";
 import { renderApp } from "../test/render";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
+import { Announcer } from "../ui/announcer";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 // B10 and B12 of docs/features/hub-confirm.md on a stub client, one click per item as
@@ -1051,5 +1055,211 @@ describe("a confirm answered with notes (U1 of hub-git)", () => {
     await waitFor(() => {
       expect(document.activeElement).toBe(document.querySelector(".round"));
     });
+  });
+});
+
+// DS3 to DS5, DS7 and DS8 of docs/features/door-step-up.md "Acceptance criteria": the confirm route
+// over `fetch`, the hub's login door answering a one-factor session 401 with its observed `text/html`
+// body, one anchor. The dialog says the step-up in the page's words and links the door's login page
+// in a new tab, built from the page's address when the refusal shows (a hub's origin, stood on here);
+// not one byte of the body is shown or spoken. Status 0 keeps its words, one line added, no link; every
+// other refusal keeps the daemon's words.
+
+const CONFIRM_PATH = "/api/projects/alpha/proposals/PR-0007/confirm";
+
+const STEP_UP_TITLE = "This action needs the second factor";
+
+const STEP_UP_TEXT =
+  "Your session is signed in with a password only. Sign in with your second factor, a one-time code or a passkey, on the login page, then retry. The first time, registering a second factor takes a one-time code from the hub's operator.";
+
+const STEP_UP_NO_ANSWER = "If this action needs the second factor, sign in with it on the login page, then retry.";
+
+/** The page when the refusal comes: the Inbox on PR-0007, on a hub's origin. */
+const HERE = `${HUB_ORIGIN}#/alpha/inbox/PR-0007`;
+
+/** The door's login page, back to HERE once the second factor is in. */
+const LOGIN = "https://login.example.org/?rd=https%3A%2F%2Fhub.example.org%2F%23%2Falpha%2Finbox%2FPR-0007";
+
+/** What the body carries and the page never shows. */
+const BODY_BYTES = ["401 Unauthorized", "&amp;", "/api/projects/"];
+
+/** The confirm read's 200, the daemon's document. */
+function readAnswer(): Response {
+  return jsonAnswer(200, { id: "PR-0007", question: questionOf("PR-0007"), updated_at: STAGED_AT });
+}
+
+/** The read and the POST of the confirm route over HttpClient, `fetch` answering as `answering` says; the rest of the stub as it was. */
+function overFetch(client: StubClient, answering: Answering) {
+  const http = new HttpClient();
+  client.getConfirm.mockImplementation((project, id, signal) => http.getConfirm(project, id, signal));
+  client.confirmProposal.mockImplementation((project, id, body) => http.confirmProposal(project, id, body));
+  return stubFetch(answering);
+}
+
+/** The POSTs `fetch` was asked. */
+function postsOf(fetched: ReturnType<typeof stubFetch>): number {
+  return fetched.mock.calls.filter(([, init]) => init?.method === "POST").length;
+}
+
+/** The notice as the alert holds it: its heading, its link and the dialog keeping no byte of the body. */
+function expectStepUp(dialog: HTMLElement, alert: HTMLElement) {
+  expect(alert.querySelector(".refusal-title")?.textContent).toBe(STEP_UP_TITLE);
+  expect(alert.textContent).toContain(STEP_UP_TEXT);
+  const links = within(alert).getAllByRole("link");
+  expect(links).toHaveLength(1);
+  const link = links[0] as HTMLElement;
+  expect(link.textContent).toBe("Open the login page");
+  expect(window.location.href).toBe(HERE);
+  expect(link.getAttribute("href")).toBe(LOGIN);
+  expect(link.getAttribute("target")).toBe("_blank");
+  expect(link.getAttribute("rel")?.split(" ")).toEqual(expect.arrayContaining(["noopener", "noreferrer"]));
+  for (const bytes of BODY_BYTES) {
+    expect(dialog.textContent).not.toContain(bytes);
+  }
+  expect(alert.querySelector(".verbatim")).toBeNull();
+}
+
+describe("the door's step-up refusal (door-step-up)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    standAt(TEST_ORIGIN);
+  });
+
+  it("DS3: the read's 401 shows the step-up notice and one link, no byte of the body; Confirm off, and Read again with a 200 reads the question", async () => {
+    standAt(HUB_ORIGIN);
+    const client = hubClient(LEAD);
+    let door = true;
+    overFetch(client, () => (door ? doorAnswer(doorBody(CONFIRM_PATH)) : readAnswer()));
+    renderApp(client, "#/alpha/inbox/PR-0007");
+    const dialog = await opened();
+    expectStepUp(dialog, await within(dialog).findByRole("alert"));
+    expect(confirmIn(dialog).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(confirmIn(dialog));
+    await tick();
+    expect(client.confirmProposal).not.toHaveBeenCalled();
+    door = false;
+    fireEvent.click(buttonIn(dialog, "Read again"));
+    await waitFor(async () => {
+      expect((await questionIn(dialog)).textContent).toBe(questionOf("PR-0007"));
+    });
+    await ready(dialog);
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+  });
+
+  it("DS4: the POST's 401 after a 200 read shows the same notice; Confirm stays off until Read again", async () => {
+    standAt(HUB_ORIGIN);
+    const client = hubClient(LEAD);
+    const fetched = overFetch(client, (_url, init) => (init?.method === "POST" ? doorAnswer(doorBody(CONFIRM_PATH, "POST")) : readAnswer()));
+    renderApp(client, "#/alpha/inbox/PR-0007");
+    const dialog = await opened();
+    fireEvent.click(await ready(dialog));
+    expectStepUp(dialog, await within(dialog).findByRole("alert"));
+    await waitFor(() => {
+      expect(confirmIn(dialog).getAttribute("aria-disabled")).toBe("true");
+    });
+    fireEvent.click(confirmIn(dialog));
+    await tick();
+    expect(postsOf(fetched)).toBe(1);
+    fireEvent.click(buttonIn(dialog, "Read again"));
+    await ready(dialog);
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+  });
+
+  it("DS4: the POST's 401 after the dialog is gone speaks the step-up title, no byte of the body", async () => {
+    standAt(HUB_ORIGIN);
+    const client = hubClient(LEAD);
+    let answer: (response: Response) => void = () => undefined;
+    overFetch(client, (_url, init) =>
+      init?.method === "POST"
+        ? new Promise<Response>((resolve) => {
+            answer = resolve;
+          })
+        : readAnswer(),
+    );
+    const page = (open: boolean) => (
+      <ApiProvider client={client}>
+        <Announcer>{open && <ConfirmDialog project="alpha" id="PR-0007" team={LEAD} onClose={() => undefined} onConfirmed={() => undefined} />}</Announcer>
+      </ApiProvider>
+    );
+    const { rerender } = render(page(true));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm PR-0007" });
+    fireEvent.click(await ready(dialog));
+    await waitFor(() => {
+      expect(confirmIn(dialog).textContent).toMatch(/^Confirming/);
+    });
+    rerender(page(false));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    answer(doorAnswer(doorBody(CONFIRM_PATH, "POST")));
+    const spoken = document.querySelector('[aria-live="assertive"]');
+    await waitFor(() => {
+      expect(spoken?.textContent).toContain(STEP_UP_TITLE);
+    });
+    for (const bytes of BODY_BYTES) {
+      expect(spoken?.textContent).not.toContain(bytes);
+    }
+  });
+
+  it.each([
+    ["the read", "GET"],
+    ["the POST", "POST"],
+  ])("DS5: status 0 on %s keeps its words, adds the second factor's line and draws no link", async (_case, method) => {
+    standAt(HUB_ORIGIN);
+    const client = hubClient(LEAD);
+    overFetch(client, (_url, init) => {
+      if ((init?.method ?? "GET") === method) {
+        throw new TypeError("Failed to fetch");
+      }
+      return readAnswer();
+    });
+    renderApp(client, "#/alpha/inbox/PR-0007");
+    const dialog = await opened();
+    if (method === "POST") {
+      fireEvent.click(await ready(dialog));
+    }
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.querySelector(".refusal-title")?.textContent).toBe(NO_ANSWER);
+    expect(alert.querySelector(".verbatim")?.textContent).toBe(`${method} ${CONFIRM_PATH}: no response from the daemon (Failed to fetch)`);
+    expect(alert.textContent).toContain(STEP_UP_NO_ANSWER);
+    expect(alert.querySelector("a")).toBeNull();
+    expect(buttonIn(dialog, "Read again")).toBeTruthy();
+  });
+
+  it.each([
+    ["a bare word", "Unauthorized"],
+    ["an http href", '<a href="http://login.example.org/">401 Unauthorized</a>'],
+    ["a relative href", '<a href="/login">401 Unauthorized</a>'],
+  ])("DS7: a 401 whose body is %s shows the notice with no link at all", async (_case, body) => {
+    standAt(HUB_ORIGIN);
+    const client = hubClient(LEAD);
+    overFetch(client, () => doorAnswer(body));
+    renderApp(client, "#/alpha/inbox/PR-0007");
+    const dialog = await opened();
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.querySelector(".refusal-title")?.textContent).toBe(STEP_UP_TITLE);
+    expect(alert.textContent).toContain(STEP_UP_TEXT);
+    expect(alert.querySelector("a")).toBeNull();
+    expect(dialog.textContent).not.toContain("Unauthorized");
+  });
+
+  it.each([
+    ["a 403's error body", () => errorAnswer(403, "refused: mira leads maps; docs/spec/brief.md lies outside them"), "refused: mira leads maps; docs/spec/brief.md lies outside them"],
+    [
+      "a 409's review document",
+      () => jsonAnswer(409, staged("PR-0007", { notes: ["a first note", "`PR-0007` changed since the question: its staged choice was replaced or removed; nothing changed"] })),
+      "`PR-0007` changed since the question: its staged choice was replaced or removed; nothing changed",
+    ],
+  ])("DS8: on the POST, %s keeps today's heading and the daemon's words verbatim", async (_case, refusal, words) => {
+    standAt(HUB_ORIGIN);
+    const client = hubClient(LEAD);
+    overFetch(client, (_url, init) => (init?.method === "POST" ? refusal() : readAnswer()));
+    renderApp(client, "#/alpha/inbox/PR-0007");
+    const dialog = await opened();
+    fireEvent.click(await ready(dialog));
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.querySelector(".refusal-title")?.textContent).toBe("The daemon refused to confirm it.");
+    expect(alert.querySelector(".verbatim")?.textContent).toBe(words);
+    expect(alert.textContent).not.toContain(STEP_UP_TITLE);
+    expect(alert.textContent).not.toContain(STEP_UP_NO_ANSWER);
+    expect(alert.querySelector("a")).toBeNull();
   });
 });

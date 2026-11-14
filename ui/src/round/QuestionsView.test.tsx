@@ -12,7 +12,8 @@ import { STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
 // a test drives by hand: the states, the sheet as sent, controls by structure with nothing picked,
 // one POST of the decision route's bodies, drafts by ID across re-reads and sections, the round's
 // terminal command, UTF-8 byte counters, agent text escaped and isolated, the sheet read again on
-// every proposal or task event (a superseded read aborted). Iteration 2 of the review: a pick the
+// every proposal or task event (a read in flight kept, then read once more: hub-turn-fairness TF12).
+// Iteration 2 of the review: a pick the
 // revised item no longer offers is never sent; a POST on its way when the owner leaves and comes
 // back is neither sent again nor lost; the sticky Stage bar stays short with the page's scroll
 // padding reserving it; a staged option's label is escaped. Non-Latin text is built from code
@@ -609,7 +610,8 @@ describe("live (U-10)", () => {
     });
   });
 
-  it("aborts a read a newer event supersedes, and shows the newer one's answer", async () => {
+  // TF12 of docs/features/hub-turn-fairness.md: a live event never aborts the sheet's read in flight.
+  it("keeps a read in flight when a newer event lands, then reads once more and shows that answer", async () => {
     const { client, tail } = serving(aRoundSheet([aRoundItem({ id: "PR-0003" })]));
     const signals: AbortSignal[] = [];
     const answers: ((sheet: RoundSheet) => void)[] = [];
@@ -634,15 +636,26 @@ describe("live (U-10)", () => {
       expect(signals).toHaveLength(2);
     });
     tail.emit("task.planned", { id: "T-0004" });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // The read in flight is kept: not aborted, and nothing sent beside it.
+    expect(signals.map((signal) => signal.aborted)).toEqual([false, false]);
+    act(() => {
+      answers[0]?.(aRoundSheet([aRoundItem({ id: "PR-0010" })]));
+    });
+    expect(await screen.findByRole("article", { name: "PR-0010" })).toBeTruthy();
+    // Its answer may predate the event: exactly one more read follows it.
     await waitFor(() => {
       expect(signals).toHaveLength(3);
     });
-    expect(signals.map((signal) => signal.aborted)).toEqual([false, true, false]);
+    expect(signals.map((signal) => signal.aborted)).toEqual([false, false, false]);
     const newest: RoundItem = aRoundItem({ id: "PR-0011" });
     act(() => {
       answers[1]?.(aRoundSheet([newest]));
     });
     expect(await screen.findByRole("article", { name: "PR-0011" })).toBeTruthy();
+    expect(client.getRound).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -150,3 +150,15 @@ describe("the mandate's words (V1, V2 of task-mandate)", () => {
     expect(mandateWords(ru).filter(([, value]) => earlier.some((stem) => value.toLowerCase().includes(stem)))).toEqual([]);
   });
 });
+
+// docs/features/board-subtasks.md "Rules and edge cases": no word of the Show select, its parent line or
+// its empty states is built on accept, in English or on the Russian stem, as the hand-off's are not.
+describe("the level's words (board-subtasks)", () => {
+  it("cover the same eight keys in both languages and hold no `accept`, nor the Russian stem", () => {
+    const english = leaves(en.board.level, "board.level");
+    expect(english.map(([path]) => path)).toEqual(leaves(ru.board.level, "board.level").map(([path]) => path));
+    expect(english).toHaveLength(8);
+    expect(english.filter(([, value]) => value.toLowerCase().includes("accept"))).toEqual([]);
+    expect(leaves(ru.board.level, "board.level").filter(([, value]) => value.toLowerCase().includes(RUSSIAN_STEM))).toEqual([]);
+  });
+});

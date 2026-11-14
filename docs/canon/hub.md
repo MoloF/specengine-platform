@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-14
 ---
 
 # Hub mode: a public origin and one trusted login
@@ -100,7 +100,7 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 
 ## Known limits
 
-- **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. The gate (step 11b-3) checks what the door answers to a JSON request.
+- **Session expiry.** The door answers a refused `fetch` 401 with one anchor, not a redirect (seen on a step-up route; expiry likely alike): the step-up acts link the door (`hub-confirm.md` "Screen"), other views show the body verbatim; `EventSource` backs off.
 - **A stalled reader.** A client that stops reading keeps its socket past a stream's life, not its events: the end waits for it to read again.
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (`hub-ops.md`).
 - **Scale.** Reads trust the index (`spec-read-freshness.md`); a team still waits in a project's turn.

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-14
 ---
 
 # Plain questions: a question's gist, why it matters, its options
@@ -76,15 +76,16 @@ A question's `options`, `recommendation` fill the existing keys; every other kin
 
 ## MCP and plugin
 
-- `ask_question` (stdio `QuestionArgs`, hub `HubQuestionArgs`) takes `gist`, `matters`, `options` (items closed, `mirror::IntakeOption`) and `recommendation` after `text`, nullable, property docs without digits. `QUESTION_DESCRIPTION` 2 031 B, `HUB_QUESTION_DESCRIPTION` 2 044, `get_card`'s 2 047 (its 18 item keys), ASCII, within 2 048; `holds_number` ties 160, 512, 2 and 3 to the constants. `INSTRUCTIONS`, `HUB_INSTRUCTIONS` unchanged; 30 stdio tools, 18 on a hub.
+- `ask_question` (stdio `QuestionArgs`, hub `HubQuestionArgs`) takes `gist`, `matters`, `options` (items closed, `mirror::IntakeOption`) and `recommendation` after `text`, nullable, property docs without digits. `QUESTION_DESCRIPTION`, `HUB_QUESTION_DESCRIPTION`, `get_card`'s (its 18 item keys) ASCII, within 2 048; `holds_number` ties 160, 512, 2 and 3 to the constants. `INSTRUCTIONS`, `HUB_INSTRUCTIONS` unchanged.
 - Plugin 0.43.0 (`plugin-files.md` "Changing it"): `ask-owner` teaches a question to lead with a plain `gist` and why it `matters`, then priced `options` and a `recommendation` (`plugin.md` "Skills").
 
 ## UI
 
 `src/inbox/ItemLead.tsx` (`ItemLead`, `LeadMatters`, `AskedFold`, `AskedText`, `RecommendedMark`), on the Inbox card and its dialogs, the Questions screen, a card's Activity and Answer…:
 - **The lead**, for an item holding `gist`: the gist on one line in `<bdi>` through `shownSlot` (also the Inbox `h2`, a list row, the not-staged line; the filter searches it), "Why it matters" (`shownText`, line feeds kept), then the options and controls; the text, working answer, price and why in a `Disclosure`, "The question as asked", collapsed. A question with no options shows its working answer and price after "Why it matters", outside the fold, which keeps the text, the pair and the why. An item without a gist renders as before. Every list draws an entry through `inbox/ProposalSummary.tsx`: a held gist so, else the summary (the Inbox list and a card's others, the Spec tree's proposals, Health's left region, the palette).
-- **Who recommends**: `labels.ts` `recommendedBy(author, t)`, the one place an author's type is compared (`policy.test.ts`): an agent "Recommended by the AI", anyone else "Recommended by the asker". Never preselected, the Inbox's decision dialog included, discrepancies too: Accept stays off with "Pick an answer first" until a pick, which a revision clears.
-- **Controls by structure** (`round/drafts.ts` `answersOf`, shared by `offers`, `RoundItemCard`, `CardItems` `picksOf`): each option; the working answer when `price_of_other` and `working_answer` are held; an own answer with `price_of_other` (not in the Inbox: `decision-staging.md` "UI"); Reject; Leave open on the Questions screen. An item with neither options nor a price offers the working answer and an own answer, as before.
+- **Who recommends**: `labels.ts` `recommendedBy(author, t)`, the one place an author's type is compared (`policy.test.ts`): an agent "Recommended by the AI", anyone else "Recommended by the asker". Never preselected, the Inbox's decision dialog included, discrepancies too: Accept stays off with "Pick an answer first" until a pick, which a revision clears; there an item without options checks the working answer on open, and a revision keeps a working or own pick still offered.
+- **Controls by structure** (`round/drafts.ts` `answersOf`, shared by `offers`, `RoundItemCard`, `CardItems` `picksOf`): each option; the working answer when `price_of_other` and `working_answer` are held; an own answer with `price_of_other`, the Inbox's Accept too; Reject; Leave open on the Questions screen. An item with neither options nor a price offers the working answer and an own answer, as before.
+- **The Inbox's own answer** (`inbox/DecisionDialog.tsx`): "Own answer" opens "Your answer" with a byte count, sent trimmed as `answer`, empty refused ("Write your answer first."); the note reads "Decision note (optional)", described as not the answer. A trimmed note unequal to a picked working answer shows a `role="status"` warning: the first Accept stages nothing and focuses "Use the note as my answer" (the note into Your answer, picked); the next stages; a note edit or a revision re-arms it.
 - **Strings**: `inbox.lead.{matters, asked, recommendedByAgent, recommendedByAsker, pickFirst}` in both catalogs, the Russian a draft for the owner; `.lead-*` CSS on scale tokens. Mock: `?scenario=plain-questions` (`src/mocks/plainQuestions.ts`), the approve lines in `mocks/approveLines.ts`.
 
 ## Known limits

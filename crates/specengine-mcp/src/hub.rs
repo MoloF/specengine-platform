@@ -80,10 +80,14 @@ pub trait HubSeam: Send + Sync + 'static {
     /// Runs `command` once inside the project's turn, on the blocking pool:
     /// [`Command::run`] with the process's `Env` and the project's globals
     /// once the project is found again under its slug, else
-    /// [`Command::cannot_run`] with the CLI's exit-2 line. A future dropped
-    /// while it waits for the turn never runs the command; once running, it
-    /// runs to its end.
-    fn turn(&self, command: Command) -> TurnFuture;
+    /// [`Command::cannot_run`] with the CLI's exit-2 line. `login` is the
+    /// call's request's ([`HubSeam::login`], empty when it has none): the
+    /// daemon first puts the call in that login's line for the project and
+    /// lets it wait for the turn once it heads the line (task spec
+    /// `hub-turn-fairness`). A future dropped while it waits, in its line or
+    /// for the turn, never runs the command; once running, it runs to its
+    /// end.
+    fn turn(&self, login: &str, command: Command) -> TurnFuture;
 }
 
 /// What a turn hands a call: the process's `Env` and the project's globals,
@@ -129,6 +133,14 @@ pub(crate) async fn in_request<F: Future>(
     READS.scope(reads, REQUEST.scope(context, call)).await
 }
 
+/// `read` of the extensions of the request the current hub call serves
+/// (where rmcp puts the HTTP request's parts); `None` outside a call. The
+/// daemon's [`HubSeam::turn`] finds its own record of the request there,
+/// for its slow lines (task spec `slow-requests`).
+pub fn call_extensions<T>(read: impl FnOnce(&Extensions) -> T) -> Option<T> {
+    REQUEST.try_with(|context| read(&context.extensions)).ok()
+}
+
 /// Resolves once the request of the current call is cancelled; never
 /// outside one.
 async fn cancelled() {
@@ -164,7 +176,14 @@ where
         };
         *filled.lock().unwrap_or_else(PoisonError::into_inner) = Some(value);
     }));
-    let turn = seam.turn(command);
+    // The call's own login, for its line before the turn; outside a call
+    // (never on a hub) none.
+    let login = REQUEST
+        .try_with(|context| seam.login(&context.extensions))
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let turn = seam.turn(&login, command);
     tokio::select! {
         biased;
         () = cancelled() => {}
@@ -241,7 +260,7 @@ pub(crate) fn reads_trust(
 /// The measurement build's hub probes, which the daemon admits beside
 /// [`HUB_TOOLS`]; none in any other build.
 #[cfg(feature = "probes")]
-pub const HUB_PROBES: [&str; 1] = ["probe_panic"];
+pub const HUB_PROBES: [&str; 2] = ["probe_panic", "probe_hold"];
 
 /// The measurement build's hub probes: none in this build.
 #[cfg(not(feature = "probes"))]
@@ -1002,7 +1021,8 @@ impl SpecEngineServer {
         }
         let router =
             router + Self::hub_read_tools() + Self::hub_queue_tools() + Self::hub_card_tools();
-        // The measurement build's panic probe (`crate::probes`), a hub's alone.
+        // The measurement build's panic and hold probes (`crate::probes`), a
+        // hub's alone.
         #[cfg(feature = "probes")]
         let router = router + Self::hub_probe_tools();
         router

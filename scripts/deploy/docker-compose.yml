@@ -35,6 +35,23 @@ services:
       - --certificatesresolvers.le.acme.caserver=${ACME_CA_SERVER}
       - --certificatesresolvers.le.acme.storage=/acme/acme.json
       - --certificatesresolvers.le.acme.tlschallenge=true
+      # The access log (slow-requests): JSON on stdout, requests of 2 s or
+      # more alone, an allowlist of fields: no path (a door's query can carry
+      # a one-time token), no client address or username, every header dropped.
+      - --accesslog=true
+      - --accesslog.format=json
+      - --accesslog.filters.minduration=2s
+      - --accesslog.fields.defaultmode=drop
+      - --accesslog.fields.names.StartUTC=keep
+      - --accesslog.fields.names.Duration=keep
+      - --accesslog.fields.names.Overhead=keep
+      - --accesslog.fields.names.OriginDuration=keep
+      - --accesslog.fields.names.RouterName=keep
+      - --accesslog.fields.names.RequestMethod=keep
+      - --accesslog.fields.names.RequestHost=keep
+      - --accesslog.fields.names.OriginStatus=keep
+      - --accesslog.fields.names.DownstreamStatus=keep
+      - --accesslog.fields.headers.defaultmode=drop
     volumes:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - ./traefik/mcp-users:/etc/traefik/mcp-users:ro

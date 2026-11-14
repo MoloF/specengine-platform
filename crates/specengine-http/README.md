@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-14
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -14,7 +14,7 @@ Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge),
 
 ## Binary
 
-`specengine-http --root DIR... [--port N] [--public-origin URL [--push ...]]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`), a hub's floor: `serve.md` "Start", "Lines"; `--push`, `sync.rs`: `hub-git.md`. Exit 1: stopped after listening.
+`specengine-http --root DIR... [--port N] [--public-origin URL [--push ...]]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening, a hub's floor: `serve.md` "Start", "Lines"; `--push`, `sync.rs`: `hub-git.md`; `--slow-ms`, `slow.rs`, `turn.rs`: `serve-slow.md`. Exit 1: stopped after listening.
 
 ## Fence
 
@@ -79,4 +79,4 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]` edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,delivery,catalog,map,rings,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`; a `#[cfg(test)]` edit relinks no bin). Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,delivery,catalog,map,rings,workspaces}.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `slow.rs`, `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

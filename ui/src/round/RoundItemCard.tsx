@@ -12,7 +12,7 @@ import { Icon } from "../ui/Icon";
 import { shownSlot, shownText } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { answersOf, capOf, draftOf, offers, stateOf, textOf, type Draft, type DraftPick } from "./drafts";
-import { utf8Bytes } from "./text";
+import { DraftText } from "./DraftText";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 
@@ -31,66 +31,6 @@ function AgentText({ text }: { text: string }) {
 /** A one-line slot of agent text (a label, a title): LF and CR as `\n`, `\r`, isolated from its neighbours. */
 function Slot({ text }: { text: string }) {
   return <bdi>{shownSlot(text)}</bdi>;
-}
-
-/**
- * The text a pick sends, typed in full, never cut: its UTF-8 bytes against the cap beside it (a
- * text over the cap is sent all the same; the daemon's refusal decides).
- */
-function DraftText({
-  label,
-  value,
-  cap,
-  sent,
-  missing,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  cap: number;
-  /** The text as it is sent, which the counter counts. */
-  sent: string;
-  /** What to write when nothing is written yet; null when something is. */
-  missing: string | null;
-  onChange: (value: string) => void;
-}) {
-  const t = useTranslate();
-  const fieldId = useId();
-  const counterId = useId();
-  const missingId = useId();
-  const bytes = utf8Bytes(sent);
-  const over = bytes > cap;
-  return (
-    <div className="round-field">
-      <label className="field-label" htmlFor={fieldId}>
-        {label}
-      </label>
-      <textarea
-        id={fieldId}
-        className="field"
-        rows={3}
-        dir="auto"
-        spellCheck
-        value={value}
-        aria-invalid={over}
-        aria-describedby={missing === null ? counterId : `${counterId} ${missingId}`}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      />
-      <p id={counterId} className={over ? "byte-count byte-count-over" : "byte-count"}>
-        {over && <Icon name="alert" />}
-        <span className="byte-count-value">{t("round.bytes", { bytes, cap })}</span>
-        {over && <span>{t("round.overCap")}</span>}
-      </p>
-      {missing !== null && (
-        <p id={missingId} className="note">
-          <Icon name="info" />
-          <span>{missing}</span>
-        </p>
-      )}
-    </div>
-  );
 }
 
 /** A target on the Concerns line: `<title> (<ID or path>)`, linked to the spec tree. */

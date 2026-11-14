@@ -560,7 +560,7 @@ impl HubSeam for Ann {
         Some("ann".to_owned())
     }
 
-    fn turn(&self, command: Command) -> TurnFuture {
+    fn turn(&self, _login: &str, command: Command) -> TurnFuture {
         command.run(&self.env, &self.globals);
         Box::pin(async {})
     }

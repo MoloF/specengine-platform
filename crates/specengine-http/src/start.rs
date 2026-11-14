@@ -11,6 +11,8 @@ use specengine_cli::{
 };
 use tokio::sync::Mutex;
 
+use crate::turn::{Lines, Seats};
+
 /// A served project: the slug it is served under, its canonical root, and
 /// the turn its CLI calls take (one at a time: each read refreshes the
 /// project's index). The turn is awaited by the request's own task, not
@@ -25,6 +27,11 @@ pub(crate) struct Project {
     /// (the `read-trust` spec, "The daemon"): set by [`crate::app::App::new`]
     /// on a hub, entered at the three turn sites; `None` locally.
     pub trust: Option<Arc<IndexTrust>>,
+    /// A hub's MCP calls' lines before the turn, one per login (task spec
+    /// `hub-turn-fairness`); empty while no call holds or waits in one.
+    pub lines: Lines,
+    /// The turn's holders and waiters now (a slow line's `ahead`).
+    pub seats: Seats,
 }
 
 impl Project {
@@ -80,6 +87,8 @@ pub(crate) fn served(env: &Env, roots: &[PathBuf]) -> Result<Served, String> {
                 root: found.root.clone(),
                 turn: Arc::new(Mutex::new(())),
                 trust: None,
+                lines: Lines::default(),
+                seats: Seats::default(),
             },
         ));
         roots_found.push((given.clone(), found));

@@ -41,7 +41,12 @@
 //!   merge's; absent, no git child reaches a remote;
 //! - [`mcp`]: a hub's `/mcp/<slug>` (task spec `hub-mcp`), the MCP server
 //!   over Streamable HTTP, each call in the project's turn, its sessions
-//!   bound to a login; absent on a local daemon.
+//!   bound to a login; absent on a local daemon;
+//! - [`slow`]: `--slow-ms` (task spec `slow-requests`), a stderr line per
+//!   request past it, its client gone or not; [`turn`]: each project's turn
+//!   taken, measured and watched, a line when a hold passes it and one when
+//!   that hold ends, and a hub's MCP calls' FIFO line per login before it
+//!   (task spec `hub-turn-fairness`).
 
 mod answer;
 mod app;
@@ -49,12 +54,16 @@ mod args;
 mod confirm;
 mod daemon;
 mod hub;
+#[cfg(test)]
+mod lines_tests;
 mod mcp;
 #[cfg(test)]
 mod read_trust_tests;
+mod slow;
 mod start;
 mod sync;
 mod tail;
+mod turn;
 mod ui;
 
 use std::io::Write as _;
@@ -98,6 +107,17 @@ struct Cli {
     /// 3600 (default 120).
     #[arg(long, value_name = "SECONDS", allow_negative_numbers = true)]
     push_deadline: Option<u64>,
+    /// The milliseconds, 0 to 3600000 (default 2000), past which a request,
+    /// or a hold of a project's turn, writes a stderr line; 0 writes one
+    /// for every request and hold.
+    #[arg(
+        long,
+        value_name = "MS",
+        default_value_t = slow::SLOW_MS,
+        allow_negative_numbers = true,
+        value_parser = clap::value_parser!(u64).range(0..=slow::SLOW_MS_MAX)
+    )]
+    slow_ms: u64,
 }
 
 /// `--push-every`'s default, in minutes.
@@ -173,6 +193,7 @@ fn main() -> ExitCode {
     {
         return cannot_start(&reason);
     }
+    slow::set_threshold(cli.slow_ms);
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -258,13 +279,22 @@ fn cannot_start(reason: &str) -> ExitCode {
 }
 
 /// Help and version go to stdout, exit 0; any other parse error (no
-/// `--root`, an unknown flag such as `--host`) exits 2 on stderr.
+/// `--root`, an unknown flag such as `--host`, a `--slow-ms` out of its
+/// range) exits 2 with clap's message on one stderr line: its lines up to
+/// the first blank one, trimmed and joined (so a missing argument's name
+/// stays), its tips and usage left out (`docs/canon/serve.md` "Lines"), as
+/// the CLI's `gate_usage` reads it.
 fn usage_error(error: &clap::Error) -> ExitCode {
     if !error.use_stderr() {
         let _ = error.print();
         return ExitCode::SUCCESS;
     }
     let rendered = error.render().to_string();
-    let message = rendered.strip_prefix("error: ").unwrap_or(&rendered);
-    cannot_start(message.trim_end())
+    let message = rendered
+        .lines()
+        .map(str::trim)
+        .take_while(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    cannot_start(message.trim_start_matches("error: "))
 }

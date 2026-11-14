@@ -1158,6 +1158,20 @@ textarea.field {
   font-size: var(--font-size-body);
 }
 
+/* Where a routed proposal out of the inbox stands, beside the list (InboxView.tsx ClosedRead). */
+.closed-read {
+  min-width: 0;
+}
+
+/* A closed proposal's targets, each a document link on its own line (ClosedProposal.tsx). */
+.closed-targets {
+  display: grid;
+  gap: var(--space-050);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .queue-item-summary {
   font-weight: var(--font-weight-medium);
 }
@@ -7099,6 +7113,16 @@ mark {
   min-height: var(--target-min);
 }
 
+/* Subtasks only: the tile's parent, a link above the stretched title; a long title wraps under the
+   foot's buttons, never beside them (docs/features/board-subtasks.md "Acceptance criteria", BS12). */
+.board-card-parent {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
 .board-move {
   flex: none;
   margin-inline-start: auto;
@@ -7761,6 +7785,22 @@ mark {
 .card-field-hint {
   color: var(--text-secondary);
   font-size: var(--font-size-body);
+}
+
+/* The Inbox Accept's note hint and its warning in one cell, sized for the larger: the warning's
+   coming moves no action (docs/features/question-accept-note.md "Acceptance criteria", QA10). */
+.note-guide {
+  display: grid;
+}
+
+.note-guide > * {
+  grid-area: 1 / 1;
+  align-self: start;
+  min-width: 0;
+}
+
+.note-guide-off {
+  visibility: hidden;
 }
 
 .card-evidence-field {

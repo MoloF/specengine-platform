@@ -22,7 +22,6 @@ import { formatAge, formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { DECISION_KEYS, isStaged, verbOf, type DecisionKind } from "./decisions";
-import { DriftSection, TerminalDecision } from "./DriftItem";
 import { EvidenceItem } from "./EvidenceItem";
 import { AskedFold, AskedText, LeadMatters, RecommendedMark } from "./ItemLead";
 import { PairSlot } from "./PairSlot";
@@ -46,6 +45,15 @@ const StagedChoice = lazy(() => import("./StagedChoice").then((module) => ({ def
  * heading over a skeleton.
  */
 const InterpretationSection = lazy(() => import("./InterpretationSection").then((module) => ({ default: module.InterpretationSection })));
+
+/**
+ * A drift item's parts, its evidence and its terminal commands, arrive in a chunk of their own,
+ * loaded only for a review document carrying `drift` (the key decides, never the kind), so the
+ * Inbox's first load stays within its budget (docs/canon/ui-languages.md "Size"); until they do, a
+ * skeleton under the evidence's heading, and one where the commands stand.
+ */
+const DriftSection = lazy(() => import("./DriftItem").then((module) => ({ default: module.DriftSection })));
+const TerminalDecision = lazy(() => import("./DriftItem").then((module) => ({ default: module.TerminalDecision })));
 
 /** The target as a document: the modal over the Inbox (docs/features/doc-modal.md "Acceptance criteria", DM-8). */
 function OpenInTree({ project, id }: { project: string; id: string }) {
@@ -281,7 +289,17 @@ function ReviewBody({
   const drift = review.drift;
   return (
     <>
-      {drift !== null && <DriftSection project={project} drift={drift} commit={review.base_commit} />}
+      {drift !== null && (
+        <Suspense
+          fallback={
+            <Section title={t("inbox.drift.title")}>
+              <Skeleton label={t("inbox.drift.title")} lines={3} />
+            </Section>
+          }
+        >
+          <DriftSection project={project} drift={drift} commit={review.base_commit} />
+        </Suspense>
+      )}
 
       {/* A served pair lays the evidence out by side after the summary instead (PairSlot; the key decides, never the kind). */}
       {review.pair === null && review.evidence.length > 0 && (
@@ -653,7 +671,9 @@ export function ProposalCard({
         actions={
           <>
             {reviewed !== undefined && reviewed.drift !== null ? (
-              <TerminalDecision id={id} worktree={reviewed.worktree} />
+              <Suspense fallback={<Skeleton label={t("inbox.drift.terminalTitle")} lines={2} />}>
+                <TerminalDecision id={id} worktree={reviewed.worktree} />
+              </Suspense>
             ) : (
               <>
                 <div className="decision-bar" role="group" aria-label={t("inbox.card.decide", { id })}>

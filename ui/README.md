@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-14
 ---
 
 # ui -- the web UI
@@ -16,7 +16,7 @@ A standalone pnpm project on strict TypeScript, no root `package.json`. Tests: V
 
 ## Contract seam
 
-- One interface, `src/api/client.ts` `SpecEngineClient`, methods named after the daemon's endpoints; reads take the query's `AbortSignal` (superseded: aborted; never the check or health read), writes none. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily.
+- One interface, `src/api/client.ts` `SpecEngineClient`, methods named after the daemon's endpoints; reads take the query's `AbortSignal` (superseded: aborted, never by a live event's re-read; never the check or health read: `ui-client.md`), writes none. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily.
 - App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
 - An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry.
 - The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`decision-staging.md`) or, on a hub, by one click per item (`hub-confirm.md`); a card is written (`board-ui.md`).
@@ -30,9 +30,9 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 - **States**: loading: a skeleton, `aria-busy`; empty: the meaning, the next step; error: the daemon's message verbatim, Retry. Live regions (polite for results, assertive for a 409) sit outside any inert subtree.
 - **Dialogs** in-app (`role="dialog"`, `aria-modal`, focus trap, Esc but mid-IME, focus back to the trigger; a scrim click closes only the palette and a work item's modal; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while pending no dialog closes or opens; a refusal keeps the dialog, the typed text and a `role="alert"`; a proposal revised meanwhile shows as changed.
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4), letters by `letterOf`; `?` lists them. Cmd/Ctrl-K opens the palette over no dialog but the document modal: the shell's keydown listener, the only one on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never on `body` nor under a sticky bar (scroll padding).
-- **Text**: chrome from `src/i18n/` (`ui-languages.md`); data is text, no HTML sink, a proposal's login escaped (`ProposalCard`), each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`); anything cut is seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
+- **Text**: chrome from `src/i18n/` (`ui-languages.md`); data is text, no HTML sink, a proposal's login escaped (`ProposalCard`), each `href` from `routes.ts` but the door's (`ui-client.md`); wraps (`overflow-wrap: anywhere`); anything cut is seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
 - **Canvas** (`@xyflow/react`, lazy, hand-laid; the Map: `spec-map.md`): read-only, key options `null`, the wheel scrolls the page, a press up to 5 px a click; Flow's pans, zooms by key; `base.css` only, each `--xy-*` from a token; a List its text twin; attribution hidden, credited as text.
-- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: home; Flow: `spec-flow-place.md`; `/page`, `doc`: `doc-view.md`), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), but the Tree's Show drift, `specengine.{board.as,board.lanes.<p>,workspace.<p>[.<login>],module.<p>[.<login>],language,theme}` in `localStorage`; a root error boundary, one per view.
+- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: home; Flow: `spec-flow-place.md`; `/page`, `doc`: `doc-view.md`), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), choices kept per viewer in `localStorage` aside (`ui-client.md`); a root error boundary, one per view.
 
 ## Dependencies
 

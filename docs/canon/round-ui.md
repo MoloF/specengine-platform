@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-14
 ---
 
 # Round routes and screen
@@ -54,7 +54,7 @@ The Questions section (`#/<project>/questions`), over `getRound` and `stageRound
 - The Shell holds a per-project store (`round/memory.ts`: drafts keyed by ID and the `updated_at` shown, the limit, the last outcome, refusals, a failure, dropped notices): it survives section switches, not a reload (said on screen). A newer `updated_at`: "Changed since you answered", left out until "Keep my answer for this version" or a new pick; an item gone: its draft dropped, a polite notice. Blank own text or reason is left out; text is trimmed before sending, its UTF-8 bytes counted as sent, never cut.
 - A sticky Stage bar (max 6rem; `scroll-padding-bottom` keeps focus above it): the count, "Stage <k> answers" (one POST, none while one is pending: `useRoundPosting`; each stage carries the acting name as `as`, on a hub the login, none when empty: `board-screen.md` "The acting name"; Unstage sends no body), the picks that replace a staged choice, a one-line outcome focusing the details. Refused drafts stay with the reason verbatim, staged ones clear; status 0: the sheet read again, drafts kept. A failure with no Questions screen of the project mounted: assertive, `Questions of <project>: ` first.
 - A staged item: "Staged", `Staged <at>`, `StagedChoice`, Unstage (the DELETE). One panel above the list: ``Confirm on a terminal in <root>: `spec round answer --staged`; each answer is asked again there, one at a time``; Copy copies exactly the command, never the root; `spec approve|reject <ID>` only for `^PR-[0-9]{4,}$`.
-- Live: the sheet read again on every `proposal.*`, `task.*` event of the project and on a gap, a superseded read aborted. One `startOwnWrite` per answer before the POST, ended by its outcome; an Unstage here is tracked from the stage the sheet shows (`useStageDecision`'s `shown`).
+- Live: the sheet read again on every `proposal.*`, `task.*` event of the project and on a gap, a read in flight kept, then read once more (`ui-client.md` "Live re-reads"). One `startOwnWrite` per answer before the POST, ended by its outcome; an Unstage here is tracked from the stage the sheet shows (`useStageDecision`'s `shown`).
 - Agent text verbatim, not Markdown, wrapped, in `<bdi>`, controls and bidi characters written `\u{..}` (`shownSlot`; option labels too on the Inbox card, the decision dialog, `StagedChoice`).
 - Primitives (`ui-design.md`): every button a `Button`, "Stage <k> answers" the sheet's one primary, the dropped notice's Dismiss subtle, the rest default. An empty sheet is an `EmptyState`, level 2 (`round.emptyTitle`), its description the notes, `round.emptyWhy` and the next step with its Inbox and Agent tasks links.
 - Mock: both routes; `?scenario=conflict`: the first POST refuses one answer as changed since read.

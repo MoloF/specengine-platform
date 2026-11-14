@@ -682,7 +682,7 @@ impl specengine_mcp::HubSeam for IdleSeam {
         None
     }
 
-    fn turn(&self, command: specengine_mcp::Command) -> specengine_mcp::TurnFuture {
+    fn turn(&self, _login: &str, command: specengine_mcp::Command) -> specengine_mcp::TurnFuture {
         drop(command);
         Box::pin(async {})
     }

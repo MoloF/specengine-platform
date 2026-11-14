@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
+import { doorRefusalOf } from "../api/door";
 import { useConfirmProposal, useConfirmRead, useProposal } from "../api/queries";
 import type { ApiError, Proposal, Team } from "../api/types";
 import { useTranslate, type Translate } from "../i18n";
@@ -9,17 +10,21 @@ import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { DiffView } from "../ui/DiffView";
 import { Icon } from "../ui/Icon";
+import { Refusal } from "../ui/Refusal";
 import { Skeleton } from "../ui/states";
 import { shownConfirmSlot, shownConfirmText } from "../ui/text";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 
 /**
- * A request with no answer, status 0: a one-factor session's `fetch` meeting the login door's
- * redirect (`docs/canon/hub-confirm.md` "Known limits"), or a connection dropped, after the commit
- * too, so it never says that nothing was confirmed (`docs/features/hub-confirm.md` "Description and interactions").
+ * The door's refusal, a 401: observed on a hub, a one-factor session's `fetch` of this step-up route
+ * gets one from the login door, its body an anchor to the door's login page, never a redirect
+ * (docs/features/door-step-up.md "Description and interactions"). The refusal block says so in the
+ * page's words and links the door, not one byte of the body (`ui/Refusal.tsx`). A request with no
+ * answer, status 0, is a connection dropped, after the commit too, or a door that redirects: it never
+ * says that nothing was confirmed (`docs/features/hub-confirm.md` "Description and interactions").
  */
 
-/** The heading of a refusal; the daemon's own words stand under it. */
+/** The heading of a refusal; the daemon's own words stand under it, a door's 401 its own notice. */
 function headingOf({ status }: ApiError, t: Translate): string {
   return status === 0 ? t("inbox.confirm.noAnswer") : t("inbox.confirm.refused");
 }
@@ -100,9 +105,10 @@ function ChangeShown({ review }: { review: Proposal }) {
  * submit is one call; while it is out, a second click, Cancel and Esc do nothing. Any refusal (a read
  * or a POST; a 403, a 409, status 0) keeps the dialog, in the daemon's words, and leaves Confirm off
  * until Read again, so the same words are not sent twice; status 0 may follow a commit, so it says
- * to read again, never that nothing was confirmed. Everything of an agent's or the daemon's shows as
- * text, written as the CLI prints it with every format character escaped too (shownConfirmText in
- * src/ui/text.ts), never as markup.
+ * to read again, never that nothing was confirmed. The door's 401 shows the step-up notice and its
+ * link instead, Read again then passing once the second factor is in. Everything of an agent's or
+ * the daemon's shows as text, written as the CLI prints it with every format character escaped too
+ * (shownConfirmText in src/ui/text.ts), never as markup.
  *
  * A 200 whose review document holds notes (an apply's gap warning, `docs/features/apply-outputs.md`;
  * a reject's follow-up) keeps the dialog open (`docs/features/hub-git.md` "Status and the screen"):
@@ -209,7 +215,14 @@ export function ConfirmDialog({
         setPending(false);
         setRefusal(refused);
       } else {
-        announce(t("inbox.confirm.refusedSaid", { heading: headingOf(refused, t), id, message: refused.message }), "assertive");
+        // The door's body is never spoken: its notice's own words are.
+        const door = doorRefusalOf(refused, window.location.href);
+        announce(
+          door !== null && "link" in door
+            ? t("inbox.confirm.refusedSaid", { heading: t("ui.stepUp.title"), id, message: t("ui.stepUp.text") })
+            : t("inbox.confirm.refusedSaid", { heading: headingOf(refused, t), id, message: refused.message }),
+          "assertive",
+        );
       }
       return;
     }
@@ -289,17 +302,7 @@ export function ConfirmDialog({
               </figure>
             )}
       </div>
-      {failure !== null && (
-        <div className="refusal" role="alert">
-          <p className="refusal-title">
-            <Icon name="alert" />
-            <span>{headingOf(failure, t)}</span>
-          </p>
-          <p className="verbatim" lang="en">
-            {failure.message}
-          </p>
-        </div>
-      )}
+      {failure !== null && <Refusal error={failure} heading={headingOf(failure, t)} />}
       {moved && failure === null && (
         <div className="notice" role="alert">
           <p className="notice-title">

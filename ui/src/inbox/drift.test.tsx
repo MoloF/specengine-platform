@@ -83,6 +83,10 @@ async function openCard(proposals: Proposal[], id = "PR-0012") {
   const list = await screen.findByRole("listbox");
   const card = await screen.findByRole("article");
   await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+  // A drift item's parts arrive in a chunk of their own (ProposalCard.tsx): no skeleton left standing.
+  await waitFor(() => {
+    expect(card.querySelector('.skeleton[aria-busy="true"]')).toBeNull();
+  });
   return { client, list, card };
 }
 

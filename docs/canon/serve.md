@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-14
 ---
 
 # Daemon: spec serve
 
-`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens; as built by `spec-serve`; it serves the web UI compiled into it (`docs/canon/serve-ui.md`). The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`, `unpublished_daemon`, `daemon_text`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL` 50 ms, `DAEMON_PUBLISH_WAIT` 2 s), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
+`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens; as built by `spec-serve`; it serves the web UI compiled into it (`docs/canon/serve-ui.md`). The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`, `unpublished_daemon`, `daemon_text`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL`, `DAEMON_PUBLISH_WAIT`), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
 
 ## Launcher
 
@@ -52,7 +52,7 @@ Beside `<slug>.db`, never under a root (ADR-0003). `daemon.lock`: empty, its `fl
 
 stdout. A start (`specengine-http`): `serving <slug> <root>` per root, a hub's `public <origin>` and a `--push` hub's `push every <N> min` (`hub-git.md`), then `listening http://127.0.0.1:<port>`. Already running (`spec`, exit 0): `already running: pid <pid>`, `serving <slug> <root>` per requested root, `listening <url>`.
 
-Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first:
+Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first; clap's refusals (no `--root`, a bad `--slow-ms`) its message to its first blank line, joined: `specengine-http: the following required arguments were not provided: --root <DIR>`:
 
 | Line | When |
 |---|---|
@@ -88,7 +88,7 @@ No authentication inside SpecEngine (ADR-0034, `architecture.md#distribution`). 
 
 ## Concurrency
 
-Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-6 (ADR-0051), its first call building the whole code index inside the turn, and row 6 spawning verify's read-only git there (`rev-parse`, the unmerged check, `hash-object` without `-w`: `health-drift.md` "Route"), no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects`, `.../workspaces` and the tail's polls take no turn. A `--push` hub's sync takes the turns of its repository's projects, in `--root` order, for its merge alone; its fetch and push take none (`hub-git.md`). A hub's `/mcp` calls and resource reads take their project's turn, the wait raced with the request's cancellation; its handshakes and lists take none (`hub-mcp.md`). With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
+Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-6 (ADR-0051), its first call building the whole code index inside the turn, and row 6 spawning verify's read-only git there (`health-drift.md` "Route"), no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects`, `.../workspaces` and the tail's polls take no turn. A `--push` hub's sync takes the turns of its repository's projects, in `--root` order, for its merge alone; its fetch and push take none (`hub-git.md`). A hub's `/mcp` calls and resource reads take their project's turn behind their login's FIFO line, both waits raced with the request's cancellation; its handshakes and lists take neither (`hub-mcp.md` "Turn"). Slow lines on stderr: `serve-slow.md`. With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store").
 
 ## Live tail
 
@@ -102,9 +102,9 @@ Requests of one project run one at a time on the blocking pool (a read refreshes
 - Deleting the data directory under a live daemon lets a second start lock a new file.
 - Version skew: crates 0.1.0, no build id; an old daemon after `cargo install` answers `SchemaTooNew` 503s: restart it.
 - `daemon.json.tmp` is one fixed name, safe because the lock serialises starts.
-- **The local half by units alone.** No test waits 300 s, and tokio's paused clock (`test-util`) is in no part of the graph, so `answered` capping `None` at `STREAM_LIFE` survives SL3; SL2 pins a local `None`, SL1 `lived(.., None)` (`docs/features/stream-life.md`).
-- **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. AC-01 keeps `daemon.json`'s five keys, and it fails closed (the guide, `scripts/deploy/README.md`).
+- **The local half by units alone.** No test waits 300 s and no paused clock is in the graph, so `answered` capping `None` at `STREAM_LIFE` survives SL3 (`docs/features/stream-life.md`).
+- **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. It fails closed, `daemon.json` keeping its five keys (the guide, `scripts/deploy/README.md`).
 
 ## Tests
 
-http `tests/serve.rs` (17: AC-D1, D3-D8, D10, D11, the rules, a DIR's line, escaping, the probe's retry); `common/mod.rs` `beyond_daemon` (`HOME` beyond `daemon.lock`, `daemon.json`; 15 sites adapted), `try_start_program`, `signal_and_reap`; CLI `tests/common/serve.rs` (`Daemon`), `gate.rs` and `gate_wrapper.rs` `serve_d9_*`. Not covered: the Unix-only line, an exec failure, clap's `--port` refusal, raw controls in an unpublished reason (unreachable), a DIR's broken-config line naming `specengine.toml:1:` without its root.
+http `tests/serve.rs` (17: AC-D1, D3-D8, D10, D11, the rules, a DIR's line, escaping, the probe's retry); `common/mod.rs` `beyond_daemon`, `try_start_program`, `signal_and_reap`; CLI `tests/common/serve.rs` (`Daemon`), `gate.rs` and `gate_wrapper.rs` `serve_d9_*`. Not covered: the Unix-only line, an exec failure, clap's `--port` refusal, raw controls in an unpublished reason (unreachable), a DIR's broken-config line naming `specengine.toml:1:` without its root.

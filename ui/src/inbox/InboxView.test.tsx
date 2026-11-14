@@ -168,16 +168,17 @@ describe("the Inbox on a stub client", () => {
     expect(within(card).getByText("reconcile")).toBeTruthy();
   });
 
-  it("selects the hash's ID and says when it is absent", async () => {
-    await openInbox(QUEUE, "#/alpha/inbox/PR-4");
+  it("selects the hash's ID; one the inbox does not list selects nothing and says no proposal has it (inbox-closed-link)", async () => {
+    const { list } = await openInbox(QUEUE, "#/alpha/inbox/PR-4");
     expect(await screen.findByRole("heading", { level: 2, name: "Low one" })).toBeTruthy();
     window.history.replaceState(null, "", "/#/alpha/inbox/PR-404");
     await act(async () => {
       window.dispatchEvent(new HashChangeEvent("hashchange"));
       await Promise.resolve();
     });
-    expect(await screen.findByText(/PR-404 is not in this inbox/)).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "High one" })).toBeTruthy();
+    expect(await screen.findByText("PR-404: no proposal has this ID in this project.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
+    expect(within(list).getAllByRole("option").filter((option) => option.getAttribute("aria-selected") === "true")).toEqual([]);
   });
 
   it("renders the attached diff with its signs and says when none is attached", async () => {
@@ -890,8 +891,11 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog", { name: "Accept PR-0008" });
-    expect(within(dialog).queryAllByRole("radio")).toEqual([]);
-    expect(within(dialog).getByText("The working answer is recorded:")).toBeTruthy();
+    // Checked on open, Own answer beside it (docs/features/question-accept-note.md "Acceptance criteria", QA2).
+    expect(within(dialog).getAllByRole<HTMLInputElement>("radio").map((radio) => [radio.value, radio.checked])).toEqual([
+      ["working", true],
+      ["answer", false],
+    ]);
     expect(within(dialog).getByText("Yes, 1.5 s")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
@@ -1536,5 +1540,264 @@ describe("the proposal as a pane (DS5 of design-sweep)", () => {
     expect(clear.classList.contains("button-primary")).toBe(true);
     fireEvent.click(clear);
     expect(optionIds(await screen.findByRole("listbox"))).toHaveLength(4);
+  });
+});
+
+// IC1 and IC3-IC8 of docs/features/inbox-closed-link.md "Acceptance criteria": a routed ID the inbox does
+// not list is read on its own and shown to read, nothing selected and the route kept. The inbox lists
+// PR-0001 and PR-0002, both open; the review of PR-0009 is applied.
+describe("a routed proposal the inbox does not list (inbox-closed-link)", () => {
+  const SHA = "0123456789abcdef0123456789abcdef01234567";
+  const FIRST = aProposal({ id: "PR-0001", severity: "high", summary: "Stamina cap at night", created_at: "2026-11-14T09:00:00Z" });
+  const SECOND = aProposal({ id: "PR-0002", severity: "normal", summary: "Berth plan names the basin", created_at: "2026-11-14T10:00:00Z" });
+  const APPLIED = aProposal({
+    id: "PR-0009",
+    kind: "question",
+    status: "applied",
+    gist: "Does stamina recover at rest?",
+    summary: "Stamina recovery is unspecified",
+    target_id: "MEC-STAMINA",
+    target_ids: ["MEC-STAMINA"],
+    decided_by: "molof",
+    decided_at: "2026-11-14T13:58:00Z",
+    decision_note: "Use <b>the</b> working answer",
+    applied_commit: SHA,
+    record_id: "DEC-0002",
+    record_path: "docs/spec/decisions/stamina.md",
+    record_title: "Stamina recovers at rest",
+  });
+
+  /** A stub whose inbox lists the open and approved proposals alone, as the daemon's does; a review is served whatever its status. */
+  function closedClient(proposals: Proposal[] = [FIRST, SECOND, APPLIED]): StubClient {
+    const client = stubClient(proposals);
+    client.getInbox.mockImplementation(() =>
+      Promise.resolve({ proposals: client.state.proposals.filter((proposal) => proposal.status === "open" || proposal.status === "approved").map((proposal) => entryOf(proposal)), notes: [] }),
+    );
+    return client;
+  }
+
+  function noneSelected(list: HTMLElement) {
+    expect(within(list).getAllByRole("option").filter((option) => option.getAttribute("aria-selected") === "true")).toEqual([]);
+  }
+
+  /** The Details list's rows, label and value. */
+  function detailRows(pane: HTMLElement): [string, string][] {
+    const details = within(pane).getByRole("region", { name: "Details" });
+    return Array.from(details.querySelectorAll(".property-row")).map((row) => [row.querySelector("dt")?.textContent ?? "", row.querySelector("dd")?.textContent ?? ""]);
+  }
+
+  async function closedPane(): Promise<HTMLElement> {
+    const heading = await screen.findByRole("heading", { level: 2, name: "Does stamina recover at rest?" });
+    return heading.closest("article") as HTMLElement;
+  }
+
+  it("shows an applied proposal read on its own, to read only: its gist, Applied, its details and note as text; nothing selected, the route kept (IC1)", async () => {
+    const client = closedClient();
+    renderApp(client, "#/alpha/inbox/PR-0009");
+    const list = await screen.findByRole("listbox");
+    const replaced = vi.spyOn(window.history, "replaceState");
+    const pane = await closedPane();
+    expect(pane.querySelector(".issue-view-meta .lozenge-label")?.textContent).toBe("Applied");
+    expect(within(pane).getByRole("status").textContent).toBe("This proposal is no longer in the inbox. It is shown to read; nothing here decides it.");
+    const trail = within(pane).getByRole("navigation", { name: "Breadcrumbs" });
+    expect(within(trail).getAllByRole("listitem").map((item) => item.textContent.replace("/", ""))).toEqual(["Alpha", "Inbox", "PR-0009"]);
+    expect(trail.querySelector('[aria-current="page"]')?.textContent).toBe("PR-0009");
+    expect(pane.querySelector(".issue-view")?.classList.contains("issue-view-pane")).toBe(true);
+    expect(detailRows(pane)).toEqual([
+      ["Kind", "question"],
+      ["Decided by", "molof"],
+      ["Decided at", "2026-11-14 13:58 UTC"],
+      ["Commit", SHA],
+      ["Record", "Stamina recovers at rest"],
+      ["Targets", "MEC-STAMINA"],
+    ]);
+    expect(within(pane).getByRole("link", { name: "Stamina recovers at rest" }).getAttribute("href")).toContain("DEC-0002");
+    expect(within(pane).getByRole("link", { name: "MEC-STAMINA" }).getAttribute("href")).toContain("MEC-STAMINA");
+    const note = within(pane).getByRole("heading", { level: 3, name: "Decision note" }).closest("section") as HTMLElement;
+    expect(note.querySelector("p")?.textContent).toBe("Use <b>the</b> working answer");
+    expect(note.querySelector("b")).toBeNull();
+    expect(within(pane).queryAllByRole("button").filter((button) => /^(Accept|Reject|Stage|Unstage|Confirm)\b/.test(button.textContent))).toEqual([]);
+    expect(within(pane).queryByRole("group", { name: /Decide/ })).toBeNull();
+    noneSelected(list);
+    expect(within(list).getAllByRole("option").map((option) => option.tabIndex)).toEqual([0, -1]);
+    expect(replaced).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe("#/alpha/inbox/PR-0009");
+    expect(client.getProposal.mock.calls.map(([, id]) => id)).toEqual(["PR-0009"]);
+  });
+
+  it("a clear queue still shows the routed proposal it no longer lists, beside the empty state (IC1)", async () => {
+    const client = closedClient([APPLIED]);
+    renderApp(client, "#/alpha/inbox/PR-0009");
+    expect(await screen.findByRole("heading", { level: 2, name: "The queue is clear" })).toBeTruthy();
+    const pane = await closedPane();
+    expect(pane.querySelector(".issue-view-meta .lozenge-label")?.textContent).toBe("Applied");
+    fireEvent.keyDown(pane, { key: "a" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => {
+      expect(politeRegion().textContent).toContain("PR-0009 is not in the inbox: nothing to decide here.");
+    });
+    expect(window.location.hash).toBe("#/alpha/inbox/PR-0009");
+  });
+
+  it("an unknown ID: the exit-1 document says no proposal has it, with no pane and no selection, the route kept (IC3)", async () => {
+    const client = closedClient();
+    renderApp(client, "#/alpha/inbox/PR-0404");
+    const list = await screen.findByRole("listbox");
+    expect(await screen.findByText("PR-0404: no proposal has this ID in this project.")).toBeTruthy();
+    expect(screen.queryByRole("article")).toBeNull();
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
+    noneSelected(list);
+    expect(window.location.hash).toBe("#/alpha/inbox/PR-0404");
+  });
+
+  it("a failed read: the daemon's words and Retry, whose answer shows the pane; nothing selected throughout (IC4)", async () => {
+    const client = closedClient();
+    const message = "the index is busy: read again in a moment";
+    client.getProposal.mockRejectedValueOnce(new ClientError({ status: 503, message }));
+    renderApp(client, "#/alpha/inbox/PR-0009");
+    const list = await screen.findByRole("listbox");
+    const alert = await screen.findByRole("alert");
+    expect(alert.querySelector("[lang='en']")?.textContent).toBe(message);
+    noneSelected(list);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await closedPane();
+    expect(client.getProposal.mock.calls.map(([, id]) => id)).toEqual(["PR-0009", "PR-0009"]);
+    noneSelected(list);
+  });
+
+  it("keys from no selection: j selects the first item and routes to it; the accept letter opens nothing and says why (IC5)", async () => {
+    const client = closedClient();
+    renderApp(client, "#/alpha/inbox/PR-0009");
+    const list = await screen.findByRole("listbox");
+    const pane = await closedPane();
+    fireEvent.keyDown(pane, { key: "a" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => {
+      expect(politeRegion().textContent).toContain("PR-0009 is not in the inbox: nothing to decide here.");
+    });
+    expect(client.getProposal.mock.calls.map(([, id]) => id)).toEqual(["PR-0009"]);
+    const first = within(list).getAllByRole("option")[0] as HTMLElement;
+    first.focus();
+    fireEvent.keyDown(first, { key: "j" });
+    await waitFor(() => {
+      expect(selectedOption(list).dataset.proposal).toBe("PR-0001");
+    });
+    expect(window.location.hash).toBe("#/alpha/inbox/PR-0001");
+    expect(await screen.findByRole("heading", { level: 2, name: "Stamina cap at night" })).toBeTruthy();
+  });
+
+  it("leaves the listed routes as they were: none, a listed ID, and one the filter hides (IC6)", async () => {
+    const client = closedClient();
+    renderApp(client, "#/alpha/inbox");
+    const list = await screen.findByRole("listbox");
+    expect(selectedOption(list).dataset.proposal).toBe("PR-0001");
+    window.history.replaceState(null, "", "/#/alpha/inbox/PR-0002");
+    await act(async () => {
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(selectedOption(list).dataset.proposal).toBe("PR-0002");
+    });
+    fireEvent.change(screen.getByLabelText("Filter"), { target: { value: "stamina" } });
+    await waitFor(() => {
+      expect(selectedOption(screen.getByRole("listbox")).dataset.proposal).toBe("PR-0001");
+    });
+    expect(screen.getByRole("heading", { level: 2, name: "Stamina cap at night" })).toBeTruthy();
+    expect(window.location.hash).toBe("#/alpha/inbox/PR-0002");
+  });
+
+  it("the view's own confirm on a hub: the route drops the ID, the next item selected and focused, the result line as before (IC7)", async () => {
+    const staged: Proposal = { ...FIRST, staged: { decision: "approve", option: null, answer: null, canon: null, editorial: null, note: null, span_hash: null }, staged_at: STAGED_AT, updated_at: STAGED_AT };
+    const client = closedClient([staged, SECOND]);
+    client.getIdentity.mockResolvedValue({ login: "mira" });
+    client.getTeam.mockResolvedValue({ login: "mira", name: "Mira K", allowed: ["stage", "accept", "clear", "group_clear", "confirm"] });
+    client.getConfirm.mockImplementation((_project, id) => Promise.resolve({ id, question: `apply ${id}? [y/N]`, updated_at: STAGED_AT }));
+    client.confirmProposal.mockImplementation((_project, id) => {
+      const applied: Proposal = { ...staged, status: "applied", staged: null, staged_at: null, applied_commit: "1a2b3c4" };
+      client.state.proposals = client.state.proposals.map((proposal) => (proposal.id === id ? applied : proposal));
+      return Promise.resolve(structuredClone(applied));
+    });
+    renderApp(client, "#/alpha/inbox/PR-0001");
+    const control = await screen.findByRole("button", { name: "Confirm PR-0001" });
+    control.focus();
+    fireEvent.click(control);
+    const dialog = await screen.findByRole("dialog", { name: "Confirm PR-0001" });
+    const confirm = within(dialog).getByRole("button", { name: /^Confirm(ing)? PR-/ });
+    await waitFor(() => {
+      expect(confirm.getAttribute("aria-disabled")).toBe("false");
+    });
+    fireEvent.click(confirm);
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(window.location.hash).toBe("#/alpha/inbox");
+    const list = await screen.findByRole("listbox");
+    await waitFor(() => {
+      expect(selectedOption(list).dataset.proposal).toBe("PR-0002");
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(selectedOption(list));
+    });
+    expect(document.querySelector(".decision-result")?.textContent).toBe("Confirmed PR-0001: applied as commit 1a2b3c4, in this hub's checkout; this click pushes nothing.");
+    expect(screen.queryByText("This proposal is no longer in the inbox. It is shown to read; nothing here decides it.")).toBeNull();
+  });
+
+  it("decided elsewhere: the routed, selected item leaves the inbox on a live re-read and turns into its closed view, the route kept (IC8)", async () => {
+    const client = closedClient();
+    let emit: (event: QueueEvent) => void = () => undefined;
+    client.subscribe = (_project, onEvent) => {
+      emit = onEvent;
+      return () => undefined;
+    };
+    renderApp(client, "#/alpha/inbox/PR-0002");
+    const list = await screen.findByRole("listbox");
+    await waitFor(() => {
+      expect(selectedOption(list).dataset.proposal).toBe("PR-0002");
+    });
+    await screen.findByRole("heading", { level: 2, name: "Berth plan names the basin" });
+    client.state.proposals = client.state.proposals.map((proposal) => (proposal.id === "PR-0002" ? { ...proposal, status: "applied", decided_by: "molof", applied_commit: SHA } : proposal));
+    act(() => {
+      emit({ seq: 1, type: "proposal.applied", payload: { id: "PR-0002", commit: SHA } });
+    });
+    await waitFor(() => {
+      expect(within(screen.getByRole("listbox")).getAllByRole("option").map((option) => option.dataset.proposal)).toEqual(["PR-0001"]);
+    });
+    const heading = await screen.findByRole("heading", { level: 2, name: "Berth plan names the basin" });
+    const pane = heading.closest("article") as HTMLElement;
+    await waitFor(() => {
+      expect(pane.querySelector(".issue-view-meta .lozenge-label")?.textContent).toBe("Applied");
+    });
+    expect(within(pane).getByText("This proposal is no longer in the inbox. It is shown to read; nothing here decides it.")).toBeTruthy();
+    noneSelected(screen.getByRole("listbox"));
+    expect(window.location.hash).toBe("#/alpha/inbox/PR-0002");
+  });
+});
+
+// QA9 of docs/features/question-accept-note.md "Acceptance criteria": an own answer staged from the
+// Inbox's Accept reaches `stageDecision` as the Questions screen sends one, and the card's staged
+// choice shows it as it shows one staged there.
+describe("an own answer from the Inbox's Accept (QA9 of question-accept-note)", () => {
+  it("reaches stageDecision as `answer`, and the card's staged choice shows it", async () => {
+    const question = aProposal({ id: "PR-0009", kind: "question", summary: "How many slots?", working_answer: "Use 2 slots", price_of_other: "a rebalance" });
+    const { client } = await openInbox([question], "#/alpha/inbox/PR-0009");
+    const card = await screen.findByRole("article");
+    await within(card).findByRole("heading", { level: 3, name: "Provenance" });
+    fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Accept PR-0009" });
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Own answer" }));
+    fireEvent.change(within(dialog).getByLabelText("Your answer"), { target: { value: "  Use 3 slots  " } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(client.stageDecision.mock.calls).toEqual([
+      ["alpha", "PR-0009", { decision: "approve", option: null, answer: "Use 3 slots", canon: null, editorial: null, note: null }, "2026-10-01T10:00:00Z"],
+    ]);
+    const staged = await stagedRegion();
+    expect(Array.from(staged.querySelectorAll("dt"), (dt) => [dt.textContent, dt.nextElementSibling?.textContent])).toEqual([
+      ["Decision", "Accept"],
+      ["Answer", "Use 3 slots"],
+    ]);
   });
 });

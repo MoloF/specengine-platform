@@ -114,7 +114,7 @@ impl HubSeam for Idle {
         None
     }
 
-    fn turn(&self, command: Command) -> TurnFuture {
+    fn turn(&self, _login: &str, command: Command) -> TurnFuture {
         drop(command);
         Box::pin(async {})
     }
@@ -254,7 +254,7 @@ impl HubSeam for Anonymous {
         None
     }
 
-    fn turn(&self, command: Command) -> TurnFuture {
+    fn turn(&self, _login: &str, command: Command) -> TurnFuture {
         self.turns.fetch_add(1, Ordering::SeqCst);
         command.run(&self.env, &self.globals);
         Box::pin(async {})

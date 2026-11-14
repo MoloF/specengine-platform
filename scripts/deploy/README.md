@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [scripts/deploy]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-14
 ---
 
 # scripts/deploy -- a hub on one host
@@ -70,13 +70,11 @@ Keep the printed password, then bring a project over: its step 3 is the first `u
 
 A login is the person: recorded verbatim, compared exactly (`docs/canon/hub.md` "Identity"). A new one is lower case, digits, `.`, `_` or `-`, a letter first, at most 64 bytes; a name may be any script.
 
-- **A new person.** `add`; relay the password privately. At their first step-up the door asks for a one-time code: `code` shows it, so enrol one person at a time. Leads and the owner also need the printed `[team]` row in the project's `specengine.toml` (`docs/canon/hub-team.md` "Team"), a reviewed commit. Until `--push`, bring it in by hand: `docker compose exec specengine git -C /projects/<name> pull --no-rebase`, then `docker compose exec specengine spec index --root /projects/<name>`. Then `docker compose exec -T specengine spec team --root /projects/<name> | docker compose run --rm -T admin check` names a `[team]` login with no account, a disabled one, or a `:`.
+- **A new person.** `add`; relay the password privately. The door sends no mail: registering a TOTP or passkey (a first step-up, or its settings page) takes a one-time code `code` shows; relay it, one person at a time. Leads and the owner also need the printed `[team]` row in the project's `specengine.toml` (`docs/canon/hub-team.md` "Team"), a reviewed commit. Until `--push`, bring it in by hand: `docker compose exec specengine git -C /projects/<name> pull --no-rebase`, then `docker compose exec specengine spec index --root /projects/<name>`. Then `docker compose exec -T specengine spec team --root /projects/<name> | docker compose run --rm -T admin check` names a `[team]` login with no account, a disabled one, or a `:`.
 - **A lost passkey or password.** `reset`, relay the password; the person enrols again.
 - **Someone leaves.** `disable`: the door refuses them at their next request, and their AI's next call fails.
 - **A compromised account.** `disable`; `docker compose restart authelia` (sessions live in memory: everyone logs in again); `reset`; `enable` only when `reset` ended without `passkeys-left`. A passkey left signs in alone: reset again.
 - **Everything lost.** With every account disabled, `authelia` stopped even: `enable` and `reset` your own, then `docker compose up -d`.
-
-Passwords cannot be reset by mail.
 
 ## AI over MCP: Claude Code
 
@@ -116,13 +114,14 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 
 - **TLS.** The staging CA gives untrusted certificates: check the whole flow with them. Then set `ACME_CA_SERVER=https://acme-v02.api.letsencrypt.org/directory`, `docker compose down`, remove the `traefik-acme` volume, `docker compose up -d`.
 - **Running.** `docker compose ps`: `specengine` and `backup` healthy; if not, `docker compose logs dump-queue dump-door backup` say why. Runbooks: `docs/canon/hub-ops.md` "Restore", "Upgrade", "Push".
+- **Slow pages.** `docker compose logs -t --since 2h specengine | grep ' slow '`, then `traefik`'s; a ~300 s Traefik line with no daemon line is a stream, not a hang: `docs/canon/serve-slow.md` "Reading them".
 - **The gate.** Before real people, the owner tries the hub by hand (step 11b-3, `docs/features/hub-deploy.md` H1-H17). `--push` waits for it.
 
 ## Before the gate
 
 `hub-admin` was tested against a stand-in for the door's CLI. On the pinned images, before real people (`docs/features/hub-accounts.md` VF1-VF3):
-1. **The door's image:** its `sh`, `awk`, `od`, `base64`; `crypto hash generate --random`, its output, the lowest bcrypt cost; both `storage user ... delete` calls, and their answer when nothing is there; no default user for a missing users file; a start on a read-only one.
-2. **The proxy:** a new stamp (`traefik/dynamic/mcp-stamp.yml`) makes it read the MCP users file again; `$2b$` digests pass; what a missing users file does to `/mcp`.
+1. **The door's image:** `sh`, `awk`, `od`, `base64`; `crypto hash generate --random`, its output, the lowest bcrypt cost; both `storage user ... delete` calls, and their answer on nothing; no default user for a missing users file; a start on a read-only one.
+2. **The proxy:** a new stamp (`mcp-stamp.yml`) makes it read the MCP users file again; `$2b$` digests pass; what a missing users file does to `/mcp`.
 3. **The door, on Linux:** a `disable` ends a live session at its next request; two edits in a row are both read.
 4. **Dumps and health:** VF4-VF9 of `docs/features/hub-ops.md`.
 
@@ -132,8 +131,7 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 - **Developers' `spec`.** Before the hub records a decision or creates a node, everyone who commits to its repositories runs this release or later (`docs/canon/spec-ids.md`).
 - **Never run `spec serve` here**: in the container it attaches to the hub, a loopback URL answering 403.
 - **A Traefik crash** the engine restarts leaves the daemon offline, `unhealthy`: run `docker compose up -d`; `restart traefik` restarts both.
-- **Sessions live in memory**: restarting `authelia` logs everyone out.
 - **Git LFS** content in the served paths is unsupported.
-- **A one-factor confirm** in the page reads `No answer`: the person completes the second factor on the door's page, then reads again.
+- **A one-factor session** on a step-up act gets a notice linking the door: add the second factor there, then Retry.
 - **A failed stamp:** restart `traefik` as told; a second `disable` of that login answers `unchanged`. A `mcp rotate` stopped before it showed the secret: run it again. A killed act can leave a `.tmp` beside a users file: delete it.
 - **A hand-made users value** with a YAML escape but `\"` and `\\` is shown as written.

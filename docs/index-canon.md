@@ -16,6 +16,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies, decisions · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
 - [docs/canon/architecture-code.md](canon/architecture-code.md) SpecEngine architecture rules: the code layer · architecture, crates/specengine-code, crates/specengine-cli · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
+- [docs/canon/board-lanes.md](canon/board-lanes.md) Board lanes and the Show level: how a board groups and cuts its cards · ui · tier 2
 - [docs/canon/board-screen.md](canon/board-screen.md) Board screen: a still grid, the card modal and page, lanes, hand-off and return · ui · tier 2
 - [docs/canon/board-ui.md](canon/board-ui.md) Board: card routes, door and fence · crates/specengine-http, crates/specengine-cli, ui · tier 2
 - [docs/canon/collision-pass.md](canon/collision-pass.md) Collision pass: pairs that may collide, an agent's verdicts, a local ledger · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-eval, plugin · tier 2
@@ -53,6 +54,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/round-ui.md](canon/round-ui.md) Round routes and screen · crates/specengine-http, ui · tier 2
 - [docs/canon/round.md](canon/round.md) Question rounds · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/scale-eval.md](canon/scale-eval.md) Scale eval: read cost on a seeded synthetic corpus · crates/specengine-eval · tier 2
+- [docs/canon/serve-slow.md](canon/serve-slow.md) Daemon: slow requests, long turns and the proxy's access log · crates/specengine-http, scripts/deploy · tier 2
 - [docs/canon/serve-ui.md](canon/serve-ui.md) Daemon: the web UI it serves · crates/specengine-http, ui · tier 2
 - [docs/canon/serve.md](canon/serve.md) Daemon: spec serve · crates/specengine-cli, crates/specengine-http · tier 2
 - [docs/canon/stack.md](canon/stack.md) Stack: toolchain and pinned crates · crates · tier 2
@@ -61,6 +63,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/symbol-reads.md](canon/symbol-reads.md) Symbol reads: lookup tiers, spec symbols, spec unmapped · crates/specengine-cli, crates/specengine-store, crates/specengine-code · tier 2
 - [docs/canon/task-package.md](canon/task-package.md) Task package: what an agent is given · crates/specengine-cli, crates/specengine-mcp, crates/specengine-model · tier 2
 - [docs/canon/tasks.md](canon/tasks.md) Tasks: commands, transitions, place, store · crates/specengine-store, crates/specengine-cli, crates/specengine-core · tier 2
+- [docs/canon/ui-client.md](canon/ui-client.md) UI client: reads, live re-reads, stored choices and the one outside link · ui · tier 2
 - [docs/canon/ui-design.md](canon/ui-design.md) UI design: themes, the scale, primitives, the work item · ui · tier 2
 - [docs/canon/ui-languages.md](canon/ui-languages.md) UI languages: the chrome in English and Russian · ui · tier 2
 - [docs/canon/w-measurement.md](canon/w-measurement.md) W measurement: every task, before and after · crates/specengine-eval · tier 2

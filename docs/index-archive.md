@@ -24,6 +24,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/bevy-roles-reads.md](features/bevy-roles-reads.md) shipped
 - [docs/features/bevy-roles.md](features/bevy-roles.md) shipped
 - [docs/features/board-handoff.md](features/board-handoff.md) shipped
+- [docs/features/board-subtasks.md](features/board-subtasks.md) shipped
 - [docs/features/board-ui.md](features/board-ui.md) shipped
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) shipped
 - [docs/features/canvas-clicks.md](features/canvas-clicks.md) shipped
@@ -54,6 +55,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/design-sweep.md](features/design-sweep.md) shipped
 - [docs/features/direction-catalog.md](features/direction-catalog.md) shipped
 - [docs/features/doc-modal.md](features/doc-modal.md) shipped
+- [docs/features/door-step-up.md](features/door-step-up.md) shipped
 - [docs/features/drift-follow-up.md](features/drift-follow-up.md) shipped
 - [docs/features/drift-queue.md](features/drift-queue.md) shipped
 - [docs/features/edge-table.md](features/edge-table.md) shipped
@@ -84,6 +86,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/hub-mcp.md](features/hub-mcp.md) shipped
 - [docs/features/hub-ops.md](features/hub-ops.md) shipped
 - [docs/features/hub-team.md](features/hub-team.md) shipped
+- [docs/features/hub-turn-fairness.md](features/hub-turn-fairness.md) shipped
 - [docs/features/hygiene-pass.md](features/hygiene-pass.md) shipped
 - [docs/features/impact-since.md](features/impact-since.md) shipped
 - [docs/features/impact.md](features/impact.md) shipped
@@ -92,6 +95,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/import-layout.md](features/import-layout.md) shipped
 - [docs/features/import-lead-ins.md](features/import-lead-ins.md) shipped
 - [docs/features/import-records.md](features/import-records.md) shipped
+- [docs/features/inbox-closed-link.md](features/inbox-closed-link.md) shipped
 - [docs/features/index-compaction.md](features/index-compaction.md) shipped
 - [docs/features/index-shards.md](features/index-shards.md) shipped
 - [docs/features/intake-similar.md](features/intake-similar.md) shipped
@@ -124,6 +128,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/proposal-apply.md](features/proposal-apply.md) shipped
 - [docs/features/proposal-kinds.md](features/proposal-kinds.md) shipped
 - [docs/features/proposal-rehearsal.md](features/proposal-rehearsal.md) shipped
+- [docs/features/question-accept-note.md](features/question-accept-note.md) shipped
 - [docs/features/queue-export.md](features/queue-export.md) shipped
 - [docs/features/queue-path-targets.md](features/queue-path-targets.md) shipped
 - [docs/features/read-trust.md](features/read-trust.md) shipped
@@ -144,6 +149,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/scope-rings.md](features/scope-rings.md) shipped
 - [docs/features/screen-fit.md](features/screen-fit.md) shipped
 - [docs/features/show-bindings.md](features/show-bindings.md) shipped
+- [docs/features/slow-requests.md](features/slow-requests.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
 - [docs/features/spec-check-process.md](features/spec-check-process.md) shipped
@@ -277,4 +283,10 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0111.md](roadmap/RM-0111.md) shipped
 - [docs/roadmap/RM-0112.md](roadmap/RM-0112.md) shipped
 - [docs/roadmap/RM-0113.md](roadmap/RM-0113.md) shipped
+- [docs/roadmap/RM-0114.md](roadmap/RM-0114.md) shipped
+- [docs/roadmap/RM-0115.md](roadmap/RM-0115.md) shipped
+- [docs/roadmap/RM-0116.md](roadmap/RM-0116.md) shipped
+- [docs/roadmap/RM-0117.md](roadmap/RM-0117.md) shipped
+- [docs/roadmap/RM-0118.md](roadmap/RM-0118.md) shipped
+- [docs/roadmap/RM-0119.md](roadmap/RM-0119.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

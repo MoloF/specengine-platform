@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-14
 ---
 
 # The Roadmap screen
@@ -23,11 +23,11 @@ Header: `Plan::summary`'s line, Read again; tabs Lanes, Chain and Delivery ("Del
 
 ## States and live
 
-Loading a skeleton, `aria-busy`. A refusal or the exit-1 document: `ErrorPanel`, the message verbatim, Retry, `NO_PLAN_LINE`. A failed re-read keeps the plan, its line, Retry. No item: an `EmptyState` (`h2`, `roadmap.emptyNext`) above the tabs; all done: a line. Re-read on screen, a read in flight aborted, on `task.*`, `proposal.applied`, a gap; never a stage, `created`, `approved`, `rejected`, `apply_failed` or focus; off screen marked stale.
+Loading a skeleton, `aria-busy`. A refusal or the exit-1 document: `ErrorPanel`, the message verbatim, Retry, `NO_PLAN_LINE`. A failed re-read keeps the plan, its line, Retry. No item: an `EmptyState` (`h2`, `roadmap.emptyNext`) above the tabs; all done: a line. Re-read on screen, a read in flight kept, then read once more, on `task.*`, `proposal.applied`, a gap; never a stage, `created`, `approved`, `rejected`, `apply_failed` or focus; off screen marked stale.
 
 ## Delivery
 
-`spec delivery` drawn, its rule and document `spec-delivery.md`; RM-0107 a, 2026-11-12. The third tab (`RoadmapTab` `"delivery"`), a lazy chunk (`RoadmapDelivery` in a `Suspense` with a skeleton, under a `RegionBoundary`), shown once the plan reads. `useDelivery(p, asOf)`, key `["delivery", p, asOf]`: `getDelivery(p, {asOf}, signal)`, `?as_of=`, a judged read, only a 200 resolving. Re-read, every day cached (`deliveryOf(p)`), on every `card.*` event, every `proposal.*` but a stage, and a gap, a read in flight aborted.
+`spec delivery` drawn, its rule and document `spec-delivery.md`; RM-0107 a, 2026-11-12. The third tab (`RoadmapTab` `"delivery"`), a lazy chunk (`RoadmapDelivery` in a `Suspense` with a skeleton, under a `RegionBoundary`), shown once the plan reads. `useDelivery(p, asOf)`, key `["delivery", p, asOf]`: `getDelivery(p, {asOf}, signal)`, `?as_of=`, a judged read, only a 200 resolving. Re-read, every day cached (`deliveryOf(p)`), on every `card.*` event, every `proposal.*` but a stage, and a gap, a read in flight kept, then read once more.
 
 - **As of**: a date field starting at the viewer's day (`useToday()`, as the Board's overdue badge), always sent; a change re-reads, showing the day asked and a skeleton, no placeholder data; "Today" returns to it.
 - **Two tables**, captioned, each in a focusable scrolling region, a row header per row: By release (the name, Pool, Unplaced, No release; an unknown group raw, `lang="en"`) and By department (titles in `bdi`; a footer row All tasks, the served `total`); columns Delivered (N of M), Open, Overdue, Delivered late, Cancelled, Lead time (`median N, max M days`, no plural forms; else None delivered).

@@ -2,6 +2,7 @@ import { createContext, use, useEffect, useId, useMemo, useRef, useState, type R
 import { apiErrorOf } from "../api/client";
 import { useCard, useCardClearGroup, useCardRaise, useCards, useCardWrite, useHeldWorkspaces, type CardWriteRequest } from "../api/queries";
 import type {
+  ApiError,
   Card,
   CardAcceptBody,
   CardClearBody,
@@ -23,6 +24,7 @@ import { Dialog } from "../ui/Dialog";
 import { Disclosure } from "../ui/Disclosure";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
+import { Refusal } from "../ui/Refusal";
 import { shownSlot } from "../ui/text";
 import { actingName, handOffReviewer, isActingLine, useActing, useHubLogin, useTeamRow } from "./acting";
 import { assigneeChoices, disciplineChoices } from "./filter";
@@ -52,8 +54,12 @@ export interface WriteHandlers {
   onActingLine?: (line: string) => void;
 }
 
-/** A write sent from a dialog: null once done (the caller closes it), else the words to show, the daemon's own. */
-function useSend(project: string, { onDone, onActingLine }: WriteHandlers): (request: CardWriteRequest) => Promise<string | null> {
+/**
+ * A write sent from a dialog: null once done (the caller closes it), else the words to show, the
+ * daemon's own; on a route behind a hub's step-up (`stepUp`: Accept, Clear) the refusal itself, which
+ * WriteDialog reads for the door's 401 (docs/features/door-step-up.md "Description and interactions").
+ */
+function useSend(project: string, { onDone, onActingLine }: WriteHandlers, stepUp = false): (request: CardWriteRequest) => Promise<string | ApiError | null> {
   const write = useCardWrite(project);
   return async (request) => {
     try {
@@ -64,7 +70,7 @@ function useSend(project: string, { onDone, onActingLine }: WriteHandlers): (req
       if (isActingLine(answer)) {
         onActingLine?.(answer.message);
       }
-      return answer.message;
+      return stepUp ? answer : answer.message;
     }
   };
 }
@@ -301,7 +307,9 @@ function firstFieldOf(root: HTMLFormElement | null): HTMLElement | null {
  * submit at all, only the dismiss, which then takes the focus the submit had. Focus after a stop or a
  * refusal goes to the first field marked invalid, else the first autofocus field that takes text,
  * else the first that does: never a field held read-only, nor one folded away. `primary` false
- * draws the submit as a plain button, where another act of the dialog is its one primary.
+ * draws the submit as a plain button, where another act of the dialog is its one primary. A refusal
+ * handed back whole, a step-up route's, shows as `Refusal` does: the door's 401 as its notice and link,
+ * the submit staying on for the retry (docs/features/door-step-up.md "Description and interactions").
  */
 export function WriteDialog({
   title,
@@ -331,15 +339,15 @@ export function WriteDialog({
   /** Why this submit cannot be sent, else null. */
   check?: () => string | null;
   onClose: () => void;
-  /** Null: done, the caller closes; a string: the daemon's refusal; false: kept open, nothing refused. */
-  onSubmit: () => Promise<string | null | false>;
+  /** Null: done, the caller closes; a string: the daemon's refusal; an ApiError: a step-up route's; false: kept open, nothing refused. */
+  onSubmit: () => Promise<string | ApiError | null | false>;
   children: ReactNode;
 }) {
   const t = useTranslate();
   const form = useRef<HTMLFormElement>(null);
   const inFlight = useRef(false);
   const [pending, setPending] = useState(false);
-  const [refusal, setRefusal] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | ApiError | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [shown, setShown] = useState(revision);
   const [changed, setChanged] = useState(false);
@@ -434,7 +442,7 @@ export function WriteDialog({
             {problem}
           </p>
         )}
-        {refusal !== null && (
+        {typeof refusal === "string" && (
           <div className="refusal" role="alert">
             <p className="refusal-title">
               <Icon name="alert" />
@@ -445,6 +453,8 @@ export function WriteDialog({
             </p>
           </div>
         )}
+        {/* Static, never a chunk fetched as the refusal comes: status 0 is an origin that did not answer. */}
+        {refusal !== null && typeof refusal !== "string" && <Refusal error={refusal} heading={t("board.view.refused")} />}
         <div className="dialog-actions">
           {action !== null && (
             <button type="submit" className={danger ? "button button-danger" : primary ? "button button-primary" : "button"} aria-disabled={pending} disabled={!canSubmit}>
@@ -862,7 +872,7 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
   const gaps = gapTypes(t);
   const { onClose } = handlers;
   const targets = card.targets ?? [];
-  const send = useSend(project, handlers);
+  const send = useSend(project, handlers, true);
   const verdictId = useId();
   const gapId = useId();
   const [acting, setActing] = useActing();
@@ -1532,7 +1542,7 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
   const t = useTranslate();
   const outcomeId = useId();
   const { onClose } = handlers;
-  const send = useSend(project, handlers);
+  const send = useSend(project, handlers, true);
   const [acting, setActing] = useActing();
   const [outcome, setOutcome] = useState<CardClearBody["outcome"]>("no_effect");
   const [reason, setReason] = useState("");
@@ -1631,12 +1641,13 @@ export function ClearGroupDialog({ project, group, cards, onClose, onDone }: { p
   const [checked, setChecked] = useState(false);
   const name = actingName(acting);
 
-  async function send(as: string): Promise<string | null> {
+  /** The refusal whole: a step-up route's (docs/features/door-step-up.md "Description and interactions"). */
+  async function send(as: string): Promise<ApiError | null> {
     try {
       onDone(await clear.mutateAsync({ group, reason: reason.trim(), as, ...(login === null ? {} : { count: cards }) }));
       return null;
     } catch (error) {
-      return apiErrorOf(error).message;
+      return apiErrorOf(error);
     }
   }
 

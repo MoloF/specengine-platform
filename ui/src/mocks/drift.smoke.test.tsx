@@ -234,7 +234,11 @@ describe("ledger-api's drift item (UI-1 of drift-queue)", () => {
     for (const name of ["Accept", "Reject", "Needs clarification", "Defer"]) {
       expect([name, within(card).queryByRole("button", { name })]).toEqual([name, null]);
     }
-    const terminal = within(card).getByRole("region", { name: "Decided on a terminal" });
+    // The drift item's parts arrive in a chunk of their own (ProposalCard.tsx).
+    const terminal = await within(card).findByRole("region", { name: "Decided on a terminal" });
+    await waitFor(() => {
+      expect(card.querySelector(".drift-rows")).not.toBeNull();
+    });
     expect(Array.from(terminal.querySelectorAll(".command-text"), (command) => command.textContent)).toEqual([
       `spec approve ${DRIFT_ITEM}`,
       `spec approve ${DRIFT_ITEM} --editorial`,

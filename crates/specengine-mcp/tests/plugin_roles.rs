@@ -1396,10 +1396,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // plain-questions (RM-0088, PQ11, `ask_question`'s four keys): 0.43.0;
     // collision-pass (RM-0060, CP9, two tools and `check-collisions`): 0.44.0;
     // collision-pairs (RM-0088, PP7, the review document's `pair`): 0.45.0;
-    // usage-orphans (RM-0111, UO6, `get_node`'s links `usage`): 0.46.0.
-    if plugin["version"] != "0.46.0" {
+    // usage-orphans (RM-0111, UO6, `get_node`'s links `usage`): 0.46.0;
+    // the 0.46.1 patch (RM-0114 to RM-0119, a version-only bump): 0.46.1.
+    if plugin["version"] != "0.46.1" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.46.0",
+            "plugin.json: version {}, not 0.46.1",
             plugin["version"]
         ));
     }
@@ -1469,9 +1470,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.46.0\"", "\"0.45.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.46.0");
-    assert_names(&r2_problems(&older, &market), "not 0.46.0", "0.45.0");
+    let older = plugin.replacen("\"0.46.1\"", "\"0.46.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.46.1");
+    assert_names(&r2_problems(&older, &market), "not 0.46.1", "0.46.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

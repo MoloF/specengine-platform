@@ -58,6 +58,8 @@ impl Served {
             root: self.root.clone(),
             turn: Arc::new(Mutex::new(())),
             trust: Some(Arc::clone(&trust)),
+            lines: Default::default(),
+            seats: Default::default(),
         });
         (project, trust)
     }

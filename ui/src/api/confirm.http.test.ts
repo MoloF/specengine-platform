@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorAnswer, jsonAnswer, stubFetch, urlsOf } from "../test/daemonStub";
+import { doorAnswer, doorBody } from "../test/doorStub";
 import { aProposal } from "../test/builders";
 import { ClientError } from "./client";
 import { HttpClient } from "./http";
@@ -7,8 +8,9 @@ import type { ConfirmBody } from "./types";
 
 // `docs/features/hub-confirm.md` "Data" over a stubbed `fetch`: the read and the POST on the one path,
 // the POST's body exactly `{question, updated_at}`, closed keys, so a choice cannot travel; the read
-// judged as the POST is, so each refusal rejects in the daemon's words whatever its body; no answer,
-// the login door's redirect among them, is status 0.
+// judged as the POST is, so each refusal rejects in the daemon's words whatever its body; no answer is
+// status 0; the login door's 401 rejects with its body verbatim, which the page never shows
+// (docs/features/door-step-up.md "Data").
 
 const PATH = "/api/projects/alpha/proposals/PR-0007/confirm";
 
@@ -62,7 +64,18 @@ describe("the confirm read", () => {
     expect([error.status, error.message]).toEqual([status, message]);
   });
 
-  it("a `fetch` meeting the login door's redirect is status 0", async () => {
+  it("the login door's 401, a `text/html` anchor, rejects as 401 with the body verbatim, on the read and the POST", async () => {
+    const read = doorBody(PATH);
+    stubFetch(() => doorAnswer(read));
+    const refusedRead = await rejection(new HttpClient().getConfirm("alpha", "PR-0007"));
+    expect([refusedRead.status, refusedRead.message]).toEqual([401, read]);
+    const post = doorBody(PATH, "POST");
+    stubFetch(() => doorAnswer(post));
+    const refusedPost = await rejection(new HttpClient().confirmProposal("alpha", "PR-0007", BODY));
+    expect([refusedPost.status, refusedPost.message]).toEqual([401, post]);
+  });
+
+  it("a `fetch` with no answer is status 0", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))));
     const error = await rejection(new HttpClient().getConfirm("alpha", "PR-0007"));
     expect([error.status, error.message]).toEqual([0, `GET ${PATH}: no response from the daemon (Failed to fetch)`]);

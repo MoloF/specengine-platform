@@ -305,6 +305,13 @@ export const en = {
     // A disclosure of the IDs, raw kinds and places a person rarely needs (flow-scenario D12; the document modal's too).
     technicalDetails: "Technical details",
     close: "Close",
+    // The hub's login door refusing a step-up route (Refusal.tsx; docs/features/door-step-up.md "Data").
+    stepUp: {
+      title: "This action needs the second factor",
+      text: "Your session is signed in with a password only. Sign in with your second factor, a one-time code or a passkey, on the login page, then retry. The first time, registering a second factor takes a one-time code from the hub's operator.",
+      open: "Open the login page",
+      noAnswer: "If this action needs the second factor, sign in with it on the login page, then retry.",
+    },
     diff: {
       label: "Section diff",
       none: "No section diff attached.",
@@ -568,6 +575,19 @@ export const en = {
       everythingElse: "Everything else",
       count_one: "{{count}} task",
       count_other: "{{count}} tasks",
+    },
+    // The Show select, a subtask tile's parent line and the level's empty states (BoardView.tsx, BoardCard.tsx;
+    // docs/features/board-subtasks.md "Data"): `parent` a slot holding the link to the parent's modal.
+    level: {
+      label: "Show",
+      // The spec's "All cards" in the owner's word for a card (ADR-0076; i18n/words.test.ts, DP-8).
+      all: "All tasks",
+      tasks: "Tasks only",
+      subtasks: "Subtasks only",
+      parentOf: "Subtask of {{parent}}",
+      noTasks: "No task without a parent here.",
+      noSubtasks: "No subtask here.",
+      showAll: "Show all tasks",
     },
     // A hand-off: a child card in another trade's flow, the asking side its reviewer (HandOffDialog in CardDialogs.tsx).
     handoff: {
@@ -1434,7 +1454,19 @@ export const en = {
     queueSummary_other: "{{count}} in the queue, {{high}} high severity",
     filter: "Filter",
     filterPlaceholder: "ID, words, kind, branch or target",
-    absent: "{{id}} is not in this inbox; it may have been decided. The first proposal is shown.",
+    // A routed ID the inbox does not list (docs/features/inbox-closed-link.md "Data"): no proposal by it, or its read-only pane (ClosedProposal.tsx).
+    unknown: "{{id}}: no proposal has this ID in this project.",
+    closed: {
+      notice: "This proposal is no longer in the inbox. It is shown to read; nothing here decides it.",
+      decidedBy: "Decided by",
+      decidedAt: "Decided at",
+      commit: "Commit",
+      record: "Record",
+      targets: "Targets",
+      note: "Decision note",
+      noDecision: "{{id}} is not in the inbox: nothing to decide here.",
+      reading: "Reading {{id}}",
+    },
     notes: "Notes from the daemon",
     noMatch: "No proposal matches “{{query}}”.",
     clearFilter: "Clear the filter",
@@ -1472,6 +1504,9 @@ export const en = {
           "Stages your approval; nothing is applied here. Confirm it on a terminal: spec approve with this ID shows the staged choice and its time and asks [y/N], then applies it as its own commit.",
         submit: "Stage accept",
         field: "Note for the record (optional)",
+        // On an item that takes an own answer (docs/features/question-accept-note.md "Data").
+        noteField: "Decision note (optional)",
+        noteHint: "Kept in the decision's record beside the answer. It is not the answer: to answer in your own words, choose Own answer.",
       },
       reject: {
         verb: "Reject",
@@ -1504,7 +1539,11 @@ export const en = {
       interprets: "It interprets decision {{decision}}; the proposal's Interpretation section says how and why.",
       replaces: "It replaces the choice staged {{at}}.",
       option: "Option",
-      workingRecorded: "The working answer is recorded:",
+      // An own answer and the note's warning (docs/features/question-accept-note.md "Data").
+      ownAnswer: "Own answer",
+      writeAnswer: "Write your answer first.",
+      noteNotAnswer: "Your note is not an answer. Accept records the working answer, with this note beside it.",
+      useNoteAsAnswer: "Use the note as my answer",
       noOptions: "This proposal has no options to choose from.",
       editorial: "Editorial: keep the revision",
       uncheckedRefused: "Unchecked, this is a meaning approval, which the terminal refuses while a raise below is refused:",

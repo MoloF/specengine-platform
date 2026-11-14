@@ -77,7 +77,7 @@ impl HubSeam for Idle {
         None
     }
 
-    fn turn(&self, command: Command) -> TurnFuture {
+    fn turn(&self, _login: &str, command: Command) -> TurnFuture {
         drop(command);
         Box::pin(async {})
     }
@@ -215,7 +215,7 @@ impl HubSeam for Walking {
         Some("mira".to_owned())
     }
 
-    fn turn(&self, command: Command) -> TurnFuture {
+    fn turn(&self, _login: &str, command: Command) -> TurnFuture {
         walking(&[&self.trust], || command.run(&self.env, &self.globals));
         Box::pin(async {})
     }

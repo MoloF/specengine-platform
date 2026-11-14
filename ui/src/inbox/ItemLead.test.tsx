@@ -194,8 +194,9 @@ describe("the Inbox: the card, the row and the dialog (PQ12)", () => {
       ["[0] Wait at the anchorageRecommended by the AIDeep ships hold.Price: None: as built.", false],
       ["[1] Enter on yesterday's tableShips keep moving.Price: A grounding risk.", false],
       [`Take the working answer${WORKING}`, false],
+      // An own answer too, with a price held (docs/features/question-accept-note.md "Acceptance criteria", QA1).
+      ["Own answer", false],
     ]);
-    expect(within(dialog).queryByRole("radio", { name: /Your answer/ })).toBeNull();
     const { button, region } = fold(dialog);
     expect([button.getAttribute("aria-expanded"), region.hidden]).toEqual(["false", true]);
     expect(Array.from(region.querySelectorAll("bdi"), (bdi) => bdi.textContent)).toContain(shownText(ASKED));
@@ -236,8 +237,10 @@ describe("the Inbox: the card, the row and the dialog (PQ12)", () => {
     const { card } = await inboxCard([aLeadQuestion({ id: "PR-0059", options: [], recommendation: null })], "PR-0059");
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const accept = await screen.findByRole("dialog", { name: "Accept PR-0059" });
-    expect(within(accept).queryAllByRole("radio")).toEqual([]);
-    expect(within(accept).getByText("The working answer is recorded:").nextElementSibling?.textContent).toBe(WORKING);
+    // Under its radio, checked on open (docs/features/question-accept-note.md "Acceptance criteria", QA2).
+    const working = within(accept).getByRole<HTMLInputElement>("radio", { name: /^Take the working answer/ });
+    expect(working.checked).toBe(true);
+    expect(within(working.closest("label") as HTMLElement).getByText(WORKING)).toBeTruthy();
     expect(within(accept).getAllByText(WORKING)).toHaveLength(1);
     const asked = fold(accept).region;
     expect(Array.from(asked.querySelectorAll("bdi"), (bdi) => bdi.textContent)).toEqual([shownText(ASKED), PRICE]);
@@ -247,7 +250,7 @@ describe("the Inbox: the card, the row and the dialog (PQ12)", () => {
     });
     fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
     const reject = await screen.findByRole("dialog", { name: "Reject PR-0059" });
-    expect(within(reject).queryByText("The working answer is recorded:")).toBeNull();
+    expect(within(reject).queryAllByRole("radio")).toEqual([]);
     expect(Array.from(fold(reject).region.querySelectorAll("bdi"), (bdi) => bdi.textContent)).toEqual([shownText(ASKED), WORKING, PRICE]);
   });
 

@@ -8,7 +8,8 @@ import { HttpClient, REOPEN_FIRST_MS } from "./http";
 // UI-5 of docs/features/roadmap-screen.md over HttpClient, the daemon a stubbed `fetch` and
 // `EventSource`: entering the Roadmap reads the plan once, with its query's signal; while it is on
 // screen a `task.*` event (naming a task or none), `proposal.applied` and a gap each read it once
-// more; a burst during a read aborts the read in flight and one read is answered; a stage,
+// more; a burst during a read keeps the read in flight and one more follows it
+// (docs/features/hub-turn-fairness.md, TF12); a stage,
 // `proposal.created`, `.approved`, `.rejected` or `.apply_failed` reads nothing. Off screen nothing
 // is read; entering reads once.
 
@@ -197,7 +198,8 @@ describe("the plan's read on the live tail (UI-5)", () => {
     },
   );
 
-  it("a burst during a read aborts the read in flight: one plan read answered", async () => {
+  // TF12 of docs/features/hub-turn-fairness.md: a live event never aborts a read in flight.
+  it("a burst during a read keeps the read in flight: it is answered, then exactly one more plan read", async () => {
     const { fates } = await onRoadmap();
     const before = fates.answered;
     fates.hold();
@@ -207,13 +209,15 @@ describe("the plan's read on the live tail (UI-5)", () => {
     });
     emit("task.run_reported", '{"id":"T-0109","run":1}', "51");
     emit("proposal.applied", '{"id":"PR-0001","commit":"abc1234"}', "52");
-    await waitFor(() => {
-      expect(fates.aborted).toBe(2);
-    });
-    fates.release();
     await settle();
-    expect(planReads()).toHaveLength(3);
-    expect(fates.answered - before).toBe(1);
+    expect([planReads().length, fates.aborted]).toEqual([1, 0]);
+    fates.release();
+    await waitFor(() => {
+      expect(planReads()).toHaveLength(2);
+    });
+    await settle();
+    expect(planReads()).toHaveLength(2);
+    expect([fates.aborted, fates.answered - before]).toEqual([0, 2]);
     expect(document.querySelector("[data-item]")?.getAttribute("data-item")).toBe("RM-0001");
   });
 

@@ -9,9 +9,12 @@
 //!
 //! A hub's server alone also routes `probe_panic` (the `read-trust` spec,
 //! D9): a call that panics inside the project's turn, on demand, so a test
-//! can see the daemon doubt the project's index. Stdio's tool list is
-//! unchanged.
+//! can see the daemon doubt the project's index; and `probe_hold` (task spec
+//! `hub-turn-fairness`): a call that holds the project's turn for `ms`,
+//! answering its `tag` and the process's count of its runs, so a test can
+//! see the order calls reach the turn. Stdio's tool list is unchanged.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use rmcp::handler::server::wrapper::Parameters;
@@ -125,6 +128,24 @@ Deterministic; no LLM inside.",
 /// What `probe_panic` panics with, inside the turn.
 const PANIC_MESSAGE: &str = "probe_panic: a panic inside the project's turn, on demand";
 
+/// Upper bound of `probe_hold`'s `ms`.
+const MAX_HOLD_MS: u64 = 10_000;
+
+/// Upper bound of `probe_hold`'s `tag`, in bytes.
+const MAX_TAG: usize = 32;
+
+/// `probe_hold`'s runs in this process, counted as each run starts.
+static HOLD_RUNS: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HoldArgs {
+    /// Milliseconds to hold the project's turn, at most 10000.
+    pub ms: u64,
+    /// Returned as given: 1 to 32 ASCII characters.
+    pub tag: String,
+}
+
 #[tool_router(router = hub_probe_tools, vis = "pub(crate)")]
 impl SpecEngineServer {
     /// Panic probe, a hub's alone.
@@ -155,6 +176,63 @@ Deterministic; no LLM inside.",
         match ran {
             Some(Some(cannot)) => Ok(CallToolResult::error(vec![ContentBlock::text(cannot)])),
             Some(None) | None => Err(ErrorData::internal_error(
+                "internal error: the call failed",
+                None,
+            )),
+        }
+    }
+
+    /// Hold probe, a hub's alone.
+    #[tool(
+        description = "Measurement probe (tests only): on a hub, hold the project's turn for \
+`ms` milliseconds (at most 10000), sleeping inside it, then answer {tag, seq}: `tag` as \
+given (1 to 32 ASCII characters) and `seq`, this process's count of probe_hold runs, \
+counted as each run starts. Reads nothing, writes nothing. No LLM inside.",
+        annotations(
+            title = "Probe: a call holding the turn",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn probe_hold(
+        &self,
+        Parameters(args): Parameters<HoldArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if args.ms > MAX_HOLD_MS {
+            return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "probe_hold: ms {} exceeds the limit {MAX_HOLD_MS}.",
+                args.ms
+            ))]));
+        }
+        if !(1..=MAX_TAG).contains(&args.tag.len()) || !args.tag.is_ascii() {
+            return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "probe_hold: tag must be 1 to {MAX_TAG} ASCII characters."
+            ))]));
+        }
+        let Some(seam) = self.seam() else {
+            return Ok(CallToolResult::error(vec![ContentBlock::text(
+                "probe_hold: a hub's probe; this server takes no turn",
+            )]));
+        };
+        let hold = Duration::from_millis(args.ms);
+        let ran = crate::hub::turned(
+            seam,
+            move |_env, _globals| -> Result<u64, String> {
+                let seq = HOLD_RUNS.fetch_add(1, Ordering::SeqCst) + 1;
+                std::thread::sleep(hold);
+                Ok(seq)
+            },
+            |error| Err(error.message),
+        )
+        .await;
+        match ran {
+            Some(Ok(seq)) => Ok(CallToolResult::structured(
+                serde_json::json!({"tag": args.tag, "seq": seq}),
+            )),
+            Some(Err(cannot)) => Ok(CallToolResult::error(vec![ContentBlock::text(cannot)])),
+            None => Err(ErrorData::internal_error(
                 "internal error: the call failed",
                 None,
             )),

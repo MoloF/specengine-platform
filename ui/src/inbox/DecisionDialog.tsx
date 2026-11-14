@@ -1,36 +1,86 @@
-import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
+import { useEffect, useId, useRef, useState, type Ref, type SubmitEvent } from "react";
 import type { Proposal, StageChoice } from "../api/types";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
+import { useAnnounce } from "../ui/announcer";
 import { shownSlot, shownText } from "../ui/text";
+import { useFocusLater } from "../ui/useFocusLater";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { answersOf } from "../round/drafts";
+import { OwnAnswerText } from "../round/DraftText";
 import { wordingOf, type DecisionKind } from "./decisions";
 import { AskedFold, AskedText, ItemLead, RecommendedMark } from "./ItemLead";
 import { isRefused, revisionsToKeep } from "./revisions";
 import { RevisionList } from "./RevisionList";
 
 /**
- * What Accept stages on an item with options: one of them by index, or its working answer where the
- * item holds a price of another answer; null until the owner picks: nothing is picked for them, a
- * discrepancy's recommendation neither (docs/features/plain-questions.md "Acceptance criteria", PQ12).
+ * What Accept stages: one of the item's options by index, its working answer where it holds a price
+ * of another answer or has no options, or an own answer where it takes one; null until the owner
+ * picks on an item with options: nothing is picked for them, a discrepancy's recommendation neither
+ * (docs/features/plain-questions.md "Acceptance criteria", PQ12).
  */
-type Chosen = number | "working" | null;
+type Chosen = number | "working" | "answer" | null;
+
+/**
+ * The picks Accept offers, in the radios' order, by structure, never kind (`round/drafts.ts`
+ * `answersOf`): each option, the working answer, then an own answer where the item holds a working
+ * answer or a price of another, so a question or a decision, never an update, a create or a
+ * discrepancy (docs/features/question-accept-note.md "Description and interactions").
+ */
+function picksOf(item: Proposal): readonly Exclude<Chosen, null>[] {
+  const holds = item.working_answer !== null || item.price_of_other !== null;
+  return answersOf(item).flatMap((offered): Exclude<Chosen, null>[] => {
+    if (offered.pick === "option") {
+      return [offered.option];
+    }
+    return offered.pick === "working" || holds ? [offered.pick] : [];
+  });
+}
+
+/** The pick Accept opens on: on an item without options, its working answer, today's implicit choice; else none. */
+function openingPick(item: Proposal): Chosen {
+  return item.options.length === 0 && picksOf(item).includes("working") ? "working" : null;
+}
+
+/** The pick a revised item keeps: the working answer or an own answer while it still offers it; else the opening one, as an option pick clears. */
+function keptPick(chosen: Chosen, next: Proposal): Chosen {
+  return (chosen === "working" || chosen === "answer") && picksOf(next).includes(chosen) ? chosen : openingPick(next);
+}
 
 /**
  * The stage a dialog sends (`docs/canon/decision-staging.md` "The stage"): an approve with the
  * chosen option when one is chosen (else none: a question's working answer, picked or its only
- * answer, an update's change), `editorial` true when the owner keeps the revisions, else null
- * (`docs/features/rev-discipline.md` "UI"), no `--answer` or `--canon` from the UI; a reject with
- * its reason.
+ * answer, an update's change), the own answer as `answer` when one is picked, `editorial` true when
+ * the owner keeps the revisions, else null (`docs/features/rev-discipline.md` "UI"), no `--canon`
+ * from the UI; a reject with its reason.
  */
-function stageOf(kind: "accept" | "reject", option: number | null, editorial: boolean, text: string): StageChoice {
+function stageOf(kind: "accept" | "reject", option: number | null, answer: string | null, editorial: boolean, text: string): StageChoice {
   return kind === "accept"
-    ? { decision: "approve", option, answer: null, canon: null, editorial: editorial ? true : null, note: text === "" ? null : text }
+    ? { decision: "approve", option, answer, canon: null, editorial: editorial ? true : null, note: text === "" ? null : text }
     : { decision: "reject", reason: text };
+}
+
+/**
+ * The note's warning on the working answer
+ * (docs/features/question-accept-note.md "Description and interactions"): its words and its one
+ * button; without `onUse`, the hidden copy that keeps its place.
+ */
+function NoteWarning({ buttonRef, pending = false, onUse }: { buttonRef?: Ref<HTMLButtonElement>; pending?: boolean; onUse?: () => void }) {
+  const t = useTranslate();
+  return (
+    <>
+      <p className="notice-title">
+        <Icon name="info" />
+        <span>{t("inbox.dialog.noteNotAnswer")}</span>
+      </p>
+      <Button ref={buttonRef} aria-disabled={pending} onClick={onUse}>
+        {t("inbox.dialog.useNoteAsAnswer")}
+      </Button>
+    </>
+  );
 }
 
 /**
@@ -78,6 +128,12 @@ function NotStaged({ id, proposal, kind, onCancel }: { id: string; proposal: Pro
  * review's `revisions` a non-empty list) offers "Editorial: keep the revision", unchecked: approval
  * raises each revision unless the owner says the change is wording only; a revised version unchecks
  * it again, its revisions being another change's. Needs clarification and Defer send nothing.
+ *
+ * An item that takes an own answer (docs/features/question-accept-note.md) offers Own answer beside
+ * the working answer, which an item without options checks on open; its note is the decision's note,
+ * said so. A note that differs from the working answer it is accepted with is warned of: the first
+ * Accept while the warning stands stages nothing, a second does, and one button makes the note the
+ * answer. A revision keeps both texts and the working answer or own answer pick while still offered.
  */
 export function DecisionDialog({
   id,
@@ -122,10 +178,20 @@ function StageDialog({
   const missingId = useId();
   const refusalId = useId();
   const pickFirstId = useId();
+  const noteHintId = useId();
   /** The version on screen: the one opened, then each revision the inbox brings. */
   const [shown, setShown] = useState(proposal);
   const [changed, setChanged] = useState(false);
-  const [chosen, setChosen] = useState<Chosen>(null);
+  const [chosen, setChosen] = useState<Chosen>(() => (kind === "accept" ? openingPick(proposal) : null));
+  /** The own answer as typed, kept across picks and revisions. */
+  const [answer, setAnswer] = useState("");
+  const [answerMissing, setAnswerMissing] = useState(false);
+  /** The first Accept under the note's warning was spent; editing the note arms it again. */
+  const [warned, setWarned] = useState(false);
+  const answerField = useRef<HTMLTextAreaElement>(null);
+  const noteButton = useRef<HTMLButtonElement>(null);
+  const announce = useAnnounce();
+  const focusLater = useFocusLater();
   /** The owner keeps the revisions (`--editorial`); never the default. */
   const [editorial, setEditorial] = useState(false);
   const [text, setText] = useState("");
@@ -144,8 +210,10 @@ function StageDialog({
     // the dialog or comes back as a refusal, after which the revision is taken.
     setShown(proposal);
     setChanged(true);
-    setChosen(null);
+    setChosen(kind === "accept" ? keptPick(chosen, proposal) : null);
     setEditorial(false);
+    // A new version asks again: the note's warning holds the next Accept anew.
+    setWarned(false);
   }
 
   // A revision can take away the radio that had focus: put focus on the new choice, not the body.
@@ -156,18 +224,22 @@ function StageDialog({
   }, [changed, shown]);
 
   const hasOptions = kind === "accept" && shown.options.length > 0;
-  /** By its structure, never its kind: its working answer where it holds a price of another answer; no own answer here (`docs/canon/decision-staging.md` "UI"). */
-  const takesWorking = hasOptions && answersOf(shown).some((offered) => offered.pick === "working");
+  /** By its structure, never its kind: the options, the working answer, an own answer. */
+  const picks = kind === "accept" ? picksOf(shown) : [];
+  const takesOwn = picks.includes("answer");
   /** Accept on options stays off until a pick. */
   const needsPick = hasOptions && chosen === null;
-  /** Accept without options records the working answer, shown as the choice; the fold leaves it out then, so it shows once. */
+  /** Accept without options shows the working answer under its radio; the fold leaves it out then, so it shows once. */
   const recordsWorking = kind === "accept" && !hasOptions && shown.working_answer !== null;
+  /** The note differs from the working answer it is accepted with: it is not an answer, said so. */
+  const notAnAnswer = chosen === "working" && text.trim() !== "" && text.trim() !== (shown.working_answer ?? "").trim();
+  const showAnswerMissing = chosen === "answer" && answerMissing && answer.trim() === "";
   /** The nodes whose revisions Accept raises: only then is Editorial offered. */
   const raised = kind === "accept" ? revisionsToKeep(shown) : null;
   const showMissing = missing && text.trim() === "";
-  const describedBy = quiet
-    ? ""
-    : [showMissing ? missingId : null, refusal !== null ? refusalId : null].filter((id) => id !== null).join(" ");
+  const describedBy = [takesOwn ? noteHintId : null, ...(quiet ? [] : [showMissing ? missingId : null, refusal !== null ? refusalId : null])]
+    .filter((id) => id !== null)
+    .join(" ");
 
   function cancel() {
     if (!inFlight.current) {
@@ -192,10 +264,22 @@ function StageDialog({
       textArea.current?.focus();
       return;
     }
+    if (chosen === "answer" && answer.trim() === "") {
+      setAnswerMissing(true);
+      answerField.current?.focus();
+      return;
+    }
+    if (notAnAnswer && !warned) {
+      setWarned(true);
+      announce(t("inbox.dialog.noteNotAnswer"), "assertive");
+      noteButton.current?.focus();
+      return;
+    }
     inFlight.current = true;
     setPending(true);
     setRefusal(null);
-    const outcome = await onSubmit(stageOf(kind, hasOptions && typeof chosen === "number" ? chosen : null, raised !== null && editorial, trimmed), updatedAt);
+    const option = hasOptions && typeof chosen === "number" ? chosen : null;
+    const outcome = await onSubmit(stageOf(kind, option, chosen === "answer" ? answer.trim() : null, raised !== null && editorial, trimmed), updatedAt);
     if (outcome !== null) {
       inFlight.current = false;
       setPending(false);
@@ -203,6 +287,18 @@ function StageDialog({
       setQuiet(true);
       textArea.current?.focus();
     }
+  }
+
+  /** The note becomes the own answer, the note cleared, focus in Your answer. */
+  function noteAsAnswer() {
+    if (inFlight.current) {
+      return;
+    }
+    setAnswer(text);
+    setText("");
+    setChosen("answer");
+    setAnswerMissing(false);
+    focusLater(() => answerField.current);
   }
 
   return (
@@ -249,9 +345,9 @@ function StageDialog({
           void submit(event);
         }}
       >
-        {hasOptions && (
+        {picks.length > 0 && (
           <fieldset className="option-choice">
-            <legend>{t("inbox.dialog.option")}</legend>
+            <legend>{hasOptions ? t("inbox.dialog.option") : fill(t("round.answerLegend", { id: slot("id") }), { id: <span className="sr-only">{id}</span> })}</legend>
             {shown.options.map((choice, index) => (
               <label key={`${String(index)}-${choice.label}`} className="option-radio">
                 <input
@@ -275,7 +371,7 @@ function StageDialog({
                 </span>
               </label>
             ))}
-            {takesWorking && shown.working_answer !== null && (
+            {picks.includes("working") && shown.working_answer !== null && (
               <label className="option-radio">
                 <input
                   type="radio"
@@ -285,7 +381,7 @@ function StageDialog({
                   onChange={() => {
                     setChosen("working");
                   }}
-                  data-autofocus={chosen === "working" ? "" : undefined}
+                  data-autofocus={hasOptions && chosen === "working" ? "" : undefined}
                 />
                 <span className="option-radio-body">
                   <span className="option-radio-label">{t("round.takeWorking")}</span>
@@ -295,7 +391,27 @@ function StageDialog({
                 </span>
               </label>
             )}
+            {takesOwn && (
+              <label className="option-radio">
+                <input
+                  type="radio"
+                  name="option"
+                  value="answer"
+                  checked={chosen === "answer"}
+                  onChange={() => {
+                    setChosen("answer");
+                  }}
+                  data-autofocus={hasOptions && chosen === "answer" ? "" : undefined}
+                />
+                <span className="option-radio-body">
+                  <span className="option-radio-label">{t("inbox.dialog.ownAnswer")}</span>
+                </span>
+              </label>
+            )}
           </fieldset>
+        )}
+        {chosen === "answer" && (
+          <OwnAnswerText value={answer} fieldRef={answerField} readOnly={pending} stop={showAnswerMissing ? t("inbox.dialog.writeAnswer") : null} onChange={setAnswer} />
         )}
         {shown.gist !== null && (
           <AskedFold>
@@ -314,15 +430,7 @@ function StageDialog({
             )}
           </AskedFold>
         )}
-        {recordsWorking && (
-          <div className="dialog-text">
-            <p className="field-label">{t("inbox.dialog.workingRecorded")}</p>
-            <p className="staged-text">{shown.working_answer}</p>
-          </div>
-        )}
-        {kind === "accept" && !hasOptions && shown.working_answer === null && (
-          <p className="dialog-text">{t("inbox.dialog.noOptions")}</p>
-        )}
+        {kind === "accept" && picks.length === 0 && <p className="dialog-text">{t("inbox.dialog.noOptions")}</p>}
         {raised !== null && (
           <div className="editorial-choice">
             <input
@@ -347,7 +455,7 @@ function StageDialog({
           </div>
         )}
         <label className="field-label" htmlFor={textId}>
-          {wording.field}
+          {takesOwn ? t("inbox.decision.accept.noteField") : wording.field}
         </label>
         <textarea
           id={textId}
@@ -362,11 +470,33 @@ function StageDialog({
           data-autofocus={hasOptions ? undefined : ""}
           onChange={(event) => {
             setText(event.target.value);
+            setWarned(false);
           }}
           onBlur={() => {
             setQuiet(false);
           }}
         />
+        {takesOwn && (
+          // The note's hint and its warning share one cell, sized for the larger, so the warning's
+          // coming moves neither the fields nor the actions
+          // (docs/features/question-accept-note.md "Acceptance criteria", QA10); the live region
+          // stands empty until the warning does.
+          <div className="note-guide">
+            <p id={noteHintId} className={notAnAnswer ? "card-field-hint note-guide-off" : "card-field-hint"}>
+              {t("inbox.decision.accept.noteHint")}
+            </p>
+            <div className="notice note-guide-off" aria-hidden="true" inert>
+              <NoteWarning />
+            </div>
+            <div role="status">
+              {notAnAnswer && (
+                <div className="notice">
+                  <NoteWarning buttonRef={noteButton} pending={pending} onUse={noteAsAnswer} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {showMissing && (
           <p id={missingId} className="field-error" role="alert">
             {wording.missing}

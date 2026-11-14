@@ -306,7 +306,7 @@ describe("the Inbox card and the decision dialog take the decision by structure 
     ]);
   });
 
-  it("Accept offers no option and records the working answer: it stages option and answer null, the card shows the working answer staged", async () => {
+  it("Accept offers no option and checks the working answer: it stages option and answer null, the card shows the working answer staged", async () => {
     const client = mock();
     const stage = vi.spyOn(client, "stageDecision");
     const read = await client.getProposal(SLUG, DECISION);
@@ -314,11 +314,18 @@ describe("the Inbox card and the decision dialog take the decision by structure 
     const card = await cardOf(DECISION);
     fireEvent.click(within(card).getByRole("button", { name: "Accept" }));
     const dialog = await screen.findByRole("dialog", { name: `Accept ${DECISION}` });
-    expect(within(dialog).queryAllByRole("radio")).toEqual([]);
+    // No option to choose; the working answer checked, Own answer beside it (docs/features/question-accept-note.md "Acceptance criteria", QA2).
     expect(within(dialog).queryByRole("group", { name: "Option" })).toBeNull();
-    expect(within(dialog).getByText("The working answer is recorded:")).toBeTruthy();
+    expect(within(dialog).getAllByRole<HTMLInputElement>("radio").map((radio) => [radio.value, radio.checked])).toEqual([
+      ["working", true],
+      ["answer", false],
+    ]);
     expect(within(dialog).getByText(CRANES_DECISION.working_answer)).toBeTruthy();
-    fireEvent.change(within(dialog).getByLabelText("Note for the record (optional)"), { target: { value: "Two cranes, as built." } });
+    fireEvent.change(within(dialog).getByLabelText("Decision note (optional)"), { target: { value: "Two cranes, as built." } });
+    // The note is not the working answer: the first Accept says so and stages nothing (QA6), the second stages.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
+    expect(await within(dialog).findByRole("button", { name: "Use the note as my answer" })).toBe(document.activeElement);
+    expect(stage).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Stage accept" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();

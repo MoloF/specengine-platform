@@ -54,6 +54,11 @@
 //! for `b`; byte order is then `B a a-1 c`, a collating locale's `a a-1 B c`.
 //! The entrypoint runs with `LC_ALL` and `LANG` set to `en_US.UTF-8`, so only
 //! the script's own `LC_ALL=C` gives byte order.
+//!
+//! docs/features/slow-requests.md (RM-0118) SR11, `sr11_*`: Traefik's access
+//! log in its `command:`, the fourteen flags of that spec's "Data" and no
+//! other, no client or path field kept, every header dropped. The daemon's
+//! criteria are `tests/slow.rs`.
 
 #![cfg(unix)]
 
@@ -3031,4 +3036,79 @@ fn op06_no_version_moves() {
         .position(|run| run.contains("cargo "))
         .unwrap_or_else(|| panic!("the check job runs no cargo: {runs:?}"));
     assert!(cargo > 0, "the tests come after tag-check.sh: {runs:?}");
+}
+
+// ------------------------------------------------- slow-requests SR11
+
+/// docs/features/slow-requests.md "Data", **Traefik**: the access log's
+/// fourteen flags, as written there.
+const ACCESS_LOG: [&str; 14] = [
+    "--accesslog=true",
+    "--accesslog.format=json",
+    "--accesslog.filters.minduration=2s",
+    "--accesslog.fields.defaultmode=drop",
+    "--accesslog.fields.names.StartUTC=keep",
+    "--accesslog.fields.names.Duration=keep",
+    "--accesslog.fields.names.Overhead=keep",
+    "--accesslog.fields.names.OriginDuration=keep",
+    "--accesslog.fields.names.RouterName=keep",
+    "--accesslog.fields.names.RequestMethod=keep",
+    "--accesslog.fields.names.RequestHost=keep",
+    "--accesslog.fields.names.OriginStatus=keep",
+    "--accesslog.fields.names.DownstreamStatus=keep",
+    "--accesslog.fields.headers.defaultmode=drop",
+];
+
+/// docs/features/slow-requests.md SR11: the `traefik` service's `command:`
+/// holds the fourteen lines of "Data" exactly, each once, and no other
+/// `--accesslog` flag (Traefik reads flag names case-insensitively, so the
+/// look is too); no `--accesslog.fields.names.*` keeps `RequestPath`,
+/// `RequestLine`, `ClientAddr`, `ClientHost`, `ClientPort` or
+/// `ClientUsername`, nor any header; the headers' default is `drop`. M:
+/// `RequestPath=keep` added.
+#[test]
+fn sr11_traefiks_access_log_keeps_slow_requests_and_an_allowlist() {
+    let command = command(&compose());
+    let mut logged: Vec<&str> = command
+        .iter()
+        .map(String::as_str)
+        .filter(|flag| flag.to_ascii_lowercase().starts_with("--accesslog"))
+        .collect();
+    logged.sort_unstable();
+    let mut expected = ACCESS_LOG.to_vec();
+    expected.sort_unstable();
+    assert_eq!(
+        logged, expected,
+        "traefik's --accesslog flags are slow-requests.md's fourteen, each once"
+    );
+    let flags = flags(&command);
+    for (name, value) in &flags {
+        let Some(field) = name.strip_prefix("--accesslog.fields.names.") else {
+            continue;
+        };
+        for forbidden in [
+            "RequestPath",
+            "RequestLine",
+            "ClientAddr",
+            "ClientHost",
+            "ClientPort",
+            "ClientUsername",
+        ] {
+            assert!(
+                !field.eq_ignore_ascii_case(forbidden) || value.eq_ignore_ascii_case("drop"),
+                "the access log keeps {forbidden}: {name}={value}"
+            );
+        }
+    }
+    assert!(
+        flags
+            .iter()
+            .all(|(name, _)| !name.starts_with("--accesslog.fields.headers.names.")),
+        "a header named in the access log: {flags:?}"
+    );
+    assert_eq!(
+        flag_values(&flags, "--accesslog.fields.headers.defaultmode"),
+        ["drop"],
+        "every header dropped"
+    );
 }

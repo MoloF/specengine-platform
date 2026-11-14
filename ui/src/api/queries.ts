@@ -1,4 +1,4 @@
-import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient, type InvalidateQueryFilters } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   apiErrorOf,
@@ -15,6 +15,7 @@ import {
   type TraceOptions,
   type TreeOptions,
 } from "./client";
+import { readAgainKept } from "./coalesce";
 import { endOwnWrite, isOwnStageEvent, outsideSince, startOwnWrite, type OwnWrite } from "./ownStages";
 import { useClient } from "./provider";
 import type {
@@ -191,10 +192,12 @@ export function catalogsOf(project: string) {
 }
 
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
-// false `archive` too; then the query's AbortSignal. A read invalidated while in flight is aborted
-// and read once more (TanStack's `cancelRefetch`), so a burst of live events costs the daemon one
-// answered read per query, not one per event (`docs/features/ui-live-tasks.md` "Data"); the two
-// walks, the check and the health read, never take their signal (useCheck, useHealth).
+// false `archive` too; then the query's AbortSignal. A read superseded by a key change (a new search,
+// another node) or by a person's own re-read is aborted; a live event's re-read never aborts the read
+// in flight, which keeps its place in a hub's turn and is followed by at most one more
+// (`readAgainKept`, docs/features/hub-turn-fairness.md "The UI half: a live event never aborts a read in flight"), so a burst of live events costs
+// the daemon at most two reads per query, not one per event; the two walks, the check and the health
+// read, never take their signal (useCheck, useHealth).
 
 function treeRequest(options: TreeOptions): TreeOptions | undefined {
   const sent: TreeOptions = {};
@@ -423,7 +426,7 @@ function eventId(payload: unknown): string | null {
  */
 const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards", "catalog", "rings", "map"] as const;
 
-/** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
+/** The spec reads that walk the whole corpus, kept when in flight and never followed by a second walk (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
 
 /** The queue event of an apply: its commit wrote a spec file (`docs/canon/proposal-queue.md` "States and events"). */
@@ -486,17 +489,20 @@ const CARD_EVENT = "card.";
  * also that project's trees, nodes, searches, bundles, graphs, check, unapplied amendments and lock
  * diffs (a spec file changed; `docs/features/ui-live.md` "Data"); `proposal.approved`, `.rejected` and
  * `.apply_failed` also that project's health read, which row 4 shows (`docs/canon/health.md` "UI").
- * A health read in flight when one of these, an apply or a gap lands is kept, never aborted, and
- * exactly one more is read when it settles, answered or failed, however many landed. A stage
+ * No re-read here aborts a read in flight (docs/features/hub-turn-fairness.md "The UI half: a live event never aborts a read in flight"): one in
+ * flight when an event or a gap lands is kept, and exactly one more is read when it settles, answered
+ * or failed, however many landed (`readAgainKept`; the health read's debt the subscription's, dropped
+ * by its cleanup); with none in flight, one at once. The check's walk in flight is kept with no
+ * second walk (`docs/canon/health.md` "UI"). A stage
  * event, `proposal.staged` or `.unstaged`, reads only that project's inbox, that proposal and its
  * cards again: a stage touches no task and no spec file (`docs/canon/decision-staging.md` "Queue"); one
  * no write of this tab accounts for is returned as the outside change to show, until `dismiss` or
  * the next one. A `task.*` event reads that project's task list and that task again (no string
  * `id`: every task of it), never the inbox, a proposal or a spec read
  * (`docs/features/ui-live-tasks.md` "Data"). Every `proposal.*` and `task.*` event also reads that
- * project's round sheets again, a read in flight aborted
+ * project's round sheets again
  * (`docs/features/ui-round.md` "Description and interactions"). The plan is read again on a
- * `task.*` event, `proposal.applied` and a gap, a read in flight aborted, never on a stage,
+ * `task.*` event, `proposal.applied` and a gap, never on a stage,
  * `.created`, `.approved`, `.rejected` or `.apply_failed` (`docs/features/roadmap-screen.md`). A
  * `task.*` event also reads the project's cards again (the open one; a card serves each task it
  * links as read now, `docs/canon/card-tasks.md` "The rule"), never the card list, which shows no
@@ -509,13 +515,13 @@ const CARD_EVENT = "card.";
  * carry their rollups (`docs/features/trace-views.md` "Timeline"). A rejected discrepancy settles a
  * departure, so `.approved`, `.rejected` and `.apply_failed` read the trace, the flows and the card
  * lists too (`docs/features/card-trace.md` "Rollup"). The delivery reads, at every day asked, are
- * read again on a `card.*` event, every `proposal.*` event but a stage and a gap, a read in flight
- * aborted (docs/features/delivery-analytics.md "Acceptance criteria", DA-12). A direction's
+ * read again on a `card.*` event, every `proposal.*` event but a stage and a gap
+ * (docs/features/delivery-analytics.md "Acceptance criteria", DA-12). A direction's
  * catalog, whatever its kinds, is read again on a `card.*` event and every `proposal.*` event but a
- * stage, an apply and a gap as a read of the spec, a read in flight aborted
+ * stage, an apply and a gap as a read of the spec
  * (docs/features/direction-catalog.md "Acceptance criteria", DC-10). The task counts, under the card
  * lists, are read again with them, and on every `proposal.*` event but a stage and every `task.*`
- * event too, a read in flight aborted (docs/features/department-overview.md "Acceptance criteria",
+ * event too (docs/features/department-overview.md "Acceptance criteria",
  * DO10: a count of open items and of agent tasks in review). No
  * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
@@ -536,6 +542,14 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     if (project === null) {
       return undefined;
     }
+    // Every re-read here is a live event's (docs/features/hub-turn-fairness.md "The UI half: a live event never aborts a read in flight"): a read
+    // in flight is kept, never aborted, and exactly one more follows it once it settles, answered or
+    // failed, however many events land meanwhile; with none in flight, one read at once (on screen;
+    // off screen only marked stale). `readAgain` is coalesce.ts's readAgainKept; the two walks below
+    // keep their own rules.
+    const readAgain = (filters: InvalidateQueryFilters) => {
+      readAgainKept(queryClient, filters);
+    };
     // Whether one more health read is owed once the walk in flight settles: one, however many
     // events land during it; dropped with the subscription (entering Health reads anyway).
     let healthOwed = false;
@@ -543,7 +557,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     // at once (on screen; off screen it is only marked stale and entering Health reads it). One in
     // flight (Health entered, Check again, an earlier event) is kept, never aborted, its answer
     // taken; it may predate the event, so exactly one more is read after it settles, answered or
-    // failed, active only. No timer: the walk's own settling sends the next.
+    // failed, active only: readAgainKept's rule, its debt the subscription's, so the cleanup drops it.
     const readHealthAgain = () => {
       const key = queryKeys.health(project);
       const walk = queryClient.getQueryCache().find({ queryKey: key, exact: true })?.promise;
@@ -562,65 +576,67 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     };
     const readSpecAgain = () => {
       // `[read, project]` matches that project's entries of the read whatever their options.
-      // The check and the health read are full walks: one already running (Health entered, Check
-      // again) is kept and its answer taken, never cancelled for a second walk (the health read
-      // then read once more, readHealthAgain); any other read is read again at once.
       for (const read of READS_OF_THE_SPEC) {
         if (read === "health") {
           readHealthAgain();
+        } else if (WALKS.has(read)) {
+          // The check, a walk of the whole corpus, keeps its rule (`docs/canon/health.md` "UI"): one
+          // already running (Health entered, Check again) is kept and its answer taken, never
+          // aborted and never followed by a second walk.
+          void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: false });
         } else {
-          void queryClient.invalidateQueries({ queryKey: [read, project] }, { cancelRefetch: !WALKS.has(read) });
+          readAgain({ queryKey: [read, project] });
         }
       }
     };
     // The plan lists each open task beside the item it executes, or among the pool tasks: a task
-    // event reads it again, a read in flight aborted (`docs/features/roadmap-screen.md`); an apply
-    // and a gap read it as a read of the spec. No other event: a stage, a new proposal, an
-    // approval, a rejection or a refused apply changes no item file and no task.
+    // event reads it again (`docs/features/roadmap-screen.md`); an apply and a gap read it as a read
+    // of the spec. No other event: a stage, a new proposal, an approval, a rejection or a refused
+    // apply changes no item file and no task.
     const readPlanAgain = () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.roadmap(project), exact: true });
+      readAgain({ queryKey: queryKeys.roadmap(project), exact: true });
     };
     /** The task list and every task of the project, whatever task is open. */
     const readTasksAgain = () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(project), exact: true });
-      void queryClient.invalidateQueries({ queryKey: ["task", project] });
+      readAgain({ queryKey: queryKeys.tasks(project), exact: true });
+      readAgain({ queryKey: ["task", project] });
     };
     // The question round's sheet lists the open questions and discrepancies, their stages and the
-    // tasks waiting on them: any proposal or task event, and a gap, read it again; a read in flight
-    // is aborted for the new one (`docs/features/ui-round.md` "Description and interactions").
+    // tasks waiting on them: any proposal or task event, and a gap, read it again
+    // (`docs/features/ui-round.md` "Description and interactions").
     const readRoundAgain = () => {
-      void queryClient.invalidateQueries({ queryKey: roundsOf(project) });
+      readAgain({ queryKey: roundsOf(project) });
     };
     // What was delivered and what is overdue counts the cards, their events, the items raised on
     // them and the plan's groups: a card event, any proposal event but a stage, and a gap read it
-    // again at every day asked, a read in flight aborted (docs/features/delivery-analytics.md
-    // "Acceptance criteria", DA-12). A task event changes none of it.
+    // again at every day asked (docs/features/delivery-analytics.md "Acceptance criteria", DA-12).
+    // A task event changes none of it.
     const readDeliveryAgain = () => {
-      void queryClient.invalidateQueries({ queryKey: deliveryOf(project) });
+      readAgain({ queryKey: deliveryOf(project) });
     };
     // A direction's catalog serves each node's state and tasks from the cards, and its open items
-    // from the queue: a card event and any proposal event but a stage read it again, a read in
-    // flight aborted; an apply and a gap read it as a read of the spec, once
-    // (docs/features/direction-catalog.md "Acceptance criteria", DC-10). A task event changes none of it.
-    // The rings serve each node's state from the cards, as the catalog does: they are read again
-    // with it, a read in flight aborted; an apply and a gap read them as a read of the spec, once
+    // from the queue: a card event and any proposal event but a stage read it again; an apply and a
+    // gap read it as a read of the spec, once
+    // (docs/features/direction-catalog.md "Acceptance criteria", DC-10). A task event changes none of
+    // it. The rings serve each node's state from the cards, as the catalog does: they are read again
+    // with it; an apply and a gap read them as a read of the spec, once
     // (docs/features/scope-rings.md "Acceptance criteria", SR7).
     const readCatalogAgain = () => {
-      void queryClient.invalidateQueries({ queryKey: catalogsOf(project) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.rings(project), exact: true });
+      readAgain({ queryKey: catalogsOf(project) });
+      readAgain({ queryKey: queryKeys.rings(project), exact: true });
     };
     /** Marks and rollups: a read of the project's cards against its spec, wherever they show. */
     const readMarksAgain = () => {
-      void queryClient.invalidateQueries({ queryKey: tracesOf(project) });
-      void queryClient.invalidateQueries({ queryKey: flowsOf(project) });
-      void queryClient.invalidateQueries({ queryKey: cardListsOf(project) });
+      readAgain({ queryKey: tracesOf(project) });
+      readAgain({ queryKey: flowsOf(project) });
+      readAgain({ queryKey: cardListsOf(project) });
     };
     // The task counts serve each flow's open items and the agent tasks its open tasks link whose plan
-    // waits for review: a proposal event but a stage, and a task event, read them again, a read in
-    // flight aborted; a card event, a write and a gap read them with the card lists, which hold them
+    // waits for review: a proposal event but a stage, and a task event, read them again; a card
+    // event, a write and a gap read them with the card lists, which hold them
     // (docs/features/department-overview.md "Acceptance criteria", DO10).
     const readCountsAgain = () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.cardCounts(project), exact: true });
+      readAgain({ queryKey: queryKeys.cardCounts(project), exact: true });
     };
     const unsubscribe = client.subscribe(
       project,
@@ -628,11 +644,11 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         const id = eventId(event.payload);
         if (event.type.startsWith(CARD_EVENT)) {
           if (id === null) {
-            void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+            readAgain({ queryKey: cardsOf(project) });
           } else {
-            void queryClient.invalidateQueries({ queryKey: queryKeys.card(project, id), exact: true });
+            readAgain({ queryKey: queryKeys.card(project, id), exact: true });
             // A subtask's read serves what changed above it: its parent's write is news to it.
-            void queryClient.invalidateQueries({ queryKey: cardsOf(project), predicate: (query) => namesParent(query.state.data, id) });
+            readAgain({ queryKey: cardsOf(project), predicate: (query) => namesParent(query.state.data, id) });
           }
           readMarksAgain();
           readDeliveryAgain();
@@ -646,27 +662,27 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
           if (id === null) {
             readTasksAgain();
           } else {
-            void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(project), exact: true });
-            void queryClient.invalidateQueries({ queryKey: queryKeys.task(project, id), exact: true });
+            readAgain({ queryKey: queryKeys.tasks(project), exact: true });
+            readAgain({ queryKey: queryKeys.task(project, id), exact: true });
           }
           readPlanAgain();
           // A card reads each task it links now: the card on screen is read again, whichever task
           // this is (no read names which cards link it); the list shows no task and stays.
-          void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+          readAgain({ queryKey: cardsOf(project) });
           readCountsAgain();
           return;
         }
         if (!event.type.startsWith(PROPOSAL_EVENT)) {
           return;
         }
-        void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
+        readAgain({ queryKey: queryKeys.inbox(project), exact: true });
         if (id !== null) {
-          void queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true });
+          readAgain({ queryKey: queryKeys.proposal(project, id), exact: true });
         }
         // A card serves its items and their events read now, whichever card names this one (no event
         // says): the card on screen is read again, as after a task event; the list shows no item and stays
         // (docs/canon/card-questions.md "The rule").
-        void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+        readAgain({ queryKey: cardsOf(project) });
         if (event.type === STAGED || event.type === UNSTAGED) {
           const unstaged = event.type === UNSTAGED;
           if (id !== null && !isOwnStageEvent(queryClient, project, id, unstaged, stagedOf(event.payload))) {
@@ -691,12 +707,12 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         }
       },
       () => {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true });
-        void queryClient.invalidateQueries({ queryKey: ["proposal", project] });
+        readAgain({ queryKey: queryKeys.inbox(project), exact: true });
+        readAgain({ queryKey: ["proposal", project] });
         readSpecAgain();
         readTasksAgain();
         readRoundAgain();
-        void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+        readAgain({ queryKey: cardsOf(project) });
         readDeliveryAgain();
       },
     );
@@ -1231,7 +1247,7 @@ export function useConfirmProposal(project: string) {
 
 /**
  * The project's whole plan (`docs/features/roadmap-screen.md`): one read, neither option sent, its
- * query's AbortSignal taken (a read superseded by a live event's is aborted). Read on entering the
+ * query's AbortSignal taken (a live event's re-read keeps the read in flight, then reads once more). Read on entering the
  * Roadmap, on "Read again" (`refetch`) and, while the Roadmap is on screen, after a `task.*` event,
  * `proposal.applied` or a gap (useLiveQueue); never on window focus.
  */
@@ -1325,7 +1341,7 @@ export type CardsQuery = ReturnType<typeof useCards>;
  * The project's tasks counted per flow and column, uncut (docs/features/department-overview.md
  * "Acceptance criteria", DO10): `spec card counts --json`, its query's AbortSignal taken. Read while
  * the Overview shows; read again with the card lists (a `card.*` event, a write's settle, a gap), on
- * a `proposal.*` event but a stage and on a `task.*` event (useLiveQueue), a read in flight aborted;
+ * a `proposal.*` event but a stage and on a `task.*` event (useLiveQueue), a read in flight kept;
  * never on window focus. The counts are the daemon's; the Overview folds them, never recounts.
  */
 export function useCardCounts(project: string) {
@@ -1367,7 +1383,7 @@ export type CardQuery = ReturnType<typeof useCard>;
 /**
  * Marks and rollups (`docs/features/card-trace.md`), never stored: read when a screen shows them
  * (`enabled`), after a card write, a `card.*` event, an apply, a decision on a proposal or a gap; with
- * `onFocus` on window focus too, for a hand edit, which raises no event. A read superseded is aborted.
+ * `onFocus` on window focus too, for a hand edit, which raises no event. A live event keeps a read in flight.
  */
 export function useTrace(project: string, options: TraceOptions = {}, enabled = true, onFocus = false) {
   const client = useClient();

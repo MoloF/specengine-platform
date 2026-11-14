@@ -31,9 +31,10 @@ use specengine_cli::{
     Env, GitEnv, HubSync, IndexTrust, SyncOutcome, SyncRepository, SyncState, hub_sync,
     process_git, sync_key, sync_line, sync_once, utc_now, walking,
 };
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Notify;
 
 use crate::start::Project;
+use crate::turn::{self, Holder};
 
 /// The most intervals a `retrying` sync waits.
 const BACKOFF_MAX: u32 = 8;
@@ -62,8 +63,8 @@ pub(crate) struct RepoSync {
     top: PathBuf,
     /// The repository and its served roots; `Err`: why no sync can run.
     repository: Result<SyncRepository, String>,
-    /// The turns of its projects, in `--root` order.
-    turns: Vec<Arc<Mutex<()>>>,
+    /// Its projects, whose turns its merge takes, in `--root` order.
+    projects: Vec<Arc<Project>>,
     /// Their trusts (a hub's), which the merge runs in: its update keeps
     /// the indexes, its failures doubt them.
     trusts: Vec<Arc<IndexTrust>>,
@@ -113,12 +114,17 @@ impl RepoSync {
                 Err(error) => return stopped(error.message),
             };
             let git = process_git(&env);
-            let turns = &sync.turns;
+            let projects = &sync.projects;
             let trusts: Vec<&IndexTrust> = sync.trusts.iter().map(Arc::as_ref).collect();
             let mut in_turns = |merge: &mut dyn FnMut()| {
                 // In `--root` order; a request holding one is awaited, a
-                // request waiting for one waits for the merge.
-                let held: Vec<_> = turns.iter().map(|turn| turn.blocking_lock()).collect();
+                // request waiting for one waits for the merge. Each hold
+                // watched (`crate::turn`): `by=sync`, released in that
+                // order too.
+                let held: Vec<_> = projects
+                    .iter()
+                    .map(|project| turn::take_blocking(project, Holder::sync(project)))
+                    .collect();
                 walking(&trusts, &mut *merge);
                 drop(held);
             };
@@ -175,7 +181,7 @@ struct Group {
     key: Option<(PathBuf, PathBuf)>,
     top: PathBuf,
     repository: Result<SyncRepository, String>,
-    turns: Vec<Arc<Mutex<()>>>,
+    projects: Vec<Arc<Project>>,
     trusts: Vec<Arc<IndexTrust>>,
 }
 
@@ -205,7 +211,7 @@ impl Syncs {
                 Ok(git) => sync_key(git, &project.root),
                 Err(error) => Err(error.message.clone()),
             };
-            let turn = Arc::clone(&project.turn);
+            let served = Arc::clone(project);
             let trust = project.trust.clone();
             let slot = match place {
                 Ok((top, common)) => {
@@ -215,7 +221,7 @@ impl Syncs {
                         if let Ok(repository) = &mut group.repository {
                             repository.roots.push(project.root.clone());
                         }
-                        group.turns.push(turn);
+                        group.projects.push(served);
                         group.trusts.extend(trust);
                         slot
                     } else {
@@ -242,7 +248,7 @@ impl Syncs {
                             key,
                             top,
                             repository,
-                            turns: vec![turn],
+                            projects: vec![served],
                             trusts: trust.into_iter().collect(),
                         });
                         groups.len() - 1
@@ -253,7 +259,7 @@ impl Syncs {
                         key: None,
                         top: project.root.clone(),
                         repository: Err(format!("{}: {why}", project.root.display())),
-                        turns: vec![turn],
+                        projects: vec![served],
                         trusts: trust.into_iter().collect(),
                     });
                     groups.len() - 1
@@ -267,7 +273,7 @@ impl Syncs {
                 Arc::new(RepoSync {
                     top: group.top,
                     repository: group.repository,
-                    turns: group.turns,
+                    projects: group.projects,
                     trusts: group.trusts,
                     signal: Notify::new(),
                     memory: Held::new(Memory::default()),

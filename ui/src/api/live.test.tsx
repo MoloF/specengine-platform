@@ -31,7 +31,7 @@ import {
   useTrace,
   useTree,
 } from "./queries";
-import type { Proposal, QueueEvent, TaskListEntry } from "./types";
+import type { CardList, Inbox, Proposal, QueueEvent, TaskListEntry } from "./types";
 
 // AC-09 of docs/features/daemon-read.md: the live tail over a stubbed EventSource. A `proposal.*`
 // event reads that project's inbox and that proposal again; `proposal.applied` also that project's
@@ -766,7 +766,8 @@ function heldTasksDaemon(board: TaskBoard, held: RegExp): Fates {
 }
 
 describe("a burst of events on the live tail (AC-10 of ui-live-tasks, the review's burst)", () => {
-  it("proposal.applied, then task.refreshed twice on the open task: the superseded reads are aborted, exactly one package read answered", async () => {
+  // TF12 of docs/features/hub-turn-fairness.md: a live event never aborts a read in flight; it is followed by one more.
+  it("proposal.applied, then task.refreshed twice on the open task: the read in flight is kept and answered, then exactly one more package read", async () => {
     const board: TaskBoard = {
       alpha: [aTaskEntry({ id: "T-0107", status: "review" }), aTaskEntry({ id: "T-0109", status: "in_progress", stale: false })],
       beta: [aTaskEntry({ id: "T-0109", status: "draft" })],
@@ -796,23 +797,34 @@ describe("a burst of events on the live tail (AC-10 of ui-live-tasks, the review
     act(() => {
       source.emit("task.refreshed", '{"id":"T-0109","proposal":"PR-0001","node":"RULE-TIDE-WINDOW"}', "102");
     });
+    const T_0109 = "/api/projects/alpha/tasks/T-0109";
+    const LIST = "/api/projects/alpha/tasks";
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // Nothing aborted, nothing sent beside the reads in flight.
+    expect(fates.aborted).toEqual([]);
+    expect(urlsOf(vi.mocked(fetch)).filter((url) => url === T_0109 || url === LIST).sort()).toEqual([LIST, T_0109]);
+    fates.release();
+    // Each read answered is followed by one more, held in its turn too.
     await waitFor(() => {
-      expect(fates.aborted.filter((url) => url.endsWith("/tasks/T-0109"))).toHaveLength(2);
+      expect(urlsOf(vi.mocked(fetch)).filter((url) => url === T_0109)).toHaveLength(2);
     });
     fates.release();
     await still(queryClient);
+    fates.release();
+    await still(queryClient);
 
-    const T_0109 = "/api/projects/alpha/tasks/T-0109";
-    expect(fates.aborted.filter((url) => url === T_0109)).toEqual([T_0109, T_0109]);
-    expect(fates.answered.filter((url) => url === T_0109)).toEqual([T_0109]);
-    // The list read again with each event: likewise one answered, the rest aborted.
-    expect(fates.answered.filter((url) => url === "/api/projects/alpha/tasks")).toEqual(["/api/projects/alpha/tasks"]);
-    expect(fates.aborted.filter((url) => url === "/api/projects/alpha/tasks")).toHaveLength(2);
+    expect(fates.aborted).toEqual([]);
+    expect(fates.answered.filter((url) => url === T_0109)).toEqual([T_0109, T_0109]);
+    // The list read again with each event: likewise kept, then read once more.
+    expect(fates.answered.filter((url) => url === LIST)).toEqual([LIST, LIST]);
     expect(queryClient.getQueryState(queryKeys.task("alpha", "T-0109"))?.status).toBe("success");
     expect(screen.getByText("ready")).toBeTruthy();
   });
 
-  it("a burst of applies aborts the superseded graph read, never the check in flight: one /check, sent with no signal", async () => {
+  // TF12 of docs/features/hub-turn-fairness.md: the graph read in flight is kept, then read once more; the check keeps its rule (docs/canon/health.md "UI").
+  it("a burst of applies keeps the graph read in flight, then reads it once more; never a second walk of the check in flight: one /check, sent with no signal", async () => {
     const waiting: (() => void)[] = [];
     const aborted: string[] = [];
     const checkInits: (RequestInit | undefined)[] = [];
@@ -863,9 +875,7 @@ describe("a burst of events on the live tail (AC-10 of ui-live-tasks, the review
         await Promise.resolve();
       });
     }
-    await waitFor(() => {
-      expect(aborted.filter((url) => url.includes("/graph"))).toHaveLength(2);
-    });
+    expect(urlsOf(fetchStub).filter((url) => url === ALPHA_GRAPH)).toHaveLength(1);
     holding = false;
     for (const release of waiting.splice(0)) {
       release();
@@ -876,7 +886,8 @@ describe("a burst of events on the live tail (AC-10 of ui-live-tasks, the review
     expect(urlsOf(fetchStub).filter((url) => url === ALPHA_CHECK)).toEqual([ALPHA_CHECK]);
     expect(aborted.filter((url) => url.includes("/check"))).toEqual([]);
     expect(checkInits.map((init) => init !== undefined && "signal" in init)).toEqual([false]);
-    expect(urlsOf(fetchStub).filter((url) => url === ALPHA_GRAPH)).toHaveLength(3);
+    expect(aborted).toEqual([]);
+    expect(urlsOf(fetchStub).filter((url) => url === ALPHA_GRAPH)).toHaveLength(2);
   });
 });
 
@@ -1316,5 +1327,226 @@ describe("a work item's children on the live tail (HP-1 of handoff-progress)", (
       expect(queryClient.isFetching()).toBe(0);
     });
     expect(asked()).toHaveLength(2);
+  });
+});
+
+// TF10-TF12 of docs/features/hub-turn-fairness.md "Acceptance criteria" over the stub client: a live
+// event never aborts a read in flight, which keeps its place in a hub's turn; one more read follows it
+// once it settles, however many events landed; with none in flight, an event reads at once.
+describe("a live event keeps the read in flight (TF10-TF12 of hub-turn-fairness)", () => {
+  /** One held read: the signal it was sent with, and the hand that answers it. */
+  interface Held<T> {
+    signal: AbortSignal | undefined;
+    answer: (data: T) => void;
+  }
+
+  function InboxOnScreen() {
+    const inbox = useInbox("alpha");
+    useLiveQueue("alpha");
+    return <p>{inbox.data === undefined ? "reading" : inbox.data.proposals.map((proposal) => proposal.id).join(" ") || "empty"}</p>;
+  }
+
+  function CardsOnScreen() {
+    const cards = useCards("alpha");
+    useLiveQueue("alpha");
+    return <p>{cards.data === undefined ? "reading" : cards.data.cards.map((row) => row.id).join(" ")}</p>;
+  }
+
+  /** The stub client, every inbox and card list read held until answered by hand, its tail driven by `emit`. */
+  function heldReads() {
+    const client = stubClient();
+    const inboxReads: Held<Inbox>[] = [];
+    const cardReads: Held<CardList>[] = [];
+    client.getInbox.mockImplementation(
+      (_project, signal) =>
+        new Promise<Inbox>((resolve) => {
+          inboxReads.push({ signal, answer: resolve });
+        }),
+    );
+    client.getCards.mockImplementation(
+      (_project, _options, signal) =>
+        new Promise<CardList>((resolve) => {
+          cardReads.push({ signal, answer: resolve });
+        }),
+    );
+    let tail: (event: QueueEvent) => void = () => undefined;
+    let lost: (() => void) | undefined;
+    client.subscribe = (_project, onEvent, onGap) => {
+      tail = onEvent;
+      lost = onGap;
+      return () => undefined;
+    };
+    let seq = 0;
+    const emit = (type: string, id: string) => {
+      seq += 1;
+      act(() => {
+        tail({ seq, type, payload: { id } });
+      });
+    };
+    /** The stream opened again after the browser gave up on it: events may have been missed. */
+    const gap = () => {
+      act(() => {
+        lost?.();
+      });
+    };
+    return { client, inboxReads, cardReads, emit, gap };
+  }
+
+  function inboxOf(ids: string[]): Inbox {
+    return { proposals: ids.map((id) => entryOf(aProposal({ id }))), notes: [] };
+  }
+
+  /** Lets the tasks an event or an answer queued run. */
+  async function settle() {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  it("an inbox read in flight is not aborted by proposal.created; its answer starts exactly one more read, whose answer is shown (TF10)", async () => {
+    const { client, inboxReads, emit } = heldReads();
+    render(
+      <ApiProvider client={client} queryClient={createQueryClient()}>
+        <InboxOnScreen />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(1);
+    });
+    act(() => {
+      inboxReads[0]?.answer(inboxOf([]));
+    });
+    expect(await screen.findByText("empty")).toBeTruthy();
+    // A read of the inbox on screen, held in the hub's turn: the one in flight.
+    emit("proposal.created", "PR-0001");
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(2);
+    });
+    const held = inboxReads[1];
+    emit("proposal.created", "PR-0002");
+    await settle();
+    // Not aborted, and nothing sent beside it: still the one request.
+    expect([inboxReads.length - 1, held?.signal?.aborted]).toEqual([1, false]);
+    act(() => {
+      held?.answer(inboxOf(["PR-0001"]));
+    });
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(3);
+    });
+    act(() => {
+      inboxReads[2]?.answer(inboxOf(["PR-0001", "PR-0002"]));
+    });
+    expect(await screen.findByText("PR-0001 PR-0002")).toBeTruthy();
+    await settle();
+    expect(client.getInbox).toHaveBeenCalledTimes(3);
+    expect(inboxReads.map((read) => read.signal?.aborted)).toEqual([false, false, false]);
+  });
+
+  it("three proposal events during one held read give one more read, two in all; an event with none in flight reads at once (TF11)", async () => {
+    const { client, inboxReads, emit } = heldReads();
+    render(
+      <ApiProvider client={client} queryClient={createQueryClient()}>
+        <InboxOnScreen />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(1);
+    });
+    act(() => {
+      inboxReads[0]?.answer(inboxOf([]));
+    });
+    expect(await screen.findByText("empty")).toBeTruthy();
+    // No read in flight: one read at once.
+    emit("proposal.created", "PR-0001");
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(2);
+    });
+    // Held, three more events: nothing aborted, nothing sent beside it.
+    emit("proposal.created", "PR-0002");
+    emit("proposal.approved", "PR-0001");
+    emit("proposal.rejected", "PR-0002");
+    await settle();
+    expect(client.getInbox).toHaveBeenCalledTimes(2);
+    act(() => {
+      inboxReads[1]?.answer(inboxOf(["PR-0001"]));
+    });
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(3);
+    });
+    act(() => {
+      inboxReads[2]?.answer(inboxOf(["PR-0001", "PR-0002"]));
+    });
+    expect(await screen.findByText("PR-0001 PR-0002")).toBeTruthy();
+    await settle();
+    // The held read and its one trailing read: two for the four events.
+    expect(client.getInbox).toHaveBeenCalledTimes(3);
+    expect(inboxReads.map((read) => read.signal?.aborted)).toEqual([false, false, false]);
+  });
+
+  it("a gap keeps the inbox read in flight too: not aborted, then exactly one more read (TF12, the gap's re-reads)", async () => {
+    const { client, inboxReads, emit, gap } = heldReads();
+    render(
+      <ApiProvider client={client} queryClient={createQueryClient()}>
+        <InboxOnScreen />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(1);
+    });
+    act(() => {
+      inboxReads[0]?.answer(inboxOf([]));
+    });
+    expect(await screen.findByText("empty")).toBeTruthy();
+    // A read with an answer on screen, held in the hub's turn when the stream is opened again.
+    emit("proposal.created", "PR-0001");
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(2);
+    });
+    gap();
+    gap();
+    await settle();
+    expect([client.getInbox.mock.calls.length, inboxReads[1]?.signal?.aborted]).toEqual([2, false]);
+    act(() => {
+      inboxReads[1]?.answer(inboxOf(["PR-0001"]));
+    });
+    await waitFor(() => {
+      expect(inboxReads).toHaveLength(3);
+    });
+    act(() => {
+      inboxReads[2]?.answer(inboxOf(["PR-0001", "PR-0002"]));
+    });
+    expect(await screen.findByText("PR-0001 PR-0002")).toBeTruthy();
+    await settle();
+    expect(client.getInbox).toHaveBeenCalledTimes(3);
+    expect(inboxReads.map((read) => read.signal?.aborted)).toEqual([false, false, false]);
+  });
+
+  it("a card list read in flight is kept through card events, then read once more (TF12)", async () => {
+    const { client, cardReads, emit } = heldReads();
+    render(
+      <ApiProvider client={client} queryClient={createQueryClient()}>
+        <CardsOnScreen />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(cardReads).toHaveLength(1);
+    });
+    emit("card.moved", "C-0001");
+    emit("card.edited", "C-0001");
+    await settle();
+    expect([client.getCards.mock.calls.length, cardReads[0]?.signal?.aborted]).toEqual([1, false]);
+    act(() => {
+      cardReads[0]?.answer(aCardList([aCardRow({ id: "C-0001" })]));
+    });
+    await waitFor(() => {
+      expect(cardReads).toHaveLength(2);
+    });
+    act(() => {
+      cardReads[1]?.answer(aCardList([aCardRow({ id: "C-0001" }), aCardRow({ id: "C-0002" })]));
+    });
+    expect(await screen.findByText("C-0001 C-0002")).toBeTruthy();
+    await settle();
+    expect(client.getCards).toHaveBeenCalledTimes(2);
+    expect(cardReads.map((read) => read.signal?.aborted)).toEqual([false, false]);
   });
 });
