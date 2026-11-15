@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-15
 ---
 
 # specengine-store -- the spec index
@@ -22,7 +22,7 @@ No `rusqlite` type in a public signature (`architecture.md#distribution`).
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 17`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 - Code index (`symbol-{index,reads}.md` seams): `CodeAnalyzer`, `{update,clear}_code`, `stored_names`, `code_{refs,symbols,snapshot{,_with_roles,_with_layer_c},roles,selection}`, `{lookup,file}_symbols`, `LookupWithFiles` (`spec-impact.md`); `StoredRole`, `RoleCandidate`, `CodeSnapshot.roles` (`code-roles.md`); `CodeSelection {refs, files}`, `SelectedFile {path, names, holds, symbols}` (`spec-verify-scope.md`); layer C: `replace_layer_c`, `layer_c_{stamp,snapshot}`, `code_tree_rows` (`layer-c{,-reads}.md`).
 - `b3_hash(&[u8]) -> String`, streaming `B3Stream {new, update, finish}` (`node-revision.md` "Where it appears"): `bundle_hash`, `span_hash`, `patch_hash`, `norm_hash`.
-- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record,decision-staging,spec-ids,collision-pass}.md`, schemas `proposal-queue.md` "Store"; tasks `tasks.md`, cards `{cards,spec-trace,card-upstream,card-counts}.md`, the gate `gate.md`): `ProposalQueue`, `SqliteQueue::open(db, project)`, ops named in those canons, `stage_as`, `unstage_as`, `record_verify_tests` (`spec-verify-tests.md`); `events_after(after, limit) -> EventsAfter {events, last_seq, full}` (`user_version` checked), `events_of_types`, `live_adds`, `snapshot` -> `QueueSnapshot` (`spec-delivery.md` "Reads"); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`): methods in those canons, `spec-lock.md`, `spec-history.md`, `spec-catalog.md` (`last_commits{,_at}` -> `LastCommits`), `spec-verify-tests.md` (`status_all`) and `proposal-outputs.md` (`is_skip_worktree`, `local_blob_at`, `disk_name` -> `DiskName`; `outputs.rs` `committed_tree`); `floor.rs` `read_floor`, `id_side`, `store_floor` (`queue-backup.md`); children's environment, deadlines: `hub-git.md`, `gate.md`; `STDERR_MAX` public; `sync.rs` `SyncGit` (`changed` -> `ChangedPaths`), the only `fetch` and `push`, and `sparse.rs` `sparse_set` (`hub-git.md`); `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"; `list_revision` (`impact --since`): `spec-impact.md` "Since"); the file writes, `same_repository`, `introduced_findings`: those canons.
+- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record,decision-staging,spec-ids,collision-pass}.md`, schemas `proposal-queue.md` "Store"; tasks `tasks.md`, cards `{cards,spec-trace,card-upstream,card-counts}.md`, the gate `gate.md`): `ProposalQueue`, `SqliteQueue::open(db, project)`, ops named in those canons, `stage_as`, `unstage_as`, `record_verify_tests` (`spec-verify-tests.md`); `events_after(after, limit) -> EventsAfter {events, last_seq, full}` (`user_version` checked), `events_of_types`, `live_adds`, `snapshot` -> `QueueSnapshot` (`spec-delivery.md` "Reads"); `queue/{auto,feed}.rs` (`spec-auto.md`, `hub-auto.md`; `FeedSnapshot`: `spec-feed.md`); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`): methods in those canons, `spec-lock.md`, `spec-history.md`, `spec-catalog.md` (`last_commits{,_at}` -> `LastCommits`), `spec-verify-tests.md` (`status_all`) and `proposal-outputs.md` (`is_skip_worktree`, `local_blob_at`, `disk_name` -> `DiskName`; `outputs.rs` `committed_tree`); `floor.rs` `read_floor`, `id_side`, `store_floor` (`queue-backup.md`); children's environment, deadlines: `hub-git.md`, `gate.md`; `STDERR_MAX` public; `sync.rs` `SyncGit` (`changed` -> `ChangedPaths`), the only `fetch` and `push`, and `sparse.rs` `sparse_set` (`hub-git.md`); `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"; `list_revision` (`impact --since`): `spec-impact.md` "Since"); the file writes, `same_repository`, `introduced_findings`: those canons.
 
 ## Rows
 
@@ -54,12 +54,12 @@ Before the first table: `journal_mode=WAL`, `auto_vacuum=INCREMENTAL`; per conne
 
 Working answer -> the other's cost.
 
-- Q1 the pins above, transitive ones pending (04 s6) -> `build_graph.rs` changes.
+- Q1 the pins above, transitive ones pending -> `build_graph.rs` changes.
 - Q2 `trigram case_sensitive 0` (`remove_diacritics 1` if `fts.rs` stays green), exact IDs outside FTS -> `unicode61`: prefix, substring, stem tests rewritten; a stemmer by `[project] language`: an ADR on `#universal`.
-- Q3 role keys + `roots` + `exclude` -> role keys only: spec-b rewritten, READMEs outside `docs/` unreachable (08 s4.1); `roots` only: role keys leave the walk.
+- Q3 role keys + `roots` + `exclude` -> role keys only: spec-b rewritten, READMEs outside `docs/` unreachable; `roots` only: role keys leave the walk.
 
 ## Open minors
 
 - -> the watcher: `update_paths` silently drops rows under an unreadable directory.
-- Accepted: an existing non-WAL DB with other tables keeps its rollback journal; a broken escalation invariant or JSON encode -> `Sqlite`; races (`read` checks components, then reads; `resolve` names the parent when an entry's type is unreadable).
+- Accepted: a non-WAL DB with other tables keeps its rollback journal; a broken escalation invariant or JSON encode -> `Sqlite`; races (`read` checks components, then reads).
 - `GitIndex` holds each blob twice; untested: `RootGone` by a spawn race, a filesystem boundary.

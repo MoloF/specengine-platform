@@ -133,6 +133,7 @@ impl Pair {
                 &super::CARD_PRESS,
                 &super::TRACE_ALMANAC,
                 &super::STUDIO_LAMP,
+                &super::AUTO_MINI,
             ])
             .find(|(name, _)| *name == fixture)
             .map_or_else(

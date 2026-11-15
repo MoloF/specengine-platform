@@ -4,7 +4,6 @@ import { useDataSource } from "../api/provider";
 import { useCardWriting, useIdentity, useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
 import type { Project } from "../api/types";
 import { BoardView, type BoardMemory, type BoardState } from "../board/BoardView";
-import { CardPage } from "../board/CardPage";
 import { DocModal } from "../doc/DocModal";
 import { DocPage } from "../doc/DocPage";
 import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
@@ -36,7 +35,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { closeDoc, forgetDoc, openDocFrom, pushHash, replaceHash, useHash } from "./location";
-import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
+import { ALL_SECTIONS, feedHash, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { SyncLine } from "./SyncLine";
 import { NotFound, ViewFailure } from "./views";
@@ -47,6 +46,12 @@ import { NotFound, ViewFailure } from "./views";
  */
 const RoadmapView = lazy(() => import("../roadmap/RoadmapView").then((module) => ({ default: module.RoadmapView })));
 const GraphView = lazy(() => import("../graph/GraphView").then((module) => ({ default: module.GraphView })));
+/**
+ * Activity, the feed, a chunk of its own too (docs/features/auto-feed.md "The UI"); so is a task's
+ * page, a view reached by its link alone, which keeps first load within its budget as the feed joins it.
+ */
+const CardPage = lazy(() => import("../board/CardPage").then((module) => ({ default: module.CardPage })));
+const FeedView = lazy(() => import("../feed/FeedView").then((module) => ({ default: module.FeedView })));
 
 /**
  * Calls `onLanded` once committed beside a lazy view: a Suspense boundary resolves without the
@@ -67,12 +72,16 @@ function viewKeyOf(route: Route): string {
   if (route.type === "section") {
     return route.view === undefined ? `${route.project}/${route.section}` : `${route.project}/${route.section}/${route.id ?? ""}/${route.view}`;
   }
+  if (route.type === "feed") {
+    // Its two tabs are one view: a tab's switch keeps the focus where it is.
+    return `${route.project}/feed`;
+  }
   return route.type === "project" ? `project:${route.project}` : route.type;
 }
 
 /** The project a route names, if any. */
 function projectOf(route: Route): string | null {
-  return route.type === "section" || route.type === "project" ? route.project : null;
+  return route.type === "section" || route.type === "project" || route.type === "feed" ? route.project : null;
 }
 
 /** The document a route opens in the modal, if any. */
@@ -190,7 +199,7 @@ function ProjectSwitcher({
         onChange={(event) => {
           // A section keeps its section; the home and any other route land on the other project's home.
           const other = event.target.value;
-          pushHash(route.type === "section" ? sectionHash(other, route.section) : homeHash(other));
+          pushHash(route.type === "section" ? sectionHash(other, route.section) : route.type === "feed" ? feedHash(other, route.tab) : homeHash(other));
         }}
       >
         {!listed && (
@@ -613,6 +622,13 @@ export function Shell({ scenario }: { scenario: string | null }) {
         workspaces={lens?.workspaces ?? (workspacesFailed ? [] : null)}
       />
     );
+  } else if (route.type === "feed") {
+    view = (
+      <Suspense key={route.project} fallback={<Skeleton label={t("feed.loading", { project: route.project })} lines={6} />}>
+        <FeedView project={route.project} tab={route.tab} />
+        <Landed onLanded={onLanded} />
+      </Suspense>
+    );
   } else if (route.section === "inbox") {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {
@@ -620,7 +636,12 @@ export function Shell({ scenario }: { scenario: string | null }) {
   } else if (route.section === "tree" && route.view !== undefined && route.id !== null) {
     view = <DocPage key={`${route.project}/${route.id}`} project={route.project} docRef={route.id} insideOpen={insideOpen} onInside={setInsideOpen} historyOpen={historyOpen} onHistory={setHistoryOpen} />;
   } else if (route.section === "board" && route.view !== undefined && route.id !== null) {
-    view = <CardPage key={`${route.project}/${route.id}`} project={route.project} id={route.id} />;
+    view = (
+      <Suspense key={`${route.project}/${route.id}`} fallback={<Skeleton label={t("board.panel.loading", { id: route.id })} lines={6} />}>
+        <CardPage project={route.project} id={route.id} />
+        <Landed onLanded={onLanded} />
+      </Suspense>
+    );
   } else if (route.section === "board") {
     view = (
       <BoardView
@@ -747,7 +768,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
               <ul>
                 {navOf(navProject ?? "", navSections, t).map((entry) => {
                   // A section the nav does not list still renders at its hash; then no item is current.
-                  const active = entry.key === "overview" ? route.type === "project" : route.type === "section" && route.section === entry.key;
+                  const active = entry.key === "overview" ? route.type === "project" : entry.key === "feed" ? route.type === "feed" : route.type === "section" && route.section === entry.key;
                   return (
                     <li key={entry.key}>
                       <a href={navProject === null ? "#/" : entry.hash} aria-current={active ? "page" : undefined}>

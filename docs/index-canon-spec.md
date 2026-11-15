@@ -12,6 +12,8 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 
 ## Canon
 
+- [docs/canon/spec-auto-land.md](canon/spec-auto-land.md) spec auto land and spec auto hold · crates/specengine-cli · tier 2
+- [docs/canon/spec-auto.md](canon/spec-auto.md) spec auto: show, stop, resume, start, approve, next · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-catalog.md](canon/spec-catalog.md) spec catalog: a direction as a table of its documents · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-check-cli.md](canon/spec-check-cli.md) spec check and export index · crates/specengine-cli · tier 2
 - [docs/canon/spec-check-git.md](canon/spec-check-git.md) spec check against HEAD · crates/specengine-store, crates/specengine-cli · tier 2
@@ -25,6 +27,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-cli-refs.md](canon/spec-cli-refs.md) spec refs output: rows, JSON, exits · crates/specengine-cli · tier 2
 - [docs/canon/spec-delivery-timeline.md](canon/spec-delivery-timeline.md) spec delivery --timeline: every task on one axis · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-delivery.md](canon/spec-delivery.md) spec delivery: what was delivered, what is overdue and why · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
+- [docs/canon/spec-feed.md](canon/spec-feed.md) spec feed: what happened, newest change first, and what needs the owner · crates/specengine-cli, crates/specengine-store, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-flow-bar.md](canon/spec-flow-bar.md) The Flow screen: the bar, Gaps and Records for the AI · ui · tier 2
 - [docs/canon/spec-flow-cuts.md](canon/spec-flow-cuts.md) spec flow: in the flow, the stage and in-flow cuts, types · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
 - [docs/canon/spec-flow-layout.md](canon/spec-flow-layout.md) The Flow screen: layout and forms · ui · tier 2

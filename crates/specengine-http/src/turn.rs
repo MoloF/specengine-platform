@@ -21,9 +21,12 @@
 //!   end writes `released` with its whole length, before the turn passes on.
 //!
 //! ```text
-//! specengine-http: slow turn at=<T> project=<P> by=<R|sync> id=<I> tool=<N> state=held held_ms=<n> class=<page|mcp|sync>
-//! specengine-http: slow turn at=<T> project=<P> by=<R|sync> id=<I> tool=<N> state=released held_ms=<n> class=<page|mcp|sync>
+//! specengine-http: slow turn at=<T> project=<P> by=<R|sync|L> id=<I> tool=<N> state=held held_ms=<n> class=<page|mcp|sync>
+//! specengine-http: slow turn at=<T> project=<P> by=<R|sync|L> id=<I> tool=<N> state=released held_ms=<n> class=<page|mcp|sync>
 //! ```
+//!
+//! A hub's delegated apply ([`crate::auto`]) holds as `by=<login> id=<proposal>
+//! tool=auto_apply class=mcp`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -94,6 +97,33 @@ impl Holder {
             class,
             exchange,
         }
+    }
+
+    /// A hub's delegated apply ([`crate::auto`]), which no request carries:
+    /// `by` the login whose call stored the row (as `project` and `id`
+    /// print: else `?`), `id` the proposal, `tool` the library call it runs,
+    /// class `mcp`.
+    pub(crate) fn delegated(project: &Project, login: &str, id: &str, tool: &str) -> Self {
+        Self {
+            project: project.slug.clone(),
+            by: Some(slow::clean(Some(login), false).to_owned()),
+            id: Some(id.to_owned()),
+            tool: Some(tool.to_owned()),
+            class: Class::Mcp,
+            exchange: None,
+        }
+    }
+
+    /// Its `by`, `id`, `tool` and class, as its lines name them: the units'
+    /// seam (`crate::auto`), test builds alone.
+    #[cfg(test)]
+    pub(crate) fn named(&self) -> (Option<&str>, Option<&str>, Option<&str>, Class) {
+        (
+            self.by.as_deref(),
+            self.id.as_deref(),
+            self.tool.as_deref(),
+            self.class,
+        )
     }
 
     /// A `--push` sync's merge.

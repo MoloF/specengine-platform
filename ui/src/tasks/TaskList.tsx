@@ -18,6 +18,7 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { chipsOf, DEFAULT_FILTERS, isFiltered, isPressed, matchesFilters, toggleChip, type TaskFilters } from "./filter";
 import { groupsOf, waitsForYou } from "./groups";
 import { specChanged, taskStatusLook } from "./labels";
+import { changedGroups, recallSort, rememberSort, type TaskSort } from "./sort";
 import { useTranslate, type Translate } from "../i18n";
 import { around, fill, slot } from "../i18n/fill";
 
@@ -121,10 +122,12 @@ export function TaskList({
   const failure = useRetainedFailure(tasks.error, tasks.isFetching);
   const focusLater = useFocusLater();
   const fieldId = useId();
+  const sortId = useId();
   const listbox = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const region = useRef<HTMLDivElement>(null);
   const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+  const [sort, setSort] = useState<TaskSort>(() => recallSort(project));
   const [active, setActive] = useState<string | null>(taskId);
   const [shownTask, setShownTask] = useState<string | null>(taskId);
 
@@ -203,7 +206,7 @@ export function TaskList({
   const changedCount = answer.tasks.filter((entry) => entry.stale === true).length;
   const waiting = answer.tasks.filter(waitsForYou).length;
   const visible = answer.tasks.filter((entry) => matchesFilters(entry, filters));
-  const groups = groupsOf(visible, t);
+  const groups = sort === "changed" ? changedGroups(visible, t) : groupsOf(visible, t);
   const order = groups.flatMap((group) => group.entries);
   const roving = order.find((entry) => entry.id === active) ?? order.find((entry) => entry.id === taskId) ?? order[0];
 
@@ -321,6 +324,22 @@ export function TaskList({
             setFilters((current) => ({ ...current, query }));
           }}
         />
+        <label className="field-label" htmlFor={sortId}>
+          {t("tasks.sort.label")}
+        </label>
+        <select
+          id={sortId}
+          className="field"
+          value={sort}
+          onChange={(event) => {
+            const chosen = event.target.value === "changed" ? "changed" : "state";
+            setSort(chosen);
+            rememberSort(project, chosen);
+          }}
+        >
+          <option value="state">{t("tasks.sort.state")}</option>
+          <option value="changed">{t("tasks.sort.changed")}</option>
+        </select>
       </div>
       {order.length === 0 ? (
         <EmptyState

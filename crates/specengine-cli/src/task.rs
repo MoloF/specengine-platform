@@ -42,6 +42,7 @@ use specengine_store::{
 };
 
 use crate::apply::Consent;
+use crate::auto_pack::{AUTO_LINE_VAR, auto_line, bind_new_task};
 use crate::corpus::indexed;
 use crate::package::{
     NodeNow, Roots, assemble, node_now, plan_task, reading_plan, render_brief, staleness,
@@ -163,6 +164,9 @@ pub struct TaskOutcome {
     /// Why the command was refused (exit 1).
     pub refusal: Option<String>,
     pub messages: Vec<Message>,
+    /// `spec task new` under `SPECENGINE_AUTO_LINE`: `bound to pack <n> line
+    /// <k>`, the text's second line (and in `notes`); `None` otherwise.
+    pub bound: Option<String>,
 }
 
 impl TaskOutcome {
@@ -199,6 +203,7 @@ impl TaskOutcome {
             notes,
             refusal: Some(reason),
             messages,
+            bound: None,
         }
     }
 
@@ -218,6 +223,7 @@ impl TaskOutcome {
             notes,
             refusal: None,
             messages,
+            bound: None,
         }
     }
 }
@@ -326,7 +332,11 @@ impl Serialize for TaskListOutcome {
 
 /// The queue's context for a task command: as every queue command's, and
 /// `T` not taken by the project's `[ids]` (exit 2).
-fn open_tasks(env: &Env, globals: &Globals, git: &GitEnv) -> Result<QueueContext, CliError> {
+pub(crate) fn open_tasks(
+    env: &Env,
+    globals: &Globals,
+    git: &GitEnv,
+) -> Result<QueueContext, CliError> {
     let context = open_context(env, globals, git)?;
     if let Some(clash) = task_prefix_clash(&context.project.config.scheme) {
         return Err(CliError::spec(format!(
@@ -538,20 +548,39 @@ fn run_new(
         Ok(targets) => targets,
         Err(reason) => return refuse(reason, messages),
     };
-    let created = context
-        .queue
-        .create_task(
-            &NewTask {
-                git_common_dir: context.common_dir.display().to_string(),
-                title: request.title.clone(),
-                goal: request.goal.clone(),
-                targets,
-                author,
-            },
-            now,
-        )
-        .map_err(queue_cannot)?;
-    Ok(TaskOutcome::done(ACTION, &created, None, messages))
+    let new_task = NewTask {
+        git_common_dir: context.common_dir.display().to_string(),
+        title: request.title.clone(),
+        goal: request.goal.clone(),
+        targets,
+        author,
+    };
+    // `SPECENGINE_AUTO_LINE` set and not empty: bound to a pack's line in
+    // the same transaction, or a note why not; unset or empty: as ever.
+    let Some(value) = auto_line(&request.git) else {
+        let created = context
+            .queue
+            .create_task(&new_task, now)
+            .map_err(queue_cannot)?;
+        return Ok(TaskOutcome::done(ACTION, &created, None, messages));
+    };
+    let (created, bound) = bind_new_task(env, &mut context, &new_task, &value, now, &request.git)?;
+    let bound = match bound {
+        Ok(bound) => Some(bound),
+        Err(why) => {
+            messages.push(Message::Note(format!(
+                "{AUTO_LINE_VAR} `{value}`: {why}; {} is bound to no line",
+                created.id
+            )));
+            None
+        }
+    };
+    let mut outcome = TaskOutcome::done(ACTION, &created, None, messages);
+    if let Some(bound) = bound {
+        outcome.notes.push(bound.clone());
+        outcome.bound = Some(bound);
+    }
+    Ok(outcome)
 }
 
 // --------------------------------------------------------------- show
@@ -936,57 +965,10 @@ fn run_approve(
     })?;
     let mut messages = Vec::new();
     let input = indexed(env, &context.project, &mut messages, false)?;
-    // The snapshot's nodes: targets, criteria references, affected nodes,
-    // each once, in that order.
-    let mut wanted: Vec<(String, String)> = Vec::new();
-    let references = task
-        .criteria
-        .iter()
-        .enumerate()
-        .filter_map(|(index, criterion)| {
-            criterion
-                .reference
-                .as_ref()
-                .map(|reference| (format!("criteria[{index}]"), reference.clone()))
-        });
-    for (field, id) in task
-        .targets
-        .iter()
-        .enumerate()
-        .map(|(index, id)| (format!("targets[{index}]"), id.clone()))
-        .chain(references)
-        .chain(
-            task.affected_nodes
-                .iter()
-                .enumerate()
-                .map(|(index, id)| (format!("affected_nodes[{index}]"), id.clone())),
-        )
-    {
-        if !wanted.iter().any(|(_, known)| *known == id) {
-            wanted.push((field, id));
-        }
-    }
-    if let Some(problem) = over_items("snapshot", wanted.len(), SNAPSHOT_MAX) {
-        return refuse(&format!("{problem} (nodes)"), messages);
-    }
-    let mut nodes = Vec::with_capacity(wanted.len());
-    for (field, id) in &wanted {
-        let node: NodeNow = match node_now(&context.project, &input, id)? {
-            Ok(node) => node,
-            Err(reason) => {
-                return refuse(
-                    &format!("{field}: {reason}; nothing can be frozen of it"),
-                    messages,
-                );
-            }
-        };
-        nodes.push(SnapshotEntry {
-            id: id.clone(),
-            path: node.path,
-            span_hash: node.span_hash,
-            text: node.text,
-        });
-    }
+    let nodes = match frozen_nodes(&context.project, &input, &task)? {
+        Ok(nodes) => nodes,
+        Err(reason) => return refuse(&reason, messages),
+    };
     let question = format!(
         "approve {} ({}), freezing {} node(s) of {} on {} at {}? [y/N]",
         task.id,
@@ -1025,6 +1007,69 @@ fn run_approve(
         Ok((stored, run)) => Ok(TaskOutcome::done(ACTION, &stored, run, messages)),
         Err(error) => store_refusal(error, ACTION, &task, messages),
     }
+}
+
+/// The nodes `spec task approve` freezes of `task` in `project` over
+/// `input`: targets, criteria references, affected nodes, each once, in that
+/// order, each read from disk now; `Ok(Err)` the refusal (one over
+/// [`SNAPSHOT_MAX`], one that cannot be read). `spec auto approve` freezes
+/// the same.
+pub(crate) fn frozen_nodes(
+    project: &ProjectRoot,
+    input: &specengine_core::check::CheckInput,
+    task: &Task,
+) -> Result<Result<Vec<SnapshotEntry>, String>, CliError> {
+    // The snapshot's nodes: targets, criteria references, affected nodes,
+    // each once, in that order.
+    let mut wanted: Vec<(String, String)> = Vec::new();
+    let references = task
+        .criteria
+        .iter()
+        .enumerate()
+        .filter_map(|(index, criterion)| {
+            criterion
+                .reference
+                .as_ref()
+                .map(|reference| (format!("criteria[{index}]"), reference.clone()))
+        });
+    for (field, id) in task
+        .targets
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (format!("targets[{index}]"), id.clone()))
+        .chain(references)
+        .chain(
+            task.affected_nodes
+                .iter()
+                .enumerate()
+                .map(|(index, id)| (format!("affected_nodes[{index}]"), id.clone())),
+        )
+    {
+        if !wanted.iter().any(|(_, known)| *known == id) {
+            wanted.push((field, id));
+        }
+    }
+    if let Some(problem) = over_items("snapshot", wanted.len(), SNAPSHOT_MAX) {
+        return Ok(Err(format!("{problem} (nodes)")));
+    }
+    let mut nodes = Vec::with_capacity(wanted.len());
+    for (field, id) in &wanted {
+        let node: NodeNow = match node_now(project, input, id)? {
+            Ok(node) => node,
+            Err(reason) => {
+                return Ok(Err(format!(
+                    "{field}: {reason}; nothing can be frozen of it"
+                )));
+            }
+        };
+        nodes.push(SnapshotEntry {
+            id: id.clone(),
+            path: node.path,
+            span_hash: node.span_hash,
+            text: node.text,
+        });
+    }
+    Ok(Ok(nodes))
 }
 
 /// `spec task changes T --note N`: `review` → `changes_requested`, the
@@ -1622,6 +1667,9 @@ pub(crate) fn render_text(outcome: &TaskOutcome) -> String {
         line.push_str(&format!(" (run {run})"));
     }
     line.push('\n');
+    if let Some(bound) = &outcome.bound {
+        line.push_str(&format!("{bound}\n"));
+    }
     escape_controls(&line)
 }
 

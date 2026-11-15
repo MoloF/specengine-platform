@@ -1,0 +1,5 @@
+[auto]
+mode          = "hub"
+zones         = ["docs"]
+exclude_zones = ["narrative"]
+exclude_kinds = ["scenario"]

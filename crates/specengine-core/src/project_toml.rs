@@ -328,6 +328,11 @@ struct RawFile {
     module: Option<IgnoredAny>,
     #[serde(default)]
     map: Option<IgnoredAny>,
+    /// `[auto]` (`docs/canon/auto-mode.md`): read apart by
+    /// [`crate::auto_toml::AutoRule::from_toml`] from `HEAD`'s bytes, never
+    /// this read's error.
+    #[serde(default)]
+    auto: Option<IgnoredAny>,
 }
 
 /// `[project]`; any other key is an error.

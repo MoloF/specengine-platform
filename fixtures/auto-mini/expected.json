@@ -1,0 +1,146 @@
+{
+  "prefixes": [
+    "DEC",
+    "R",
+    "SC"
+  ],
+  "kinds": [
+    "decision",
+    "requirement",
+    "scenario"
+  ],
+  "files": {
+    "docs/spec/core.md": {
+      "title": "Core rules",
+      "sections": [
+        "R-01",
+        "R-02"
+      ],
+      "zones": [
+        "docs"
+      ]
+    },
+    "docs/narrative/intro.md": {
+      "title": "Intro",
+      "sections": [
+        "SC-001"
+      ],
+      "zones": [
+        "docs",
+        "narrative"
+      ]
+    },
+    "src/lib.rs": {
+      "zones": [
+        "code"
+      ]
+    },
+    "tests/a.rs": {
+      "zones": [
+        "tests"
+      ]
+    },
+    "notes/ideas.md": {
+      "title": "Ideas",
+      "sections": [
+        "R-03"
+      ],
+      "zones": []
+    },
+    "docs/spec/rooms.md": {
+      "title": "Rooms",
+      "sections": [
+        "R-04",
+        "R-05"
+      ],
+      "zones": [
+        "docs"
+      ]
+    },
+    "docs/records/DEC/DEC-0001.md": {
+      "title": "The cellar door sticks only when wet",
+      "id": "DEC-0001",
+      "zones": [
+        "docs"
+      ]
+    },
+    "docs/spec/gate.md": {
+      "title": "The gate",
+      "sections": [
+        "R-07"
+      ],
+      "zones": [
+        "docs"
+      ]
+    }
+  },
+  "rule_hash_input": {
+    "on.toml": "{\"format\":1,\"mode\":\"both\",\"zones\":{\"code\":[\"src/**\"],\"docs\":[\"docs/**\"],\"tests\":[\"tests/**\"]},\"exclude_zones\":{\"narrative\":[\"docs/narrative/**\"]},\"exclude_kinds\":{\"scenario\":[\"SC\"]},\"branch\":\"auto\",\"max_tasks\":10,\"max_applies\":20}"
+  },
+  "bad_rules": {
+    "bad-type.toml": {
+      "line": 4,
+      "problem": null
+    },
+    "bad-not-table.toml": {
+      "line": 1,
+      "problem": "`[auto]` is not a table"
+    },
+    "bad-unknown-key.toml": {
+      "line": 4,
+      "problem": "unknown key `speed` in `[auto]`"
+    },
+    "bad-no-mode.toml": {
+      "line": 1,
+      "problem": "`[auto]` is required to hold `mode`"
+    },
+    "bad-no-zones.toml": {
+      "line": 1,
+      "problem": "`[auto]` is required to hold `zones`"
+    },
+    "bad-mode.toml": {
+      "line": 3,
+      "problem": "`mode` is `always`: one of off, local, hub, both"
+    },
+    "bad-no-zone.toml": {
+      "line": 3,
+      "problem": "`zones` lists no zone"
+    },
+    "bad-long-list.toml": {
+      "line": 3,
+      "problem": "a list holds at most 32 entries"
+    },
+    "bad-undeclared-zone.toml": {
+      "line": 3,
+      "problem": "zone `art` is not declared in `[zones]`"
+    },
+    "bad-zone-twice.toml": {
+      "line": 4,
+      "problem": "zone `narrative` is listed twice"
+    },
+    "bad-kind-twice.toml": {
+      "line": 4,
+      "problem": "kind `scenario` is listed twice"
+    },
+    "bad-undeclared-kind.toml": {
+      "line": 4,
+      "problem": "kind `scene` is declared by no `[ids]` prefix"
+    },
+    "bad-branch.toml": {
+      "line": 4,
+      "problem": "`branch` `-auto` is no branch name (letters, digits, `.`, `_`, `-`, `/`; 1 to 64 bytes)"
+    },
+    "bad-max-tasks.toml": {
+      "line": 4,
+      "problem": "`max_tasks` is 0: 1 to 100"
+    },
+    "bad-max-applies.toml": {
+      "line": 4,
+      "problem": "`max_applies` is 1001: 1 to 1000"
+    },
+    "bad-zones-table.toml": {
+      "line": 5,
+      "problem": "`[zones]` does not read: "
+    }
+  }
+}

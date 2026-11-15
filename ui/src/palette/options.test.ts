@@ -47,7 +47,8 @@ describe("the palette's groups", () => {
     const expected = [
       [
         "Sections",
-        ["section:overview", "section:inbox", "section:tasks", "section:board", "section:roadmap", "section:flow", "section:tree", "section:graph", "section:health", "section:questions"],
+        // Activity second, as the nav; the nav's entries never cut to GROUP_LIMIT (the owner's word of 2026-11-15).
+        ["section:overview", "section:feed", "section:inbox", "section:tasks", "section:board", "section:roadmap", "section:flow", "section:tree", "section:graph", "section:health", "section:questions"],
       ],
       ["Projects", ["project:alpha", "project:beta"]],
     ];
@@ -56,6 +57,7 @@ describe("the palette's groups", () => {
     const sections = paletteGroups(input(""), enT)[0]?.options ?? [];
     expect(sections.map(hashOf)).toEqual([
       "#/alpha",
+      "#/alpha/feed",
       "#/alpha/inbox",
       "#/alpha/tasks",
       "#/alpha/board",
@@ -70,7 +72,8 @@ describe("the palette's groups", () => {
 
   it("matches sections on the label, tasks on ID and title, proposals on ID and summary, projects on slug and name", () => {
     expect(shape("t")).toEqual([
-      ["Sections", ["section:tasks", "section:tree", "section:health", "section:questions"]],
+      // Activity, the nav's second entry (docs/features/auto-feed.md "The UI"; the owner's word of 2026-11-15).
+      ["Sections", ["section:feed", "section:tasks", "section:tree", "section:health", "section:questions"]],
       [
         "Agent tasks",
         ["task:T-0002", "task:T-0003", "task:T-0005", "task:T-0007", "task:T-0004", "task:T-0006", "task:T-0001", "task:T-0008", "task:T-0009"],

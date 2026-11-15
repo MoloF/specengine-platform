@@ -1690,13 +1690,16 @@ pub(crate) fn approve_file(
     if let Some(gap) = outputs.gap() {
         messages.push(Message::Warning(gap.to_owned()));
     }
-    let message = commit_message(&CommitFacts {
-        id,
-        rationale: &proposal.rationale,
-        decided_by: &decided_by,
-        author: &proposal.author,
-        base_commit: &place.base_commit,
-    });
+    let message = crate::apply::delegated_message(
+        commit_message(&CommitFacts {
+            id,
+            rationale: &proposal.rationale,
+            decided_by: &decided_by,
+            author: &proposal.author,
+            base_commit: &place.base_commit,
+        }),
+        context,
+    );
     let output_tops = outputs.top_paths();
     let mut paths = vec![top_path.as_str()];
     paths.extend(output_tops.iter().map(String::as_str));

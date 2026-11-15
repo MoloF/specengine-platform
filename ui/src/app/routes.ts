@@ -27,7 +27,16 @@ export type Route =
       /** The document modal's REF, decoded; absent with none. */
       doc?: string;
     }
+  /** Activity, `#/<p>/feed[/needs-me]`: the nav's second entry, never a tenth section (docs/features/auto-feed.md "The UI"). */
+  | { type: "feed"; project: string; tab: FeedTab }
   | { type: "not_found" };
+
+/** Activity's two tabs: every entry, or what needs the owner. */
+export type FeedTab = "all" | "needs-me";
+
+/** Activity's segment and its Needs me tab's. */
+const FEED = "feed";
+const NEEDS_ME = "needs-me";
 
 /** The fourth segment of a page: a card's or a document's. */
 const PAGE = "page";
@@ -104,6 +113,10 @@ function parsePath(path: string): Route {
   if (section === undefined || (section === "" && id === undefined)) {
     return { type: "project", project };
   }
+  if (section === FEED) {
+    // `#/<p>/feed` and `#/<p>/feed/needs-me`; any other segment names nothing.
+    return rest.length > 0 || (id !== undefined && id !== "" && id !== NEEDS_ME) ? { type: "not_found" } : { type: "feed", project, tab: id === NEEDS_ME ? NEEDS_ME : "all" };
+  }
   if (section === null || !isSectionId(section) || id === null) {
     return { type: "not_found" };
   }
@@ -122,6 +135,11 @@ export function homeHash(project: string): string {
 export function sectionHash(project: string, section: SectionId, id: string | null = null): string {
   const base = `${homeHash(project)}/${section}`;
   return id === null ? base : `${base}/${encodeURIComponent(id)}`;
+}
+
+/** Activity's hash, `#/<p>/feed` or its Needs me tab's `#/<p>/feed/needs-me`. */
+export function feedHash(project: string, tab: FeedTab = "all"): string {
+  return `${homeHash(project)}/${FEED}${tab === NEEDS_ME ? `/${NEEDS_ME}` : ""}`;
 }
 
 /** A card's page, `#/<p>/board/<C>/page`: the card alone, its modal's body and actions, no columns. */
@@ -269,9 +287,9 @@ export function isBareFlow(route: { id: string | null; query?: string }): boolea
   return route.id === null && route.query === undefined;
 }
 
-/** One entry of the nav: the home, then a section. */
+/** One entry of the nav: the home, Activity, then a section. */
 export interface NavEntry {
-  key: "overview" | SectionId;
+  key: "overview" | "feed" | SectionId;
   label: string;
   hash: string;
 }
@@ -280,9 +298,10 @@ export interface NavEntry {
 export const ALL_SECTIONS: readonly SectionId[] = SECTIONS.map((section) => section.id);
 
 /**
- * The nav in order: Overview first, then `sections` in their order (07 §3 "Web UI — screens"), each
- * drawn only if it is one of the nine and only once: a workspace's served list
- * (`docs/features/workspaces.md` "The UI"), or ALL_SECTIONS.
+ * The nav in order: Overview first, Activity second (the feed, in every department: the owner's
+ * word of 2026-11-15, over docs/features/auto-feed.md's off-nav), then `sections` in their order
+ * (07 §3 "Web UI — screens"), each drawn only if it is one of the nine and only once: a workspace's
+ * served list (`docs/features/workspaces.md` "The UI"), or ALL_SECTIONS. Activity stays no section.
  */
 export function navOf(project: string, sections: readonly string[], t: Translate): NavEntry[] {
   const shown: SectionId[] = [];
@@ -293,6 +312,7 @@ export function navOf(project: string, sections: readonly string[], t: Translate
   }
   return [
     { key: "overview", label: t("app.overview"), hash: homeHash(project) },
+    { key: "feed", label: t("feed.title"), hash: feedHash(project) },
     ...shown.map((id) => ({ key: id, label: sectionLabel(id, t), hash: sectionHash(project, id) })),
   ];
 }

@@ -30,8 +30,8 @@ use specengine_core::task::{TaskAction, needs_message, task_id, task_number, tra
 use specengine_model::{RunOutcome, SnapshotPlace, TaskClaim, TaskCriterion, TaskStatus};
 
 use super::{
-    ID_ORDER, Place, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, check_time, log, to_json,
-    user_version,
+    ID_ORDER, Place, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, check_time, log, log_text,
+    to_json, user_version,
 };
 use crate::error::{Db, StoreError};
 use crate::git::same_dir;
@@ -414,6 +414,19 @@ impl SqliteQueue {
         change: &TaskChange,
         now: &str,
     ) -> Result<(Task, Option<u64>), QueueError> {
+        self.change_task_logging(id, seen, change, None, now)
+    }
+
+    /// [`Self::change_task`], its event's payload `payload` when given (a
+    /// delegated approve's, `queue/auto.rs`), else today's.
+    pub(crate) fn change_task_logging(
+        &mut self,
+        id: &str,
+        seen: &TaskSeen,
+        change: &TaskChange,
+        payload: Option<&str>,
+        now: &str,
+    ) -> Result<(Task, Option<u64>), QueueError> {
         check_time(now)?;
         let project = self.project.clone();
         let tx = self.write()?;
@@ -557,11 +570,16 @@ impl SqliteQueue {
             }
         }
         bump(&tx, &project, id, current.revision)?;
-        let payload = match run {
-            Some(run) => json!({ "id": id, "run": run }),
-            None => json!({ "id": id }),
-        };
-        log(&tx, &project, task_event(action), &payload, now)?;
+        match payload {
+            Some(text) => log_text(&tx, &project, task_event(action), text, now)?,
+            None => {
+                let payload = match run {
+                    Some(run) => json!({ "id": id, "run": run }),
+                    None => json!({ "id": id }),
+                };
+                log(&tx, &project, task_event(action), &payload, now)?;
+            }
+        }
         let stored = existing_task(&tx, &project, id)?;
         tx.commit().db()?;
         Ok((stored, run))
@@ -661,7 +679,7 @@ type RawTask = Vec<Option<String>>;
 /// The project's tasks (of the repository `git_common_dir` when given,
 /// compared as stored) by number, read in the caller's snapshot; a row
 /// that does not decode is skipped into [`TaskList::unreadable`].
-fn listed_tasks(
+pub(crate) fn listed_tasks(
     conn: &Connection,
     project: &str,
     git_common_dir: Option<&str>,

@@ -1,0 +1,5 @@
+[auto]
+mode          = "both"
+zones         = ["code", "tests", "docs"]
+exclude_zones = ["narrative"]
+exclude_kinds = ["scenario"]

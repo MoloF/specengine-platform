@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-15
 ---
 
 # Workspaces: a trade's lens on a project
@@ -61,7 +61,7 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 
 UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edit raises no event).
 
-- **Nav** (`routes.ts` `navOf`): Overview, then the workspace's sections that pass `isSectionId`. Pending: a skeleton, `aria-busy`; failed: the nine, or the kept answer's. A section off the nav renders on its route, no redirect, no item `aria-current`; the palette lists all nine.
+- **Nav** (`routes.ts` `navOf`): Overview, Activity (`spec-feed.md` "UI", in every department, no section), then the workspace's sections that pass `isSectionId`. Pending: a skeleton, `aria-busy`; failed: the nine, or the kept answer's. A section off the nav renders on its route, no redirect, no item `aria-current`; the palette's Sections lists Overview, Activity and all nine, uncut.
 - **Keys** (`choice.ts`): `specengine.workspace.<p>`, a name, unserved: the `default`, else the first workspace; a hub's keys end `.<login>` (`hub-department.md` "Screen"). `specengine.module.<p>`: `""` All modules; a served name; none or unserved: the workspace's `module`. Choosing a workspace removes it. Storage refusing: held until a reload.
 - **Switcher**: a select "Department" in the header, titles in served order, `workspaceHint` its description and `title`, with two or more. Choosing stores, removes the module key, pushes the landing (`#/<p>` for `overview`).
 - **Landing**: `#/` is replaced, no history entry, by the first project's landing once read, `#/<p>` on failure; a typed `#/<p>` is the Overview, the chosen department's numbers (`card-counts.md` "Overview").

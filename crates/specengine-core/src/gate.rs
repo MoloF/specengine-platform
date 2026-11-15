@@ -99,6 +99,32 @@ impl Zone {
     pub fn covers(&self, rel: &str) -> bool {
         self.compiled.iter().any(|glob| glob.matches(rel))
     }
+
+    /// A zone rebuilt from its name and globs as written (a frozen auto
+    /// rule's, `crate::auto_toml`), each checked as `[zones]` checks it:
+    /// the first problem, else the zone.
+    pub(crate) fn from_globs(name: &str, globs: &[String]) -> Result<Self, String> {
+        if let Some(problem) = zone_name_problem(name) {
+            return Err(format!("`[zones] {name}`: {problem}"));
+        }
+        if globs.is_empty() {
+            return Err(format!(
+                "`[zones] {name}` has no glob: a zone names at least one"
+            ));
+        }
+        let mut compiled = Vec::with_capacity(globs.len());
+        for glob in globs {
+            if let Some(problem) = glob_problem(glob) {
+                return Err(format!("`[zones] {name}`: {problem}"));
+            }
+            compiled.push(Glob::new(glob));
+        }
+        Ok(Self {
+            name: name.to_owned(),
+            globs: globs.to_vec(),
+            compiled,
+        })
+    }
 }
 
 /// `[gate]` with the zones it controls, checked.

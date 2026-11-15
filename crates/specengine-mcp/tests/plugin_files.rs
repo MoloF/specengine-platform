@@ -295,6 +295,12 @@
 //!   0.46.1, the tree with plugin.json's version set back 0.46.0's; no
 //!   `SCHEMA_PINS` entry, the last still 0.46.0 (as 0.29.1). M: plugin.json
 //!   left at 0.46.0; another file changed.
+//! - auto-mode (RM-0120 to RM-0124, docs/features/auto-runner.md RN8):
+//!   0.46.1 -> 0.47.0, MINOR: the runner `scripts/autopilot.sh`, the
+//!   nineteenth file; no description, skill, role or schema change. A `PINS`
+//!   entry 0.47.0, the tree with plugin.json's version set back 0.46.1's and
+//!   the script removed; no `SCHEMA_PINS` entry, the last still 0.46.0. M:
+//!   the script left out of the set; plugin.json left at 0.46.1.
 //!
 //! The repository is only read.
 
@@ -743,6 +749,13 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.46.1",
         "1ae5a8a52ec3c55683db61faebd6fb08bff7d3cece9c9eb2cc4867289611e4b6",
+    ),
+    // auto-mode (RM-0120 to RM-0124, auto-runner.md RN8: 0.46.1 -> 0.47.0,
+    // MINOR): plugin.json's version and the runner `scripts/autopilot.sh`;
+    // both set back, the tree hashes as 0.46.1's pin.
+    (
+        "0.47.0",
+        "3e8632ed2a16491632284f56dbffd4bc15336b7ac4ea0479be725e7640bdf5d8",
     ),
 ];
 
@@ -1330,8 +1343,9 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
 /// ten (its Files bullet) and docs/canon/plugin-files.md "Changing it", Files
 /// (the five agents and `skills/feature/SKILL.md`), docs/features/flow-authoring.md
 /// `skills/write-flow/SKILL.md`, seventeen; docs/features/collision-pass.md
-/// CP9 `skills/check-collisions/SKILL.md`, eighteen.
-const FILES: [&str; 18] = [
+/// CP9 `skills/check-collisions/SKILL.md`, eighteen; docs/features/auto-runner.md
+/// RN8 `scripts/autopilot.sh`, nineteen.
+const FILES: [&str; 19] = [
     ".claude-plugin/marketplace.json",
     "specengine/.claude-plugin/plugin.json",
     "specengine/.mcp.json",
@@ -1342,6 +1356,7 @@ const FILES: [&str; 18] = [
     "specengine/agents/tester.md",
     "specengine/hooks/gate.sh",
     "specengine/hooks/hooks.json",
+    "specengine/scripts/autopilot.sh",
     "specengine/skills/analyze/SKILL.md",
     "specengine/skills/ask-owner/SKILL.md",
     "specengine/skills/check-collisions/SKILL.md",
@@ -1684,7 +1699,7 @@ fn ac03_problems(tree: &Tree) -> Vec<String> {
     let wanted = BTreeSet::from(FILES);
     let mut problems: Vec<String> = found
         .difference(&wanted)
-        .map(|path| format!("plugin/{path}: outside the eighteen files"))
+        .map(|path| format!("plugin/{path}: outside the nineteen files"))
         .collect();
     problems.extend(
         wanted
@@ -1741,7 +1756,7 @@ fn ac03_the_plugin_tree_is_data_s_ten_files() {
         write(&copy, extra, b"{}\n");
         assert_names(
             &ac03_problems(&read_tree(&copy)),
-            &format!("plugin/{extra}: outside the eighteen files"),
+            &format!("plugin/{extra}: outside the nineteen files"),
             extra,
         );
         fs::remove_file(copy.join(extra)).unwrap();
@@ -2345,7 +2360,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// 1 197 B together, 3 B of room), 0.45.0 since collision-pairs (RM-0088,
 /// PP7: no skill text changed), 0.46.0 since usage-orphans (RM-0111, UO6: no
 /// skill text changed), 0.46.1 since the patch of RM-0114 to RM-0119 (no skill
-/// text changed).
+/// text changed), 0.47.0 since auto-mode (RM-0120 to RM-0124: no skill text
+/// changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2368,7 +2384,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.46.1")
+        json!("0.47.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2521,11 +2537,40 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // auto-mode (RM-0120 to RM-0124, auto-runner.md RN8: 0.46.1 -> 0.47.0,
+    // MINOR): plugin.json's version and the runner `scripts/autopilot.sh`;
+    // both set back, the tree is 0.46.1's pinned content, every skill and
+    // role byte-equal. M: the script left out; plugin.json left at 0.46.1;
+    // another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.47.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.47.0"),
+        "plugin.json's version"
+    );
+    assert!(tree.files.contains_key("specengine/scripts/autopilot.sh"));
+    let mut at_0_46_1 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.47.0\"",
+        "\"version\": \"0.46.1\"",
+    );
+    at_0_46_1.files.remove("specengine/scripts/autopilot.sh");
+    assert_eq!(
+        content_hash(&at_0_46_1),
+        PINS[PINS.len() - 2].1,
+        "0.47.0 changes plugin.json's version and adds the runner only"
+    );
+    let tree = at_0_46_1;
+    let pins_0_46_1 = &PINS[..PINS.len() - 1];
     // The 0.46.1 patch (RM-0114 to RM-0119: 0.46.0 -> 0.46.1, PATCH):
     // plugin.json's version alone; set back, the tree is 0.46.0's pinned
     // content, every skill and role byte-equal. M: plugin.json left at
     // 0.46.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.46.1"));
+    assert_eq!(
+        pins_0_46_1.last().map(|(version, _)| *version),
+        Some("0.46.1")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.46.1"),
@@ -2539,11 +2584,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_46_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_46_1[pins_0_46_1.len() - 2].1,
         "0.46.1 changes plugin.json's version only"
     );
     let tree = at_0_46_0;
-    let pins_0_46_0 = &PINS[..PINS.len() - 1];
+    let pins_0_46_0 = &pins_0_46_1[..pins_0_46_1.len() - 1];
     // usage-orphans (RM-0111, UO6: 0.45.0 -> 0.46.0): plugin.json's version
     // alone; set back, the tree is 0.45.0's pinned content, every skill and
     // role byte-equal. M: plugin.json left at 0.45.0; another file changed.

@@ -104,7 +104,7 @@ describe("a lens, not a filter (HD4)", () => {
       within(screen.getByRole("navigation", { name: "Sections" }))
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Overview", "Board", "Health", "Graph", "Spec tree"]);
+    ).toEqual(["Overview", "Activity", "Board", "Health", "Graph", "Spec tree"]);
   });
 
   it("as mira the palette lists all nine sections, the Overview first, those off the default's nav too", async () => {
@@ -123,6 +123,7 @@ describe("a lens, not a filter (HD4)", () => {
     });
     // M: the palette's Sections cut to the default's nav.
     expect(SECTIONS).toHaveLength(9);
-    expect(within(group).getAllByRole("option").map((option) => option.textContent)).toEqual(["Overview", ...SECTIONS.map((section) => sectionLabel(section.id, enT))]);
+    // Activity second, as the nav (the owner's word of 2026-11-15).
+    expect(within(group).getAllByRole("option").map((option) => option.textContent)).toEqual(["Overview", "Activity", ...SECTIONS.map((section) => sectionLabel(section.id, enT))]);
   });
 });

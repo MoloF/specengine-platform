@@ -379,6 +379,15 @@ impl WorktreeGit {
         self.bounded(self.command(args, read_only))
     }
 
+    /// `git -C <dir> <args>` under this handle's environment (local `GIT_*`
+    /// variables dropped, stdin null), its whole output whatever its exit:
+    /// a caller's own sequence of git commands (`spec auto land`, task spec
+    /// `auto-land`), which judges each exit itself. `read_only` sets
+    /// `GIT_OPTIONAL_LOCKS=0`.
+    pub fn run(&self, args: &[&OsStr], read_only: bool) -> Result<Output, GitError> {
+        self.output(args, read_only)
+    }
+
     /// One command's whole output, whatever its exit (the sync's own
     /// children, `crate::sync`).
     pub(crate) fn output_of(&self, args: &[&OsStr], read_only: bool) -> Result<Output, GitError> {

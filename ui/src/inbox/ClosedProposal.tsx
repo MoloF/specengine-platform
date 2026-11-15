@@ -4,6 +4,7 @@ import type { Proposal } from "../api/types";
 import { homeHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
 import { Icon } from "../ui/Icon";
 import { IssueView } from "../ui/IssueView";
@@ -35,6 +36,31 @@ function Decider({ text }: { text: string }) {
         </Fragment>
       ))}
     </bdi>
+  );
+}
+
+/**
+ * A rule's apply (docs/features/auto-feed.md "The UI", Applied by rule): the line, the commit's 12 hex
+ * and the rule hash's 12, each whole as its title, the hash whole as what a screen reader says. Only
+ * a document holding `delegated` shows it.
+ */
+function AppliedByRule({ rule, commit }: { rule: string; commit: string }) {
+  const t = useTranslate();
+  return (
+    <p className="note by-rule" data-delegated="true">
+      <Icon name="terminal" />
+      <span>
+        {fill(t("inbox.byRule", { hash: slot("hash"), commit: slot("commit") }), {
+          hash: (
+            <code title={rule}>
+              <span aria-hidden="true">{shownSlot(rule.slice(0, 15))}</span>
+              <span className="sr-only">{shownSlot(rule)}</span>
+            </code>
+          ),
+          commit: <code title={commit}>{shownSlot(commit.slice(0, 12))}</code>,
+        })}
+      </span>
+    </p>
   );
 }
 
@@ -116,10 +142,13 @@ export function ClosedProposal({ project, proposal }: { project: string; proposa
         }
         meta={proposal.status === null ? null : <Lozenge {...statusLozenge(proposal.status, t)} />}
         actions={
-          <p className="note" role="status">
-            <Icon name="info" />
-            <span>{t("inbox.closed.notice")}</span>
-          </p>
+          <>
+            <p className="note" role="status">
+              <Icon name="info" />
+              <span>{t("inbox.closed.notice")}</span>
+            </p>
+            {proposal.delegated !== undefined && <AppliedByRule rule={proposal.delegated.rule} commit={proposal.delegated.commit} />}
+          </>
         }
         side={<PropertyList label={t("inbox.card.details")} items={rows.filter((row) => row !== null)} />}
         main={

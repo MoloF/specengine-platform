@@ -550,3 +550,193 @@ fn card_questions_the_hub_raises_take_card_id_and_their_texts_hold() {
         "{description}"
     );
 }
+
+// ------------------------------------------------- hub-auto (RM-0121), HA8
+
+/// A seam whose every request is `ann`'s and whose turn runs each command at
+/// once, for real: `proposed` records each `(login, id)` it hears.
+struct Recording {
+    env: Env,
+    globals: Globals,
+    heard: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+impl HubSeam for Recording {
+    fn login(&self, _extensions: &Extensions) -> Option<String> {
+        Some("ann".to_owned())
+    }
+
+    fn turn(&self, _login: &str, command: Command) -> TurnFuture {
+        command.run(&self.env, &self.globals);
+        Box::pin(async {})
+    }
+
+    fn proposed(&self, login: &str, id: &str) {
+        self.heard
+            .lock()
+            .expect("the heard list")
+            .push((login.to_owned(), id.to_owned()));
+    }
+}
+
+/// HA8 (docs/features/hub-auto.md): over a scratch `fixtures/auto-mini`, a
+/// seam that runs every turn: `proposed` is called exactly once per stored
+/// `update` or `create`, with the call's login and the stored ID, and never
+/// for a dry run, a refusal (a stale base), another kind
+/// (`interpretation`), or another tool (`ask_question`, `create_card`);
+/// stdio has no seam to call. M: called for `ask_question`.
+#[tokio::test]
+async fn hub_auto_ha8_proposed_is_called_once_per_stored_update_or_create() {
+    let scratch = Scratch::new("hub-auto-seam");
+    let root = scratch.copy("auto-mini", "a");
+    let home = scratch.home("h");
+    let git_home = scratch.home("git");
+    for args in [
+        &["init", "-q", "--template=", "-b", "main"][..],
+        &["config", "--local", "maintenance.auto", "false"],
+        &["config", "--local", "gc.auto", "0"],
+        &["add", "-A"],
+        &["commit", "-q", "-m", "auto-mini"],
+    ] {
+        let status = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(args)
+            .env("HOME", &git_home)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "Scratch")
+            .env("GIT_AUTHOR_EMAIL", "scratch@example.invalid")
+            .env("GIT_COMMITTER_NAME", "Scratch")
+            .env("GIT_COMMITTER_EMAIL", "scratch@example.invalid")
+            .status()
+            .expect("git runs");
+        assert!(status.success(), "git {args:?}");
+    }
+    let env = Env {
+        cwd: root.clone(),
+        home: Some(home.as_os_str().to_os_string()),
+        xdg_data_home: None,
+    };
+    let globals = Globals {
+        root: Some(root.clone()),
+        config: None,
+    };
+    let shown = |reference: &str| {
+        let outcome = specengine_cli::show(
+            &env,
+            &globals,
+            &specengine_cli::ShowRequest {
+                reference: reference.to_owned(),
+                links: false,
+                archive: false,
+                bindings: false,
+                history: false,
+                git: specengine_cli::GitEnv::new(root.as_path(), std::env::vars_os()),
+            },
+        )
+        .expect("show");
+        let node = outcome.nodes.into_iter().next().expect("a node");
+        (node.span_hash, node.text)
+    };
+    let (r02, r02_text) = shown("R-02");
+    let (r01, r01_text) = shown("R-01");
+    let heard = Arc::new(Mutex::new(Vec::new()));
+    let seam = Recording {
+        env: env.clone(),
+        globals: globals.clone(),
+        heard: Arc::clone(&heard),
+    };
+    let agent = |mut args: Value| {
+        args["author_role"] = json!("drafter");
+        args["author_model"] = json!("m-1");
+        args
+    };
+    let calls = [
+        // 1: a stored update.
+        (
+            "propose_change",
+            agent(json!({"kind": "update", "target": "R-02", "base": r02,
+                "text": r02_text.replacen("five seconds", "six seconds", 1),
+                "rationale": "Six."})),
+        ),
+        // 2: a dry run of the same.
+        (
+            "propose_change",
+            agent(json!({"kind": "update", "target": "R-01", "base": r01,
+                "text": r01_text.replacen("three save slots", "four save slots", 1),
+                "rationale": "Four.", "dry_run": true})),
+        ),
+        // 3: a refusal: a stale base.
+        (
+            "propose_change",
+            agent(json!({"kind": "update", "target": "R-01",
+                "base": format!("b3:{}", "0".repeat(64)),
+                "text": r01_text.replacen("three save slots", "four save slots", 1),
+                "rationale": "Four."})),
+        ),
+        // 4: a stored create of a new section.
+        (
+            "propose_change",
+            agent(json!({"kind": "create", "target": "R-01", "base": r01,
+                "text": format!("{}\n\n### Slot names {{#R-06}}\n\nEach slot has a name.\n",
+                    r01_text.trim_end()),
+                "rationale": "Names."})),
+        ),
+        // 5: another tool.
+        (
+            "ask_question",
+            agent(json!({"node_ids": ["R-02"], "text": "Six seconds?",
+                "working_answer": "Yes.", "price_of_other": "A rule case."})),
+        ),
+        // 6: a card.
+        ("create_card", json!({"title": "Lamp oil"})),
+    ];
+    let mut inbound = VecDeque::new();
+    inbound.push_back(client(
+        json!({"jsonrpc": "2.0", "id": 0, "method": "initialize",
+        "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "specengine-mcp-tests", "version": "0.0.0"}}}),
+    ));
+    inbound.push_back(client(
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+    ));
+    for (n, (name, arguments)) in calls.iter().enumerate() {
+        inbound.push_back(client(json!({"jsonrpc": "2.0", "id": n + 1,
+            "method": "tools/call", "params": {"name": name, "arguments": arguments}})));
+    }
+    let outbound = Arc::new(Mutex::new(Vec::new()));
+    let transport = Memory {
+        inbound,
+        outbound: Arc::clone(&outbound),
+        expected: 1 + calls.len(),
+    };
+    let running = SpecEngineServer::hub(Arc::new(seam))
+        .serve(transport)
+        .await
+        .expect("the handshake");
+    let _ = tokio::time::timeout(Duration::from_secs(90), running.waiting()).await;
+    let messages = outbound.lock().expect("the server's messages").clone();
+    let result = |n: usize| -> Value {
+        let response = messages
+            .iter()
+            .find(|message| message.get("id") == Some(&json!(n)))
+            .unwrap_or_else(|| panic!("call {n}: no answer in {messages:?}"));
+        let content = response["result"]["structuredContent"].clone();
+        if content.is_null() {
+            response.clone()
+        } else {
+            content
+        }
+    };
+    let stored = |n: usize| result(n)["id"].as_str().map(str::to_owned);
+    let update = stored(1).unwrap_or_else(|| panic!("the update is stored: {}", result(1)));
+    assert_eq!(stored(2), None, "a dry run stores nothing: {}", result(2));
+    assert_eq!(stored(3), None, "a stale base is refused: {}", result(3));
+    let create = stored(4).unwrap_or_else(|| panic!("the create is stored: {}", result(4)));
+    assert!(stored(5).is_some(), "the question is stored: {}", result(5));
+    assert_eq!(
+        *heard.lock().expect("heard"),
+        [("ann".to_owned(), update), ("ann".to_owned(), create)],
+        "once per stored update or create, nothing else"
+    );
+}

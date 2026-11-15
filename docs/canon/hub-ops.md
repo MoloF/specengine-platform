@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [scripts/deploy, .github/workflows]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-15
 ---
 
 # Hub ops: off-host dumps, restore, upgrade, health and `--push`
@@ -34,7 +34,7 @@ Three sidecars, `restart: unless-stopped`, `init: true`, run `/bin/sh /opt/hub-o
 - **`secrets/restic_password`** (`openssl rand -hex 32`, `RESTIC_PASSWORD_FILE`) and **`secrets/restic_env`**, not `.env` (a URL may hold a password): Docker secrets of `backup` alone, 600. Encryption is restic's, client-side.
 - **`restic_env`**: a `KEY=value` per LF-ended line; empty and `#` lines skipped. Keys, each once: `RESTIC_REPOSITORY` (required), `RESTIC_REST_USERNAME`, `RESTIC_REST_PASSWORD`, or `AWS_`, `B2_`, `AZURE_`, `GOOGLE_`, `OS_`, `ST_` then `[A-Z0-9_]`. Read as data, never sourced: the value is the rest of the line. Another line, or a CR end, is exit 2 naming its number, and its key only as an upper-case shell name (`[A-Z_][A-Z0-9_]*`, at most 64 B), else `not KEY=value`: text before `=` may be a pasted secret. No value is printed.
 - **Redaction**: restic's last line is logged with every occurrence of each value covered as `<KEY>`, longest first, overlaps too.
-- **Retention**: per `--host <HUB_HOST>` (one hub each), tags `queue` and `door` apart; every round for 48 hours, one a day for 30 days.
+- **Retention**: per `--host <HUB_HOST>`, tags `queue` and `door` apart; every round for 48 hours, one a day for 30 days.
 - **Acts**, `docker compose run --rm backup <act>`: `init` (never automatic), `snapshots`, `check`, `restore DIR [QUEUE DOOR]` (`restic restore <id>:/snapshot/<part> --target DIR/<part>`, `DIR` empty; `latest`, the default, by host and tag).
 - **`fresh`**, `backup`'s healthcheck (5 min, one retry, 20 min start): 0 when `/state/ok` and both parts' newest generations are under 35 minutes old.
 
@@ -90,24 +90,16 @@ After the gate (`hub-git.md` "Rules"):
 
 ## Health
 
-- **`specengine`**: `specengine-health`, bash for `/dev/tcp` (Debian's is Essential: no package or HTTP client), every 30 s. Its `GET /` has `Host: 127.0.0.1:<port>` alone. Alive: `HTTP/1.1 403 ` within 5 s (the fence refuses a loopback `Host`, `hub.md` "Fence" step 1: nothing read or recorded), and `127.0.0.1:443` accepting, so a Traefik crash's dead namespace is unhealthy. Ports `SPECENGINE_HEALTH_PORT` (7777), `SPECENGINE_HEALTH_PROXY_PORT` (443); exit 0 or 1, one line.
+- **`specengine`**: `specengine-health`, bash for `/dev/tcp` (no HTTP client in the image), every 30 s. Its `GET /` has `Host: 127.0.0.1:<port>` alone. Alive: `HTTP/1.1 403 ` within 5 s (the fence refuses a loopback `Host`: `hub.md` "Fence" step 1), and `127.0.0.1:443` accepting, so a Traefik crash's dead namespace is unhealthy. Ports `SPECENGINE_HEALTH_PORT` (7777), `SPECENGINE_HEALTH_PROXY_PORT` (443); exit 0 or 1, one line.
 - **`backup`**: `fresh`. **`admin`, `dump-door`**: `healthcheck: {disable: true}`: the door image's own probes a server they never run.
 - **Outside**: `https://<DOOR_HOST>/` answers 200. Docker restarts nothing unhealthy; `docker compose logs dump-queue dump-door backup` say why.
 
-## Pins
+## Auto
 
-Exact, pending the owner; full digests and SHAs in the files.
-
-| Pin | Value |
-|---|---|
-| Traefik | `v3.7.17@sha256:68ae5fe5...3748` (2026-11-03) |
-| Authelia | `4.39.28@sha256:bd97cff4...6f54` (2026-11-03) |
-| restic | `0.19.1@sha256:136600b6...d510` (2026-11-04) |
-| Debian | `trixie-20261027-slim@sha256:f6b08b09...3ec4` |
-| Node | `24.22.2-trixie-slim@sha256:54f84b4c...b446` |
-| Rust | `1.90.0-slim-trixie@sha256:7fa728f3...b39e` |
-| pnpm | 10.28.2, `ui/package.json` |
-| Actions | `actions/checkout` v7.0.1 `3d3c42e5`, `docker/login-action` v4.7.0 `81c6f93d`, `docker/setup-buildx-action` v4.4.1 `f87e5991`, `docker/build-push-action` v7.4.0 `c3c9e263` |
+ADR-0082, from 0.47.0 (`hub-auto.md`). Older binaries refuse `[auto]`: upgrade the hub first ("Upgrade"), then the laptop's `spec` and plugin, and only then commit and push `[auto]`. In `docker compose exec specengine`: `spec auto show --root /projects/<name> --surface hub` shows the verdicts.
+- **Stop**: `spec auto stop` writes `/data/specengine/auto-stop`, holding all projects, no restart; `spec auto resume` (`exec -it`) removes it after `y`. For good: commit the table's removal.
+- **Read**: `git -C /projects/<name> log --grep '^Delegated-by: auto'`.
+- **Revert one**: `git revert <sha>` on a clone, pushed, which `--push` merges; without it, `git -C /projects/<name> revert --no-edit <sha>`. The proposal stays `applied`.
 
 ## Known limits
 

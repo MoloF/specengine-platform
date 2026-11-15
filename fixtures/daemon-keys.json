@@ -158,5 +158,14 @@
   "MapNode": ["name", "id", "kind", "title", "path", "line", "of", "status", "archived", "used_by", "mentioned_by", "orphan"],
   "MapEdge": ["src", "dst", "type", "weak", "places"],
   "MapParent": ["child", "parent"],
-  "MapGhost": ["written", "reason", "sources", "places"]
+  "MapGhost": ["written", "reason", "sources", "places"],
+  "Feed": ["auto", "after", "last_seq", "more", "entries", "needs_me", "notes"],
+  "FeedEntry": ["seq", "at", "type", "task", "proposal", "card", "line", "title", "status", "by", "outcome", "summary", "commit", "reason", "detail", "path", "lane"],
+  "FeedNeedsMe": ["held", "open", "failed_runs", "gate_observed", "unlanded"],
+  "FeedHeld": ["seq", "at", "pack", "task", "line", "proposal", "act", "reason", "detail"],
+  "FeedOpen": ["id", "kind", "target_id", "task_id", "created_at"],
+  "FeedFailedRun": ["task", "run", "outcome", "summary", "ended_at"],
+  "FeedGateObserved": ["seq", "at", "path", "zone", "branch"],
+  "FeedUnlanded": ["task", "status", "pack"],
+  "Delegated": ["by", "rule", "commit"]
 }

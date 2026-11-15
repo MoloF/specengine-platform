@@ -23,6 +23,7 @@ import type {
   ConfirmBody,
   ConfirmRead,
   DeliveryDocument,
+  FeedDocument,
   FlowView,
   GraphView,
   HealthReport,
@@ -184,6 +185,17 @@ export interface TraceOptions {
 }
 
 /**
+ * `spec feed [--since SEQ] [--needs-me] [--task T] [--department D]` (`docs/features/auto-feed.md`
+ * "Data"): each key at most once; `since` a seq, `needs_me` sent only as true.
+ */
+export interface FeedOptions {
+  since?: number;
+  needs_me?: boolean;
+  task?: string;
+  department?: string;
+}
+
+/**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data",
  * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data", the plan's
@@ -279,6 +291,12 @@ export interface SpecEngineClient {
    * older daemon's 404 and a 503 reject in the daemon's words.
    */
   getMap(project: string, options: MapOptions, signal?: AbortSignal): Promise<MapDocument>;
+  /**
+   * GET /api/projects/:p/feed (docs/features/auto-feed.md "Data"; = spec feed --json, any login on a
+   * hub): judged, so only a 200 resolves; a query's 400, an older daemon's 404 and a 503 reject in
+   * the daemon's words.
+   */
+  getFeed(project: string, options: FeedOptions, signal?: AbortSignal): Promise<FeedDocument>;
   /** GET /api/projects/:p/lock-diff (docs/features/lock-diff.md "Route"; = spec lock diff REF --json, uncut; 404 the exit-1 document) */
   getLockDiff(project: string, ref: string, signal?: AbortSignal): Promise<LockDiffView>;
   // The stage's two writes: `stage` replaces any staged choice, the body exactly `stage` plus

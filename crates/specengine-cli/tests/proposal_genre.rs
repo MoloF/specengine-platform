@@ -429,6 +429,9 @@ fn ac20_no_dependency_is_added() {
                 "toml",
                 "serde_json",
                 "petgraph",
+                // auto-mode: the `[auto]` rule's hash (`auto_toml.rs`),
+                // already in the graph through store; docs/canon/stack.md.
+                "blake3",
             ]),
         ),
         (

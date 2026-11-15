@@ -1,0 +1,6 @@
+[auto]
+mode  = "both"
+zones = ["code"]
+
+[zones.art]
+globs = ["art/**"]

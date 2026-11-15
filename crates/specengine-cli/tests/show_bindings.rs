@@ -2543,9 +2543,16 @@ fn repository_git(args: &[&str]) -> Option<String> {
 
 /// RD-8: the slice adds no dependency. Against `main` (else `HEAD`): every
 /// workspace manifest (the root's and each crate's) adds no direct
-/// dependency, no crate is added, and `Cargo.lock` names no new package
-/// (a later slice may remove one: docs/features/review-form.md drops the
-/// MCP server's `getrandom`). M: a crate or a dependency added.
+/// dependency but [`ACCEPTED`], no crate is added, and `Cargo.lock` names
+/// no new package (a later slice may remove one:
+/// docs/features/review-form.md drops the MCP server's `getrandom`). M: a
+/// crate or a dependency added.
+/// The direct dependencies a later accepted decision added to a manifest
+/// (`docs/canon/stack.md`), which `main` may not hold yet: auto-mode gave
+/// core `blake3` for the `[auto]` rule's hash, a package the workspace
+/// already locks (store's).
+const ACCEPTED: [(&str, &str); 1] = [("crates/specengine-core/Cargo.toml", "blake3")];
+
 #[test]
 fn no_workspace_dependency_is_added_against_main() {
     let base = ["main", "HEAD"]
@@ -2590,7 +2597,11 @@ fn no_workspace_dependency_is_added_against_main() {
         let then = repository_git(&["show", &format!("{base}:{manifest}")])
             .unwrap_or_else(|| panic!("{manifest} at {base}"));
         let then = dependencies(&then);
-        let added: Vec<String> = dependencies(&now).difference(&then).cloned().collect();
+        let added: Vec<String> = dependencies(&now)
+            .difference(&then)
+            .filter(|name| !ACCEPTED.contains(&(manifest.as_str(), name.as_str())))
+            .cloned()
+            .collect();
         assert!(
             added.is_empty(),
             "{manifest}: dependencies added against {base}: {added:?}"

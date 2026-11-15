@@ -561,6 +561,9 @@ fn forbidden(name: &str) -> bool {
     [
         "approve",
         "approve_with",
+        // docs/features/hub-auto.md HA4: the apply a delegated act runs
+        // after judging, reached only through `auto_apply`.
+        "delegated_approve",
         "reject",
         "import_state",
         "init",
@@ -569,7 +572,10 @@ fn forbidden(name: &str) -> bool {
     ]
     .contains(&name)
         || name.starts_with("export_")
-        || name.starts_with("propose")
+        // `proposed` is the hub seam's method (`HubSeam::proposed`,
+        // docs/features/hub-auto.md step 1), no CLI call: the CLI library
+        // holds no item of that name (`hub_auto_ha4_proposed_is_no_cli_call`).
+        || (name.starts_with("propose") && name != "proposed")
 }
 
 /// The names `src` may not hold at all, a field access included: a check's
@@ -1550,18 +1556,24 @@ fn ignoring_closures(code: &str) -> Vec<String> {
 fn caught_in(path: &Path, code: &str) -> Vec<String> {
     let mut found = caught(code);
     let blanked = code_only(code);
-    if path.ends_with(HUB_CONFIRM_FILE) {
-        found.extend(ignoring_closures(&blanked));
-        found.extend(renaming_uses(&blanked));
-    } else {
-        found.extend(
-            identifiers(&blanked)
-                .into_iter()
-                .filter(|(before, name)| {
-                    *before != '.' && HUB_CONFIRM_CALLS.contains(&name.as_str())
-                })
-                .map(|(_, name)| name),
-        );
+    // Each exempt file: its own calls allowed, no closure ignoring its
+    // argument, no rename; every other door's calls caught there too
+    // (docs/features/hub-auto.md HA4 adds `src/auto.rs` by the same rule).
+    for (file, calls) in [
+        (HUB_CONFIRM_FILE, &HUB_CONFIRM_CALLS[..]),
+        (HUB_AUTO_FILE, &HUB_AUTO_CALLS[..]),
+    ] {
+        if path.ends_with(file) {
+            found.extend(ignoring_closures(&blanked));
+            found.extend(renaming_uses(&blanked));
+        } else {
+            found.extend(
+                identifiers(&blanked)
+                    .into_iter()
+                    .filter(|(before, name)| *before != '.' && calls.contains(&name.as_str()))
+                    .map(|(_, name)| name),
+            );
+        }
     }
     found
 }
@@ -1859,4 +1871,191 @@ fn hub_mcp_h9_the_mcp_crate_is_named_in_src_mcp_rs_alone() {
         [HUB_MCP_FILE],
         "the files of crates/specengine-http/src naming specengine_mcp"
     );
+}
+
+// ---------------------------------------------------------- hub-auto, HA4
+
+/// The CLI library's call a hub's auto apply makes
+/// (docs/canon/hub-auto.md "Rules", **The door**): judged and applied in one
+/// call. Only `src/auto.rs` names it.
+const HUB_AUTO_CALLS: [&str; 1] = ["auto_apply"];
+
+/// The one file allowed [`HUB_AUTO_CALLS`].
+const HUB_AUTO_FILE: &str = "src/auto.rs";
+
+/// The library's file holding the auto apply's consents.
+const CLI_AUTO_FILE: &str = "crates/specengine-cli/src/auto_apply.rs";
+
+/// HA4, the scan's controls: `approve`, `approve_with`, `reject` and
+/// `delegated_approve` caught by path and bare in every file, `src/auto.rs`
+/// and `src/confirm.rs` among them; `auto_apply` in any file but
+/// `src/auto.rs`, the confirm file included; there a `|_|` closure and a
+/// `use ... as` caught. Negative controls: the auto file's own call, a
+/// method of something else, a name in a string or a comment. M: an
+/// `approve` call added to `app.rs`; `auto_apply` called from `mcp.rs`; the
+/// CLI's `auto_apply.rs` answering `|_| true`.
+#[test]
+fn hub_auto_ha4_the_scan_knows_the_auto_file() {
+    let auto = Path::new("crates/specengine-http/src/auto.rs");
+    let confirm = Path::new("crates/specengine-http/src/confirm.rs");
+    let others = ["app.rs", "mcp.rs", "hub.rs", "turn.rs", "extra/auto.rs"]
+        .map(|name| PathBuf::from("crates/specengine-http/src").join(name));
+    let probes = |name: &str| {
+        [
+            format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}"),
+            format!("fn f() {{ {name}(&env, &globals, &r)?; }}"),
+        ]
+    };
+    for path in [auto, confirm]
+        .into_iter()
+        .chain(others.iter().map(PathBuf::as_path))
+    {
+        for name in ["approve", "approve_with", "reject", "delegated_approve"] {
+            for probe in probes(name) {
+                assert_eq!(
+                    caught_in(path, &probe),
+                    [name],
+                    "{}: {probe}",
+                    path.display()
+                );
+            }
+        }
+    }
+    for probe in probes("auto_apply") {
+        for path in others.iter().map(PathBuf::as_path).chain([confirm]) {
+            assert_eq!(
+                caught_in(path, &probe),
+                ["auto_apply"],
+                "{}: {probe}",
+                path.display()
+            );
+        }
+        assert_eq!(caught_in(auto, &probe), Vec::<String>::new(), "{probe}");
+    }
+    // The confirm calls stay caught in the auto file.
+    assert_eq!(
+        caught_in(auto, "fn f() { specengine_cli::confirm_staged(e, g, &r); }"),
+        ["confirm_staged"]
+    );
+    assert_eq!(
+        caught_in(&others[0], "use specengine_cli::{Env, auto_apply};"),
+        ["auto_apply"]
+    );
+    // A closure ignoring its argument, a rename, in the auto file.
+    for closure in [
+        "|_| true",
+        "| _ | true",
+        "|_: &str| true",
+        "move |_asked| true",
+    ] {
+        let probe = format!("fn f() {{ let mut yes = {closure}; run(&mut yes); }}");
+        assert_eq!(caught_in(auto, &probe), ["|_|"], "{probe}");
+    }
+    for probe in [
+        "use specengine_cli::auto_apply as go;",
+        "use specengine_cli::{AutoApplyRequest, auto_apply as go};",
+    ] {
+        assert_eq!(caught_in(auto, probe), ["use as"], "{probe}");
+    }
+    // The criterion's mutations.
+    let app = "async fn page(request: Request) {\n\
+               run(project, move |env, globals| {\n\
+               specengine_cli::approve(env, globals, &request, &mut ask)\n\
+               }).await }";
+    assert_eq!(caught_in(&others[0], app), ["approve"], "{app}");
+    let mcp = "fn proposed(&self, login: &str, id: &str) {\n\
+               let _ = specengine_cli::auto_apply(&env, &globals, &request);\n\
+               }";
+    assert_eq!(caught_in(&others[1], mcp), ["auto_apply"], "{mcp}");
+    let library = "pub fn auto_apply() { delegated(env, &mut |_| true) }";
+    assert_eq!(ignoring_closures(&code_only(library)), ["|_|"]);
+    // Negative controls.
+    for probe in [
+        "fn f() { let outcome = specengine_cli::auto_apply(&env, &globals, &request); }",
+        "use specengine_cli::{AutoApplyOutcome, AutoApplyRequest, Env, Globals, auto_apply};",
+        "fn f() { let n = x.parse::<u16>(); } // auto_apply(x) |_| true",
+        "fn f() { let s = \"approve(|_| true)\"; }",
+    ] {
+        assert_eq!(caught_in(auto, probe), Vec::<String>::new(), "{probe}");
+    }
+    assert_eq!(
+        caught_in(
+            &others[0],
+            "fn f() { queue.auto_apply(); let s = \"auto_apply\"; }"
+        ),
+        Vec::<String>::new()
+    );
+}
+
+/// HA4 over the sources as they stand: `src/auto.rs` exists and names
+/// `auto_apply` (the exemption guards something), no file of the daemon
+/// holds a finding of [`caught_in`], and the CLI's `auto_apply.rs` holds no
+/// closure ignoring its argument. M: `auto_apply` called from `mcp.rs`; the
+/// CLI's `auto_apply.rs` answering `|_| true`.
+#[test]
+fn hub_auto_ha4_the_daemon_applies_from_one_file_with_no_closure() {
+    let files = sources();
+    let (_, auto) = files
+        .iter()
+        .find(|(path, _)| path.ends_with(HUB_AUTO_FILE))
+        .unwrap_or_else(|| panic!("no {HUB_AUTO_FILE} among the daemon's sources"));
+    assert!(
+        identifiers(&code_only(auto))
+            .iter()
+            .any(|(_, name)| name == "auto_apply"),
+        "{HUB_AUTO_FILE} names no `auto_apply`: the exemption guards nothing"
+    );
+    let mut named = Vec::new();
+    for (path, text) in &files {
+        for name in caught_in(path, text) {
+            named.push(format!("{}: {name}", path.display()));
+        }
+    }
+    assert!(named.is_empty(), "past the auto door: {named:#?}");
+    let library = fs::read_to_string(repository_root().join(CLI_AUTO_FILE))
+        .unwrap_or_else(|error| panic!("{CLI_AUTO_FILE}: {error}"));
+    assert!(library.contains("delegated_approve"));
+    assert_eq!(
+        ignoring_closures(&code_only(&library)),
+        Vec::<String>::new(),
+        "{CLI_AUTO_FILE}: a consent that reads no question"
+    );
+}
+
+/// HA4: the seam's method `proposed` is the one `propose*` name the door
+/// admits, so the CLI library must hold no item of that name (else a
+/// handler could call it past the scan); every other `propose*` name stays
+/// caught. M: a `pub fn proposed` in the CLI library.
+#[test]
+fn hub_auto_ha4_proposed_is_no_cli_call() {
+    let cli = repository_root().join("crates/specengine-cli/src");
+    let mut stack = vec![cli];
+    let mut defined = Vec::new();
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).expect("src").flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                let code = code_only(&fs::read_to_string(&path).unwrap());
+                let names = identifiers(&code);
+                if names
+                    .windows(2)
+                    .any(|pair| pair[0].1 == "fn" && pair[1].1 == "proposed")
+                {
+                    defined.push(path.display().to_string());
+                }
+            }
+        }
+    }
+    assert!(defined.is_empty(), "a CLI `fn proposed`: {defined:?}");
+    for name in [
+        "propose",
+        "propose_question",
+        "propose_with_task",
+        "proposes",
+    ] {
+        assert!(forbidden(name), "{name}");
+    }
+    assert!(!forbidden("proposed"));
 }

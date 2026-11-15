@@ -52,7 +52,9 @@ use specengine_cli::{
 };
 
 use crate::cards::{CreateCardArgs, EditCardArgs, MoveCardArgs, SplitCardArgs};
-use crate::intake::{HubChangeArgs, HubDecisionArgs, HubDiscrepancyArgs, HubQuestionArgs};
+use crate::intake::{
+    ChangeKind, HubChangeArgs, HubDecisionArgs, HubDiscrepancyArgs, HubQuestionArgs,
+};
 use crate::mirror::{
     CardSplitDocument, CardWriteDocument, IntakeDocument, ReviewDocument, RoadmapDocument,
     input_schema, output_schema,
@@ -88,6 +90,15 @@ pub trait HubSeam: Send + Sync + 'static {
     /// for the turn, never runs the command; once running, it runs to its
     /// end.
     fn turn(&self, login: &str, command: Command) -> TurnFuture;
+
+    /// `propose_change` stored the `update` or `create` `id` under `login`
+    /// (not a dry run, not a refusal): called once, after its answer is
+    /// built and before it returns, by that tool alone
+    /// (`docs/canon/hub-auto.md` "Rules"). The daemon queues its delegated
+    /// apply there; a no-op by default.
+    fn proposed(&self, login: &str, id: &str) {
+        let _ = (login, id);
+    }
 }
 
 /// What a turn hands a call: the process's `Env` and the project's globals,
@@ -991,6 +1002,20 @@ fn no_login() -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(NO_LOGIN)])
 }
 
+/// The `id` of the open row a `propose_change` answer stored: none for a
+/// refusal (an error result), a gated `similar` (`id` null) or any answer
+/// without a document.
+fn stored_id(result: &CallToolResult) -> Option<&str> {
+    if result.is_error == Some(true) {
+        return None;
+    }
+    let document = result.structured_content.as_ref()?;
+    if document.get("status").and_then(serde_json::Value::as_str) != Some("open") {
+        return None;
+    }
+    document.get("id").and_then(serde_json::Value::as_str)
+}
+
 impl SpecEngineServer {
     /// A hub's server, one per MCP session or stateless request: both
     /// protocol eras, [`HUB_TOOLS`], [`HUB_INSTRUCTIONS`], every call through
@@ -1078,7 +1103,19 @@ impl SpecEngineServer {
         let Some(login) = self.login_of(&extensions) else {
             return Ok(no_login());
         };
-        self.change(args.into(), Some(login)).await
+        let applies = matches!(args.kind, ChangeKind::Update | ChangeKind::Create);
+        let dry_run = args.dry_run.unwrap_or(false);
+        let result = self.change(args.into(), Some(login.clone())).await?;
+        // A stored `update` or `create`: the seam hears of it once, its
+        // answer built (`docs/canon/hub-auto.md` "Rules").
+        if applies
+            && !dry_run
+            && let Some(id) = stored_id(&result)
+            && let Some(seam) = self.seam()
+        {
+            seam.proposed(&login, id);
+        }
+        Ok(result)
     }
 
     /// `spec propose question` under the login.

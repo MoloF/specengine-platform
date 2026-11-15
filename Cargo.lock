@@ -2800,6 +2800,7 @@ dependencies = [
 name = "specengine-core"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "petgraph",
  "pulldown-cmark 0.13.4",
  "serde",

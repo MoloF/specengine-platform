@@ -71,6 +71,7 @@ use crate::app::{Shared, unknown_route_of};
 use crate::hub::{Hub, Login, STREAM_LIFE, lived};
 use crate::slow::Exchange;
 use crate::start::Project;
+use crate::sync::{RepoSync, Syncs};
 use crate::turn;
 
 /// Sessions one login may hold in one project (S1).
@@ -97,9 +98,12 @@ const TOOL_NOT_FOUND: &str = "tool not found";
 const OPEN_FAILED: &str = "internal error: the MCP request failed";
 
 /// The daemon's half of the hub server for one project: the login a
-/// request's fence judged, and the project's turn behind the login's line.
+/// request's fence judged, the project's turn behind the login's line, and
+/// a stored row's delegated apply ([`crate::auto`]).
 struct Seam {
     project: Arc<Project>,
+    /// The project's `--push` sync, which a delegated commit signals.
+    sync: Option<Arc<RepoSync>>,
 }
 
 impl HubSeam for Seam {
@@ -169,6 +173,12 @@ impl HubSeam for Seam {
             .await;
         })
     }
+
+    /// The row's delegated apply, queued in `login`'s line behind the call
+    /// that stored it (docs/features/hub-auto.md): [`crate::auto::queue`].
+    fn proposed(&self, login: &str, id: &str) {
+        crate::auto::queue(&self.project, self.sync.clone(), login, id);
+    }
 }
 
 /// One project's service and the session manager the daemon keeps a handle
@@ -232,24 +242,40 @@ impl fmt::Debug for Mounts {
 
 impl Mounts {
     /// The mounts of a hub serving `projects` at `hub`'s origin, rmcp's idle
-    /// end its default (300 s), a GET stream's life [`STREAM_LIFE`].
-    pub(crate) fn new(projects: &[Arc<Project>], hub: &Hub) -> Self {
-        Self::with_idle(projects, hub, None)
+    /// end its default (300 s), a GET stream's life [`STREAM_LIFE`]; a
+    /// delegated commit signals its project's sync of `syncs` (`--push`).
+    pub(crate) fn new(projects: &[Arc<Project>], hub: &Hub, syncs: Option<&Syncs>) -> Self {
+        Self::built(projects, hub, None, STREAM_LIFE, syncs)
     }
 
     /// As [`Self::new`], a session ending after `idle` without a request
     /// when given (H17's unit test).
+    #[cfg(test)]
     pub(crate) fn with_idle(projects: &[Arc<Project>], hub: &Hub, idle: Option<Duration>) -> Self {
         Self::with_ends(projects, hub, idle, STREAM_LIFE)
     }
 
     /// As [`Self::with_idle`], a GET stream ending `life` after its answer
     /// (the units of docs/features/stream-life.md "Acceptance criteria").
+    #[cfg(test)]
     pub(crate) fn with_ends(
         projects: &[Arc<Project>],
         hub: &Hub,
         idle: Option<Duration>,
         life: Duration,
+    ) -> Self {
+        Self::built(projects, hub, idle, life, None)
+    }
+
+    /// The mounts, sessions ending after `idle` when given, GET streams
+    /// `life` after their answer, each project's seam holding its sync of
+    /// `syncs`.
+    fn built(
+        projects: &[Arc<Project>],
+        hub: &Hub,
+        idle: Option<Duration>,
+        life: Duration,
+        syncs: Option<&Syncs>,
     ) -> Self {
         // rmcp's defaults but the two allow-lists (docs/features/hub-mcp.md
         // "Data"): legacy sessions on, SSE responses, keep-alive 15 s, retry
@@ -271,6 +297,9 @@ impl Mounts {
                 let manager = Arc::new(manager);
                 let seam: Arc<dyn HubSeam> = Arc::new(Seam {
                     project: Arc::clone(project),
+                    sync: syncs
+                        .and_then(|syncs| syncs.of(&project.slug))
+                        .map(Arc::clone),
                 });
                 let service = StreamableHttpService::new(
                     move || Ok(SpecEngineServer::hub(Arc::clone(&seam))),

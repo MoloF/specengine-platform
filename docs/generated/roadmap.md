@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 34 open, 85 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
+roadmap: 34 open, 90 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -31,7 +31,7 @@ roadmap: 34 open, 85 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 une
 
 ## release v5 | 0 open, 23 done | 0 days
 
-## pool | 27 open, 11 done | 7-12 days, 23 unestimated
+## pool | 27 open, 16 done | 7-12 days, 23 unestimated
 
 - [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | -
 - [RM-0040](../roadmap/RM-0040.md) | check-parity: what pilot A's own docs check still does beside spec check | draft | should | -

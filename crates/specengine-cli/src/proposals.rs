@@ -139,7 +139,18 @@ pub struct ProposalDrift {
     pub read: Vec<DriftRow>,
 }
 
-/// The review document: every key, in this order, absent = `null`.
+/// What a hub's delegated apply leaves on its review document
+/// (canon `hub-auto` "Screen"): its `proposal.applied` event's
+/// `by` (`rule`), the rule's hash and the commit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Delegated {
+    pub by: String,
+    pub rule: String,
+    pub commit: String,
+}
+
+/// The review document: every key, in this order, absent = `null`; but
+/// `delegated`, left out when absent.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct ProposalDocument {
     pub id: Option<String>,
@@ -217,6 +228,11 @@ pub struct ProposalDocument {
     pub choice: Option<Choice>,
     /// The task it was raised for; `null` unbound.
     pub task_id: Option<String>,
+    /// A delegated apply's `{by: "rule", rule, commit}`, from its
+    /// `proposal.applied` event, filled by `spec review` alone; the key left
+    /// out on every other row, as `Author.login` (task spec `hub-auto`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegated: Option<Delegated>,
     /// The owner's staged choice (canon `decision-staging`,
     /// "The stage"): `{"decision":"approve",…}` or `{"decision":"reject",…}`;
     /// `null` when nothing is staged. Not an answer: any local process can
@@ -317,6 +333,7 @@ impl ProposalDocument {
             record_text: proposal.record.as_ref().map(|record| record.text.clone()),
             choice: proposal.record.as_ref().map(|record| record.choice.clone()),
             task_id: proposal.task_id.clone(),
+            delegated: None,
             staged: proposal.staged.as_ref().map(|staged| staged.stage.clone()),
             staged_at: proposal.staged.as_ref().map(|staged| staged.at.clone()),
             interpretation: proposal.interpretation.clone(),
@@ -999,6 +1016,16 @@ fn review_text(document: &ProposalDocument) -> String {
         .and_then(|choice| serde_json::to_string(choice).ok());
     line(&mut out, "choice", choice.as_deref());
     line(&mut out, "task_id", document.task_id.as_deref());
+    // A delegated apply's line; none on every other row, as its key.
+    if let Some(delegated) = &document.delegated {
+        let commit = &delegated.commit;
+        out.push_str(&format!(
+            "delegated: by {} {}, commit {}\n",
+            delegated.by,
+            delegated.rule,
+            commit.get(..12).unwrap_or(commit)
+        ));
+    }
     let staged = document.staged.as_ref().map(Stage::to_json);
     line(&mut out, "staged", staged.as_deref());
     line(&mut out, "staged_at", document.staged_at.as_deref());

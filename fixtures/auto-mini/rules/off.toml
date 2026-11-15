@@ -1,0 +1,3 @@
+[auto]
+mode  = "off"
+zones = ["code", "tests", "docs"]

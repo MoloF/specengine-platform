@@ -143,11 +143,11 @@ interface Built {
   exact: boolean;
 }
 
-function build(name: GroupName, options: PaletteOption[], exactKey: string | null = null, loading = false): Built {
+function build(name: GroupName, options: PaletteOption[], exactKey: string | null = null, loading = false, limit = GROUP_LIMIT): Built {
   const exact = exactKey === null ? undefined : options.find((option) => option.key === exactKey);
   const ordered = exact === undefined ? options : [exact, ...options.filter((option) => option !== exact)];
   return {
-    group: { name, options: ordered.slice(0, GROUP_LIMIT), total: ordered.length, loading },
+    group: { name, options: ordered.slice(0, limit), total: ordered.length, loading },
     exact: exact !== undefined,
   };
 }
@@ -170,7 +170,8 @@ export function paletteGroups(input: PaletteInput, t: Translate): PaletteGroup[]
     const sections = navOf(project, ALL_SECTIONS, t)
       .filter((entry) => holds(needle, [entry.label]))
       .map((entry): PaletteOption => ({ type: "section", key: `section:${entry.key}`, label: entry.label, hash: entry.hash }));
-    built.push(build("Sections", sections));
+    // The nav's entries whole: Overview, Activity and the nine are never cut to GROUP_LIMIT.
+    built.push(build("Sections", sections, null, false, sections.length));
   }
 
   if (project !== null && needle !== "") {

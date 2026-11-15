@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-02
+reviewed: 2026-11-15
 ---
 
 # Proposal apply: consent and steps
@@ -21,6 +21,8 @@ reviewed: 2026-11-02
 A lookup git could not make is printed above the question (`note: cannot tell whether …`) and in the outcome's notes. A pseudo-terminal passes (ADR-0034). A stage it confirms is printed above, the question marked `staged` (`decision-staging.md` "Terminal").
 
 **A hub's confirm** (`hub-confirm.md`, ADR-0061) runs this same approve or reject with no terminal, for one staged choice: `confirm_question` rehearses it, answering no, to return the question above with its stage line; `confirm_staged` runs it again, its one consent `asked == question` against the text the page sent back, byte for byte. Every step below runs unchanged, under the login's git identity; an editorial stage, a drift item, a task-bound proposal, an approve staged with no `span_hash` where the kind carries one, and an `approved` row's completion stay a terminal's.
+
+**A rule's apply** (`auto-mode.md`, ADR-0081, ADR-0082) runs this same approve with no terminal or stage, for a covered `update` or `create`: in a pack's land, its task's proposals; on a hub, its sole owner's after the `/mcp` propose (`hub-auto.md`). A rehearsal returns the question; the run's one consent is `asked == question`, byte for byte; the commit ends `Delegated-by: auto <rule hash>`.
 
 **`spec approve --open`** (`approve_open`; the same terminal check first; beside a `PR`, `--note`, `--option`, `--answer`, `--canon` or `--editorial`: a usage error, exit 2) walks this repository's `open` rows of applying kinds (`family()` `Applies`), listed once at its start, by ID number, on one clock reading. Each runs the ordinary `spec approve PR`: its own question, `[y/N]`, commit and `Proposal:`; an approve staged shows its stage. One key per item: no consent over a set (ADR-0038), no `--yes`. An `approved` row is not walked (`spec approve PR` completes it); an item needing a flag takes its own `spec approve`.
 

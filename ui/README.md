@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-15
 ---
 
 # ui -- the web UI
@@ -12,7 +12,7 @@ The owner's screens: 07 s3, flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md
 
 ## Stack
 
-A standalone pnpm project on strict TypeScript, no root `package.json`. Tests: Vitest, jsdom, Testing Library: `src/**/*.test.ts(x)`, `fetch` and `EventSource` stubbed.
+A standalone pnpm project, strict TypeScript, no root `package.json`. Tests: Vitest, jsdom, Testing Library: `src/**/*.test.ts(x)`, `fetch`, `EventSource` stubbed.
 
 ## Contract seam
 
@@ -32,7 +32,7 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4), letters by `letterOf`; `?` lists them. Cmd/Ctrl-K opens the palette over no dialog but the document modal: the shell's keydown listener, the only one on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never on `body` nor under a sticky bar (scroll padding).
 - **Text**: chrome from `src/i18n/` (`ui-languages.md`); data is text, no HTML sink, a proposal's login escaped (`ProposalCard`), each `href` from `routes.ts` but the door's (`ui-client.md`); wraps (`overflow-wrap: anywhere`); anything cut is seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
 - **Canvas** (`@xyflow/react`, lazy, hand-laid; the Map: `spec-map.md`): read-only, key options `null`, the wheel scrolls the page, a press up to 5 px a click; Flow's pans, zooms by key; `base.css` only, each `--xy-*` from a token; a List its text twin; attribution hidden, credited as text.
-- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: home; Flow: `spec-flow-place.md`; `/page`, `doc`: `doc-view.md`), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), choices kept per viewer in `localStorage` aside (`ui-client.md`); a root error boundary, one per view.
+- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: home; Flow: `spec-flow-place.md`; `/page`, `doc`: `doc-view.md`; Activity: `spec-feed.md`), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), choices kept per viewer in `localStorage` aside (`ui-client.md`); a root error boundary, one per view.
 
 ## Dependencies
 
@@ -87,7 +87,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. Build and install: `serve-ui.md` "Build order"; `spec serve` alone serves the UI.
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`; never `--host` with the daemon up. The mock: `?scenario=<name>` before the `#` (`src/mocks/scenario.ts`).
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`; no `--host` with the daemon up. The mock: `?scenario=<name>` before the `#`.
 
 ## Roles here
 

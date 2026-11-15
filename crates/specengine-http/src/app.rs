@@ -21,6 +21,8 @@
 //! `…/catalog` a read, its last changes cached per `HEAD` in [`App`]
 //! (docs/features/direction-catalog.md); `…/rings` a read, the scope rings
 //! (task spec `scope-rings` SR4).
+//! `…/feed` a read, the project's events and what needs the owner
+//! ([`crate::feed`], task spec `auto-feed`).
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `…/workspaces` a read of the config
 //! alone, no turn, locally and on a hub alike
@@ -96,7 +98,7 @@ use crate::hub::{Hub, Login};
 use crate::mcp::{self, Mounts};
 use crate::start::Project;
 use crate::sync::{Push, RepoSync, Syncs};
-use crate::{confirm, hub, slow, tail, ui};
+use crate::{confirm, feed, hub, slow, tail, ui};
 
 /// What every handler shares.
 #[derive(Debug)]
@@ -144,7 +146,9 @@ impl App {
             .collect();
         let syncs = push.map(|push| Syncs::new(&projects, push));
         // `--public-origin` is the whole switch (S5): no flag of its own.
-        let mcp = hub.as_ref().map(|hub| Mounts::new(&projects, hub));
+        let mcp = hub
+            .as_ref()
+            .map(|hub| Mounts::new(&projects, hub, syncs.as_ref()));
         // A hub's streams end at their life, a local daemon's never: the
         // switch is `hub` alone, no flag, key or variable
         // (`docs/canon/serve.md` "Live tail").
@@ -273,6 +277,10 @@ pub(crate) fn router(app: Shared) -> Router {
         .route(
             "/api/projects/{p}/rings",
             read(rings).noted("/api/projects/{p}/rings"),
+        )
+        .route(
+            "/api/projects/{p}/feed",
+            read(feed::feed).noted("/api/projects/{p}/feed"),
         )
         .route(
             "/api/projects/{p}/lock-diff",

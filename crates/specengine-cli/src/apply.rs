@@ -121,10 +121,12 @@
 //! in a note. No `--yes`: one key per item.
 
 use std::collections::BTreeSet;
+use std::ops::{Deref, DerefMut};
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use serde::Serialize;
+use specengine_core::auto::delegated_by_line;
 use specengine_core::lock::LOCK_FILE;
 use specengine_core::proposal::{
     Author, CommitFacts, EDITORIAL, Interprets, PROPOSAL_TRAILER, commit_message_raising,
@@ -132,9 +134,9 @@ use specengine_core::proposal::{
 use specengine_core::task::FollowUp;
 use specengine_model::IdScheme;
 use specengine_store::{
-    ApplyFailure, CardRefresh, Decision, GitEnv, KindFamily, NewTask, Proposal, ProposalKind,
-    ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, Stage,
-    TaskRefresh, WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
+    ApplyFailure, ByRule, CardRefresh, Decision, GitEnv, KindFamily, NewTask, Proposal,
+    ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _,
+    Stage, TaskRefresh, WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
 };
 
 use crate::freshness::{After, post_commit_failed, post_commit_update};
@@ -510,10 +512,87 @@ pub(crate) fn run_approve(
     hub: Option<HubRun<'_>>,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
+    run_approve_as(env, globals, request, flags, editorial, hub, None, consent)
+}
+
+/// A delegated apply's marks (canon `auto-mode` "Events",
+/// "Trailers"; task spec `auto-rule` "Events and the apply seam"): the
+/// commit ends `Delegated-by: auto <rule>` after every other trailer, and
+/// `proposal.approved`, `proposal.applied` add `"by":"rule"`, `rule` and,
+/// when set, `pack` after today's keys. `None` on every terminal and
+/// confirm path: their commits and events are 0.46.1's, byte for byte.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Delegation {
+    /// The rule's hash, `b3:` and 64 hex.
+    pub rule: String,
+    /// The pack, locally; `None` on a hub.
+    pub pack: Option<i64>,
+}
+
+/// A run's queue context marked by its [`Delegation`], when one is given,
+/// for as long as it is held: dropped, its handle writes today's events
+/// again (the mark scoped to the one run).
+pub(crate) struct Delegated(QueueContext);
+
+impl Delegated {
+    /// `context`, its queue handle marked by `delegation`.
+    pub(crate) fn over(mut context: QueueContext, delegation: Option<&Delegation>) -> Self {
+        if let Some(delegation) = delegation {
+            context.queue.set_by_rule(Some(ByRule {
+                rule: delegation.rule.clone(),
+                pack: delegation.pack,
+            }));
+        }
+        Self(context)
+    }
+}
+
+impl Deref for Delegated {
+    type Target = QueueContext;
+
+    fn deref(&self) -> &QueueContext {
+        &self.0
+    }
+}
+
+impl DerefMut for Delegated {
+    fn deref_mut(&mut self) -> &mut QueueContext {
+        &mut self.0
+    }
+}
+
+impl Drop for Delegated {
+    fn drop(&mut self) {
+        self.0.queue.set_by_rule(None);
+    }
+}
+
+/// `message` with the delegation's trailer last, when the run is
+/// delegated ([`Delegation`]); else as given.
+pub(crate) fn delegated_message(message: String, context: &QueueContext) -> String {
+    match context.queue.by_rule() {
+        Some(by) => format!("{message}{}", delegated_by_line(&by.rule)),
+        None => message,
+    }
+}
+
+/// [`run_approve`], marked by `delegation` when given ([`Delegation`]).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_approve_as(
+    env: &Env,
+    globals: &Globals,
+    request: &ApproveRequest,
+    flags: &ApproveFlags,
+    editorial: bool,
+    hub: Option<HubRun<'_>>,
+    delegation: Option<&Delegation>,
+    consent: Consent<'_>,
+) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Approve;
     let now = checked_now(&request.now)?;
     let id = written_id(&request.id)?;
-    let mut context = open_context(env, globals, &request.git)?;
+    // The delegation marks this run's queue handle while the run holds it.
+    let mut context = Delegated::over(open_context(env, globals, &request.git)?, delegation);
     context.rehearsal = hub.is_some_and(|hub| hub.rehearsal);
     context.hub = hub.is_some();
     let Some(id) = id else {
@@ -919,16 +998,19 @@ pub(crate) fn run_approve(
     // The revisions raised or kept, the nodes whose lock entries change.
     let revised = prepared.revisions.revised();
     let locked = prepared.revisions.locked();
-    let message = commit_message_raising(
-        &CommitFacts {
-            id: &id,
-            rationale: &proposal.rationale,
-            decided_by: &decided_by,
-            author: &proposal.author,
-            base_commit: &proposal.place.base_commit,
-        },
-        interprets.as_ref(),
-        &apply_trailers(&revised, &locked),
+    let message = delegated_message(
+        commit_message_raising(
+            &CommitFacts {
+                id: &id,
+                rationale: &proposal.rationale,
+                decided_by: &decided_by,
+                author: &proposal.author,
+                base_commit: &proposal.place.base_commit,
+            },
+            interprets.as_ref(),
+            &apply_trailers(&revised, &locked),
+        ),
+        &context,
     );
     let output_tops = outputs.top_paths();
     let mut paths = vec![prepared.top_path.as_str()];

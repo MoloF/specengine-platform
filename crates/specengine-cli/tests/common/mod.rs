@@ -473,6 +473,12 @@ pub const TRACE_ALMANAC: (&str, &str) = ("trace-almanac", "trace-almanac");
 /// [`FIXTURES`] too, for the same reason.
 pub const STUDIO_LAMP: (&str, &str) = ("studio-lamp", "studio-lamp");
 
+/// The fixture of docs/features/auto-rule.md "Fixture" (code, tests, a
+/// spec and a narrative, no `[auto]` table; the rule variants under
+/// `rules/`), with its slug: the auto-mode slices' tests run on it; kept
+/// out of [`FIXTURES`] too, for the same reason.
+pub const AUTO_MINI: (&str, &str) = ("auto-mini", "auto-mini");
+
 /// A header line of `spec show`: the fields split on ` | `.
 pub fn header_fields(line: &str) -> Vec<&str> {
     line.split(" | ").collect()

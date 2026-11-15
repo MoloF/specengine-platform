@@ -57,8 +57,9 @@ use crate::{
 // ------------------------------------------------------------------ the scratch
 
 /// The configured fixtures: every `fixtures/*/specengine.toml`.
-const FIXTURES: [&str; 22] = [
+const FIXTURES: [&str; 23] = [
     "anchor-states",
+    "auto-mini",
     "card-press",
     "code-a",
     "code-bevy",
@@ -1073,6 +1074,7 @@ macro_rules! per_fixture {
 
 per_fixture! {
     sr0_differential_anchor_states, ac12_subset_anchor_states => "anchor-states";
+    sr0_differential_auto_mini, ac12_subset_auto_mini => "auto-mini";
     sr0_differential_card_press, ac12_subset_card_press => "card-press";
     sr0_differential_code_a, ac12_subset_code_a => "code-a";
     sr0_differential_code_bevy, ac12_subset_code_bevy => "code-bevy";

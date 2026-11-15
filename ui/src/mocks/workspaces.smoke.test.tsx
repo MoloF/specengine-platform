@@ -121,10 +121,11 @@ async function go(hash: string) {
   });
 }
 
-const GALLEY_NAV = ["Overview", "Board", "Flow", "Spec tree", "Inbox"];
-const FOUNDRY_NAV = ["Overview", "Board", "Health", "Graph", "Spec tree"];
-const IMPLICIT_NAV = ["Overview", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"];
-const EVERY_NAV = ["Overview", ...SECTIONS.map((section) => sectionLabel(section.id, enT))];
+// Activity second in every department's nav (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
+const GALLEY_NAV = ["Overview", "Activity", "Board", "Flow", "Spec tree", "Inbox"];
+const FOUNDRY_NAV = ["Overview", "Activity", "Board", "Health", "Graph", "Spec tree"];
+const IMPLICIT_NAV = ["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"];
+const EVERY_NAV = ["Overview", "Activity", ...SECTIONS.map((section) => sectionLabel(section.id, enT))];
 
 describe("the implicit workspace on the screen (WS-1)", () => {
   it("ledger-api: Overview, then every section but Tasks; no Workspace control, no module bar on Tree or Flow", async () => {

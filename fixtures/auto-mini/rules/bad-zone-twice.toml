@@ -1,0 +1,4 @@
+[auto]
+mode          = "both"
+zones         = ["code", "docs"]
+exclude_zones = ["narrative", "narrative"]

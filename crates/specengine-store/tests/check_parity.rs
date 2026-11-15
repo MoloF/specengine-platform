@@ -54,7 +54,7 @@ use common::{Scratch, repository_root};
 use parity_config::{
     DANGLING, EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, INDEX_SET, INDEX_SHARD,
     SKIP_FILES, VIEW, add_dangling_mention, claimed, claiming_shard, glob_matches, mutated,
-    root_toml, roots, skipped_file, skipped_files, std_walk, with_roots,
+    root_toml, roots, shard_label, skipped_file, skipped_files, std_walk, with_roots,
 };
 use specengine_core::check::{
     CheckConfig, CheckInput, Mode, Report, ShardKind, Verdict, is_tier3_file, render_index,
@@ -686,11 +686,12 @@ fn the_core_render_is_the_committed_index() {
     // `spec-*` canon before the rest of the canon, the plan items last
     // (docs/features/roadmap-items.md SW-4).
     let mut want = vec![(INDEX_SHARD, ShardKind::Tier3)];
-    want.extend(
-        INDEX_LIVE_SHARDS
-            .iter()
-            .map(|(path, claim)| (*path, ShardKind::Claims(vec![(*claim).to_owned()]))),
-    );
+    want.extend(INDEX_LIVE_SHARDS.iter().map(|(path, claims)| {
+        (
+            *path,
+            ShardKind::Claims(claims.iter().map(|claim| (*claim).to_owned()).collect()),
+        )
+    }));
     assert_eq!(
         generator
             .shards
@@ -761,27 +762,22 @@ fn the_core_render_is_the_committed_index() {
             ARCHIVE,
             "Archive \u{2014} Tier 3, by id only".to_owned(),
         ),
-        (&set[2], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[0].1)),
+        (&set[2], "## Canon", shard_label(INDEX_LIVE_SHARDS[0].1)),
         // docs/features/review-form.md: the `proposal-*` queue canons.
-        (&set[3], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[1].1)),
+        (&set[3], "## Canon", shard_label(INDEX_LIVE_SHARDS[1].1)),
         // docs/features/hub-ops.md "Canon at ship": the `hub*` hub canons.
-        (&set[4], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[2].1)),
+        (&set[4], "## Canon", shard_label(INDEX_LIVE_SHARDS[2].1)),
         // card-tasks (RM-0092): the `card*` card canons.
-        (&set[5], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[3].1)),
+        (&set[5], "## Canon", shard_label(INDEX_LIVE_SHARDS[3].1)),
         // docs/features/collision-pass.md: the `code-*` code-layer canons.
-        (&set[6], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[4].1)),
-        (&set[7], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[5].1)),
-        (
-            &set[8],
-            "## Decisions",
-            format!("`{}`", INDEX_LIVE_SHARDS[6].1),
-        ),
-        (&set[9], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[7].1)),
-        (
-            &set[10],
-            "## Specs",
-            format!("`{}`", INDEX_LIVE_SHARDS[8].1),
-        ),
+        (&set[6], "## Canon", shard_label(INDEX_LIVE_SHARDS[4].1)),
+        (&set[7], "## Canon", shard_label(INDEX_LIVE_SHARDS[5].1)),
+        // auto-mode (docs/features/auto-rule.md RL1): ADR-0001 to
+        // ADR-0039 first, by four claims, then the rest.
+        (&set[8], "## Decisions", shard_label(INDEX_LIVE_SHARDS[6].1)),
+        (&set[9], "## Decisions", shard_label(INDEX_LIVE_SHARDS[7].1)),
+        (&set[10], "## Canon", shard_label(INDEX_LIVE_SHARDS[8].1)),
+        (&set[11], "## Specs", shard_label(INDEX_LIVE_SHARDS[9].1)),
     ] {
         let (path, text) = (output.path.as_str(), output.bytes.as_str());
         assert!(
@@ -810,13 +806,14 @@ fn the_core_render_is_the_committed_index() {
     // Seven since docs/features/review-form.md (the `proposal-*` shard),
     // eight since docs/features/hub-ops.md (the `hub*` shard), nine since
     // card-tasks (RM-0092, the `card*` shard), ten since
-    // docs/features/collision-pass.md (the `code-*` shard): the archive and
-    // nine live shards.
-    assert_eq!(INDEX_SET - 1, 10);
+    // docs/features/collision-pass.md (the `code-*` shard), eleven since
+    // auto-mode (`docs/index-decisions-0.md`): the archive and ten live
+    // shards.
+    assert_eq!(INDEX_SET - 1, 11);
     assert_eq!(
         section_lines(root, SHARDS).len(),
         INDEX_SET - 1,
-        "{INDEX}: ten pointers"
+        "{INDEX}: eleven pointers"
     );
     // No plan item in the root: each is claimed or Tier 3.
     assert!(
@@ -1060,7 +1057,8 @@ fn each_live_shard_lists_its_claim(
     input: &CheckInput,
 ) -> Vec<String> {
     let mut failures = Vec::new();
-    for (shard, claim) in INDEX_LIVE_SHARDS {
+    for (shard, claims) in INDEX_LIVE_SHARDS {
+        let claim = shard_label(claims);
         let Some((_, text)) = outputs.iter().find(|(path, _)| *path == shard) else {
             failures.push(format!("{what}: no {shard}"));
             continue;
@@ -1086,7 +1084,7 @@ fn each_live_shard_lists_its_claim(
             .collect();
         if want.is_empty() || listed != want {
             failures.push(format!(
-                "{what}: {shard} (`{claim}`) lists {listed:?}, the claimed live files are {want:?}"
+                "{what}: {shard} ({claim}) lists {listed:?}, the claimed live files are {want:?}"
             ));
         }
     }
@@ -1171,7 +1169,11 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     // Three Tier 3 seeds sit under the decisions shard's claim: Tier 3
     // places before the claims.
     // The `code-*` shard (docs/features/collision-pass.md) fifth.
-    let [_, _, _, _, _, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
+    // The decisions split in two since auto-mode: the second shard's one
+    // claim, `docs/decisions/*.md`, still covers every decision.
+    let [_, _, _, _, _, _, _, (_, [decisions]), _, _] = INDEX_LIVE_SHARDS else {
+        panic!("the decisions shard has one claim")
+    };
     assert_eq!(
         COMPACTION_SEEDS
             .iter()
@@ -1390,6 +1392,8 @@ fn each_seed_blocks_exactly_its_target() {
         // The `code-*` shard (docs/features/collision-pass.md).
         _,
         (canon, _),
+        // ADR-0001 to ADR-0039 since auto-mode, then the rest.
+        (decisions_0, _),
         (decisions, _),
         (crates, _),
         _,
@@ -1405,9 +1409,11 @@ fn each_seed_blocks_exactly_its_target() {
         ("ADR-0002 as id: ADR-0001", &[INDEX_SHARD]),
         (
             "ADR-0010 superseded-by ADR-0001, not rendered",
-            &[INDEX_SHARD, decisions],
+            &[INDEX_SHARD, decisions_0],
         ),
-        ("ADR-0003.md renamed 3.md", &[decisions]),
+        // The renamed `3.md` matches no `ADR-00..3*` claim: its line
+        // moves from the first decisions shard to the second.
+        ("ADR-0003.md renamed 3.md", &[decisions_0, decisions]),
         ("scope: [] on canon", &[crates]),
         ("docs/index-archive.md hand-edited", &[INDEX_SHARD]),
         ("docs/index-archive.md deleted", &[INDEX_SHARD]),
@@ -1986,8 +1992,9 @@ const SEEDS: &[Seed] = &[
             )
         },
     ),
-    // The decision's live line is in the decisions shard (its claim): it
-    // leaves that shard for the archive, the root untouched.
+    // The decision's live line is in the first decisions shard (its claim
+    // `docs/decisions/ADR-001*.md` since auto-mode): it leaves that shard
+    // for the archive, the root untouched.
     (
         "ADR-0010 superseded-by ADR-0001, not rendered",
         INDEX_LIVE_SHARDS[6].0,

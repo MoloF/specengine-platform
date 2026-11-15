@@ -9182,3 +9182,131 @@ mark {
   padding: 0;
   list-style: none;
 }
+
+/* Activity, the feed (src/feed/; docs/features/auto-feed.md "The UI"): off the nav, linked from the Overview and the Tasks list. */
+.feed-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+}
+
+.feed-auto {
+  display: flex;
+  align-items: center;
+  gap: var(--space-075);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.feed-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-150);
+}
+
+.feed-tool {
+  display: grid;
+  gap: var(--space-050);
+  max-width: 100%;
+}
+
+.feed-list,
+.feed-needs-list {
+  display: grid;
+  gap: var(--space-100);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feed-entry {
+  display: grid;
+  gap: var(--space-050);
+  padding: var(--space-100) var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-raised);
+  min-width: 0;
+}
+
+/* New since the last visit: the lozenge says so; the edge only repeats it. */
+.feed-entry[data-new="true"] {
+  border-inline-start: 3px solid var(--accent);
+}
+
+.feed-entry-head,
+.feed-row,
+.feed-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-075);
+  min-width: 0;
+}
+
+.feed-time {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.feed-type {
+  font-weight: var(--font-weight-semibold);
+}
+
+.feed-title,
+.feed-subject,
+.feed-words code,
+.feed-row code {
+  overflow-wrap: anywhere;
+}
+
+.feed-text {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.feed-quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--space-075);
+  padding: 0 var(--space-150);
+  color: var(--text-subtlest);
+}
+
+.feed-needs-all {
+  display: grid;
+  gap: var(--space-300);
+}
+
+.feed-needs {
+  display: grid;
+  gap: var(--space-100);
+}
+
+.feed-needs-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-075);
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+}
+
+.feed-needs-list > li {
+  padding: var(--space-075) var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+}
+
+/* A rule's apply on a decided proposal (ClosedProposal.tsx). */
+.by-rule code {
+  overflow-wrap: anywhere;
+}
+
+/* A served code said in words (src/feed/): the code in its title. */
+.feed-code {
+  font-weight: var(--font-weight-medium);
+}

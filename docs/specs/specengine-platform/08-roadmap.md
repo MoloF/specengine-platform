@@ -404,6 +404,48 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 
 **Shipped 2026-11-14**, the six in one commit, plugin 0.46.1 (a version-only bump: `docs/canon/plugin-files.md` "Changing it"), the next tag `v0.46.1`. No queue schema or backup format step: a hub upgrades from 0.46.0 as `docs/canon/hub-ops.md` "Upgrade" says, a dump first, and runs the fixes only from an image of that tag. Owed, the owner's on the live hub after the upgrade: DS10 (the step-up link and Retry) and TF14 (8 parallel agent writes with the Inbox open, read from the daemon's lines: `docs/canon/serve-slow.md` "Reading them"). The three next slices stay plan text above, unspecified.
 
+#### Owner's word, 2026-11-15
+
+**His words**, three chat messages in Russian; this is a translation:
+1. "How can I build the pipeline to run fully automatically, so that I set a task or a pack of tasks and Claude Code, over MCP, drives and confirms the progress itself? That is, I would trust it with development, and handle the scenarios and so on myself to keep control. I want it to run autonomously while I follow how it goes, get the tasks filtered by the last change and see how everything flows, with some details; otherwise I spend a lot of time on plain confirmation."
+2. "I would like an auto mode set in specengine.toml itself, so one can work calmly, leave development overnight and go to sleep. In the end everyone chooses the production mode they work in. I am now the only developer, and it pays me to parallelise development across virtual departments and delegate it to agents; once a team appears, auto mode is removed and manual stays, where everyone checks their own actions and everything works in harmony."
+3. "Go on, do it to the end, push and publish the tag, then update the hub with the new auto setting so that everything works."
+
+**The analysis.** His literal mechanism, an agent confirming over MCP, is what `docs/canon/architecture.md#apply` forbids ("no tool takes a choice from an agent"). The outcome survives another mechanism: agents only report through today's tools; his committed rule decides, judged by SpecEngine's deterministic code over the queue and git; every delegated act is an event `by: "rule"` and a `Delegated-by:` trailer. ADR-0081 (local: a pack started on a terminal, approved and landed by the rule; amends ADR-0012, ADR-0035, ADR-0038) and ADR-0082 (hub: the sole owner's covered `/mcp` proposals applied by the hub's code; narrows ADR-0061). Canon: `docs/canon/auto-mode.md`, `docs/canon/hub-auto.md`, `docs/canon/hub-ops.md` "Auto". This repository's own pipeline (`CLAUDE.md` "Process") stays manual.
+
+**Working answers**, the analyst's, adopted by the orchestrator under his "do it to the end"; each is his to revise:
+
+| Q | Working answer | Cost of the other |
+|---|---|---|
+| Q1 a pack is | `T-` tasks and requirement lines | Board cards: a third ADR, against ADR-0056 and ADR-0075 |
+| Q2 local lands on | the `auto` integration branch, merged by him each morning | main: a bad night lands on main and, through the hub's sync, on the remote |
+| Q3 off | both: by itself at two `[team]` logins, and by removing the table | the table only: an agent keeps applying beside a writer |
+| Q4 exclusions by | zones and node kinds | departments: a workspace becomes a right, against ADR-0073 |
+| Q5 delegated kinds | `update`, `create`; a rebase held | interpretations and amendments change accepted meaning unseen |
+| Q6 tests | the runner's results are claims; `verified` and the lock stay his | amending ADR-0044 and ADR-0041 |
+| Q7 a hub applies | at once, as its own command | a veto window adds a scheduler |
+| Q8 the gate under auto | a warning; the feed lists the night's `gate.observed` | requiring `selective` gates his own sessions |
+
+**Fixed now**: release `auto-mode`, plugin 0.47.0 (MINOR: the plugin gains `scripts/autopilot.sh`), one tag; no queue schema step (it stays 14) and no backup format step (7): the new events ride the `events` table.
+
+| # | Slice | Item | Fixed now |
+|---|---|---|---|
+| 1 | `auto-rule` (`docs/features/auto-rule.md`) | RM-0120 | shipped 2026-11-15; must, first: the table, hash, predicate, events, the apply seam, `spec auto show`, `stop`, `resume` |
+| 2 | `hub-auto` (`docs/features/hub-auto.md`) | RM-0121 | shipped 2026-11-15; must, after 1, beside 3: the hub's delegated apply, one door file |
+| 3 | `auto-land` (`docs/features/auto-land.md`) | RM-0122 | shipped 2026-11-15; must, after 1, beside 2: `start`, `approve`, `land`, `hold`, `next`, the line binding |
+| 4 | `auto-runner` (`docs/features/auto-runner.md`) | RM-0123 | shipped 2026-11-15; must, after 3's command contract: `plugin/specengine/scripts/autopilot.sh` |
+| 5 | `auto-feed` (`docs/features/auto-feed.md`) | RM-0124 | shipped 2026-11-15; must, beside 2-4 once 1's event names are fixed: `spec feed`, the route, Activity, the Tasks sort |
+
+**The release's gates:**
+- G1: one tag, `v0.47.0`, with no queue schema or backup format step.
+- G2, the order (`docs/canon/hub-ops.md` "Auto"): the hub upgraded to the tag, a dump first (from 0.46.0 or 0.46.1: neither steps the schema or the format); then the laptop's `spec` and plugin reinstalled from it; only then `[auto]` committed in his game project and pushed, since 0.46.1 refuses the table.
+- G3, his, on the live hub: an agent's covered update applied and pushed with no click; a `narrative` one waits for Confirm with the step-up (`hub-auto.md` HA9).
+- G4, his: one overnight run on his game project with three or more tasks, read from the feed in the morning (`auto-feed.md` FD8, `auto-runner.md` RN0).
+
+His game project's committed config, as the analyst read it: one `[team]` login, role `owner`, a commented-out `lead` for a writer with a `narrative` zone, and `[gate] mode = "observe"`. Uncommenting the `lead` switches auto off on the hub and the laptop alike.
+
+**Shipped 2026-11-15**, the five in one commit, plugin 0.47.0 (MINOR: the plugin gains `scripts/autopilot.sh`: `docs/canon/plugin-files.md` "Changing it"), the next tag `v0.47.0` (G1); no queue schema or backup format step. Canon: `docs/canon/auto-mode.md`, `spec-auto.md`, `spec-auto-land.md`, `hub-auto.md`, `auto-runner.md`, `spec-feed.md`. The orchestrator's decisions and the deviations (Activity in the nav, the owner's word over the spec's off-nav; MCP reviews leaving `delegated` out; a hub without `[auto]` taking one more turn hold per stored write) are in each slice's "Implementation". Owed, the owner's: G2, the hub upgraded to 0.47.0 (a dump first; no schema or format step), then the laptop's `spec` and plugin, then `[auto]` committed in his game project; G3 (`hub-auto.md` HA9); G4 (`auto-feed.md` FD8, `auto-runner.md` RN0).
+
 ## 3. Product acceptance criteria
 
 | # | Criterion | How it is checked |

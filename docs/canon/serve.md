@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-15
 ---
 
 # Daemon: spec serve
@@ -92,7 +92,7 @@ Requests of one project run one at a time on the blocking pool (a read refreshes
 
 ## Live tail
 
-`GET .../events`, the stream: `crates/specengine-http/README.md` "Live tail". Types: all stored (`proposal-queue.md` "States and events", `tasks.md` "Store", `gate.md` "Event", `spec-verify-tests.md`); a row with a NULL type or payload or CR, LF in its type skipped. Polls at most 250 ms apart, at once after a full page (`EVENTS_PAGE_MAX`, 512 rows read, skipped ones counted), each reads the config (a changed slug ends the stream), then one short read transaction on the stream's own connection (CLI `EventsTail`), kept between polls, reopened when the file is replaced, dropped when gone; no database created. A poll that cannot run ends the stream; a client gone ends it and the connection. On a hub a stream ends 300 s after it opens (`STREAM_LIFE`, `hub.rs`), between two events, sending nothing more; the browser reconnects with `Last-Event-ID` through the door, which judges the person again, and loses no event. A local daemon's never ends.
+`GET .../events`, the stream: `crates/specengine-http/README.md` "Live tail". Types: all stored (`proposal-queue.md` "States and events"); the UI re-reads Activity's feed on each and on a gap (`spec-feed.md` "UI"); a row with a NULL type or payload or CR, LF in its type skipped. Polls at most 250 ms apart, at once after a full page (`EVENTS_PAGE_MAX`, 512 rows read, skipped ones counted), each reads the config (a changed slug ends the stream), then one short read transaction on the stream's own connection (CLI `EventsTail`), kept between polls, reopened when the file is replaced, dropped when gone; no database created. A poll that cannot run ends the stream; a client gone ends it and the connection. On a hub a stream ends 300 s after it opens (`STREAM_LIFE`, `hub.rs`), between two events, sending nothing more; the browser reconnects with `Last-Event-ID` through the door, which judges the person again, and loses no event. A local daemon's never ends.
 
 ## Known limits
 
@@ -102,7 +102,7 @@ Requests of one project run one at a time on the blocking pool (a read refreshes
 - Deleting the data directory under a live daemon lets a second start lock a new file.
 - Version skew: crates 0.1.0, no build id; an old daemon after `cargo install` answers `SchemaTooNew` 503s: restart it.
 - `daemon.json.tmp` is one fixed name, safe because the lock serialises starts.
-- **The local half by units alone.** No test waits 300 s and no paused clock is in the graph, so `answered` capping `None` at `STREAM_LIFE` survives SL3 (`docs/features/stream-life.md`).
+- **The local half by units alone.** No test waits 300 s and no paused clock is in the graph, so `answered` capping `None` at `STREAM_LIFE` survives SL3 (`stream-life` spec).
 - **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. It fails closed, `daemon.json` keeping its five keys (the guide, `scripts/deploy/README.md`).
 
 ## Tests

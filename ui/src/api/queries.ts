@@ -1,4 +1,4 @@
-import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient, type InvalidateQueryFilters } from "@tanstack/react-query";
+import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient, type InvalidateQueryFilters, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   apiErrorOf,
@@ -190,6 +190,14 @@ export function deliveryOf(project: string) {
 export function catalogsOf(project: string) {
   return ["catalog", project] as const;
 }
+
+/** Every feed read of a project, whatever its filters: `src/feed/` keys each under it (docs/features/auto-feed.md "The UI"). */
+export function feedsOf(project: string) {
+  return ["feed", project] as const;
+}
+
+/** Each client's feed reads a gap owes a whole read, by query hash: what they hold may be stale or ahead of a restored queue. */
+export const feedsOwedWhole = new WeakMap<QueryClient, Set<string>>();
 
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
 // false `archive` too; then the query's AbortSignal. A read superseded by a key change (a new search,
@@ -522,8 +530,9 @@ const CARD_EVENT = "card.";
  * (docs/features/direction-catalog.md "Acceptance criteria", DC-10). The task counts, under the card
  * lists, are read again with them, and on every `proposal.*` event but a stage and every `task.*`
  * event too (docs/features/department-overview.md "Acceptance criteria",
- * DO10: a count of open items and of agent tasks in review). No
- * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
+ * DO10: a count of open items and of agent tasks in review). Every event, of any type, and a gap
+ * read the project's feeds again, each appended past what it holds (docs/features/auto-feed.md
+ * "The UI", Live; src/api/feedQueries.ts). No other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads, the round sheets and the cards of the project again. Only the reads on screen are fetched, once each
  * but the health read's one more after a walk (the check and the health read only while Health
@@ -641,6 +650,9 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     const unsubscribe = client.subscribe(
       project,
       (event) => {
+        // The feed lists every event: any one reads it again, appended past what it holds
+        // (docs/features/auto-feed.md "The UI", Live).
+        readAgain({ queryKey: feedsOf(project) });
         const id = eventId(event.payload);
         if (event.type.startsWith(CARD_EVENT)) {
           if (id === null) {
@@ -707,6 +719,14 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         }
       },
       () => {
+        // Events may be missed and a restored queue may number below what is held: each feed is read
+        // whole, its held entries dropped (src/api/feedQueries.ts), never appended.
+        const owed = feedsOwedWhole.get(queryClient) ?? new Set<string>();
+        feedsOwedWhole.set(queryClient, owed);
+        for (const query of queryClient.getQueryCache().findAll({ queryKey: feedsOf(project) })) {
+          owed.add(query.queryHash);
+        }
+        readAgain({ queryKey: feedsOf(project) });
         readAgain({ queryKey: queryKeys.inbox(project), exact: true });
         readAgain({ queryKey: ["proposal", project] });
         readSpecAgain();

@@ -431,6 +431,7 @@ impl SqliteQueue {
             conn,
             project: project.to_owned(),
             dir: dir.to_path_buf(),
+            by_rule: None,
         }))
     }
 

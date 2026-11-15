@@ -1,0 +1,3 @@
+[auto]
+zones = ["code"]
+mode  = "always"

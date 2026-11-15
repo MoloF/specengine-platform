@@ -41,10 +41,12 @@ describe("the shell (AC-11)", () => {
     const client = stubClient([aProposal({ id: "PR-1" })]);
     renderApp(client, "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
-    expect((await shownNav()).map((link) => link.textContent)).toEqual(["Overview", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
-    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null, null]);
+    // Activity second, after Overview (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
+    expect((await shownNav()).map((link) => link.textContent)).toEqual(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, null, "page", null, null, null, null, null, null, null]);
     expect(navLinks()[0]?.getAttribute("href")).toBe("#/alpha");
-    expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/board");
+    expect(navLinks()[1]?.getAttribute("href")).toBe("#/alpha/feed");
+    expect(navLinks()[3]?.getAttribute("href")).toBe("#/alpha/board");
     // One workspace: no switcher, no notes.
     expect(within(appHeader()).queryByLabelText("Workspace")).toBeNull();
     expect(within(appHeader()).queryByRole("button", { name: /^Config notes/ })).toBeNull();

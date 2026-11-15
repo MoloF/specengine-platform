@@ -1,0 +1,4 @@
+[auto]
+mode        = "both"
+zones       = ["code"]
+max_applies = 1001

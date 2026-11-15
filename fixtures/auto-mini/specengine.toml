@@ -1,0 +1,29 @@
+# Fixture corpus auto-mini: the auto-mode corpus (docs/features/auto-rule.md
+# "Fixture"): a tiny project with code, tests, a spec and a narrative, and no
+# `[auto]` table. The tables under `rules/` are what a test appends to this
+# file and commits: `on.toml` covers code, tests and docs and excludes the
+# narrative zone and the scenario kind; `bad-*.toml` each hold one problem of
+# docs/canon/auto-mode.md "Rule", its line and words in `expected.json`.
+
+[project]
+slug = "auto-mini"
+
+# The narrative lies outside the default walk (`docs/spec`, ...); `notes/`
+# lies in no zone, so a change there is never covered.
+[paths]
+roots = ["docs", "notes"]
+
+[ids]
+R   = { kind = "requirement", width = 2 }
+SC  = { kind = "scenario",    width = 3 }
+DEC = { kind = "decision",    width = 4 }
+
+[zones]
+code      = ["src/**"]
+tests     = ["tests/**"]
+docs      = ["docs/**"]
+narrative = ["docs/narrative/**"]
+
+[gate]
+mode  = "observe"
+zones = ["code"]

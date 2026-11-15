@@ -144,6 +144,8 @@
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod anchor;
+pub mod auto;
+pub mod auto_toml;
 pub mod card;
 pub mod card_counts;
 pub mod card_split;

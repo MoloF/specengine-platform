@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-15
 ---
 
 # Proposal queue: commands, states, store
 
-An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`, `drift`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`; revisions: `proposal-revisions.md`; inbox, review document, preview: `proposal-review.md`; completion, reject: `proposal-completion.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds terminal check, prompt, clock. `--task`: `tasks.md`. Code: core `patch` (`locate`, `span_bytes`, `splice`, `check_structure`, `update{,_refusal}`, `PatchCheck::introduced`), `proposal` (`PR-NNNN`, look-alikes, `prefix_clash`, `Author`, `commit_message{,_interpreting,_raising}`, trailers, `TEXT_MAX_BYTES`); store `introduced_findings`. Not yet: re-targeting, `has_open_proposal`.
+An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`, `drift`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`; revisions: `proposal-revisions.md`; inbox, review document, preview: `proposal-review.md`; completion, reject: `proposal-completion.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds terminal check, prompt, clock. `--task`: `tasks.md`. Code: core `patch` (`locate`, `span_bytes`, `splice`, `check_structure`, `update{,_refusal}`, `PatchCheck::introduced`), `proposal` (`PR-NNNN`, look-alikes, `prefix_clash`, `Author`, `commit_message{,_interpreting,_raising}`, trailers, `TEXT_MAX_BYTES`); store `introduced_findings`.
 
 ## Commands
 
@@ -23,7 +23,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 
 `spec propose` stores nothing and takes no ID unless:
 
-1. The target resolves as in `spec show` (`spec-cli-read.md` "Resolution"): an ID or `slug/ID` to one holder; a `.md` path to its file's document, the whole file (unlike `show`, no node -> exit 1). Not `class: generated`, its prefix (a section's: also its document's) without `immutable_text`. An alias, a legacy ID, `#SECTION`, `@rev`, `[[…]]` -> exit 1 naming the canonical ID when known; a look-alike, mixed script, `project:` -> exit 2. Stored **canonical**: a bare feature-scoped ID as `slug/ID`; a path as its document's `id:` as if written (refused, or held elsewhere: exit 1 `` `<p>` declares `<ID>`… ``), else as itself (an `id:` since -> exit 1).
+1. The target resolves as in `spec show` (`spec-cli-read.md` "Resolution"): an ID or `slug/ID` to one holder; a `.md` path to its file's document, the whole file (no node -> exit 1, unlike `show`). Not `class: generated`, its prefix (a section's: also its document's) without `immutable_text`. An alias, a legacy ID, `#SECTION`, `@rev`, `[[…]]` -> exit 1 naming the canonical ID when known; a look-alike, mixed script, `project:` -> exit 2. Stored **canonical**: a bare feature-scoped ID as `slug/ID`; a path as its document's `id:` as if written (refused, or held elsewhere: exit 1 `` `<p>` declares `<ID>`… ``), else as itself (an `id:` since -> exit 1).
 2. `--base` is the span's hash now; stale -> exit 1 printing the current one.
 3. The text verbatim (no line-ending normalisation), a section's trailing whitespace (space, tab, CR, LF) dropped, as no section span ends in it; spliced into exactly the span and parsed afresh, the file keeps its ordered (ID, heading level) list, the target spans exactly the text, and the file changes (else exit 1 `no change: …`). Refused: an `{#ID}` or `id:` dropped or added (`create`: `proposal-kinds.md`), a level changed, a heading of the same or higher level added, a revision changed.
 4. Validation: the tree parsed once, checked as is and with the file swapped, judged against `HEAD` (`spec-check-git.md`): introduced findings in `diagnostics` (held IDs, `--dry-run`: `proposal-kinds.md`), never refusing (ADR-0012); a parser panic on the patched bytes gives none.
@@ -31,7 +31,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 
 ## Place, IDs, repositories
 
-`PR` taken in `[ids]` (a prefix or `aliases_from`) -> exit 2. The queue is the project's `<slug>.db` (CLI README "Database"), shared by every worktree and repository of the slug; the current repository is the root's git common dir. An ID is `PR-` and 4 or more digits as written by the queue; a look-alike -> exit 2 naming the Latin form; other text (`PR-1`, `PR-00001`) -> exit 1 `no proposal …`. Another repository's proposal (same slug) -> exit 2 naming it, `run the command there`. One whose recorded common dir no longer exists is an **orphan**: review and approve exit 2 `` `PR` belongs to the repository <dir> (worktree <w>), which no longer exists: `` + the inbox note's hint; only reject takes it (`proposal-completion.md` "Reject").
+`PR` taken in `[ids]` (a prefix or `aliases_from`) -> exit 2. The queue is the project's `<slug>.db` (CLI README "Database"), shared by every worktree and repository of the slug, the current one the root's git common dir. An ID is `PR-` and 4 or more digits, as the queue writes; a look-alike -> exit 2 naming its Latin form; other text (`PR-1`, `PR-00001`) -> exit 1 `no proposal …`. Another repository's proposal (same slug) -> exit 2 naming it, `run the command there`. One whose recorded common dir is gone is an **orphan**: review and approve exit 2 `` `PR` belongs to the repository <dir> (worktree <w>), which no longer exists: `` + the inbox note's hint; only reject takes it (`proposal-completion.md` "Reject").
 
 ## Exit codes
 
@@ -39,7 +39,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 
 ## States and events
 
-`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `card.*` (`cards.md`), `gate.observed`, `verify.tests` (`spec-verify-tests.md`); `specengine-http` streams it.
+`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both; a rule's `by`, `rule`, `pack`), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `card.*` (`cards.md`), `auto.*` (`auto-mode.md` "Events"), `gate.observed` (`gate.md`), `verify.tests` (`spec-verify-tests.md`); `specengine-http` streams it.
 
 ## Store
 

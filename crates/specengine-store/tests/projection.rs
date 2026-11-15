@@ -348,8 +348,9 @@ fn sr3_every_configured_fixture_reads_back_as_parsed() {
     // 20 since docs/features/workspaces.md added `fixtures/studio-lamp`, 21
     // since docs/features/flow-scenario.md added `fixtures/flow-aside`, 22
     // since docs/features/pack.md "Acceptance criteria", PK3, added
-    // `fixtures/plant-diary`.
-    assert_eq!(fixtures.len(), 22, "premise: the configured fixtures");
+    // `fixtures/plant-diary`, 23 since docs/features/auto-rule.md "Fixture"
+    // added `fixtures/auto-mini`.
+    assert_eq!(fixtures.len(), 23, "premise: the configured fixtures");
     let mut files = 0;
     for name in &fixtures {
         let corpus = Corpus::copy_of(name, &scratch, name);

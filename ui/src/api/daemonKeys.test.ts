@@ -61,6 +61,15 @@ import type {
   DriftLock,
   DriftMarker,
   DriftRow,
+  FeedDocument,
+  FeedEntry,
+  FeedFailedRun,
+  FeedGateObserved,
+  FeedHeld,
+  FeedNeedsMe,
+  FeedOpen,
+  FeedUnlanded,
+  Delegated,
   FlowEdge,
   FlowGap,
   FlowInner,
@@ -348,6 +357,7 @@ const KEYS = {
     record_path: true,
     record_title: true,
     record_text: true,
+    delegated: true,
     choice: true,
     task_id: true,
     staged: true,
@@ -1187,6 +1197,36 @@ const KEYS = {
   MapEdge: { src: true, dst: true, type: true, weak: true, places: true } satisfies Record<keyof MapEdge, true>,
   MapParent: { child: true, parent: true } satisfies Record<keyof MapParent, true>,
   MapGhost: { written: true, reason: true, sources: true, places: true } satisfies Record<keyof MapGhost, true>,
+  // docs/features/auto-feed.md "Data" (FD3): the feed document, an entry, Needs me and its five row
+  // sets, sets 161 to 168 in "Data"'s order, the fixture's names; `Feed` is the document's type.
+  Feed: { auto: true, after: true, last_seq: true, more: true, entries: true, needs_me: true, notes: true } satisfies Record<keyof FeedDocument, true>,
+  FeedEntry: {
+    seq: true,
+    at: true,
+    type: true,
+    task: true,
+    proposal: true,
+    card: true,
+    line: true,
+    title: true,
+    status: true,
+    by: true,
+    outcome: true,
+    summary: true,
+    commit: true,
+    reason: true,
+    detail: true,
+    path: true,
+    lane: true,
+  } satisfies Record<keyof FeedEntry, true>,
+  FeedNeedsMe: { held: true, open: true, failed_runs: true, gate_observed: true, unlanded: true } satisfies Record<keyof FeedNeedsMe, true>,
+  FeedHeld: { seq: true, at: true, pack: true, task: true, line: true, proposal: true, act: true, reason: true, detail: true } satisfies Record<keyof FeedHeld, true>,
+  FeedOpen: { id: true, kind: true, target_id: true, task_id: true, created_at: true } satisfies Record<keyof FeedOpen, true>,
+  FeedFailedRun: { task: true, run: true, outcome: true, summary: true, ended_at: true } satisfies Record<keyof FeedFailedRun, true>,
+  FeedGateObserved: { seq: true, at: true, path: true, zone: true, branch: true } satisfies Record<keyof FeedGateObserved, true>,
+  FeedUnlanded: { task: true, status: true, pack: true } satisfies Record<keyof FeedUnlanded, true>,
+  // hub-auto's mark on a rule's apply, set 169 (docs/features/hub-auto.md "Acceptance criteria", HA7).
+  Delegated: { by: true, rule: true, commit: true } satisfies Record<keyof Delegated, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1201,7 +1241,7 @@ const CITED: Record<Named, string> = {
     "drift, " +
     "decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, " +
     "target_ids, severity, gap_type, summary, gist, matters, working_answer, price_of_other, evidence, pair, options, recommendation, distinct_from, linked, " +
-    "record_id, record_path, record_title, record_text, choice, " +
+    "record_id, record_path, record_title, record_text, delegated?, choice, " +
     "task_id, " +
     "staged, staged_at, " +
     "interpretation, " +
@@ -1368,6 +1408,15 @@ const CITED: Record<Named, string> = {
   MapEdge: "src, dst, type, weak, places",
   MapParent: "child, parent",
   MapGhost: "written, reason, sources, places",
+  Feed: "auto, after, last_seq, more, entries, needs_me, notes",
+  FeedEntry: "seq, at, type, task, proposal, card, line, title, status, by, outcome, summary, commit, reason, detail, path, lane",
+  FeedNeedsMe: "held, open, failed_runs, gate_observed, unlanded",
+  FeedHeld: "seq, at, pack, task, line, proposal, act, reason, detail",
+  FeedOpen: "id, kind, target_id, task_id, created_at",
+  FeedFailedRun: "task, run, outcome, summary, ended_at",
+  FeedGateObserved: "seq, at, path, zone, branch",
+  FeedUnlanded: "task, status, pack",
+  Delegated: "by, rule, commit",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1735,10 +1784,19 @@ const CORPUS_MAP_KEYS: readonly (readonly [Named, string])[] = [
 ];
 
 /** The types each set names in `provisional.ts`, where the fixture's name is not the type's own. */
-const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument", Rings: "RingsDocument" };
+const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument", Rings: "RingsDocument", Feed: "FeedDocument" };
+
+/** The hundred and sixty types the fixture names before auto-feed, corpus-map's six among them. */
+const BEFORE_AUTO_FEED: readonly Named[] = [...BEFORE_CORPUS_MAP, ...CORPUS_MAP];
+
+/** auto-feed's eight, sets 161 to 168 in "Data"'s order: the feed, an entry, Needs me and its five row sets (docs/features/auto-feed.md "Acceptance criteria", FD3). */
+const AUTO_FEED: readonly Named[] = ["Feed", "FeedEntry", "FeedNeedsMe", "FeedHeld", "FeedOpen", "FeedFailedRun", "FeedGateObserved", "FeedUnlanded"];
+
+/** hub-auto's one, set 169: a delegated apply's mark (docs/features/hub-auto.md "Acceptance criteria", HA7). */
+const HUB_AUTO: readonly Named[] = ["Delegated"];
 
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_CORPUS_MAP, ...CORPUS_MAP];
+const ALL: readonly Named[] = [...BEFORE_AUTO_FEED, ...AUTO_FEED, ...HUB_AUTO];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1752,6 +1810,9 @@ const NEVER_SERVED: readonly (readonly [Named, string])[] = [
   ["CheckCounts", "new_debt"],
   ["CheckFinding", "introduced"],
   ["Author", "login"],
+  // A delegated apply's mark, skipped on every other row, so the file keeps the review document at
+  // its keys (docs/features/hub-auto.md "Acceptance criteria", HA7).
+  ["Proposal", "delegated"],
 ];
 
 /** The keys the daemon sends for a type: its record's, less the never-served ones. */
@@ -1831,8 +1892,10 @@ describe("the daemon's document types (AC-09)", () => {
 
   it("counts 4 project keys, 13 inbox-entry keys, 54 review keys (AC-14 of decision-staging, AC-U1 of kind-interpretation, UI-4 of rev-discipline, UI-1 of drift-queue, L1 of card-questions, IS10 of intake-similar, PQ10 of plain-questions, PP8 of collision-pairs)", () => {
     // 13 and 53 since plain-questions' `gist`, and its `matters` on the review (docs/features/plain-questions.md "Acceptance criteria", PQ10);
-    // 54 since collision-pairs' `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8).
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 13, 54]);
+    // 54 since collision-pairs' `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8); 55 typed
+    // since hub-auto's optional `delegated` (HA7), never served on the file's row, so 54 compared.
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 13, 55]);
+    expect(served("Proposal")).toHaveLength(54);
   });
 
   it("gives the review document its drift right after revisions, before decided_by, and the DriftEvidence set its 3 keys (UI-1 of drift-queue)", () => {
@@ -1871,7 +1934,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_USAGE_ORPHANS.at(-1)).toBe("DeliveryTask");
     expect(BEFORE_SCOPE_RINGS.at(-1)).toBe("HealthOrphan");
     expect(BEFORE_CORPUS_MAP.at(-1)).toBe("RingSector");
-    expect(ALL.at(-1)).toBe("MapGhost");
+    expect(BEFORE_AUTO_FEED.at(-1)).toBe("MapGhost");
+    expect(ALL.at(-1)).toBe("Delegated");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1900,7 +1964,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(160);
+    expect(ALL).toHaveLength(169);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -2367,8 +2431,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_USAGE_ORPHANS).toHaveLength(148);
     expect(BEFORE_SCOPE_RINGS).toHaveLength(151);
     expect(BEFORE_CORPUS_MAP).toHaveLength(154);
-    expect(ALL).toHaveLength(160);
-    expect(new Set(ALL).size).toBe(160);
+    expect(BEFORE_AUTO_FEED).toHaveLength(160);
+    expect(ALL).toHaveLength(169);
+    expect(new Set(ALL).size).toBe(169);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -2663,7 +2728,7 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it('types corpus-map\'s six as the spec writes them: 7, 6, 12, 5, 2, 4 keys in "Data"\'s order, every one present, a node\'s `kind`, `title`, `of`, `status` and `orphan` nullable, ends by index, each citing `docs/features/corpus-map.md` "Acceptance criteria"; all six in the file, and GraphView\'s `both` and `kinds` after `impact`, since its Rust test wrote them (CM1 to CM5 of corpus-map)', () => {
-    expect(ALL.slice(BEFORE_CORPUS_MAP.length)).toEqual([...CORPUS_MAP]);
+    expect(ALL.slice(BEFORE_CORPUS_MAP.length, BEFORE_AUTO_FEED.length)).toEqual([...CORPUS_MAP]);
     expect(CORPUS_MAP.map((name) => served(name))).toEqual([
       ["archive", "notes", "counts", "nodes", "edges", "parents", "ghosts"],
       ["documents", "sections", "edges", "parents", "ghosts", "orphans"],
@@ -2716,6 +2781,8 @@ describe("the daemon's document types (AC-09)", () => {
       "CheckCounts.new_debt",
       "CheckFinding.introduced",
       "Author.login",
+      // hub-auto's mark on a rule's apply, skipped on every other row (docs/features/hub-auto.md "Acceptance criteria", HA7).
+      "Proposal.delegated",
     ]);
     for (const [name, key] of NEVER_SERVED) {
       expect([name, key, CITED[name].split(", ").includes(`${key}?`)]).toEqual([name, key, true]);
@@ -2817,7 +2884,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(Object.keys(sets)).toEqual([...expected]);
     expect(Object.keys(sets)).toHaveLength(expected.length);
     expect(expected).toEqual([...ALL]);
-    expect(expected).toHaveLength(160);
+    // auto-feed's eight since its Rust test wrote them (docs/features/auto-feed.md "Acceptance criteria", FD3): all hundred and sixty-eight.
+    // hub-auto's `Delegated` since its Rust test wrote it (HA7): a hundred and sixty-nine.
+    expect(expected).toHaveLength(169);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -3090,11 +3159,11 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(named.map((name) => sets[name]?.length)).toEqual([2, 4, 8].slice(0, named.length));
   });
 
-  it("names corpus-map's six last, after RingSector, sets 155 to 160: 7, 6, 12, 5, 2, 4 keys in the types' order, and GraphView's `both` and `kinds` after `impact`, once its Rust test writes them; none before (CM3 to CM5 of corpus-map)", () => {
+  it("names corpus-map's six after RingSector, sets 155 to 160: 7, 6, 12, 5, 2, 4 keys in the types' order, and GraphView's `both` and `kinds` after `impact`, once its Rust test writes them; none before (CM3 to CM5 of corpus-map)", () => {
     const named = CORPUS_MAP.filter((name) => Object.hasOwn(sets, name));
     // Ahead of the file, every key, until the Rust test writes the six in one change: none or all.
     expect([0, CORPUS_MAP.length]).toContain(named.length);
-    expect(Object.keys(sets).slice(BEFORE_CORPUS_MAP.length)).toEqual(named);
+    expect(Object.keys(sets).slice(BEFORE_CORPUS_MAP.length, BEFORE_AUTO_FEED.length)).toEqual(named);
     expect(named.map((name) => sets[name])).toEqual(named.map((name) => served(name)));
     expect(named.map((name) => sets[name])).toEqual(named.map((name) => declaredKeys(name)));
     expect(named.map((name) => sets[name]?.length)).toEqual([7, 6, 12, 5, 2, 4].slice(0, named.length));
@@ -3103,6 +3172,22 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     const written = CORPUS_MAP_KEYS.filter(([, key]) => graph.includes(key)).map(([, key]) => key);
     expect([[], ["both", "kinds"]]).toContainEqual(written);
     expect(graph).toEqual(compared("GraphView"));
+  });
+
+  it("names auto-feed's eight last, after MapGhost, sets 161 to 168: 7, 17, 5, 9, 5, 5, 5, 3 keys in the types' order, each as provisional.ts declares it (FD3 of auto-feed)", () => {
+    expect(Object.keys(sets).slice(BEFORE_AUTO_FEED.length, BEFORE_AUTO_FEED.length + AUTO_FEED.length)).toEqual([...AUTO_FEED]);
+    expect(Object.keys(sets).at(BEFORE_AUTO_FEED.length - 1)).toBe("MapGhost");
+    expect(AUTO_FEED.map((name) => sets[name])).toEqual(AUTO_FEED.map((name) => served(name)));
+    expect(AUTO_FEED.map((name) => sets[name])).toEqual(AUTO_FEED.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
+    expect(AUTO_FEED.map((name) => sets[name]?.length)).toEqual([7, 17, 5, 9, 5, 5, 5, 3]);
+    // The review document's `delegated` is never on the file's row (HA7 of hub-auto): skipped as `Author.login` is.
+    expect(sets.Proposal).not.toContain("delegated");
+  });
+
+  it("names hub-auto's Delegated last, after FeedUnlanded, set 169: by, rule, commit, as provisional.ts declares it (HA7 of hub-auto)", () => {
+    expect(Object.keys(sets).slice(BEFORE_AUTO_FEED.length + AUTO_FEED.length)).toEqual([...HUB_AUTO]);
+    expect(sets.Delegated).toEqual(["by", "rule", "commit"]);
+    expect(sets.Delegated).toEqual(declaredKeys("Delegated"));
   });
 
   it("names lock-diff's five after ShownBindings, before flow-read's five: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {

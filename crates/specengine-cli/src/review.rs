@@ -37,17 +37,18 @@
 //! PP1): its targets resolved now in the current root, as `spec round`
 //! resolves them; `null` on every other item, nothing resolved for it.
 
+use serde_json::Value;
 use specengine_core::pair::Pair;
 use specengine_core::raise::RevisionRow;
-use specengine_store::{GitEnv, KindFamily, Proposal, ProposalStatus, Stage};
+use specengine_store::{BY_RULE, GitEnv, KindFamily, Proposal, ProposalStatus, Stage};
 
 use crate::corpus::indexed;
 use crate::create::prepare_file;
 use crate::interpret::{canon_note, recorded_canon_note};
 use crate::preflight::{RecordedCorpus, StepRead, completing, prepare_spanned, trailer_lookup};
 use crate::proposals::{
-    Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed,
-    escaped_error, find, no_proposal, open_context, with_diff, written_id,
+    Delegated, Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext,
+    briefed, escaped_error, find, no_proposal, open_context, with_diff, written_id,
 };
 use crate::revisions::{lock_for_review, rows};
 use crate::round::{pair_of, pair_served, target};
@@ -134,7 +135,39 @@ fn run_review(
     let mut document = document_with(&request.git, &context, &proposal, run);
     document.notes.extend(note);
     document.pair = review_pair(env, &context, &proposal, &mut messages, &mut document.notes);
+    document.delegated = delegated_of(&context, &proposal, &mut document.notes);
     Ok(ProposalOutcome::done(COMMAND, document, messages))
+}
+
+/// The review's `delegated` (task spec `hub-auto`, the review document): an
+/// applied row's last `proposal.applied` event, one read of the store's
+/// ([`specengine_store::SqliteQueue::applied_payload`]), when it says `by:
+/// "rule"`; no read for any other row. A queue that cannot be read leaves it
+/// out, a note saying why.
+fn delegated_of(
+    context: &QueueContext,
+    proposal: &Proposal,
+    notes: &mut Vec<String>,
+) -> Option<Delegated> {
+    if proposal.status != ProposalStatus::Applied {
+        return None;
+    }
+    let payload = match context.queue.applied_payload(&proposal.id) {
+        Ok(payload) => payload?,
+        Err(error) => {
+            notes.push(one_line(&format!("delegated unknown: {error}")));
+            return None;
+        }
+    };
+    let field = |key: &str| payload.get(key).and_then(Value::as_str);
+    if field("by")? != BY_RULE {
+        return None;
+    }
+    Some(Delegated {
+        by: BY_RULE.to_owned(),
+        rule: field("rule")?.to_owned(),
+        commit: field("commit")?.to_owned(),
+    })
 }
 
 /// The review's `pair` (task spec `collision-pairs` PP1 to PP4, PP6): for a
@@ -210,6 +243,13 @@ pub(crate) struct PreviewRun {
     /// The recorded root and its index from step 4; `None` when the
     /// preview stopped before it or was not run.
     pub corpus: Option<RecordedCorpus>,
+}
+
+impl PreviewRun {
+    /// What the run previewed; `None` when it ran nothing.
+    pub(crate) fn preview(&self) -> Option<Preview> {
+        self.preview
+    }
 }
 
 /// Steps 2–6 for an open or approved `update` or `create`, read-only

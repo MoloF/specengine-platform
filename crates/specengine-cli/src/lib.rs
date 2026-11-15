@@ -238,6 +238,13 @@
 
 mod amend;
 mod apply;
+mod auto;
+mod auto_apply;
+mod auto_approve;
+mod auto_land;
+mod auto_next;
+mod auto_pack;
+mod auto_read;
 mod bindings;
 mod bump;
 mod bundle;
@@ -264,6 +271,7 @@ mod drift;
 mod drift_apply;
 mod events;
 mod export;
+mod feed;
 mod flow;
 mod follow_up;
 mod freshness;
@@ -346,10 +354,27 @@ use std::fmt;
 use std::path::PathBuf;
 
 pub use amend::{AmendmentRequest, propose_amendment, propose_amendment_brief};
+/// Auto mode (canon `auto-mode`): the rule's commands, the
+/// delegated apply its callers run once they have judged, and the rule as
+/// one surface reads it.
+pub use apply::Delegation;
 pub use apply::{
     ApproveFlags, ApproveOpenRequest, ApproveRequest, Consent, OpenWalk, RejectRequest, approve,
     approve_editorial, approve_open, approve_with, reject, reject_follow_up,
 };
+pub use auto::{
+    AutoOutcome, AutoShowOutcome, AutoShowRequest, AutoStopRequest, ShownAuto, ShownItem,
+    ShownPack, ShownProposal, auto_resume, auto_show, auto_stop,
+};
+pub use auto_apply::{AutoApplyOutcome, AutoApplyRequest, auto_apply};
+pub use auto_apply::{DelegatedApproveRequest, DelegatedOutcome, delegated_approve};
+pub use auto_approve::{AutoApproveRequest, auto_approve};
+pub use auto_land::{AutoLandRequest, auto_land};
+pub use auto_next::{AutoNextRequest, NextAct, auto_next};
+pub use auto_pack::{
+    AutoHoldRequest, AutoStartRequest, HOLD_NOTE_MAX, LINE_MAX, StartConsent, auto_hold, auto_start,
+};
+pub use auto_read::{EffectiveRule, load_auto, stop_file};
 pub use bump::{BumpOutcome, BumpRequest, bump};
 /// Test-only: `spec bundle` by the walk alone (the `store-reads` spec,
 /// D5), the differential's oracle.
@@ -400,6 +425,11 @@ pub use drift::{
 };
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
+pub use feed::{
+    FEED_DEFAULT, FEED_MAX, FeedAuto, FeedEntry, FeedFailedRun, FeedGateObserved, FeedHeld,
+    FeedNeedsMe, FeedOpen, FeedOutcome, FeedRequest, FeedSince, FeedUnlanded, GENERAL_LANE, feed,
+    feed_since, feed_task,
+};
 pub use flow::{FlowOutcome, FlowRequest, GAP_ITEMS_SHOWN, flow, flow_with_view};
 pub use freshness::{IndexTrust, RECONCILE_EVERY, doubt_in_scope, trusted, trusting, walking};
 pub use gate::{
@@ -454,7 +484,9 @@ pub use map::{MapOutcome, MapRequest, MapRow, map};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
-pub use proposals::{Preview, ProposalDocument, ProposalDrift, ProposalOutcome, QueueCommand};
+pub use proposals::{
+    Delegated, Preview, ProposalDocument, ProposalDrift, ProposalOutcome, QueueCommand,
+};
 pub use propose::{
     ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose, propose_brief, propose_brief_with_task,
     propose_dry_run, propose_dry_run_brief, propose_with_task,
@@ -488,6 +520,8 @@ pub use show::{
     show_with_view,
 };
 pub use sparse::{SparseOutcome, sparse};
+/// Why an [`AutoApplyOutcome`] holds or is off (core's closed set).
+pub use specengine_core::auto::Reason as AutoReason;
 /// A card's caps (core's).
 pub use specengine_core::card::{
     EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, HISTORY_MAX, hub_login_problem,
@@ -742,6 +776,8 @@ pub enum Outcome {
     Catalog(Box<CatalogOutcome>),
     /// `rings`: the scope rings and their sectors' work.
     Rings(Box<RingsOutcome>),
+    /// `feed`: the project's events and what needs the owner.
+    Feed(Box<FeedOutcome>),
     /// `collisions`: the pairs of nodes that may collide.
     Collisions(Box<CollisionsOutcome>),
     /// `collisions mark`: the verdicts written, or why none was.
@@ -899,6 +935,8 @@ impl Outcome {
             Self::Catalog(outcome) => return outcome.stderr_lines(),
             // The notes, then the tree's warnings, escaped.
             Self::Rings(outcome) => return outcome.stderr_lines(),
+            // The notes, escaped, as JSON `notes` holds them raw.
+            Self::Feed(outcome) => return outcome.stderr_lines(),
             // The walk's lines and the pass's notes, escaped, as JSON
             // `notes` holds the notes raw.
             Self::Collisions(outcome) => return outcome.stderr_lines(),
@@ -1051,6 +1089,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Delivery(outcome) => delivery::render_text(outcome),
         Outcome::Catalog(outcome) => catalog::render_text(outcome),
         Outcome::Rings(outcome) => rings::render_text(outcome),
+        Outcome::Feed(outcome) => feed::render_text(outcome),
         Outcome::Collisions(outcome) => collisions::render_text(outcome),
         Outcome::PairsMarked(outcome) => collisions::render_mark_text(outcome),
         Outcome::Flow(outcome) => flow::render_text(outcome),
@@ -1118,6 +1157,7 @@ impl serde::Serialize for Outcome {
             Self::Delivery(outcome) => outcome.serialize(serializer),
             Self::Catalog(outcome) => outcome.serialize(serializer),
             Self::Rings(outcome) => outcome.serialize(serializer),
+            Self::Feed(outcome) => outcome.serialize(serializer),
             Self::Collisions(outcome) => outcome.serialize(serializer),
             Self::PairsMarked(outcome) => outcome.serialize(serializer),
             Self::Flow(outcome) => outcome.serialize(serializer),

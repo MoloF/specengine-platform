@@ -1064,7 +1064,8 @@ impl SpecEngineServer {
             .into_tool_result("report_drift"))
     }
 
-    /// `spec review PR --brief`.
+    /// `spec review PR --brief`, without `delegated` (the context-cost
+    /// rule: [`crate::review::mcp_review`]).
     #[tool(
         description = PROPOSAL_DESCRIPTION,
         input_schema = input_schema::<ProposalArgs>(),
@@ -1083,7 +1084,7 @@ impl SpecEngineServer {
                     git: process_git(env),
                 };
                 specengine_cli::review_brief(env, globals, &request)
-                    .map(|outcome| Outcome::Proposal(Box::new(outcome)))
+                    .map(|outcome| Outcome::Proposal(Box::new(crate::review::mcp_review(outcome))))
             })
             .await
             .into_tool_result("get_proposal"))

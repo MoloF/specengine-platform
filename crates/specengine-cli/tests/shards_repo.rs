@@ -49,7 +49,8 @@ use std::process::Command;
 use common::check::library;
 use common::{Scratch, read, repository_root, snapshot, spec, write};
 use parity_config::{
-    EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, claiming_shard, root_toml, skipped_files,
+    EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, claiming_shard, root_toml, shard_label,
+    skipped_files,
 };
 use specengine_core::ProjectConfig;
 use specengine_core::check::{
@@ -59,11 +60,12 @@ use specengine_store::{WorkingTree, check_input};
 
 const SHARD: &str = "docs/index-archive.md";
 const ARCHIVE_HEADING: &str = "## Archive \u{2014} Tier 3, by id only";
-const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`\n- [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`\n- [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`\n- [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`\n- [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n- [docs/index-roadmap.md](index-roadmap.md) `docs/roadmap/*.md`\n";
+const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`\n- [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`\n- [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`\n- [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`\n- [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-decisions-0.md](index-decisions-0.md) `docs/decisions/ADR-000*.md`, `docs/decisions/ADR-001*.md`, `docs/decisions/ADR-002*.md`, `docs/decisions/ADR-003*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n- [docs/index-roadmap.md](index-roadmap.md) `docs/roadmap/*.md`\n";
 
 /// The root config's index entry, verbatim: the spec's shipping entry
-/// (the archive shard) with the nine live shards after it (the `code-*`
-/// one since docs/features/collision-pass.md), the `spec-*`
+/// (the archive shard) with the ten live shards after it (the `code-*`
+/// one since docs/features/collision-pass.md, the decisions in two since
+/// auto-mode), the `spec-*`
 /// canon's first (the first matching claim wins), the plan items' last;
 /// since docs/features/roadmap-view.md SW-5, the roadmap view
 /// `docs/generated/roadmap.md` in `writes` and `roadmap`.
@@ -71,11 +73,11 @@ const SHIPPING: &str = "\
 [[generators]]
 command = \"cargo run -q -p specengine-cli -- export index\"
 writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon-spec.md\", \"docs/index-canon-proposal.md\", \"docs/index-canon-hub.md\", \"docs/index-canon-card.md\", \"docs/index-canon-code.md\", \"docs/index-canon.md\",
-           \"docs/index-decisions.md\", \"docs/index-crates.md\", \"docs/index-roadmap.md\", \"docs/generated/roadmap.md\"]
+           \"docs/index-decisions-0.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\", \"docs/index-roadmap.md\", \"docs/generated/roadmap.md\"]
 index   = true
 roadmap = \"docs/generated/roadmap.md\"
 gate    = \"cargo run -q -p specengine-cli -- check\"
-# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons, the `proposal-*` queue canons, the `hub*` hub canons, the `card*` card canons and the `code-*` code-layer canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md \"Generated\".
+# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons, the `proposal-*` queue canons, the `hub*` hub canons, the `card*` card canons and the `code-*` code-layer canons first, the first matching claim wins), decisions (read by id; ADR-0001 to ADR-0039 first, then the rest), crate READMEs (by path) and plan items: docs/README.md \"Generated\".
 shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
            { path = \"docs/index-canon-spec.md\", claims = [\"docs/canon/spec-*.md\"] },
            { path = \"docs/index-canon-proposal.md\", claims = [\"docs/canon/proposal-*.md\"] },
@@ -83,6 +85,7 @@ shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
            { path = \"docs/index-canon-card.md\", claims = [\"docs/canon/card*.md\"] },
            { path = \"docs/index-canon-code.md\", claims = [\"docs/canon/code-*.md\"] },
            { path = \"docs/index-canon.md\", claims = [\"docs/canon/*.md\"] },
+           { path = \"docs/index-decisions-0.md\", claims = [\"docs/decisions/ADR-000*.md\", \"docs/decisions/ADR-001*.md\", \"docs/decisions/ADR-002*.md\", \"docs/decisions/ADR-003*.md\"] },
            { path = \"docs/index-decisions.md\", claims = [\"docs/decisions/*.md\"] },
            { path = \"docs/index-crates.md\", claims = [\"crates/*/README.md\"] },
            { path = \"docs/index-roadmap.md\", claims = [\"docs/roadmap/*.md\"] }]
@@ -311,12 +314,13 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
     // the root or another output; a `spec-*` canon in the first canon shard
     // only).
     let mut seen = listed.union(&in_shard).cloned().collect::<BTreeSet<_>>();
-    for (output, (path, claim)) in outputs[2..].iter().zip(INDEX_LIVE_SHARDS) {
+    for (output, (path, claims)) in outputs[2..].iter().zip(INDEX_LIVE_SHARDS) {
         assert_eq!(output.path, path);
+        let claim = shard_label(claims);
         let text = output.bytes.as_str();
         assert!(
             text.starts_with(&format!(
-                "---\nclass: generated\ngenerator: {EXPORT}\nsource: front-matter of the repository's documents\n---\n\n# Documentation index: `{claim}`\n\n<!-- Built by `{EXPORT}`. Manual edits are overwritten on rebuild, and `{GATE}` rejects them. -->\n\nA shard of [docs/index.md](index.md), the index's one entry point.\n\n## "
+                "---\nclass: generated\ngenerator: {EXPORT}\nsource: front-matter of the repository's documents\n---\n\n# Documentation index: {claim}\n\n<!-- Built by `{EXPORT}`. Manual edits are overwritten on rebuild, and `{GATE}` rejects them. -->\n\nA shard of [docs/index.md](index.md), the index's one entry point.\n\n## "
             )),
             "{path}: {text}"
         );
@@ -335,7 +339,7 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
         // card-context, RM-0108, written at ship; card-upstream, RM-0105,
         // written at ship; card-counts, RM-0086, written at ship as
         // docs/canon/card-counts.md); every other more than five.
-        if claim == "docs/canon/card*.md" {
+        if claims == ["docs/canon/card*.md"] {
             assert_eq!(
                 claimed_live,
                 [
@@ -362,7 +366,7 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
         assert_eq!(
             in_live.iter().cloned().collect::<BTreeSet<_>>(),
             claimed_live,
-            "{path} lists exactly the live documents `{claim}` is the first to claim"
+            "{path} lists exactly the live documents {claim} is the first to claim"
         );
         assert_eq!(in_live.len(), claimed_live.len(), "{path}: each once");
         for target in in_live {

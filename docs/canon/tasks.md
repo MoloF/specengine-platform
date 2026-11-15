@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-15
 ---
 
 # Tasks: commands, transitions, place, store
 
-Phase 2 slice 7 (`docs/features/task-package.md`, ADR-0027): a task is a per-project queue record only the owner moves to `ready`, on a terminal (ADR-0012); an agent reads its package (`task-package.md`), plans, claims, reports and completes it; spec edits meanwhile raise `stale`, never block. Code: core `task.rs` (IDs, `transition`, caps), store `queue/tasks.rs`, CLI `task.rs`, `package.rs`, MCP `tasks.rs`; library `task_{new,show,list,approve,changes,cancel,plan,claim,report,complete}` (`&Env, &Globals, &<Command>Request`, owner commands a `Consent`).
+Phase 2 slice 7 (`docs/features/task-package.md`, ADR-0027): a task is a per-project queue record only the owner moves to `ready`, on a terminal (ADR-0012), or a pack's `[auto]` rule (ADR-0081, `auto-mode.md`); an agent reads its package (`task-package.md`), plans, claims, reports and completes it; spec edits meanwhile raise `stale`, never block. Code: core `task.rs` (IDs, `transition`, caps), store `queue/tasks.rs`, CLI `task.rs`, `package.rs`, MCP `tasks.rs`; library `task_{new,show,list,approve,changes,cancel,plan,claim,report,complete}` (`&Env, &Globals, &<Command>Request`, owner commands a `Consent`).
 
 ## Commands
 
@@ -49,7 +49,7 @@ Other pairs -> exit 1 ``T-0001 is <status>: `<action>` needs <states>; nothing c
 
 ## Place
 
-ADR-0032. `new` records the repository (its git common dir). `approve` records the snapshot's place: the caller's worktree, `root_rel`, branch, `HEAD`, and the git identity as `by`. `claim`'s `--worktree` (CLI: current-directory relative; MCP: the server's) canonical, one of the task's repository's worktrees (`git worktree list`, never a bare entry), on a branch (git only reads), no control character; else exit 1 naming why (missing, no worktree of the repository, another repository, a detached `HEAD`). Another repository's task (same slug) -> exit 2 naming it, `run the command there`.
+ADR-0032. `new` records the repository (its git common dir). `approve` records the snapshot's place: the caller's worktree, `root_rel`, branch, `HEAD`, and the git identity as `by`. `claim`'s `--worktree` (CLI: cwd-relative; MCP: the server's) canonical, one of the task's repository's worktrees (`git worktree list`, never a bare entry), on a branch, no control character; else exit 1 naming why (missing, no worktree of the repository, another one, a detached `HEAD`). Another repository's task (same slug) -> exit 2 naming it, `run the command there`.
 
 `report` and `complete` run only in the claimed worktree (the project root's worktree top, compared as a directory): elsewhere exit 1 `` `T-0001` is claimed in the worktree <w> on `<b>`: `report` runs there, not in <here>; nothing recorded ``.
 
@@ -75,9 +75,9 @@ proposals: + task_id   -- column 41 of 43
 
 `TASK_COLUMNS` 17, `RUN_COLUMNS` 11, pinned to `PRAGMA table_info`. JSON columns: `targets`, `affected_nodes` canonical IDs or paths; `criteria` `{ref, text}` (a reference's text `null`); `owner_notes` `{at, note, by}`; `snapshot` `{at, by, place, nodes: [{id, path, span_hash, text}]}`; `claim` `{at, role, worktree, branch}`; a task's and a run's `author` as a proposal's. IDs `T-` and 4 or more digits, highest + 1, never deleted; runs numbered from 1 per task.
 
-Each op one `Immediate` transaction with its event, a compare-and-set on `TaskSeen.revision`: `revision` decimal text from `1`, raised by every change and refresh (two changes within one second never overwrite each other); lost -> exit 1 `` `T-0001` changed since this run read it: it is <status> since <updated_at>; nothing changed ``. Events `task.created`, `.planned`, `.approved`, `.changes_requested`, `.claimed`, `.run_reported`, `.completed`, `.cancelled`, payload `{id}` (+ `run` for claim and report), `.refreshed` `{id, proposal, node}`. The same `events` hold the gate's `gate.observed` (`gate.md` "Event"), naming no task. Corrupt (bad JSON, an unknown state or outcome, a non-decimal `revision`, a bad ID): named (`show` exit 2 naming the column), skipped by `list` with a note.
+Each op one `Immediate` transaction with its event, a compare-and-set on `TaskSeen.revision`: `revision` decimal text from `1`, raised by every change and refresh (two changes within one second never overwrite each other); lost -> exit 1 `` `T-0001` changed since this run read it: it is <status> since <updated_at>; nothing changed ``. Events `task.created`, `.planned`, `.approved`, `.changes_requested`, `.claimed`, `.run_reported`, `.completed`, `.cancelled`, payload `{id}` (+ `run` for claim and report; a rule's `.approved` + `by`, `pack`, `rule`), `.refreshed` `{id, proposal, node}`. The same `events` hold the gate's `gate.observed` (`gate.md` "Event"), naming no task. Corrupt (bad JSON, an unknown state or outcome, a non-decimal `revision`, a bad ID): named (`show` exit 2 naming the column), skipped by `list` with a note.
 
-API: `create_task`, `reject_with_task` (a follow-up), `get_task`, `list_tasks`, `list_existing_tasks` (an `open_existing` handle, one snapshot, no schema step: no table empty, newer `SchemaTooNew`; `spec roadmap`), `change_task(id, &TaskSeen, &TaskChange, now)`, `binding_problem`, `claimed_elsewhere`; `ProposalQueue::create_with_task`, `create_intake_with_task` (debt: fold into the request types). A schema-4 database refuses older builds (`SchemaTooNew`): restart the daemon and reinstall `specengine-mcp` from one commit.
+API: `create_task`, `reject_with_task` (a follow-up), `get_task`, `list_tasks`, `list_existing_tasks` (an `open_existing` handle, one snapshot, no schema step: no table empty, newer `SchemaTooNew`; `spec roadmap`), `change_task(id, &TaskSeen, &TaskChange, now)`, `binding_problem`, `claimed_elsewhere`; `ProposalQueue::create_with_task`, `create_intake_with_task` (debt: fold into the requests). A newer schema refuses older builds (`SchemaTooNew`): restart the daemon, reinstall `specengine-mcp` from one commit.
 
 ## Backup
 

@@ -5,6 +5,7 @@ import {
   type CardsOptions,
   type CatalogOptions,
   type DeliveryOptions,
+  type FeedOptions,
   type FlowOptions,
   type GraphOptions,
   type MapOptions,
@@ -40,6 +41,7 @@ import type {
   ConfirmRead,
   CatalogDocument,
   DeliveryDocument,
+  FeedDocument,
   FlowView,
   GraphView,
   HealthReport,
@@ -78,6 +80,7 @@ import {
   aMap,
   aRings,
   aDelivery,
+  aFeed,
   aFlowView,
   aGraphNode,
   aGraphView,
@@ -227,6 +230,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getCatalog: vi.fn<(project: string, options: CatalogOptions, signal?: AbortSignal) => Promise<CatalogDocument>>((_project, options) => Promise.resolve(aCatalog([], { kinds: [...options.kinds], archive: options.archive }))),
     // The rings (docs/features/scope-rings.md "Acceptance criteria", SR4): no ring, no note; a test overriding what it answers.
     getRings: vi.fn<(project: string, signal?: AbortSignal) => Promise<RingsDocument>>(() => Promise.resolve(aRings([]))),
+    // The feed with no `[auto]` table and no event (docs/features/auto-feed.md "Data").
+    getFeed: vi.fn<(project: string, options: FeedOptions, signal?: AbortSignal) => Promise<FeedDocument>>(() => Promise.resolve(aFeed())),
     // The map (docs/features/corpus-map.md "Acceptance criteria", CM3): no node, the archive asked; a test overriding what it answers.
     getMap: vi.fn<(project: string, options: MapOptions, signal?: AbortSignal) => Promise<MapDocument>>((_project, options) => Promise.resolve(aMap([], [], { archive: options.archive }))),
     // The lock diff (docs/features/lock-diff.md "Data"): the REF's one holder, no drifted row with a lock entry.

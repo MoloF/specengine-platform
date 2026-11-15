@@ -163,8 +163,9 @@ fn ac12_from_rows_over_every_stored_row_is_the_whole_graph() {
     // 20 since docs/features/workspaces.md added `fixtures/studio-lamp`, 21
     // since docs/features/flow-scenario.md added `fixtures/flow-aside`, 22
     // since docs/features/pack.md "Acceptance criteria", PK3, added
-    // `fixtures/plant-diary`.
-    assert_eq!(fixtures.len(), 22, "premise: the configured fixtures");
+    // `fixtures/plant-diary`, 23 since docs/features/auto-rule.md "Fixture"
+    // added `fixtures/auto-mini`.
+    assert_eq!(fixtures.len(), 23, "premise: the configured fixtures");
     let mut edges = 0;
     for name in &fixtures {
         let fixture = indexed(name, &scratch);

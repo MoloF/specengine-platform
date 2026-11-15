@@ -461,6 +461,8 @@ export interface Proposal {
   record_title: string | null;
   /** The record's bytes. */
   record_text: string | null;
+  /** A rule applied it (`docs/features/hub-auto.md` "Description and interactions" 4): the key only on such a row; where the daemon puts it is the daemon's. */
+  delegated?: Delegated;
   choice: Choice | null;
   /** The task it was raised for (`--task`), never changed; null unbound. */
   task_id: string | null;
@@ -3095,4 +3097,133 @@ export interface TraceDocument {
   nodes: TraceNode[];
   truncated: boolean;
   omitted: number | null;
+}
+
+// The feed (docs/features/auto-feed.md "Data"): `spec feed --json` and `GET /api/projects/:p/feed`,
+// every key present, null where none. Written by hand ahead of the daemon's types and of
+// `fixtures/daemon-keys.json` (its `Feed`, `FeedEntry`, `FeedNeedsMe` and row sets).
+
+/** The auto head's two states as `spec auto show` words them; other strings kept. Source: `docs/features/auto-rule.md` "`spec auto show`". */
+export type KnownAutoState = "on" | "off";
+
+/** The auto head's state as sent. Source: `docs/features/auto-rule.md` "`spec auto show`". */
+export type AutoState = KnownAutoState | Unlisted;
+
+/**
+ * The feed's auto head, judged for the surface the reader is on: `state` `on` with its rule's hash,
+ * or `off` with `reason` (`off`, `team`, `stopped`) and `why` the daemon's words. Source:
+ * `docs/features/auto-feed.md` "Data".
+ */
+export interface FeedAuto {
+  state: AutoState;
+  reason: string | null;
+  why: string | null;
+  rule: string | null;
+}
+
+/**
+ * One queue event of the feed: `type` as stored, the keys its payload and the queue now give, every
+ * other key null (a payload that does not parse: all null but `seq` and `type`, `at` too). `line` is
+ * `<pack>/<n>`; `title` and `status` are the task's (else the card's, else the proposal's) now; `by`
+ * the rule's word when the payload names one (the auto rule). Source: `docs/features/auto-feed.md` "Data".
+ */
+export interface FeedEntry {
+  seq: number;
+  at: string | null;
+  type: string;
+  task: string | null;
+  proposal: string | null;
+  card: string | null;
+  line: string | null;
+  title: string | null;
+  status: string | null;
+  by: string | null;
+  outcome: RunOutcome | null;
+  summary: string | null;
+  commit: string | null;
+  reason: string | null;
+  detail: string | null;
+  path: string | null;
+  lane: string | null;
+}
+
+/** An item whose last `auto.*` event is a hold, never landed since. Source: `docs/features/auto-feed.md` "Data". */
+export interface FeedHeld {
+  seq: number;
+  at: string | null;
+  pack: number | null;
+  task: string | null;
+  line: string | null;
+  proposal: string | null;
+  act: string | null;
+  reason: string | null;
+  detail: string | null;
+}
+
+/** An open proposal of this repository. Source: `docs/features/auto-feed.md` "Data". */
+export interface FeedOpen {
+  id: string;
+  kind: string | null;
+  target_id: string | null;
+  task_id: string | null;
+  created_at: string | null;
+}
+
+/** A run reported in the window with `failed`, `partial` or `abandoned`. Source: `docs/features/auto-feed.md` "Data". */
+export interface FeedFailedRun {
+  task: string;
+  run: number;
+  outcome: RunOutcome | null;
+  summary: string | null;
+  ended_at: string | null;
+}
+
+/** An agent's write the gate let through uncovered, in the window. Source: `docs/features/auto-feed.md` "Data". */
+export interface FeedGateObserved {
+  seq: number;
+  at: string | null;
+  path: string | null;
+  zone: string | null;
+  branch: string | null;
+}
+
+/** A pack task `done`, neither landed nor held. Source: `docs/features/auto-feed.md` "Data". */
+export interface FeedUnlanded {
+  task: string;
+  status: TaskStatus;
+  pack: number;
+}
+
+/** What needs the owner, `--needs-me` alone. Source: `docs/features/auto-feed.md` "Data". */
+export interface FeedNeedsMe {
+  held: FeedHeld[];
+  open: FeedOpen[];
+  failed_runs: FeedFailedRun[];
+  gate_observed: FeedGateObserved[];
+  unlanded: FeedUnlanded[];
+}
+
+/**
+ * `spec feed --json`: the entries oldest first, `after` the `since` SEQ given, `last_seq` the next
+ * call's `since`, `more` true when cut at 512; `needs_me` null unless asked. Source:
+ * `docs/features/auto-feed.md` "Data".
+ */
+export interface FeedDocument {
+  auto: FeedAuto;
+  after: number | null;
+  last_seq: number | null;
+  more: boolean;
+  entries: FeedEntry[];
+  needs_me: FeedNeedsMe | null;
+  notes: string[];
+}
+
+/**
+ * A delegated apply's mark on its review document: present only on a row a rule applied, the key
+ * skipped on every other row. Source: `docs/features/hub-auto.md` "Description and interactions" 4, `docs/canon/hub-auto.md` "Screen".
+ */
+export interface Delegated {
+  by: string;
+  rule: string;
+  commit: string;
 }

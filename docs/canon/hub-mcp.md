@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-15
 ---
 
 # Hub MCP: `/mcp/<slug>` under each request's login
@@ -58,7 +58,7 @@ Eighteen tools and both resources, each its stdio twin's CLI call:
 - **queue**, without `task_id`: `propose_change` (four kinds, `dry_run`, a create's `distinct_from`, `keywords`: `proposal-similar.md`), `ask_question`, `report_discrepancy`, `report_decision`;
 - **cards:** `list_cards`, `get_card`, `create_card`, `split_card`, `edit_card`, `move_card`.
 
-None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 18 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
+None decides: a person confirms (`hub-confirm.md`), on the hub or a terminal, or the hub's code after the call (`hub-auto.md`). Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 18 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
 
 Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub); `get_collisions`, `mark_pairs` (local: `collision-pass.md`).
 
@@ -77,7 +77,7 @@ No hub schema holds `login`, `as`, `actor` or `task_id`. A hub write that finds 
 <a id="trust"></a>
 ## Trust
 
-As in `hub.md#trust`: no authentication inside SpecEngine (ADR-0034); the daemon trusts one header (ADR-0059), holding no account, token, key or login session. A protocol session binds a login in memory and identifies no one. Raising proposals is the daemon's for `/mcp` and a card's `items`, on ADR-0057's precedent of a proposing daemon.
+As in `hub.md#trust`: no authentication inside SpecEngine (ADR-0034); the daemon trusts one header (ADR-0059), holding no account, token, key or login session. A protocol session binds a login in memory, identifying no one. Raising proposals is the daemon's for `/mcp` and a card's `items`, on ADR-0057's precedent of a proposing daemon.
 
 **The daemon can defend:** another login's session id, or a second id in one request (404); an invented tool name, refused before rmcp; `Authorization` on a route but `/mcp`, where the proxy forwards it; a query; an identity argument, which no schema holds; every decision, which no tool makes.
 
@@ -98,19 +98,19 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 ## Known limits
 
 - Agents' calls wait one per login beside the page's; two agents under one login share a line.
-- A login's AI reads others' proposals and cards: they are data, never a decision.
+- A login's AI reads others' proposals and cards: data, never a decision.
 - A bearer `Remote-User` that is an email or a UUID would split a person in two; the deployment's Basic user is the door login.
-- Answers carry the corpus to the client's model provider.
+- Answers carry the corpus to the client's model vendor.
 - A forged `Remote-User` raises proposals as anyone: no real use before the gate, step 11b-3.
-- A body's buffer is reserved from its `Content-Length`, at most 4 MiB.
+- A body's buffer is reserved by its `Content-Length`, at most 4 MiB.
 - A body that is no JSON-RPC message but names an unknown tool is refused as one (rmcp: a parse error).
-- A duplicated JSON key can cost up to three parses of one body.
-- `Mounts::shutdown` effectively never runs: sessions end with the process.
+- A duplicated JSON key costs up to three parses of a body.
+- `Mounts::shutdown` never runs: sessions end with the process.
 - The drop-safe bind has no end-to-end test.
 
 ## Client check
 
-By hand at the gate; findings go to `hub-deploy.md` "Gate" with the client's version and date.
+By hand at the gate; findings to `hub-deploy.md` "Gate" with the client's version and date.
 1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http`. Expected: the session holds, the GET stream reopens at 300 s, 18 tools, `login` on a proposal and a card, a second login's own sessions.
 2. **claude.ai and Claude Desktop, at the gate, step 11b-3,** on the public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
 

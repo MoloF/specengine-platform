@@ -874,3 +874,63 @@ describe("the task as a pane (DB5 of design-sweep-b)", () => {
     expect(box?.querySelector(".empty-state-description")?.textContent).toBe("This agent task has no approval yet, so there is nothing to compare.");
   });
 });
+
+// FD4 of docs/features/auto-feed.md "Acceptance criteria": the list's Sort. By state, today's groups,
+// stays the default; Last changed is one group by `updated_at`, newest first, ties by ID number,
+// highest first; the choice is kept per viewer and project as `specengine.tasks.sort.<p>` and
+// survives a reload; storage that refuses keeps it for the page alone.
+describe("the list's Sort (FD4 of auto-feed)", () => {
+  const SORTED = [
+    aTaskEntry({ id: "T-0001", status: "ready", title: "Older ready", updated_at: "2026-11-15T10:00:00Z" }),
+    aTaskEntry({ id: "T-0002", status: "review", title: "Plan to read", updated_at: "2026-11-14T10:00:00Z" }),
+    aTaskEntry({ id: "T-0003", status: "draft", title: "A draft", updated_at: "2026-11-15T10:00:00Z" }),
+    aTaskEntry({ id: "T-0010", status: "in_progress", title: "Under way", updated_at: "2026-11-16T09:00:00Z" }),
+  ];
+
+  function sortField(): HTMLSelectElement {
+    return screen.getByLabelText<HTMLSelectElement>("Sort");
+  }
+
+  it("is By state by default: today's groups, what waits for you first, nothing stored (M: the default changed)", async () => {
+    await openList(taskClient(SORTED));
+    expect(sortField().value).toBe("state");
+    expect(Array.from(sortField().options).map((option) => option.textContent)).toEqual(["By state", "Last changed"]);
+    expect(groupTitles()).toEqual(["Waiting for you", "Draft", "Ready", "In progress"]);
+    expect(rowIds()).toEqual(["T-0002", "T-0003", "T-0001", "T-0010"]);
+    expect(window.localStorage.getItem("specengine.tasks.sort.alpha")).toBeNull();
+  });
+
+  it("Last changed: one group, newest change first, a tie by ID number highest first; kept, and chosen again after a reload", async () => {
+    const { unmount } = renderApp(taskClient(SORTED), "#/alpha/tasks");
+    await screen.findByRole("listbox", { name: "Agent tasks, what waits for you first" });
+    fireEvent.change(sortField(), { target: { value: "changed" } });
+    expect(groupTitles()).toEqual(["Last changed first"]);
+    expect(rowIds()).toEqual(["T-0010", "T-0003", "T-0001", "T-0002"]);
+    expect(window.localStorage.getItem("specengine.tasks.sort.alpha")).toBe("changed");
+    // Another project keeps its own.
+    expect(window.localStorage.getItem("specengine.tasks.sort.beta")).toBeNull();
+    unmount();
+    await openList(taskClient(SORTED));
+    expect(sortField().value).toBe("changed");
+    expect(rowIds()).toEqual(["T-0010", "T-0003", "T-0001", "T-0002"]);
+    // The keys walk the one list in its order.
+    row("T-0010").focus();
+    fireEvent.keyDown(row("T-0010"), { key: "ArrowDown" });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(row("T-0003"));
+    });
+  });
+
+  it("storage that refuses: the choice holds on the page, and a reload shows By state", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied by a policy");
+    });
+    const { unmount } = renderApp(taskClient(SORTED), "#/alpha/tasks");
+    await screen.findByRole("listbox", { name: "Agent tasks, what waits for you first" });
+    fireEvent.change(sortField(), { target: { value: "changed" } });
+    expect(rowIds()).toEqual(["T-0010", "T-0003", "T-0001", "T-0002"]);
+    unmount();
+    await openList(taskClient(SORTED));
+    expect(sortField().value).toBe("state");
+  });
+});

@@ -16,6 +16,8 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies, decisions · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
 - [docs/canon/architecture-code.md](canon/architecture-code.md) SpecEngine architecture rules: the code layer · architecture, crates/specengine-code, crates/specengine-cli · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
+- [docs/canon/auto-mode.md](canon/auto-mode.md) Auto mode: a committed rule approves, applies and lands · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, plugin, ui · tier 2
+- [docs/canon/auto-runner.md](canon/auto-runner.md) Auto runner: the plugin's autopilot.sh drives a pack overnight · plugin · tier 2
 - [docs/canon/board-lanes.md](canon/board-lanes.md) Board lanes and the Show level: how a board groups and cuts its cards · ui · tier 2
 - [docs/canon/board-screen.md](canon/board-screen.md) Board screen: a still grid, the card modal and page, lanes, hand-off and return · ui · tier 2
 - [docs/canon/board-ui.md](canon/board-ui.md) Board: card routes, door and fence · crates/specengine-http, crates/specengine-cli, ui · tier 2
@@ -57,7 +59,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/serve-slow.md](canon/serve-slow.md) Daemon: slow requests, long turns and the proxy's access log · crates/specengine-http, scripts/deploy · tier 2
 - [docs/canon/serve-ui.md](canon/serve-ui.md) Daemon: the web UI it serves · crates/specengine-http, ui · tier 2
 - [docs/canon/serve.md](canon/serve.md) Daemon: spec serve · crates/specengine-cli, crates/specengine-http · tier 2
-- [docs/canon/stack.md](canon/stack.md) Stack: toolchain and pinned crates · crates · tier 2
+- [docs/canon/stack.md](canon/stack.md) Stack: toolchain and pinned crates · crates, scripts/deploy · tier 2
 - [docs/canon/symbol-index.md](canon/symbol-index.md) Symbol index: stored code rows, the refresh, spec index, spec refs · crates/specengine-store, crates/specengine-cli, crates/specengine-code, crates/specengine-eval · tier 2
 - [docs/canon/symbol-names.md](canon/symbol-names.md) Symbol names: in-file twins and display signatures · crates/specengine-code · tier 2
 - [docs/canon/symbol-reads.md](canon/symbol-reads.md) Symbol reads: lookup tiers, spec symbols, spec unmapped · crates/specengine-cli, crates/specengine-store, crates/specengine-code · tier 2

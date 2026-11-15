@@ -1072,9 +1072,15 @@ describe("the live tail (AC-09)", () => {
       "card.cleared",
       "card.reestimated",
       "card.refreshed",
+      // docs/features/auto-feed.md "The UI": auto mode's four and the gate's one, which the feed reads again.
+      "auto.started",
+      "auto.bound",
+      "auto.held",
+      "auto.landed",
+      "gate.observed",
     ]);
     expect([...QUEUE_EVENT_TYPES]).toEqual(source.types());
-    expect(QUEUE_EVENT_TYPES).toHaveLength(25);
+    expect(QUEUE_EVENT_TYPES).toHaveLength(30);
     source.open();
     source.emit("proposal.created", '{"id":"PR-0005"}', "12");
     source.emit("proposal.rejected", '{"id":"PR-0002","reason":"no"}', "13");

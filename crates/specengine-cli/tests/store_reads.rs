@@ -116,11 +116,12 @@ const FIXTURES: [&str; 19] = [
 /// The configured fixtures added after the golden's recording
 /// (docs/features/workspaces.md, `fixtures/studio-lamp`;
 /// docs/features/flow-scenario.md, `fixtures/flow-aside`;
-/// docs/features/pack.md "Acceptance criteria", PK3, `fixtures/plant-diary`):
+/// docs/features/pack.md "Acceptance criteria", PK3, `fixtures/plant-diary`;
+/// docs/features/auto-rule.md "Fixture", `fixtures/auto-mini`):
 /// the golden cannot hold their rows, since a recording after the slice
 /// proves nothing, so no replay runs over them; the in-crate differential
 /// (`store_reads_tests.rs`) covers them with the binary under test.
-const AFTER_THE_GOLDEN: [&str; 3] = ["flow-aside", "plant-diary", "studio-lamp"];
+const AFTER_THE_GOLDEN: [&str; 4] = ["auto-mini", "flow-aside", "plant-diary", "studio-lamp"];
 
 /// A path no fixture holds: exit 1, `is no indexed document`.
 const MISSING_PATH: &str = "docs/store-reads-missing.md";

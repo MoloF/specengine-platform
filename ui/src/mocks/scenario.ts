@@ -34,9 +34,12 @@
  * first (docs/features/hub-department.md "Acceptance criteria", HD8; src/mocks/workspaces.ts).
  * `orphan-notes`: as `normal` but Health's orphan documents read no task, the queue of a newer build:
  * each row's tasks null and the row's note why (docs/features/usage-orphans.md "Acceptance criteria",
- * UO4; src/mocks/orphans.ts).
+ * UO4; src/mocks/orphans.ts). Every scenario serves harbor-sim's night under auto mode and ledger-api's
+ * manual events with auto off (docs/features/auto-feed.md "The UI"; src/mocks/feed.ts); `feed`: as
+ * `normal`, and harbor-sim's live tail says its morning, one event every few seconds, so Activity
+ * appends each and marks it New.
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions", "collision-pairs", "orphan-notes"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions", "collision-pairs", "orphan-notes", "feed"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

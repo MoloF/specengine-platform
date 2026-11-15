@@ -566,7 +566,8 @@ describe("source policy", () => {
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     // Flow's place is routes.ts's too (docs/features/writer-studio.md D4): `flowHash`; a document's page (docs/features/doc-modal.md DM-7): `docPageHash`.
-    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash|cardPageHash|docPageHash)\()/;
+    // Activity's (docs/features/auto-feed.md "The UI"): `feedHash`.
+    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash|cardPageHash|docPageHash|feedHash)\()/;
     expect(offending(rule, views)).toEqual([]);
     // The detector itself: a hash spelled by hand is caught, one from routes.ts is not.
     expect(rule.test("<a href={`#/${project}/tasks`}>")).toBe(true);

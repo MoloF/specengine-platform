@@ -92,9 +92,9 @@ function shownIn(catalog: typeof en | typeof ru) {
   };
 }
 
-/** The nav's labels in one catalog: Overview, then `sections`. */
+/** The nav's labels in one catalog: Overview, Activity (the owner's word of 2026-11-15), then `sections`. */
 function navIn(catalog: typeof en | typeof ru, sections: readonly string[]): string[] {
-  return [catalog.app.overview, ...sections.filter(isSectionId).map((id) => catalog.app.sections[id].label)];
+  return [catalog.app.overview, catalog.feed.title, ...sections.filter(isSectionId).map((id) => catalog.app.sections[id].label)];
 }
 
 /** The same, as each catalog's values say it should be: the workspace "writers" lists the implicit sections. */

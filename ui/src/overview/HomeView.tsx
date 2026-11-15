@@ -1,8 +1,10 @@
 import { lazy, Suspense, type KeyboardEvent } from "react";
 import type { Workspace, WorkspaceModule } from "../api/types";
+import { feedHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
+import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { Skeleton } from "../ui/states";
 
@@ -50,6 +52,13 @@ export function HomeView({
         </h1>
         <p className="view-about">{fill(t("home.about", { project: slot("project") }), { project: <span className="mono">{project}</span> })}</p>
         {named && <p className="view-about">{fill(t("home.department.named", { department: slot("department") }), { department: <bdi>{workspace.title}</bdi> })}</p>}
+        {/* Activity, also the nav's second entry (docs/features/auto-feed.md "The UI"). */}
+        <p className="feed-link">
+          <a href={feedHash(project)}>
+            <Icon name="arrowRight" />
+            <span>{t("feed.title")}</span>
+          </a>
+        </p>
       </header>
       <Suspense fallback={<Skeleton label={t("home.department.loading", { project })} lines={6} />}>
         <DepartmentOverview project={project} workspace={workspace} module={module} workspaces={workspaces} />

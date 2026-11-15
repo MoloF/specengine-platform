@@ -469,10 +469,12 @@ describe("nav, switcher and keys (AC-08 of ui-home)", () => {
   it("lists nine entries, Overview first to the home, current only there; Tasks off the nav (docs/features/workspaces.md WS-1)", async () => {
     await openHome(stubClient());
     await waitFor(() => {
-      expect(navLinks()).toHaveLength(9);
+      expect(navLinks()).toHaveLength(10);
     });
     expect(navLinks().map((link) => [link.textContent, link.getAttribute("href"), link.getAttribute("aria-current")])).toEqual([
       ["Overview", "#/alpha", "page"],
+      // Activity second (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
+      ["Activity", "#/alpha/feed", null],
       ["Inbox", "#/alpha/inbox", null],
       ["Board", "#/alpha/board", null],
       ["Roadmap", "#/alpha/roadmap", null],

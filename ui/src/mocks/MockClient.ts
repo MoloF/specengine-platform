@@ -6,6 +6,7 @@ import {
   type CardsOptions,
   type CatalogOptions,
   type DeliveryOptions,
+  type FeedOptions,
   type FlowOptions,
   type GraphOptions,
   type MapOptions,
@@ -41,6 +42,7 @@ import type {
   ConfirmRead,
   CatalogDocument,
   DeliveryDocument,
+  FeedDocument,
   FlowView,
   GraphView,
   HealthReport,
@@ -54,6 +56,7 @@ import type {
   NodeView,
   Project,
   Proposal,
+  QueueEvent,
   RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
@@ -109,6 +112,7 @@ import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
 import { lockDiffOf } from "./lockDiff";
 import { deliveryOf } from "./delivery";
+import { delegatedProposals, feedOf, MORNING, payloadOf, type NightEvent } from "./feed";
 import { catalogOf } from "./catalog";
 import { plainQuestionsScenario } from "./plainQuestions";
 import { collisionPairsScenario } from "./collisionPairs";
@@ -135,6 +139,9 @@ const NOTE_MAX_BYTES = 4096;
 
 /** The `conflict` scenario's stage made elsewhere: a reject another page staged meanwhile. */
 const ELSEWHERE: Stage = { decision: "reject", reason: "Staged in another tab (mock scenario: conflict)" };
+
+/** How often the `feed` scenario's tail says the next morning event. */
+export const MORNING_MS = 6000;
 
 /** A local daemon's unknown route, the mock's words: a hub alone confirms (`docs/features/hub-confirm.md` B8). */
 const NO_CONFIRM_ROUTE = "no route /api/projects/<slug>/proposals/<id>/confirm: the routes are /api/projects and the web UI (mock)";
@@ -202,6 +209,8 @@ export class MockClient implements SpecEngineClient {
   private readonly raiseConflicted = new Set<string>();
   /** `conflict`: the projects whose first split written has met a config changed meanwhile. */
   private readonly splitConflicted = new Set<string>();
+  /** `feed`: harbor-sim's morning events the live tail has said so far (src/mocks/feed.ts). */
+  private readonly morning: NightEvent[] = [];
 
   constructor(scenario: Scenario, options: MockOptions = {}) {
     this.scenario = scenario;
@@ -214,6 +223,8 @@ export class MockClient implements SpecEngineClient {
       this.tasks.set(project.project.slug, mockTasks(project.project.slug));
       this.boards.set(project.project.slug, mockBoard(project.project.slug, scenario, at));
     }
+    // The night's applies by rule (src/mocks/feed.ts): decided rows, so the Inbox lists neither.
+    this.project("harbor-sim").proposals.push(...delegatedProposals("harbor-sim", at));
     if (scenario === "empty") {
       for (const project of this.projects) {
         project.proposals = [];
@@ -426,6 +437,17 @@ export class MockClient implements SpecEngineClient {
   async getRings(project: string): Promise<RingsDocument> {
     await this.read();
     return structuredClone(mockRings(this.project(project).corpus, project, this.scenario));
+  }
+
+  /**
+   * The project's feed (src/mocks/feed.ts; docs/features/auto-feed.md "Data"), read only: harbor-sim's
+   * night under auto mode, ledger-api's manual events with auto off; `empty` none.
+   */
+  async getFeed(project: string, options: FeedOptions): Promise<FeedDocument> {
+    await this.read();
+    const entry = this.project(project);
+    const sources = { tasks: this.taskStore(project), board: this.boards.get(project), proposals: entry.proposals };
+    return structuredClone(feedOf(project, this.at, sources, options, this.scenario === "empty", project === "harbor-sim" ? this.morning : []));
   }
 
   /**
@@ -881,9 +903,26 @@ export class MockClient implements SpecEngineClient {
     return board;
   }
 
-  /** No live tail: the mock's queue changes only by this page's stages, which read again themselves. */
-  subscribe(): () => void {
-    return () => undefined;
+  /**
+   * No live tail: the mock's queue changes only by this page's stages, which read again themselves.
+   * `feed`: harbor-sim's tail says its morning, one event every MORNING_MS, until it is said.
+   */
+  subscribe(project: string, onEvent: (event: QueueEvent) => void): () => void {
+    if (this.scenario !== "feed" || project !== "harbor-sim") {
+      return () => undefined;
+    }
+    const timer = setInterval(() => {
+      const next = MORNING[this.morning.length];
+      if (next === undefined) {
+        clearInterval(timer);
+        return;
+      }
+      this.morning.push({ ...next, ago: -(this.now() - this.at) / 60_000 });
+      onEvent({ seq: next.seq, type: next.type, payload: payloadOf(next) });
+    }, MORNING_MS);
+    return () => {
+      clearInterval(timer);
+    };
   }
 
   /** A read: waits, then fails in the `error` scenario. */

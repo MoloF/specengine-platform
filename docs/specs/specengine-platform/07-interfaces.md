@@ -103,6 +103,13 @@ spec task new --nodes REF… [--title ...]   # --contour: later
 spec task show T | --next | list [--status S]
 spec task approve T | changes T --note "..." | cancel T
 
+# auto mode, planned 0.47.0: docs/canon/auto-mode.md (ADR-0081, ADR-0082), docs/features/auto-*.md
+spec auto show [--surface local|hub] [--json] | stop | resume   # resume: a terminal's [y/N]
+spec auto start T... [--lines FILE] [--until TIME]               # a terminal's [y/N], one per pack
+spec auto next [--busy ITEM]... [--skip-lane D]... [--slots N]  # the runner's next act, read-only
+spec auto approve T | land T | hold ITEM --reason R [--note TEXT] [--json]
+spec feed [--since SEQ|TIME] [--needs-me] [--task T] [--department D] [--json]
+
 # code and drift
 spec symbols QUERY | --node REF | --file F | --at F:L   # shipped: docs/canon/symbol-reads.md; layer C: docs/canon/layer-c-reads.md; unbound nodes: spec health
 spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md
@@ -140,6 +147,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035); `POST .../proposals/:id/confirm`, a hub's alone, confirms one stage (ADR-0061)
 - `GET .../cards` (`?parent=` a card's children), `.../cards/:id`, `.../trace`; `POST .../cards`, `.../cards/:id/move|edit|assign|cancel|accept|clear`, `.../trace/clear`: the card routes, writing the queue alone (built: `docs/canon/board-ui.md`, `docs/canon/card-flows.md`)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
+- `GET /api/projects/:p/feed` -- `spec feed --json`, local and hub; on a hub its code applies the sole owner's covered `/mcp` proposals (planned 0.47.0: `docs/features/auto-feed.md`, `docs/canon/hub-auto.md`)
 - `/mcp/<slug>` — MCP Streamable HTTP (rmcp Tower service in axum), a hub's alone, both eras, GET/SSE (built: `docs/canon/hub-mcp.md`)
 - `/`, `/assets/<file>` -- the Web UI compiled in (built: `docs/canon/serve-ui.md`)
 
@@ -225,6 +233,15 @@ scip = false                # retired (ADR-0049): an unknown key; layer C is `sp
 mode = "observe"            # observe | enforce-introduced | enforce
 tests = ["scripts/run-test", "{package}", "{target_kind}", "{target}", "{test}"]  # argv, no shell; run only by the owner
 timeout = 600               # seconds per invocation, 1..86400
+
+[auto]                      # planned 0.47.0: docs/canon/auto-mode.md "Rule"; read from HEAD
+mode = "both"               # off | local | hub | both
+zones = ["code", "tests"]   # [zones] keys covered
+exclude_zones = ["docs"]    # never delegated; exclusion beats cover
+exclude_kinds = ["requirement"]  # node kinds never delegated
+branch = "auto"             # local: where a pack lands; never pushed
+max_tasks = 10              # local: items per pack
+max_applies = 20            # hub: delegated applies per project per UTC day
 
 [[workspace]]               # built: docs/canon/workspaces.md "Config"; a lens, never a right
 name = "newsroom"

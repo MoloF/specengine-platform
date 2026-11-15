@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTasks } from "../api/queries";
 import { movesHere } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
+import { feedHash } from "../app/routes";
 import { aboutOf } from "../app/sections";
 import { useTranslate } from "../i18n";
 import { useOpenShortcuts } from "../app/shortcuts";
@@ -132,6 +133,13 @@ export function TasksView({ project, taskId }: { project: string; taskId: string
         <h2 id="tasks-list-title" className="sr-only">
           {t("tasks.listLabel")}
         </h2>
+        {/* Activity from the list's head, as from the nav (docs/features/auto-feed.md "The UI"). */}
+        <p className="feed-link">
+          <a href={feedHash(project)}>
+            <Icon name="arrowRight" />
+            <span>{t("feed.title")}</span>
+          </a>
+        </p>
         <div
           ref={listRegion}
           tabIndex={-1}

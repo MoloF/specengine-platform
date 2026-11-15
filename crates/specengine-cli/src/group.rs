@@ -2,8 +2,9 @@
 //! `verify-tests`, "Runner") and `spec resolve` (task spec
 //! `layer-c-resolve`, "Group core"), Unix only: a prepared `Command`
 //! spawned as the leader of a process group of its own and waited for,
-//! through three POSIX calls std does not expose (`killpg`, `sigaction`,
-//! `waitid`), the CLI's only `unsafe`, each block with its `SAFETY` note
+//! through POSIX calls std does not expose (`killpg`, `sigaction`,
+//! `waitid`; and `kill` with signal 0, [`alive`], for `spec auto land`'s
+//! stale lock), the CLI's only `unsafe`, each block with its `SAFETY` note
 //! (after eval's `ra/sys.rs` `kill_group`, which the CLI may not depend
 //! on). The I/O is each caller's.
 //!
@@ -139,6 +140,23 @@ fn install(signal: libc::c_int) -> Option<libc::sigaction> {
     // stores to an atomic; `sigaction` reads the first, writes the second.
     let status = unsafe { libc::sigaction(signal, &action, &mut before) };
     (status == 0).then_some(before)
+}
+
+/// A process `pid` exists (`kill(pid, 0)` succeeds, or fails with `EPERM`:
+/// another user's); `false` only when the system answers there is none
+/// (`ESRCH`), or for a pid no process can have. `spec auto land`'s stale
+/// lock (task spec `auto-land`, step 3).
+pub(crate) fn alive(pid: u32) -> bool {
+    let Ok(pid) = libc::pid_t::try_from(pid) else {
+        return false;
+    };
+    if pid <= 0 {
+        return false;
+    }
+    // SAFETY: `kill` with signal 0 sends nothing: it only checks that a
+    // positive `pid` names a process; no memory is passed.
+    let status = unsafe { libc::kill(pid, 0) };
+    status == 0 || io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
 }
 
 /// `before` made `signal`'s disposition again.

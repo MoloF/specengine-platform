@@ -1455,7 +1455,13 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// of the spec files a login already reads through `tree` and `graph` (the
 /// rings' states the trace's, which `trace` serves every login), never
 /// `[team]`.
-const GET_ROUTES: [&str; 33] = [
+///
+/// docs/features/auto-feed.md (RM-0124, FD3) judged
+/// `/api/projects/{p}/feed`, the 34th: mounted for every login, a read of
+/// the project's queue events a login already reads through `events`, and
+/// its `auto` head judged for the hub's surface, never `[team]` beyond the
+/// switch.
+const GET_ROUTES: [&str; 34] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1467,6 +1473,7 @@ const GET_ROUTES: [&str; 33] = [
     "/api/projects/{p}/check",
     "/api/projects/{p}/delivery",
     "/api/projects/{p}/events",
+    "/api/projects/{p}/feed",
     "/api/projects/{p}/flow",
     "/api/projects/{p}/graph",
     "/api/projects/{p}/health",
@@ -2270,8 +2277,9 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
     // since docs/features/direction-catalog.md DC-9 (`catalog`); 31 since
     // docs/features/department-overview.md DO10 (`cards/counts`); 33 since
     // docs/features/corpus-map.md CM3 (`map`) and
-    // docs/features/scope-rings.md SR4 (`rings`).
-    assert_eq!(GET_ROUTES.len(), 33);
+    // docs/features/scope-rings.md SR4 (`rings`); 34 since
+    // docs/features/auto-feed.md FD3 (`feed`).
+    assert_eq!(GET_ROUTES.len(), 34);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

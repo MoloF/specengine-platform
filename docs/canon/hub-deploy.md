@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [scripts/deploy, .github/workflows]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-15
 ---
 
 # Hub deploy: compose, Traefik, Authelia and the image
@@ -42,7 +42,7 @@ Every router to the daemon also carries `hardening` (`nosniff`, HSTS, COOP `same
 
 `ghcr.io/molof/specengine:<v>`, from `scripts/deploy/Dockerfile` (ADR-0066), its context the repository root through an allowlist, `Dockerfile.dockerignore`: the manifests, `Cargo.lock`, `crates/`, `ui/` without `node_modules` or `dist`, and the three scripts. Stages: Node 24 with pnpm through corepack builds `ui/dist`; Rust 1.90, the workspace `rust-version`, runs `cargo build --locked --release -p specengine-cli -p specengine-http`; Debian 13 slim holds `spec`, `specengine-http`, git (2.38 or later), `openssh-client`, `ca-certificates` and the base's `sh` (a sync's SIGTERM goes through `sh -c kill`). No git-lfs, Rust toolchain or `rust-analyzer`. User 10001 owns `/data`, `/projects` and its home `/var/lib/specengine/home`; the scripts are copied `--chmod=0755`; the label `org.opencontainers.image.source` links the GHCR package to the repository. No `# syntax=` line.
 
-`.github/workflows/image.yml` runs on `v*` tags alone, `contents: read`. `check`: `tag-check.sh` (the tag is exactly `v` + the plugin's version, which `.env.example` holds too: on `main` 0.46.1, while `scripts/deploy/README.md` clones `v0.29.1`, `v3`'s, until `v4`'s first release), the deploy tests, `compose config`, `docker build --check`, Authelia's `validate-config`. `build`, per architecture on native runners (`ubuntu-24.04`, `ubuntu-24.04-arm`): builds with `load`, smoke-tests (git 2.38 or later, no `git lfs`, `GET /` a 200 page), pushes `<v>-<arch>`. `merge` publishes the list `<v>`. Both pushing jobs take `packages: write`, run only for the owner's account, `MoloF`, log in, then fail if `<v>` is published: one version, one build. Actions are pinned by commit SHA. The host only pulls.
+`.github/workflows/image.yml` runs on `v*` tags alone, `contents: read`. `check`: `tag-check.sh` (the tag is exactly `v` + the plugin's version, which `.env.example` holds too: on `main` 0.47.0, while `scripts/deploy/README.md` clones `v0.29.1`, `v3`'s, until `v4`'s first release), the deploy tests, `compose config`, `docker build --check`, Authelia's `validate-config`. `build`, per architecture on native runners (`ubuntu-24.04`, `ubuntu-24.04-arm`): builds with `load`, smoke-tests (git 2.38 or later, no `git lfs`, `GET /` a 200 page), pushes `<v>-<arch>`. `merge` publishes the list `<v>`. Both pushing jobs take `packages: write`, run only for the owner's account, `MoloF`, log in, then fail if `<v>` is published: one version, one build. Actions are pinned by commit SHA. The host only pulls.
 
 ## Entrypoint
 
@@ -54,7 +54,7 @@ Every router to the daemon also carries `hardening` (`nosniff`, HSTS, COOP `same
 
 ## Pins
 
-`hub-ops.md` "Pins".
+`stack.md` "Deployment".
 
 <a id="accounts"></a>
 ## Accounts
@@ -73,11 +73,11 @@ Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of
 - `readTimeout` 300 s may cut an HTTP/1.1 GET stream or a POST waiting in the turn (Go's `ReadTimeout`): the gate measures.
 - A re-run of `build` after a failed `merge` overwrites `<v>-<arch>` before the list `<v>` exists; hosts pin only the list.
 - D12's `LC_ALL=C` mutation survives under dash on CI.
-- Authelia's entrypoint `chown -R 0:0 /config` on the read-only mount errors at start, harmless.
-- A `specengine.toml` below its repository's top is not served.
+- Authelia's entrypoint `chown -R 0:0 /config` on the read-only mount errors at start: harmless.
+- A `specengine.toml` below its repository top is not served.
 - The MCP users file is read when its middleware is built (from memory), hence the stamp; VF2 open.
 - `hub-admin` until VF1-VF3 (`hub-accounts.md`): the deletes' flags and "nothing to delete" answers from memory, busybox `od`, `awk` untested, the NUL case proven on macOS awk alone; smaller limits: the guide.
-- A private GHCR package needs a pull credential on the host.
+- A private GHCR package needs a pull credential on its host.
 - A hand change on the host (`git pull`, an edit, a restore) reaches trusting reads after `spec index` or a reconcile (`spec-read-freshness.md`).
 - Unverified until the gate (from memory): that Traefik keeps the client's `Host` and drops a client's copy of a listed header also when the door returns none; that the door on a sibling subdomain makes the landing a `same-site` navigation (tried in no browser).
 

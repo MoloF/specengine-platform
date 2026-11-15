@@ -393,6 +393,22 @@
 //! `MapCounts` (6), `MapNode` (12), `MapEdge` (5), `MapParent` (2) and
 //! `MapGhost` (4), from `GET .../map` over a git copy of A holding CM2's
 //! ghost. M: a set left out of the fixture.
+//!
+//! docs/features/auto-feed.md (RM-0124) "Data", FD3: eight sets more, 168
+//! in all, last: `Feed` (7), `FeedEntry` (17), `FeedNeedsMe` (5) and its row
+//! sets `FeedHeld` (9), `FeedOpen` (5), `FeedFailedRun` (5),
+//! `FeedGateObserved` (5) and `FeedUnlanded` (3), from `GET
+//! .../feed?since=0&needs_me=1` over a git copy of `fixtures/auto-mini` with
+//! `rules/on.toml` committed and a pack started through the library: a task
+//! held, one done and not landed, one whose run failed, an observed gate
+//! write and an open proposal. The `auto` head has no set of its own (the
+//! spec names none). M: a set left out of the fixture.
+//!
+//! docs/features/hub-auto.md (RM-0121) HA7: one set more, 169 in all, last:
+//! `Delegated` (`{by, rule, commit}`), from `GET .../proposals/<id>` of a
+//! row a hub applied by rule; `Proposal` keeps its keys (the mark is left
+//! out of every other row, as `Author.login`). M: the key written `null`
+//! on every row.
 
 mod common;
 mod task_state;
@@ -914,6 +930,210 @@ fn map_document() -> String {
         .to_owned()
 }
 
+/// docs/features/hub-auto.md HA7: a hub over a git copy of
+/// `fixtures/auto-mini` (`rules/hub.toml`, `[team]` `ann` the sole owner),
+/// `ann`'s update raised over `/mcp` and applied by the rule; `GET
+/// .../proposals/<id>`'s body raw.
+fn delegated_review() -> String {
+    use common::mcp_http::Session;
+    let scratch = Scratch::new("daemon-keys-delegated");
+    let root = scratch.repo("auto-mini", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let git = scratch.git();
+    git.run(&root, &["config", "user.name", "Owner"]);
+    git.run(&root, &["config", "user.email", "owner@example.invalid"]);
+    let config = read_text(&root, "specengine.toml");
+    let rule = read_text(
+        &repository_root().join("fixtures/auto-mini/rules"),
+        "hub.toml",
+    );
+    write(
+        &root,
+        "specengine.toml",
+        format!(
+            "{}\n\n{rule}\n[team.ann]\nrole  = \"owner\"\nemail = \"ann@example.org\"\n",
+            config.trim_end()
+        ),
+    );
+    git.run(&root, &["commit", "-qam", "the rule and the team"]);
+    let server = Server::start(&home, &cwd, &hub_args(&[&root], ORIGIN));
+    let mut ann = Session::open(server.port, "auto-mini", "ann");
+    let node = ann.call("get_node", serde_json::json!({"id": "R-02"}));
+    let node = &node["result"]["structuredContent"]["nodes"][0];
+    let raised = ann.call(
+        "propose_change",
+        serde_json::json!({"kind": "update", "target": "R-02", "base": node["span_hash"],
+            "text": node["text"].as_str().unwrap().replacen("five seconds", "six seconds", 1),
+            "rationale": "Six.", "author_role": "drafter"}),
+    );
+    let id = raised["result"]["structuredContent"]["id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("stored: {raised}"))
+        .to_owned();
+    // The barrier: `ann`'s next call runs after the apply in her line.
+    let _ = ann.call("get_tree", serde_json::json!({}));
+    let path = format!("/api/projects/auto-mini/proposals/{id}");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let body = through(&server, "GET", &path, &Proxied::fetch("ann"), b"")
+            .text()
+            .to_owned();
+        if body.contains("\"delegated\":{") || Instant::now() > deadline {
+            return body;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// docs/features/auto-feed.md FD3: `GET .../feed?since=0&needs_me=1` over a
+/// git copy of `fixtures/auto-mini` with `rules/on.toml` committed, on a
+/// daemon of its own, every `needs_me` list holding a row; its body raw
+/// (the keys' order kept).
+fn feed_document() -> String {
+    let scratch = Scratch::new("daemon-keys-feed");
+    let root = scratch.repo("auto-mini", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let git = scratch.git();
+    git.run(&root, &["config", "user.name", "Owner"]);
+    git.run(&root, &["config", "user.email", "owner@example.org"]);
+    let config = read_text(&root, "specengine.toml");
+    let rule = read_text(
+        &repository_root().join("fixtures/auto-mini/rules"),
+        "on.toml",
+    );
+    write(
+        &root,
+        "specengine.toml",
+        format!("{}\n\n{rule}", config.trim_end()),
+    );
+    git.run(&root, &["commit", "-q", "-am", "the rule"]);
+    let plan = scratch.join("plan.md");
+    fs::write(&plan, "1. Do it.\n").unwrap();
+    let plan = plan.to_str().unwrap().to_owned();
+    let ok = |dir: &std::path::Path, args: &[&str]| {
+        let run = spec(&home, dir, args);
+        assert_eq!(run.code, 0, "{args:?}: {}", run.show());
+        run
+    };
+    for (task, title) in [("T-0001", "Held"), ("T-0002", "Done"), ("T-0003", "Failed")] {
+        ok(&root, &["task", "new", "--nodes", "R-02", "--title", title]);
+        ok(&root, &["task", "plan", task, "--plan-file", &plan]);
+    }
+    let env = specengine_cli::Env {
+        cwd: root.clone(),
+        home: Some(home.clone().into_os_string()),
+        xdg_data_home: None,
+    };
+    let started = specengine_cli::auto_start(
+        &env,
+        &specengine_cli::Globals::default(),
+        &specengine_cli::AutoStartRequest {
+            tasks: vec!["T-0001".into(), "T-0002".into(), "T-0003".into()],
+            lines: None,
+            until: None,
+            now: "2026-11-15T00:00:00Z".to_owned(),
+            git: specengine_cli::GitEnv::new(root.as_path(), common::product_env(&home)),
+        },
+        &mut |_, _| true,
+    )
+    .expect("the pack starts");
+    assert_eq!(started.exit, specengine_cli::Exit::Answered, "{started:?}");
+    ok(
+        &root,
+        &["auto", "hold", "T-0001", "--reason", "agent-error"],
+    );
+    for (task, outcome) in [("T-0002", "completed"), ("T-0003", "failed")] {
+        let wt = scratch.join(&format!("wt-{task}"));
+        git.run(
+            &root,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                &format!("auto-{task}"),
+                wt.to_str().unwrap(),
+                "auto",
+            ],
+        );
+        let wt = fs::canonicalize(wt).unwrap();
+        let wt_text = wt.to_str().unwrap().to_owned();
+        ok(&wt, &["auto", "approve", task, "--root", &wt_text]);
+        ok(
+            &wt,
+            &[
+                "task",
+                "claim",
+                task,
+                "--role",
+                "developer",
+                "--worktree",
+                &wt_text,
+            ],
+        );
+        ok(
+            &wt,
+            &[
+                "task",
+                "report",
+                task,
+                "--outcome",
+                outcome,
+                "--summary",
+                "Ran.",
+                "--changed",
+                "src/lib.rs",
+            ],
+        );
+        if outcome == "completed" {
+            ok(&wt, &["task", "complete", task]);
+        }
+    }
+    // An observed gate write: `src/` is the gate's `code`, no task claimed
+    // in the main worktree, `[gate] mode = "observe"`.
+    let root_text = root.to_str().unwrap().to_owned();
+    ok(
+        &root,
+        &["gate", "--worktree", &root_text, "--path", "src/x.rs"],
+    );
+    // An open proposal.
+    let shown = spec(&home, &root, &["--json", "show", "R-01"]);
+    let node = shown.json()["nodes"][0].clone();
+    let base = node["span_hash"].as_str().unwrap().to_owned();
+    let text = spec(&home, &root, &["show", "R-01"]).stdout;
+    let text = text
+        .split_once('\n')
+        .unwrap()
+        .1
+        .replacen("three", "four", 1);
+    let run = run_product(
+        &spec_bin(),
+        &home,
+        &root,
+        &[
+            "propose",
+            "update",
+            "R-01",
+            "--base",
+            &base,
+            "--text-file",
+            "-",
+            "--rationale",
+            "Four.",
+        ],
+        text.as_bytes(),
+    );
+    assert_eq!(run.code, 0, "{}", run.show());
+    let server = Server::serve(&home, &cwd, &[&root]);
+    server
+        .get("/api/projects/auto-mini/feed?since=0&needs_me=1")
+        .status(200)
+        .text()
+        .to_owned()
+}
+
 fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     // docs/features/delivery-analytics.md DA-11: C-0001's late row holds
     // one of each reason.
@@ -945,6 +1165,18 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let map = map_document();
     let map_ghosts = raw_items(&map, "ghosts");
     assert_eq!(map_ghosts.len(), 1, "{map}");
+    // docs/features/hub-auto.md HA7: a delegated row's review, its mark.
+    let delegated = delegated_review();
+    let delegated_mark = raw_object(&delegated, "delegated");
+    // docs/features/auto-feed.md FD3: the feed, its entries, its needs-me
+    // lists, each holding a row.
+    let feed = feed_document();
+    let feed_needs = raw_object(&feed, "needs_me");
+    let feed_rows = |list: &str| {
+        let rows = raw_items(&feed_needs, list);
+        assert!(!rows.is_empty(), "no {list} row: {feed}");
+        rows
+    };
     // docs/features/direction-catalog.md DC-9: both rows hold a last change.
     let catalog = catalog_document();
     // docs/features/collision-pairs.md PP8: the example's review, its pair
@@ -2552,6 +2784,44 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             one_key_set("MapParent", &raw_items(&map, "parents"), keys_of),
         ),
         ("MapGhost", one_key_set("MapGhost", &map_ghosts, keys_of)),
+        // docs/features/auto-feed.md FD3, sets 161 to 168.
+        (
+            "Feed",
+            one_key_set("Feed", std::slice::from_ref(&feed), keys_of),
+        ),
+        (
+            "FeedEntry",
+            one_key_set("FeedEntry", &raw_items(&feed, "entries"), keys_of),
+        ),
+        (
+            "FeedNeedsMe",
+            one_key_set("FeedNeedsMe", std::slice::from_ref(&feed_needs), keys_of),
+        ),
+        (
+            "FeedHeld",
+            one_key_set("FeedHeld", &feed_rows("held"), keys_of),
+        ),
+        (
+            "FeedOpen",
+            one_key_set("FeedOpen", &feed_rows("open"), keys_of),
+        ),
+        (
+            "FeedFailedRun",
+            one_key_set("FeedFailedRun", &feed_rows("failed_runs"), keys_of),
+        ),
+        (
+            "FeedGateObserved",
+            one_key_set("FeedGateObserved", &feed_rows("gate_observed"), keys_of),
+        ),
+        (
+            "FeedUnlanded",
+            one_key_set("FeedUnlanded", &feed_rows("unlanded"), keys_of),
+        ),
+        // docs/features/hub-auto.md HA7, set 169.
+        (
+            "Delegated",
+            one_key_set("Delegated", std::slice::from_ref(&delegated_mark), keys_of),
+        ),
     ]
 }
 
@@ -2908,7 +3178,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        160,
+        169,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -2917,7 +3187,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          flow-scenario: 115; card-questions: 118; department-split: 121; task-mandate: 122; \
          node-history: 124; upstream-signal: 126; delivery-analytics: 137; \
          direction-catalog: 140; department-overview: 143; collision-pairs: 145; \
-         delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160)"
+         delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160; \
+         auto-feed: 168; hub-auto: 169)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -4013,9 +4284,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         ]
     );
     // docs/features/scope-rings.md SR4 and docs/features/corpus-map.md CM3:
-    // sets 152 to 160, last, in "Data"'s order, each the spec's keys in its
+    // sets 152 to 160, in "Data"'s order, each the spec's keys in its
     // order. M: a set left out of the fixture.
-    let added: Vec<(&str, Vec<&str>)> = sets[151..]
+    let added: Vec<(&str, Vec<&str>)> = sets[151..160]
         .iter()
         .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
         .collect();
@@ -4068,6 +4339,61 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("MapParent", vec!["child", "parent"]),
             ("MapGhost", vec!["written", "reason", "sources", "places"]),
         ]
+    );
+    // docs/features/auto-feed.md FD3: sets 161 to 168, each "Data"'s keys
+    // in its order. M: a set left out of the fixture.
+    let feed: Vec<(&str, Vec<&str>)> = sets[160..168]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        feed,
+        [
+            (
+                "Feed",
+                vec![
+                    "auto", "after", "last_seq", "more", "entries", "needs_me", "notes"
+                ]
+            ),
+            (
+                "FeedEntry",
+                vec![
+                    "seq", "at", "type", "task", "proposal", "card", "line", "title", "status",
+                    "by", "outcome", "summary", "commit", "reason", "detail", "path", "lane"
+                ]
+            ),
+            (
+                "FeedNeedsMe",
+                vec!["held", "open", "failed_runs", "gate_observed", "unlanded"]
+            ),
+            (
+                "FeedHeld",
+                vec![
+                    "seq", "at", "pack", "task", "line", "proposal", "act", "reason", "detail"
+                ]
+            ),
+            (
+                "FeedOpen",
+                vec!["id", "kind", "target_id", "task_id", "created_at"]
+            ),
+            (
+                "FeedFailedRun",
+                vec!["task", "run", "outcome", "summary", "ended_at"]
+            ),
+            (
+                "FeedGateObserved",
+                vec!["seq", "at", "path", "zone", "branch"]
+            ),
+            ("FeedUnlanded", vec!["task", "status", "pack"]),
+        ]
+    );
+    // docs/features/hub-auto.md HA7: set 169, last; `Proposal` without it.
+    assert_eq!(sets[168].0, "Delegated");
+    assert_eq!(sets[168].1, ["by", "rule", "commit"]);
+    let proposal = &sets.iter().find(|(name, _)| *name == "Proposal").unwrap().1;
+    assert!(
+        !proposal.iter().any(|key| key == "delegated"),
+        "{proposal:?}"
     );
     // docs/features/corpus-map.md CM4, CM5: `both` and `kinds` right after
     // `impact`.
@@ -4137,7 +4463,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 160 sets (41 until
+/// unchanged, no new key): the fixture holds 169 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4171,7 +4497,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/delivery-timeline.md its three, DT6, and
 /// docs/features/usage-orphans.md its three, UO9, and
 /// docs/features/scope-rings.md its three, SR4, and
-/// docs/features/corpus-map.md its six, CM3); a decision
+/// docs/features/corpus-map.md its six, CM3, and
+/// docs/features/auto-feed.md its eight, FD3, and
+/// docs/features/hub-auto.md its `Delegated`, HA7); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -4185,8 +4513,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        160,
-        "160 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        169,
+        "169 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4200,7 +4528,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          upstream-signal's two (US-12), delivery-analytics' eleven (DA-11), \
          direction-catalog's three (DC-9), department-overview's three (DO10), \
          collision-pairs' two (PP8), delivery-timeline's three (DT6), \
-         usage-orphans' three (UO9), scope-rings' three (SR4) and corpus-map's six (CM3)"
+         usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
+         auto-feed's eight (FD3) and \
+         hub-auto's `Delegated` (HA7)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -4317,7 +4647,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 160 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 169 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4349,7 +4679,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/delivery-timeline.md its three, DT6, and
 /// docs/features/usage-orphans.md its three, UO9, and
 /// docs/features/scope-rings.md its three, SR4, and
-/// docs/features/corpus-map.md its six, CM3); the amendment of
+/// docs/features/corpus-map.md its six, CM3, and
+/// docs/features/auto-feed.md its eight, FD3, and
+/// docs/features/hub-auto.md its `Delegated`, HA7); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -4366,8 +4698,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        160,
-        "160 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        169,
+        "169 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4381,7 +4713,9 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          upstream-signal's two (US-12), delivery-analytics' eleven (DA-11), \
          direction-catalog's three (DC-9), department-overview's three (DO10), \
          collision-pairs' two (PP8), delivery-timeline's three (DT6), \
-         usage-orphans' three (UO9), scope-rings' three (SR4) and corpus-map's six (CM3)"
+         usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
+         auto-feed's eight (FD3) and \
+         hub-auto's `Delegated` (HA7)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

@@ -22,7 +22,7 @@ pub const INDEX: &str = "docs/index.md";
 pub const INDEX_SHARD: &str = "docs/index-archive.md";
 
 /// The live shards of the root config's index entry after the archive, in
-/// config order, each with its one claim (`shards`, `claims`; docs/README.md
+/// config order, each with its claims (`shards`, `claims`; docs/README.md
 /// "Generated"): Tier 2 canon (cited by path, found by scope; the `spec-*`
 /// command canons first, since 2026-10-15), what is read by id (decisions)
 /// and by path (crate READMEs), and the plan items (since
@@ -32,22 +32,47 @@ pub const INDEX_SHARD: &str = "docs/index-archive.md";
 /// docs/features/hub-ops.md "Canon at ship" (shard `docs/index-canon-hub.md`);
 /// the `card*` card canons fourth, since card-tasks (RM-0092, shard
 /// `docs/index-canon-card.md`); the `code-*` code-layer canons fifth, since
-/// docs/features/collision-pass.md (shard `docs/index-canon-code.md`).
-/// Claims overlap (`docs/canon/spec-*.md`, `docs/canon/proposal-*.md`,
-/// `docs/canon/hub*.md`, `docs/canon/card*.md` and `docs/canon/code-*.md` are
-/// within `docs/canon/*.md`): the first matching claim wins
-/// ([`claiming_shard`]).
-pub const INDEX_LIVE_SHARDS: [(&str, &str); 9] = [
-    ("docs/index-canon-spec.md", "docs/canon/spec-*.md"),
-    ("docs/index-canon-proposal.md", "docs/canon/proposal-*.md"),
-    ("docs/index-canon-hub.md", "docs/canon/hub*.md"),
-    ("docs/index-canon-card.md", "docs/canon/card*.md"),
-    ("docs/index-canon-code.md", "docs/canon/code-*.md"),
-    ("docs/index-canon.md", "docs/canon/*.md"),
-    ("docs/index-decisions.md", "docs/decisions/*.md"),
-    ("docs/index-crates.md", "crates/*/README.md"),
-    ("docs/index-roadmap.md", "docs/roadmap/*.md"),
+/// docs/features/collision-pass.md (shard `docs/index-canon-code.md`); the
+/// decisions split in two since auto-mode (docs/features/auto-rule.md RL1:
+/// `docs/index-decisions-0.md` holds ADR-0001 to ADR-0039 by four claims,
+/// `docs/index-decisions.md` the rest). Claims overlap
+/// (`docs/canon/spec-*.md`, `docs/canon/proposal-*.md`, `docs/canon/hub*.md`,
+/// `docs/canon/card*.md` and `docs/canon/code-*.md` are within
+/// `docs/canon/*.md`; the `ADR-00..3*` claims within `docs/decisions/*.md`):
+/// the first matching claim wins ([`claiming_shard`]).
+pub const INDEX_LIVE_SHARDS: [(&str, &[&str]); 10] = [
+    ("docs/index-canon-spec.md", &["docs/canon/spec-*.md"]),
+    (
+        "docs/index-canon-proposal.md",
+        &["docs/canon/proposal-*.md"],
+    ),
+    ("docs/index-canon-hub.md", &["docs/canon/hub*.md"]),
+    ("docs/index-canon-card.md", &["docs/canon/card*.md"]),
+    ("docs/index-canon-code.md", &["docs/canon/code-*.md"]),
+    ("docs/index-canon.md", &["docs/canon/*.md"]),
+    (
+        "docs/index-decisions-0.md",
+        &[
+            "docs/decisions/ADR-000*.md",
+            "docs/decisions/ADR-001*.md",
+            "docs/decisions/ADR-002*.md",
+            "docs/decisions/ADR-003*.md",
+        ],
+    ),
+    ("docs/index-decisions.md", &["docs/decisions/*.md"]),
+    ("docs/index-crates.md", &["crates/*/README.md"]),
+    ("docs/index-roadmap.md", &["docs/roadmap/*.md"]),
 ];
+
+/// A live shard's label, as the shard's title and the root's pointer give
+/// it: each claim in backticks, joined by `, ` (one claim: `` `<claim>` ``).
+pub fn shard_label(claims: &[&str]) -> String {
+    claims
+        .iter()
+        .map(|claim| format!("`{claim}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 /// The roadmap view of the root config's index entry (`roadmap`; ADR-0052,
 /// docs/features/roadmap-view.md): the plan of `[roadmap]`'s items, the
@@ -57,7 +82,7 @@ pub const VIEW: &str = "docs/generated/roadmap.md";
 /// The outputs of the root config's index entry in config order: the root,
 /// then the shards, then the roadmap view. The index entry's `writes`, the
 /// render's outputs and the export's lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 12] = [
+pub const INDEX_OUTPUTS: [&str; 13] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
@@ -69,6 +94,7 @@ pub const INDEX_OUTPUTS: [&str; 12] = [
     INDEX_LIVE_SHARDS[6].0,
     INDEX_LIVE_SHARDS[7].0,
     INDEX_LIVE_SHARDS[8].0,
+    INDEX_LIVE_SHARDS[9].0,
     VIEW,
 ];
 
@@ -140,7 +166,7 @@ pub fn root_toml() -> String {
         fs::read_to_string(repository().join("specengine.toml")).expect("the root specengine.toml");
     let live = INDEX_LIVE_SHARDS
         .iter()
-        .flat_map(|(path, claim)| [*path, *claim]);
+        .flat_map(|(path, claims)| std::iter::once(*path).chain(claims.iter().copied()));
     for registered in [EXPORT, GATE, INDEX, INDEX_SHARD].into_iter().chain(live) {
         let quoted = format!("\"{registered}\"");
         assert!(toml.contains(&quoted), "{quoted} in:\n{toml}");
@@ -182,7 +208,7 @@ pub fn claimed(glob: &str, relative: &str) -> bool {
 pub fn claiming_shard(relative: &str) -> Option<&'static str> {
     INDEX_LIVE_SHARDS
         .iter()
-        .find(|(_, claim)| claimed(claim, relative))
+        .find(|(_, claims)| claims.iter().any(|claim| claimed(claim, relative)))
         .map(|(path, _)| *path)
 }
 

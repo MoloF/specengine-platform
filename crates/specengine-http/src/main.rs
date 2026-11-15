@@ -42,6 +42,9 @@
 //! - [`mcp`]: a hub's `/mcp/<slug>` (task spec `hub-mcp`), the MCP server
 //!   over Streamable HTTP, each call in the project's turn, its sessions
 //!   bound to a login; absent on a local daemon;
+//! - [`auto`]: a hub's delegated apply (task spec `hub-auto`), one command
+//!   per stored `update` or `create` in its login's line; the one file that
+//!   calls the CLI's delegated apply;
 //! - [`slow`]: `--slow-ms` (task spec `slow-requests`), a stderr line per
 //!   request past it, its client gone or not; [`turn`]: each project's turn
 //!   taken, measured and watched, a line when a hold passes it and one when
@@ -51,8 +54,10 @@
 mod answer;
 mod app;
 mod args;
+mod auto;
 mod confirm;
 mod daemon;
+mod feed;
 mod hub;
 #[cfg(test)]
 mod lines_tests;

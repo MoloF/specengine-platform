@@ -191,6 +191,11 @@ pub use queue::{
     claimed_elsewhere, open_for_gate, patch_hash, proposal_columns, record_gate_observed,
     task_event,
 };
+pub use queue::{
+    AUTO_EVENTS, AutoBind, AutoBound, AutoEvent, AutoHeld, AutoLanded, AutoStarted, BY_RULE,
+    ByRule, EVENT_AUTO_BOUND, EVENT_AUTO_HELD, EVENT_AUTO_LANDED, EVENT_AUTO_STARTED, StoredAuto,
+};
+pub use queue::{FeedCard, FeedEvent, FeedProposal, FeedRun, FeedSnapshot, FeedTask, FeedWindow};
 pub use read::{Decoded, IndexSnapshot, NodeNorm};
 pub use roles::{RoleCandidate, StoredRole};
 pub use similar::{SimilarQuery, SimilarRow, SimilarTarget, SimilarTitle};

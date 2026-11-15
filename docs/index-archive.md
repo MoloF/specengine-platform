@@ -21,6 +21,10 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/agent-intake.md](features/agent-intake.md) shipped
 - [docs/features/anchor-states.md](features/anchor-states.md) shipped
 - [docs/features/apply-outputs.md](features/apply-outputs.md) shipped
+- [docs/features/auto-feed.md](features/auto-feed.md) shipped
+- [docs/features/auto-land.md](features/auto-land.md) shipped
+- [docs/features/auto-rule.md](features/auto-rule.md) shipped
+- [docs/features/auto-runner.md](features/auto-runner.md) shipped
 - [docs/features/bevy-roles-reads.md](features/bevy-roles-reads.md) shipped
 - [docs/features/bevy-roles.md](features/bevy-roles.md) shipped
 - [docs/features/board-handoff.md](features/board-handoff.md) shipped
@@ -78,6 +82,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/health-left.md](features/health-left.md) shipped
 - [docs/features/health-ui-follow-up.md](features/health-ui-follow-up.md) shipped
 - [docs/features/hub-accounts.md](features/hub-accounts.md) shipped
+- [docs/features/hub-auto.md](features/hub-auto.md) shipped
 - [docs/features/hub-confirm.md](features/hub-confirm.md) shipped
 - [docs/features/hub-department.md](features/hub-department.md) shipped
 - [docs/features/hub-deploy.md](features/hub-deploy.md) shipped
@@ -289,4 +294,9 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0117.md](roadmap/RM-0117.md) shipped
 - [docs/roadmap/RM-0118.md](roadmap/RM-0118.md) shipped
 - [docs/roadmap/RM-0119.md](roadmap/RM-0119.md) shipped
+- [docs/roadmap/RM-0120.md](roadmap/RM-0120.md) shipped
+- [docs/roadmap/RM-0121.md](roadmap/RM-0121.md) shipped
+- [docs/roadmap/RM-0122.md](roadmap/RM-0122.md) shipped
+- [docs/roadmap/RM-0123.md](roadmap/RM-0123.md) shipped
+- [docs/roadmap/RM-0124.md](roadmap/RM-0124.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

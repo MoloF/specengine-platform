@@ -4,6 +4,7 @@ import {
   type CardsOptions,
   type CatalogOptions,
   type DeliveryOptions,
+  type FeedOptions,
   type FlowOptions,
   type GraphOptions,
   type MapOptions,
@@ -40,6 +41,7 @@ import type {
   ConfirmRead,
   CatalogDocument,
   DeliveryDocument,
+  FeedDocument,
   FlowView,
   GraphView,
   HealthReport,
@@ -99,8 +101,9 @@ const API = "/api";
  * (`docs/canon/proposal-queue.md` "States and events"; the stage's two after `apply_failed`:
  * `docs/canon/decision-staging.md` "Queue"), the tasks' nine (`docs/canon/tasks.md` "Store"), then
  * the cards' nine (`docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md`
- * "Data"). An EventSource hands a named event only to a listener of that name: a type missing here is
- * never seen.
+ * "Data"), then auto mode's four and the gate's one, which only the feed reads again
+ * (`docs/features/auto-feed.md` "The UI"). An EventSource hands a named event only to a listener of
+ * that name: a type missing here is never seen.
  */
 export const QUEUE_EVENT_TYPES = [
   "proposal.created",
@@ -128,6 +131,11 @@ export const QUEUE_EVENT_TYPES = [
   "card.cleared",
   "card.reestimated",
   "card.refreshed",
+  "auto.started",
+  "auto.bound",
+  "auto.held",
+  "auto.landed",
+  "gate.observed",
 ] as const;
 
 /** The first wait before a stream the browser gave up on is opened again; doubled per failure. */
@@ -533,6 +541,21 @@ export class HttpClient implements SpecEngineClient {
    */
   async getRings(project: string, signal?: AbortSignal): Promise<RingsDocument> {
     return (await request("GET", `${projectPath(project)}/rings`, { signal, judged: true })) as RingsDocument;
+  }
+
+  /**
+   * `spec feed --json` (`docs/features/auto-feed.md` "Data"): `since`, `needs_me=1`, `task`,
+   * `department`, each sent once and only when given. Judged, so only a 200 resolves: a bad value's
+   * 400, an older daemon's 404 and a 503 reject in the daemon's words. Takes its query's AbortSignal.
+   */
+  async getFeed(project: string, options: FeedOptions, signal?: AbortSignal): Promise<FeedDocument> {
+    const query = queryOf([
+      ["since", options.since],
+      ["needs_me", options.needs_me === true ? 1 : undefined],
+      ["task", options.task],
+      ["department", options.department],
+    ]);
+    return (await request("GET", `${projectPath(project)}/feed${query}`, { signal, judged: true })) as FeedDocument;
   }
 
   /**

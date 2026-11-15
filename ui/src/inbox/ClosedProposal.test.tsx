@@ -74,3 +74,45 @@ describe("the closed pane's words (IC9)", () => {
     expect([ru.inbox.unknown, ru.inbox.closed.noDecision, ru.inbox.closed.reading].every((value) => value.includes("{{id}}"))).toBe(true);
   });
 });
+
+// FD7 of docs/features/auto-feed.md "Acceptance criteria": a decided proposal whose review document
+// holds `delegated` shows Applied by rule, the commit's 12 hex and the rule hash's 12, the whole hash
+// what a screen reader says, read-only; one without `delegated` shows nothing new, an applied one too.
+describe("a rule's apply on a closed proposal (FD7 of auto-feed)", () => {
+  const RULE = `b3:${"0123456789abcdef".repeat(4)}`;
+  const COMMIT = "9b1e77c2d0aa4f3e8c1b2a3d4e5f60718293a4b5";
+
+  it("shows Applied by rule with the commit's 12 and the hash's 12, the whole hash spoken; no Confirm, no stage", async () => {
+    const pane = await paneOf(
+      aProposal({
+        id: "PR-0012",
+        kind: "update",
+        status: "applied",
+        summary: "Moor with four",
+        applied_commit: COMMIT,
+        decided_by: "ann <ann@example.org>",
+        decided_at: "2026-11-16T01:05:40Z",
+        delegated: { by: "rule", rule: RULE, commit: COMMIT },
+      }),
+    );
+    const line = pane.querySelector<HTMLElement>("[data-delegated]");
+    expect(line?.textContent).toBe(`Applied by rule b3:0123456789ab${RULE}, commit 9b1e77c2d0aa`);
+    // The twelve shown, the whole hash read out, each whole as its title.
+    const [rule, commit] = Array.from(line?.querySelectorAll("code") ?? []);
+    expect(rule?.querySelector('[aria-hidden="true"]')?.textContent).toBe("b3:0123456789ab");
+    expect(rule?.querySelector(".sr-only")?.textContent).toBe(RULE);
+    expect([rule?.getAttribute("title"), commit?.getAttribute("title"), commit?.textContent]).toEqual([RULE, COMMIT, "9b1e77c2d0aa"]);
+    expect(within(pane).queryByRole("button", { name: /Confirm|Accept|Reject/ })).toBeNull();
+  });
+
+  it("an applied one without `delegated` shows no such line (M: the line shown for any applied row)", async () => {
+    const pane = await paneOf(aProposal({ id: "PR-0013", kind: "update", status: "applied", summary: "Confirmed by hand", applied_commit: COMMIT, decided_by: "ann", decided_at: "2026-11-16T01:05:40Z" }));
+    expect(pane.querySelector("[data-delegated]")).toBeNull();
+    expect(pane.textContent).not.toContain(en.inbox.byRule.split(" {{")[0] ?? "");
+  });
+
+  it("says it in Russian from the catalog", () => {
+    expect(ru.inbox.byRule).toContain("{{hash}}");
+    expect(ru.inbox.byRule).toContain("{{commit}}");
+  });
+});

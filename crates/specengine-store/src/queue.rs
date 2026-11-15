@@ -132,11 +132,13 @@
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
+mod auto;
 mod cards;
 mod collisions;
 // docs/features/department-overview.md DO11: the statement-count seam.
 #[cfg(test)]
 mod card_counts_seam;
+mod feed;
 mod gate;
 mod stage;
 mod state;
@@ -174,6 +176,10 @@ use crate::floor::{PROPOSAL_FLOOR_FILE, id_side, read_floor};
 use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
+pub use auto::{
+    AUTO_EVENTS, AutoBind, AutoBound, AutoEvent, AutoHeld, AutoLanded, AutoStarted, BY_RULE,
+    ByRule, EVENT_AUTO_BOUND, EVENT_AUTO_HELD, EVENT_AUTO_LANDED, EVENT_AUTO_STARTED, StoredAuto,
+};
 pub use cards::{
     CardAccept, CardAccepted, CardChange, CardClear, CardCleared, CardClearing, CardDeparture,
     CardEdit, CardItems, CardList, CardRefresh, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
@@ -182,6 +188,7 @@ pub use cards::{
     NewSplitChild, QueueSnapshot, SplitCards, SplitParent, UnreadableCard,
 };
 pub use collisions::{CollisionMark, CollisionMarks, MarkResult, NewCollisionMark};
+pub use feed::{FeedCard, FeedEvent, FeedProposal, FeedRun, FeedSnapshot, FeedTask, FeedWindow};
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
 pub use state::{
@@ -1635,6 +1642,9 @@ pub struct SqliteQueue {
     /// The database's directory, the data directory: where its proposal
     /// floor lies ([`crate::floor`]), read by every mint.
     dir: PathBuf,
+    /// A delegated apply's keys on `proposal.approved` and `.applied`
+    /// (`queue/auto.rs`); `None`: today's events.
+    by_rule: Option<ByRule>,
 }
 
 impl SqliteQueue {
@@ -1682,6 +1692,7 @@ impl SqliteQueue {
             conn,
             project: project.to_owned(),
             dir: parent.to_path_buf(),
+            by_rule: None,
         })
     }
 
@@ -1877,6 +1888,7 @@ impl SqliteQueue {
     ) -> Result<Proposal, QueueError> {
         check_time(now)?;
         let project = self.project.clone();
+        let by_rule = self.by_rule.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
         approved_without_record(&current)?;
@@ -1912,11 +1924,14 @@ impl SqliteQueue {
         )
         .db()?;
         if current.status == ProposalStatus::Open {
-            log(
+            log_text(
                 &tx,
                 &project,
                 EVENT_APPROVED,
-                &with_staged(json!({ "id": id }), decision),
+                &auto::ruled_text(
+                    &with_staged(json!({ "id": id }), decision),
+                    by_rule.as_ref(),
+                ),
                 now,
             )?;
         }
@@ -1999,6 +2014,7 @@ impl SqliteQueue {
     ) -> Result<(Proposal, Vec<String>, Vec<String>), QueueError> {
         check_time(now)?;
         let project = self.project.clone();
+        let by_rule = self.by_rule.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
         if current.kind.family() == KindFamily::Decides && current.record.is_none() {
@@ -2020,13 +2036,16 @@ impl SqliteQueue {
                 .db()?;
                 // Deliberately no compare-and-set (module documentation,
                 // "Runs"): the stage it confirms, if any, as the caller says.
-                log(
+                log_text(
                     &tx,
                     &project,
                     EVENT_APPROVED,
-                    &with_staged(
-                        with_record(json!({ "id": id }), record.as_deref()),
-                        decision,
+                    &auto::ruled_text(
+                        &with_staged(
+                            with_record(json!({ "id": id }), record.as_deref()),
+                            decision,
+                        ),
+                        by_rule.as_ref(),
                     ),
                     now,
                 )?;
@@ -2045,11 +2064,14 @@ impl SqliteQueue {
             ],
         )
         .db()?;
-        log(
+        log_text(
             &tx,
             &project,
             EVENT_APPLIED,
-            &with_record(json!({ "id": id, "commit": commit }), record.as_deref()),
+            &auto::ruled_text(
+                &with_record(json!({ "id": id, "commit": commit }), record.as_deref()),
+                by_rule.as_ref(),
+            ),
             now,
         )?;
         let refreshed = match refresh {

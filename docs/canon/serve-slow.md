@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, scripts/deploy]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-15
 ---
 
 # Daemon: slow requests, long turns and the proxy's access log
@@ -30,7 +30,7 @@ specengine-http: slow request at=2026-11-14T14:01:07.610Z method=GET route=/api/
 ```
 
 - **A request line**: one per request whose whole time passes the threshold, written when the handler's answer returns. An answer whose body streams (an MCP call's SSE answer, which carries the call's result) writes it at the body's end; a HEAD's, a 1xx, 204 or 304 at the return. A client gone first: `status=gone`, `run_ms=-` when it never ran. None for the live tail (`GET …/events`) or `/mcp`'s GET stream, open up to 300 s by design; the tail's polls take no turn.
-- **A turn's lines**: a hold reaching the threshold writes `held` at once, while still held (at 0, at acquisition, before the call runs). A watcher on its own std thread, outside the async runtime, keeps the timers, so a stalled runtime still leaves the line. That hold's end writes `released`, its whole length, before the turn passes on. Every holder: a request, a confirm's too (`answer.rs` `turned`), a hub's `/mcp` call or resource read (`hub-mcp.md` "Turn"), a `--push` sync's merge (`by=sync`, one pair per project of its repository, in `--root` order). A call once started is never cancelled, so a `gone` request's hold can outlast its line; its `released` gives the real length.
+- **A turn's lines**: a hold reaching the threshold writes `held` at once, while still held (at 0, at acquisition, before the call runs). A watcher on its own std thread, outside the async runtime, keeps the timers, so a stalled runtime still leaves the line. That hold's end writes `released`, its whole length, before the turn passes on. Every holder: a request, a confirm's too (`answer.rs` `turned`), a hub's `/mcp` call or resource read (`hub-mcp.md` "Turn"), a `--push` sync's merge (`by=sync`, one pair per project of its repository, in `--root` order), a hub's delegated apply (`by=<login> id=<PR> tool=auto_apply class=mcp`, `hub-auto.md` "Lines"). A call once started is never cancelled, so a `gone` request's hold can outlast its line; its `released` gives the real length.
 
 | Key | Value |
 |---|---|
@@ -47,10 +47,10 @@ specengine-http: slow request at=2026-11-14T14:01:07.610Z method=GET route=/api/
 | `class` | `page` (every route but `/mcp/{p}`), `mcp`; a turn line also `sync` |
 | `line_ms` | the wait in its login's line (`hub-mcp.md` "Turn"); `-` with none |
 | `ahead` | the turn's holders and waiters when it began waiting for the turn; `-` with no turn |
-| `by` | the holder: its route template, or `sync` |
+| `by` | the holder: its route template, `sync`, or a delegated apply's login |
 | `held_ms` | `held`: the threshold (0 at 0); `released`: the hold's whole length |
 
-**Hygiene.** No login (the door's log names who; `at`, to the millisecond, joins the logs), body, header, query string, raw path, cookie or MCP argument. `project` and `id` print as 1 to 64 bytes of `[A-Za-z0-9._-]`, `tool` of `[A-Za-z0-9._/-]`, else `?`; nothing is percent-decoded, quoted or holds a space or control. **Never a change**: no answer, status, header or order changes; a failed write is ignored; `ms` is measured before the write; lines of different requests interleave line by line, never within one.
+**Hygiene.** No login but a delegated apply's `by`, which no request carries (else the door's log names who; `at`, to the millisecond, joins the logs), body, header, query string, raw path, cookie or MCP argument. `project`, `id` and that `by` print as 1 to 64 bytes of `[A-Za-z0-9._-]`, `tool` of `[A-Za-z0-9._/-]`, else `?`; nothing is percent-decoded, quoted or holds a space or control. **Never a change**: no answer, status, header or order changes; a failed write is ignored; `ms` is measured before the write; lines of different requests interleave line by line, never within one.
 
 ## Traefik's access log
 

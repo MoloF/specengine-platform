@@ -1,9 +1,9 @@
 ---
 class: canon
 tier: 2
-scope: [crates]
+scope: [crates, scripts/deploy]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-11-15
 ---
 
 # Stack: toolchain and pinned crates
@@ -30,7 +30,7 @@ Edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc >= 1.98 (the `r
 | `serde-saphyr` | =1.3.0 (`deserialize` only) | YAML front-matter (why: 05 s9). `deserialize` pulls unpinned crates no feature turns off: granit-parser, arraydeque, annotate-snippets (+ anstyle, unicode-width), encoding_rs_io, encoding_rs (+ simdutf8, multiversion_no_op; core_detect on x86), pending the owner (Q1, core README) |
 | `serde` / `serde_json` | =1.0.229 (`derive`) / =1.0.151 (`float_roundtrip`) | serialization; JSON output of tools and `specengine-eval`, the `specengine-ra` protocol lines; a float read back bit for bit |
 | `toml` / `regex` | =1.1.4 (`std`, `parse`, `serde`) / =1.13.1 (`std`, `unicode`) | configs (`specengine.toml`, importer; a direct CLI dependency for `Cargo.toml` package names) / importer ID patterns; `regex` already in the graph via tree-sitter |
-| `blake3` | =1.8.7 | node and AST hashes |
+| `blake3` | =1.8.7 | node and AST hashes; core's own dependency for the `[auto]` rule hash (`auto_toml.rs`, `auto-mode.md`) |
 | `petgraph` | =0.8.3 (no default features) | `depends-cycle` (`tarjan_scc`; owner, Q-C); new to the default members: `fixedbitset` 0.5.7, `hashbrown` 0.15.5, `foldhash` 0.1.5 |
 | `schemars` | 1.2.2 | JSON Schema 2020-12 for tools, via the `rmcp::schemars` re-export |
 | `clap` | =4.6.7 (`derive`) | CLI |
@@ -39,7 +39,18 @@ Edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc >= 1.98 (the `r
 | `libc` | =0.2.189 (`default-features = false`) | `specengine-cli`, a plain dependency: the process groups and signals of `verify --tests` and `resolve` (`group.rs`); `specengine-eval` feature `ra`: peak RSS and process groups; the `specengine-ra` binary: `getrusage`, `getpgrp`, `kill` (`docs/canon/layer-c-protocol.md`) |
 | `syn` / `quote` / `proc-macro2` | =3.0.6 (+ `extra-traits`) / =1.0.47 / =1.0.107 | comparison only, behind `specengine-eval`'s `syn` feature: not an identity source (no name resolution) and not the digest (05 s5.2, ADR-0021) |
 
-**Deployment.** A hub's third-party images (Traefik v3.7.17, Authelia 4.39.28, restic 0.19.1, Debian 13 slim, Node 24.22.2, the Rust 1.90.0 builder) and `image.yml`'s four actions are pinned by version and digest or commit SHA in the files, listed in `hub-ops.md` "Pins": recorded 2026-11-03 under the owner's approval of new dependencies (restic 2026-11-04, the orchestrator's answer to Q5), they await the owner's confirmation. pnpm stays `ui/package.json`'s.
+**Deployment.** A hub's third-party images (Traefik v3.7.17, Authelia 4.39.28, restic 0.19.1, Debian 13 slim, Node 24.22.2, the Rust 1.90.0 builder) and `image.yml`'s four actions are pinned by version and digest or commit SHA in the files, listed below shortened: recorded 2026-11-03 under the owner's approval of new dependencies (restic 2026-11-04, the orchestrator's answer to Q5), they await the owner's confirmation. pnpm stays `ui/package.json`'s.
+
+| Pin | Value |
+|---|---|
+| Traefik | `v3.7.17@sha256:68ae5fe5...3748` (2026-11-03) |
+| Authelia | `4.39.28@sha256:bd97cff4...6f54` (2026-11-03) |
+| restic | `0.19.1@sha256:136600b6...d510` (2026-11-04) |
+| Debian | `trixie-20261027-slim@sha256:f6b08b09...3ec4` |
+| Node | `24.22.2-trixie-slim@sha256:54f84b4c...b446` |
+| Rust | `1.90.0-slim-trixie@sha256:7fa728f3...b39e` |
+| pnpm | 10.28.2, `ui/package.json` |
+| Actions | `actions/checkout` v7.0.1 `3d3c42e5`, `docker/login-action` v4.7.0 `81c6f93d`, `docker/setup-buildx-action` v4.4.1 `f87e5991`, `docker/build-push-action` v7.4.0 `c3c9e263` |
 
 ## Not taken
 

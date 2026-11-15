@@ -1,4 +1,7 @@
 import type {
+  FeedDocument,
+  FeedEntry,
+  FeedNeedsMe,
   AssumedNode,
   AssumedProposal,
   AssumesRow,
@@ -1241,4 +1244,46 @@ export function aMapNode(fields: Partial<MapNode> & Pick<MapNode, "name">): MapN
 /** A strong link of an invented type, one place, unless given. */
 export function aMapEdge(src: number, dst: number, fields: Partial<MapEdge> = {}): MapEdge {
   return { src, dst, type: "alpha_type", weak: false, places: 1, ...fields };
+}
+
+/** The feed with no `[auto]` table and no entry, unless given (docs/features/auto-feed.md "Data"). */
+export function aFeed(entries: FeedEntry[] = [], fields: Partial<FeedDocument> = {}): FeedDocument {
+  return {
+    auto: { state: "off", reason: "off", why: "no [auto] table in specengine.toml@HEAD", rule: null },
+    after: null,
+    last_seq: entries.at(-1)?.seq ?? null,
+    more: false,
+    entries,
+    needs_me: null,
+    notes: [],
+    ...fields,
+  };
+}
+
+/** One feed entry at `seq`, a task's claim by hand, every other key null, unless given. */
+export function aFeedEntry(fields: Partial<FeedEntry> & Pick<FeedEntry, "seq">): FeedEntry {
+  return {
+    at: "2026-11-16T01:02:03Z",
+    type: "task.claimed",
+    task: null,
+    proposal: null,
+    card: null,
+    line: null,
+    title: null,
+    status: null,
+    by: null,
+    outcome: null,
+    summary: null,
+    commit: null,
+    reason: null,
+    detail: null,
+    path: null,
+    lane: null,
+    ...fields,
+  };
+}
+
+/** Needs me with every list empty, unless given. */
+export function aFeedNeedsMe(fields: Partial<FeedNeedsMe> = {}): FeedNeedsMe {
+  return { held: [], open: [], failed_runs: [], gate_observed: [], unlanded: [], ...fields };
 }

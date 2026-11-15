@@ -276,6 +276,21 @@ enum Command {
     },
     /// Print the scope rings the `[[map.ring]]` tables of the config choose, innermost first: per ring the nodes `tree [ROOT] --kind K…` lists for its root and kinds, live files only, less those an inner ring holds, each with its work state (the trace's rollup); computed per read, never stored; read-only, exit 0 whatever is listed (a bad table, or a root naming no node, is a note), 2 when it cannot run (no project, an index or a queue that cannot be read).
     Rings,
+    /// List what happened, oldest first: the project's queue events (tasks, runs, proposals, cards, auto packs, holds and lands, the gate's observed writes), each with its subject, title and what it did; with --needs-me also what waits for the owner (held items, open proposals, failed runs, observed writes, done tasks not landed); read-only, exit 0 whatever is listed, 2 when it cannot run (a bad value, no project, a queue of a newer build).
+    Feed {
+        /// Only events after this seq (a non-negative decimal), or at or after this time (YYYY-MM-DDTHH:MM:SSZ); default: the newest 100.
+        #[arg(long, value_name = "SEQ|TIME")]
+        since: Option<String>,
+        /// Also list what needs the owner.
+        #[arg(long = "needs-me")]
+        needs_me: bool,
+        /// Only the events naming this task or a proposal bound to it.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
+        /// Only the events of this department's lane (a [[workspace]] name, or general).
+        #[arg(long, value_name = "D")]
+        department: Option<String>,
+    },
     /// List pairs of spec nodes that may collide, for an agent to judge: within a kind, those sharing a link target (but `mentions`; a target too many nodes of the kind hold skipped) or with alike titles by title trigrams, scored and ordered; a pair an agent marked stays hidden until either side's norm_hash changes. Computed per read; writes nothing but the index. Exit 0 whatever is listed, 2 when it cannot run (a bad --limit, no project, an index or a queue that cannot be read).
     #[command(args_conflicts_with_subcommands = true)]
     Collisions {
@@ -460,6 +475,11 @@ enum Command {
         #[arg(long)]
         stdin: bool,
     },
+    /// Auto mode: a committed `[auto]` rule approves, applies and lands what it covers; show it (a dry run), stop or resume it on this machine, start a pack on a terminal, and the runner's approve, land, hold and next.
+    Auto {
+        #[command(subcommand)]
+        command: AutoCommand,
+    },
     /// Run the daemon (specengine-http) in the foreground on 127.0.0.1 for the project, or for each DIR; one per data directory: a daemon already serving them is named instead.
     Serve {
         /// A project root to serve, its own specengine.toml read; repeat for more (default: the project found from the current directory, or --root).
@@ -468,6 +488,65 @@ enum Command {
         /// The port on 127.0.0.1; 0 takes a free one.
         #[arg(long, value_name = "N", default_value_t = specengine_cli::DAEMON_PORT)]
         port: u16,
+    },
+}
+
+#[derive(Subcommand)]
+enum AutoCommand {
+    /// The rule at HEAD, its switches, every live pack's items and every open proposal of this repository, each `apply` or `hold` with its reason; writes nothing; exit 0, 2 when it cannot run.
+    Show {
+        /// Judge the proposals as this surface would.
+        #[arg(long, value_name = "local|hub", default_value = "local", value_parser = ["local", "hub"])]
+        surface: String,
+    },
+    /// Stop auto mode for every project of this machine's data directory: the stop file is made (no project read).
+    Stop,
+    /// Resume auto mode on this machine: the stop file removed after a terminal [y/N].
+    Resume,
+    /// Start a pack: its tasks approved and landed by the rule with no further key, after one terminal [y/N].
+    Start {
+        /// The pack's tasks, in order.
+        #[arg(value_name = "T")]
+        tasks: Vec<String>,
+        /// A file of lines, each a task to plan (UTF-8; empty and `#` lines skipped).
+        #[arg(long, value_name = "FILE")]
+        lines: Option<PathBuf>,
+        /// The pack ends at this time (YYYY-MM-DDTHH:MM:SSZ).
+        #[arg(long, value_name = "TIME")]
+        until: Option<String>,
+    },
+    /// Approve a pack's task in review by the rule (no terminal): run in the worktree it will be claimed in.
+    Approve {
+        #[arg(value_name = "T")]
+        id: String,
+    },
+    /// Land a pack's done task on the rule's branch: its code committed, its covered proposals applied, `spec check` clean on the merge; never pushes.
+    Land {
+        #[arg(value_name = "T")]
+        id: String,
+    },
+    /// The runner's hold of a pack's item (a task ID or <pack>/<n>).
+    Hold {
+        #[arg(value_name = "ITEM")]
+        item: String,
+        /// agent-error, denied-tool, no-mcp, max-turns, max-budget, not-planned or not-done.
+        #[arg(long, value_name = "R")]
+        reason: String,
+        /// At most 1 024 bytes, no control character; default the reason.
+        #[arg(long, value_name = "TEXT")]
+        note: Option<String>,
+    },
+    /// The runner's next act, one JSON document; read-only.
+    Next {
+        /// An item the runner works on (repeatable).
+        #[arg(long = "busy", value_name = "ITEM")]
+        busy: Vec<String>,
+        /// Pass over this lane's items (repeatable).
+        #[arg(long = "skip-lane", value_name = "D")]
+        skip_lanes: Vec<String>,
+        /// Free slots for a new act; 0 leaves only land (default 1).
+        #[arg(long, value_name = "N", default_value_t = 1)]
+        slots: u32,
     },
 }
 
@@ -1218,6 +1297,13 @@ fn main() -> ExitCode {
         };
         return run_serve(&globals, cli.json, dirs, port);
     }
+    if let Command::Auto { command } = cli.command {
+        let globals = Globals {
+            root: cli.root,
+            config: cli.config,
+        };
+        return run_auto(&globals, cli.json, command);
+    }
     // `conflicts_with` sees `--json` only after `index`: clap fills global
     // arguments in after the subcommand's conflict check.
     if cli.json
@@ -1449,6 +1535,23 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             &CatalogRequest { kinds, archive },
         )?)),
         Command::Rings => Outcome::Rings(Box::new(specengine_cli::rings(env, globals)?)),
+        Command::Feed {
+            since,
+            needs_me,
+            task,
+            department,
+        } => Outcome::Feed(Box::new(specengine_cli::feed(
+            env,
+            globals,
+            &specengine_cli::FeedRequest {
+                since,
+                needs_me,
+                task,
+                department,
+                hub: false,
+                git: process_git(env),
+            },
+        )?)),
         Command::Collisions {
             command: None,
             kinds,
@@ -2149,7 +2252,146 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 "spec: serve runs apart from the other commands",
             ));
         }
+        Command::Auto { .. } => {
+            return Err(CliError::cannot(
+                "spec: auto runs apart from the other commands",
+            ));
+        }
     })
+}
+
+/// `spec auto …` (canon `auto-mode`): its outcome's stderr lines,
+/// then its stdout (the JSON document with `--json`), its exit.
+fn run_auto(globals: &Globals, json: bool, command: AutoCommand) -> ExitCode {
+    let result = Env::from_process().and_then(|env| auto_outcome(&env, globals, command));
+    match result {
+        Ok(outcome) => {
+            let mut stderr = std::io::stderr().lock();
+            for line in &outcome.stderr {
+                let _ = writeln!(stderr, "{line}");
+            }
+            drop(stderr);
+            let _ = std::io::stdout()
+                .lock()
+                .write_all(outcome.stdout(json).as_bytes());
+            ExitCode::from(outcome.exit.code())
+        }
+        Err(error) => {
+            let _ = writeln!(std::io::stderr().lock(), "{error}");
+            ExitCode::from(error.exit.code())
+        }
+    }
+}
+
+fn auto_outcome(
+    env: &Env,
+    globals: &Globals,
+    command: AutoCommand,
+) -> Result<specengine_cli::AutoOutcome, CliError> {
+    match command {
+        AutoCommand::Show { surface } => {
+            let surface = match surface.as_str() {
+                "hub" => specengine_core::auto::Surface::Hub,
+                _ => specengine_core::auto::Surface::Local,
+            };
+            let shown = specengine_cli::auto_show(
+                env,
+                globals,
+                &specengine_cli::AutoShowRequest {
+                    surface,
+                    now: now(),
+                    git: process_git(env),
+                },
+            )?;
+            let mut json = serde_json::to_string(&shown).unwrap_or_default();
+            json.push('\n');
+            Ok(specengine_cli::AutoOutcome {
+                exit: Exit::Answered,
+                text: shown.text(),
+                json,
+                stderr: Vec::new(),
+            })
+        }
+        AutoCommand::Stop => specengine_cli::auto_stop(
+            env,
+            &specengine_cli::AutoStopRequest {
+                now: now(),
+                git: process_git(env),
+            },
+        ),
+        AutoCommand::Resume => {
+            // Before anything is read: the owner's alone.
+            require_terminal("auto resume")?;
+            specengine_cli::auto_resume(env, &mut |question: &str| ask(question))
+        }
+        AutoCommand::Start {
+            tasks,
+            lines,
+            until,
+        } => {
+            require_terminal("auto start")?;
+            let mut consent = |listing: &str, question: &str| {
+                let _ = std::io::stderr().lock().write_all(listing.as_bytes());
+                ask(question)
+            };
+            specengine_cli::auto_start(
+                env,
+                globals,
+                &specengine_cli::AutoStartRequest {
+                    tasks,
+                    lines,
+                    until,
+                    now: now(),
+                    git: process_git(env),
+                },
+                &mut consent,
+            )
+        }
+        AutoCommand::Approve { id } => specengine_cli::auto_approve(
+            env,
+            globals,
+            &specengine_cli::AutoApproveRequest {
+                id,
+                now: now(),
+                git: process_git(env),
+            },
+        ),
+        AutoCommand::Land { id } => specengine_cli::auto_land(
+            env,
+            globals,
+            &specengine_cli::AutoLandRequest {
+                id,
+                now: now(),
+                git: process_git(env),
+            },
+        ),
+        AutoCommand::Hold { item, reason, note } => specengine_cli::auto_hold(
+            env,
+            globals,
+            &specengine_cli::AutoHoldRequest {
+                item,
+                reason,
+                note,
+                now: now(),
+                git: process_git(env),
+            },
+        ),
+        AutoCommand::Next {
+            busy,
+            skip_lanes,
+            slots,
+        } => specengine_cli::auto_next(
+            env,
+            globals,
+            &specengine_cli::AutoNextRequest {
+                busy,
+                skip_lanes,
+                slots,
+                now: now(),
+                git: process_git(env),
+            },
+        ),
+    }
 }
 
 /// `spec gate`: the verdict within [`GATE_DEADLINE`] of `started`; a

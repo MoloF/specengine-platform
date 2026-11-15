@@ -1,0 +1,12 @@
+# on.toml's rule: its keys and lists reordered, comments and spacing added;
+# the canonical form and the hash are on.toml's.
+[auto]
+exclude_kinds = [ "scenario" ]   # the writers' scenes
+zones = [
+  "docs",
+  "tests",   # the tests too
+  "code",
+]
+# never the narrative
+exclude_zones=["narrative"]
+mode="both"

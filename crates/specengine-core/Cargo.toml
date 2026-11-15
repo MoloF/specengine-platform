@@ -21,6 +21,9 @@ serde_json.workspace = true
 # `depends-cycle`: strongly connected components (`tarjan_scc`) of the
 # `depends_on` graph; owner-approved (Q-C, docs/canon/spec-check-graph.md).
 petgraph.workspace = true
+# The `[auto]` rule's hash (docs/canon/auto-mode.md "Rule hash"): already in
+# the workspace graph at this pin (store, code, import).
+blake3.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

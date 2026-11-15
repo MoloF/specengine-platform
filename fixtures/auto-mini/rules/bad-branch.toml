@@ -1,0 +1,4 @@
+[auto]
+mode   = "both"
+zones  = ["code"]
+branch = "-auto"

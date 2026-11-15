@@ -36,6 +36,12 @@
 //!
 //! Nothing but the queue's stage columns and its `proposal.staged` event is
 //! written; no file, no git, no approve, reject, unstage or apply.
+//!
+//! MCP reviews leave `delegated` out: the context-cost rule. The review
+//! document a delegated apply's row carries in `spec review --json` and the
+//! daemon's route (task spec `hub-auto`) is dropped from what `get_proposal`
+//! and `review_proposal` answer, over stdio and on a hub, its text line with
+//! it ([`mcp_review`]), so their output schemas stay one shape.
 
 use rmcp::handler::server::tool::{InputResponses, RequestState};
 use rmcp::handler::server::wrapper::Parameters;
@@ -49,9 +55,9 @@ use rmcp::{ErrorData, RoleServer, tool, tool_router};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specengine_cli::{
-    CliError, Env, Exit, Outcome, ProposalDocument, ReviewRequest, StageBody, StageForm,
-    StageFormOutcome, StageOutcome, StageRequest, escape_controls, process_git, staged_command,
-    utc_now,
+    CliError, Env, Exit, Outcome, ProposalDocument, ProposalOutcome, ReviewRequest, StageBody,
+    StageForm, StageFormOutcome, StageOutcome, StageRequest, escape_controls, process_git,
+    staged_command, utc_now,
 };
 
 use crate::intake::ProposalArgs;
@@ -420,12 +426,12 @@ impl SpecEngineServer {
                     lines.push_str(&format!("staged {at}: {}\n", staged_command(id, stage)));
                 }
                 let read = ReviewRequest { id: written, git };
-                let read = specengine_cli::review_brief(&env, &globals, &read);
+                let read = specengine_cli::review_brief(&env, &globals, &read).map(mcp_review);
                 let read = read.map(|outcome| Outcome::Proposal(Box::new(outcome)));
                 return (answer_of(read), Some(lines));
             }
             let request = ReviewRequest { id: written, git };
-            let read = specengine_cli::review_brief(&env, &globals, &request);
+            let read = specengine_cli::review_brief(&env, &globals, &request).map(mcp_review);
             let id = read
                 .as_ref()
                 .ok()
@@ -460,9 +466,10 @@ impl SpecEngineServer {
             };
             match specengine_cli::stage_form(&env, &globals, &request) {
                 Ok(StageFormOutcome {
-                    outcome,
+                    mut outcome,
                     form: Some(form),
                 }) if outcome.cause.is_none() => {
+                    outcome.proposal = mcp_review(outcome.proposal);
                     let form = form_of(&outcome.proposal.document, form);
                     (answer_of(Ok(Outcome::Stage(Box::new(outcome)))), Some(form))
                 }
@@ -474,6 +481,13 @@ impl SpecEngineServer {
         .await;
         joined.unwrap_or((Answer::Panicked, None))
     }
+}
+
+/// A review document as MCP answers it: without `delegated` (see the
+/// module documentation).
+pub(crate) fn mcp_review(mut outcome: ProposalOutcome) -> ProposalOutcome {
+    outcome.document.delegated = None;
+    outcome
 }
 
 /// The stage `submitted` names, compared against `updated_at`: the flags a

@@ -38,6 +38,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`
 - [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`
 - [docs/index-canon.md](index-canon.md) `docs/canon/*.md`
+- [docs/index-decisions-0.md](index-decisions-0.md) `docs/decisions/ADR-000*.md`, `docs/decisions/ADR-001*.md`, `docs/decisions/ADR-002*.md`, `docs/decisions/ADR-003*.md`
 - [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`
 - [docs/index-crates.md](index-crates.md) `crates/*/README.md`
 - [docs/index-roadmap.md](index-roadmap.md) `docs/roadmap/*.md`
