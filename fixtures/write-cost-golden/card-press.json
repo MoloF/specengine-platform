@@ -1,0 +1,1094 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "approve decision": {
+      "answer": {
+        "error": "spec: `PR-0011` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0011`'s record: add it, or `spec reject PR-0011 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve discrepancy --option 1": {
+      "answer": {
+        "error": "spec: `PR-0010` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0010`'s record: add it, or `spec reject PR-0010 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve question": {
+      "answer": {
+        "error": "spec: `PR-0009` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0009`'s record: add it, or `spec reject PR-0009 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve update": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0001\",\"project\":\"card-press\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\",\"new_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:620efac00348c514efcb29676dab8a6c6d266b520286c24161bf026cafb50234\",\"rationale\":\"Probe PRN-WEEKLY.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/prn-weekly.md\\n+++ proposed docs/spec/prn-weekly.md\\n@@ -14,3 +14,7 @@ before the run starts.\\n ## The deadline {#PRN-WEEKLY-DEADLINE}\\n \\n Copy closes on Tuesday at noon; plates are struck by Wednesday night.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0001` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0001` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "apply PR-0001 to docs/spec/prn-weekly.md on main in <root> (applies; raises PRN-WEEKLY-DEADLINE 1 -> 2)? [y/N]"
+      ]
+    },
+    "probe": {
+      "base": "b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f",
+      "decision": "STY-0001",
+      "path": "docs/spec/prn-weekly.md",
+      "target": "PRN-WEEKLY"
+    },
+    "propose amendment": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0005\",\"project\":\"card-press\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends.md\",\"target_path\":\"docs/spec/zz-wc-amends.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\nclass: spec\\nstatus: draft\\nlinks:\\n  amends: [PRN-WEEKLY]\\n---\\n\\n# Write cost amendment\\n\\nSee [the second probe](zz-wc-amends-b.md) here.\\n\\nSee [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"patch_hash\":\"b3:a8064bbaeefb8223e8cc8b53d13bc3c164044ffa90b3b9d1d3247245fb417207\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":13,\"subject\":\"zz-wc-amends-b.md\",\"message\":\"`zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":15,\"subject\":\"#zz-wc-amends-anchor\",\"message\":\"`#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":15,\"subject\":\"zz-wc-amends-a.md\",\"message\":\"`zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-amends.md\\n+++ proposed docs/spec/zz-wc-amends.md\\n@@ -0,0 +1,15 @@\\n+---\\n+title: The weekly run\\n+owner: owner\\n+reviewed: 2026-10-01\\n+class: spec\\n+status: draft\\n+links:\\n+  amends: [PRN-WEEKLY]\\n+---\\n+\\n+# Write cost amendment\\n+\\n+See [the second probe](zz-wc-amends-b.md) here.\\n+\\n+See [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0005\nintroduced: 4\nerror  docs/spec/zz-wc-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends.md:13: link-dangling: `zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\nwarning  docs/spec/zz-wc-amends.md:15: link-anchor: `#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\nwarning  docs/spec/zz-wc-amends.md:15: link-dangling: `zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\n"
+    },
+    "propose amendment --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0006\",\"project\":\"card-press\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends-brief.md\",\"target_path\":\"docs/spec/zz-wc-amends-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:9e640811d1a391a9b01a9a4c500e9699f2fdb771ba2cad770001ab70238d99fd\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":13,\"subject\":\"zz-wc-amends-brief-b.md\",\"message\":\"`zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":15,\"subject\":\"#zz-wc-amends-brief-anchor\",\"message\":\"`#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":15,\"subject\":\"zz-wc-amends-brief-a.md\",\"message\":\"`zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0006\nintroduced: 4\nerror  docs/spec/zz-wc-amends-brief.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends-brief.md:13: link-dangling: `zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\nwarning  docs/spec/zz-wc-amends-brief.md:15: link-anchor: `#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\nwarning  docs/spec/zz-wc-amends-brief.md:15: link-dangling: `zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\n"
+    },
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"card-press\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:d6e6b8b9d3a15d96d59c8a688b91fc1f6ff7d800782c5afe3e6c11d176c8ccef\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":10,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":12,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":12,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,12 @@\\n+---\\n+class: canon\\n+title: The weekly run\\n+owner: owner\\n+reviewed: 2026-10-01\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PRN-WEEKLY\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The weekly run\",\"kind\":\"print-run\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create.md`'s\",\"gates\":true},{\"id\":\"PRN-WEEKLY-DEADLINE\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The deadline\",\"kind\":\"print-run\",\"source\":\"search\",\"reason\":\"search rank 2 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"STY-0001\",\"path\":\"docs/records/STY/STY-0001.md\",\"title\":\"The lead story opens the front sheet\",\"kind\":\"style-ruling\",\"source\":\"search\",\"reason\":\"search rank 3 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT-HEAD\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The masthead\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 4 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The front sheet\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 5 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-INNER-FOLD\",\"path\":\"docs/spec/sht-inner.md\",\"title\":\"The fold\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 6 on `the`, `weekly`, `run`\",\"gates\":false}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:10: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:12: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:12: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\nsimilar: PRN-WEEKLY | title | gates | print-run | docs/spec/prn-weekly.md | The weekly run | title equal to new `docs/spec/zz-wc-create.md`'s\nsimilar: PRN-WEEKLY-DEADLINE | search | advises | print-run | docs/spec/prn-weekly.md | The deadline | search rank 2 on `the`, `weekly`, `run`\nsimilar: STY-0001 | search | advises | style-ruling | docs/records/STY/STY-0001.md | The lead story opens the front sheet | search rank 3 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT-HEAD | search | advises | broadsheet | docs/spec/sht-front.md | The masthead | search rank 4 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT | search | advises | broadsheet | docs/spec/sht-front.md | The front sheet | search rank 5 on `the`, `weekly`, `run`\nsimilar: SHT-INNER-FOLD | search | advises | broadsheet | docs/spec/sht-inner.md | The fold | search rank 6 on `the`, `weekly`, `run`\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"card-press\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:2946bb17883b719db6834a7e08f61a37d5bbc74ff2148fed93b7e15259cfe402\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":10,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PRN-WEEKLY\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The weekly run\",\"kind\":\"print-run\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create-brief.md`'s\",\"gates\":true},{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"The weekly run\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"PRN-WEEKLY-DEADLINE\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The deadline\",\"kind\":\"print-run\",\"source\":\"search\",\"reason\":\"search rank 2 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"STY-0001\",\"path\":\"docs/records/STY/STY-0001.md\",\"title\":\"The lead story opens the front sheet\",\"kind\":\"style-ruling\",\"source\":\"search\",\"reason\":\"search rank 3 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT-HEAD\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The masthead\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 4 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The front sheet\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 5 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-INNER-FOLD\",\"path\":\"docs/spec/sht-inner.md\",\"title\":\"The fold\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 6 on `the`, `weekly`, `run`\",\"gates\":false}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:10: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:12: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:12: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: PRN-WEEKLY | title | gates | print-run | docs/spec/prn-weekly.md | The weekly run | title equal to new `docs/spec/zz-wc-create-brief.md`'s\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | The weekly run | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: PRN-WEEKLY-DEADLINE | search | advises | print-run | docs/spec/prn-weekly.md | The deadline | search rank 2 on `the`, `weekly`, `run`\nsimilar: STY-0001 | search | advises | style-ruling | docs/records/STY/STY-0001.md | The lead story opens the front sheet | search rank 3 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT-HEAD | search | advises | broadsheet | docs/spec/sht-front.md | The masthead | search rank 4 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT | search | advises | broadsheet | docs/spec/sht-front.md | The front sheet | search rank 5 on `the`, `weekly`, `run`\nsimilar: SHT-INNER-FOLD | search | advises | broadsheet | docs/spec/sht-inner.md | The fold | search rank 6 on `the`, `weekly`, `run`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0004\",\"project\":\"card-press\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:2946bb17883b719db6834a7e08f61a37d5bbc74ff2148fed93b7e15259cfe402\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":10,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PRN-WEEKLY\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The weekly run\",\"kind\":\"print-run\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create-brief.md`'s\",\"gates\":true},{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"The weekly run\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"PRN-WEEKLY-DEADLINE\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The deadline\",\"kind\":\"print-run\",\"source\":\"search\",\"reason\":\"search rank 2 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"STY-0001\",\"path\":\"docs/records/STY/STY-0001.md\",\"title\":\"The lead story opens the front sheet\",\"kind\":\"style-ruling\",\"source\":\"search\",\"reason\":\"search rank 3 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT-HEAD\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The masthead\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 4 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The front sheet\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 5 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-INNER-FOLD\",\"path\":\"docs/spec/sht-inner.md\",\"title\":\"The fold\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 6 on `the`, `weekly`, `run`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:10: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:12: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:12: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: PRN-WEEKLY | title | gates | print-run | docs/spec/prn-weekly.md | The weekly run | title equal to new `docs/spec/zz-wc-create-brief.md`'s\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | The weekly run | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: PRN-WEEKLY-DEADLINE | search | advises | print-run | docs/spec/prn-weekly.md | The deadline | search rank 2 on `the`, `weekly`, `run`\nsimilar: STY-0001 | search | advises | style-ruling | docs/records/STY/STY-0001.md | The lead story opens the front sheet | search rank 3 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT-HEAD | search | advises | broadsheet | docs/spec/sht-front.md | The masthead | search rank 4 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT | search | advises | broadsheet | docs/spec/sht-front.md | The front sheet | search rank 5 on `the`, `weekly`, `run`\nsimilar: SHT-INNER-FOLD | search | advises | broadsheet | docs/spec/sht-inner.md | The fold | search rank 6 on `the`, `weekly`, `run`\n"
+    },
+    "propose create, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0003\",\"project\":\"card-press\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:d6e6b8b9d3a15d96d59c8a688b91fc1f6ff7d800782c5afe3e6c11d176c8ccef\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":10,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":12,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":12,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,12 @@\\n+---\\n+class: canon\\n+title: The weekly run\\n+owner: owner\\n+reviewed: 2026-10-01\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PRN-WEEKLY\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The weekly run\",\"kind\":\"print-run\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create.md`'s\",\"gates\":true},{\"id\":\"PRN-WEEKLY-DEADLINE\",\"path\":\"docs/spec/prn-weekly.md\",\"title\":\"The deadline\",\"kind\":\"print-run\",\"source\":\"search\",\"reason\":\"search rank 2 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"STY-0001\",\"path\":\"docs/records/STY/STY-0001.md\",\"title\":\"The lead story opens the front sheet\",\"kind\":\"style-ruling\",\"source\":\"search\",\"reason\":\"search rank 3 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT-HEAD\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The masthead\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 4 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-FRONT\",\"path\":\"docs/spec/sht-front.md\",\"title\":\"The front sheet\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 5 on `the`, `weekly`, `run`\",\"gates\":false},{\"id\":\"SHT-INNER-FOLD\",\"path\":\"docs/spec/sht-inner.md\",\"title\":\"The fold\",\"kind\":\"broadsheet\",\"source\":\"search\",\"reason\":\"search rank 6 on `the`, `weekly`, `run`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0003\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:10: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:12: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:12: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\nsimilar: PRN-WEEKLY | title | gates | print-run | docs/spec/prn-weekly.md | The weekly run | title equal to new `docs/spec/zz-wc-create.md`'s\nsimilar: PRN-WEEKLY-DEADLINE | search | advises | print-run | docs/spec/prn-weekly.md | The deadline | search rank 2 on `the`, `weekly`, `run`\nsimilar: STY-0001 | search | advises | style-ruling | docs/records/STY/STY-0001.md | The lead story opens the front sheet | search rank 3 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT-HEAD | search | advises | broadsheet | docs/spec/sht-front.md | The masthead | search rank 4 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT | search | advises | broadsheet | docs/spec/sht-front.md | The front sheet | search rank 5 on `the`, `weekly`, `run`\nsimilar: SHT-INNER-FOLD | search | advises | broadsheet | docs/spec/sht-inner.md | The fold | search rank 6 on `the`, `weekly`, `run`\n"
+    },
+    "propose interpretation": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0007\",\"project\":\"card-press\",\"kind\":\"interpretation\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\",\"new_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\\nSee [the second probe](zz-wc-interpret-b.md) here.\\n\\nSee [the first probe](zz-wc-interpret-a.md) and [its anchor](#zz-wc-interpret-anchor) here.\\n\",\"patch_hash\":\"b3:aa71dc57d401491dcd1e6d76226282852a8b48ede61c4d815f496c53cbcacab5\",\"rationale\":\"Interpret it.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-interpret-b.md\",\"message\":\"`zz-wc-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-interpret-anchor\",\"message\":\"`#zz-wc-interpret-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-interpret-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-interpret-a.md\",\"message\":\"`zz-wc-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-a.md`)\"}],\"diff\":\"--- base docs/spec/prn-weekly.md\\n+++ proposed docs/spec/prn-weekly.md\\n@@ -14,3 +14,7 @@ before the run starts.\\n ## The deadline {#PRN-WEEKLY-DEADLINE}\\n \\n Copy closes on Tuesday at noon; plates are struck by Wednesday night.\\n+\\n+See [the second probe](zz-wc-interpret-b.md) here.\\n+\\n+See [the first probe](zz-wc-interpret-a.md) and [its anchor](#zz-wc-interpret-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"PRN-WEEKLY-DEADLINE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":{\"decision\":\"STY-0001\",\"how\":\"Applied as written.\",\"why\":\"The decision left the wording open.\"},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0007\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-interpret-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-interpret-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-a.md`)\n"
+    },
+    "propose interpretation --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0008\",\"project\":\"card-press\",\"kind\":\"interpretation\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:eb9723aaf0961e3b4c06ab2e582cff1008f02d41e0c485b032ccd27973ff3b27\",\"rationale\":\"Interpret it.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-interpret-brief-b.md\",\"message\":\"`zz-wc-interpret-brief-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-interpret-brief-anchor\",\"message\":\"`#zz-wc-interpret-brief-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-interpret-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-interpret-brief-a.md\",\"message\":\"`zz-wc-interpret-brief-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"PRN-WEEKLY-DEADLINE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":{\"decision\":\"STY-0001\",\"how\":\"Applied as written.\",\"why\":\"The decision left the wording open.\"},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0008\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-interpret-brief-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-interpret-brief-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-interpret-brief-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-interpret-brief-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-a.md`)\n"
+    },
+    "propose update": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"card-press\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\",\"new_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:620efac00348c514efcb29676dab8a6c6d266b520286c24161bf026cafb50234\",\"rationale\":\"Probe PRN-WEEKLY.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/prn-weekly.md\\n+++ proposed docs/spec/prn-weekly.md\\n@@ -14,3 +14,7 @@ before the run starts.\\n ## The deadline {#PRN-WEEKLY-DEADLINE}\\n \\n Copy closes on Tuesday at noon; plates are struck by Wednesday night.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"PRN-WEEKLY-DEADLINE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-update-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\n"
+    },
+    "propose update --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"card-press\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"ea300ee3bdb35ddf160a3da6cfaf588b575e9de8\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:a6a301e8d25aad1eceafac4e553ffd48c2cdacea927ccc3855bc16ea6e001282\",\"rationale\":\"Probe PRN-WEEKLY.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-update-brief-b.md\",\"message\":\"`zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-update-brief-anchor\",\"message\":\"`#zz-wc-update-brief-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-update-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-update-brief-a.md\",\"message\":\"`zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"PRN-WEEKLY-DEADLINE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-update-brief-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-update-brief-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\n"
+    },
+    "raise decision": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0011\",\"created\":true,\"hits\":[],\"related\":[{\"id\":\"PR-0009\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0011\nrelated: PR-0009 | open | - | -\n"
+    },
+    "raise discrepancy": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0010\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0010\n"
+    },
+    "raise question": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0009\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0009\n"
+    }
+  },
+  "corpus": "card-press",
+  "http": {
+    "probe": {
+      "path": "docs/spec/prn-weekly.md",
+      "target": "PRN-WEEKLY"
+    },
+    "question confirm GET": {
+      "body": "{\"status\":503,\"message\":\"spec: `PR-100002` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-100002`'s record: add it, or `spec reject PR-100002 --reason <answer>`; nothing changed\"}",
+      "status": 503
+    },
+    "question raise": [
+      {
+        "exit": 0,
+        "json": "{\"id\":\"PR-100002\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "PR-100002\n"
+      }
+    ],
+    "question stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100002\",\"project\":\"card-press\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100002\nproject: card-press\nkind: question\nstatus: open\ntarget_id: PRN-WEEKLY\ntarget_path: docs/spec/prn-weekly.md\nworktree: <root>\nbranch: main\nbase_commit: <sha>\nbase_hash: -\nbase_text: -\nnew_text: -\npatch_hash: -\nrationale: -\nauthor: agent role=developer model=claude-opus-5-5 run=unknown\ndiagnostics: 0\ndiff: -\npreview: -\nconflict: -\nrevisions: -\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  PRN-WEEKLY\nseverity: normal\ngap_type: -\nsummary: Does the write cost probe hold as written?\ngist: -\nmatters: -\nworking_answer: Keep it as written.\nprice_of_other: A new rule case.\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    },
+    "update commits": [
+      "<sha>\n6cb6e6cc2af1bac511f2f59a91c56e4f5e371e93\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100001\n\nProbe PRN-WEEKLY.\n\nProposal: PR-100001\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown\nBase-commit: 6cb6e6cc2af1bac511f2f59a91c56e4f5e371e93\nRevision: PRN-WEEKLY-DEADLINE 1 -> 2\n\n---\n docs/spec/prn-weekly.md | 6 +++++-\n 1 file changed, 5 insertions(+), 1 deletion(-)\n\ndiff --git a/docs/spec/prn-weekly.md b/docs/spec/prn-weekly.md\n--- a/docs/spec/prn-weekly.md\n+++ b/docs/spec/prn-weekly.md\n@@ -11,6 +11,10 @@ reviewed: 2026-10-01\n One edition leaves the shop every Thursday. A sheet is set, proofed and struck\n before the run starts.\n \n-## The deadline {#PRN-WEEKLY-DEADLINE}\n+## The deadline {#PRN-WEEKLY-DEADLINE rev=2}\n \n Copy closes on Tuesday at noon; plates are struck by Wednesday night.\n+\n+See [the second probe](zz-wc-hub-update-b.md) here.\n+\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n"
+    ],
+    "update confirm GET": {
+      "body": "{\"id\":\"PR-100001\",\"question\":\"staged 2026-10-05T21:14:03Z: spec approve PR-100001\\napply PR-100001 to docs/spec/prn-weekly.md on main in <root> (applies; raises PRN-WEEKLY-DEADLINE 1 -> 2, staged)? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "update confirm POST": {
+      "body": "{\"id\":\"PR-100001\",\"project\":\"card-press\",\"kind\":\"update\",\"status\":\"applied\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"6cb6e6cc2af1bac511f2f59a91c56e4f5e371e93\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\",\"new_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:35f1d5216310f555973cc3ac449d1a014cd509fa7626b3b821d0a5e6a5f4be45\",\"rationale\":\"Probe PRN-WEEKLY.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/prn-weekly.md\\n+++ proposed docs/spec/prn-weekly.md\\n@@ -14,3 +14,7 @@ before the run starts.\\n ## The deadline {#PRN-WEEKLY-DEADLINE}\\n \\n Copy closes on Tuesday at noon; plates are struck by Wednesday night.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "update propose": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"card-press\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"6cb6e6cc2af1bac511f2f59a91c56e4f5e371e93\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\",\"new_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:35f1d5216310f555973cc3ac449d1a014cd509fa7626b3b821d0a5e6a5f4be45\",\"rationale\":\"Probe PRN-WEEKLY.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/prn-weekly.md\\n+++ proposed docs/spec/prn-weekly.md\\n@@ -14,3 +14,7 @@ before the run starts.\\n ## The deadline {#PRN-WEEKLY-DEADLINE}\\n \\n Copy closes on Tuesday at noon; plates are struck by Wednesday night.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"PRN-WEEKLY-DEADLINE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-100001\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-hub-update-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\n"
+    },
+    "update stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"card-press\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"PRN-WEEKLY\",\"target_path\":\"docs/spec/prn-weekly.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"6cb6e6cc2af1bac511f2f59a91c56e4f5e371e93\",\"base_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\",\"base_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\",\"new_text\":\"---\\nid: PRN-WEEKLY\\nclass: canon\\ntitle: The weekly run\\nowner: owner\\nreviewed: 2026-10-01\\n---\\n\\n# The weekly run\\n\\nOne edition leaves the shop every Thursday. A sheet is set, proofed and struck\\nbefore the run starts.\\n\\n## The deadline {#PRN-WEEKLY-DEADLINE}\\n\\nCopy closes on Tuesday at noon; plates are struck by Wednesday night.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:35f1d5216310f555973cc3ac449d1a014cd509fa7626b3b821d0a5e6a5f4be45\",\"rationale\":\"Probe PRN-WEEKLY.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/prn-weekly.md\",\"line\":20,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/prn-weekly.md\\n+++ proposed docs/spec/prn-weekly.md\\n@@ -14,3 +14,7 @@ before the run starts.\\n ## The deadline {#PRN-WEEKLY-DEADLINE}\\n \\n Copy closes on Tuesday at noon; plates are struck by Wednesday night.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"PRN-WEEKLY-DEADLINE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"PRN-WEEKLY\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\"},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100001\nproject: card-press\nkind: update\nstatus: open\ntarget_id: PRN-WEEKLY\ntarget_path: docs/spec/prn-weekly.md\nworktree: <root>\nbranch: main\nbase_commit: 6cb6e6cc2af1bac511f2f59a91c56e4f5e371e93\nbase_hash: b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\nbase_text:\n  ---\n  id: PRN-WEEKLY\n  class: canon\n  title: The weekly run\n  owner: owner\n  reviewed: 2026-10-01\n  ---\n\n  # The weekly run\n\n  One edition leaves the shop every Thursday. A sheet is set, proofed and struck\n  before the run starts.\n\n  ## The deadline {#PRN-WEEKLY-DEADLINE}\n\n  Copy closes on Tuesday at noon; plates are struck by Wednesday night.\nnew_text:\n  ---\n  id: PRN-WEEKLY\n  class: canon\n  title: The weekly run\n  owner: owner\n  reviewed: 2026-10-01\n  ---\n\n  # The weekly run\n\n  One edition leaves the shop every Thursday. A sheet is set, proofed and struck\n  before the run starts.\n\n  ## The deadline {#PRN-WEEKLY-DEADLINE}\n\n  Copy closes on Tuesday at noon; plates are struck by Wednesday night.\n\n  See [the second probe](zz-wc-hub-update-b.md) here.\n\n  See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npatch_hash: b3:35f1d5216310f555973cc3ac449d1a014cd509fa7626b3b821d0a5e6a5f4be45\nrationale:\n  Probe PRN-WEEKLY.\nauthor: agent role=spec-writer model=claude-opus-5-5 run=unknown\ndiagnostics: 3\n  warning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\n  warning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-hub-update-anchor`\n  warning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\ndiff:\n  --- base docs/spec/prn-weekly.md\n  +++ proposed docs/spec/prn-weekly.md\n  @@ -14,3 +14,7 @@ before the run starts.\n   ## The deadline {#PRN-WEEKLY-DEADLINE}\n   \n   Copy closes on Tuesday at noon; plates are struck by Wednesday night.\n  +\n  +See [the second probe](zz-wc-hub-update-b.md) here.\n  +\n  +See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npreview: applies\nconflict: -\nrevisions: PRN-WEEKLY-DEADLINE 1 -> 2 (0 lock entries)\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  PRN-WEEKLY\nseverity: -\ngap_type: -\nsummary: -\ngist: -\nmatters: -\nworking_answer: -\nprice_of_other: -\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f\"}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "path": "docs/spec/prn-weekly.md",
+      "target": "PRN-WEEKLY"
+    },
+    "propose_change amendment": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0003\nintroduced: 4\nerror  docs/spec/zz-wc-mcp-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-mcp-amends.md:13: link-dangling: `zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)\nwarning  docs/spec/zz-wc-mcp-amends.md:15: link-anchor: `#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`\nwarning  docs/spec/zz-wc-mcp-amends.md:15: link-dangling: `zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "ea300ee3bdb35ddf160a3da6cfaf588b575e9de8",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "key-missing",
+              "line": 1,
+              "message": "key `scope` is required for class spec: a list, as [root]",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "error",
+              "subject": "scope"
+            },
+            {
+              "code": "link-dangling",
+              "line": 13,
+              "message": "`zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 15,
+              "message": "`#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-amends-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 15,
+              "message": "`zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0003",
+          "interpretation": null,
+          "kind": "amendment",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:feab2e7e057ab6afb8bbb63d5dc20e6441c0a5efd7fe06497559df9bb0f2f72c",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "card-press",
+          "rationale": "Amend the probe.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-amends.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-amends.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-amends.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:10: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:12: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:12: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)\nsimilar: PRN-WEEKLY | title | gates | print-run | docs/spec/prn-weekly.md | The weekly run | title equal to new `docs/spec/zz-wc-mcp.md`'s\nsimilar: PRN-WEEKLY-DEADLINE | search | advises | print-run | docs/spec/prn-weekly.md | The deadline | search rank 2 on `the`, `weekly`, `run`\nsimilar: STY-0001 | search | advises | style-ruling | docs/records/STY/STY-0001.md | The lead story opens the front sheet | search rank 3 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT-HEAD | search | advises | broadsheet | docs/spec/sht-front.md | The masthead | search rank 4 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT | search | advises | broadsheet | docs/spec/sht-front.md | The front sheet | search rank 5 on `the`, `weekly`, `run`\nsimilar: SHT-INNER-FOLD | search | advises | broadsheet | docs/spec/sht-inner.md | The fold | search rank 6 on `the`, `weekly`, `run`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 10,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 12,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:8e2ecd3cfed536ef1392b635d79d6bfef58593208466a69019df1f9550a29b5b",
+          "preview": null,
+          "price_of_other": null,
+          "project": "card-press",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "PRN-WEEKLY",
+              "kind": "print-run",
+              "path": "docs/spec/prn-weekly.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp.md`'s",
+              "source": "title",
+              "title": "The weekly run"
+            },
+            {
+              "gates": false,
+              "id": "PRN-WEEKLY-DEADLINE",
+              "kind": "print-run",
+              "path": "docs/spec/prn-weekly.md",
+              "reason": "search rank 2 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The deadline"
+            },
+            {
+              "gates": false,
+              "id": "STY-0001",
+              "kind": "style-ruling",
+              "path": "docs/records/STY/STY-0001.md",
+              "reason": "search rank 3 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The lead story opens the front sheet"
+            },
+            {
+              "gates": false,
+              "id": "SHT-FRONT-HEAD",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-front.md",
+              "reason": "search rank 4 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The masthead"
+            },
+            {
+              "gates": false,
+              "id": "SHT-FRONT",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-front.md",
+              "reason": "search rank 5 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The front sheet"
+            },
+            {
+              "gates": false,
+              "id": "SHT-INNER-FOLD",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-inner.md",
+              "reason": "search rank 6 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The fold"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp-dry.md:10: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)\nwarning  docs/spec/zz-wc-mcp-dry.md:12: link-anchor: `#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  docs/spec/zz-wc-mcp-dry.md:12: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)\nsimilar: PRN-WEEKLY | title | gates | print-run | docs/spec/prn-weekly.md | The weekly run | title equal to new `docs/spec/zz-wc-mcp-dry.md`'s\nsimilar: PRN-WEEKLY-DEADLINE | search | advises | print-run | docs/spec/prn-weekly.md | The deadline | search rank 2 on `the`, `weekly`, `run`\nsimilar: STY-0001 | search | advises | style-ruling | docs/records/STY/STY-0001.md | The lead story opens the front sheet | search rank 3 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT-HEAD | search | advises | broadsheet | docs/spec/sht-front.md | The masthead | search rank 4 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT | search | advises | broadsheet | docs/spec/sht-front.md | The front sheet | search rank 5 on `the`, `weekly`, `run`\nsimilar: SHT-INNER-FOLD | search | advises | broadsheet | docs/spec/sht-inner.md | The fold | search rank 6 on `the`, `weekly`, `run`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 10,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 12,
+              "message": "`#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored",
+            "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:0b97070119b9e65fcb3fe3368906e179c268340191dd2cdb2f495c71692ac575",
+          "preview": null,
+          "price_of_other": null,
+          "project": "card-press",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "PRN-WEEKLY",
+              "kind": "print-run",
+              "path": "docs/spec/prn-weekly.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp-dry.md`'s",
+              "source": "title",
+              "title": "The weekly run"
+            },
+            {
+              "gates": false,
+              "id": "PRN-WEEKLY-DEADLINE",
+              "kind": "print-run",
+              "path": "docs/spec/prn-weekly.md",
+              "reason": "search rank 2 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The deadline"
+            },
+            {
+              "gates": false,
+              "id": "STY-0001",
+              "kind": "style-ruling",
+              "path": "docs/records/STY/STY-0001.md",
+              "reason": "search rank 3 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The lead story opens the front sheet"
+            },
+            {
+              "gates": false,
+              "id": "SHT-FRONT-HEAD",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-front.md",
+              "reason": "search rank 4 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The masthead"
+            },
+            {
+              "gates": false,
+              "id": "SHT-FRONT",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-front.md",
+              "reason": "search rank 5 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The front sheet"
+            },
+            {
+              "gates": false,
+              "id": "SHT-INNER-FOLD",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-inner.md",
+              "reason": "search rank 6 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The fold"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create, distinct": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:10: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:12: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:12: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)\nsimilar: PRN-WEEKLY | title | gates | print-run | docs/spec/prn-weekly.md | The weekly run | title equal to new `docs/spec/zz-wc-mcp.md`'s\nsimilar: PRN-WEEKLY-DEADLINE | search | advises | print-run | docs/spec/prn-weekly.md | The deadline | search rank 2 on `the`, `weekly`, `run`\nsimilar: STY-0001 | search | advises | style-ruling | docs/records/STY/STY-0001.md | The lead story opens the front sheet | search rank 3 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT-HEAD | search | advises | broadsheet | docs/spec/sht-front.md | The masthead | search rank 4 on `the`, `weekly`, `run`\nsimilar: SHT-FRONT | search | advises | broadsheet | docs/spec/sht-front.md | The front sheet | search rank 5 on `the`, `weekly`, `run`\nsimilar: SHT-INNER-FOLD | search | advises | broadsheet | docs/spec/sht-inner.md | The fold | search rank 6 on `the`, `weekly`, `run`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "ea300ee3bdb35ddf160a3da6cfaf588b575e9de8",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 10,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 12,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0002",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:8e2ecd3cfed536ef1392b635d79d6bfef58593208466a69019df1f9550a29b5b",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "card-press",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "PRN-WEEKLY",
+              "kind": "print-run",
+              "path": "docs/spec/prn-weekly.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp.md`'s",
+              "source": "title",
+              "title": "The weekly run"
+            },
+            {
+              "gates": false,
+              "id": "PRN-WEEKLY-DEADLINE",
+              "kind": "print-run",
+              "path": "docs/spec/prn-weekly.md",
+              "reason": "search rank 2 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The deadline"
+            },
+            {
+              "gates": false,
+              "id": "STY-0001",
+              "kind": "style-ruling",
+              "path": "docs/records/STY/STY-0001.md",
+              "reason": "search rank 3 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The lead story opens the front sheet"
+            },
+            {
+              "gates": false,
+              "id": "SHT-FRONT-HEAD",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-front.md",
+              "reason": "search rank 4 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The masthead"
+            },
+            {
+              "gates": false,
+              "id": "SHT-FRONT",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-front.md",
+              "reason": "search rank 5 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The front sheet"
+            },
+            {
+              "gates": false,
+              "id": "SHT-INNER-FOLD",
+              "kind": "broadsheet",
+              "path": "docs/spec/sht-inner.md",
+              "reason": "search rank 6 on `the`, `weekly`, `run`",
+              "source": "search",
+              "title": "The fold"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change interpretation": {
+      "id": 7,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-mcp-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-mcp-interpret-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-mcp-interpret-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-mcp-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "ea300ee3bdb35ddf160a3da6cfaf588b575e9de8",
+          "base_hash": "b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 18,
+              "message": "`zz-wc-mcp-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-b.md`)",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-interpret-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 20,
+              "message": "`#zz-wc-mcp-interpret-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-mcp-interpret-anchor`",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-interpret-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 20,
+              "message": "`zz-wc-mcp-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-a.md`)",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-interpret-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0004",
+          "interpretation": {
+            "decision": "STY-0001",
+            "how": "Applied as written.",
+            "why": "The decision left the wording open."
+          },
+          "kind": "interpretation",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:7a910baf45377b0fe42eef5515c800bb994973d1dd3312fa3c3bf141857e196c",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "card-press",
+          "rationale": "Interpret it.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "PRN-WEEKLY-DEADLINE",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "PRN-WEEKLY",
+          "target_ids": [
+            "PRN-WEEKLY"
+          ],
+          "target_path": "docs/spec/prn-weekly.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-mcp-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-mcp-update-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "ea300ee3bdb35ddf160a3da6cfaf588b575e9de8",
+          "base_hash": "b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 18,
+              "message": "`zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 20,
+              "message": "`#zz-wc-mcp-update-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-mcp-update-anchor`",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 20,
+              "message": "`zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:6d13233690fa27bf0922de8ee2b3facd620026b934e64fb7d9d7326091d994e5",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "card-press",
+          "rationale": "Probe PRN-WEEKLY.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "PRN-WEEKLY-DEADLINE",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "PRN-WEEKLY",
+          "target_ids": [
+            "PRN-WEEKLY"
+          ],
+          "target_path": "docs/spec/prn-weekly.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/prn-weekly.md:18: link-dangling: `zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)\nwarning  docs/spec/prn-weekly.md:20: link-anchor: `#zz-wc-mcp-update-dry-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`\nwarning  docs/spec/prn-weekly.md:20: link-dangling: `zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": "b3:ea95aebf29b83160130ca4f22d99c85f435dbf0885a7f4b56dcb72fc1252a45f",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 18,
+              "message": "`zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 20,
+              "message": "`#zz-wc-mcp-update-dry-anchor`: `docs/spec/prn-weekly.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 20,
+              "message": "`zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)",
+              "path": "docs/spec/prn-weekly.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:035aa4b4d1aa2864fdfc169f0f2a39868b7852c9b8a616564d154ced4ed22240",
+          "preview": null,
+          "price_of_other": null,
+          "project": "card-press",
+          "rationale": "Probe PRN-WEEKLY.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "PRN-WEEKLY",
+          "target_ids": [
+            "PRN-WEEKLY"
+          ],
+          "target_path": "docs/spec/prn-weekly.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

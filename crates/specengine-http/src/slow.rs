@@ -26,9 +26,14 @@
 //!   route, `line_ms` the wait in a hub MCP call's login line (`-` with
 //!   none), `ahead` the turn's holders and waiters when the request began
 //!   waiting for it (`-` with no turn).
+//! - **Then** (task spec `write-cost`): the call's own time by kind,
+//!   measured on its thread in its turn, each charged to the innermost
+//!   kind: `check_ms` a write's findings, `index_ms` walks and decodes,
+//!   `git_ms` and `git` git's processes, `write_ms` synced writes; `-`
+//!   where nothing of the kind ran.
 //!
 //! ```text
-//! specengine-http: slow request at=<T> method=<M> route=<R> project=<P> id=<I> tool=<N> status=<S> ms=<n> wait_ms=<n|-> run_ms=<n|-> index=<walked|trusted|-> class=<page|mcp> line_ms=<n|-> ahead=<n|->
+//! specengine-http: slow request at=<T> method=<M> route=<R> project=<P> id=<I> tool=<N> status=<S> ms=<n> wait_ms=<n|-> run_ms=<n|-> index=<walked|trusted|-> class=<page|mcp> line_ms=<n|-> ahead=<n|-> check_ms=<n|-> index_ms=<n|-> git_ms=<n|-> git=<n|-> write_ms=<n|->
 //! ```
 
 use std::borrow::Cow;
@@ -46,6 +51,7 @@ use axum::middleware::Next;
 use axum::response::Response;
 use futures_util::{StreamExt as _, stream};
 use specengine_cli::IndexTrust;
+use specengine_cli::cost::CallCost;
 
 /// `--slow-ms`'s default.
 pub(crate) const SLOW_MS: u64 = 2_000;
@@ -203,6 +209,9 @@ struct Seen {
     /// A hub MCP call's wait in its login's line: joined, headed.
     line: Option<(Instant, Option<Instant>)>,
     turn: Turned,
+    /// The call's costs by kind, measured on its thread in its turn
+    /// (`write-cost`, the five fields); `None`: no call ran.
+    cost: Option<CallCost>,
     /// Its line written, or ruled out.
     done: bool,
 }
@@ -312,6 +321,11 @@ impl Exchange {
         }
     }
 
+    /// The call's costs, as its turn's run measured them.
+    pub(crate) fn costed(&self, cost: CallCost) {
+        self.seen().cost = Some(cost);
+    }
+
     /// No line: a stream's, or one already written.
     fn rule_out(&self) {
         self.seen().done = true;
@@ -366,10 +380,11 @@ impl Exchange {
         let shown = |value: Option<Duration>| {
             value.map_or_else(|| "-".to_owned(), |value| millis(value).to_string())
         };
+        let costs = seen.cost.unwrap_or_default().fields();
         let line = format!(
             "specengine-http: slow request at={} method={} route={} project={} id={} tool={} \
              status={status} ms={} wait_ms={} run_ms={} index={walk} class={class} line_ms={} \
-             ahead={}",
+             ahead={}{costs}",
             utc(self.0.at),
             self.0.method,
             seen.route.as_deref().unwrap_or("-"),

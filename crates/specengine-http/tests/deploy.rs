@@ -767,6 +767,16 @@ impl Entry {
     /// `sh entrypoint.sh` with `HUB_HOST` and `SPECENGINE_PUSH` as given
     /// (`None`: unset), and whether the stub ran.
     fn run(&self, hub_host: Option<&str>, push: Option<&str>) -> (Ran, bool) {
+        self.run_with(hub_host, push, None)
+    }
+
+    /// [`Entry::run`] with `SPECENGINE_SLOW_MS` as given (`None`: unset).
+    fn run_with(
+        &self,
+        hub_host: Option<&str>,
+        push: Option<&str>,
+        slow_ms: Option<&str>,
+    ) -> (Ran, bool) {
         let _ = fs::remove_file(&self.mark);
         let mut path = OsString::from(&self.bin);
         path.push(":/usr/bin:/bin");
@@ -788,9 +798,15 @@ impl Entry {
         if let Some(push) = push {
             env.push(("SPECENGINE_PUSH".to_owned(), push.into()));
         }
+        if let Some(slow_ms) = slow_ms {
+            env.push(("SPECENGINE_SLOW_MS".to_owned(), slow_ms.into()));
+        }
         let script = deploy().join("entrypoint.sh");
         let ran = run(
-            &format!("entrypoint HUB_HOST={hub_host:?} SPECENGINE_PUSH={push:?}"),
+            &format!(
+                "entrypoint HUB_HOST={hub_host:?} SPECENGINE_PUSH={push:?} \
+                 SPECENGINE_SLOW_MS={slow_ms:?}"
+            ),
             "/bin/sh",
             &[script.into_os_string()],
             &self.scratch.root,
@@ -3110,5 +3126,120 @@ fn sr11_traefiks_access_log_keeps_slow_requests_and_an_allowlist() {
         flag_values(&flags, "--accesslog.fields.headers.defaultmode"),
         ["drop"],
         "every header dropped"
+    );
+}
+
+// ------------------------------------------- write-cost WC35: the threshold
+
+/// docs/features/write-cost.md (RM-0125) WC35 and "The hub's slow-line
+/// threshold", D12's harness: `SPECENGINE_SLOW_MS` unset gives exactly
+/// today's arguments, byte for byte, with and without `--push`. M: a
+/// `--slow-ms 2000` always passed.
+#[test]
+fn wc35_slow_ms_unset_gives_todays_arguments() {
+    let entry = Entry::new("wc35-unset");
+    entry.project("p");
+    for push in [None, Some("1")] {
+        let (ran, stub) = entry.run_with(Some(HOST), push, None);
+        assert_eq!(ran.code, 0, "{}", ran.show());
+        assert!(stub, "the daemon runs: {}", ran.show());
+        assert_eq!(
+            ran.lines(),
+            entry.expected(&["p"], push.is_some()),
+            "{}",
+            ran.show()
+        );
+        assert_eq!(ran.stderr, "", "{}", ran.show());
+    }
+}
+
+/// WC35: `SPECENGINE_SLOW_MS` `0` and `3600000` reach the daemon as
+/// `--slow-ms <value>`, once, before `--push`; the rest of the arguments are
+/// today's. M: the variable ignored.
+#[test]
+fn wc35_slow_ms_reaches_the_daemon_as_its_flag() {
+    let entry = Entry::new("wc35-set");
+    entry.project("p");
+    for value in ["0", "3600000"] {
+        for push in [None, Some("1")] {
+            let (ran, stub) = entry.run_with(Some(HOST), push, Some(value));
+            assert_eq!(ran.code, 0, "{}", ran.show());
+            assert!(stub, "the daemon runs: {}", ran.show());
+            let lines = ran.lines();
+            let at: Vec<usize> = (0..lines.len())
+                .filter(|&index| lines[index] == "--slow-ms")
+                .collect();
+            assert_eq!(at.len(), 1, "one --slow-ms: {}", ran.show());
+            let at = at[0];
+            assert_eq!(lines.get(at + 1), Some(&value), "{}", ran.show());
+            if push.is_some() {
+                let push_at = lines.iter().position(|line| *line == "--push");
+                assert!(
+                    push_at.is_some_and(|push_at| push_at > at + 1),
+                    "--slow-ms before --push: {}",
+                    ran.show()
+                );
+            }
+            let mut rest = lines.clone();
+            rest.drain(at..at + 2);
+            assert_eq!(
+                rest,
+                entry.expected(&["p"], push.is_some()),
+                "today's arguments beside it: {}",
+                ran.show()
+            );
+        }
+    }
+}
+
+/// WC35: an empty value, `-1`, `3600001` and `2s` exit 2 with one stderr
+/// line, the script's own, naming the variable, and run nothing.
+#[test]
+fn wc35_a_bad_slow_ms_exits_2_and_runs_nothing() {
+    let entry = Entry::new("wc35-bad");
+    entry.project("p");
+    for value in ["", "-1", "3600001", "2s"] {
+        let (ran, stub) = entry.run_with(Some(HOST), None, Some(value));
+        assert_eq!(ran.code, 2, "{value:?}: {}", ran.show());
+        assert!(!stub, "{value:?}: the daemon never runs: {}", ran.show());
+        assert_eq!(ran.stdout, "", "{value:?}: {}", ran.show());
+        let lines: Vec<&str> = ran.stderr.lines().collect();
+        assert_eq!(lines.len(), 1, "{value:?}: one stderr line: {}", ran.show());
+        assert!(
+            lines[0].starts_with(&format!("{ENTRYPOINT} SPECENGINE_SLOW_MS")),
+            "{value:?}: the script's own line naming the variable: {}",
+            ran.show()
+        );
+    }
+}
+
+/// WC35: the `specengine` service passes `SPECENGINE_SLOW_MS` through from
+/// `.env` by name alone (`SPECENGINE_SLOW_MS:` or `- SPECENGINE_SLOW_MS`), so
+/// a `.env` without it leaves it unset in the container: an interpolated
+/// `"${SPECENGINE_SLOW_MS}"` would make it set and empty there, which the
+/// entrypoint refuses (exit 2), and a hub upgraded without the line would not
+/// start.
+#[test]
+fn wc35_the_compose_passes_slow_ms_through() {
+    let compose = compose();
+    let service = service(&compose, "specengine");
+    let passed = match service.get("environment") {
+        Some(Value::Object(map)) => map.get("SPECENGINE_SLOW_MS").cloned(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .find(|item| {
+                item.as_str()
+                    .is_some_and(|text| text.split('=').next() == Some("SPECENGINE_SLOW_MS"))
+            })
+            .cloned(),
+        other => panic!("the specengine service's environment: {other:?}"),
+    };
+    let passed = passed.unwrap_or_else(|| {
+        panic!("the specengine service does not pass SPECENGINE_SLOW_MS: {service}")
+    });
+    assert!(
+        passed.is_null() || passed == json!("SPECENGINE_SLOW_MS"),
+        "SPECENGINE_SLOW_MS passed by name alone, not {passed}: an unset .env line must stay \
+         unset"
     );
 }

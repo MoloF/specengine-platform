@@ -27,16 +27,22 @@ use crate::Paths;
 /// Both rules; causes when the index bytes were not supplied or the index
 /// entry has no `[paths] index` to compare (a config built in code: the TOML
 /// reader rejects it).
+/// The index comparison runs only when `compared` (a whole run always; a
+/// run over a set when the change can reach the outputs).
 pub(crate) fn run(
     input: &CheckInput,
     corpus: &Corpus<'_>,
     paths: &Paths,
     config: &CheckConfig,
+    compared: bool,
     findings: &mut Vec<Finding>,
     causes: &mut Vec<Cause>,
 ) {
     if let Some(generators) = &config.generators {
         registry(corpus, generators, findings);
+    }
+    if !compared {
+        return;
     }
     let Some(generator) = config.index_generator() else {
         return;
@@ -129,6 +135,9 @@ pub fn walk_gap<'a>(input: &'a CheckInput, paths: &Paths) -> Option<WalkGap<'a>>
 /// front-matter was read.
 fn registry(corpus: &Corpus<'_>, generators: &[Generator], findings: &mut Vec<Finding>) {
     for (index, parsed) in corpus.parses.iter().enumerate() {
+        if !corpus.kept(index) {
+            continue;
+        }
         let Some(fields) = parsed.and_then(readable_fields) else {
             continue;
         };

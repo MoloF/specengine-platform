@@ -35,6 +35,7 @@
 //!
 //! [`StageBody`]: crate::StageBody
 
+use std::cell::Cell;
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
@@ -46,7 +47,8 @@ use specengine_core::{TeamEntry, TeamRole};
 use specengine_model::grammar::{self, Canon};
 use specengine_model::{AMENDS, IdScript};
 use specengine_store::{
-    GitEnv, KindFamily, Proposal, ProposalQueue as _, ProposalStatus, Stage, same_repository,
+    GitEnv, KindFamily, Proposal, ProposalQueue as _, ProposalStatus, Stage, check_memo,
+    same_repository,
 };
 
 use crate::amend::amended_ids;
@@ -328,6 +330,9 @@ struct Judged {
     proposal: Proposal,
     /// A reject is staged; else an approve.
     rejects: bool,
+    /// The queue context the judge opened, which the run takes
+    /// (`write-cost` G4).
+    context: Cell<Option<QueueContext>>,
 }
 
 /// `request.id`'s row judged (see the module documentation): the first refusal
@@ -418,7 +423,11 @@ fn judged(
             proposal.updated_at
         ))));
     }
-    Ok(Ok(Judged { proposal, rejects }))
+    Ok(Ok(Judged {
+        proposal,
+        rejects,
+        context: Cell::new(Some(context)),
+    }))
 }
 
 /// Why `proposal` is no confirm's whatever is staged: another repository, a
@@ -644,27 +653,32 @@ fn staged_run(
     let hub = Some(HubRun {
         judged: &seen,
         rehearsal,
+        opened: Some(&judged.context),
     });
     let id = judged.proposal.id.clone();
     let (now, git) = (request.now.clone(), git.clone());
-    if judged.rejects {
-        let request = RejectRequest {
-            id,
-            reason: None,
-            now,
-            git,
-        };
-        run_reject(env, globals, &request, None, hub, consent)
-    } else {
-        let request = ApproveRequest {
-            id,
-            note: None,
-            now,
-            git,
-        };
-        let flags = ApproveFlags::default();
-        run_approve(env, globals, &request, &flags, false, hub, consent)
-    }
+    // The write findings this run computes are the login's alone (the
+    // check memo's D key).
+    check_memo::as_login(&request.entry.login, || {
+        if judged.rejects {
+            let request = RejectRequest {
+                id,
+                reason: None,
+                now,
+                git,
+            };
+            run_reject(env, globals, &request, None, hub, consent)
+        } else {
+            let request = ApproveRequest {
+                id,
+                note: None,
+                now,
+                git,
+            };
+            let flags = ApproveFlags::default();
+            run_approve(env, globals, &request, &flags, false, hub, consent)
+        }
+    })
 }
 
 #[cfg(test)]
@@ -880,6 +894,7 @@ mod tests {
                 Some(HubRun {
                     judged: &seen,
                     rehearsal: false,
+                    opened: None,
                 }),
                 consent,
             )
@@ -905,10 +920,51 @@ mod tests {
                 Some(HubRun {
                     judged: &seen,
                     rehearsal: false,
+                    opened: None,
                 }),
                 consent,
             )
         }
+    }
+
+    /// WC6, the daemon's half: inside a project's memo scope, `spec check`
+    /// and a trusting read leave the memo's entries as they were; the
+    /// confirm's read, a write's check, stores (the memo is reached). M: the
+    /// check route or a read consulting the memo: red.
+    #[test]
+    fn the_check_and_a_trusting_read_leave_the_memo_alone() {
+        use std::sync::Arc;
+
+        use specengine_store::CheckMemo;
+
+        let staged = staged("memo-reads");
+        let memo = Arc::new(CheckMemo::new());
+        let trust = crate::IndexTrust::new(staged.scratch.0.join("repo"));
+        check_memo::scoped(&memo, "-", || {
+            crate::freshness::trusted(&[&trust], || {
+                crate::check::check(
+                    &staged.env,
+                    &staged.globals,
+                    &crate::check::CheckRequest::default(),
+                )
+                .expect("a check");
+                crate::show(
+                    &staged.env,
+                    &staged.globals,
+                    &crate::ShowRequest {
+                        reference: id_of(&staged.scratch.0.join("repo"), "sht-back.md"),
+                        links: true,
+                        archive: false,
+                        bindings: false,
+                        history: false,
+                        git: staged.git.clone(),
+                    },
+                )
+                .expect("a read");
+            });
+        });
+        assert_eq!(memo.entries(), 0, "a read and the check store nothing");
+        assert_eq!(memo.hits() + memo.misses(), 0, "nor look anything up");
     }
 
     const MOVED: &str = "changed since it was judged";

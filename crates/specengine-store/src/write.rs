@@ -799,7 +799,7 @@ fn plan_file(
             FileRows::unreadable(
                 path,
                 size_of(&bytes),
-                "the spec parser panicked on this file".to_owned(),
+                crate::check::PARSER_PANICKED.to_owned(),
             ),
             stored,
         )),

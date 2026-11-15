@@ -119,7 +119,10 @@ fn store_floor_with(
     if step(FloorStep::SiblingWritten).is_break() {
         return Ok(None);
     }
-    let synced = file.sync_all();
+    let synced = {
+        let _cost = crate::cost::charge(crate::cost::Kind::Write);
+        file.sync_all()
+    };
     drop(file);
     if let Err(error) = synced {
         return Err(abandon(error));
@@ -147,9 +150,12 @@ fn store_floor_with(
     if step(FloorStep::SiblingRemoved).is_break() {
         return Ok(None);
     }
-    fs::File::open(dir)
-        .and_then(|handle| handle.sync_all())
-        .map_err(|error| StoreError::io(dir, error))?;
+    {
+        let _cost = crate::cost::charge(crate::cost::Kind::Write);
+        fs::File::open(dir)
+            .and_then(|handle| handle.sync_all())
+            .map_err(|error| StoreError::io(dir, error))?;
+    }
     if step(FloorStep::DirectorySynced).is_break() {
         return Ok(None);
     }

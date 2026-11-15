@@ -34,6 +34,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
 use specengine_cli::IndexTrust;
+use specengine_cli::check_memo::TurnHeld;
 use tokio::sync::OwnedMutexGuard;
 
 use crate::slow::{self, Exchange};
@@ -169,7 +170,8 @@ pub(crate) async fn take(project: &Project, holder: Holder) -> Held {
         exchange.seeking(ahead);
     }
     let guard = Arc::clone(&project.turn).lock_owned().await;
-    Held::new(guard, seat, project.trust.clone(), holder)
+    let memo = project.memo.hold_turn();
+    Held::new(guard, seat, project.trust.clone(), holder, memo)
 }
 
 /// `project`'s turn, on a blocking-pool thread (never the runtime's).
@@ -179,7 +181,8 @@ pub(crate) fn take_blocking(project: &Project, holder: Holder) -> Held {
         exchange.seeking(ahead);
     }
     let guard = Arc::clone(&project.turn).blocking_lock_owned();
-    Held::new(guard, seat, project.trust.clone(), holder)
+    let memo = project.memo.hold_turn();
+    Held::new(guard, seat, project.trust.clone(), holder, memo)
 }
 
 /// A held turn: dropped, its hold ends (its lines first, then the turn).
@@ -190,6 +193,9 @@ pub(crate) struct Held {
     /// The watcher's key of a pending `held` line.
     key: Option<(Instant, u64)>,
     _seat: Seat,
+    /// The project's check memo's turn (`write-cost`): a call runs
+    /// [`Held::within`] it on its own thread.
+    memo: TurnHeld,
     /// Last: released after [`Held`]'s own drop has written its line.
     _guard: OwnedMutexGuard<()>,
 }
@@ -200,6 +206,7 @@ impl Held {
         seat: Seat,
         trust: Option<Arc<IndexTrust>>,
         holder: Holder,
+        memo: TurnHeld,
     ) -> Self {
         let acquired = Instant::now();
         let at = SystemTime::now();
@@ -237,8 +244,15 @@ impl Held {
             watch,
             key,
             _seat: seat,
+            memo,
             _guard: guard,
         }
+    }
+
+    /// `run` on this thread inside the held turn: the project's check memo
+    /// reachable here alone while it runs.
+    pub(crate) fn within<T>(&self, run: impl FnOnce() -> T) -> T {
+        self.memo.within(run)
     }
 }
 

@@ -58,14 +58,13 @@ use specengine_core::intake::ANSWER_MAX;
 use specengine_core::proposal::{CommitFacts, PROPOSAL_TRAILER, TEXT_MAX_BYTES, commit_message};
 use specengine_core::record::{
     ACCEPTED, CANON_MAX_BYTES, Choice, RecordDefect, Slot, SlotValues, TEMPLATE_MAX_BYTES,
-    Template, canon_text, highest_record_number, is_escaped, reads_back_canon, record_defect,
-    record_title, refused_char,
+    Template, canon_text, is_escaped, reads_back_canon, record_defect, record_title, refused_char,
 };
 use specengine_model::{ParsedFile, grammar};
 use specengine_store::{
     CreateFileError, Decision, GitEnv, Intake, NamedBytes, Proposal, ProposalFinding,
-    ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries, SpecIndex as _,
-    WorkingTree, WorktreeGit, create_file, default_baseline, id_side, introduced_findings,
+    ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries, SetupFiles,
+    SpecIndex as _, SqliteIndex, WorkingTree, WorktreeGit, create_file, default_baseline, id_side,
     load_check,
 };
 
@@ -73,13 +72,14 @@ use crate::apply::{
     ApproveFlags, ApproveRequest, Consent, Made, complete, failed, made_anyway, noted,
     recorded_already, verify,
 };
+use crate::create::rows_findings;
 use crate::freshness::{After, post_commit_update};
 use crate::interpret::canon_target;
 use crate::location::open_index;
 use crate::outputs::{Beside, Outputs, names, outputs_clause};
 use crate::preflight::{
-    Placed, StepFailure, adds_file, completes_when, completing, place_step, place_unchanged,
-    recorded_project, trailer_lookup,
+    Placed, StepFailure, adds_file, completes_when, completing, open_place, place_step,
+    place_step_in, place_unchanged, recorded_project, trailer_lookup_in,
 };
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{
@@ -169,7 +169,9 @@ pub(crate) fn approve_record(
     // Its own commit completes it; another one with its trailer refuses a
     // new record. A lookup git cannot make is a note.
     let mut unknown = None;
-    match trailer_lookup(&request.git, context, proposal) {
+    // The recorded worktree opened once for the lookup and step 2.
+    let opened = open_place(&request.git, proposal, context);
+    match trailer_lookup_in(&request.git, context, proposal, opened.as_ref()) {
         Ok(found) => {
             if let Some(own) = completing(&found) {
                 // An open one holding a record (reopened after its step 7)
@@ -261,7 +263,7 @@ pub(crate) fn approve_record(
     };
 
     // Step 2: the place.
-    let Placed { git, top, head } = match place_step(&request.git, proposal) {
+    let Placed { git, top, head } = match place_step_in(&request.git, proposal, opened) {
         Ok(placed) => placed,
         Err(failure) => return before(context, failure, messages),
     };
@@ -322,21 +324,22 @@ pub(crate) fn approve_record(
                 let reason = no_prefix(&table.prefix, &recorded);
                 return before(context, StepFailure::cannot(3, reason), messages);
             };
-            let input = match index.index.indexed_input() {
-                Ok(input) => input,
-                Err(error) => {
-                    return before(context, StepFailure::cannot(4, error.to_string()), messages);
-                }
-            };
             // The data directory's side: its numbers alone count (the
             // `spec-ids` spec); an invalid floor file stores nothing. A
             // kept ID is written as kept, whatever its side: none is read.
-            let parsed = input.files.iter().filter_map(|file| file.parsed.as_ref());
+            // The corpus's highest by a query over the index's IDs, no
+            // decode (`write-cost` WC24).
             let corpus_max = if proposal.record.is_some() {
                 0
             } else {
                 match id_side(&context.data_dir) {
-                    Ok(side) => highest_record_number(parsed, spec, side),
+                    Ok(side) => match index.index.highest_record_number(spec, side) {
+                        Ok(highest) => highest,
+                        Err(error) => {
+                            let failure = StepFailure::cannot(4, error.to_string());
+                            return before(context, failure, messages);
+                        }
+                    },
                     Err(error) => {
                         let failure = StepFailure::cannot(4, error.to_string());
                         return before(context, failure, messages);
@@ -512,6 +515,7 @@ pub(crate) fn approve_record(
         return before(context, failure, messages);
     }
     let findings = introduced(
+        &index.index,
         &recorded,
         &tree,
         today,
@@ -1170,8 +1174,10 @@ fn parse_record(path: &str, text: &str, scheme: &specengine_model::IdScheme) -> 
 }
 
 /// The findings the record introduces in the recorded root's check, the
-/// tree checked as is and with it, never refusing.
+/// tree checked as is and with it, never refusing: over the rows of
+/// `index`, which step 4's walk updated (the walked rows of `write-cost`).
 fn introduced(
+    index: &SqliteIndex,
     recorded: &ProjectRoot,
     tree: &WorkingTree,
     today: &str,
@@ -1182,7 +1188,14 @@ fn introduced(
     let config = NamedBytes::read(CONFIG_FILE, &recorded.root.join(CONFIG_FILE));
     let baseline = default_baseline(&recorded.root);
     match load_check(&config, baseline.as_ref()) {
-        Ok(setup) => introduced_findings(tree, &setup, today, path, bytes),
+        Ok(setup) => {
+            let files = SetupFiles {
+                config: &config,
+                baseline: baseline.as_ref(),
+            };
+            let root = &recorded.root;
+            rows_findings(Some(index), tree, &setup, files, today, path, bytes, root)
+        }
         Err(report) => {
             messages.push(Message::Warning(format!(
                 "the record was not checked (no introduced findings shown): {}",

@@ -3795,3 +3795,141 @@ fn card_questions_h4_a_carded_decision_confirmed_on_a_hub_writes_its_why() {
         "{history:?}"
     );
 }
+
+// ------------------------------------------- write-cost WC5: another login
+
+/// 0.47.0's 409 when the question moved, whole.
+fn moved_line(id: &str) -> String {
+    format!("`{id}` {MOVED_LINE}; read it again; nothing changed")
+}
+
+/// docs/features/write-cost.md (RM-0125) WC5, another login's confirm commits
+/// between a read and its POST, a record taking the ID the read named: `lena`
+/// reads one question's confirm (DEC-100001), `kit` confirms another, whose
+/// record takes DEC-100001 first, on top of the base. `lena`'s POST of her
+/// read is 0.47.0's 409, nothing changed; her read after `kit`'s commit names
+/// DEC-100002 and lands on top of `kit`'s commit.
+#[test]
+fn wc5_another_logins_record_between_a_read_and_its_post_is_a_409() {
+    let setup = keep("wc5-record");
+    let first = asked(&setup, &["MEC-SPRINT"], "Does a sprint end at zero?");
+    let second = asked(&setup, &["MEC-STAMINA"], "Does stamina drain at rest?");
+    let desk = Desk::new(setup, KEEP);
+    desk.staged("lena", &first, &approved_choice());
+    desk.staged("kit", &second, &approved_choice());
+    let read = desk.read_ok("lena", &first);
+    let question = read["question"].as_str().expect("a question");
+    assert!(question.contains(" as DEC-100001 ("), "{question}");
+
+    let base = desk.head();
+    let document = desk.confirmed("kit", &second);
+    assert_eq!(document["record_id"], json!("DEC-100001"), "{document}");
+    let kits = desk.head();
+    assert_eq!(desk.parents(&kits), [base], "kit's commit on the base");
+
+    let ids = [first.as_str(), second.as_str()];
+    let before = desk.left(&ids);
+    let reply = desk.confirm("lena", &first, &read);
+    assert_says(&reply, 409, &moved_line(&first), "another login's record");
+    assert_eq!(desk.left(&ids), before, "nothing changed");
+
+    let fresh = desk.read_ok("lena", &first);
+    let text = fresh["question"].as_str().expect("a question");
+    assert!(
+        text.contains(" as DEC-100002 ("),
+        "the read shows kit's commit: {text}"
+    );
+    let document = desk.confirm("lena", &first, &fresh).status(200).json();
+    assert_eq!(document["record_id"], json!("DEC-100002"), "{document}");
+    assert_eq!(document["decided_by"], json!(LENA), "{document}");
+    let head = desk.head();
+    assert_eq!(document["applied_commit"], json!(head), "{document}");
+    assert_eq!(desk.parents(&head), [kits], "lena's commit on kit's");
+}
+
+/// WC5, another login's confirm commits between a read and its POST, nothing
+/// in the read's question moving: `mira` reads an update of the sprint, `kit`
+/// confirms an update of the stamina file; `mira`'s POST of her read commits,
+/// as 0.47.0's does, its parent `kit`'s commit.
+#[test]
+fn wc5_another_logins_commit_on_another_file_lets_the_post_commit() {
+    let setup = keep("wc5-other-file");
+    let sprint = reworded(
+        &setup,
+        "EDGE-SPRINT-EMPTY",
+        "the sprint ends;",
+        "the sprint ends at once;",
+    );
+    let stamina = reworded(
+        &setup,
+        "RULE-STAM-REGEN",
+        "Base rate 10 units/s,",
+        "Base rate 10 units/s at rest,",
+    );
+    let desk = Desk::new(setup, KEEP);
+    desk.staged("mira", &sprint, &approved_choice());
+    desk.staged("kit", &stamina, &approved_choice());
+    let read = desk.read_ok("mira", &sprint);
+
+    let base = desk.head();
+    let document = desk.confirmed("kit", &stamina);
+    assert_eq!(document["status"], json!("applied"), "{document}");
+    let kits = desk.head();
+    assert_eq!(desk.parents(&kits), [base], "kit's commit on the base");
+
+    let document = desk.confirm("mira", &sprint, &read).status(200).json();
+    assert_eq!(document["status"], json!("applied"), "{document}");
+    assert_eq!(document["decided_by"], json!(MIRA), "{document}");
+    let head = desk.head();
+    assert_eq!(document["applied_commit"], json!(head), "{document}");
+    assert_eq!(desk.parents(&head), [kits], "mira's commit on kit's");
+    assert!(
+        bytes(desk.root(), SPRINT_MD)
+            .windows(b"the sprint ends at once;".len())
+            .any(|window| window == b"the sprint ends at once;"),
+        "mira's text landed"
+    );
+    assert!(
+        bytes(desk.root(), STAMINA_MD)
+            .windows(b"Base rate 10 units/s at rest,".len())
+            .any(|window| window == b"Base rate 10 units/s at rest,"),
+        "kit's text kept"
+    );
+}
+
+/// WC5, one item confirmed by two logins: `mira` and `lena` both read it,
+/// `mira`'s POST commits; `lena`'s POST of her read gets 0.47.0's refusal, the
+/// 409 naming `mira`'s commit, and nothing changes.
+#[test]
+fn wc5_one_item_confirmed_by_two_logins_refuses_the_second() {
+    let setup = keep("wc5-two-logins");
+    let id = reworded(
+        &setup,
+        "EDGE-SPRINT-EMPTY",
+        "the sprint ends;",
+        "the sprint ends at once;",
+    );
+    let desk = Desk::new(setup, KEEP);
+    desk.staged("mira", &id, &approved_choice());
+    let by_mira = desk.read_ok("mira", &id);
+    let by_lena = desk.read_ok("lena", &id);
+
+    let document = desk.confirm("mira", &id, &by_mira).status(200).json();
+    let commit = document["applied_commit"]
+        .as_str()
+        .expect("an applied commit")
+        .to_owned();
+    assert_eq!(desk.head(), commit, "mira's commit");
+    let ids = [id.as_str()];
+    let before = desk.left(&ids);
+
+    let reply = desk.confirm("lena", &id, &by_lena);
+    assert_says(
+        &reply,
+        409,
+        &format!("`{id}` is already applied: commit {commit}; nothing changed"),
+        "the second login",
+    );
+    assert_eq!(desk.left(&ids), before, "nothing changed");
+    assert_eq!(desk.hub.proposal(&id)["decided_by"], json!(MIRA));
+}

@@ -146,8 +146,8 @@ use crate::outputs::{self, Beside, Outputs};
 use crate::package::position;
 use crate::preflight::{
     History, LookupError, Missing, Prepared, StepFailure, StepRead, TrailerCommit, completes_when,
-    completing, history, place_step, place_unchanged, prepare_spanned, recorded_project,
-    recorded_root, trailer_lookup, trailer_lookup_here,
+    completing, history, open_place, place_step, place_unchanged, prepare_spanned,
+    recorded_project, recorded_root, trailer_lookup, trailer_lookup_here, trailer_lookup_in,
 };
 use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, checked_now,
@@ -256,13 +256,41 @@ pub type Consent<'a> = &'a mut dyn FnMut(&str) -> bool;
 
 /// A hub's run of an approve or a reject ([`crate::confirm`], task spec
 /// `hub-confirm`); a terminal's has none.
-#[derive(Debug, Clone, Copy)]
 pub(crate) struct HubRun<'a> {
     /// The state the confirm judged. The row this run reads must be it, so
     /// no row but the judged one is ever asked, staged value included.
     pub judged: &'a Seen,
     /// The read's run: [`failed`] logs nothing, so a read writes no event.
     pub rehearsal: bool,
+    /// The queue context the confirm opened to judge the row, taken by the
+    /// run instead of opening another (`write-cost` G4); `None` or empty:
+    /// the run opens its own.
+    pub opened: Option<&'a std::cell::Cell<Option<QueueContext>>>,
+}
+
+impl Clone for HubRun<'_> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Copy for HubRun<'_> {}
+
+impl std::fmt::Debug for HubRun<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HubRun")
+            .field("judged", self.judged)
+            .field("rehearsal", &self.rehearsal)
+            .field("opened", &self.opened.is_some())
+            .finish()
+    }
+}
+
+impl HubRun<'_> {
+    /// The context the confirm opened, once.
+    fn opened(&self) -> Option<QueueContext> {
+        self.opened.and_then(std::cell::Cell::take)
+    }
 }
 
 impl HubRun<'_> {
@@ -592,7 +620,11 @@ pub(crate) fn run_approve_as(
     let now = checked_now(&request.now)?;
     let id = written_id(&request.id)?;
     // The delegation marks this run's queue handle while the run holds it.
-    let mut context = Delegated::over(open_context(env, globals, &request.git)?, delegation);
+    let opened = match hub.and_then(|hub| hub.opened()) {
+        Some(opened) => opened,
+        None => open_context(env, globals, &request.git)?,
+    };
+    let mut context = Delegated::over(opened, delegation);
     context.rehearsal = hub.is_some_and(|hub| hub.rehearsal);
     context.hub = hub.is_some();
     let Some(id) = id else {
@@ -699,7 +731,9 @@ pub(crate) fn run_approve_as(
     // shown before the consent prompt too, or in the reason of an exit 2 at
     // steps 2–6, which has no notes).
     let mut unknown = None;
-    match trailer_lookup(&request.git, &context, &proposal) {
+    // The recorded worktree opened once for the lookup and step 2.
+    let opened = open_place(&request.git, &proposal, &context);
+    match trailer_lookup_in(&request.git, &context, &proposal, opened.as_ref()) {
         Ok(found) => {
             if let Some(own) = completing(&found) {
                 let commit = own.commit.clone();
@@ -752,6 +786,7 @@ pub(crate) fn run_approve_as(
         &mut messages,
         &mut steps,
         editorial,
+        opened,
     )
     .and_then(|prepared| match prepared.revisions.refusal() {
         Some(failure) => Err(failure),
@@ -1980,7 +2015,10 @@ pub(crate) fn run_reject(
         ));
     }
     let id = written_id(&request.id)?;
-    let mut context = open_context(env, globals, &request.git)?;
+    let mut context = match hub.and_then(|hub| hub.opened()) {
+        Some(opened) => opened,
+        None => open_context(env, globals, &request.git)?,
+    };
     let Some(id) = id else {
         return Ok(ProposalOutcome::refused(
             COMMAND,

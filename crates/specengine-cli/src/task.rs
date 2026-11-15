@@ -839,6 +839,7 @@ fn link_context(place: LinkPlace, git_env: &GitEnv) -> Result<QueueContext, CliE
         queue: place.queue,
         git,
         common_dir,
+        top: None,
         rehearsal: false,
         hub: false,
     })

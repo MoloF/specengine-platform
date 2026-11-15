@@ -75,6 +75,7 @@
 //! variables and with optional locks off: nothing is written in the
 //! worktree or its git dir.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
@@ -91,8 +92,8 @@ use specengine_core::proposal::{LOCK_MODE_TRAILER, LOCK_TRAILER, PROPOSAL_TRAILE
 use specengine_model::node::Node;
 use specengine_model::{IdScheme, ParsedFile, grammar};
 use specengine_store::{
-    GitEnv, GitError, KindFamily, Merge, Place, Proposal, Source as _, SpecIndex as _, WorkingTree,
-    WorktreeGit, same_repository, span_hash, update_file,
+    GitEnv, GitError, KindFamily, Merge, Place, Proposal, Source as _, SpecIndex as _, SqliteIndex,
+    StoreError, WorkingTree, WorktreeGit, same_repository, span_hash, update_file,
 };
 
 use crate::create::{Corpus, canonical_in};
@@ -154,8 +155,12 @@ pub(crate) struct StepRead {
     /// resolved node), once step 4 resolved the target; `None` before.
     pub span: Option<String>,
     /// The recorded root and its index as step 4 refreshed it; `None` when
-    /// a step stopped before.
+    /// a step stopped before, or when nothing asked for it.
     pub corpus: Option<RecordedCorpus>,
+    /// The caller reads [`StepRead::corpus`] (a review's notes): step 4
+    /// decodes the whole recorded index for it. Else a plain update's step
+    /// 4 decodes only its target's key closure (`write-cost` WC24).
+    pub want_corpus: bool,
 }
 
 /// A proposal's recorded root and its refreshed index, as the check's
@@ -212,7 +217,9 @@ impl StepFailure {
 /// `decision-staging`, "Staleness") and the recorded root's index refreshed
 /// at step 4 (the review's note on an update in a decision's `canon:`).
 /// `editorial`: `spec approve --editorial` (step 3 reads `spec.lock`, step
-/// 6 keeps revisions).
+/// 6 keeps revisions). `opened`: the recorded worktree as the call's trailer
+/// lookup opened it (step 2 takes it).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_spanned(
     env: &Env,
     git_env: &GitEnv,
@@ -221,10 +228,11 @@ pub(crate) fn prepare_spanned(
     messages: &mut Vec<Message>,
     read: &mut StepRead,
     editorial: bool,
+    opened: Option<OpenedPlace>,
 ) -> Result<Prepared, StepFailure> {
     let place = &proposal.place;
     let path = proposal.target_path.as_str();
-    let Placed { git, top, head } = place_step(git_env, proposal)?;
+    let Placed { git, top, head } = place_step_in(git_env, proposal, opened)?;
 
     // Step 3: the file.
     let root = if place.root_rel.is_empty() {
@@ -297,17 +305,29 @@ pub(crate) fn prepare_spanned(
     let (_, warnings) = refresh(&mut index.index, &recorded, false)
         .map_err(|error| StepFailure::cannot(4, error.message))?;
     messages.extend(warnings);
-    let input = index
-        .index
-        .indexed_input()
-        .map_err(|error| StepFailure::cannot(4, error.to_string()))?;
-    let input = &read
-        .corpus
-        .insert(RecordedCorpus {
-            recorded: recorded.clone(),
-            input,
-        })
-        .input;
+    // The whole recorded index is decoded only where a later read takes it
+    // (a review's notes, an interpretation's decision, a create's new IDs);
+    // a plain update's target resolves over its key closure, which answers
+    // as the whole index does.
+    let whole = read.want_corpus || proposal.interpretation.is_some() || proposal.kind.adds_nodes();
+    let closure;
+    let input: &CheckInput = if whole {
+        let input = index
+            .index
+            .indexed_input()
+            .map_err(|error| StepFailure::cannot(4, error.to_string()))?;
+        &read
+            .corpus
+            .insert(RecordedCorpus {
+                recorded: recorded.clone(),
+                input,
+            })
+            .input
+    } else {
+        closure = target_closure(&index.index, &recorded, path, &proposal.target_id)
+            .map_err(|error| StepFailure::cannot(4, error.to_string()))?;
+        &closure
+    };
     let resolver = Resolver::new(input, scheme, &recorded.config.paths);
     let target = proposal.target_id.as_str();
     let ord = if is_path_target(target) {
@@ -483,26 +503,82 @@ pub(crate) struct Placed {
     pub head: String,
 }
 
+/// Git in a proposal's recorded worktree, its top and its common dir read
+/// in one process, opened once for a call whose trailer lookup and step 2
+/// share it (`write-cost` G3, G5).
+#[derive(Debug, Clone)]
+pub(crate) struct OpenedPlace {
+    git: WorktreeGit,
+    /// Canonical.
+    top: PathBuf,
+    /// Canonical.
+    common: PathBuf,
+}
+
+/// The recorded worktree of `proposal` opened ([`OpenedPlace`]): when it is
+/// the top `context` read for the project root under the same variables,
+/// that top and common dir; else one `rev-parse` of its own. `None` when it
+/// is no directory, git cannot start in it or that `rev-parse` fails: each
+/// step then reads as it always did, its own words kept.
+pub(crate) fn open_place(
+    git_env: &GitEnv,
+    proposal: &Proposal,
+    context: &QueueContext,
+) -> Option<OpenedPlace> {
+    let worktree = Path::new(&proposal.place.worktree);
+    if !worktree.is_dir() {
+        return None;
+    }
+    let git = WorktreeGit::new(worktree, git_env).ok()?;
+    if let Some(top) = &context.top
+        && same_repository(&proposal.place.worktree, top)
+        && git.vars().eq(context.git.vars())
+    {
+        return Some(OpenedPlace {
+            git,
+            top: top.clone(),
+            common: context.common_dir.clone(),
+        });
+    }
+    let (top, common) = git.top_and_common_dir().ok()?;
+    Some(OpenedPlace { git, top, common })
+}
+
 /// Apply step 2: the recorded worktree exists, its top and common dir as
 /// recorded, `HEAD` on the recorded branch with a commit, no operation in
 /// progress; else exit 2.
 pub(crate) fn place_step(git_env: &GitEnv, proposal: &Proposal) -> Result<Placed, StepFailure> {
+    place_step_in(git_env, proposal, None)
+}
+
+/// [`place_step`] on the worktree the call opened, when it did.
+pub(crate) fn place_step_in(
+    git_env: &GitEnv,
+    proposal: &Proposal,
+    opened: Option<OpenedPlace>,
+) -> Result<Placed, StepFailure> {
     let place = &proposal.place;
     let worktree = Path::new(&place.worktree);
     let at = |error: &dyn std::fmt::Display| {
         StepFailure::cannot(2, format!("git in {}: {error}", place.worktree))
     };
-    if !worktree.is_dir() {
-        return Err(StepFailure::cannot(
-            2,
-            format!(
-                "the proposal's worktree {} no longer exists",
-                place.worktree
-            ),
-        ));
-    }
-    let git = WorktreeGit::new(worktree, git_env).map_err(|error| at(&error))?;
-    let top = git.top().map_err(|error| at(&error))?;
+    let (git, top, common) = match opened {
+        Some(OpenedPlace { git, top, common }) => (git, top, common),
+        None => {
+            if !worktree.is_dir() {
+                return Err(StepFailure::cannot(
+                    2,
+                    format!(
+                        "the proposal's worktree {} no longer exists",
+                        place.worktree
+                    ),
+                ));
+            }
+            let git = WorktreeGit::new(worktree, git_env).map_err(|error| at(&error))?;
+            let (top, common) = git.top_and_common_dir().map_err(|error| at(&error))?;
+            (git, top, common)
+        }
+    };
     if !same_repository(&place.worktree, &top) {
         return Err(StepFailure::cannot(
             2,
@@ -513,7 +589,6 @@ pub(crate) fn place_step(git_env: &GitEnv, proposal: &Proposal) -> Result<Placed
             ),
         ));
     }
-    let common = git.common_dir().map_err(|error| at(&error))?;
     if !same_repository(&place.git_common_dir, &common) {
         return Err(StepFailure::cannot(
             2,
@@ -561,6 +636,68 @@ pub(crate) fn place_step(git_env: &GitEnv, proposal: &Proposal) -> Result<Placed
         .map_err(|error| at(&error))?
         .ok_or_else(|| StepFailure::cannot(2, format!("`{}` has no commit", place.branch)))?;
     Ok(Placed { git, top, head })
+}
+
+/// The stored files a plain update's step 4 resolves over, from one index
+/// snapshot: the target's file `path`, then for a target by ID its
+/// closure, rounds from there each resolving the target over the files so
+/// far and adding the holders of every key the lookup read (`edge_names`),
+/// until none joins. A resolution over it equals the whole index's: every
+/// key it read has every holder in it.
+fn target_closure(
+    index: &SqliteIndex,
+    recorded: &ProjectRoot,
+    path: &str,
+    target: &str,
+) -> Result<CheckInput, StoreError> {
+    let scheme = &recorded.config.scheme;
+    let paths = &recorded.config.paths;
+    let snapshot = index.snapshot()?;
+    let reference = (!is_path_target(target))
+        .then(|| grammar::parse_reference(target, 0, scheme))
+        .flatten()
+        .map(|found| found.reference);
+    let mut files: BTreeMap<String, specengine_core::check::CheckFile> = BTreeMap::new();
+    let mut tried: BTreeSet<String> = BTreeSet::new();
+    let mut queried: BTreeSet<String> = BTreeSet::new();
+    let mut fresh: Vec<String> = vec![path.to_owned()];
+    loop {
+        let named: Vec<&str> = fresh
+            .iter()
+            .map(String::as_str)
+            .filter(|path| tried.insert((*path).to_owned()))
+            .collect();
+        for file in snapshot.decode(&named)?.input.files {
+            files.insert(file.path.clone(), file);
+        }
+        let Some(reference) = &reference else {
+            break;
+        };
+        let round = CheckInput {
+            files: files.values().cloned().collect(),
+            problems: Vec::new(),
+        };
+        let (_, keys) = Resolver::new(&round, scheme, paths).resolve_detached_reading(reference);
+        fresh.clear();
+        for key in keys {
+            let text = key.text();
+            if queried.insert(text.clone()) {
+                fresh.extend(
+                    snapshot
+                        .holders(&text)?
+                        .into_iter()
+                        .filter(|holder| !tried.contains(holder)),
+                );
+            }
+        }
+        if fresh.is_empty() {
+            break;
+        }
+    }
+    Ok(CheckInput {
+        files: files.into_values().collect(),
+        problems: Vec::new(),
+    })
 }
 
 /// Step 4 for a target by ID: held by one file in the refreshed index,
@@ -1024,14 +1161,28 @@ pub(crate) fn history<'c>(
     context: &'c QueueContext,
     proposal: &Proposal,
 ) -> Result<History<'c>, String> {
+    history_in(git_env, context, proposal, None)
+}
+
+/// [`history`] on the worktree the call opened, when it did.
+fn history_in<'c>(
+    git_env: &GitEnv,
+    context: &'c QueueContext,
+    proposal: &Proposal,
+    opened: Option<&OpenedPlace>,
+) -> Result<History<'c>, String> {
     let place = &proposal.place;
     let worktree = Path::new(&place.worktree);
     // The repository the recorded path belongs to now, when another one.
     let mut other = None;
-    if worktree.is_dir()
-        && let Ok(git) = WorktreeGit::new(worktree, git_env)
-        && let Ok(common) = git.common_dir()
-    {
+    let found = match opened {
+        Some(opened) => Some((opened.git.clone(), opened.common.clone())),
+        None if worktree.is_dir() => WorktreeGit::new(worktree, git_env)
+            .ok()
+            .and_then(|git| git.common_dir().ok().map(|common| (git, common))),
+        None => None,
+    };
+    if let Some((git, common)) = found {
         if same_repository(&place.git_common_dir, &common) {
             return Ok(History::Recorded(git));
         }
@@ -1067,7 +1218,18 @@ pub(crate) fn trailer_lookup(
     context: &QueueContext,
     proposal: &Proposal,
 ) -> Result<Vec<TrailerCommit>, LookupError> {
-    let history = history(git_env, context, proposal).map_err(LookupError::failed)?;
+    trailer_lookup_in(git_env, context, proposal, None)
+}
+
+/// [`trailer_lookup`] in the worktree the call opened, when it did
+/// (`write-cost` G5: step 2 takes the same).
+pub(crate) fn trailer_lookup_in(
+    git_env: &GitEnv,
+    context: &QueueContext,
+    proposal: &Proposal,
+    opened: Option<&OpenedPlace>,
+) -> Result<Vec<TrailerCommit>, LookupError> {
+    let history = history_in(git_env, context, proposal, opened).map_err(LookupError::failed)?;
     let config_now = || history.config_now(context, proposal);
     let then = approve_or_reject(proposal);
     trailer_commits(

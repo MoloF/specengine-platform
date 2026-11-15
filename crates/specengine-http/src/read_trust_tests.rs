@@ -60,6 +60,7 @@ impl Served {
             trust: Some(Arc::clone(&trust)),
             lines: Default::default(),
             seats: Default::default(),
+            memo: Default::default(),
         });
         (project, trust)
     }

@@ -82,7 +82,7 @@ use specengine_store::{
 
 use crate::cap::SHOW_TAIL_NAMES;
 use crate::card::not_a_card;
-use crate::corpus::{Admission, indexed};
+use crate::corpus::Admission;
 use crate::create::unheld_findings;
 use crate::proposals::{
     checked_now, escaped_error, finding_line, more_findings_note, open_context, queue_cannot,
@@ -784,7 +784,8 @@ fn run_intake(
         )));
     }
     let mut messages = Vec::new();
-    let input = indexed(env, &context.project, &mut messages, false)?;
+    let mut open = crate::location::open_index(env, &context.project)?;
+    let input = crate::corpus::indexed_in(&mut open.index, &context.project, &mut messages, false)?;
 
     // 3. The nodes, each once.
     let mut targets: Vec<IntakeTarget> = Vec::with_capacity(item.node_ids.len());
@@ -852,6 +853,7 @@ fn run_intake(
             }
         };
         match checked_update(
+            Some(&open.index),
             &context.project,
             &input,
             written,

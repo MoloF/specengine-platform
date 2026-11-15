@@ -3,7 +3,7 @@ class: spec
 status: shipped
 shipped: 2026-11-14
 scope: [ui]
-ref: RM-0116; the owner's report of 2026-11-14 from the hosted hub (0.46.0, project `dorm`), written in Russian, paraphrased; scheduled the same day ("do all the fixes and release a new version"); patch release 0.46.1
+ref: RM-0116; the owner's report of 2026-11-14 from the hosted hub (0.46.0, his game project), written in Russian, paraphrased; scheduled the same day ("do all the fixes and release a new version"); patch release 0.46.1
 adrs: []
 ---
 

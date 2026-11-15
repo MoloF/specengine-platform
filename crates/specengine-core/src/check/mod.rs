@@ -15,6 +15,10 @@
 //! (judged as `enforce` without one), and exit 2 means the check could not
 //! vouch for the corpus.
 //!
+//! - [`affected`] — the files a write's check judges again and the global
+//!   passes it reruns (`write-cost`), over a corpus's [`Dependents`]; [`AsIs`]
+//!   the as-is findings a memo keeps; [`counts`] the engine runs and parses
+//!   so far;
 //! - [`config`] — `[budgets]` (caps in bytes), `[classes]` (contracts),
 //!   `[check]` (mode, the project's process rules `[[check.rules]]`, read
 //!   in `rules_toml`), `[[generators]]` (the generator registry);
@@ -63,11 +67,13 @@
 //!   run against `HEAD` reads it (the store's `--staged` and `--changed`),
 //!   [`add_findings`] adds its findings to the checked run's report.
 
+mod affected;
 pub mod base;
 pub mod baseline;
 mod bundle;
 pub mod config;
-mod engine;
+mod counts;
+pub(crate) mod engine;
 mod generated;
 mod graph;
 mod health;
@@ -84,6 +90,7 @@ mod text;
 mod unapplied;
 mod working_set;
 
+pub use affected::{Affected, AsIs, Dependents, affected, found_bytes};
 pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use bundle::{
@@ -94,8 +101,11 @@ pub use config::{
     DEFAULT_GATE, DocClass, Generator, Mode, RoadmapView, Shard, ShardKind, bundle_node_from_toml,
     bundle_task_from_toml, check_config_from_toml,
 };
+pub use counts::{RunCounts, counts, note_parse};
+pub use engine::Globals;
 pub use engine::{PARSER_SEVERITY, add_findings, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};
+pub use graph::depends_targets;
 pub(crate) use health::documents_selected;
 pub use health::{BoundCandidate, bound_candidates};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};

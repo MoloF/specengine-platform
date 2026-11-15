@@ -41,11 +41,18 @@ const SUPERSEDES: &str = "supersedes";
 /// The link type of the cycle rule.
 const DEPENDS_ON: &str = "depends_on";
 
-/// The three warnings.
-pub(crate) fn run(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Finding>) {
+/// The three warnings; `depends-cycle` only with `cycles`.
+pub(crate) fn run(
+    corpus: &Corpus<'_>,
+    scheme: &IdScheme,
+    cycles: bool,
+    findings: &mut Vec<Finding>,
+) {
     mention_dangling(corpus, findings);
     ref_superseded(corpus, scheme, findings);
-    depends_cycle(corpus, findings);
+    if cycles {
+        depends_cycle(corpus, findings);
+    }
 }
 
 /// The inline mentions of a parse, in text order.
@@ -82,6 +89,9 @@ pub(super) fn live_sources<'c, 'a>(
 
 fn mention_dangling(corpus: &Corpus<'_>, findings: &mut Vec<Finding>) {
     for (index, parsed) in live_sources(corpus) {
+        if !corpus.kept(index) {
+            continue;
+        }
         let text = &corpus.texts[index];
         for reference in inline_mentions(parsed) {
             let written = written(text, reference);
@@ -166,6 +176,9 @@ fn ref_superseded(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Fin
         return;
     }
     for (index, parsed) in live_sources(corpus) {
+        if !corpus.kept(index) {
+            continue;
+        }
         let text = &corpus.texts[index];
         let from = corpus.paths[index];
         // An accepted decision is never edited: dated before X, it cited
@@ -289,6 +302,48 @@ fn depends_cycle(corpus: &Corpus<'_>, findings: &mut Vec<Finding>) {
             format!("`{DEPENDS_ON}` forms a cycle through {subject}"),
         ));
     }
+}
+
+/// The `depends_on` targets of the live files `only` names, by path, each
+/// resolved as `depends-cycle` resolves it over `input` (every holder, the
+/// section ignored, no name fallback): the edges a write's check follows
+/// out of the files it judges (`write-cost`).
+pub fn depends_targets(
+    input: &CheckInput,
+    scheme: &IdScheme,
+    paths: &Paths,
+    only: &std::collections::BTreeSet<&str>,
+) -> std::collections::BTreeMap<String, Vec<String>> {
+    let mut files: Vec<&super::input::CheckFile> = input.files.iter().collect();
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    let resolver = Resolver::of_sorted(&files, scheme, &paths.features);
+    let mut targets = std::collections::BTreeMap::new();
+    for file in &files {
+        if !only.contains(file.path.as_str()) {
+            continue;
+        }
+        let Some(parsed) = file.parsed.as_ref().filter(|parsed| is_live(parsed)) else {
+            continue;
+        };
+        let Some(list) = readable_fields(parsed)
+            .and_then(|fields| fields.links.as_ref())
+            .and_then(|links| links.get(DEPENDS_ON))
+        else {
+            continue;
+        };
+        let mut reached: Vec<String> = Vec::new();
+        for reference in list {
+            if let Some(holders) = resolver.holders_of(&file.path, reference, "") {
+                reached.extend(
+                    holders
+                        .into_iter()
+                        .map(|holder| resolver.paths()[holder].to_owned()),
+                );
+            }
+        }
+        targets.insert(file.path.clone(), reached);
+    }
+    targets
 }
 
 /// `parent-cycle`: one warning per `parent:` cycle of the read commands'

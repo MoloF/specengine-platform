@@ -1635,6 +1635,34 @@ pub trait ProposalQueue {
     fn events(&self) -> Result<Vec<Event>, QueueError>;
 }
 
+/// A queue write transaction, its time charged to the call's `write_ms`
+/// from begin to commit (or drop).
+pub(crate) struct WriteTx<'c> {
+    tx: Transaction<'c>,
+    _cost: crate::cost::Charge,
+}
+
+impl WriteTx<'_> {
+    /// Commits; the charge ends with it.
+    pub(crate) fn commit(self) -> rusqlite::Result<()> {
+        self.tx.commit()
+    }
+}
+
+impl<'c> std::ops::Deref for WriteTx<'c> {
+    type Target = Transaction<'c>;
+
+    fn deref(&self) -> &Transaction<'c> {
+        &self.tx
+    }
+}
+
+impl std::ops::DerefMut for WriteTx<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tx
+    }
+}
+
 /// The queue in the project's SQLite database (the index's file).
 pub struct SqliteQueue {
     conn: Connection,
@@ -1860,11 +1888,16 @@ impl SqliteQueue {
         Ok(())
     }
 
-    fn write(&mut self) -> Result<Transaction<'_>, QueueError> {
-        Ok(self
-            .conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .db()?)
+    fn write(&mut self) -> Result<WriteTx<'_>, QueueError> {
+        // Charged from begin to commit (`write-cost`, `write_ms`).
+        let cost = crate::cost::charge(crate::cost::Kind::Write);
+        Ok(WriteTx {
+            tx: self
+                .conn
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .db()?,
+            _cost: cost,
+        })
     }
 
     /// The project's rows `filter`'s repository admits, by ID number, in

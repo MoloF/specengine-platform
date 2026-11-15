@@ -24,9 +24,14 @@
 //!   "The base"): the unpatched run, no baseline, is the base; only the
 //!   findings it lacks are kept. Never a refusal (ADR-0012).
 
+use std::collections::BTreeSet;
+
 use specengine_model::{IdScheme, Node, ParsedFile, RefForm, Reference, Span};
 
 use crate::Paths;
+use crate::check::engine::{Globals, Rules, mark_debt, run_over};
+use crate::check::report::sort_findings;
+use crate::check::{Affected, AsIs, Dependents, affected};
 // Under another name: core's sources are scanned for file access by a text
 // match that a `CheckFile` path call would trip (`specengine-eval`'s build
 // graph test).
@@ -457,6 +462,76 @@ impl PatchCheck<'_> {
             .into_iter()
             .filter(|finding| finding.introduced == Some(true))
             .collect()
+    }
+
+    /// [`PatchCheck::introduced`] over the files the change reaches
+    /// ([`affected`]): the same findings in the same order, the as-is side
+    /// taken from `as_is` where it holds them and put there where it does
+    /// not. `input` holds every file of the set with its bytes, and every
+    /// holder of every key the set's files read, on either side.
+    pub fn introduced_over(
+        &self,
+        input: &CheckInput,
+        path: &str,
+        patched: Vec<u8>,
+        dependents: &dyn Dependents,
+        as_is: &mut AsIs,
+    ) -> Vec<Finding> {
+        let patched = InputEntry::parse(path, patched, self.scheme);
+        let reach = affected(input, self.config, self.paths, path, &patched, dependents);
+        self.introduced_in(input, patched, &reach, as_is)
+    }
+
+    /// [`PatchCheck::introduced_over`] with the patched file parsed and its
+    /// set found.
+    pub fn introduced_in(
+        &self,
+        input: &CheckInput,
+        patched: InputEntry,
+        reach: &Affected,
+        as_is: &mut AsIs,
+    ) -> Vec<Finding> {
+        let rules = Rules {
+            scheme: self.scheme,
+            paths: self.paths,
+            config: self.config,
+        };
+        let lacking: BTreeSet<String> = reach
+            .paths
+            .iter()
+            .filter(|path| !as_is.by_path.contains_key(*path))
+            .cloned()
+            .collect();
+        let globals = as_is.lacking(reach.globals);
+        if !lacking.is_empty() || globals != Globals::default() {
+            let found = run_over(input, rules, &lacking, globals);
+            as_is.absorb(found, &lacking, globals);
+        }
+        let known: BTreeSet<(&str, &str, &str)> = as_is
+            .judged(reach)
+            .map(|finding| {
+                (
+                    finding.code.as_str(),
+                    finding.path.as_str(),
+                    finding.subject.as_str(),
+                )
+            })
+            .collect();
+        let patched_input = with_file(input, patched);
+        let mut found = run_over(&patched_input, rules, &reach.paths, reach.globals);
+        mark_debt(&mut found, self.baseline, self.today);
+        found.retain(|finding| {
+            !known.contains(&(
+                finding.code.as_str(),
+                finding.path.as_str(),
+                finding.subject.as_str(),
+            ))
+        });
+        for finding in &mut found {
+            finding.introduced = Some(true);
+        }
+        sort_findings(&mut found);
+        found
     }
 }
 

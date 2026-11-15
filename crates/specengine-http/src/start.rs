@@ -6,6 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use specengine_cli::{CheckMemo, check_memo};
 use specengine_cli::{
     CliError, Env, Globals, IndexTrust, ProjectRoot, checked_data_dir, discover, prepared_data_dir,
 };
@@ -32,6 +33,10 @@ pub(crate) struct Project {
     pub lines: Lines,
     /// The turn's holders and waiters now (a slow line's `ahead`).
     pub seats: Seats,
+    /// A write's check, remembered for the process's life (`write-cost`:
+    /// the as-is and the introduced findings), reached only inside the
+    /// turn, entered at the turn sites with the call's login.
+    pub memo: Arc<CheckMemo>,
 }
 
 impl Project {
@@ -89,6 +94,7 @@ pub(crate) fn served(env: &Env, roots: &[PathBuf]) -> Result<Served, String> {
                 trust: None,
                 lines: Lines::default(),
                 seats: Seats::default(),
+                memo: Arc::new(CheckMemo::turned(check_memo::BUDGET)),
             },
         ));
         roots_found.push((given.clone(), found));

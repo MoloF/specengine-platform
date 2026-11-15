@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-15
 ---
 
 # Read freshness: the stat key, and a hub's trusted index
@@ -50,7 +50,7 @@ The code index keys on content, never a stat (`symbol-index.md` "Cache key and c
 - **R9.** A walk under a matching trust clears the mark and counts itself as it begins; success sets `walked` and `since` (its start), failure or a panic (`Walk`'s drop) the mark, so a doubt raised meanwhile survives.
 - **Doubt (T4)**, the dirty mark: `IndexTrust::doubt`, CLI `freshness::doubt(root)`, `doubt_in_scope()` (every trust in scope); outside a scope, nothing. Raised by a failed post-commit `update_paths` (`post_commit_update`: apply, completion, create, decide; R10); a merge's failed diff, discovery, open or update, skipped non-UTF-8 names, a root with no path from the top (R11); a failed fast-forward, every served root (R12); a trusted read's T5 or Q7 mismatch, `covers` failure or attempt store error, once per read (R13); a refused confirm (http `confirm.rs`: it may have written); a call that panicked or could not run (`answer.rs`, `HubSeam::turn`, MCP's `call` and resources).
 - **Writers keep the index in the turn.** A confirm's commit updates its paths. A sync's fast-forward, every served project's turn held, in their `walking` scope, runs `reindex`: `SyncGit::changed(L, target) -> ChangedPaths {paths, skipped_names}` (`diff --name-only -z --no-renames`, under the deadline); per served root, the paths under its path from the top, prefix stripped, through `update_paths` on a `WorkingTree` of the merged `[paths]` and scheme, the project discovered again (a moved `[paths]` or `[ids]` walks). `Contained`, `Same`: no update.
-- **R15.** A trust never refuses a read; no status, check or gate consults `IndexTrust` (the `check` and `health` routes are display reads that trust). **R16.** The CLI, stdio MCP, a local daemon and eval's walking reads enter no scope.
+- **R15.** A trust never refuses a read; no status, check or gate consults `IndexTrust` (the `check` and `health` routes are display reads that trust). **R16.** The CLI, stdio MCP, a local daemon and eval's walking reads enter no trust scope (a write's memo: `spec-check-write.md`).
 
 ## Routes and tools
 
@@ -62,16 +62,16 @@ The code index keys on content, never a stat (`symbol-index.md` "Cache key and c
 ## Invariants and the window
 
 - **T1.** A trusted read equals the walking read, text, JSON and stderr, byte for byte, whenever a walk would change nothing. **T2.** It prints the last walk's warnings from `walk_notes`. **T4.** Any doubt means a walk: one mark per project, per process. T3, T5 hold in both modes.
-- **The window.** A subset read cannot see an edit made after its step to a file outside its subset (`spec-read-subset.md` "Known limits"); locally as short as the stat walk. On a hub every SpecEngine write is indexed before its turn ends, so only hand edits on the host remain: one in a printed file shows at once (T5), any other after a reconcile (≤ 300 s) or `docker compose exec specengine spec index --root /projects/<name>` (`scripts/deploy/README.md`). Writes and trace data see the disk.
+- **The window.** A subset read cannot see an edit made after its step to a file outside its subset (`spec-read-subset.md` "Known limits"); locally as short as the stat walk. On a hub every SpecEngine write is indexed before its turn ends, so only hand edits on the host remain: one in a printed file shows at once (T5), any other after a reconcile (≤ 300 s) or `spec index` in the container (`scripts/deploy/README.md`). Writes and trace data walk; a write's findings take the walked rows (`spec-check-write.md`, ADR-0083).
 
 ## API
 
-Store `StatKey`, `Source::stat`, `WalkNotes`, `SqliteIndex::trusted_notes(&IdScheme, &Paths) -> Option<WalkNotes>` (never writes; `Some` when the stamp is current, the worktree row's fingerprints match and its notes read), `ChangedPaths`; `IndexWriter` unchanged. CLI `IndexTrust` (`#[doc(hidden)]` `with_every`, `walks`, `is_dirty`), `RECONCILE_EVERY`, `trusted`, `walking`, `trusting`, `doubt_in_scope`. http crate-private `answer::{run_read, run_as}`. mcp `HUB_READ_TOOLS`, `HUB_PROBES` (`probe_panic`, `probes` builds only).
+Store `StatKey`, `Source::stat`, `WalkNotes`, `SqliteIndex::trusted_notes(&IdScheme, &Paths) -> Option<WalkNotes>` (never writes; `Some` when the stamp is current, the worktree row's fingerprints match and its notes read), `ChangedPaths`. CLI `IndexTrust` (`#[doc(hidden)]` `with_every`, `walks`, `is_dirty`), `RECONCILE_EVERY`, `trusted`, `walking`, `trusting`, `doubt_in_scope`. http crate-private `answer::{run_read, run_as}`. mcp `HUB_READ_TOOLS`, `HUB_PROBES` (`probe_panic`, `probes` builds only).
 
 ## Known limits
 
 - **A driver whose ctime does not move on a write** (some FUSE, FAT-family), with a same-size edit and mtime restored: missed until the key moves or `--full`.
-- **A network client's attribute cache** (NFS 3-60 s by default; SMB) lags another machine's write by its life; this machine's own show at once. No network file system is detected (no `statfs` in `std`, no libc).
+- **A network client's attribute cache** (NFS 3-60 s by default; SMB) lags another machine's write by its life; this machine's own show at once. No network file system is detected.
 - **A stale writer**, local and multi-process only: a row written from a parse older than another process's commit stands until an update reads that file, since a no-op update no longer re-checks it in an `Immediate` transaction. T5, Q7 still check printed files; a hub's writes take the turn.
 - **`roots_may_move` misses a missing root created holding only non-`.md` files:** trusted reads warn it missing until the next walk.
 - **Doubt does not cross processes:** a terminal's `spec approve` or `spec index` on a hub's host writes rows the daemon reads as written; a failure of theirs waits for the reconcile.
@@ -80,4 +80,4 @@ Store `StatKey`, `Source::stat`, `WalkNotes`, `SqliteIndex::trusted_notes(&IdSch
 
 ## Tests
 
-Store `tests/stat_key.rs` (raw connections: the one exception to `tests/api.rs`' `rusqlite` guard); CLI `tests/read_trust.rs`; http `tests/hub_git.rs`, `tests/hub_trust.rs`; mcp `tests/mcp_hub_trust.rs`; eval `tests/read_trust_scale.rs` (`#[ignore]`); `src/read_trust_tests.rs` in CLI and http. Criteria: the spec.
+Store `tests/stat_key.rs` (raw connections: the one exception to `tests/api.rs`' `rusqlite` guard); CLI `tests/read_trust.rs`; http `tests/hub_git.rs`, `tests/hub_trust.rs`; mcp `tests/mcp_hub_trust.rs`; eval `tests/read_trust_scale.rs` (`#[ignore]`); `src/read_trust_tests.rs` in CLI and http.

@@ -34,6 +34,7 @@ impl CheckFile {
     /// A read file: parsed here.
     pub fn parse(path: impl Into<String>, bytes: Vec<u8>, scheme: &IdScheme) -> Self {
         let path = path.into();
+        super::counts::note_parse();
         let parsed = crate::parse(&path, &bytes, scheme);
         Self::parsed(path, bytes, parsed)
     }

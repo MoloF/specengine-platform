@@ -66,6 +66,9 @@ pub(super) fn run(corpus: &Corpus<'_>, rules: &[CheckRule], findings: &mut Vec<F
         })
         .collect();
     for (index, file) in corpus.files.iter().enumerate() {
+        if !corpus.kept(index) {
+            continue;
+        }
         let Some(parsed) = corpus.parses[index] else {
             continue;
         };

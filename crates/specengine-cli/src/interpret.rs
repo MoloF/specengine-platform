@@ -170,7 +170,8 @@ fn run_interpret(
         Ok(reference) => reference,
         Err(reason) => return refuse(reason, messages),
     };
-    let input = indexed(env, &context.project, &mut messages, false)?;
+    let mut open = crate::location::open_index(env, &context.project)?;
+    let input = crate::corpus::indexed_in(&mut open.index, &context.project, &mut messages, false)?;
     let target = match located(&context.project, &input, written, reference, true)? {
         Ok(target) => target,
         Err(reason) => return refuse(reason, messages),
@@ -192,6 +193,7 @@ fn run_interpret(
 
     // Creation 2–4.
     let mut checked = match checked_located(
+        Some(&open.index),
         &context.project,
         target,
         &request.base,

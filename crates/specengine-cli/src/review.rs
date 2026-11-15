@@ -302,27 +302,33 @@ pub(crate) fn preview_run(
     let prepared = if proposal.new_file() {
         prepare_file(env, git_env, context, proposal, messages).map(|_| Preview::Applies)
     } else {
-        let mut read = StepRead::default();
+        // The review's notes read the whole recorded index step 4 decodes.
+        let mut read = StepRead {
+            want_corpus: true,
+            ..StepRead::default()
+        };
         // A meaning approve's plan; a refused raise keeps the preview (the
         // text an editorial approve writes) and is named per node (task
         // spec `rev-discipline` Q15).
-        let prepared = prepare_spanned(env, git_env, context, proposal, messages, &mut read, false)
-            .map(|prepared| {
-                let lock = lock_for_review(&prepared.recorded.root);
-                if let Err(why) = &lock {
-                    run.notes
-                        .push(one_line(&format!("lock_entries unknown: {why}")));
-                }
-                let rows = rows(&prepared.revisions.nodes, &lock);
-                run.notes.extend(rows.iter().filter_map(|row| {
-                    let refused = row.refused.as_deref()?;
-                    Some(format!(
-                        "meaning approve not applicable (step 6): {refused}"
-                    ))
-                }));
-                run.revisions = Some(rows);
-                prepared.preview
-            });
+        let prepared = prepare_spanned(
+            env, git_env, context, proposal, messages, &mut read, false, None,
+        )
+        .map(|prepared| {
+            let lock = lock_for_review(&prepared.recorded.root);
+            if let Err(why) = &lock {
+                run.notes
+                    .push(one_line(&format!("lock_entries unknown: {why}")));
+            }
+            let rows = rows(&prepared.revisions.nodes, &lock);
+            run.notes.extend(rows.iter().filter_map(|row| {
+                let refused = row.refused.as_deref()?;
+                Some(format!(
+                    "meaning approve not applicable (step 6): {refused}"
+                ))
+            }));
+            run.revisions = Some(rows);
+            prepared.preview
+        });
         run.span = read.span;
         run.corpus = read.corpus;
         prepared

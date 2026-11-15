@@ -1,0 +1,294 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "probe": null,
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"bench\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"bench/zz-wc-create.md\",\"target_path\":\"bench/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"5e61925da96460ad0791e1a7b5b2e88fe2ebfd49\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:63f0a6284032f8a7e16d251f7c2e7f1e7e0b0beffa9e5117e928550d1e9ee446\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"class-missing\",\"severity\":\"error\",\"path\":\"bench/zz-wc-create.md\",\"line\":1,\"subject\":\"\",\"message\":\"no `class:`: declare one of canon | decision | spec | generated\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create.md\",\"line\":3,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `bench/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create.md\",\"line\":5,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `bench/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create.md\",\"line\":5,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `bench/zz-wc-create-a.md`)\"}],\"diff\":\"--- base bench/zz-wc-create.md\\n+++ proposed bench/zz-wc-create.md\\n@@ -0,0 +1,5 @@\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"bench/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":null,\"path\":\"bench/probes.md\",\"title\":\"Probes\",\"kind\":null,\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false},{\"id\":null,\"path\":\"bench/notes.md\",\"title\":\"Notes\",\"kind\":null,\"source\":\"search\",\"reason\":\"search rank 2 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 4\nerror  bench/zz-wc-create.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  bench/zz-wc-create.md:3: link-dangling: `zz-wc-create-b.md` names no walked document (tried `bench/zz-wc-create-b.md`)\nwarning  bench/zz-wc-create.md:5: link-anchor: `#zz-wc-create-anchor`: `bench/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  bench/zz-wc-create.md:5: link-dangling: `zz-wc-create-a.md` names no walked document (tried `bench/zz-wc-create-a.md`)\nsimilar: bench/probes.md | search | advises | - | bench/probes.md | Probes | search rank 1 on `write`, `cost`, `probe`\nsimilar: bench/notes.md | search | advises | - | bench/notes.md | Notes | search rank 2 on `write`, `cost`, `probe`\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"bench\",\"kind\":\"create\",\"status\":null,\"target_id\":\"bench/zz-wc-create-brief.md\",\"target_path\":\"bench/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:d802367f70d749b86172d93f1579e61273455d87fab0cabc7c90045388e01e2b\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"class-missing\",\"severity\":\"error\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":1,\"subject\":\"\",\"message\":\"no `class:`: declare one of canon | decision | spec | generated\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":3,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `bench/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `bench/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `bench/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"bench/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0001\",\"path\":\"bench/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0001` (open), a live create, adds `bench/zz-wc-create.md` titled as new `bench/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":null,\"path\":\"bench/probes.md\",\"title\":\"Probes\",\"kind\":null,\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false},{\"id\":null,\"path\":\"bench/notes.md\",\"title\":\"Notes\",\"kind\":null,\"source\":\"search\",\"reason\":\"search rank 2 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 4\nerror  bench/zz-wc-create-brief.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  bench/zz-wc-create-brief.md:3: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `bench/zz-wc-create-brief-b.md`)\nwarning  bench/zz-wc-create-brief.md:5: link-anchor: `#zz-wc-create-brief-anchor`: `bench/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  bench/zz-wc-create-brief.md:5: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `bench/zz-wc-create-brief-a.md`)\nsimilar: PR-0001 | queue | gates | - | bench/zz-wc-create.md | Write cost probe | `PR-0001` (open), a live create, adds `bench/zz-wc-create.md` titled as new `bench/zz-wc-create-brief.md`\nsimilar: bench/probes.md | search | advises | - | bench/probes.md | Probes | search rank 1 on `write`, `cost`, `probe`\nsimilar: bench/notes.md | search | advises | - | bench/notes.md | Notes | search rank 2 on `write`, `cost`, `probe`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"bench\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"bench/zz-wc-create-brief.md\",\"target_path\":\"bench/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"5e61925da96460ad0791e1a7b5b2e88fe2ebfd49\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:d802367f70d749b86172d93f1579e61273455d87fab0cabc7c90045388e01e2b\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"class-missing\",\"severity\":\"error\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":1,\"subject\":\"\",\"message\":\"no `class:`: declare one of canon | decision | spec | generated\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":3,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `bench/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `bench/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"bench/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `bench/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"bench/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0001\",\"path\":\"bench/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0001` (open), a live create, adds `bench/zz-wc-create.md` titled as new `bench/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":null,\"path\":\"bench/probes.md\",\"title\":\"Probes\",\"kind\":null,\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false},{\"id\":null,\"path\":\"bench/notes.md\",\"title\":\"Notes\",\"kind\":null,\"source\":\"search\",\"reason\":\"search rank 2 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 4\nerror  bench/zz-wc-create-brief.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  bench/zz-wc-create-brief.md:3: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `bench/zz-wc-create-brief-b.md`)\nwarning  bench/zz-wc-create-brief.md:5: link-anchor: `#zz-wc-create-brief-anchor`: `bench/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  bench/zz-wc-create-brief.md:5: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `bench/zz-wc-create-brief-a.md`)\nsimilar: PR-0001 | queue | gates | - | bench/zz-wc-create.md | Write cost probe | `PR-0001` (open), a live create, adds `bench/zz-wc-create.md` titled as new `bench/zz-wc-create-brief.md`\nsimilar: bench/probes.md | search | advises | - | bench/probes.md | Probes | search rank 1 on `write`, `cost`, `probe`\nsimilar: bench/notes.md | search | advises | - | bench/notes.md | Notes | search rank 2 on `write`, `cost`, `probe`\n"
+    }
+  },
+  "corpus": "import-layout/three",
+  "http": {
+    "probe": null
+  },
+  "mcp": {
+    "probe": null,
+    "propose_change create": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 4\nerror  bench/zz-wc-mcp.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  bench/zz-wc-mcp.md:3: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `bench/zz-wc-mcp-b.md`)\nwarning  bench/zz-wc-mcp.md:5: link-anchor: `#zz-wc-mcp-anchor`: `bench/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  bench/zz-wc-mcp.md:5: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `bench/zz-wc-mcp-a.md`)\nsimilar: bench/probes.md | search | advises | - | bench/probes.md | Probes | search rank 1 on `write`, `cost`, `probe`\nsimilar: bench/notes.md | search | advises | - | bench/notes.md | Notes | search rank 2 on `write`, `cost`, `probe`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "5e61925da96460ad0791e1a7b5b2e88fe2ebfd49",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "class-missing",
+              "line": 1,
+              "message": "no `class:`: declare one of canon | decision | spec | generated",
+              "path": "bench/zz-wc-mcp.md",
+              "severity": "error",
+              "subject": ""
+            },
+            {
+              "code": "link-dangling",
+              "line": 3,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `bench/zz-wc-mcp-b.md`)",
+              "path": "bench/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 5,
+              "message": "`#zz-wc-mcp-anchor`: `bench/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "bench/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 5,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `bench/zz-wc-mcp-a.md`)",
+              "path": "bench/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:7600f876eed25a5510a6979a4cd92d040bede9635122e35b5318720e0d9d599a",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "bench",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": false,
+              "id": null,
+              "kind": null,
+              "path": "bench/probes.md",
+              "reason": "search rank 1 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "Probes"
+            },
+            {
+              "gates": false,
+              "id": null,
+              "kind": null,
+              "path": "bench/notes.md",
+              "reason": "search rank 2 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "Notes"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "bench/zz-wc-mcp.md",
+          "target_ids": [
+            "bench/zz-wc-mcp.md"
+          ],
+          "target_path": "bench/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 4\nerror  bench/zz-wc-mcp-dry.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  bench/zz-wc-mcp-dry.md:3: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `bench/zz-wc-mcp-dry-b.md`)\nwarning  bench/zz-wc-mcp-dry.md:5: link-anchor: `#zz-wc-mcp-dry-anchor`: `bench/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  bench/zz-wc-mcp-dry.md:5: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `bench/zz-wc-mcp-dry-a.md`)\nsimilar: bench/probes.md | search | advises | - | bench/probes.md | Probes | search rank 1 on `write`, `cost`, `probe`\nsimilar: bench/notes.md | search | advises | - | bench/notes.md | Notes | search rank 2 on `write`, `cost`, `probe`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "class-missing",
+              "line": 1,
+              "message": "no `class:`: declare one of canon | decision | spec | generated",
+              "path": "bench/zz-wc-mcp-dry.md",
+              "severity": "error",
+              "subject": ""
+            },
+            {
+              "code": "link-dangling",
+              "line": 3,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `bench/zz-wc-mcp-dry-b.md`)",
+              "path": "bench/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 5,
+              "message": "`#zz-wc-mcp-dry-anchor`: `bench/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "bench/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 5,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `bench/zz-wc-mcp-dry-a.md`)",
+              "path": "bench/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:086eb7231db1d6eb8b84300d84a5ecdd727017d3111fdb6c11a3483c93fc3d80",
+          "preview": null,
+          "price_of_other": null,
+          "project": "bench",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": false,
+              "id": null,
+              "kind": null,
+              "path": "bench/probes.md",
+              "reason": "search rank 1 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "Probes"
+            },
+            {
+              "gates": false,
+              "id": null,
+              "kind": null,
+              "path": "bench/notes.md",
+              "reason": "search rank 2 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "Notes"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "bench/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "bench/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "bench/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

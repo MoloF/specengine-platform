@@ -62,7 +62,7 @@ use rmcp::transport::streamable_http_server::{
 };
 use serde::Deserialize;
 use serde_json::Value;
-use specengine_cli::Env;
+use specengine_cli::{Env, check_memo, cost};
 use specengine_mcp::{Command, HUB_PROBES, HUB_TOOLS, HubSeam, SpecEngineServer, TurnFuture};
 use tokio::sync::{Mutex, oneshot};
 
@@ -138,36 +138,52 @@ impl HubSeam for Seam {
         .flatten();
         Box::pin(async move {
             let place = project.lines.line_up(&login, exchange.as_ref()).await;
-            let holder = turn::Holder::call(&project, exchange);
+            let holder = turn::Holder::call(&project, exchange.clone());
             let turn = turn::take(&project, holder).await;
             // A panic in the call leaves its answer unset: the hub server
             // answers it as an internal error.
             let _ = tokio::task::spawn_blocking(move || {
                 // Dropped in reverse: the turn, then the line's place.
                 let _place = place;
-                let _turn = turn;
+                let turn = turn;
                 // As `answer::run`: the call in the trust's `walking`
                 // scope (a read tool opts into trust in the MCP crate); a
                 // panic or a call that cannot run doubts it, the turn held.
                 let trust = project.trust.clone();
                 let _doubt = answer::DoubtOnPanic(trust.as_deref());
-                let ready = Env::from_process().and_then(|env| {
-                    let globals = project.globals();
-                    answer::found(&env, &globals, &project)?;
-                    Ok((env, globals))
-                });
-                match ready {
-                    Ok((env, globals)) => {
-                        answer::in_scope(trust.as_deref(), answer::Freshness::Walk, || {
-                            command.run(&env, &globals);
+                // In the turn, on this thread, after the login's line: the
+                // call's costs counted, the check memo in scope under the
+                // login.
+                let ((), cost) = turn.within(|| {
+                    cost::scoped(|| {
+                        check_memo::scoped(&project.memo, &login, || {
+                            let ready = Env::from_process().and_then(|env| {
+                                let globals = project.globals();
+                                answer::found(&env, &globals, &project)?;
+                                Ok((env, globals))
+                            });
+                            match ready {
+                                Ok((env, globals)) => {
+                                    answer::in_scope(
+                                        trust.as_deref(),
+                                        answer::Freshness::Walk,
+                                        || {
+                                            command.run(&env, &globals);
+                                        },
+                                    );
+                                }
+                                Err(cannot) => {
+                                    if let Some(trust) = &trust {
+                                        trust.doubt();
+                                    }
+                                    command.cannot_run(cannot);
+                                }
+                            }
                         });
-                    }
-                    Err(cannot) => {
-                        if let Some(trust) = &trust {
-                            trust.doubt();
-                        }
-                        command.cannot_run(cannot);
-                    }
+                    })
+                });
+                if let Some(exchange) = &exchange {
+                    exchange.costed(cost);
                 }
             })
             .await;
@@ -867,6 +883,7 @@ mod tests {
             trust: None,
             lines: Default::default(),
             seats: Default::default(),
+            memo: Default::default(),
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         let mounts = Mounts::with_idle(&[project], &hub, Some(IDLE));
@@ -976,6 +993,7 @@ mod tests {
             trust: None,
             lines: Default::default(),
             seats: Default::default(),
+            memo: Default::default(),
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         let mounts = Mounts::with_ends(&[project], &hub, None, LIFE);
@@ -1064,6 +1082,7 @@ mod tests {
             trust: None,
             lines: Default::default(),
             seats: Default::default(),
+            memo: Default::default(),
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         Mounts::with_idle(&[project], &hub, None)

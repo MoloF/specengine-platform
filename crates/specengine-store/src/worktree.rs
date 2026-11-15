@@ -49,9 +49,11 @@ use std::io::{self, Write as _};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::cost;
 use crate::git::{Blob, CatFile, GitEnv, GitFailure, same_dir};
 use crate::queue::Place;
 
@@ -591,9 +593,22 @@ impl WorktreeGit {
     /// cherry-pick, revert, bisect, sequencer), by its state file under
     /// `rev-parse --git-path`; `None` when there is none.
     pub fn operation_in_progress(&self) -> Result<Option<Operation>, GitError> {
-        for (name, operation) in OPERATION_PATHS {
-            let output = self.read("rev-parse", &["rev-parse", "--git-path", name])?;
-            let printed = one_line(&output).ok_or(GitError::Unreadable {
+        // One process names every state file, one line each, in order
+        // (`write-cost` G2).
+        let mut args = vec!["rev-parse"];
+        for (name, _) in OPERATION_PATHS {
+            args.extend(["--git-path", name]);
+        }
+        let output = self.read("rev-parse", &args)?;
+        let output = output.strip_suffix(b"\n").unwrap_or(&output);
+        let printed: Vec<&[u8]> = output.split(|&byte| byte == b'\n').collect();
+        if printed.len() != OPERATION_PATHS.len() {
+            return Err(GitError::Unreadable {
+                command: "rev-parse",
+            });
+        }
+        for ((_, operation), printed) in OPERATION_PATHS.into_iter().zip(printed) {
+            let printed = one_line(printed).ok_or(GitError::Unreadable {
                 command: "rev-parse",
             })?;
             let path = self.dir.join(os_path(printed).ok_or(GitError::Unreadable {
@@ -1496,6 +1511,7 @@ impl WorktreeGit {
             "--",
         ];
         let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+        let _git = cost::spawn();
         let mut child = self
             .command(&args, true)
             .spawn()
@@ -1599,10 +1615,14 @@ impl WorktreeGit {
         let mut command = self.command(&[OsStr::new("cat-file"), OsStr::new("--batch")], true);
         // Nobody reads it: a pipe could fill and stall the session.
         command.stdin(Stdio::piped()).stderr(Stdio::null());
+        // Charged from the spawn to the session's end.
+        let git = cost::spawn();
         let child = command.spawn().map_err(GitError::NotRunnable)?;
-        let session = CatFile::of_child(child).ok_or(GitError::Unreadable {
-            command: "cat-file",
-        })?;
+        let session = CatFile::of_child(child)
+            .map(|session| session.charged(git))
+            .ok_or(GitError::Unreadable {
+                command: "cat-file",
+            })?;
         Ok(BlobBatch { session })
     }
 
@@ -1964,6 +1984,7 @@ pub fn replace_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
             Err(error) => return Err(error),
         }
     };
+    let write_cost = cost::charge(cost::Kind::Write);
     let written = file
         .write_all(bytes)
         .and_then(|()| file.sync_all())
@@ -1977,6 +1998,7 @@ pub fn replace_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Ok(dir) = fs::File::open(dir) {
         let _ = dir.sync_all();
     }
+    drop(write_cost);
     Ok(())
 }
 
@@ -2252,7 +2274,9 @@ pub fn create_file(
             }
         }
     };
+    let write_cost = cost::charge(cost::Kind::Write);
     let written = file.write_all(bytes).and_then(|()| file.sync_all());
+    drop(write_cost);
     drop(file);
     let placed = match written {
         Err(error) => Err(CreateFileError::Io(
@@ -2277,6 +2301,7 @@ pub fn create_file(
     }
     // The new name made durable where the platform allows; best effort.
     if let Ok(dir) = fs::File::open(&dir) {
+        let _cost = cost::charge(cost::Kind::Write);
         let _ = dir.sync_all();
     }
     Ok(CreatedFile {
@@ -2325,9 +2350,45 @@ impl Drop for Scratch {
     }
 }
 
+/// How many spawn `PATH`s [`local_env_vars`] keeps an answer for.
+const LOCAL_ENV_KEPT: usize = 8;
+
+/// [`local_env_vars`]' answers by the spawn's `PATH` (`write-cost` G1):
+/// git's own list, the same for one `git` program; a failed spawn is not
+/// kept. The oldest goes first past [`LOCAL_ENV_KEPT`].
+type LocalEnvAnswers = Vec<(Option<OsString>, BTreeSet<OsString>)>;
+static LOCAL_ENV: Mutex<LocalEnvAnswers> = Mutex::new(Vec::new());
+
 /// The names `git rev-parse --local-env-vars` prints, run with `vars` minus
-/// every `GIT_*` variable (the list is git's own, never the caller's).
+/// every `GIT_*` variable (the list is git's own, never the caller's): once
+/// per process per spawn `PATH`.
 fn local_env_vars(
+    vars: &BTreeMap<OsString, OsString>,
+    deadline: Option<Instant>,
+) -> Result<BTreeSet<OsString>, GitError> {
+    let path = vars.get(OsStr::new("PATH")).cloned();
+    let kept = |answers: &LocalEnvAnswers| {
+        answers
+            .iter()
+            .find(|(kept, _)| *kept == path)
+            .map(|(_, names)| names.clone())
+    };
+    if let Some(names) = kept(&LOCAL_ENV.lock().unwrap_or_else(PoisonError::into_inner)) {
+        return Ok(names);
+    }
+    let names = spawn_local_env_vars(vars, deadline)?;
+    let mut answers = LOCAL_ENV.lock().unwrap_or_else(PoisonError::into_inner);
+    if kept(&answers).is_none() {
+        if answers.len() >= LOCAL_ENV_KEPT {
+            answers.remove(0);
+        }
+        answers.push((path, names.clone()));
+    }
+    Ok(names)
+}
+
+/// [`local_env_vars`]' process.
+fn spawn_local_env_vars(
     vars: &BTreeMap<OsString, OsString>,
     deadline: Option<Instant>,
 ) -> Result<BTreeSet<OsString>, GitError> {
@@ -2372,6 +2433,7 @@ fn run_with_input(
     grace: Option<Duration>,
     input: Option<Vec<u8>>,
 ) -> Result<Output, GitError> {
+    let _git = cost::spawn();
     if deadline.is_none() && input.is_none() {
         return command.output().map_err(GitError::NotRunnable);
     }

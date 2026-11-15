@@ -223,6 +223,7 @@ impl SpecIndex for SqliteIndex {
     }
 
     fn indexed_input(&self) -> Result<CheckInput, StoreError> {
+        let _cost = crate::cost::charge(crate::cost::Kind::Index);
         read::indexed_input(self)
     }
 
@@ -241,6 +242,7 @@ impl IndexWriter for SqliteIndex {
         source: &dyn Source,
         scheme: &IdScheme,
     ) -> Result<UpdateReport, StoreError> {
+        let _cost = crate::cost::charge(crate::cost::Kind::Index);
         let report = write::run(self, source, scheme, Mode::Walk)?;
         self.reparsed_all = report.reparsed_all;
         Ok(report)
@@ -252,6 +254,7 @@ impl IndexWriter for SqliteIndex {
         scheme: &IdScheme,
         paths: &[&str],
     ) -> Result<UpdateReport, StoreError> {
+        let _cost = crate::cost::charge(crate::cost::Kind::Index);
         let report = write::run(self, source, scheme, Mode::Paths(paths))?;
         self.reparsed_all = report.reparsed_all;
         Ok(report)
@@ -262,6 +265,7 @@ impl IndexWriter for SqliteIndex {
         source: &dyn Source,
         scheme: &IdScheme,
     ) -> Result<UpdateReport, StoreError> {
+        let _cost = crate::cost::charge(crate::cost::Kind::Index);
         let report = write::run(self, source, scheme, Mode::Rebuild)?;
         self.reparsed_all = report.reparsed_all;
         Ok(report)

@@ -25,18 +25,20 @@
 //! error.
 
 use std::borrow::Cow;
+use std::sync::{Arc, OnceLock};
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock, JsonObject, MetaObject};
 use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use serde_json::Value;
+use specengine_cli::CheckMemo;
 use specengine_cli::{
     BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, FlowRequest, GAP_ITEMS_SHOWN,
     Globals, ImpactRequest, MIN_TERM_CHARS, NODE_HISTORY_MAX, OUTPUT_CAP_CHARS, Outcome,
     PACKAGE_BUDGET, RoadmapRequest, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,
-    SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TraceRequest, TreeRequest, View, process_git,
-    render_json, render_text,
+    SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TraceRequest, TreeRequest, View, check_memo,
+    process_git, render_json, render_text,
 };
 
 use crate::mirror::{
@@ -1092,11 +1094,22 @@ impl SpecEngineServer {
         }
         let globals = self.globals().clone();
         let joined = tokio::task::spawn_blocking(move || {
-            answer_of(Env::from_process().and_then(|env| command(&env, &globals)))
+            // Over stdio: the process's check memo, one for its roots (the
+            // root is in every key), no login (`write-cost`).
+            check_memo::scoped(stdio_memo(), "-", || {
+                answer_of(Env::from_process().and_then(|env| command(&env, &globals)))
+            })
         })
         .await;
         joined.unwrap_or(Answer::Panicked)
     }
+}
+
+/// The stdio server's check memo: one per process, its roots apart by key,
+/// its budget shared (a terminal's `spec` keeps none).
+fn stdio_memo() -> &'static Arc<CheckMemo> {
+    static MEMO: OnceLock<Arc<CheckMemo>> = OnceLock::new();
+    MEMO.get_or_init(|| Arc::new(CheckMemo::new()))
 }
 
 /// A command's outcome rendered as [`SpecEngineServer::call`] renders it.

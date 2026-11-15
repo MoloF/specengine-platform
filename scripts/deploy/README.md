@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [scripts/deploy]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-15
 ---
 
 # scripts/deploy -- a hub on one host
 
-The operator's guide: from a clean Linux VPS with Docker to a running hub. How the files guarantee the hub's trust, and why: `docs/canon/hub-deploy.md`; the hub itself: `docs/canon/hub.md`. Accounts are `hub-admin`'s; dumps, restore, upgrades, health and `--push`: `docs/canon/hub-ops.md`.
+The operator's guide: from a clean Linux VPS with Docker to a running hub. Why the files are trusted: `docs/canon/hub-deploy.md`; the hub itself: `docs/canon/hub.md`. Accounts are `hub-admin`'s; dumps, restore, upgrades, health and `--push`: `docs/canon/hub-ops.md`.
 
 ## Before you start
 
@@ -39,7 +39,7 @@ chmod 600 secrets/*
 sudo chown 10001:10001 secrets/deploy_key
 ```
 
-- Add `secrets/deploy_key.pub` to the project's repository as a deploy key, read-only for now (write comes with `--push`: `docs/canon/hub-ops.md` "Push"). Then delete the `.pub` file or keep it outside `secrets/`.
+- Add `secrets/deploy_key.pub` to the project's repository as a deploy key, read-only for now (write comes with `--push`: `docs/canon/hub-ops.md` "Push"). Then delete or move the `.pub` file out of `secrets/`.
 - `secrets/known_hosts` holds the forge's published SSH host keys, checked against the fingerprints it documents: `ssh-keyscan` alone trusts the network. `chown 10001:10001` it too.
 - `authelia_storage_key` encrypts the door's database: lose it and every account is lost with it.
 - `secrets/restic_env`: the dumps' backend, `RESTIC_REPOSITORY` and its keys, a `KEY=value` a line (`docs/canon/hub-ops.md` "Restic"); then `docker compose run --rm backup init`, once. Keep `.env`, `restic_password` and `restic_env` off the host too, or no dump can be read.
@@ -114,7 +114,7 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 
 - **TLS.** The staging CA gives untrusted certificates: check the whole flow with them. Then set `ACME_CA_SERVER=https://acme-v02.api.letsencrypt.org/directory`, `docker compose down`, remove the `traefik-acme` volume, `docker compose up -d`.
 - **Running.** `docker compose ps`: `specengine` and `backup` healthy; if not, `docker compose logs dump-queue dump-door backup` say why. Runbooks: `docs/canon/hub-ops.md` "Restore", "Upgrade", "Push".
-- **Slow pages.** `docker compose logs -t --since 2h specengine | grep ' slow '`, then `traefik`'s; a ~300 s Traefik line with no daemon line is a stream, not a hang: `docs/canon/serve-slow.md` "Reading them".
+- **Slow pages.** `docker compose logs -t --since 2h specengine | grep ' slow '`, then `traefik`'s: `docs/canon/serve-slow.md` "Reading them". Every request's line: `SPECENGINE_SLOW_MS=0` in `.env`, `docker compose up -d`; after, remove it, `up -d`.
 - **The gate.** Before real people, the owner tries the hub by hand (step 11b-3, `docs/features/hub-deploy.md` H1-H17). `--push` waits for it.
 
 ## Before the gate

@@ -54,6 +54,11 @@
 
 mod common;
 
+#[path = "../../specengine-cli/tests/write_cost_common/mod.rs"]
+mod write_cost_common;
+
+mod write_cost_hub;
+
 use std::ffi::OsStr;
 use std::fs;
 use std::io::Write as _;
@@ -978,4 +983,152 @@ fn sr10_the_flag_is_judged_before_listening() {
         !argv.contains("--slow-ms"),
         "spec serve passes --slow-ms: {argv:?}"
     );
+}
+
+// ------------------------------------------- write-cost WC15: five fields
+
+/// The confirm route's template, as a request line names it.
+const CONFIRM_ROUTE: &str = "/api/projects/{p}/proposals/{id}/confirm";
+
+/// docs/features/write-cost.md (RM-0125) WC15, "Attribution: five fields",
+/// over spec-a opted in to a hub (`--slow-ms 0`), every git child of the
+/// daemon through the shim:
+/// - every request line ends ` check_ms= index_ms= git_ms= git= write_ms=`
+///   (the grammar of `tests/common/slow.rs`), and the four `_ms` fields sum
+///   to at most `run_ms`;
+/// - a question's confirm GET names in `git` exactly the shim's lines of that
+///   request;
+/// - the POST that commits shows `write_ms`;
+/// - a trusting read shows `check_ms=- git_ms=- git=- write_ms=-`;
+/// - turn lines keep their keys (no field of the five).
+///
+/// M: the counters not reset per call (the second GET shows the sum); a git
+/// spawn inside the walk charged to both kinds (the sum passes `run_ms`).
+#[test]
+fn wc15_every_request_line_ends_in_five_fields() {
+    use write_cost_hub::{
+        confirm_get, confirm_post, git_shim, hub_env, logged, opted_in, raise_question, shimmed,
+        slug, stage_approve, start_with,
+    };
+    let repo = opted_in("wc15", "spec-a");
+    let found = write_cost_common::probe(&repo.env(), &repo.git_env())
+        .expect("spec-a opens")
+        .expect("spec-a has a node");
+    let slug = slug(&repo).expect("a slug");
+    let shim_dir = repo.scratch.dir("shim");
+    let log = repo.scratch.path().join("git.log");
+    git_shim(&shim_dir, &log);
+    let server = start_with(
+        &repo,
+        &shimmed(&hub_env(&repo), &shim_dir),
+        &["--slow-ms", "0"],
+    );
+    let (_, question) = raise_question(&repo, &found);
+    let id = question.expect("the question is stored");
+    stage_approve(&repo, &id);
+
+    // Two GETs, each counted alone: the second shows its own count.
+    let mut counted = Vec::new();
+    for round in 0..2 {
+        thread::sleep(SETTLE);
+        let before = logged(&log).len();
+        let read = confirm_get(&server, &slug, &id);
+        assert_eq!(read.status, 200, "GET {round}: {}", read.text());
+        counted.push(logged(&log).len() - before);
+    }
+    let gets: Vec<Request> = requests_of(&server, CONFIRM_ROUTE, 2)
+        .into_iter()
+        .filter(|line| line.method == "GET")
+        .collect();
+    assert_eq!(gets.len(), 2, "{gets:?}");
+    for (line, spawned) in gets.iter().zip(&counted) {
+        let cost = line.cost.as_ref().expect("the five fields");
+        assert_eq!(
+            cost.git,
+            Some(u64::try_from(*spawned).expect("a count")),
+            "a GET's git is the shim's lines of it: {}",
+            line.line
+        );
+    }
+
+    thread::sleep(SETTLE);
+    let read = confirm_get(&server, &slug, &id);
+    let written = confirm_post(&server, &slug, &id, &read);
+    assert_eq!(written.status, 200, "POST: {}", written.text());
+    let post = requests_of(&server, CONFIRM_ROUTE, 4)
+        .into_iter()
+        .find(|line| line.method == "POST")
+        .expect("the POST's line");
+    let cost = post.cost.as_ref().expect("the five fields");
+    assert!(
+        cost.write_ms.is_some(),
+        "a POST that commits shows write_ms: {}",
+        post.line
+    );
+    assert!(cost.git.is_some_and(|git| git > 0), "{}", post.line);
+
+    // Reads of the tree: once trusted, nothing of the write kinds ran. (A
+    // proposal's own read is no such read: its review renders the diff with
+    // one `git diff --no-index`, as 0.47.0's did.)
+    let tree = format!("/api/projects/{slug}/tree");
+    let mut trusted = None;
+    for _ in 0..3 {
+        let reply = through(&server, "GET", &tree, &Proxied::fetch("ann"), b"");
+        assert_eq!(reply.status, 200, "{}", reply.text());
+        let lines = requests(&slow_lines(&server.stderr()));
+        trusted = lines
+            .into_iter()
+            .find(|line| line.route == "/api/projects/{p}/tree" && line.index == "trusted");
+        if trusted.is_some() {
+            break;
+        }
+        thread::sleep(SETTLE);
+    }
+    let trusted = trusted.expect("a trusting read of the tree");
+    let cost = trusted.cost.as_ref().expect("the five fields");
+    assert_eq!(
+        (cost.check_ms, cost.git_ms, cost.git, cost.write_ms),
+        (None, None, None, None),
+        "a trusting read: {}",
+        trusted.line
+    );
+
+    thread::sleep(SETTLE);
+    let lines = slow_lines(&server.stderr());
+    let all = requests(&lines);
+    assert!(!all.is_empty());
+    for line in &all {
+        let cost = line
+            .cost
+            .as_ref()
+            .unwrap_or_else(|| panic!("no five fields: {}", line.line));
+        if let Some(run_ms) = line.run_ms {
+            let sum: u64 = [cost.check_ms, cost.index_ms, cost.git_ms, cost.write_ms]
+                .iter()
+                .flatten()
+                .sum();
+            assert!(
+                sum <= run_ms,
+                "the five fields sum to {sum} > run_ms {run_ms}: {}",
+                line.line
+            );
+        }
+    }
+    let turns = turns(&lines);
+    assert!(!turns.is_empty(), "turn lines at --slow-ms 0");
+    for turn in &turns {
+        for key in [
+            " check_ms=",
+            " index_ms=",
+            " git_ms=",
+            " git=",
+            " write_ms=",
+        ] {
+            assert!(
+                !turn.line.contains(key),
+                "a turn line keeps its keys: {}",
+                turn.line
+            );
+        }
+    }
 }

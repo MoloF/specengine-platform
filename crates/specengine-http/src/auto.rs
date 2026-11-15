@@ -41,7 +41,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 
 use specengine_cli::{
-    AutoApplyOutcome, AutoApplyRequest, CliError, Env, escape_controls, process_git, utc_now,
+    AutoApplyOutcome, AutoApplyRequest, CliError, Env, check_memo, escape_controls, process_git,
+    utc_now,
 };
 
 use crate::answer::{self, DoubtOnPanic, Freshness};
@@ -76,8 +77,14 @@ pub(crate) fn queue(project: &Arc<Project>, sync: Option<Arc<RepoSync>>, login: 
         let _ = tokio::task::spawn_blocking(move || {
             // Dropped in reverse: the turn, then the line's place.
             let _place = place;
-            let _held = held;
-            run(&project, sync.as_deref(), &login, &id);
+            let held = held;
+            // In the hold, on this thread: the check memo in scope under the
+            // login.
+            held.within(|| {
+                check_memo::scoped(&project.memo, &login, || {
+                    run(&project, sync.as_deref(), &login, &id);
+                });
+            });
         })
         .await;
     });
@@ -287,6 +294,7 @@ mod tests {
             trust: None,
             lines: Lines::default(),
             seats: Seats::default(),
+            memo: Default::default(),
         };
         let named = |login: &str| {
             let holder = Holder::delegated(&project, login, "PR-100001", TOOL);

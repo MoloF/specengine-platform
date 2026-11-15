@@ -1,0 +1,800 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "approve decision": {
+      "answer": {
+        "error": "spec: `PR-0009` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0009`'s record: add it, or `spec reject PR-0009 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve discrepancy --option 1": {
+      "answer": {
+        "error": "spec: `PR-0008` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0008`'s record: add it, or `spec reject PR-0008 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve question": {
+      "answer": {
+        "error": "spec: `PR-0007` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0007`'s record: add it, or `spec reject PR-0007 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve update": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0001\",\"project\":\"inkwell\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"SLAB-INK\",\"target_path\":\"docs/spec/ink.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"2ef20b71c4b852056e243ee0424b2e41d55284a0\",\"base_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\",\"base_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\",\"new_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:5440f2e95d551915627402837264bbc2ea5ae645ffad9b6ac706d8639e9ba9f5\",\"rationale\":\"Probe SLAB-INK.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":16,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/ink.md\\n+++ proposed docs/spec/ink.md\\n@@ -12,3 +12,7 @@ Where the width of SLAB-SHEET is configured.\\n ## Flow {#TENET-FLOW}\\n \\n Ink flows one mark at a time.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"SLAB-INK\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0001` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0001` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "apply PR-0001 to docs/spec/ink.md on main in <root> (applies; raises TENET-FLOW 1 -> 2)? [y/N]"
+      ]
+    },
+    "probe": {
+      "base": "b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121",
+      "decision": "SLAB-INK",
+      "path": "docs/spec/ink.md",
+      "target": "SLAB-INK"
+    },
+    "propose amendment": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0005\",\"project\":\"inkwell\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends.md\",\"target_path\":\"docs/spec/zz-wc-amends.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"2ef20b71c4b852056e243ee0424b2e41d55284a0\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nowner: owner\\nreviewed: 2026-10-16\\nclass: spec\\nstatus: draft\\nlinks:\\n  amends: [SLAB-INK]\\n---\\n\\n# Write cost amendment\\n\\nSee [the second probe](zz-wc-amends-b.md) here.\\n\\nSee [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"patch_hash\":\"b3:083c9b8bab6369ea2dab7d002267a64f7ac4b7490031da1d71f11c372b8f2c0b\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":12,\"subject\":\"zz-wc-amends-b.md\",\"message\":\"`zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":14,\"subject\":\"#zz-wc-amends-anchor\",\"message\":\"`#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":14,\"subject\":\"zz-wc-amends-a.md\",\"message\":\"`zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-amends.md\\n+++ proposed docs/spec/zz-wc-amends.md\\n@@ -0,0 +1,14 @@\\n+---\\n+owner: owner\\n+reviewed: 2026-10-16\\n+class: spec\\n+status: draft\\n+links:\\n+  amends: [SLAB-INK]\\n+---\\n+\\n+# Write cost amendment\\n+\\n+See [the second probe](zz-wc-amends-b.md) here.\\n+\\n+See [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0005\nintroduced: 4\nerror  docs/spec/zz-wc-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends.md:12: link-dangling: `zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\nwarning  docs/spec/zz-wc-amends.md:14: link-anchor: `#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\nwarning  docs/spec/zz-wc-amends.md:14: link-dangling: `zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\n"
+    },
+    "propose amendment --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0006\",\"project\":\"inkwell\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends-brief.md\",\"target_path\":\"docs/spec/zz-wc-amends-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"2ef20b71c4b852056e243ee0424b2e41d55284a0\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:b9b7a4796022bb9cabecc607701503656e357168ca0aa1f46c47b6ebc3dffee7\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":12,\"subject\":\"zz-wc-amends-brief-b.md\",\"message\":\"`zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":14,\"subject\":\"#zz-wc-amends-brief-anchor\",\"message\":\"`#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":14,\"subject\":\"zz-wc-amends-brief-a.md\",\"message\":\"`zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0006\nintroduced: 4\nerror  docs/spec/zz-wc-amends-brief.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends-brief.md:12: link-dangling: `zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\nwarning  docs/spec/zz-wc-amends-brief.md:14: link-anchor: `#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\nwarning  docs/spec/zz-wc-amends-brief.md:14: link-dangling: `zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\n"
+    },
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0003\",\"project\":\"inkwell\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"2ef20b71c4b852056e243ee0424b2e41d55284a0\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:256ce9b39982eb517f855a54ad03722c60cd8d4807430f0c80442068b16b4334\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":9,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":11,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":11,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,11 @@\\n+---\\n+class: canon\\n+owner: owner\\n+reviewed: 2026-10-16\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"SLAB-PROBE\",\"path\":\"docs/spec/probe.md\",\"title\":\"Probe\",\"kind\":\"slab\",\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0003\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:9: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:11: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:11: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\nsimilar: SLAB-PROBE | search | advises | slab | docs/spec/probe.md | Probe | search rank 1 on `write`, `cost`, `probe`\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"inkwell\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:71eae78763702585e9f0708598470897dcf2d341374daf689be631e9a545f809\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":9,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"SLAB-PROBE\",\"path\":\"docs/spec/probe.md\",\"title\":\"Probe\",\"kind\":\"slab\",\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:9: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:11: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:11: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: SLAB-PROBE | search | advises | slab | docs/spec/probe.md | Probe | search rank 1 on `write`, `cost`, `probe`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0004\",\"project\":\"inkwell\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"2ef20b71c4b852056e243ee0424b2e41d55284a0\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:71eae78763702585e9f0708598470897dcf2d341374daf689be631e9a545f809\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":9,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"SLAB-PROBE\",\"path\":\"docs/spec/probe.md\",\"title\":\"Probe\",\"kind\":\"slab\",\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:9: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:11: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:11: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: SLAB-PROBE | search | advises | slab | docs/spec/probe.md | Probe | search rank 1 on `write`, `cost`, `probe`\n"
+    },
+    "propose interpretation": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: SLAB-INK is no accepted decision: canon document docs/spec/ink.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: SLAB-INK is no accepted decision: canon document docs/spec/ink.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose interpretation --brief": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: SLAB-INK is no accepted decision: canon document docs/spec/ink.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: SLAB-INK is no accepted decision: canon document docs/spec/ink.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose update": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"inkwell\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"SLAB-INK\",\"target_path\":\"docs/spec/ink.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"2ef20b71c4b852056e243ee0424b2e41d55284a0\",\"base_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\",\"base_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\",\"new_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:5440f2e95d551915627402837264bbc2ea5ae645ffad9b6ac706d8639e9ba9f5\",\"rationale\":\"Probe SLAB-INK.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":16,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/ink.md\\n+++ proposed docs/spec/ink.md\\n@@ -12,3 +12,7 @@ Where the width of SLAB-SHEET is configured.\\n ## Flow {#TENET-FLOW}\\n \\n Ink flows one mark at a time.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TENET-FLOW\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"SLAB-INK\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/ink.md:16: link-dangling: `zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\nwarning  docs/spec/ink.md:18: link-anchor: `#zz-wc-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-update-anchor`\nwarning  docs/spec/ink.md:18: link-dangling: `zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\n"
+    },
+    "propose update --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"inkwell\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"SLAB-INK\",\"target_path\":\"docs/spec/ink.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"2ef20b71c4b852056e243ee0424b2e41d55284a0\",\"base_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:10501f1839590f61658c6a41e18c2511a27fd191cbc617c467ef85a427e968d2\",\"rationale\":\"Probe SLAB-INK.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":16,\"subject\":\"zz-wc-update-brief-b.md\",\"message\":\"`zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"#zz-wc-update-brief-anchor\",\"message\":\"`#zz-wc-update-brief-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-update-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"zz-wc-update-brief-a.md\",\"message\":\"`zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TENET-FLOW\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"SLAB-INK\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/ink.md:16: link-dangling: `zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\nwarning  docs/spec/ink.md:18: link-anchor: `#zz-wc-update-brief-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-update-brief-anchor`\nwarning  docs/spec/ink.md:18: link-dangling: `zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\n"
+    },
+    "raise decision": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0009\",\"created\":true,\"hits\":[],\"related\":[{\"id\":\"PR-0007\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0009\nrelated: PR-0007 | open | - | -\n"
+    },
+    "raise discrepancy": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0008\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0008\n"
+    },
+    "raise question": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0007\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0007\n"
+    }
+  },
+  "corpus": "code-index",
+  "http": {
+    "probe": {
+      "path": "docs/spec/ink.md",
+      "target": "SLAB-INK"
+    },
+    "question confirm GET": {
+      "body": "{\"status\":503,\"message\":\"spec: `PR-100002` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-100002`'s record: add it, or `spec reject PR-100002 --reason <answer>`; nothing changed\"}",
+      "status": 503
+    },
+    "question raise": [
+      {
+        "exit": 0,
+        "json": "{\"id\":\"PR-100002\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "PR-100002\n"
+      }
+    ],
+    "question stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100002\",\"project\":\"inkwell\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"SLAB-INK\",\"target_path\":\"docs/spec/ink.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"SLAB-INK\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100002\nproject: inkwell\nkind: question\nstatus: open\ntarget_id: SLAB-INK\ntarget_path: docs/spec/ink.md\nworktree: <root>\nbranch: main\nbase_commit: <sha>\nbase_hash: -\nbase_text: -\nnew_text: -\npatch_hash: -\nrationale: -\nauthor: agent role=developer model=claude-opus-5-5 run=unknown\ndiagnostics: 0\ndiff: -\npreview: -\nconflict: -\nrevisions: -\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  SLAB-INK\nseverity: normal\ngap_type: -\nsummary: Does the write cost probe hold as written?\ngist: -\nmatters: -\nworking_answer: Keep it as written.\nprice_of_other: A new rule case.\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    },
+    "update commits": [
+      "<sha>\n29ab48b89a06ace4af64772f1c8c416be3f41223\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100001\n\nProbe SLAB-INK.\n\nProposal: PR-100001\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown\nBase-commit: 29ab48b89a06ace4af64772f1c8c416be3f41223\nRevision: TENET-FLOW 1 -> 2\n\n---\n docs/spec/ink.md | 6 +++++-\n 1 file changed, 5 insertions(+), 1 deletion(-)\n\ndiff --git a/docs/spec/ink.md b/docs/spec/ink.md\n--- a/docs/spec/ink.md\n+++ b/docs/spec/ink.md\n@@ -9,6 +9,10 @@ reviewed: 2026-10-16\n \n Where the width of SLAB-SHEET is configured.\n \n-## Flow {#TENET-FLOW}\n+## Flow {#TENET-FLOW rev=2}\n \n Ink flows one mark at a time.\n+\n+See [the second probe](zz-wc-hub-update-b.md) here.\n+\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n"
+    ],
+    "update confirm GET": {
+      "body": "{\"id\":\"PR-100001\",\"question\":\"staged 2026-10-05T21:14:03Z: spec approve PR-100001\\napply PR-100001 to docs/spec/ink.md on main in <root> (applies; raises TENET-FLOW 1 -> 2, staged)? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "update confirm POST": {
+      "body": "{\"id\":\"PR-100001\",\"project\":\"inkwell\",\"kind\":\"update\",\"status\":\"applied\",\"target_id\":\"SLAB-INK\",\"target_path\":\"docs/spec/ink.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"29ab48b89a06ace4af64772f1c8c416be3f41223\",\"base_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\",\"base_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\",\"new_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:b9f367c11518f0edd89f6619c437f6eb5db0f60e5b3e174bcdccdad91b7613ef\",\"rationale\":\"Probe SLAB-INK.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":16,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/ink.md\\n+++ proposed docs/spec/ink.md\\n@@ -12,3 +12,7 @@ Where the width of SLAB-SHEET is configured.\\n ## Flow {#TENET-FLOW}\\n \\n Ink flows one mark at a time.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"SLAB-INK\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "update propose": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"inkwell\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"SLAB-INK\",\"target_path\":\"docs/spec/ink.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"29ab48b89a06ace4af64772f1c8c416be3f41223\",\"base_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\",\"base_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\",\"new_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:b9f367c11518f0edd89f6619c437f6eb5db0f60e5b3e174bcdccdad91b7613ef\",\"rationale\":\"Probe SLAB-INK.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":16,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/ink.md\\n+++ proposed docs/spec/ink.md\\n@@ -12,3 +12,7 @@ Where the width of SLAB-SHEET is configured.\\n ## Flow {#TENET-FLOW}\\n \\n Ink flows one mark at a time.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TENET-FLOW\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"SLAB-INK\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-100001\nintroduced: 3\nwarning  docs/spec/ink.md:16: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\nwarning  docs/spec/ink.md:18: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-hub-update-anchor`\nwarning  docs/spec/ink.md:18: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\n"
+    },
+    "update stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"inkwell\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"SLAB-INK\",\"target_path\":\"docs/spec/ink.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"29ab48b89a06ace4af64772f1c8c416be3f41223\",\"base_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\",\"base_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\",\"new_text\":\"---\\nclass: canon\\nid: SLAB-INK\\nowner: owner\\nreviewed: 2026-10-16\\n---\\n\\n# Ink\\n\\nWhere the width of SLAB-SHEET is configured.\\n\\n## Flow {#TENET-FLOW}\\n\\nInk flows one mark at a time.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:b9f367c11518f0edd89f6619c437f6eb5db0f60e5b3e174bcdccdad91b7613ef\",\"rationale\":\"Probe SLAB-INK.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":16,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/ink.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/ink.md\\n+++ proposed docs/spec/ink.md\\n@@ -12,3 +12,7 @@ Where the width of SLAB-SHEET is configured.\\n ## Flow {#TENET-FLOW}\\n \\n Ink flows one mark at a time.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TENET-FLOW\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"SLAB-INK\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\"},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100001\nproject: inkwell\nkind: update\nstatus: open\ntarget_id: SLAB-INK\ntarget_path: docs/spec/ink.md\nworktree: <root>\nbranch: main\nbase_commit: 29ab48b89a06ace4af64772f1c8c416be3f41223\nbase_hash: b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\nbase_text:\n  ---\n  class: canon\n  id: SLAB-INK\n  owner: owner\n  reviewed: 2026-10-16\n  ---\n\n  # Ink\n\n  Where the width of SLAB-SHEET is configured.\n\n  ## Flow {#TENET-FLOW}\n\n  Ink flows one mark at a time.\nnew_text:\n  ---\n  class: canon\n  id: SLAB-INK\n  owner: owner\n  reviewed: 2026-10-16\n  ---\n\n  # Ink\n\n  Where the width of SLAB-SHEET is configured.\n\n  ## Flow {#TENET-FLOW}\n\n  Ink flows one mark at a time.\n\n  See [the second probe](zz-wc-hub-update-b.md) here.\n\n  See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npatch_hash: b3:b9f367c11518f0edd89f6619c437f6eb5db0f60e5b3e174bcdccdad91b7613ef\nrationale:\n  Probe SLAB-INK.\nauthor: agent role=spec-writer model=claude-opus-5-5 run=unknown\ndiagnostics: 3\n  warning  docs/spec/ink.md:16: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\n  warning  docs/spec/ink.md:18: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-hub-update-anchor`\n  warning  docs/spec/ink.md:18: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\ndiff:\n  --- base docs/spec/ink.md\n  +++ proposed docs/spec/ink.md\n  @@ -12,3 +12,7 @@ Where the width of SLAB-SHEET is configured.\n   ## Flow {#TENET-FLOW}\n   \n   Ink flows one mark at a time.\n  +\n  +See [the second probe](zz-wc-hub-update-b.md) here.\n  +\n  +See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npreview: applies\nconflict: -\nrevisions: TENET-FLOW 1 -> 2 (0 lock entries)\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  SLAB-INK\nseverity: -\ngap_type: -\nsummary: -\ngist: -\nmatters: -\nworking_answer: -\nprice_of_other: -\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121\"}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "path": "docs/spec/ink.md",
+      "target": "SLAB-INK"
+    },
+    "propose_change amendment": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0003\nintroduced: 4\nerror  docs/spec/zz-wc-mcp-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-mcp-amends.md:12: link-dangling: `zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)\nwarning  docs/spec/zz-wc-mcp-amends.md:14: link-anchor: `#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`\nwarning  docs/spec/zz-wc-mcp-amends.md:14: link-dangling: `zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "2ef20b71c4b852056e243ee0424b2e41d55284a0",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "key-missing",
+              "line": 1,
+              "message": "key `scope` is required for class spec: a list, as [root]",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "error",
+              "subject": "scope"
+            },
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-amends-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0003",
+          "interpretation": null,
+          "kind": "amendment",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:c83555c55b264e8b22f10bf84a5f16e87d5d6749def66d4aa9b39d54664f603a",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "inkwell",
+          "rationale": "Amend the probe.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-amends.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-amends.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-amends.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:9: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:11: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:11: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)\nsimilar: SLAB-PROBE | search | advises | slab | docs/spec/probe.md | Probe | search rank 1 on `write`, `cost`, `probe`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "2ef20b71c4b852056e243ee0424b2e41d55284a0",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 9,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 11,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 11,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0002",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:4f0d7dd95b29ffff358cfb539b993bfb9820b917b502c783ca832b96481a48df",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "inkwell",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": false,
+              "id": "SLAB-PROBE",
+              "kind": "slab",
+              "path": "docs/spec/probe.md",
+              "reason": "search rank 1 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "Probe"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp-dry.md:9: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)\nwarning  docs/spec/zz-wc-mcp-dry.md:11: link-anchor: `#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  docs/spec/zz-wc-mcp-dry.md:11: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)\nsimilar: SLAB-PROBE | search | advises | slab | docs/spec/probe.md | Probe | search rank 1 on `write`, `cost`, `probe`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 9,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 11,
+              "message": "`#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 11,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:fe111482f5cbe9f0ce5b093e19c1ddcd08d77a9d2f1449f116eb28a83f08c558",
+          "preview": null,
+          "price_of_other": null,
+          "project": "inkwell",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": false,
+              "id": "SLAB-PROBE",
+              "kind": "slab",
+              "path": "docs/spec/probe.md",
+              "reason": "search rank 1 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "Probe"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change interpretation": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "spec: --decision: SLAB-INK is no accepted decision: canon document docs/spec/ink.md; nothing stored\n",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": null,
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": null,
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": null,
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": null,
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "--decision: SLAB-INK is no accepted decision: canon document docs/spec/ink.md; nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": null,
+          "preview": null,
+          "price_of_other": null,
+          "project": null,
+          "rationale": null,
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": null,
+          "target_ids": [],
+          "target_path": null,
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": null
+        }
+      }
+    },
+    "propose_change update": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/ink.md:16: link-dangling: `zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)\nwarning  docs/spec/ink.md:18: link-anchor: `#zz-wc-mcp-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-mcp-update-anchor`\nwarning  docs/spec/ink.md:18: link-dangling: `zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "2ef20b71c4b852056e243ee0424b2e41d55284a0",
+          "base_hash": "b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 16,
+              "message": "`zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)",
+              "path": "docs/spec/ink.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 18,
+              "message": "`#zz-wc-mcp-update-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-mcp-update-anchor`",
+              "path": "docs/spec/ink.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 18,
+              "message": "`zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)",
+              "path": "docs/spec/ink.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:970945ff3d91d6ae68a1122808f6e97cf88064f7ecd4807c6edd7d2c1281bc84",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "inkwell",
+          "rationale": "Probe SLAB-INK.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "TENET-FLOW",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "SLAB-INK",
+          "target_ids": [
+            "SLAB-INK"
+          ],
+          "target_path": "docs/spec/ink.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/ink.md:16: link-dangling: `zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)\nwarning  docs/spec/ink.md:18: link-anchor: `#zz-wc-mcp-update-dry-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`\nwarning  docs/spec/ink.md:18: link-dangling: `zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": "b3:bfe9c430abfe0fed2f5b399cdf1ef171b16ff27fe593d42203030997fc49d121",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 16,
+              "message": "`zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)",
+              "path": "docs/spec/ink.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 18,
+              "message": "`#zz-wc-mcp-update-dry-anchor`: `docs/spec/ink.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`",
+              "path": "docs/spec/ink.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 18,
+              "message": "`zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)",
+              "path": "docs/spec/ink.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:0f01cd3f98beba3a84f722a56887efb9f908a2b5c539b5b62738e34a1f9a3778",
+          "preview": null,
+          "price_of_other": null,
+          "project": "inkwell",
+          "rationale": "Probe SLAB-INK.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "SLAB-INK",
+          "target_ids": [
+            "SLAB-INK"
+          ],
+          "target_path": "docs/spec/ink.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

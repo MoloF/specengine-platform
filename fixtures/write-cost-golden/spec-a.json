@@ -1,0 +1,1065 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "approve decision": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0011\",\"project\":\"lantern-keep\",\"kind\":\"decision\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the probe stay?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Yes: it stays as written.\",\"price_of_other\":\"Another probe.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0011` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0011` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord DEC-0024 at docs/records/DEC/DEC-0024.md:\n  ---\n  id: DEC-0024\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Yes: it stays as written.\"\n  canon: DOM-GAME\n  links:\n    answers: [DOM-GAME]\n  ref: PR-0011\n  scope: [decisions]\n  ---\n\n  # Yes: it stays as written.\n\n  Choice:\n\n  Yes: it stays as written.\n\n  Effect:\n\n\n\n  Cost:\n\n\n\n  Summary:\n\n  Does the probe stay?\n\n  Options:\n\n\n\n  Evidence:\n\n\n\n  Note:\n\n\n\n  Decided by:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0011 as DEC-0024 (the working answer) on main in <root>? [y/N]"
+      ]
+    },
+    "approve discrepancy --option 1": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0010\",\"project\":\"lantern-keep\",\"kind\":\"discrepancy\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":\"normal\",\"gap_type\":\"contradicts\",\"summary\":\"The probe and the code disagree.\",\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[{\"file\":\"src/probe.rs\",\"qpath\":\"probe\",\"lines\":\"1-2\",\"observed\":\"returns early\",\"documented\":\"runs to the end\"}],\"pair\":null,\"options\":[{\"label\":\"Keep the spec\",\"effect\":\"Fix the code\",\"price\":\"one work item\"},{\"label\":\"Change the spec\",\"effect\":\"Allow it\",\"price\":\"a new rule case\"}],\"recommendation\":0,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0010` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0010` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord DEC-0024 at docs/records/DEC/DEC-0024.md:\n  ---\n  id: DEC-0024\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Change the spec\"\n  canon: DOM-GAME\n  links:\n    answers: [DOM-GAME]\n  ref: PR-0010\n  scope: [decisions]\n  ---\n\n  # Change the spec\n\n  Choice:\n\n  Change the spec\n\n  Effect:\n\n  Allow it\n\n  Cost:\n\n  a new rule case\n\n  Summary:\n\n  The probe and the code disagree.\n\n  Options:\n\n  - Keep the spec | Fix the code | one work item\n  - Change the spec | Allow it | a new rule case\n\n  Evidence:\n\n  - src/probe.rs:1-2 probe | returns early | runs to the end\n\n  Note:\n\n\n\n  Decided by:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0010 as DEC-0024 (option 1) on main in <root>? [y/N]"
+      ]
+    },
+    "approve question": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0009\",\"project\":\"lantern-keep\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0009` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0009` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord DEC-0024 at docs/records/DEC/DEC-0024.md:\n  ---\n  id: DEC-0024\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Keep it as written.\"\n  canon: DOM-GAME\n  links:\n    answers: [DOM-GAME]\n  ref: PR-0009\n  scope: [decisions]\n  ---\n\n  # Keep it as written.\n\n  Choice:\n\n  Keep it as written.\n\n  Effect:\n\n\n\n  Cost:\n\n\n\n  Summary:\n\n  Does the write cost probe hold as written?\n\n  Options:\n\n\n\n  Evidence:\n\n\n\n  Note:\n\n\n\n  Decided by:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0009 as DEC-0024 (the working answer) on main in <root>? [y/N]"
+      ]
+    },
+    "approve update": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0001\",\"project\":\"lantern-keep\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\",\"new_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:e34c0c40240c61b330a348b0ce00131576dc0285d316bb9270b5534313797ac0\",\"rationale\":\"Probe DOM-GAME.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/game.md\\n+++ proposed docs/spec/game.md\\n@@ -27,3 +27,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n ## Glossary {#glossary}\\n \\n See TERM-exhausted.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0001` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0001` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "apply PR-0001 to docs/spec/game.md on main in <root> (applies; raises DOM-GAME 1 -> 2)? [y/N]"
+      ]
+    },
+    "probe": {
+      "base": "b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4",
+      "decision": "DEC-0023",
+      "path": "docs/spec/game.md",
+      "target": "DOM-GAME"
+    },
+    "propose amendment": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0005\",\"project\":\"lantern-keep\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends.md\",\"target_path\":\"docs/spec/zz-wc-amends.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\ntitle: Lantern Keep\\nowner: owner\\nreviewed: 2026-09-20\\nclass: spec\\nstatus: draft\\nlinks:\\n  amends: [DOM-GAME]\\n---\\n\\n# Write cost amendment\\n\\nSee [the second probe](zz-wc-amends-b.md) here.\\n\\nSee [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"patch_hash\":\"b3:9bcb6329663014ff76bbe168cdfd7fe851f6054df58b3d87f979856c62313d7e\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":13,\"subject\":\"zz-wc-amends-b.md\",\"message\":\"`zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":15,\"subject\":\"#zz-wc-amends-anchor\",\"message\":\"`#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":15,\"subject\":\"zz-wc-amends-a.md\",\"message\":\"`zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-amends.md\\n+++ proposed docs/spec/zz-wc-amends.md\\n@@ -0,0 +1,15 @@\\n+---\\n+title: Lantern Keep\\n+owner: owner\\n+reviewed: 2026-09-20\\n+class: spec\\n+status: draft\\n+links:\\n+  amends: [DOM-GAME]\\n+---\\n+\\n+# Write cost amendment\\n+\\n+See [the second probe](zz-wc-amends-b.md) here.\\n+\\n+See [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0005\nintroduced: 4\nerror  docs/spec/zz-wc-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends.md:13: link-dangling: `zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\nwarning  docs/spec/zz-wc-amends.md:15: link-anchor: `#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\nwarning  docs/spec/zz-wc-amends.md:15: link-dangling: `zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\n"
+    },
+    "propose amendment --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0006\",\"project\":\"lantern-keep\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends-brief.md\",\"target_path\":\"docs/spec/zz-wc-amends-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:b2642e7b1d7f5b7cb2788a78d302ebc0d0c15a1684fce7e780b051d0477b7f64\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":13,\"subject\":\"zz-wc-amends-brief-b.md\",\"message\":\"`zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":15,\"subject\":\"#zz-wc-amends-brief-anchor\",\"message\":\"`#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":15,\"subject\":\"zz-wc-amends-brief-a.md\",\"message\":\"`zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0006\nintroduced: 4\nerror  docs/spec/zz-wc-amends-brief.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends-brief.md:13: link-dangling: `zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\nwarning  docs/spec/zz-wc-amends-brief.md:15: link-anchor: `#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\nwarning  docs/spec/zz-wc-amends-brief.md:15: link-dangling: `zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\n"
+    },
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"lantern-keep\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:20c76eaa0a3abd6dcc1fe7f5be5ea4e10e843c4f157e84fdfbc253e0581b29a9\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":12,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,14 @@\\n+---\\n+class: canon\\n+tier: 0\\n+title: Lantern Keep\\n+status: accepted\\n+owner: owner\\n+reviewed: 2026-09-20\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"DOM-GAME\",\"path\":\"docs/spec/game.md\",\"title\":\"Lantern Keep\",\"kind\":\"domain\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create.md`'s\",\"gates\":true},{\"id\":\"Q-032\",\"path\":\"docs/records/Q/Q-032.md\",\"title\":\"Does the lantern drain stamina?\",\"kind\":\"question\",\"source\":\"search\",\"reason\":\"search rank 2 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"A-102\",\"path\":\"docs/records/A/A-102.md\",\"title\":\"The lantern burns one unit of oil per minute\",\"kind\":\"requirement\",\"source\":\"search\",\"reason\":\"search rank 3 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"RULE-CORE-LOOP\",\"path\":\"docs/spec/game.md\",\"title\":\"Core loop\",\"kind\":\"rule\",\"source\":\"search\",\"reason\":\"search rank 4 on `lantern`, `keep`\",\"gates\":false}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:12: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:14: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:14: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\nsimilar: DOM-GAME | title | gates | domain | docs/spec/game.md | Lantern Keep | title equal to new `docs/spec/zz-wc-create.md`'s\nsimilar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain stamina? | search rank 2 on `lantern`, `keep`\nsimilar: A-102 | search | advises | requirement | docs/records/A/A-102.md | The lantern burns one unit of oil per minute | search rank 3 on `lantern`, `keep`\nsimilar: RULE-CORE-LOOP | search | advises | rule | docs/spec/game.md | Core loop | search rank 4 on `lantern`, `keep`\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"lantern-keep\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:98d54c10c7685c7e8d5de6d2f80001f187b9e443d7efab16ecc736204f0bc17d\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"DOM-GAME\",\"path\":\"docs/spec/game.md\",\"title\":\"Lantern Keep\",\"kind\":\"domain\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create-brief.md`'s\",\"gates\":true},{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"Lantern Keep\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"Q-032\",\"path\":\"docs/records/Q/Q-032.md\",\"title\":\"Does the lantern drain stamina?\",\"kind\":\"question\",\"source\":\"search\",\"reason\":\"search rank 2 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"A-102\",\"path\":\"docs/records/A/A-102.md\",\"title\":\"The lantern burns one unit of oil per minute\",\"kind\":\"requirement\",\"source\":\"search\",\"reason\":\"search rank 3 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"RULE-CORE-LOOP\",\"path\":\"docs/spec/game.md\",\"title\":\"Core loop\",\"kind\":\"rule\",\"source\":\"search\",\"reason\":\"search rank 4 on `lantern`, `keep`\",\"gates\":false}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:12: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:14: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:14: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: DOM-GAME | title | gates | domain | docs/spec/game.md | Lantern Keep | title equal to new `docs/spec/zz-wc-create-brief.md`'s\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | Lantern Keep | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain stamina? | search rank 2 on `lantern`, `keep`\nsimilar: A-102 | search | advises | requirement | docs/records/A/A-102.md | The lantern burns one unit of oil per minute | search rank 3 on `lantern`, `keep`\nsimilar: RULE-CORE-LOOP | search | advises | rule | docs/spec/game.md | Core loop | search rank 4 on `lantern`, `keep`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0004\",\"project\":\"lantern-keep\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:98d54c10c7685c7e8d5de6d2f80001f187b9e443d7efab16ecc736204f0bc17d\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"DOM-GAME\",\"path\":\"docs/spec/game.md\",\"title\":\"Lantern Keep\",\"kind\":\"domain\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create-brief.md`'s\",\"gates\":true},{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"Lantern Keep\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"Q-032\",\"path\":\"docs/records/Q/Q-032.md\",\"title\":\"Does the lantern drain stamina?\",\"kind\":\"question\",\"source\":\"search\",\"reason\":\"search rank 2 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"A-102\",\"path\":\"docs/records/A/A-102.md\",\"title\":\"The lantern burns one unit of oil per minute\",\"kind\":\"requirement\",\"source\":\"search\",\"reason\":\"search rank 3 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"RULE-CORE-LOOP\",\"path\":\"docs/spec/game.md\",\"title\":\"Core loop\",\"kind\":\"rule\",\"source\":\"search\",\"reason\":\"search rank 4 on `lantern`, `keep`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:12: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:14: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:14: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: DOM-GAME | title | gates | domain | docs/spec/game.md | Lantern Keep | title equal to new `docs/spec/zz-wc-create-brief.md`'s\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | Lantern Keep | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain stamina? | search rank 2 on `lantern`, `keep`\nsimilar: A-102 | search | advises | requirement | docs/records/A/A-102.md | The lantern burns one unit of oil per minute | search rank 3 on `lantern`, `keep`\nsimilar: RULE-CORE-LOOP | search | advises | rule | docs/spec/game.md | Core loop | search rank 4 on `lantern`, `keep`\n"
+    },
+    "propose create, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0003\",\"project\":\"lantern-keep\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:20c76eaa0a3abd6dcc1fe7f5be5ea4e10e843c4f157e84fdfbc253e0581b29a9\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":12,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,14 @@\\n+---\\n+class: canon\\n+tier: 0\\n+title: Lantern Keep\\n+status: accepted\\n+owner: owner\\n+reviewed: 2026-09-20\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"DOM-GAME\",\"path\":\"docs/spec/game.md\",\"title\":\"Lantern Keep\",\"kind\":\"domain\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create.md`'s\",\"gates\":true},{\"id\":\"Q-032\",\"path\":\"docs/records/Q/Q-032.md\",\"title\":\"Does the lantern drain stamina?\",\"kind\":\"question\",\"source\":\"search\",\"reason\":\"search rank 2 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"A-102\",\"path\":\"docs/records/A/A-102.md\",\"title\":\"The lantern burns one unit of oil per minute\",\"kind\":\"requirement\",\"source\":\"search\",\"reason\":\"search rank 3 on `lantern`, `keep`\",\"gates\":false},{\"id\":\"RULE-CORE-LOOP\",\"path\":\"docs/spec/game.md\",\"title\":\"Core loop\",\"kind\":\"rule\",\"source\":\"search\",\"reason\":\"search rank 4 on `lantern`, `keep`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0003\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:12: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:14: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:14: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\nsimilar: DOM-GAME | title | gates | domain | docs/spec/game.md | Lantern Keep | title equal to new `docs/spec/zz-wc-create.md`'s\nsimilar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain stamina? | search rank 2 on `lantern`, `keep`\nsimilar: A-102 | search | advises | requirement | docs/records/A/A-102.md | The lantern burns one unit of oil per minute | search rank 3 on `lantern`, `keep`\nsimilar: RULE-CORE-LOOP | search | advises | rule | docs/spec/game.md | Core loop | search rank 4 on `lantern`, `keep`\n"
+    },
+    "propose interpretation": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0007\",\"project\":\"lantern-keep\",\"kind\":\"interpretation\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\",\"new_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\\nSee [the second probe](zz-wc-interpret-b.md) here.\\n\\nSee [the first probe](zz-wc-interpret-a.md) and [its anchor](#zz-wc-interpret-anchor) here.\\n\",\"patch_hash\":\"b3:7f26a2e656a4003c741af79aebc1844a064c0eacd9569dd6c8d13c77edb584ed\",\"rationale\":\"Interpret it.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-interpret-b.md\",\"message\":\"`zz-wc-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-interpret-anchor\",\"message\":\"`#zz-wc-interpret-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-interpret-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-interpret-a.md\",\"message\":\"`zz-wc-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-a.md`)\"}],\"diff\":\"--- base docs/spec/game.md\\n+++ proposed docs/spec/game.md\\n@@ -27,3 +27,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n ## Glossary {#glossary}\\n \\n See TERM-exhausted.\\n+\\n+See [the second probe](zz-wc-interpret-b.md) here.\\n+\\n+See [the first probe](zz-wc-interpret-a.md) and [its anchor](#zz-wc-interpret-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"DOM-GAME\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":{\"decision\":\"DEC-0023\",\"how\":\"Applied as written.\",\"why\":\"The decision left the wording open.\"},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0007\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-interpret-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-interpret-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-a.md`)\n"
+    },
+    "propose interpretation --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0008\",\"project\":\"lantern-keep\",\"kind\":\"interpretation\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:c3501739d5f769d3147e8be5e8bc022693ff6ad6a47d8f73d0fe6461ad8ec6f6\",\"rationale\":\"Interpret it.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-interpret-brief-b.md\",\"message\":\"`zz-wc-interpret-brief-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-interpret-brief-anchor\",\"message\":\"`#zz-wc-interpret-brief-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-interpret-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-interpret-brief-a.md\",\"message\":\"`zz-wc-interpret-brief-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"DOM-GAME\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":{\"decision\":\"DEC-0023\",\"how\":\"Applied as written.\",\"why\":\"The decision left the wording open.\"},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0008\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-interpret-brief-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-interpret-brief-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-interpret-brief-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-interpret-brief-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-a.md`)\n"
+    },
+    "propose update": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"lantern-keep\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\",\"new_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:e34c0c40240c61b330a348b0ce00131576dc0285d316bb9270b5534313797ac0\",\"rationale\":\"Probe DOM-GAME.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/game.md\\n+++ proposed docs/spec/game.md\\n@@ -27,3 +27,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n ## Glossary {#glossary}\\n \\n See TERM-exhausted.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"DOM-GAME\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-update-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\n"
+    },
+    "propose update --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"lantern-keep\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"4ad9625c20dba7d741cf77bc194ef59fca27fdfa\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:73b08af0f4dbe18d38127f488afca4aa788276514a4d4228310a48f434a0e2f9\",\"rationale\":\"Probe DOM-GAME.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-update-brief-b.md\",\"message\":\"`zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-update-brief-anchor\",\"message\":\"`#zz-wc-update-brief-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-update-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-update-brief-a.md\",\"message\":\"`zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"DOM-GAME\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-update-brief-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-update-brief-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\n"
+    },
+    "raise decision": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0011\",\"created\":true,\"hits\":[],\"related\":[{\"id\":\"PR-0009\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0011\nrelated: PR-0009 | open | - | -\n"
+    },
+    "raise discrepancy": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0010\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0010\n"
+    },
+    "raise question": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0009\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0009\n"
+    }
+  },
+  "corpus": "spec-a",
+  "http": {
+    "probe": {
+      "path": "docs/spec/game.md",
+      "target": "DOM-GAME"
+    },
+    "question commits": [
+      "<sha>\n<sha>\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100002\n\nDEC-100001: Keep it as written.\n\nProposal: PR-100002\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=developer model=claude-opus-5-5 run=unknown\nBase-commit: <sha>\n\n---\n docs/records/DEC/DEC-100001.md | 46 ++++++++++++++++++++++++++++++++++++++++++\n 1 file changed, 46 insertions(+)\n\ndiff --git a/docs/records/DEC/DEC-100001.md b/docs/records/DEC/DEC-100001.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/records/DEC/DEC-100001.md\n@@ -0,0 +1,46 @@\n+---\n+id: DEC-100001\n+class: decision\n+status: accepted\n+date: <today>\n+title: \"Keep it as written.\"\n+canon: DOM-GAME\n+links:\n+  answers: [DOM-GAME]\n+ref: PR-100002\n+scope: [decisions]\n+---\n+\n+# Keep it as written.\n+\n+Choice:\n+\n+Keep it as written.\n+\n+Effect:\n+\n+\n+\n+Cost:\n+\n+\n+\n+Summary:\n+\n+Does the write cost probe hold as written?\n+\n+Options:\n+\n+\n+\n+Evidence:\n+\n+\n+\n+Note:\n+\n+\n+\n+Decided by:\n+\n+ann <ann@example.org>\n"
+    ],
+    "question confirm GET": {
+      "body": "{\"id\":\"PR-100002\",\"question\":\"introduced: 0\\nrecord DEC-100001 at docs/records/DEC/DEC-100001.md:\\n  ---\\n  id: DEC-100001\\n  class: decision\\n  status: accepted\\n  date: <today>\\n  title: \\\"Keep it as written.\\\"\\n  canon: DOM-GAME\\n  links:\\n    answers: [DOM-GAME]\\n  ref: PR-100002\\n  scope: [decisions]\\n  ---\\n\\n  # Keep it as written.\\n\\n  Choice:\\n\\n  Keep it as written.\\n\\n  Effect:\\n\\n\\n\\n  Cost:\\n\\n\\n\\n  Summary:\\n\\n  Does the write cost probe hold as written?\\n\\n  Options:\\n\\n\\n\\n  Evidence:\\n\\n\\n\\n  Note:\\n\\n\\n\\n  Decided by:\\n\\n  ann <ann@example.org>\\nstaged 2026-10-05T21:14:03Z: spec approve PR-100002\\napply PR-100002 as DEC-100001 (the working answer, staged) on main in <root>? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "question confirm POST": {
+      "body": "{\"id\":\"PR-100002\",\"project\":\"lantern-keep\",\"kind\":\"question\",\"status\":\"applied\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"DOM-GAME\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":\"DEC-100001\",\"record_path\":\"docs/records/DEC/DEC-100001.md\",\"record_title\":\"Keep it as written.\",\"record_text\":\"---\\nid: DEC-100001\\nclass: decision\\nstatus: accepted\\ndate: <today>\\ntitle: \\\"Keep it as written.\\\"\\ncanon: DOM-GAME\\nlinks:\\n  answers: [DOM-GAME]\\nref: PR-100002\\nscope: [decisions]\\n---\\n\\n# Keep it as written.\\n\\nChoice:\\n\\nKeep it as written.\\n\\nEffect:\\n\\n\\n\\nCost:\\n\\n\\n\\nSummary:\\n\\nDoes the write cost probe hold as written?\\n\\nOptions:\\n\\n\\n\\nEvidence:\\n\\n\\n\\nNote:\\n\\n\\n\\nDecided by:\\n\\nann <ann@example.org>\\n\",\"choice\":{\"working_answer\":true},\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "question raise": [
+      {
+        "exit": 0,
+        "json": "{\"id\":\"PR-100002\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "PR-100002\n"
+      }
+    ],
+    "question stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100002\",\"project\":\"lantern-keep\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100002\nproject: lantern-keep\nkind: question\nstatus: open\ntarget_id: DOM-GAME\ntarget_path: docs/spec/game.md\nworktree: <root>\nbranch: main\nbase_commit: <sha>\nbase_hash: -\nbase_text: -\nnew_text: -\npatch_hash: -\nrationale: -\nauthor: agent role=developer model=claude-opus-5-5 run=unknown\ndiagnostics: 0\ndiff: -\npreview: -\nconflict: -\nrevisions: -\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  DOM-GAME\nseverity: normal\ngap_type: -\nsummary: Does the write cost probe hold as written?\ngist: -\nmatters: -\nworking_answer: Keep it as written.\nprice_of_other: A new rule case.\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    },
+    "update commits": [
+      "<sha>\n7509be64f8c831da676dca97d77f4673c0d9e56e\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100001\n\nProbe DOM-GAME.\n\nProposal: PR-100001\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown\nBase-commit: 7509be64f8c831da676dca97d77f4673c0d9e56e\nRevision: DOM-GAME 1 -> 2\n\n---\n docs/spec/game.md | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/docs/spec/game.md b/docs/spec/game.md\n--- a/docs/spec/game.md\n+++ b/docs/spec/game.md\n@@ -1,5 +1,6 @@\n ---\n id: DOM-GAME\n+rev: 2\n class: canon\n tier: 0\n title: Lantern Keep\n@@ -27,3 +28,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\n ## Glossary {#glossary}\n \n See TERM-exhausted.\n+\n+See [the second probe](zz-wc-hub-update-b.md) here.\n+\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n"
+    ],
+    "update confirm GET": {
+      "body": "{\"id\":\"PR-100001\",\"question\":\"staged 2026-10-05T21:14:03Z: spec approve PR-100001\\napply PR-100001 to docs/spec/game.md on main in <root> (applies; raises DOM-GAME 1 -> 2, staged)? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "update confirm POST": {
+      "body": "{\"id\":\"PR-100001\",\"project\":\"lantern-keep\",\"kind\":\"update\",\"status\":\"applied\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"7509be64f8c831da676dca97d77f4673c0d9e56e\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\",\"new_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:99be39cc0d1dce62a2448a2f38a7ba90793bd0af904efd294b40dddb5acdef87\",\"rationale\":\"Probe DOM-GAME.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/game.md\\n+++ proposed docs/spec/game.md\\n@@ -27,3 +27,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n ## Glossary {#glossary}\\n \\n See TERM-exhausted.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "update propose": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"lantern-keep\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"7509be64f8c831da676dca97d77f4673c0d9e56e\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\",\"new_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:99be39cc0d1dce62a2448a2f38a7ba90793bd0af904efd294b40dddb5acdef87\",\"rationale\":\"Probe DOM-GAME.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/game.md\\n+++ proposed docs/spec/game.md\\n@@ -27,3 +27,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n ## Glossary {#glossary}\\n \\n See TERM-exhausted.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"DOM-GAME\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-100001\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-hub-update-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\n"
+    },
+    "update stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"lantern-keep\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"DOM-GAME\",\"target_path\":\"docs/spec/game.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"7509be64f8c831da676dca97d77f4673c0d9e56e\",\"base_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\",\"base_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\",\"new_text\":\"---\\nid: DOM-GAME\\nclass: canon\\ntier: 0\\ntitle: Lantern Keep\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\n---\\n\\n# Lantern Keep\\n\\nA small survival game: keep the lantern lit through the night while the\\nstamina economy pushes back.\\n\\n## Pillars\\n\\n- Every action costs stamina ([[DOM-MOVEMENT]]).\\n- Darkness is a resource, not a punishment.\\n\\n## Core loop {#RULE-CORE-LOOP}\\n\\nGather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n\\n<a name=\\\"terms\\\"></a>\\n\\n## Glossary {#glossary}\\n\\nSee TERM-exhausted.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:99be39cc0d1dce62a2448a2f38a7ba90793bd0af904efd294b40dddb5acdef87\",\"rationale\":\"Probe DOM-GAME.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":31,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/game.md\",\"line\":33,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/game.md\\n+++ proposed docs/spec/game.md\\n@@ -27,3 +27,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\\n ## Glossary {#glossary}\\n \\n See TERM-exhausted.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"DOM-GAME\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"DOM-GAME\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\"},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100001\nproject: lantern-keep\nkind: update\nstatus: open\ntarget_id: DOM-GAME\ntarget_path: docs/spec/game.md\nworktree: <root>\nbranch: main\nbase_commit: 7509be64f8c831da676dca97d77f4673c0d9e56e\nbase_hash: b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\nbase_text:\n  ---\n  id: DOM-GAME\n  class: canon\n  tier: 0\n  title: Lantern Keep\n  status: accepted\n  owner: owner\n  reviewed: 2026-09-20\n  ---\n\n  # Lantern Keep\n\n  A small survival game: keep the lantern lit through the night while the\n  stamina economy pushes back.\n\n  ## Pillars\n\n  - Every action costs stamina ([[DOM-MOVEMENT]]).\n  - Darkness is a resource, not a punishment.\n\n  ## Core loop {#RULE-CORE-LOOP}\n\n  Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\n\n  <a name=\"terms\"></a>\n\n  ## Glossary {#glossary}\n\n  See TERM-exhausted.\nnew_text:\n  ---\n  id: DOM-GAME\n  class: canon\n  tier: 0\n  title: Lantern Keep\n  status: accepted\n  owner: owner\n  reviewed: 2026-09-20\n  ---\n\n  # Lantern Keep\n\n  A small survival game: keep the lantern lit through the night while the\n  stamina economy pushes back.\n\n  ## Pillars\n\n  - Every action costs stamina ([[DOM-MOVEMENT]]).\n  - Darkness is a resource, not a punishment.\n\n  ## Core loop {#RULE-CORE-LOOP}\n\n  Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\n\n  <a name=\"terms\"></a>\n\n  ## Glossary {#glossary}\n\n  See TERM-exhausted.\n\n  See [the second probe](zz-wc-hub-update-b.md) here.\n\n  See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npatch_hash: b3:99be39cc0d1dce62a2448a2f38a7ba90793bd0af904efd294b40dddb5acdef87\nrationale:\n  Probe DOM-GAME.\nauthor: agent role=spec-writer model=claude-opus-5-5 run=unknown\ndiagnostics: 3\n  warning  docs/spec/game.md:31: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\n  warning  docs/spec/game.md:33: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-hub-update-anchor`\n  warning  docs/spec/game.md:33: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\ndiff:\n  --- base docs/spec/game.md\n  +++ proposed docs/spec/game.md\n  @@ -27,3 +27,7 @@ Gather oil, walk the walls, rest by the lantern. The loop follows R-12.\n   ## Glossary {#glossary}\n   \n   See TERM-exhausted.\n  +\n  +See [the second probe](zz-wc-hub-update-b.md) here.\n  +\n  +See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npreview: applies\nconflict: -\nrevisions: DOM-GAME 1 -> 2 (0 lock entries)\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  DOM-GAME\nseverity: -\ngap_type: -\nsummary: -\ngist: -\nmatters: -\nworking_answer: -\nprice_of_other: -\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4\"}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "path": "docs/spec/game.md",
+      "target": "DOM-GAME"
+    },
+    "propose_change amendment": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0003\nintroduced: 4\nerror  docs/spec/zz-wc-mcp-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-mcp-amends.md:13: link-dangling: `zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)\nwarning  docs/spec/zz-wc-mcp-amends.md:15: link-anchor: `#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`\nwarning  docs/spec/zz-wc-mcp-amends.md:15: link-dangling: `zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "4ad9625c20dba7d741cf77bc194ef59fca27fdfa",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "key-missing",
+              "line": 1,
+              "message": "key `scope` is required for class spec: a list, as [root]",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "error",
+              "subject": "scope"
+            },
+            {
+              "code": "link-dangling",
+              "line": 13,
+              "message": "`zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 15,
+              "message": "`#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-amends-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 15,
+              "message": "`zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0003",
+          "interpretation": null,
+          "kind": "amendment",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:9bd7214afe5f2bbd4f0011cf70261f468ba57f93166e098c01282b70057da41d",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "lantern-keep",
+          "rationale": "Amend the probe.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-amends.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-amends.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-amends.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:12: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:14: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:14: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)\nsimilar: DOM-GAME | title | gates | domain | docs/spec/game.md | Lantern Keep | title equal to new `docs/spec/zz-wc-mcp.md`'s\nsimilar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain stamina? | search rank 2 on `lantern`, `keep`\nsimilar: A-102 | search | advises | requirement | docs/records/A/A-102.md | The lantern burns one unit of oil per minute | search rank 3 on `lantern`, `keep`\nsimilar: RULE-CORE-LOOP | search | advises | rule | docs/spec/game.md | Core loop | search rank 4 on `lantern`, `keep`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:3cfeb8db2893bbff88063071001cf0c62415329b2852664703223b8a027457ca",
+          "preview": null,
+          "price_of_other": null,
+          "project": "lantern-keep",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "DOM-GAME",
+              "kind": "domain",
+              "path": "docs/spec/game.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp.md`'s",
+              "source": "title",
+              "title": "Lantern Keep"
+            },
+            {
+              "gates": false,
+              "id": "Q-032",
+              "kind": "question",
+              "path": "docs/records/Q/Q-032.md",
+              "reason": "search rank 2 on `lantern`, `keep`",
+              "source": "search",
+              "title": "Does the lantern drain stamina?"
+            },
+            {
+              "gates": false,
+              "id": "A-102",
+              "kind": "requirement",
+              "path": "docs/records/A/A-102.md",
+              "reason": "search rank 3 on `lantern`, `keep`",
+              "source": "search",
+              "title": "The lantern burns one unit of oil per minute"
+            },
+            {
+              "gates": false,
+              "id": "RULE-CORE-LOOP",
+              "kind": "rule",
+              "path": "docs/spec/game.md",
+              "reason": "search rank 4 on `lantern`, `keep`",
+              "source": "search",
+              "title": "Core loop"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp-dry.md:12: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)\nwarning  docs/spec/zz-wc-mcp-dry.md:14: link-anchor: `#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  docs/spec/zz-wc-mcp-dry.md:14: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)\nsimilar: DOM-GAME | title | gates | domain | docs/spec/game.md | Lantern Keep | title equal to new `docs/spec/zz-wc-mcp-dry.md`'s\nsimilar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain stamina? | search rank 2 on `lantern`, `keep`\nsimilar: A-102 | search | advises | requirement | docs/records/A/A-102.md | The lantern burns one unit of oil per minute | search rank 3 on `lantern`, `keep`\nsimilar: RULE-CORE-LOOP | search | advises | rule | docs/spec/game.md | Core loop | search rank 4 on `lantern`, `keep`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored",
+            "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:9f3c7e81ac2aee61bd65facd56ef58248e88d46b0ad3a0caf57c279b3452a1c6",
+          "preview": null,
+          "price_of_other": null,
+          "project": "lantern-keep",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "DOM-GAME",
+              "kind": "domain",
+              "path": "docs/spec/game.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp-dry.md`'s",
+              "source": "title",
+              "title": "Lantern Keep"
+            },
+            {
+              "gates": false,
+              "id": "Q-032",
+              "kind": "question",
+              "path": "docs/records/Q/Q-032.md",
+              "reason": "search rank 2 on `lantern`, `keep`",
+              "source": "search",
+              "title": "Does the lantern drain stamina?"
+            },
+            {
+              "gates": false,
+              "id": "A-102",
+              "kind": "requirement",
+              "path": "docs/records/A/A-102.md",
+              "reason": "search rank 3 on `lantern`, `keep`",
+              "source": "search",
+              "title": "The lantern burns one unit of oil per minute"
+            },
+            {
+              "gates": false,
+              "id": "RULE-CORE-LOOP",
+              "kind": "rule",
+              "path": "docs/spec/game.md",
+              "reason": "search rank 4 on `lantern`, `keep`",
+              "source": "search",
+              "title": "Core loop"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create, distinct": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:12: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:14: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:14: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)\nsimilar: DOM-GAME | title | gates | domain | docs/spec/game.md | Lantern Keep | title equal to new `docs/spec/zz-wc-mcp.md`'s\nsimilar: Q-032 | search | advises | question | docs/records/Q/Q-032.md | Does the lantern drain stamina? | search rank 2 on `lantern`, `keep`\nsimilar: A-102 | search | advises | requirement | docs/records/A/A-102.md | The lantern burns one unit of oil per minute | search rank 3 on `lantern`, `keep`\nsimilar: RULE-CORE-LOOP | search | advises | rule | docs/spec/game.md | Core loop | search rank 4 on `lantern`, `keep`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "4ad9625c20dba7d741cf77bc194ef59fca27fdfa",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0002",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:3cfeb8db2893bbff88063071001cf0c62415329b2852664703223b8a027457ca",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "lantern-keep",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "DOM-GAME",
+              "kind": "domain",
+              "path": "docs/spec/game.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp.md`'s",
+              "source": "title",
+              "title": "Lantern Keep"
+            },
+            {
+              "gates": false,
+              "id": "Q-032",
+              "kind": "question",
+              "path": "docs/records/Q/Q-032.md",
+              "reason": "search rank 2 on `lantern`, `keep`",
+              "source": "search",
+              "title": "Does the lantern drain stamina?"
+            },
+            {
+              "gates": false,
+              "id": "A-102",
+              "kind": "requirement",
+              "path": "docs/records/A/A-102.md",
+              "reason": "search rank 3 on `lantern`, `keep`",
+              "source": "search",
+              "title": "The lantern burns one unit of oil per minute"
+            },
+            {
+              "gates": false,
+              "id": "RULE-CORE-LOOP",
+              "kind": "rule",
+              "path": "docs/spec/game.md",
+              "reason": "search rank 4 on `lantern`, `keep`",
+              "source": "search",
+              "title": "Core loop"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change interpretation": {
+      "id": 7,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-mcp-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-mcp-interpret-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-mcp-interpret-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-mcp-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "4ad9625c20dba7d741cf77bc194ef59fca27fdfa",
+          "base_hash": "b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 31,
+              "message": "`zz-wc-mcp-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-b.md`)",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-interpret-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 33,
+              "message": "`#zz-wc-mcp-interpret-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-mcp-interpret-anchor`",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-interpret-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 33,
+              "message": "`zz-wc-mcp-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-a.md`)",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-interpret-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0004",
+          "interpretation": {
+            "decision": "DEC-0023",
+            "how": "Applied as written.",
+            "why": "The decision left the wording open."
+          },
+          "kind": "interpretation",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:227152c0079c658a3d285b2174fe517803e55a748f75d97abfbed41a18e05558",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "lantern-keep",
+          "rationale": "Interpret it.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "DOM-GAME",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "DOM-GAME",
+          "target_ids": [
+            "DOM-GAME"
+          ],
+          "target_path": "docs/spec/game.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-mcp-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-mcp-update-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "4ad9625c20dba7d741cf77bc194ef59fca27fdfa",
+          "base_hash": "b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 31,
+              "message": "`zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 33,
+              "message": "`#zz-wc-mcp-update-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-mcp-update-anchor`",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 33,
+              "message": "`zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:3eb34c755de531631845ce7b081442680052a8d5a7a96546cbfdba18575b309f",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "lantern-keep",
+          "rationale": "Probe DOM-GAME.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "DOM-GAME",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "DOM-GAME",
+          "target_ids": [
+            "DOM-GAME"
+          ],
+          "target_path": "docs/spec/game.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/game.md:31: link-dangling: `zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)\nwarning  docs/spec/game.md:33: link-anchor: `#zz-wc-mcp-update-dry-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`\nwarning  docs/spec/game.md:33: link-dangling: `zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": "b3:dac3f3ccff5b4bcc23579d3c8b15b6d05bcd51216d2930398497b7eb4e9964c4",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 31,
+              "message": "`zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 33,
+              "message": "`#zz-wc-mcp-update-dry-anchor`: `docs/spec/game.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 33,
+              "message": "`zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)",
+              "path": "docs/spec/game.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:5dad068b9a2355ef1fd0393c211bb4fb016b06015a21960f894b96bbf91fb4bb",
+          "preview": null,
+          "price_of_other": null,
+          "project": "lantern-keep",
+          "rationale": "Probe DOM-GAME.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "DOM-GAME",
+          "target_ids": [
+            "DOM-GAME"
+          ],
+          "target_path": "docs/spec/game.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

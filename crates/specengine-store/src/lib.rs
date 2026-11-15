@@ -114,7 +114,10 @@
 
 mod base;
 mod check;
+pub mod check_memo;
+mod check_rows;
 mod code;
+pub mod cost;
 mod dump;
 mod edges;
 mod error;
@@ -152,6 +155,8 @@ pub use check::{
     check_staged_with_notes, check_tree, check_worktree, default_baseline, load_check, load_config,
     today_utc,
 };
+pub use check_memo::CheckMemo;
+pub use check_rows::{Introduced, SetupFiles, introduced_from_rows};
 pub use code::{
     AMBIGUITY_DUPLICATE, AMBIGUITY_PATH_ATTRIBUTE, AMBIGUITY_UNROOTED, BoundSymbol, CodeAnalyzer,
     CodeDeclRow, CodeFileRows, CodeFileState, CodeListing, CodeMarkerRow, CodeMentionRow,

@@ -1,0 +1,22 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "probe": {
+      "error": "specengine.toml:1: no `[project]` table with a `slug`: the index database is named by it (`[project]` then `slug = \"my-project\"`)"
+    }
+  },
+  "corpus": "corpus-mini",
+  "http": {
+    "probe": {
+      "error": "specengine.toml:1: no `[project]` table with a `slug`: the index database is named by it (`[project]` then `slug = \"my-project\"`)"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "error": "specengine.toml:1: no `[project]` table with a `slug`: the index database is named by it (`[project]` then `slug = \"my-project\"`)"
+    }
+  }
+}

@@ -74,10 +74,10 @@ Without `--push` the hub's commits die with the host: a restored `applied` propo
 
 1. `git diff v<old> v<new> -- scripts/deploy`.
 2. A dump on the old version, each exit 0: `docker compose run --rm dump-queue queue once`, `... dump-door door once`, `... backup upload once`; note both snapshot IDs (no `backup` service: copy the dumps off tmpfs first).
-3. `git fetch --tags origin && git checkout v<new>`, `diff .env.example .env`, `SPECENGINE_VERSION=<new>`.
+3. `git fetch --tags origin && git checkout v<new>`, `diff .env.example .env` (new optional keys may stay unset), `SPECENGINE_VERSION=<new>`.
 4. `docker compose pull`, `up -d`, `ps`: all healthy.
 
-Migrations run forward: an older binary refuses the DB. Back: `down`, the old tag and `.env`, remove `specengine-data`, the floor if raised, `up -d traefik authelia specengine`, the noted queue snapshot by Restore step 6, `up -d`; a door pin alike (`authelia-data`, the door snapshot). Every `spec` writing to the repositories runs 0.29.1 or later before the hub's first record or create (`spec-ids.md` "Older binaries").
+Migrations run forward: an older binary refuses the DB. Back: `down`, the old tag and `.env`, remove `specengine-data`, the floor if raised, `up -d traefik authelia specengine`, the noted queue snapshot by Restore step 6, `up -d`; a door pin alike (`authelia-data`, the door snapshot). Every `spec` writing to its repositories runs 0.29.1+ before a hub's first record or create (`spec-ids.md` "Older binaries").
 
 ## Push
 
@@ -90,7 +90,7 @@ After the gate (`hub-git.md` "Rules"):
 
 ## Health
 
-- **`specengine`**: `specengine-health`, bash for `/dev/tcp` (no HTTP client in the image), every 30 s. Its `GET /` has `Host: 127.0.0.1:<port>` alone. Alive: `HTTP/1.1 403 ` within 5 s (the fence refuses a loopback `Host`: `hub.md` "Fence" step 1), and `127.0.0.1:443` accepting, so a Traefik crash's dead namespace is unhealthy. Ports `SPECENGINE_HEALTH_PORT` (7777), `SPECENGINE_HEALTH_PROXY_PORT` (443); exit 0 or 1, one line.
+- **`specengine`**: `specengine-health`, bash for `/dev/tcp`, every 30 s. Its `GET /` has `Host: 127.0.0.1:<port>` alone. Alive: `HTTP/1.1 403 ` within 5 s (the fence refuses a loopback `Host`: `hub.md` "Fence" step 1), and `127.0.0.1:443` accepting, so a Traefik crash's dead namespace is unhealthy. Ports `SPECENGINE_HEALTH_PORT` (7777), `SPECENGINE_HEALTH_PROXY_PORT` (443); exit 0 or 1, a line.
 - **`backup`**: `fresh`. **`admin`, `dump-door`**: `healthcheck: {disable: true}`: the door image's own probes a server they never run.
 - **Outside**: `https://<DOOR_HOST>/` answers 200. Docker restarts nothing unhealthy; `docker compose logs dump-queue dump-door backup` say why.
 

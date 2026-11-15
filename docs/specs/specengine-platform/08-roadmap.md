@@ -389,7 +389,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 
 #### Owner's word, 2026-11-14
 
-**From real use of the hub** (0.46.0, project `dorm`), reported in Russian. His word that day was "do all the fixes and release a new version". Six items, each with its spec, go into a patch release, **0.46.1**. None needs a schema or format step. A hub runs tagged images and `tag-check.sh` requires the tag to equal the plugin's version, so the plugin's version is bumped with no plugin text change.
+**From real use of the hub** (0.46.0, his game project), reported in Russian. His word that day was "do all the fixes and release a new version". Six items, each with its spec, go into a patch release, **0.46.1**. None needs a schema or format step. A hub runs tagged images and `tag-check.sh` requires the tag to equal the plugin's version, so the plugin's version is bumped with no plugin text change.
 
 | Item | Slice | What |
 |---|---|---|
@@ -445,6 +445,81 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 His game project's committed config, as the analyst read it: one `[team]` login, role `owner`, a commented-out `lead` for a writer with a `narrative` zone, and `[gate] mode = "observe"`. Uncommenting the `lead` switches auto off on the hub and the laptop alike.
 
 **Shipped 2026-11-15**, the five in one commit, plugin 0.47.0 (MINOR: the plugin gains `scripts/autopilot.sh`: `docs/canon/plugin-files.md` "Changing it"), the next tag `v0.47.0` (G1); no queue schema or backup format step. Canon: `docs/canon/auto-mode.md`, `spec-auto.md`, `spec-auto-land.md`, `hub-auto.md`, `auto-runner.md`, `spec-feed.md`. The orchestrator's decisions and the deviations (Activity in the nav, the owner's word over the spec's off-nav; MCP reviews leaving `delegated` out; a hub without `[auto]` taking one more turn hold per stored write) are in each slice's "Implementation". Owed, the owner's: G2, the hub upgraded to 0.47.0 (a dump first; no schema or format step), then the laptop's `spec` and plugin, then `[auto]` committed in his game project; G3 (`hub-auto.md` HA9); G4 (`auto-feed.md` FD8, `auto-runner.md` RN0).
+
+#### Owner's word, 2026-11-15, later: a write's cost (0.47.1)
+
+**His words**, in chat, in Russian, translated here. There were three that day:
+1. "do all the points, 1, 2, 3 at once". The points were the orchestrator's, put to him after he measured the hub:
+   - check only what a change touches;
+   - the hub's confirm POST does not recompute when nothing moved since its GET;
+   - the as-is check is cached until the tree changes.
+2. "include b in the release; step c, can also be done right away".
+3. "make sure not to break the project; it must work with several participants at once; I plan to use it in a team of up to 10 people in parallel".
+
+His goal is that the Inbox's Confirm opens and lands in about 1 s, and stops slowing as the corpus grows. He also asked why the 0.47.0 gate had three red timing tests. They failed under his other builds' load and pass alone, so this release makes the wall-clock tests in `crates/specengine-core/tests/cost.rs` and `crates/specengine-code/tests/hash_levels_depth.rs` relative.
+
+**The measurement.** The hub has 2 vCPU, 4 GB and 1 841 documents. A question's confirm GET holds the turn for 3.2-3.3 s and its POST for 4.4-4.6 s. The causes:
+- every write reads and checks the whole tree twice, and re-parses what the call has just decoded;
+- the POST repeats the GET's rehearsal;
+- about 25 and 44 git processes, at 2-5 ms each (git 2.47.3).
+
+The first plan (parse reuse, memos, an incremental check, git cuts) cut about a third. Three choices, each needing an ADR, went further:
+- (a) the POST reuses the whole question: it narrows ADR-0061 and is not recommended;
+- (b) a write's check trusts the walked rows;
+- (c) git read in-process.
+
+The analyst's supplement split it: (b) is worth about a second, while (c) is worth 0.01-0.07 s per call against a C library and a stale-read risk under concurrency. It also showed the POST's write side, ≈1.1 s, to be untouched: synced queue transactions, two git index writes, the post-commit update.
+
+**Working answers.** They are the analyst's, adopted by the orchestrator. Q3 and (b) are his own; the rest stay open for his review (ADR-0012).
+
+| Q | Working answer | Cost of the other |
+|---|---|---|
+| Q1 the gate | GET ≤ 1 000 ms, POST ≤ 2 000 ms, MCP `propose_change` ≤ 1 500 ms `run_ms` (median of three, about 1 900 documents); `check_ms` ≤ 150 on a GET after another login's commit, ≤ 30 on a POST after its GET; 500 more documents add ≤ 60 ms per 1 000. The POST's ≈1 s waits for a durability slice measured by `write_ms` | durability decisions in a patch release |
+| Q2 the POST reuses | findings only; it still renders, asks and compares its own question | an ADR narrowing ADR-0061, and a record committed that nobody saw |
+| Q3 the tree key | **his answer: the walked rows, (b)**, ADR-0083 | the bytes: about 0.17 s per write on the hub, growing |
+| Q4 the incremental check not green by iteration 3 | ship (b) with whole runs over the rows, the memos and the git cuts; the gate falls back to GET ≤ 2 400 ms, POST ≤ 3 200 ms | hold the release, or ship an unproven check |
+| Q5 attribution | ` check_ms= index_ms= git_ms= git= write_ms=` on the daemon's request lines | the gate cannot say where the time goes |
+| Q6 test hygiene | the two files, whole; the other wall-clock bars listed | a bigger release, or siblings failing the next loaded gate |
+| (c) | deferred, its draft decision and criteria recorded in the spec; it comes back if he insists | a C library and three amended dependency tests for 0.01-0.07 s |
+| doubt | empties the findings memo; the as-is memo waits for the walk's digest | a whole check after every refused confirm |
+
+**Ten people at once**, his third word, is turned into hard rules, all in scope:
+- the memos are read and written only inside the project's turn, with a leaf lock;
+- no findings cross logins: the findings memo's key holds the login;
+- a commit between another login's GET and POST makes the POST recompute, answering as 0.47.0 does;
+- 32 MiB per project;
+- nothing weakens the turn, the per-login line or the fence.
+
+A 10-login test (`write-cost.md` WC28) holds this.
+
+**Fixed now.** RM-0125 `write-cost` (`docs/features/write-cost.md`) goes into the patch 0.47.1:
+- ADR-0083 (b), with its canon `docs/canon/spec-check-write.md`, applied in the same change;
+- no step in the queue schema (14), the backup format (7) or `INDEX_FORMAT` (17): the walk-state digest is computed, never stored;
+- the plugin, a version-only bump.
+
+Out, awaiting his word: `[auto] start = "always"`, `spec auto night`, and auto-closing questions.
+
+**The gate** is his, WC16, on the live hub after the upgrade: three question confirms in a row at about 1 900 documents, meeting Q1, read from the daemon's lines with `SPECENGINE_SLOW_MS=0` set for the session. That is a new entrypoint variable, added at his ask for metrics (`write-cost.md` WC35). A hub at 0.46.0 or 0.47.0 upgrades with no schema or format step, a dump first (`docs/canon/hub-ops.md` "Upgrade").
+
+**Shipped 2026-11-15**, in one commit. Release facts:
+- plugin 0.47.1, a version-only bump; the next tag `v0.47.1`;
+- no queue schema, backup format or `INDEX_FORMAT` step.
+
+Canon:
+- `docs/canon/spec-check-write.md`: ADR-0083's rows, the affected set, the memos, the cost fields;
+- `docs/canon/serve-slow.md`: the five fields and `SPECENGINE_SLOW_MS`;
+- `docs/canon/hub-deploy.md` "Entrypoint".
+
+Measured:
+- git spawns, a question's GET and POST: 25 and 45 → 11 and 25; an update's: 29 and 46 → 15 and 25;
+- the laptop's approve up to its prompt: 0.16-0.18 s → 0.08-0.09 s;
+- `specengine-eval write-cost`, 0 differ: this repository, 79.2 ms whole → 9.1 ms over the rows per case; a real corpus of about 1 860 documents, run locally, 315 → 35 ms.
+
+The deviations are in the spec's "Implementation". (c) is plan item RM-0126, with his review still open.
+
+Owed, his:
+1. the hub upgraded to 0.47.1. From 0.46.x or 0.47.0 the image alone is enough, a dump first;
+2. WC16, read with `SPECENGINE_SLOW_MS=0` for the session, then removed.
 
 ## 3. Product acceptance criteria
 

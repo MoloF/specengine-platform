@@ -3,7 +3,8 @@
 # docs/features/hub-deploy.md "`entrypoint.sh` (`specengine-entrypoint`)": serves
 # every folder of the projects directory that holds a specengine.toml, in byte
 # order, as one hub on 127.0.0.1:7777, the port Traefik's service URL names.
-# Reads HUB_HOST, SPECENGINE_PUSH and SPECENGINE_PROJECTS (default /projects).
+# Reads HUB_HOST, SPECENGINE_PUSH, SPECENGINE_SLOW_MS (unset: the daemon's
+# own threshold) and SPECENGINE_PROJECTS (default /projects).
 # Creates nothing; the daemon judges the rest.
 set -eu
 LC_ALL=C
@@ -28,6 +29,29 @@ case $push in
         ;;
 esac
 
+# The slow-line threshold (docs/features/write-cost.md "The hub's slow-line
+# threshold"): unset, the daemon's default and today's arguments; set, whole
+# milliseconds from 0 to 3600000, else nothing runs. The value is never
+# echoed: one line, whatever it holds.
+slow=
+if [ -n "${SPECENGINE_SLOW_MS+set}" ]; then
+    slow=$SPECENGINE_SLOW_MS
+    case $slow in
+        '')
+            printf '%s: SPECENGINE_SLOW_MS is set but empty: give whole milliseconds from 0 to 3600000, or remove it from .env\n' "$me" >&2
+            exit 2
+            ;;
+        *[!0-9]* | ???????????*)
+            printf '%s: SPECENGINE_SLOW_MS is not whole milliseconds from 0 to 3600000: fix it or remove it from .env\n' "$me" >&2
+            exit 2
+            ;;
+    esac
+    if [ "$slow" -gt 3600000 ]; then
+        printf '%s: SPECENGINE_SLOW_MS is over 3600000 (an hour): fix it or remove it from .env\n' "$me" >&2
+        exit 2
+    fi
+fi
+
 dir=${SPECENGINE_PROJECTS:-/projects}
 roots=0
 set --
@@ -48,7 +72,12 @@ if [ "$roots" -eq 0 ]; then
     exit 2
 fi
 
-if [ -n "$push" ]; then
-    exec specengine-http "$@" --public-origin "https://$HUB_HOST" --port "$port" "$push"
+if [ -n "$slow" ]; then
+    set -- "$@" --public-origin "https://$HUB_HOST" --port "$port" --slow-ms "$slow"
+else
+    set -- "$@" --public-origin "https://$HUB_HOST" --port "$port"
 fi
-exec specengine-http "$@" --public-origin "https://$HUB_HOST" --port "$port"
+if [ -n "$push" ]; then
+    exec specengine-http "$@" "$push"
+fi
+exec specengine-http "$@"

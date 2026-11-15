@@ -578,6 +578,9 @@ pub use specengine_model::{CARD_TASKS_MAX, Mandate, RunOutcome, TaskPackage, Tas
 pub use specengine_store::GitEnv;
 /// A staged choice as the review document carries it (the store's).
 pub use specengine_store::Stage;
+/// A write's check remembered per served project, and one call's costs by
+/// kind (the store's; `write-cost`), for the daemon and the MCP server.
+pub use specengine_store::{CheckMemo, check_memo, cost};
 /// `search`'s `--limit` bounds and default, its shortest term (the store's).
 pub use specengine_store::{
     MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN,

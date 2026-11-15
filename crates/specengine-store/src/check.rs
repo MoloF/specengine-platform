@@ -396,14 +396,19 @@ pub(crate) fn split_listing(listing: Listing) -> (Vec<String>, Vec<Problem>) {
     (listing.paths, problems)
 }
 
+/// The read error of a file the spec parser panicked on: a check's and a
+/// stored row's alike.
+pub(crate) const PARSER_PANICKED: &str = "the spec parser panicked on this file";
+
 /// A read file parsed; a parser panic is a read error of that file.
 pub(crate) fn parse_file(path: String, bytes: Vec<u8>, scheme: &IdScheme) -> CheckFile {
+    specengine_core::check::note_parse();
     let parsed = panic::catch_unwind(AssertUnwindSafe(|| {
         specengine_core::parse(&path, &bytes, scheme)
     }));
     match parsed {
         Ok(parsed) => CheckFile::parsed(path, bytes, parsed),
-        Err(_) => CheckFile::unreadable(path, "the spec parser panicked on this file"),
+        Err(_) => CheckFile::unreadable(path, PARSER_PANICKED),
     }
 }
 

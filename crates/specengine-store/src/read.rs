@@ -230,6 +230,59 @@ impl SqliteIndex {
     }
 }
 
+impl SqliteIndex {
+    /// Core's `highest_record_number` over the stored corpus, by query
+    /// (`write-cost` WC24): the highest number on `side` of `spec`'s prefix
+    /// or its `aliases_from`, among the nodes' IDs and the documents'
+    /// `aliases:` entries; 0 when none. Each prefix is a range of the
+    /// `nodes_by_id` and `aliases_by_alias` indexes, read in one snapshot.
+    pub fn highest_record_number(
+        &self,
+        spec: &specengine_model::PrefixSpec,
+        side: specengine_core::record::IdSide,
+    ) -> Result<u64, StoreError> {
+        let _cost = crate::cost::charge(crate::cost::Kind::Index);
+        with_worktree(self, |tx, wt| {
+            let mut ids = tx
+                .prepare(
+                    "SELECT n.id FROM nodes n JOIN files f ON f.file_id = n.file_id
+                     WHERE f.wt = ?1 AND n.id >= ?2 AND n.id < ?3",
+                )
+                .db()?;
+            let mut aliases = tx
+                .prepare(
+                    "SELECT a.alias FROM aliases a JOIN nodes n ON n.node_id = a.node_id
+                     JOIN files f ON f.file_id = n.file_id
+                     WHERE f.wt = ?1 AND a.alias >= ?2 AND a.alias < ?3",
+                )
+                .db()?;
+            let mut highest = 0;
+            let prefixes = std::iter::once(&spec.prefix).chain(&spec.aliases_from);
+            for prefix in prefixes {
+                // `<prefix>-` up to `<prefix>.`: every text that starts
+                // with `<prefix>-` ('.' follows '-').
+                let (from, to) = (format!("{prefix}-"), format!("{prefix}."));
+                for statement in [&mut ids, &mut aliases] {
+                    let found = statement
+                        .query_map((wt, from.as_str(), to.as_str()), |row| {
+                            row.get::<_, String>(0)
+                        })
+                        .db()?;
+                    for id in found {
+                        let id = id.db()?;
+                        if let Some(number) = specengine_core::record::record_number(&id, spec)
+                            && side.holds(number)
+                        {
+                            highest = highest.max(number);
+                        }
+                    }
+                }
+            }
+            Ok(highest)
+        })
+    }
+}
+
 /// The worktree's `walk_notes` row; `None` when absent, or when it does not
 /// read back (a walk then writes it again).
 pub(crate) fn walk_notes(tx: &Transaction<'_>, wt: i64) -> Result<Option<WalkNotes>, StoreError> {

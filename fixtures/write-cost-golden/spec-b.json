@@ -1,0 +1,1017 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "approve decision": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0011\",\"project\":\"zerkalo\",\"kind\":\"decision\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the probe stay?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Yes: it stays as written.\",\"price_of_other\":\"Another probe.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[\"ADR-0001\"],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0011` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0011` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord ADR-0003 at docs/records/ADR/ADR-0003.md:\n  ---\n  id: ADR-0003\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Yes: it stays as written.\"\n  canon: MOD-CLI\n  links:\n    answers: [MOD-CLI]\n  ref: PR-0011\n  scope: [decisions]\n  ---\n\n  # Yes: it stays as written.\n\n  \u0412\u044b\u0431\u043e\u0440:\n\n  Yes: it stays as written.\n\n  \u041f\u043e\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0438\u044f:\n\n\n\n  \u0426\u0435\u043d\u0430:\n\n\n\n  \u0421\u0443\u0442\u044c:\n\n  Does the probe stay?\n\n  \u0412\u0430\u0440\u0438\u0430\u043d\u0442\u044b:\n\n\n\n  \u0421\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u0430:\n\n\n\n  \u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435:\n\n\n\n  \u0420\u0435\u0448\u0438\u043b:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0011 as ADR-0003 (the working answer) on main in <root>? [y/N]"
+      ]
+    },
+    "approve discrepancy --option 1": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0010\",\"project\":\"zerkalo\",\"kind\":\"discrepancy\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":\"normal\",\"gap_type\":\"contradicts\",\"summary\":\"The probe and the code disagree.\",\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[{\"file\":\"src/probe.rs\",\"qpath\":\"probe\",\"lines\":\"1-2\",\"observed\":\"returns early\",\"documented\":\"runs to the end\"}],\"pair\":null,\"options\":[{\"label\":\"Keep the spec\",\"effect\":\"Fix the code\",\"price\":\"one work item\"},{\"label\":\"Change the spec\",\"effect\":\"Allow it\",\"price\":\"a new rule case\"}],\"recommendation\":0,\"distinct_from\":[\"ADR-0001\"],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0010` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0010` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord ADR-0003 at docs/records/ADR/ADR-0003.md:\n  ---\n  id: ADR-0003\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Change the spec\"\n  canon: MOD-CLI\n  links:\n    answers: [MOD-CLI]\n  ref: PR-0010\n  scope: [decisions]\n  ---\n\n  # Change the spec\n\n  \u0412\u044b\u0431\u043e\u0440:\n\n  Change the spec\n\n  \u041f\u043e\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0438\u044f:\n\n  Allow it\n\n  \u0426\u0435\u043d\u0430:\n\n  a new rule case\n\n  \u0421\u0443\u0442\u044c:\n\n  The probe and the code disagree.\n\n  \u0412\u0430\u0440\u0438\u0430\u043d\u0442\u044b:\n\n  - Keep the spec | Fix the code | one work item\n  - Change the spec | Allow it | a new rule case\n\n  \u0421\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u0430:\n\n  - src/probe.rs:1-2 probe | returns early | runs to the end\n\n  \u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435:\n\n\n\n  \u0420\u0435\u0448\u0438\u043b:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0010 as ADR-0003 (option 1) on main in <root>? [y/N]"
+      ]
+    },
+    "approve question": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0009\",\"project\":\"zerkalo\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[\"ADR-0001\"],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0009` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0009` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord ADR-0003 at docs/records/ADR/ADR-0003.md:\n  ---\n  id: ADR-0003\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Keep it as written.\"\n  canon: MOD-CLI\n  links:\n    answers: [MOD-CLI]\n  ref: PR-0009\n  scope: [decisions]\n  ---\n\n  # Keep it as written.\n\n  \u0412\u044b\u0431\u043e\u0440:\n\n  Keep it as written.\n\n  \u041f\u043e\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0438\u044f:\n\n\n\n  \u0426\u0435\u043d\u0430:\n\n\n\n  \u0421\u0443\u0442\u044c:\n\n  Does the write cost probe hold as written?\n\n  \u0412\u0430\u0440\u0438\u0430\u043d\u0442\u044b:\n\n\n\n  \u0421\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u0430:\n\n\n\n  \u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435:\n\n\n\n  \u0420\u0435\u0448\u0438\u043b:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0009 as ADR-0003 (the working answer) on main in <root>? [y/N]"
+      ]
+    },
+    "approve update": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0001\",\"project\":\"zerkalo\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\",\"new_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:6d7c16f413910c1a173a631f15c57009d5cf7ffc4bf000dbb0b5585cd1d6e4cc\",\"rationale\":\"Probe MOD-CLI.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`, `docs/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`, `docs/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/cli.md\\n+++ proposed docs/spec/cli.md\\n@@ -29,3 +29,7 @@ links:\\n \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n \\n <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0001` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0001` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "apply PR-0001 to docs/spec/cli.md on main in <root> (applies; raises CMD-STATUS 1 -> 2)? [y/N]"
+      ]
+    },
+    "probe": {
+      "base": "b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49",
+      "decision": "ADR-0001",
+      "path": "docs/spec/cli.md",
+      "target": "MOD-CLI"
+    },
+    "propose amendment": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0005\",\"project\":\"zerkalo\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends.md\",\"target_path\":\"docs/spec/zz-wc-amends.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nowner: owner\\nreviewed: 2026-09-20\\nclass: spec\\nstatus: draft\\nlinks:\\n  amends: [MOD-CLI]\\n---\\n\\n# Write cost amendment\\n\\nSee [the second probe](zz-wc-amends-b.md) here.\\n\\nSee [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"patch_hash\":\"b3:08dc8a50d1036ebb6a2cf41cfebd55f5df7af86b3fc5c2e8778cc9036ea611eb\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":13,\"subject\":\"zz-wc-amends-b.md\",\"message\":\"`zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`, `docs/zz-wc-amends-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":15,\"subject\":\"#zz-wc-amends-anchor\",\"message\":\"`#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":15,\"subject\":\"zz-wc-amends-a.md\",\"message\":\"`zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`, `docs/zz-wc-amends-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-amends.md\\n+++ proposed docs/spec/zz-wc-amends.md\\n@@ -0,0 +1,15 @@\\n+---\\n+title: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n+owner: owner\\n+reviewed: 2026-09-20\\n+class: spec\\n+status: draft\\n+links:\\n+  amends: [MOD-CLI]\\n+---\\n+\\n+# Write cost amendment\\n+\\n+See [the second probe](zz-wc-amends-b.md) here.\\n+\\n+See [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0005\nintroduced: 4\nerror  docs/spec/zz-wc-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends.md:13: link-dangling: `zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`, `docs/zz-wc-amends-b.md`)\nwarning  docs/spec/zz-wc-amends.md:15: link-anchor: `#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\nwarning  docs/spec/zz-wc-amends.md:15: link-dangling: `zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`, `docs/zz-wc-amends-a.md`)\n"
+    },
+    "propose amendment --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0006\",\"project\":\"zerkalo\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends-brief.md\",\"target_path\":\"docs/spec/zz-wc-amends-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:9c3c8d8818210aa5e3f1b0010e88233291877251b7237292099a2e55b4a5c6b7\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":13,\"subject\":\"zz-wc-amends-brief-b.md\",\"message\":\"`zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`, `docs/zz-wc-amends-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":15,\"subject\":\"#zz-wc-amends-brief-anchor\",\"message\":\"`#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":15,\"subject\":\"zz-wc-amends-brief-a.md\",\"message\":\"`zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`, `docs/zz-wc-amends-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0006\nintroduced: 4\nerror  docs/spec/zz-wc-amends-brief.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends-brief.md:13: link-dangling: `zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`, `docs/zz-wc-amends-brief-b.md`)\nwarning  docs/spec/zz-wc-amends-brief.md:15: link-anchor: `#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\nwarning  docs/spec/zz-wc-amends-brief.md:15: link-dangling: `zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`, `docs/zz-wc-amends-brief-a.md`)\n"
+    },
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"zerkalo\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:caf804789f1205f2f8b97d1878415fa66323d88fc454aa15fba802994ee51ea4\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`, `docs/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":16,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":16,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`, `docs/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,16 @@\\n+---\\n+class: canon\\n+tier: 1\\n+title: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n+status: accepted\\n+owner: owner\\n+reviewed: 2026-09-20\\n+links:\\n+  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"MOD-CLI\",\"path\":\"docs/spec/cli.md\",\"title\":\"\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\",\"kind\":\"module\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create.md`'s\",\"gates\":true}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:14: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`, `docs/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:16: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:16: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`, `docs/zz-wc-create-a.md`)\nsimilar: MOD-CLI | title | gates | module | docs/spec/cli.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | title equal to new `docs/spec/zz-wc-create.md`'s\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"zerkalo\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:331973889acdf0a729d1c3e4f475f7c7da60dc9de7fa9599013e8e9bf453b9af\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`, `docs/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":16,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":16,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`, `docs/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"MOD-CLI\",\"path\":\"docs/spec/cli.md\",\"title\":\"\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\",\"kind\":\"module\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create-brief.md`'s\",\"gates\":true},{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:14: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`, `docs/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:16: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:16: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`, `docs/zz-wc-create-brief-a.md`)\nsimilar: MOD-CLI | title | gates | module | docs/spec/cli.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | title equal to new `docs/spec/zz-wc-create-brief.md`'s\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0004\",\"project\":\"zerkalo\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:331973889acdf0a729d1c3e4f475f7c7da60dc9de7fa9599013e8e9bf453b9af\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`, `docs/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":16,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":16,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`, `docs/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"MOD-CLI\",\"path\":\"docs/spec/cli.md\",\"title\":\"\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\",\"kind\":\"module\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create-brief.md`'s\",\"gates\":true},{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:14: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`, `docs/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:16: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:16: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`, `docs/zz-wc-create-brief-a.md`)\nsimilar: MOD-CLI | title | gates | module | docs/spec/cli.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | title equal to new `docs/spec/zz-wc-create-brief.md`'s\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\n"
+    },
+    "propose create, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0003\",\"project\":\"zerkalo\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:caf804789f1205f2f8b97d1878415fa66323d88fc454aa15fba802994ee51ea4\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`, `docs/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":16,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":16,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`, `docs/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,16 @@\\n+---\\n+class: canon\\n+tier: 1\\n+title: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n+status: accepted\\n+owner: owner\\n+reviewed: 2026-09-20\\n+links:\\n+  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"MOD-CLI\",\"path\":\"docs/spec/cli.md\",\"title\":\"\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\",\"kind\":\"module\",\"source\":\"title\",\"reason\":\"title equal to new `docs/spec/zz-wc-create.md`'s\",\"gates\":true}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0003\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:14: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`, `docs/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:16: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:16: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`, `docs/zz-wc-create-a.md`)\nsimilar: MOD-CLI | title | gates | module | docs/spec/cli.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | title equal to new `docs/spec/zz-wc-create.md`'s\n"
+    },
+    "propose interpretation": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0007\",\"project\":\"zerkalo\",\"kind\":\"interpretation\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\",\"new_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\\nSee [the second probe](zz-wc-interpret-b.md) here.\\n\\nSee [the first probe](zz-wc-interpret-a.md) and [its anchor](#zz-wc-interpret-anchor) here.\\n\",\"patch_hash\":\"b3:fb4a16728b58d4c84f95526c1e7c6dd95c3319c90502109b96aed64e7c266f07\",\"rationale\":\"Interpret it.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-interpret-b.md\",\"message\":\"`zz-wc-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-b.md`, `docs/zz-wc-interpret-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-interpret-anchor\",\"message\":\"`#zz-wc-interpret-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-interpret-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-interpret-a.md\",\"message\":\"`zz-wc-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-a.md`, `docs/zz-wc-interpret-a.md`)\"}],\"diff\":\"--- base docs/spec/cli.md\\n+++ proposed docs/spec/cli.md\\n@@ -29,3 +29,7 @@ links:\\n \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n \\n <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n+\\n+See [the second probe](zz-wc-interpret-b.md) here.\\n+\\n+See [the first probe](zz-wc-interpret-a.md) and [its anchor](#zz-wc-interpret-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"CMD-STATUS\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":{\"decision\":\"ADR-0001\",\"how\":\"Applied as written.\",\"why\":\"The decision left the wording open.\"},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0007\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-b.md`, `docs/zz-wc-interpret-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-interpret-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-interpret-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-a.md`, `docs/zz-wc-interpret-a.md`)\n"
+    },
+    "propose interpretation --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0008\",\"project\":\"zerkalo\",\"kind\":\"interpretation\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:8d6d60a30ca2f944b50c5e45f532beb7dc22b167163ef011c6136cb0cf3f2da4\",\"rationale\":\"Interpret it.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-interpret-brief-b.md\",\"message\":\"`zz-wc-interpret-brief-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-b.md`, `docs/zz-wc-interpret-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-interpret-brief-anchor\",\"message\":\"`#zz-wc-interpret-brief-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-interpret-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-interpret-brief-a.md\",\"message\":\"`zz-wc-interpret-brief-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-a.md`, `docs/zz-wc-interpret-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"CMD-STATUS\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":{\"decision\":\"ADR-0001\",\"how\":\"Applied as written.\",\"why\":\"The decision left the wording open.\"},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0008\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-interpret-brief-b.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-b.md`, `docs/zz-wc-interpret-brief-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-interpret-brief-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-interpret-brief-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-interpret-brief-a.md` names no walked document (tried `docs/spec/zz-wc-interpret-brief-a.md`, `docs/zz-wc-interpret-brief-a.md`)\n"
+    },
+    "propose update": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"zerkalo\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\",\"new_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:6d7c16f413910c1a173a631f15c57009d5cf7ffc4bf000dbb0b5585cd1d6e4cc\",\"rationale\":\"Probe MOD-CLI.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`, `docs/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`, `docs/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/cli.md\\n+++ proposed docs/spec/cli.md\\n@@ -29,3 +29,7 @@ links:\\n \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n \\n <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"CMD-STATUS\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`\"]}\n",
+      "stderr": [
+        "note: MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`"
+      ],
+      "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`, `docs/zz-wc-update-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-update-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`, `docs/zz-wc-update-a.md`)\n"
+    },
+    "propose update --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"zerkalo\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"93f539e3ab01ee14777e1b5b3e095da6a1f662db\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:0f9b8844707f2eb6a5a18ccc61f9a8213a97675d0cc0fa4e2a689da122545254\",\"rationale\":\"Probe MOD-CLI.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-update-brief-b.md\",\"message\":\"`zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`, `docs/zz-wc-update-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-update-brief-anchor\",\"message\":\"`#zz-wc-update-brief-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-update-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-update-brief-a.md\",\"message\":\"`zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`, `docs/zz-wc-update-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"CMD-STATUS\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`\"]}\n",
+      "stderr": [
+        "note: MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`"
+      ],
+      "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`, `docs/zz-wc-update-brief-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-update-brief-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-update-brief-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`, `docs/zz-wc-update-brief-a.md`)\n"
+    },
+    "raise decision": {
+      "exit": 0,
+      "json": "{\"id\":null,\"created\":false,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[{\"id\":\"PR-0009\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "hit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\nrelated: PR-0009 | open | - | -\nnot stored: name every hit in `distinct_from` to store it anyway\n"
+    },
+    "raise decision, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0011\",\"created\":true,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[{\"id\":\"PR-0009\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0011\nhit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\nrelated: PR-0009 | open | - | -\n"
+    },
+    "raise discrepancy": {
+      "exit": 0,
+      "json": "{\"id\":null,\"created\":false,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "hit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\nnot stored: name every hit in `distinct_from` to store it anyway\n"
+    },
+    "raise discrepancy, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0010\",\"created\":true,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0010\nhit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\n"
+    },
+    "raise question": {
+      "exit": 0,
+      "json": "{\"id\":null,\"created\":false,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "hit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\nnot stored: name every hit in `distinct_from` to store it anyway\n"
+    },
+    "raise question, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0009\",\"created\":true,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0009\nhit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\n"
+    }
+  },
+  "corpus": "spec-b",
+  "http": {
+    "probe": {
+      "path": "docs/spec/cli.md",
+      "target": "MOD-CLI"
+    },
+    "question commits": [
+      "<sha>\n<sha>\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100002\n\nADR-100001: Keep it as written.\n\nProposal: PR-100002\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=developer model=claude-opus-5-5 run=unknown\nBase-commit: <sha>\n\n---\n docs/records/ADR/ADR-100001.md | 46 ++++++++++++++++++++++++++++++++++++++++++\n 1 file changed, 46 insertions(+)\n\ndiff --git a/docs/records/ADR/ADR-100001.md b/docs/records/ADR/ADR-100001.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/records/ADR/ADR-100001.md\n@@ -0,0 +1,46 @@\n+---\n+id: ADR-100001\n+class: decision\n+status: accepted\n+date: <today>\n+title: \"Keep it as written.\"\n+canon: MOD-CLI\n+links:\n+  answers: [MOD-CLI]\n+ref: PR-100002\n+scope: [decisions]\n+---\n+\n+# Keep it as written.\n+\n+\u0412\u044b\u0431\u043e\u0440:\n+\n+Keep it as written.\n+\n+\u041f\u043e\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0438\u044f:\n+\n+\n+\n+\u0426\u0435\u043d\u0430:\n+\n+\n+\n+\u0421\u0443\u0442\u044c:\n+\n+Does the write cost probe hold as written?\n+\n+\u0412\u0430\u0440\u0438\u0430\u043d\u0442\u044b:\n+\n+\n+\n+\u0421\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u0430:\n+\n+\n+\n+\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435:\n+\n+\n+\n+\u0420\u0435\u0448\u0438\u043b:\n+\n+ann <ann@example.org>\n"
+    ],
+    "question confirm GET": {
+      "body": "{\"id\":\"PR-100002\",\"question\":\"introduced: 0\\nrecord ADR-100001 at docs/records/ADR/ADR-100001.md:\\n  ---\\n  id: ADR-100001\\n  class: decision\\n  status: accepted\\n  date: <today>\\n  title: \\\"Keep it as written.\\\"\\n  canon: MOD-CLI\\n  links:\\n    answers: [MOD-CLI]\\n  ref: PR-100002\\n  scope: [decisions]\\n  ---\\n\\n  # Keep it as written.\\n\\n  \u0412\u044b\u0431\u043e\u0440:\\n\\n  Keep it as written.\\n\\n  \u041f\u043e\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0438\u044f:\\n\\n\\n\\n  \u0426\u0435\u043d\u0430:\\n\\n\\n\\n  \u0421\u0443\u0442\u044c:\\n\\n  Does the write cost probe hold as written?\\n\\n  \u0412\u0430\u0440\u0438\u0430\u043d\u0442\u044b:\\n\\n\\n\\n  \u0421\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u0430:\\n\\n\\n\\n  \u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435:\\n\\n\\n\\n  \u0420\u0435\u0448\u0438\u043b:\\n\\n  ann <ann@example.org>\\nstaged 2026-10-05T21:14:03Z: spec approve PR-100002\\napply PR-100002 as ADR-100001 (the working answer, staged) on main in <root>? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "question confirm POST": {
+      "body": "{\"id\":\"PR-100002\",\"project\":\"zerkalo\",\"kind\":\"question\",\"status\":\"applied\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"MOD-CLI\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[\"ADR-0001\"],\"linked\":null,\"record_id\":\"ADR-100001\",\"record_path\":\"docs/records/ADR/ADR-100001.md\",\"record_title\":\"Keep it as written.\",\"record_text\":\"---\\nid: ADR-100001\\nclass: decision\\nstatus: accepted\\ndate: <today>\\ntitle: \\\"Keep it as written.\\\"\\ncanon: MOD-CLI\\nlinks:\\n  answers: [MOD-CLI]\\nref: PR-100002\\nscope: [decisions]\\n---\\n\\n# Keep it as written.\\n\\n\u0412\u044b\u0431\u043e\u0440:\\n\\nKeep it as written.\\n\\n\u041f\u043e\u0441\u043b\u0435\u0434\u0441\u0442\u0432\u0438\u044f:\\n\\n\\n\\n\u0426\u0435\u043d\u0430:\\n\\n\\n\\n\u0421\u0443\u0442\u044c:\\n\\nDoes the write cost probe hold as written?\\n\\n\u0412\u0430\u0440\u0438\u0430\u043d\u0442\u044b:\\n\\n\\n\\n\u0421\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u0430:\\n\\n\\n\\n\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435:\\n\\n\\n\\n\u0420\u0435\u0448\u0438\u043b:\\n\\nann <ann@example.org>\\n\",\"choice\":{\"working_answer\":true},\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "question raise": [
+      {
+        "exit": 0,
+        "json": "{\"id\":null,\"created\":false,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "hit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\nnot stored: name every hit in `distinct_from` to store it anyway\n"
+      },
+      {
+        "exit": 0,
+        "json": "{\"id\":\"PR-100002\",\"created\":true,\"hits\":[{\"id\":\"ADR-0001\",\"source\":\"corpus\",\"status\":\"accepted\",\"path\":\"docs/records/ADR/ADR-0001.md\",\"answer\":\"\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\",\"record\":\"ADR-0001\"}],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "PR-100002\nhit: ADR-0001 | accepted | docs/records/ADR/ADR-0001.md | \u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044f \u0447\u0435\u0440\u0435\u0437 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438\n"
+      }
+    ],
+    "question stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100002\",\"project\":\"zerkalo\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[\"ADR-0001\"],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100002\nproject: zerkalo\nkind: question\nstatus: open\ntarget_id: MOD-CLI\ntarget_path: docs/spec/cli.md\nworktree: <root>\nbranch: main\nbase_commit: <sha>\nbase_hash: -\nbase_text: -\nnew_text: -\npatch_hash: -\nrationale: -\nauthor: agent role=developer model=claude-opus-5-5 run=unknown\ndiagnostics: 0\ndiff: -\npreview: -\nconflict: -\nrevisions: -\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  MOD-CLI\nseverity: normal\ngap_type: -\nsummary: Does the write cost probe hold as written?\ngist: -\nmatters: -\nworking_answer: Keep it as written.\nprice_of_other: A new rule case.\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 1\n  ADR-0001\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    },
+    "update commits": [
+      "<sha>\ne34970a0ad623818ff413c85a039c366a0511b4f\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100001\n\nProbe MOD-CLI.\n\nProposal: PR-100001\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown\nBase-commit: e34970a0ad623818ff413c85a039c366a0511b4f\nRevision: CMD-STATUS 1 -> 2\n\n---\n docs/spec/cli.md | 6 +++++-\n 1 file changed, 5 insertions(+), 1 deletion(-)\n\ndiff --git a/docs/spec/cli.md b/docs/spec/cli.md\n--- a/docs/spec/cli.md\n+++ b/docs/spec/cli.md\n@@ -24,8 +24,12 @@ links:\n \n \u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\n \n-## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\n+## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS rev=2}\n \n \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\n \n <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\n+\n+See [the second probe](zz-wc-hub-update-b.md) here.\n+\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n"
+    ],
+    "update confirm GET": {
+      "body": "{\"id\":\"PR-100001\",\"question\":\"staged 2026-10-05T21:14:03Z: spec approve PR-100001\\napply PR-100001 to docs/spec/cli.md on main in <root> (applies; raises CMD-STATUS 1 -> 2, staged)? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "update confirm POST": {
+      "body": "{\"id\":\"PR-100001\",\"project\":\"zerkalo\",\"kind\":\"update\",\"status\":\"applied\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"e34970a0ad623818ff413c85a039c366a0511b4f\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\",\"new_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:73d8ee0a6ee759242cf01daae5e20bc425a4da1f8c463df8c6047906310193e7\",\"rationale\":\"Probe MOD-CLI.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`, `docs/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`, `docs/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/cli.md\\n+++ proposed docs/spec/cli.md\\n@@ -29,3 +29,7 @@ links:\\n \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n \\n <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "update propose": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"zerkalo\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"e34970a0ad623818ff413c85a039c366a0511b4f\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\",\"new_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:73d8ee0a6ee759242cf01daae5e20bc425a4da1f8c463df8c6047906310193e7\",\"rationale\":\"Probe MOD-CLI.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`, `docs/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`, `docs/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/cli.md\\n+++ proposed docs/spec/cli.md\\n@@ -29,3 +29,7 @@ links:\\n \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n \\n <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"CMD-STATUS\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`\"]}\n",
+      "stderr": [
+        "note: MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`"
+      ],
+      "text": "PR-100001\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`, `docs/zz-wc-hub-update-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-hub-update-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`, `docs/zz-wc-hub-update-a.md`)\n"
+    },
+    "update stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"zerkalo\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MOD-CLI\",\"target_path\":\"docs/spec/cli.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"e34970a0ad623818ff413c85a039c366a0511b4f\",\"base_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\",\"base_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\",\"new_text\":\"---\\nid: MOD-CLI\\nclass: canon\\ntier: 1\\ntitle: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\nstatus: accepted\\nowner: owner\\nreviewed: 2026-09-20\\nlinks:\\n  derived_from: [REQ-001, \u0422\u0420\u0411-002]\\n---\\n\\n# \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\\n\\n\u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\\n\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\\n\\n\u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\\n\u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\\n\\n### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\\n\\n\u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\\n\\n## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\\n\\n\u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n\\n<!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:73d8ee0a6ee759242cf01daae5e20bc425a4da1f8c463df8c6047906310193e7\",\"rationale\":\"Probe MOD-CLI.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":33,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`, `docs/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/cli.md\",\"line\":35,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`, `docs/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/cli.md\\n+++ proposed docs/spec/cli.md\\n@@ -29,3 +29,7 @@ links:\\n \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\\n \\n <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"CMD-STATUS\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MOD-CLI\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\"},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100001\nproject: zerkalo\nkind: update\nstatus: open\ntarget_id: MOD-CLI\ntarget_path: docs/spec/cli.md\nworktree: <root>\nbranch: main\nbase_commit: e34970a0ad623818ff413c85a039c366a0511b4f\nbase_hash: b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\nbase_text:\n  ---\n  id: MOD-CLI\n  class: canon\n  tier: 1\n  title: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\n  status: accepted\n  owner: owner\n  reviewed: 2026-09-20\n  links:\n    derived_from: [REQ-001, \u0422\u0420\u0411-002]\n  ---\n\n  # \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\n\n  \u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\n  \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\n\n  ## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\n\n  \u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\n  \u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\n\n  ### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\n\n  \u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\n\n  ## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\n\n  \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\n\n  <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\nnew_text:\n  ---\n  id: MOD-CLI\n  class: canon\n  tier: 1\n  title: \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\n  status: accepted\n  owner: owner\n  reviewed: 2026-09-20\n  links:\n    derived_from: [REQ-001, \u0422\u0420\u0411-002]\n  ---\n\n  # \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430\n\n  \u0418\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0438\u0435 \u043a\u043e\u043f\u0438\u0438; \u043a\u0430\u0436\u0434\u0430\u044f \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043e\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u043e\u0434\u043d\u043e\u043c\u0443\n  \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044e REQ-001.\n\n  ## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 sync {#CMD-SYNC}\n\n  \u041a\u043e\u043c\u0430\u043d\u0434\u0430 `sync` \u0441\u0432\u0435\u0440\u044f\u0435\u0442 \u0440\u0430\u0431\u043e\u0447\u0443\u044e \u043a\u043e\u043f\u0438\u044e \u0441 \u0432\u0435\u0442\u043a\u043e\u0439 (\u0441\u043c. [[GLS-worktree|\u0440\u0430\u0431\u043e\u0447\u0430\u044f \u043a\u043e\u043f\u0438\u044f]]).\n  \u0412\u043e\u043f\u0440\u043e\u0441 \u0412\u041e\u041f-7 \u043f\u043e\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442.\n\n  ### \u0424\u043b\u0430\u0433 --dry-run {#FLAG-DRY-RUN rev=2}\n\n  \u041f\u0435\u0447\u0430\u0442\u0430\u0435\u0442 \u043f\u043b\u0430\u043d \u0438 \u043d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043f\u0438\u0448\u0435\u0442; \u0441\u043c. dry-run/CRIT-01 \u0438 R\u0415Q-003.\n\n  ## \u041a\u043e\u043c\u0430\u043d\u0434\u0430 status {#CMD-STATUS}\n\n  \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\n\n  <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\n\n  See [the second probe](zz-wc-hub-update-b.md) here.\n\n  See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npatch_hash: b3:73d8ee0a6ee759242cf01daae5e20bc425a4da1f8c463df8c6047906310193e7\nrationale:\n  Probe MOD-CLI.\nauthor: agent role=spec-writer model=claude-opus-5-5 run=unknown\ndiagnostics: 3\n  warning  docs/spec/cli.md:33: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`, `docs/zz-wc-hub-update-b.md`)\n  warning  docs/spec/cli.md:35: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-hub-update-anchor`\n  warning  docs/spec/cli.md:35: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`, `docs/zz-wc-hub-update-a.md`)\ndiff:\n  --- base docs/spec/cli.md\n  +++ proposed docs/spec/cli.md\n  @@ -29,3 +29,7 @@ links:\n   \u041f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435; \u043f\u0440\u0435\u0436\u043d\u0435\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u0432 ADR-0001#history.\n   \n   <!-- REQ-009 \u0432 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0438 \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439 -->\n  +\n  +See [the second probe](zz-wc-hub-update-b.md) here.\n  +\n  +See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npreview: applies\nconflict: -\nrevisions: CMD-STATUS 1 -> 2 (0 lock entries)\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  MOD-CLI\nseverity: -\ngap_type: -\nsummary: -\ngist: -\nmatters: -\nworking_answer: -\nprice_of_other: -\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49\"}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "path": "docs/spec/cli.md",
+      "target": "MOD-CLI"
+    },
+    "propose_change amendment": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0003\nintroduced: 4\nerror  docs/spec/zz-wc-mcp-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-mcp-amends.md:13: link-dangling: `zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`, `docs/zz-wc-mcp-amends-b.md`)\nwarning  docs/spec/zz-wc-mcp-amends.md:15: link-anchor: `#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`\nwarning  docs/spec/zz-wc-mcp-amends.md:15: link-dangling: `zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`, `docs/zz-wc-mcp-amends-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "93f539e3ab01ee14777e1b5b3e095da6a1f662db",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "key-missing",
+              "line": 1,
+              "message": "key `scope` is required for class spec: a list, as [root]",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "error",
+              "subject": "scope"
+            },
+            {
+              "code": "link-dangling",
+              "line": 13,
+              "message": "`zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`, `docs/zz-wc-mcp-amends-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 15,
+              "message": "`#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-amends-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 15,
+              "message": "`zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`, `docs/zz-wc-mcp-amends-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0003",
+          "interpretation": null,
+          "kind": "amendment",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:544d0e4ea551ab20b9421e215d5874bd292801a600b4eba50a2c910f600e6e6a",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "zerkalo",
+          "rationale": "Amend the probe.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-amends.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-amends.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-amends.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:14: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`, `docs/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:16: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:16: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`, `docs/zz-wc-mcp-a.md`)\nsimilar: MOD-CLI | title | gates | module | docs/spec/cli.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | title equal to new `docs/spec/zz-wc-mcp.md`'s\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`, `docs/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 16,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 16,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`, `docs/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:24476745db72d8a1cc701fda05268679aa64dd8980b4a572f567107b9cba906f",
+          "preview": null,
+          "price_of_other": null,
+          "project": "zerkalo",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "MOD-CLI",
+              "kind": "module",
+              "path": "docs/spec/cli.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp.md`'s",
+              "source": "title",
+              "title": "\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp-dry.md:14: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`, `docs/zz-wc-mcp-dry-b.md`)\nwarning  docs/spec/zz-wc-mcp-dry.md:16: link-anchor: `#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  docs/spec/zz-wc-mcp-dry.md:16: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`, `docs/zz-wc-mcp-dry-a.md`)\nsimilar: MOD-CLI | title | gates | module | docs/spec/cli.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | title equal to new `docs/spec/zz-wc-mcp-dry.md`'s\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`, `docs/zz-wc-mcp-dry-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 16,
+              "message": "`#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 16,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`, `docs/zz-wc-mcp-dry-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored",
+            "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:38755c6b728523248e66694cac12420667db11b37d18be109a784b7183a219a0",
+          "preview": null,
+          "price_of_other": null,
+          "project": "zerkalo",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "MOD-CLI",
+              "kind": "module",
+              "path": "docs/spec/cli.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp-dry.md`'s",
+              "source": "title",
+              "title": "\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create, distinct": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:14: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`, `docs/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:16: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:16: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`, `docs/zz-wc-mcp-a.md`)\nsimilar: MOD-CLI | title | gates | module | docs/spec/cli.md | \u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 | title equal to new `docs/spec/zz-wc-mcp.md`'s\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "93f539e3ab01ee14777e1b5b3e095da6a1f662db",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`, `docs/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 16,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 16,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`, `docs/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0002",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:24476745db72d8a1cc701fda05268679aa64dd8980b4a572f567107b9cba906f",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "zerkalo",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": true,
+              "id": "MOD-CLI",
+              "kind": "module",
+              "path": "docs/spec/cli.md",
+              "reason": "title equal to new `docs/spec/zz-wc-mcp.md`'s",
+              "source": "title",
+              "title": "\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change interpretation": {
+      "id": 7,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-mcp-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-b.md`, `docs/zz-wc-mcp-interpret-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-mcp-interpret-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-mcp-interpret-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-mcp-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-a.md`, `docs/zz-wc-mcp-interpret-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "93f539e3ab01ee14777e1b5b3e095da6a1f662db",
+          "base_hash": "b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 33,
+              "message": "`zz-wc-mcp-interpret-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-b.md`, `docs/zz-wc-mcp-interpret-b.md`)",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-interpret-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 35,
+              "message": "`#zz-wc-mcp-interpret-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-mcp-interpret-anchor`",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-interpret-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 35,
+              "message": "`zz-wc-mcp-interpret-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-interpret-a.md`, `docs/zz-wc-mcp-interpret-a.md`)",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-interpret-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0004",
+          "interpretation": {
+            "decision": "ADR-0001",
+            "how": "Applied as written.",
+            "why": "The decision left the wording open."
+          },
+          "kind": "interpretation",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:42777c585d0d0bf9e10576a28e42c9dcec5743bf39e02127a67719e861601c63",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "zerkalo",
+          "rationale": "Interpret it.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "CMD-STATUS",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "MOD-CLI",
+          "target_ids": [
+            "MOD-CLI"
+          ],
+          "target_path": "docs/spec/cli.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "note: MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`\nPR-0001\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`, `docs/zz-wc-mcp-update-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-mcp-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-mcp-update-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`, `docs/zz-wc-mcp-update-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "93f539e3ab01ee14777e1b5b3e095da6a1f662db",
+          "base_hash": "b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 33,
+              "message": "`zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`, `docs/zz-wc-mcp-update-b.md`)",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 35,
+              "message": "`#zz-wc-mcp-update-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-mcp-update-anchor`",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 35,
+              "message": "`zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`, `docs/zz-wc-mcp-update-a.md`)",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:28657b41bf72b8335e260547314deefb698afc3b6b0de33536190794edac96cb",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "zerkalo",
+          "rationale": "Probe MOD-CLI.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "CMD-STATUS",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "MOD-CLI",
+          "target_ids": [
+            "MOD-CLI"
+          ],
+          "target_path": "docs/spec/cli.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "note: MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`\ndry run: nothing stored\nintroduced: 3\nwarning  docs/spec/cli.md:33: link-dangling: `zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`, `docs/zz-wc-mcp-update-dry-b.md`)\nwarning  docs/spec/cli.md:35: link-anchor: `#zz-wc-mcp-update-dry-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`\nwarning  docs/spec/cli.md:35: link-dangling: `zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`, `docs/zz-wc-mcp-update-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": "b3:ee2980259dcfbc221e1016ae041fde797b367ae74c65f96059ed3655e82bff49",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 33,
+              "message": "`zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`, `docs/zz-wc-mcp-update-dry-b.md`)",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 35,
+              "message": "`#zz-wc-mcp-update-dry-anchor`: `docs/spec/cli.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 35,
+              "message": "`zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`, `docs/zz-wc-mcp-update-dry-a.md`)",
+              "path": "docs/spec/cli.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored",
+            "MOD-CLI is in the `canon:` section of ADR-0001: a change carrying one is `spec propose interpretation MOD-CLI --decision ADR-0001`"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:3a3896d641ba5df726d53dc01661affb3ba28520b86a98f7f9d6eacc05c09e6f",
+          "preview": null,
+          "price_of_other": null,
+          "project": "zerkalo",
+          "rationale": "Probe MOD-CLI.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "MOD-CLI",
+          "target_ids": [
+            "MOD-CLI"
+          ],
+          "target_path": "docs/spec/cli.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

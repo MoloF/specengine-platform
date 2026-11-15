@@ -1399,10 +1399,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // usage-orphans (RM-0111, UO6, `get_node`'s links `usage`): 0.46.0;
     // the 0.46.1 patch (RM-0114 to RM-0119, a version-only bump): 0.46.1;
     // auto-mode (RM-0120 to RM-0124, the runner `scripts/autopilot.sh`):
-    // 0.47.0.
-    if plugin["version"] != "0.47.0" {
+    // 0.47.0; the 0.47.1 patch (RM-0125 write-cost, a version-only bump):
+    // 0.47.1.
+    if plugin["version"] != "0.47.1" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.47.0",
+            "plugin.json: version {}, not 0.47.1",
             plugin["version"]
         ));
     }
@@ -1472,9 +1473,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.47.0\"", "\"0.46.1\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.47.0");
-    assert_names(&r2_problems(&older, &market), "not 0.47.0", "0.46.1");
+    let older = plugin.replacen("\"0.47.1\"", "\"0.47.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.47.1");
+    assert_names(&r2_problems(&older, &market), "not 0.47.1", "0.47.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

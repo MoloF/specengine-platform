@@ -1,0 +1,10 @@
+{
+  "question": {
+    "get": 25,
+    "post": 45
+  },
+  "update": {
+    "get": 29,
+    "post": 46
+  }
+}

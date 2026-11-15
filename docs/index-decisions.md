@@ -55,3 +55,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0080](decisions/ADR-0080.md) The corpus map lays out with d3-force and draws on a 2D canvas, in a lazy chunk · ui · accepted
 - [ADR-0081](decisions/ADR-0081.md) A committed [auto] rule, started per pack on a terminal, approves the pack's tasks and lands each finished one · architecture · accepted
 - [ADR-0082](decisions/ADR-0082.md) A hub's code applies a covered update or create its sole owner login raised over /mcp · architecture · accepted
+- [ADR-0083](decisions/ADR-0083.md) A write's findings take the files as the call's walk indexed them · architecture · accepted

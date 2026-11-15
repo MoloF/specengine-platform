@@ -12,21 +12,21 @@ Built by `slow-requests` (RM-0118) and `hub-turn-fairness` (RM-0119), no ADR. Th
 
 ## Threshold
 
-`specengine-http --slow-ms N`: 0 to 3 600 000 (`SLOW_MS_MAX`), 2 000 by default (`SLOW_MS`); 0 writes a line for every request and every hold. A threshold is passed when the time measured is at least `N` ms. Anything else is clap's refusal: exit 2, one stderr line, before listening (`serve.md` "Lines"). `spec serve` and the hub's entrypoint pass none, so both run at 2 000.
+`specengine-http --slow-ms N`: 0 to 3 600 000 (`SLOW_MS_MAX`), 2 000 by default (`SLOW_MS`); 0 writes a line for every request and every hold. A threshold is passed when the time measured is at least `N` ms. Anything else is clap's refusal: exit 2, one stderr line, before listening (`serve.md` "Lines"). `spec serve` passes none, so it runs at 2 000. From 0.47.1 a hub's entrypoint passes `SPECENGINE_SLOW_MS` from `.env` when set, and refuses a value outside 0 to 3 600 000 before the daemon starts (exit 2, `hub-deploy.md` "Entrypoint"); unset, it passes none.
 
 ## Lines
 
 One `writeln!` each on a locked stderr, keys in this order, an absent value `-`:
 
 ```text
-specengine-http: slow request at=<T> method=<M> route=<R> project=<P> id=<I> tool=<N> status=<S> ms=<n> wait_ms=<n|-> run_ms=<n|-> index=<walked|trusted|-> class=<page|mcp> line_ms=<n|-> ahead=<n|->
+specengine-http: slow request at=<T> method=<M> route=<R> project=<P> id=<I> tool=<N> status=<S> ms=<n> wait_ms=<n|-> run_ms=<n|-> index=<walked|trusted|-> class=<page|mcp> line_ms=<n|-> ahead=<n|-> check_ms=<n|-> index_ms=<n|-> git_ms=<n|-> git=<n|-> write_ms=<n|->
 specengine-http: slow turn at=<T> project=<P> by=<R|sync> id=<I> tool=<N> state=held|released held_ms=<n> class=<page|mcp|sync>
 ```
 
 ```text
-specengine-http: slow turn at=2026-11-14T14:01:07.412Z project=dorm by=/mcp/{p} id=- tool=propose_change state=held held_ms=2000 class=mcp
-specengine-http: slow turn at=2026-11-14T14:01:07.412Z project=dorm by=/mcp/{p} id=- tool=propose_change state=released held_ms=4385 class=mcp
-specengine-http: slow request at=2026-11-14T14:01:07.610Z method=GET route=/api/projects/{p}/inbox project=dorm id=- tool=- status=200 ms=4300 wait_ms=4190 run_ms=110 index=trusted class=page line_ms=- ahead=1
+specengine-http: slow turn at=2026-11-14T14:01:07.412Z project=demo by=/mcp/{p} id=- tool=propose_change state=held held_ms=2000 class=mcp
+specengine-http: slow turn at=2026-11-14T14:01:07.412Z project=demo by=/mcp/{p} id=- tool=propose_change state=released held_ms=4385 class=mcp
+specengine-http: slow request at=2026-11-14T14:01:07.610Z method=GET route=/api/projects/{p}/inbox project=demo id=- tool=- status=200 ms=4300 wait_ms=4190 run_ms=110 index=trusted class=page line_ms=- ahead=1 check_ms=- index_ms=4 git_ms=- git=- write_ms=-
 ```
 
 - **A request line**: one per request whose whole time passes the threshold, written when the handler's answer returns. An answer whose body streams (an MCP call's SSE answer, which carries the call's result) writes it at the body's end; a HEAD's, a 1xx, 204 or 304 at the return. A client gone first: `status=gone`, `run_ms=-` when it never ran. None for the live tail (`GET …/events`) or `/mcp`'s GET stream, open up to 300 s by design; the tail's polls take no turn.
@@ -47,6 +47,7 @@ specengine-http: slow request at=2026-11-14T14:01:07.610Z method=GET route=/api/
 | `class` | `page` (every route but `/mcp/{p}`), `mcp`; a turn line also `sync` |
 | `line_ms` | the wait in its login's line (`hub-mcp.md` "Turn"); `-` with none |
 | `ahead` | the turn's holders and waiters when it began waiting for the turn; `-` with no turn |
+| `check_ms`, `index_ms`, `git_ms`, `git`, `write_ms` | a request line's time by kind, from 0.47.1: introduced findings; walks, decodes, `update_paths`, outputs; git processes, spawn to exit, and their count; the queue's write transactions and the record's and floor's synced writes (`spec-check-write.md` "Cost fields"). The innermost kind wins, so they never overlap and sum within `run_ms`; `-` when that kind never ran |
 | `by` | the holder: its route template, `sync`, or a delegated apply's login |
 | `held_ms` | `held`: the threshold (0 at 0); `released`: the hold's whole length |
 
@@ -62,15 +63,16 @@ Fourteen flags in the `traefik` service's `command:` (`hub-deploy.md` "Host"; `t
 `docker compose logs -t --since 2h specengine | grep ' slow '`, then `docker compose logs -t --since 2h traefik`.
 - A `held` line with a long `held_ms` names the holder; the request lines after it with a large `wait_ms` are what it stalled; `ahead` counts who stood before each, `line_ms` an agent's wait behind its own calls.
 - `index=walked` on a hub: a read that ran the reconcile walk (`spec-read-freshness.md` "A hub's trusted index"). `status=gone`: a person who left. `by=sync`: the `--push` merge.
+- **Below the threshold.** A measurement under 2 s, a gate's, needs a line per request: set `SPECENGINE_SLOW_MS=0` in `.env`, `docker compose up -d`, read, then remove it and `docker compose up -d` again.
+- **Where a request's time went**: `check_ms`, `index_ms`, `git_ms` over `git` processes, `write_ms`; `run_ms` less their sum is the rest (config, rendering, the queue's reads).
 - **A stream, not a hang.** The page's tail (`GET …/events`, router `hub@file`) and an agent's `/mcp` GET stream (`hub-mcp@file`) stay open up to 300 s: Traefik logs each with a `Duration` near 300 s, and the daemon writes no `slow request` line for it. A long Traefik line with a daemon request line at the same moment is a slow request; one with neither a daemon line nor a 300 s stream's shape spent its time at the proxy or the door (`Overhead`).
 
 ## Known limits
 
 - Route templates are written twice, in each route and its `.noted(…)`, since axum's `matched-path` feature is off in the pinned build; turning it on, an owner's option, would let one source serve both.
-- A hub cannot lower `--slow-ms` from the compose: the entrypoint (`hub-deploy.md` "Entrypoint") rebuilds its arguments and reads no variable for it, so a diagnosis session at a lower threshold needs an entrypoint change.
 - No rotation (Docker's log driver keeps the logs), metrics, sampling, request ID or per-person view. The CLI and the stdio MCP server write none.
 - Traefik's fields are from its documentation: that a request of 2 s or more logs `Duration`, `RouterName` and `DownstreamStatus` is the owner's check on the host.
 
 ## Tests
 
-http `tests/slow.rs` (SR1-SR10, the spawned binary's stderr), `tests/common/slow.rs` (the lines' grammar), `tests/hub_fairness.rs` (TF1-TF6, TF8, TF9; a `probes` build, `#[ignore]`d: `--features specengine-mcp/probes --run-ignored ignored-only`), `src/lines_tests.rs` (TF7), `tests/deploy.rs` SR11.
+http `tests/slow.rs` (SR1-SR10, the cost fields, the spawned binary's stderr), `tests/common/slow.rs` (the lines' grammar), `tests/hub_fairness.rs` (TF1-TF6, TF8, TF9; a `probes` build, `#[ignore]`d: `--features specengine-mcp/probes --run-ignored ignored-only`), `src/lines_tests.rs` (TF7), `tests/deploy.rs` SR11 and `wc35_*` (`SPECENGINE_SLOW_MS`).

@@ -18,6 +18,7 @@ use specengine_model::{
 
 use super::baseline::{Baseline, DebtEntry};
 use super::config::{CheckConfig, DocClass};
+use super::counts::note_run;
 use super::input::{CheckFile, CheckInput, ProblemKind};
 use super::report::{Cause, Debt, Finding, Fix, Report, entry_order, sort_findings};
 use super::resolve::{Resolution, Resolver, declared_references, reference_line, written};
@@ -144,30 +145,20 @@ pub fn run(
         }
     }
 
-    let corpus = Corpus::new(&files, scheme, &paths.features);
-    for (index, file) in files.iter().enumerate() {
-        let Some(parsed) = &file.parsed else {
-            continue;
-        };
-        let text = &corpus.texts[index];
-        FileCheck {
-            file,
-            parsed,
-            text,
+    note_run();
+    let corpus = Corpus::new(&files, scheme, &paths.features, None);
+    passes(
+        input,
+        &corpus,
+        Rules {
             scheme,
             paths,
             config,
-            corpus: &corpus,
-            findings: &mut findings,
-        }
-        .run();
-    }
-    corpus.id_taken(&mut findings);
-    generated::run(input, &corpus, paths, config, &mut findings, &mut causes);
-    graph::run(&corpus, scheme, &mut findings);
-    links::run(&corpus, paths, &mut findings);
-    rules::run(&corpus, &config.rules, &mut findings);
-    graph::parent_cycles(input, scheme, paths, &mut findings);
+        },
+        Globals::ALL,
+        &mut findings,
+        &mut causes,
+    );
 
     let stale = apply_baseline(&mut findings, baseline, today, today_valid);
     let worst_w_bytes = worst_w(input, paths, config.index_generator());
@@ -179,6 +170,117 @@ pub fn run(
         stale,
         causes,
     )
+}
+
+/// The rule tables every pass reads.
+#[derive(Clone, Copy)]
+pub(crate) struct Rules<'r> {
+    pub scheme: &'r IdScheme,
+    pub paths: &'r Paths,
+    pub config: &'r CheckConfig,
+}
+
+/// The passes whose findings land on a file other than the one they
+/// judge, by the whole corpus's shape (`write-cost`, "E: the affected
+/// set"): each runs or not, whole. [`run`] runs all three.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Globals {
+    /// `depends-cycle`.
+    pub cycles: bool,
+    /// `parent-cycle`.
+    pub parents: bool,
+    /// `index-drift` and `index-missing`.
+    pub index: bool,
+}
+
+impl Globals {
+    /// Every pass.
+    pub(crate) const ALL: Self = Self {
+        cycles: true,
+        parents: true,
+        index: true,
+    };
+}
+
+/// Every rule over `corpus`: the per-file rules and the citing passes on
+/// the files the corpus keeps ([`Corpus::kept`]), the passes `globals`
+/// names whole.
+fn passes(
+    input: &CheckInput,
+    corpus: &Corpus<'_>,
+    rules: Rules<'_>,
+    globals: Globals,
+    findings: &mut Vec<Finding>,
+    causes: &mut Vec<Cause>,
+) {
+    let Rules {
+        scheme,
+        paths,
+        config,
+    } = rules;
+    for (index, file) in corpus.files.iter().enumerate() {
+        let Some(parsed) = &file.parsed else {
+            continue;
+        };
+        if !corpus.kept(index) {
+            continue;
+        }
+        let text = &corpus.texts[index];
+        FileCheck {
+            file,
+            parsed,
+            text,
+            scheme,
+            paths,
+            config,
+            corpus,
+            findings,
+        }
+        .run();
+    }
+    corpus.id_taken(findings);
+    generated::run(
+        input,
+        corpus,
+        paths,
+        config,
+        globals.index,
+        findings,
+        causes,
+    );
+    graph::run(corpus, scheme, globals.cycles, findings);
+    links::run(corpus, paths, findings);
+    rules::run(corpus, &config.rules, findings);
+    if globals.parents {
+        graph::parent_cycles(input, scheme, paths, findings);
+    }
+}
+
+/// The findings [`run`] gives that land on the files `only` names, and those
+/// of the passes `globals` names, unsorted, no baseline applied: the files of
+/// `input` resolve as in a whole run, so a kept file's findings are those a
+/// whole run gives it. `name-skipped` is never among them.
+pub(crate) fn run_over(
+    input: &CheckInput,
+    rules: Rules<'_>,
+    only: &BTreeSet<String>,
+    globals: Globals,
+) -> Vec<Finding> {
+    let mut files: Vec<&CheckFile> = input.files.iter().collect();
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    let kept: Vec<bool> = files.iter().map(|file| only.contains(&file.path)).collect();
+    note_run();
+    let corpus = Corpus::new(&files, rules.scheme, &rules.paths.features, Some(kept));
+    let mut findings = Vec::new();
+    let mut causes = Vec::new();
+    passes(input, &corpus, rules, globals, &mut findings, &mut causes);
+    findings
+}
+
+/// [`apply_baseline`] for the set's findings: a finding's debt, as a whole
+/// run marks it.
+pub(crate) fn mark_debt(findings: &mut [Finding], baseline: &Baseline, today: &str) {
+    apply_baseline(findings, baseline, today, is_calendar_date(today));
 }
 
 /// `report` (a [`run`] under `baseline` and `today`) with `extra` findings
@@ -268,10 +370,17 @@ pub(crate) struct Corpus<'a> {
     definitions: Vec<Vec<(String, usize)>>,
     /// Per file: the front-matter was read.
     readable: Vec<bool>,
+    /// Per file: its own findings are wanted; `None`: every file's.
+    kept: Option<Vec<bool>>,
 }
 
 impl<'a> Corpus<'a> {
-    fn new(files: &[&'a CheckFile], scheme: &'a IdScheme, features: &'a str) -> Self {
+    fn new(
+        files: &[&'a CheckFile],
+        scheme: &'a IdScheme,
+        features: &'a str,
+        kept: Option<Vec<bool>>,
+    ) -> Self {
         let mut corpus = Corpus {
             files: files.to_vec(),
             paths: files.iter().map(|file| file.path.as_str()).collect(),
@@ -281,6 +390,7 @@ impl<'a> Corpus<'a> {
             resolver: Resolver::of_sorted(files, scheme, features),
             definitions: Vec::with_capacity(files.len()),
             readable: Vec::with_capacity(files.len()),
+            kept,
         };
         for (index, file) in files.iter().enumerate() {
             let text = FileText::new(&file.bytes);
@@ -307,6 +417,14 @@ impl<'a> Corpus<'a> {
         corpus
     }
 
+    /// The findings landing on the file at `index` are wanted: every file's
+    /// in a whole run, the set's in [`run_over`].
+    pub(crate) fn kept(&self, index: usize) -> bool {
+        self.kept
+            .as_ref()
+            .is_none_or(|kept| kept.get(index).copied().unwrap_or(false))
+    }
+
     /// `id-taken`: an ID of a project-scoped prefix defined in two files,
     /// reported on each later file (by path), naming the first. A
     /// feature-scoped ID never: it is unique within its feature document
@@ -321,7 +439,7 @@ impl<'a> Corpus<'a> {
                 continue;
             }
             for &index in later {
-                if !self.readable[index] {
+                if !self.readable[index] || !self.kept(index) {
                     continue;
                 }
                 let line = self.definitions[index]

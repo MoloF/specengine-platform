@@ -1,0 +1,256 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "probe": null,
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"decision-log\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"ledger/DEC/zz-wc-create.md\",\"target_path\":\"ledger/DEC/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"6dc05966d97ebf4352b2c40690f8a0dfd2ff1bc0\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:8b367d1e9f8a23effcb53c7cce472ec988ea36c4ac44a68b30feacf53b807ca9\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"class-missing\",\"severity\":\"error\",\"path\":\"ledger/DEC/zz-wc-create.md\",\"line\":1,\"subject\":\"\",\"message\":\"no `class:`: declare one of canon | decision | spec | generated\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create.md\",\"line\":3,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `ledger/DEC/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create.md\",\"line\":5,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `ledger/DEC/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create.md\",\"line\":5,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `ledger/DEC/zz-wc-create-a.md`)\"}],\"diff\":\"--- base ledger/DEC/zz-wc-create.md\\n+++ proposed ledger/DEC/zz-wc-create.md\\n@@ -0,0 +1,5 @@\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ledger/DEC/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 4\nerror  ledger/DEC/zz-wc-create.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  ledger/DEC/zz-wc-create.md:3: link-dangling: `zz-wc-create-b.md` names no walked document (tried `ledger/DEC/zz-wc-create-b.md`)\nwarning  ledger/DEC/zz-wc-create.md:5: link-anchor: `#zz-wc-create-anchor`: `ledger/DEC/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  ledger/DEC/zz-wc-create.md:5: link-dangling: `zz-wc-create-a.md` names no walked document (tried `ledger/DEC/zz-wc-create-a.md`)\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"decision-log\",\"kind\":\"create\",\"status\":null,\"target_id\":\"ledger/DEC/zz-wc-create-brief.md\",\"target_path\":\"ledger/DEC/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:d5805be2ac18c200c7bf34412f2457eb85e1037545ca0adf648e5cce0420f9f6\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"class-missing\",\"severity\":\"error\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":1,\"subject\":\"\",\"message\":\"no `class:`: declare one of canon | decision | spec | generated\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":3,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `ledger/DEC/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"ledger/DEC/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0001\",\"path\":\"ledger/DEC/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0001` (open), a live create, adds `ledger/DEC/zz-wc-create.md` titled as new `ledger/DEC/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 4\nerror  ledger/DEC/zz-wc-create-brief.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  ledger/DEC/zz-wc-create-brief.md:3: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-b.md`)\nwarning  ledger/DEC/zz-wc-create-brief.md:5: link-anchor: `#zz-wc-create-brief-anchor`: `ledger/DEC/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  ledger/DEC/zz-wc-create-brief.md:5: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-a.md`)\nsimilar: PR-0001 | queue | gates | - | ledger/DEC/zz-wc-create.md | Write cost probe | `PR-0001` (open), a live create, adds `ledger/DEC/zz-wc-create.md` titled as new `ledger/DEC/zz-wc-create-brief.md`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"decision-log\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"ledger/DEC/zz-wc-create-brief.md\",\"target_path\":\"ledger/DEC/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"6dc05966d97ebf4352b2c40690f8a0dfd2ff1bc0\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:d5805be2ac18c200c7bf34412f2457eb85e1037545ca0adf648e5cce0420f9f6\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"class-missing\",\"severity\":\"error\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":1,\"subject\":\"\",\"message\":\"no `class:`: declare one of canon | decision | spec | generated\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":3,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `ledger/DEC/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"ledger/DEC/zz-wc-create-brief.md\",\"line\":5,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ledger/DEC/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0001\",\"path\":\"ledger/DEC/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0001` (open), a live create, adds `ledger/DEC/zz-wc-create.md` titled as new `ledger/DEC/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 4\nerror  ledger/DEC/zz-wc-create-brief.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  ledger/DEC/zz-wc-create-brief.md:3: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-b.md`)\nwarning  ledger/DEC/zz-wc-create-brief.md:5: link-anchor: `#zz-wc-create-brief-anchor`: `ledger/DEC/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  ledger/DEC/zz-wc-create-brief.md:5: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `ledger/DEC/zz-wc-create-brief-a.md`)\nsimilar: PR-0001 | queue | gates | - | ledger/DEC/zz-wc-create.md | Write cost probe | `PR-0001` (open), a live create, adds `ledger/DEC/zz-wc-create.md` titled as new `ledger/DEC/zz-wc-create-brief.md`\n"
+    }
+  },
+  "corpus": "pilot-w/two",
+  "http": {
+    "probe": null
+  },
+  "mcp": {
+    "probe": null,
+    "propose_change create": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 4\nerror  ledger/DEC/zz-wc-mcp.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  ledger/DEC/zz-wc-mcp.md:3: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-b.md`)\nwarning  ledger/DEC/zz-wc-mcp.md:5: link-anchor: `#zz-wc-mcp-anchor`: `ledger/DEC/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  ledger/DEC/zz-wc-mcp.md:5: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "6dc05966d97ebf4352b2c40690f8a0dfd2ff1bc0",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "class-missing",
+              "line": 1,
+              "message": "no `class:`: declare one of canon | decision | spec | generated",
+              "path": "ledger/DEC/zz-wc-mcp.md",
+              "severity": "error",
+              "subject": ""
+            },
+            {
+              "code": "link-dangling",
+              "line": 3,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-b.md`)",
+              "path": "ledger/DEC/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 5,
+              "message": "`#zz-wc-mcp-anchor`: `ledger/DEC/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "ledger/DEC/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 5,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-a.md`)",
+              "path": "ledger/DEC/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:be062f82e8fff1297981d212abcc163ec093bc5d4b5c538ab70f8ee82696e7b4",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "decision-log",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "ledger/DEC/zz-wc-mcp.md",
+          "target_ids": [
+            "ledger/DEC/zz-wc-mcp.md"
+          ],
+          "target_path": "ledger/DEC/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 4\nerror  ledger/DEC/zz-wc-mcp-dry.md:1: class-missing: no `class:`: declare one of canon | decision | spec | generated\nwarning  ledger/DEC/zz-wc-mcp-dry.md:3: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-dry-b.md`)\nwarning  ledger/DEC/zz-wc-mcp-dry.md:5: link-anchor: `#zz-wc-mcp-dry-anchor`: `ledger/DEC/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  ledger/DEC/zz-wc-mcp-dry.md:5: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "class-missing",
+              "line": 1,
+              "message": "no `class:`: declare one of canon | decision | spec | generated",
+              "path": "ledger/DEC/zz-wc-mcp-dry.md",
+              "severity": "error",
+              "subject": ""
+            },
+            {
+              "code": "link-dangling",
+              "line": 3,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-dry-b.md`)",
+              "path": "ledger/DEC/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 5,
+              "message": "`#zz-wc-mcp-dry-anchor`: `ledger/DEC/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "ledger/DEC/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 5,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `ledger/DEC/zz-wc-mcp-dry-a.md`)",
+              "path": "ledger/DEC/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:8325da2ef3706067fddd7a039648612414ab64c63cd4186f849b515cffe53fb3",
+          "preview": null,
+          "price_of_other": null,
+          "project": "decision-log",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "ledger/DEC/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "ledger/DEC/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "ledger/DEC/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

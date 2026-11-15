@@ -148,6 +148,7 @@ fn run(
         Some(HubRun {
             judged: &judged,
             rehearsal: true,
+            opened: None,
         }),
         delegation,
         &mut heard,
@@ -183,6 +184,7 @@ fn run(
         Some(HubRun {
             judged: &judged,
             rehearsal: false,
+            opened: None,
         }),
         delegation,
         &mut same,

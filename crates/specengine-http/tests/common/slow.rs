@@ -4,8 +4,13 @@
 //! outside 0x20-0x7E, never two lines run together. docs/features/
 //! hub-turn-fairness.md (RM-0119) appends `class=` to every line and
 //! `line_ms=`, `ahead=` to a request line; a line is taken with or without
-//! them, but never a mix in one daemon's run. Shared by `tests/slow.rs` and
-//! `tests/hub_fairness.rs`.
+//! them, but never a mix in one daemon's run. docs/features/write-cost.md
+//! (RM-0125) "Attribution: five fields" appends ` check_ms= index_ms= git_ms=
+//! git= write_ms=` after `ahead` (each `<n|->`) to every request line of a
+//! build that has them, never to a turn line: a request line is taken with
+//! RM-0119's keys alone or with those and the five, again never a mix.
+//! Shared by `tests/slow.rs`, `tests/hub_fairness.rs` and
+//! `tests/write_cost_slow.rs`.
 
 use std::ffi::OsStr;
 use std::sync::LazyLock;
@@ -35,6 +40,10 @@ const TURN_KEYS: [&str; 7] = ["at", "project", "by", "id", "tool", "state", "hel
 /// Appended to a request line, and `class` alone to a turn line:
 /// docs/features/hub-turn-fairness.md "The Rust half: a line per login".
 const REQUEST_FAIR_KEYS: [&str; 3] = ["class", "line_ms", "ahead"];
+
+/// Appended after RM-0119's keys to a request line: docs/features/
+/// write-cost.md "Attribution: five fields".
+const REQUEST_COST_KEYS: [&str; 5] = ["check_ms", "index_ms", "git_ms", "git", "write_ms"];
 
 static AT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$").unwrap());
@@ -74,6 +83,18 @@ pub struct Request {
     pub run_ms: Option<u64>,
     pub index: String,
     pub fair: Option<Fair>,
+    /// RM-0125's five fields, when the build has them.
+    pub cost: Option<Cost>,
+}
+
+/// RM-0125's five fields of a request line, `None` for `-`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cost {
+    pub check_ms: Option<u64>,
+    pub index_ms: Option<u64>,
+    pub git_ms: Option<u64>,
+    pub git: Option<u64>,
+    pub write_ms: Option<u64>,
 }
 
 /// One `slow turn` line.
@@ -104,8 +125,9 @@ fn count_or_dash(value: &str) -> Option<u64> {
     (value != "-").then(|| count(value))
 }
 
-/// `key=value` pairs separated by one space each, their keys exactly `keys`
-/// or `keys` then `fair`: the values, and whether `fair` came.
+/// `key=value` pairs separated by one space each, their keys exactly `keys`,
+/// `keys` then `fair`, or (a request line) `keys`, `fair`, then
+/// [`REQUEST_COST_KEYS`]: the values, and whether `fair` came.
 fn pairs<'a>(rest: &'a str, keys: &[&str], fair: &[&str], line: &str) -> (Vec<&'a str>, bool) {
     let found: Vec<(&str, &str)> = rest
         .split(' ')
@@ -116,9 +138,10 @@ fn pairs<'a>(rest: &'a str, keys: &[&str], fair: &[&str], line: &str) -> (Vec<&'
         .collect();
     let names: Vec<&str> = found.iter().map(|(name, _)| *name).collect();
     let with_fair: Vec<&str> = keys.iter().chain(fair).copied().collect();
+    let with_cost: Vec<&str> = with_fair.iter().copied().chain(REQUEST_COST_KEYS).collect();
     let fair_too = if names == keys {
         false
-    } else if names == with_fair {
+    } else if names == with_fair || (keys == REQUEST_KEYS && names == with_cost) {
         true
     } else {
         panic!("a slow line's keys {names:?}, not {keys:?} (nor with {fair:?}): {line:?}");
@@ -181,6 +204,18 @@ pub fn parse(line: &str) -> Slow {
                 ahead: count_or_dash(values[13]),
             }
         });
+        let cost = (values.len() == REQUEST_KEYS.len() + 3 + REQUEST_COST_KEYS.len()).then(|| {
+            for (offset, key) in REQUEST_COST_KEYS.iter().enumerate() {
+                matching(&COUNT_OR_DASH, key, values[14 + offset], line);
+            }
+            Cost {
+                check_ms: count_or_dash(values[14]),
+                index_ms: count_or_dash(values[15]),
+                git_ms: count_or_dash(values[16]),
+                git: count_or_dash(values[17]),
+                write_ms: count_or_dash(values[18]),
+            }
+        });
         Slow::Request(Request {
             line: line.to_owned(),
             at: values[0].to_owned(),
@@ -195,6 +230,7 @@ pub fn parse(line: &str) -> Slow {
             run_ms: count_or_dash(values[9]),
             index: values[10].to_owned(),
             fair,
+            cost,
         })
     } else if let Some(rest) = line.strip_prefix("specengine-http: slow turn ") {
         let (values, fair) = pairs(rest, &TURN_KEYS, &["class"], line);
@@ -268,6 +304,14 @@ pub fn slow_lines(stderr: &str) -> Vec<Slow> {
     assert!(
         fair.iter().all(|one| *one) || fair.iter().all(|one| !*one),
         "some slow lines carry hub-turn-fairness' keys and some do not:\n{stderr}"
+    );
+    let cost: Vec<bool> = requests(&lines)
+        .iter()
+        .map(|request| request.cost.is_some())
+        .collect();
+    assert!(
+        cost.iter().all(|one| *one) || cost.iter().all(|one| !*one),
+        "some request lines carry write-cost's five fields and some do not:\n{stderr}"
     );
     lines
 }

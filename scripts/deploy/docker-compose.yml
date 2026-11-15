@@ -85,6 +85,9 @@ services:
     environment:
       HUB_HOST: "${HUB_HOST}"
       SPECENGINE_PUSH: "${SPECENGINE_PUSH}"
+      # Passed through bare: absent from .env, absent here (the daemon's
+      # default threshold); never interpolated, which would hand an empty value.
+      SPECENGINE_SLOW_MS:
       GIT_SSH_COMMAND: ssh -i /run/secrets/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/run/secrets/known_hosts -o StrictHostKeyChecking=yes
     secrets: [deploy_key, known_hosts]
     volumes:

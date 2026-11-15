@@ -1,0 +1,818 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "approve decision": {
+      "answer": {
+        "error": "spec: `PR-0009` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0009`'s record: add it, or `spec reject PR-0009 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve discrepancy --option 1": {
+      "answer": {
+        "error": "spec: `PR-0008` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0008`'s record: add it, or `spec reject PR-0008 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve question": {
+      "answer": {
+        "error": "spec: `PR-0007` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0007`'s record: add it, or `spec reject PR-0007 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve update": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0001\",\"project\":\"ferry-lines\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"ROUTE-CROSSING\",\"target_path\":\"docs/spec/crossing.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"de03249ebc28f89ca7c4444facfb1e2aa9e42731\",\"base_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\",\"base_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\",\"new_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:0d7e67825b1ab48a2cb38ef79e711bc9be28c288d9c91c574d2ed34f5bfd04ec\",\"rationale\":\"Probe ROUTE-CROSSING.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":23,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/crossing.md\\n+++ proposed docs/spec/crossing.md\\n@@ -19,3 +19,7 @@ The ferry leaves only inside the tide window.\\n ## Slack {#TIDE-SLACK}\\n \\n Slack water adds a margin to the window.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ROUTE-CROSSING\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0001` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0001` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "apply PR-0001 to docs/spec/crossing.md on main in <root> (applies; raises TIDE-SLACK 1 -> 2)? [y/N]"
+      ]
+    },
+    "probe": {
+      "base": "b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3",
+      "decision": "ROUTE-CROSSING",
+      "path": "docs/spec/crossing.md",
+      "target": "ROUTE-CROSSING"
+    },
+    "propose amendment": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0005\",\"project\":\"ferry-lines\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends.md\",\"target_path\":\"docs/spec/zz-wc-amends.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"de03249ebc28f89ca7c4444facfb1e2aa9e42731\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nowner: owner\\nreviewed: 2026-10-21\\nclass: spec\\nstatus: draft\\nlinks:\\n  amends: [ROUTE-CROSSING]\\n---\\n\\n# Write cost amendment\\n\\nSee [the second probe](zz-wc-amends-b.md) here.\\n\\nSee [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"patch_hash\":\"b3:9b0da69b1355c414eba56e37bd583abcfc3f3a36ef6c0b52024fcfa076f1805c\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":12,\"subject\":\"zz-wc-amends-b.md\",\"message\":\"`zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":14,\"subject\":\"#zz-wc-amends-anchor\",\"message\":\"`#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends.md\",\"line\":14,\"subject\":\"zz-wc-amends-a.md\",\"message\":\"`zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-amends.md\\n+++ proposed docs/spec/zz-wc-amends.md\\n@@ -0,0 +1,14 @@\\n+---\\n+owner: owner\\n+reviewed: 2026-10-21\\n+class: spec\\n+status: draft\\n+links:\\n+  amends: [ROUTE-CROSSING]\\n+---\\n+\\n+# Write cost amendment\\n+\\n+See [the second probe](zz-wc-amends-b.md) here.\\n+\\n+See [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0005\nintroduced: 4\nerror  docs/spec/zz-wc-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends.md:12: link-dangling: `zz-wc-amends-b.md` names no walked document (tried `docs/spec/zz-wc-amends-b.md`)\nwarning  docs/spec/zz-wc-amends.md:14: link-anchor: `#zz-wc-amends-anchor`: `docs/spec/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\nwarning  docs/spec/zz-wc-amends.md:14: link-dangling: `zz-wc-amends-a.md` names no walked document (tried `docs/spec/zz-wc-amends-a.md`)\n"
+    },
+    "propose amendment --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0006\",\"project\":\"ferry-lines\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-amends-brief.md\",\"target_path\":\"docs/spec/zz-wc-amends-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"de03249ebc28f89ca7c4444facfb1e2aa9e42731\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:7459277f7ecb784e7fc166a2a4ff7f336191b94e8106e2094e7c6cd5b838526e\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":12,\"subject\":\"zz-wc-amends-brief-b.md\",\"message\":\"`zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":14,\"subject\":\"#zz-wc-amends-brief-anchor\",\"message\":\"`#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-amends-brief.md\",\"line\":14,\"subject\":\"zz-wc-amends-brief-a.md\",\"message\":\"`zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-amends-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0006\nintroduced: 4\nerror  docs/spec/zz-wc-amends-brief.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-amends-brief.md:12: link-dangling: `zz-wc-amends-brief-b.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-b.md`)\nwarning  docs/spec/zz-wc-amends-brief.md:14: link-anchor: `#zz-wc-amends-brief-anchor`: `docs/spec/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\nwarning  docs/spec/zz-wc-amends-brief.md:14: link-dangling: `zz-wc-amends-brief-a.md` names no walked document (tried `docs/spec/zz-wc-amends-brief-a.md`)\n"
+    },
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0003\",\"project\":\"ferry-lines\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create.md\",\"target_path\":\"docs/spec/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"de03249ebc28f89ca7c4444facfb1e2aa9e42731\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: canon\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:1a709f91537e8100c8c1f799fbcb3c6dab851d0795658f3957ab3fd54b60488d\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":12,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create.md\",\"line\":14,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/spec/zz-wc-create.md\\n+++ proposed docs/spec/zz-wc-create.md\\n@@ -0,0 +1,14 @@\\n+---\\n+class: canon\\n+owner: owner\\n+reviewed: 2026-10-21\\n+links:\\n+  constrains: [FARE-01]\\n+  depends_on: [ROUTE-DOCKS]\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"FARE-01\",\"path\":\"docs/records/FARE-01.md\",\"title\":\"A crossing costs one fare\",\"kind\":\"fare-note\",\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false},{\"id\":\"FARE-02\",\"path\":\"docs/records/FARE-02.md\",\"title\":\"A late crossing costs double\",\"kind\":\"fare-note\",\"source\":\"search\",\"reason\":\"search rank 2 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0003\nintroduced: 3\nwarning  docs/spec/zz-wc-create.md:12: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/spec/zz-wc-create-b.md`)\nwarning  docs/spec/zz-wc-create.md:14: link-anchor: `#zz-wc-create-anchor`: `docs/spec/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/spec/zz-wc-create.md:14: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/spec/zz-wc-create-a.md`)\nsimilar: FARE-01 | search | advises | fare-note | docs/records/FARE-01.md | A crossing costs one fare | search rank 1 on `write`, `cost`, `probe`\nsimilar: FARE-02 | search | advises | fare-note | docs/records/FARE-02.md | A late crossing costs double | search rank 2 on `write`, `cost`, `probe`\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"ferry-lines\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:0cd538fb122f889f717640dab4960494c6e5c576f567ee532e715447bf74d19a\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"FARE-01\",\"path\":\"docs/records/FARE-01.md\",\"title\":\"A crossing costs one fare\",\"kind\":\"fare-note\",\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false},{\"id\":\"FARE-02\",\"path\":\"docs/records/FARE-02.md\",\"title\":\"A late crossing costs double\",\"kind\":\"fare-note\",\"source\":\"search\",\"reason\":\"search rank 2 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:12: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:14: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:14: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: FARE-01 | search | advises | fare-note | docs/records/FARE-01.md | A crossing costs one fare | search rank 1 on `write`, `cost`, `probe`\nsimilar: FARE-02 | search | advises | fare-note | docs/records/FARE-02.md | A late crossing costs double | search rank 2 on `write`, `cost`, `probe`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0004\",\"project\":\"ferry-lines\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/spec/zz-wc-create-brief.md\",\"target_path\":\"docs/spec/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"de03249ebc28f89ca7c4444facfb1e2aa9e42731\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:0cd538fb122f889f717640dab4960494c6e5c576f567ee532e715447bf74d19a\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":12,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/zz-wc-create-brief.md\",\"line\":14,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/spec/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"docs/spec/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\",\"gates\":true},{\"id\":\"FARE-01\",\"path\":\"docs/records/FARE-01.md\",\"title\":\"A crossing costs one fare\",\"kind\":\"fare-note\",\"source\":\"search\",\"reason\":\"search rank 1 on `write`, `cost`, `probe`\",\"gates\":false},{\"id\":\"FARE-02\",\"path\":\"docs/records/FARE-02.md\",\"title\":\"A late crossing costs double\",\"kind\":\"fare-note\",\"source\":\"search\",\"reason\":\"search rank 2 on `write`, `cost`, `probe`\",\"gates\":false}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0004\nintroduced: 3\nwarning  docs/spec/zz-wc-create-brief.md:12: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/spec/zz-wc-create-brief-b.md`)\nwarning  docs/spec/zz-wc-create-brief.md:14: link-anchor: `#zz-wc-create-brief-anchor`: `docs/spec/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/spec/zz-wc-create-brief.md:14: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/spec/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | docs/spec/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `docs/spec/zz-wc-create.md` titled as new `docs/spec/zz-wc-create-brief.md`\nsimilar: FARE-01 | search | advises | fare-note | docs/records/FARE-01.md | A crossing costs one fare | search rank 1 on `write`, `cost`, `probe`\nsimilar: FARE-02 | search | advises | fare-note | docs/records/FARE-02.md | A late crossing costs double | search rank 2 on `write`, `cost`, `probe`\n"
+    },
+    "propose interpretation": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: ROUTE-CROSSING is no accepted decision: canon document docs/spec/crossing.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: ROUTE-CROSSING is no accepted decision: canon document docs/spec/crossing.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose interpretation --brief": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: ROUTE-CROSSING is no accepted decision: canon document docs/spec/crossing.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: ROUTE-CROSSING is no accepted decision: canon document docs/spec/crossing.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose update": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"ferry-lines\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"ROUTE-CROSSING\",\"target_path\":\"docs/spec/crossing.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"de03249ebc28f89ca7c4444facfb1e2aa9e42731\",\"base_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\",\"base_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\",\"new_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"patch_hash\":\"b3:0d7e67825b1ab48a2cb38ef79e711bc9be28c288d9c91c574d2ed34f5bfd04ec\",\"rationale\":\"Probe ROUTE-CROSSING.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":23,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/spec/crossing.md\\n+++ proposed docs/spec/crossing.md\\n@@ -19,3 +19,7 @@ The ferry leaves only inside the tide window.\\n ## Slack {#TIDE-SLACK}\\n \\n Slack water adds a margin to the window.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TIDE-SLACK\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ROUTE-CROSSING\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/crossing.md:23: link-dangling: `zz-wc-update-b.md` names no walked document (tried `docs/spec/zz-wc-update-b.md`)\nwarning  docs/spec/crossing.md:25: link-anchor: `#zz-wc-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-update-anchor`\nwarning  docs/spec/crossing.md:25: link-dangling: `zz-wc-update-a.md` names no walked document (tried `docs/spec/zz-wc-update-a.md`)\n"
+    },
+    "propose update --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"ferry-lines\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"ROUTE-CROSSING\",\"target_path\":\"docs/spec/crossing.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"de03249ebc28f89ca7c4444facfb1e2aa9e42731\",\"base_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:64e9298c7f804b208f6458932bcd9a8a6fd37c7b29b7567f4d980c35b88da547\",\"rationale\":\"Probe ROUTE-CROSSING.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":23,\"subject\":\"zz-wc-update-brief-b.md\",\"message\":\"`zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"#zz-wc-update-brief-anchor\",\"message\":\"`#zz-wc-update-brief-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-update-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"zz-wc-update-brief-a.md\",\"message\":\"`zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TIDE-SLACK\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ROUTE-CROSSING\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/crossing.md:23: link-dangling: `zz-wc-update-brief-b.md` names no walked document (tried `docs/spec/zz-wc-update-brief-b.md`)\nwarning  docs/spec/crossing.md:25: link-anchor: `#zz-wc-update-brief-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-update-brief-anchor`\nwarning  docs/spec/crossing.md:25: link-dangling: `zz-wc-update-brief-a.md` names no walked document (tried `docs/spec/zz-wc-update-brief-a.md`)\n"
+    },
+    "raise decision": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0009\",\"created\":true,\"hits\":[],\"related\":[{\"id\":\"PR-0007\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0009\nrelated: PR-0007 | open | - | -\n"
+    },
+    "raise discrepancy": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0008\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0008\n"
+    },
+    "raise question": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0007\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0007\n"
+    }
+  },
+  "corpus": "impact",
+  "http": {
+    "probe": {
+      "path": "docs/spec/crossing.md",
+      "target": "ROUTE-CROSSING"
+    },
+    "question confirm GET": {
+      "body": "{\"status\":503,\"message\":\"spec: `PR-100002` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-100002`'s record: add it, or `spec reject PR-100002 --reason <answer>`; nothing changed\"}",
+      "status": 503
+    },
+    "question raise": [
+      {
+        "exit": 0,
+        "json": "{\"id\":\"PR-100002\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "PR-100002\n"
+      }
+    ],
+    "question stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100002\",\"project\":\"ferry-lines\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"ROUTE-CROSSING\",\"target_path\":\"docs/spec/crossing.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ROUTE-CROSSING\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100002\nproject: ferry-lines\nkind: question\nstatus: open\ntarget_id: ROUTE-CROSSING\ntarget_path: docs/spec/crossing.md\nworktree: <root>\nbranch: main\nbase_commit: <sha>\nbase_hash: -\nbase_text: -\nnew_text: -\npatch_hash: -\nrationale: -\nauthor: agent role=developer model=claude-opus-5-5 run=unknown\ndiagnostics: 0\ndiff: -\npreview: -\nconflict: -\nrevisions: -\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  ROUTE-CROSSING\nseverity: normal\ngap_type: -\nsummary: Does the write cost probe hold as written?\ngist: -\nmatters: -\nworking_answer: Keep it as written.\nprice_of_other: A new rule case.\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    },
+    "update commits": [
+      "<sha>\n7579435442d75483b1527fe0378fb03e75a58229\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100001\n\nProbe ROUTE-CROSSING.\n\nProposal: PR-100001\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown\nBase-commit: 7579435442d75483b1527fe0378fb03e75a58229\nRevision: TIDE-SLACK 1 -> 2\n\n---\n docs/spec/crossing.md | 6 +++++-\n 1 file changed, 5 insertions(+), 1 deletion(-)\n\ndiff --git a/docs/spec/crossing.md b/docs/spec/crossing.md\n--- a/docs/spec/crossing.md\n+++ b/docs/spec/crossing.md\n@@ -16,6 +16,10 @@ A ferry crosses the strait while the tide allows it.\n \n The ferry leaves only inside the tide window.\n \n-## Slack {#TIDE-SLACK}\n+## Slack {#TIDE-SLACK rev=2}\n \n Slack water adds a margin to the window.\n+\n+See [the second probe](zz-wc-hub-update-b.md) here.\n+\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n"
+    ],
+    "update confirm GET": {
+      "body": "{\"id\":\"PR-100001\",\"question\":\"staged 2026-10-05T21:14:03Z: spec approve PR-100001\\napply PR-100001 to docs/spec/crossing.md on main in <root> (applies; raises TIDE-SLACK 1 -> 2, staged)? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "update confirm POST": {
+      "body": "{\"id\":\"PR-100001\",\"project\":\"ferry-lines\",\"kind\":\"update\",\"status\":\"applied\",\"target_id\":\"ROUTE-CROSSING\",\"target_path\":\"docs/spec/crossing.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"7579435442d75483b1527fe0378fb03e75a58229\",\"base_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\",\"base_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\",\"new_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:b7164ad197a9815e02207e23154bce964db04b3e4825de1e4b2043e65e7111b3\",\"rationale\":\"Probe ROUTE-CROSSING.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":23,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/crossing.md\\n+++ proposed docs/spec/crossing.md\\n@@ -19,3 +19,7 @@ The ferry leaves only inside the tide window.\\n ## Slack {#TIDE-SLACK}\\n \\n Slack water adds a margin to the window.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"ROUTE-CROSSING\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "update propose": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"ferry-lines\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"ROUTE-CROSSING\",\"target_path\":\"docs/spec/crossing.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"7579435442d75483b1527fe0378fb03e75a58229\",\"base_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\",\"base_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\",\"new_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:b7164ad197a9815e02207e23154bce964db04b3e4825de1e4b2043e65e7111b3\",\"rationale\":\"Probe ROUTE-CROSSING.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":23,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/crossing.md\\n+++ proposed docs/spec/crossing.md\\n@@ -19,3 +19,7 @@ The ferry leaves only inside the tide window.\\n ## Slack {#TIDE-SLACK}\\n \\n Slack water adds a margin to the window.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TIDE-SLACK\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ROUTE-CROSSING\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-100001\nintroduced: 3\nwarning  docs/spec/crossing.md:23: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\nwarning  docs/spec/crossing.md:25: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-hub-update-anchor`\nwarning  docs/spec/crossing.md:25: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\n"
+    },
+    "update stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"ferry-lines\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"ROUTE-CROSSING\",\"target_path\":\"docs/spec/crossing.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"7579435442d75483b1527fe0378fb03e75a58229\",\"base_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\",\"base_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\",\"new_text\":\"---\\nclass: canon\\nid: ROUTE-CROSSING\\nowner: owner\\nreviewed: 2026-10-21\\nlinks:\\n  constrains: [FARE-01]\\n  depends_on: [ROUTE-DOCKS]\\n---\\n\\n# Crossing\\n\\nA ferry crosses the strait while the tide allows it.\\n\\n## Window {#TIDE-WINDOW}\\n\\nThe ferry leaves only inside the tide window.\\n\\n## Slack {#TIDE-SLACK}\\n\\nSlack water adds a margin to the window.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"patch_hash\":\"b3:b7164ad197a9815e02207e23154bce964db04b3e4825de1e4b2043e65e7111b3\",\"rationale\":\"Probe ROUTE-CROSSING.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":23,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/spec/crossing.md\",\"line\":25,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/spec/crossing.md\\n+++ proposed docs/spec/crossing.md\\n@@ -19,3 +19,7 @@ The ferry leaves only inside the tide window.\\n ## Slack {#TIDE-SLACK}\\n \\n Slack water adds a margin to the window.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"TIDE-SLACK\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"ROUTE-CROSSING\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\"},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100001\nproject: ferry-lines\nkind: update\nstatus: open\ntarget_id: ROUTE-CROSSING\ntarget_path: docs/spec/crossing.md\nworktree: <root>\nbranch: main\nbase_commit: 7579435442d75483b1527fe0378fb03e75a58229\nbase_hash: b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\nbase_text:\n  ---\n  class: canon\n  id: ROUTE-CROSSING\n  owner: owner\n  reviewed: 2026-10-21\n  links:\n    constrains: [FARE-01]\n    depends_on: [ROUTE-DOCKS]\n  ---\n\n  # Crossing\n\n  A ferry crosses the strait while the tide allows it.\n\n  ## Window {#TIDE-WINDOW}\n\n  The ferry leaves only inside the tide window.\n\n  ## Slack {#TIDE-SLACK}\n\n  Slack water adds a margin to the window.\nnew_text:\n  ---\n  class: canon\n  id: ROUTE-CROSSING\n  owner: owner\n  reviewed: 2026-10-21\n  links:\n    constrains: [FARE-01]\n    depends_on: [ROUTE-DOCKS]\n  ---\n\n  # Crossing\n\n  A ferry crosses the strait while the tide allows it.\n\n  ## Window {#TIDE-WINDOW}\n\n  The ferry leaves only inside the tide window.\n\n  ## Slack {#TIDE-SLACK}\n\n  Slack water adds a margin to the window.\n\n  See [the second probe](zz-wc-hub-update-b.md) here.\n\n  See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npatch_hash: b3:b7164ad197a9815e02207e23154bce964db04b3e4825de1e4b2043e65e7111b3\nrationale:\n  Probe ROUTE-CROSSING.\nauthor: agent role=spec-writer model=claude-opus-5-5 run=unknown\ndiagnostics: 3\n  warning  docs/spec/crossing.md:23: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/spec/zz-wc-hub-update-b.md`)\n  warning  docs/spec/crossing.md:25: link-anchor: `#zz-wc-hub-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-hub-update-anchor`\n  warning  docs/spec/crossing.md:25: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/spec/zz-wc-hub-update-a.md`)\ndiff:\n  --- base docs/spec/crossing.md\n  +++ proposed docs/spec/crossing.md\n  @@ -19,3 +19,7 @@ The ferry leaves only inside the tide window.\n   ## Slack {#TIDE-SLACK}\n   \n   Slack water adds a margin to the window.\n  +\n  +See [the second probe](zz-wc-hub-update-b.md) here.\n  +\n  +See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npreview: applies\nconflict: -\nrevisions: TIDE-SLACK 1 -> 2 (0 lock entries)\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  ROUTE-CROSSING\nseverity: -\ngap_type: -\nsummary: -\ngist: -\nmatters: -\nworking_answer: -\nprice_of_other: -\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3\"}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "path": "docs/spec/crossing.md",
+      "target": "ROUTE-CROSSING"
+    },
+    "propose_change amendment": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0003\nintroduced: 4\nerror  docs/spec/zz-wc-mcp-amends.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/spec/zz-wc-mcp-amends.md:12: link-dangling: `zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)\nwarning  docs/spec/zz-wc-mcp-amends.md:14: link-anchor: `#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`\nwarning  docs/spec/zz-wc-mcp-amends.md:14: link-dangling: `zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "de03249ebc28f89ca7c4444facfb1e2aa9e42731",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "key-missing",
+              "line": 1,
+              "message": "key `scope` is required for class spec: a list, as [root]",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "error",
+              "subject": "scope"
+            },
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-amends-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-amends-anchor`: `docs/spec/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-amends-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-amends-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-amends-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0003",
+          "interpretation": null,
+          "kind": "amendment",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:86eafaf2d2afd365106eadc9820887de38b7e20c5b75c6fe686338795c67c3c0",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "ferry-lines",
+          "rationale": "Amend the probe.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-amends.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-amends.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-amends.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0002\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp.md:12: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)\nwarning  docs/spec/zz-wc-mcp.md:14: link-anchor: `#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/spec/zz-wc-mcp.md:14: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)\nsimilar: FARE-01 | search | advises | fare-note | docs/records/FARE-01.md | A crossing costs one fare | search rank 1 on `write`, `cost`, `probe`\nsimilar: FARE-02 | search | advises | fare-note | docs/records/FARE-02.md | A late crossing costs double | search rank 2 on `write`, `cost`, `probe`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "de03249ebc28f89ca7c4444facfb1e2aa9e42731",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-b.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-anchor`: `docs/spec/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-a.md`)",
+              "path": "docs/spec/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0002",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:234abd9a8121143b1ea99ff48d473b1a63d4413290a7e55d75b306690c1a1cf6",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "ferry-lines",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": false,
+              "id": "FARE-01",
+              "kind": "fare-note",
+              "path": "docs/records/FARE-01.md",
+              "reason": "search rank 1 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "A crossing costs one fare"
+            },
+            {
+              "gates": false,
+              "id": "FARE-02",
+              "kind": "fare-note",
+              "path": "docs/records/FARE-02.md",
+              "reason": "search rank 2 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "A late crossing costs double"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/zz-wc-mcp-dry.md:12: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)\nwarning  docs/spec/zz-wc-mcp-dry.md:14: link-anchor: `#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  docs/spec/zz-wc-mcp-dry.md:14: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)\nsimilar: FARE-01 | search | advises | fare-note | docs/records/FARE-01.md | A crossing costs one fare | search rank 1 on `write`, `cost`, `probe`\nsimilar: FARE-02 | search | advises | fare-note | docs/records/FARE-02.md | A late crossing costs double | search rank 2 on `write`, `cost`, `probe`\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-b.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-dry-anchor`: `docs/spec/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-dry-a.md`)",
+              "path": "docs/spec/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:6c0c23f55d811cfc99ed535f748d531cf8c09141dc16df8b5160fbb7106c8fa4",
+          "preview": null,
+          "price_of_other": null,
+          "project": "ferry-lines",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [
+            {
+              "gates": false,
+              "id": "FARE-01",
+              "kind": "fare-note",
+              "path": "docs/records/FARE-01.md",
+              "reason": "search rank 1 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "A crossing costs one fare"
+            },
+            {
+              "gates": false,
+              "id": "FARE-02",
+              "kind": "fare-note",
+              "path": "docs/records/FARE-02.md",
+              "reason": "search rank 2 on `write`, `cost`, `probe`",
+              "source": "search",
+              "title": "A late crossing costs double"
+            }
+          ],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/spec/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "docs/spec/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "docs/spec/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change interpretation": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "spec: --decision: ROUTE-CROSSING is no accepted decision: canon document docs/spec/crossing.md; nothing stored\n",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": null,
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": null,
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": null,
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": null,
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "--decision: ROUTE-CROSSING is no accepted decision: canon document docs/spec/crossing.md; nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": null,
+          "preview": null,
+          "price_of_other": null,
+          "project": null,
+          "rationale": null,
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": null,
+          "target_ids": [],
+          "target_path": null,
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": null
+        }
+      }
+    },
+    "propose_change update": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 3\nwarning  docs/spec/crossing.md:23: link-dangling: `zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)\nwarning  docs/spec/crossing.md:25: link-anchor: `#zz-wc-mcp-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-mcp-update-anchor`\nwarning  docs/spec/crossing.md:25: link-dangling: `zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "de03249ebc28f89ca7c4444facfb1e2aa9e42731",
+          "base_hash": "b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 23,
+              "message": "`zz-wc-mcp-update-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-b.md`)",
+              "path": "docs/spec/crossing.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 25,
+              "message": "`#zz-wc-mcp-update-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-mcp-update-anchor`",
+              "path": "docs/spec/crossing.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 25,
+              "message": "`zz-wc-mcp-update-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-a.md`)",
+              "path": "docs/spec/crossing.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:5e292a8aef68944ca92002463a64286cc3e54efa78fe916f871fe526b0933740",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "ferry-lines",
+          "rationale": "Probe ROUTE-CROSSING.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "TIDE-SLACK",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "ROUTE-CROSSING",
+          "target_ids": [
+            "ROUTE-CROSSING"
+          ],
+          "target_path": "docs/spec/crossing.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/spec/crossing.md:23: link-dangling: `zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)\nwarning  docs/spec/crossing.md:25: link-anchor: `#zz-wc-mcp-update-dry-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`\nwarning  docs/spec/crossing.md:25: link-dangling: `zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": "b3:21f73bda14714a98067b9ecfd7c4e89d836498469079840a7cb8733be6296be3",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 23,
+              "message": "`zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-b.md`)",
+              "path": "docs/spec/crossing.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 25,
+              "message": "`#zz-wc-mcp-update-dry-anchor`: `docs/spec/crossing.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`",
+              "path": "docs/spec/crossing.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 25,
+              "message": "`zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/spec/zz-wc-mcp-update-dry-a.md`)",
+              "path": "docs/spec/crossing.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:04a9d9c10c721c5a987302f7082f05c5205d8222b8a1be3ba246ea00c6ce3ad5",
+          "preview": null,
+          "price_of_other": null,
+          "project": "ferry-lines",
+          "rationale": "Probe ROUTE-CROSSING.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "ROUTE-CROSSING",
+          "target_ids": [
+            "ROUTE-CROSSING"
+          ],
+          "target_path": "docs/spec/crossing.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

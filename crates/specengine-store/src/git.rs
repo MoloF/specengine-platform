@@ -544,6 +544,7 @@ impl Git {
 
     /// Runs `git <args>` to completion; its stdout on success.
     fn run(&self, command: &'static str, args: &[&str]) -> Result<Vec<u8>, GitFailure> {
+        let _git = crate::cost::spawn();
         let output = self
             .command(args)
             .output()
@@ -650,6 +651,7 @@ impl Git {
     /// `answer` reads the rest; an exit other than 0 or 1 is a failure.
     fn verify_rev(&self, spec: &str, answer: RevAnswer) -> Result<Option<String>, GitFailure> {
         const COMMAND: &str = "rev-parse";
+        let _git = crate::cost::spawn();
         let output = self
             .command(&["rev-parse", "--verify", "-q", spec])
             .output()
@@ -734,6 +736,7 @@ impl Git {
             input.extend(stdin_path(path).ok_or(unreadable.clone())?);
             input.push(b'\n');
         }
+        let _git = crate::cost::spawn();
         let mut child = self
             .command(&["hash-object", "--no-filters", "--stdin-paths"])
             .stdin(Stdio::piped())
@@ -782,6 +785,8 @@ impl Git {
         let unreadable = GitFailure::Unreadable {
             command: "cat-file",
         };
+        // Charged from the spawn to the session's end.
+        let git = crate::cost::spawn();
         let child = self
             .command(&["cat-file", "--batch"])
             .stdin(Stdio::piped())
@@ -790,7 +795,9 @@ impl Git {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|error| self.spawn_failure(&error))?;
-        CatFile::of_child(child).ok_or(unreadable)
+        CatFile::of_child(child)
+            .map(|session| session.charged(git))
+            .ok_or(unreadable)
     }
 }
 
@@ -822,6 +829,9 @@ pub(crate) struct CatFile {
     stdin: Option<ChildStdin>,
     stdout: BufReader<ChildStdout>,
     done: bool,
+    /// The process charged to the call's `git_ms` from its spawn to its end
+    /// (after [`Drop`] has reaped it), where no other kind is innermost.
+    _cost: Option<crate::cost::Charge>,
 }
 
 impl CatFile {
@@ -840,7 +850,14 @@ impl CatFile {
             stdin: Some(stdin),
             stdout: BufReader::new(stdout),
             done: false,
+            _cost: None,
         })
+    }
+
+    /// The session with its process's charge, held until it ends.
+    pub(crate) fn charged(mut self, charge: crate::cost::Charge) -> Self {
+        self._cost = Some(charge);
+        self
     }
 
     /// Writes one request and reads its whole reply:

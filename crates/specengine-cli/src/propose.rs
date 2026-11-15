@@ -59,13 +59,14 @@ use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative};
 use specengine_model::{IdScheme, IdScript, ParsedFile, Reference, Span, grammar};
 use specengine_store::{
     GitEnv, NamedBytes, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _, QueueError,
-    Source as _, WorkingTree, default_baseline, introduced_findings, load_check, patch_hash,
+    SetupFiles, Source as _, SqliteIndex, WorkingTree, default_baseline, load_check, patch_hash,
     span_hash, update_file,
 };
 
-use crate::corpus::indexed;
-use crate::create::{canonical_in, unheld_findings};
+use crate::corpus::indexed_in;
+use crate::create::{canonical_in, rows_findings, unheld_findings};
 use crate::interpret::canon_note;
+use crate::location::open_index;
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{
     ProposalDocument, ProposalOutcome, QueueCommand, briefed, checked_now, escaped_error,
@@ -242,8 +243,10 @@ fn run_propose(
         Ok(reference) => reference,
         Err(reason) => return refuse(reason, messages),
     };
-    let input = indexed(env, &context.project, &mut messages, false)?;
+    let mut open = open_index(env, &context.project)?;
+    let input = indexed_in(&mut open.index, &context.project, &mut messages, false)?;
     let mut checked = match checked_update(
+        Some(&open.index),
         &context.project,
         &input,
         written,
@@ -710,9 +713,11 @@ impl<'a> GistNames<'a> {
 /// (`input`), `reference` from [`written_reference`]: the target resolved
 /// to one updatable node (a path: its file's document, the whole file),
 /// `base` its span's hash now, `text` spliced and parsed afresh, the
-/// introduced findings (never a refusal). `Ok(Err)`: the refusal.
+/// introduced findings (never a refusal), over `index`'s rows when given
+/// (the handle that refresh updated). `Ok(Err)`: the refusal.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn checked_update(
+    index: Option<&SqliteIndex>,
     project: &ProjectRoot,
     input: &CheckInput,
     written: &str,
@@ -723,6 +728,7 @@ pub(crate) fn checked_update(
     messages: &mut Vec<Message>,
 ) -> Result<Result<CheckedUpdate, String>, CliError> {
     checked_span(
+        index,
         project,
         input,
         written,
@@ -742,6 +748,7 @@ pub(crate) fn checked_update(
 /// IDs' checks (`diagnostics` empty).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn checked_span(
+    index: Option<&SqliteIndex>,
     project: &ProjectRoot,
     input: &CheckInput,
     written: &str,
@@ -759,7 +766,7 @@ pub(crate) fn checked_span(
     let Some(base) = base else {
         return Ok(Err(exists_refusal(written)));
     };
-    checked_located(project, located, base, text, today, messages, rule)
+    checked_located(index, project, located, base, text, today, messages, rule)
 }
 
 /// Step 1's target as read now ([`located`]): its holder's path and bytes,
@@ -863,7 +870,9 @@ pub(crate) fn located(
 
 /// Steps 2–4 on the target step 1 found ([`located`]), under `rule`, as
 /// [`checked_span`] runs them. `Ok(Err)`: the refusal.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn checked_located(
+    index: Option<&SqliteIndex>,
     project: &ProjectRoot,
     located: Located,
     base: &str,
@@ -957,7 +966,14 @@ pub(crate) fn checked_located(
     let config = NamedBytes::read(CONFIG_FILE, &root.join(CONFIG_FILE));
     let baseline = default_baseline(root);
     let diagnostics = match load_check(&config, baseline.as_ref()) {
-        Ok(setup) => introduced_findings(&tree, &setup, today, &path, update.bytes.clone()),
+        Ok(setup) => {
+            let files = SetupFiles {
+                config: &config,
+                baseline: baseline.as_ref(),
+            };
+            let bytes = update.bytes.clone();
+            rows_findings(index, &tree, &setup, files, today, &path, bytes, root)
+        }
         Err(report) => {
             messages.push(Message::Warning(format!(
                 "the edit was not validated (no introduced findings stored): {}",

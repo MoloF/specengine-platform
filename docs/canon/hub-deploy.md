@@ -36,17 +36,17 @@ Every router to the daemon also carries `hardening` (`nosniff`, HSTS, COOP `same
 
 **The invariant item 5 rests on.** Authelia matches `path.Clean` of the decoded path, so `%2E%2E`, or a `%2F` inside an ID or slug segment, takes one factor at the door while the daemon sees another path. Item 5 holds only because the daemon matches exact raw segments (`hub.md` "Routes") and no slug or ID can be `.` or `..` or hold `/`: a change to either reopens the hole. A raw `#` arrives `%23` (from memory); a query on the four routes takes one factor, then the daemon's refusal.
 
-**The MCP credential** is a per-person random secret whose Basic user is the door login, byte for byte, so one person stays one login. Claude Code sends it as a static header. Room is kept for an OAuth router on the same matcher. A login holding `:` cannot be a Basic user and gets none.
+**The MCP credential** is a per-person random secret whose Basic user is the door login, byte for byte, so one person stays one login. Claude Code sends it as a static header. A login holding `:` cannot be a Basic user and gets none.
 
 ## Image
 
 `ghcr.io/molof/specengine:<v>`, from `scripts/deploy/Dockerfile` (ADR-0066), its context the repository root through an allowlist, `Dockerfile.dockerignore`: the manifests, `Cargo.lock`, `crates/`, `ui/` without `node_modules` or `dist`, and the three scripts. Stages: Node 24 with pnpm through corepack builds `ui/dist`; Rust 1.90, the workspace `rust-version`, runs `cargo build --locked --release -p specengine-cli -p specengine-http`; Debian 13 slim holds `spec`, `specengine-http`, git (2.38 or later), `openssh-client`, `ca-certificates` and the base's `sh` (a sync's SIGTERM goes through `sh -c kill`). No git-lfs, Rust toolchain or `rust-analyzer`. User 10001 owns `/data`, `/projects` and its home `/var/lib/specengine/home`; the scripts are copied `--chmod=0755`; the label `org.opencontainers.image.source` links the GHCR package to the repository. No `# syntax=` line.
 
-`.github/workflows/image.yml` runs on `v*` tags alone, `contents: read`. `check`: `tag-check.sh` (the tag is exactly `v` + the plugin's version, which `.env.example` holds too: on `main` 0.47.0, while `scripts/deploy/README.md` clones `v0.29.1`, `v3`'s, until `v4`'s first release), the deploy tests, `compose config`, `docker build --check`, Authelia's `validate-config`. `build`, per architecture on native runners (`ubuntu-24.04`, `ubuntu-24.04-arm`): builds with `load`, smoke-tests (git 2.38 or later, no `git lfs`, `GET /` a 200 page), pushes `<v>-<arch>`. `merge` publishes the list `<v>`. Both pushing jobs take `packages: write`, run only for the owner's account, `MoloF`, log in, then fail if `<v>` is published: one version, one build. Actions are pinned by commit SHA. The host only pulls.
+`.github/workflows/image.yml` runs on `v*` tags alone, `contents: read`. `check`: `tag-check.sh` (the tag is exactly `v` + the plugin's version, which `.env.example` holds too, while `scripts/deploy/README.md` clones `v0.29.1`, `v3`'s, until `v4`'s first release), the deploy tests, `compose config`, `docker build --check`, Authelia's `validate-config`. `build`, per architecture on native runners (`ubuntu-24.04`, `ubuntu-24.04-arm`): builds with `load`, smoke-tests (git 2.38 or later, no `git lfs`, `GET /` a 200 page), pushes `<v>-<arch>`. `merge` publishes the list `<v>`. Both pushing jobs take `packages: write`, run only for the owner's account, `MoloF`, log in, then fail if `<v>` is published: one version, one build. Actions are pinned by commit SHA. The host only pulls.
 
 ## Entrypoint
 
-`specengine-entrypoint`, POSIX `sh`, `LC_ALL=C`. Each folder of `/projects` (`*` with `[ -d ]`, so `a` sorts before `a-1`; files are passed over) holding a `specengine.toml` becomes one `--root` argument, in byte order; others are named `skipped`. Then `exec specengine-http --root ... --public-origin https://$HUB_HOST --port 7777`, `--push` last when `SPECENGINE_PUSH=1`. Exit 2, running nothing: no `HUB_HOST`; a `SPECENGINE_PUSH` but empty, `0` or `1`; no project, since `specengine-http` requires a `--root`. It reads its folders at start, so a new project needs a restart.
+`specengine-entrypoint`, POSIX `sh`, `LC_ALL=C`. Each folder of `/projects` (`*` with `[ -d ]`, so `a` sorts before `a-1`; files are passed over) holding a `specengine.toml` becomes one `--root` argument, in byte order; others are named `skipped`. Then `exec specengine-http --root ... --public-origin https://$HUB_HOST --port 7777`, then `--slow-ms $SPECENGINE_SLOW_MS` if set in `.env`, `--push` last when `SPECENGINE_PUSH=1`. Exit 2, running nothing: no `HUB_HOST`; a `SPECENGINE_PUSH` but empty, `0` or `1`; a `SPECENGINE_SLOW_MS` empty, not digits or over 3 600 000; no project, since `specengine-http` requires a `--root`. It reads its folders at start, so a new project needs a restart.
 
 ## Clone
 
@@ -77,8 +77,8 @@ Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of
 - A `specengine.toml` below its repository top is not served.
 - The MCP users file is read when its middleware is built (from memory), hence the stamp; VF2 open.
 - `hub-admin` until VF1-VF3 (`hub-accounts.md`): the deletes' flags and "nothing to delete" answers from memory, busybox `od`, `awk` untested, the NUL case proven on macOS awk alone; smaller limits: the guide.
-- A private GHCR package needs a pull credential on its host.
-- A hand change on the host (`git pull`, an edit, a restore) reaches trusting reads after `spec index` or a reconcile (`spec-read-freshness.md`).
+- A private GHCR package needs a pull credential.
+- A hand change on the host reaches trusting reads after `spec index` or a reconcile (`spec-read-freshness.md`).
 - Unverified until the gate (from memory): that Traefik keeps the client's `Host` and drops a client's copy of a listed header also when the door returns none; that the door on a sibling subdomain makes the landing a `same-site` navigation (tried in no browser).
 
 ## Tests

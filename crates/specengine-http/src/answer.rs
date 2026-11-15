@@ -54,11 +54,15 @@ use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use specengine_cli::{
     CardCause, CliError, ConfirmCause, Env, Exit, Globals, IndexTrust, Outcome, ProjectRoot,
-    StageCause, discover, render_json, trusted, walking,
+    StageCause, check_memo, cost, discover, render_json, trusted, walking,
 };
 
 use crate::start::Project;
 use crate::{slow, turn};
+
+/// The check memo's login of a call that names none (a page route; a
+/// confirm names its own).
+pub(crate) const NO_LOGIN: &str = "-";
 
 /// The content type of every JSON body.
 const JSON: &str = "application/json; charset=utf-8";
@@ -280,24 +284,38 @@ where
 {
     // Dropped here, with the request, while waiting: the call never runs.
     // Its wait and hold go to the request's slow record (`crate::turn`).
-    let holder = turn::Holder::page(&project, slow::current());
+    let exchange = slow::current();
+    let holder = turn::Holder::page(&project, exchange.clone());
     let turn = turn::take(&project, holder).await;
     let joined = tokio::task::spawn_blocking(move || {
-        let _turn = turn;
+        let turn = turn;
         let trust = project.trust.clone();
         // Dropped before the turn: a panic doubts while it is held.
         let _doubt = DoubtOnPanic(trust.as_deref());
-        let called = Env::from_process().and_then(|env| {
-            let globals = project.globals();
-            found(&env, &globals, &project)?;
-            in_scope(trust.as_deref(), freshness, || command(&env, &globals))
+        // In the turn, on this thread: the call's costs counted, the
+        // project's check memo in scope (a page route's writes are keyed
+        // `-`; a confirm names its login itself).
+        let (answer, cost) = turn.within(|| {
+            cost::scoped(|| {
+                check_memo::scoped(&project.memo, NO_LOGIN, || {
+                    let called = Env::from_process().and_then(|env| {
+                        let globals = project.globals();
+                        found(&env, &globals, &project)?;
+                        in_scope(trust.as_deref(), freshness, || command(&env, &globals))
+                    });
+                    let answer = match called {
+                        Ok(outcome) => answered(&outcome),
+                        Err(error) => Answered::CannotRun(error.message),
+                    };
+                    if let (Answered::CannotRun(_), Some(trust)) = (&answer, &trust) {
+                        trust.doubt();
+                    }
+                    answer
+                })
+            })
         });
-        let answer = match called {
-            Ok(outcome) => answered(&outcome),
-            Err(error) => Answered::CannotRun(error.message),
-        };
-        if let (Answered::CannotRun(_), Some(trust)) = (&answer, &trust) {
-            trust.doubt();
+        if let Some(exchange) = &exchange {
+            exchange.costed(cost);
         }
         answer
     })

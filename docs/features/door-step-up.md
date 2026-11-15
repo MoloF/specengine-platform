@@ -19,9 +19,9 @@ On the confirm class's four acts (Confirm's read and write, a card's Accept and 
 
 ## Data
 
-The observed answer: `HTTP/1.1 401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, the body one anchor, `<a href="https://login.example.org/?rd=https%3A%2F%2Fhub.example.org%2Fapi%2Fprojects%2Fdorm%2Fproposals%2FPR-100048%2Fconfirm&amp;rm=GET">401 Unauthorized</a>`. `request()` keeps it as `ClientError {status: 401, message: <the body>}`.
+The observed answer: `HTTP/1.1 401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, the body one anchor, `<a href="https://login.example.org/?rd=https%3A%2F%2Fhub.example.org%2Fapi%2Fprojects%2Fdemo%2Fproposals%2FPR-100048%2Fconfirm&amp;rm=GET">401 Unauthorized</a>`. `request()` keeps it as `ClientError {status: 401, message: <the body>}`.
 
-`ui/src/api/door.ts`: `DoorRefusal = {kind: "door"; link: string | null} | {kind: "noAnswer"}`; `doorRefusalOf(error, here)` (401 door, 0 noAnswer, else null); `doorLink(body, here)`: the first double-quoted `href` inside an `<a` tag, by a regular expression, never the DOM; `new URL(raw)` with no base; `https:` and no credentials, else null; `` `${origin}/?rd=${encodeURIComponent(here)}` ``. The observed body with `here` `https://hub.example.org/#/dorm/inbox/PR-100048` gives `https://login.example.org/?rd=https%3A%2F%2Fhub.example.org%2F%23%2Fdorm%2Finbox%2FPR-100048`; `http:`, relative, `javascript:`, credentialed, `Unauthorized` or empty give null. Strings `ui.stepUp.{title, text, open, noAnswer}`, both catalogs.
+`ui/src/api/door.ts`: `DoorRefusal = {kind: "door"; link: string | null} | {kind: "noAnswer"}`; `doorRefusalOf(error, here)` (401 door, 0 noAnswer, else null); `doorLink(body, here)`: the first double-quoted `href` inside an `<a` tag, by a regular expression, never the DOM; `new URL(raw)` with no base; `https:` and no credentials, else null; `` `${origin}/?rd=${encodeURIComponent(here)}` ``. The observed body with `here` `https://hub.example.org/#/demo/inbox/PR-100048` gives `https://login.example.org/?rd=https%3A%2F%2Fhub.example.org%2F%23%2Fdemo%2Finbox%2FPR-100048`; `http:`, relative, `javascript:`, credentialed, `Unauthorized` or empty give null. Strings `ui.stepUp.{title, text, open, noAnswer}`, both catalogs.
 
 ## Rules and edge cases
 

@@ -510,6 +510,10 @@ pub(crate) struct QueueContext {
     pub git: WorktreeGit,
     /// The current repository's canonical git common dir.
     pub common_dir: PathBuf,
+    /// The canonical top of the worktree holding the project root, when the
+    /// one `rev-parse` that read the common dir read it too (`write-cost`:
+    /// an approve in that worktree takes it, [`crate::preflight::open_place`]).
+    pub top: Option<PathBuf>,
     /// A hub's read of a confirm: a refusal is logged by nobody
     /// (`crate::apply::failed`).
     pub rehearsal: bool,
@@ -531,7 +535,7 @@ pub(crate) fn open_context(
     let project = discover(env, globals)?;
     require_root_config(env, globals, &project)?;
     let slug = project.slug()?.to_owned();
-    let (git, common_dir) = repository_of(&project, git_env)?;
+    let (git, common_dir, top) = repository_with_top(&project, git_env)?;
     let data_dir = prepared_data_dir(env, &project)?;
     let queue =
         SqliteQueue::open(data_dir.join(format!("{slug}.db")), &slug).map_err(queue_cannot)?;
@@ -542,9 +546,27 @@ pub(crate) fn open_context(
         queue,
         git,
         common_dir,
+        top,
         rehearsal: false,
         hub: false,
     })
+}
+
+/// [`repository_of`], the worktree's top read in the same `rev-parse`
+/// when it can be; when that one process fails, the common dir alone, as
+/// [`repository_of`] reads it, its words kept.
+fn repository_with_top(
+    project: &ProjectRoot,
+    git_env: &GitEnv,
+) -> Result<(WorktreeGit, PathBuf, Option<PathBuf>), CliError> {
+    if prefix_clash(&project.config.scheme).is_none()
+        && let Ok(git) = WorktreeGit::new(&project.root, git_env)
+        && let Ok((top, common_dir)) = git.top_and_common_dir()
+    {
+        return Ok((git, common_dir, Some(top)));
+    }
+    let (git, common_dir) = repository_of(project, git_env)?;
+    Ok((git, common_dir, None))
 }
 
 /// The current repository of `project`, as [`open_context`] reads it: git

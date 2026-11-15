@@ -10,6 +10,7 @@
 
 pub mod check;
 pub mod rules;
+pub mod write_cost;
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -43,12 +43,13 @@ use specengine_store::{
     id_side, patch_hash,
 };
 
-use crate::corpus::indexed;
+use crate::corpus::indexed_in;
 use crate::create::{
     Corpus, NewIds, canonical_in, checked_file, file_target, parsed_text, reserved_refusal,
     unheld_findings, validated,
 };
 use crate::intake::prefixed;
+use crate::location::open_index;
 use crate::preflight::StepFailure;
 use crate::project::ProjectRoot;
 use crate::proposals::{
@@ -167,7 +168,8 @@ fn run_amend(
             messages,
         );
     }
-    let input = indexed(env, &context.project, &mut messages, false)?;
+    let mut open = open_index(env, &context.project)?;
+    let input = indexed_in(&mut open.index, &context.project, &mut messages, false)?;
     if input.files.iter().any(|file| file.path == written) {
         return refuse(
             format!("`{written}` exists: {amendment} is a new file; nothing stored"),
@@ -237,6 +239,7 @@ fn run_amend(
     let today = &now[..10];
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let diagnostics = validated(
+        Some(&open.index),
         project,
         &tree,
         today,

@@ -1,0 +1,797 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "approve decision": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0009\",\"project\":\"ember-forge\",\"kind\":\"decision\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the probe stay?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Yes: it stays as written.\",\"price_of_other\":\"Another probe.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0009` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0009` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord DEC-0001 at docs/records/DEC/DEC-0001.md:\n  ---\n  id: DEC-0001\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Yes: it stays as written.\"\n  canon: MEC-STRIKE\n  links:\n    answers: [MEC-STRIKE]\n  ref: PR-0009\n  scope: [decisions]\n  ---\n\n  # Yes: it stays as written.\n\n  Choice:\n\n  Yes: it stays as written.\n\n  Effect:\n\n\n\n  Cost:\n\n\n\n  Summary:\n\n  Does the probe stay?\n\n  Options:\n\n\n\n  Evidence:\n\n\n\n  Note:\n\n\n\n  Decided by:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0009 as DEC-0001 (the working answer) on main in <root>? [y/N]"
+      ]
+    },
+    "approve discrepancy --option 1": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0008\",\"project\":\"ember-forge\",\"kind\":\"discrepancy\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":\"normal\",\"gap_type\":\"contradicts\",\"summary\":\"The probe and the code disagree.\",\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[{\"file\":\"src/probe.rs\",\"qpath\":\"probe\",\"lines\":\"1-2\",\"observed\":\"returns early\",\"documented\":\"runs to the end\"}],\"pair\":null,\"options\":[{\"label\":\"Keep the spec\",\"effect\":\"Fix the code\",\"price\":\"one work item\"},{\"label\":\"Change the spec\",\"effect\":\"Allow it\",\"price\":\"a new rule case\"}],\"recommendation\":0,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0008` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0008` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord DEC-0001 at docs/records/DEC/DEC-0001.md:\n  ---\n  id: DEC-0001\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Change the spec\"\n  canon: MEC-STRIKE\n  links:\n    answers: [MEC-STRIKE]\n  ref: PR-0008\n  scope: [decisions]\n  ---\n\n  # Change the spec\n\n  Choice:\n\n  Change the spec\n\n  Effect:\n\n  Allow it\n\n  Cost:\n\n  a new rule case\n\n  Summary:\n\n  The probe and the code disagree.\n\n  Options:\n\n  - Keep the spec | Fix the code | one work item\n  - Change the spec | Allow it | a new rule case\n\n  Evidence:\n\n  - src/probe.rs:1-2 probe | returns early | runs to the end\n\n  Note:\n\n\n\n  Decided by:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0008 as DEC-0001 (option 1) on main in <root>? [y/N]"
+      ]
+    },
+    "approve question": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0007\",\"project\":\"ember-forge\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0007` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0007` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "introduced: 0\nrecord DEC-0001 at docs/records/DEC/DEC-0001.md:\n  ---\n  id: DEC-0001\n  class: decision\n  status: accepted\n  date: 2026-10-06\n  title: \"Keep it as written.\"\n  canon: MEC-STRIKE\n  links:\n    answers: [MEC-STRIKE]\n  ref: PR-0007\n  scope: [decisions]\n  ---\n\n  # Keep it as written.\n\n  Choice:\n\n  Keep it as written.\n\n  Effect:\n\n\n\n  Cost:\n\n\n\n  Summary:\n\n  Does the write cost probe hold as written?\n\n  Options:\n\n\n\n  Evidence:\n\n\n\n  Note:\n\n\n\n  Decided by:\n\n  Scratch Committer <committer@example.invalid>\napply PR-0007 as DEC-0001 (the working answer) on main in <root>? [y/N]"
+      ]
+    },
+    "approve update": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0001\",\"project\":\"ember-forge\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\",\"base_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\",\"new_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\",\"patch_hash\":\"b3:148563cb6efa312ec9d76a3cd1ff54860f4164cb4e9ee95938332a99d63837d9\",\"rationale\":\"Probe MEC-STRIKE.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":12,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `design/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `design/zz-wc-update-a.md`)\"}],\"diff\":\"--- base design/strikes.md\\n+++ proposed design/strikes.md\\n@@ -1,4 +1,8 @@\\n # Strikes {#MEC-STRIKE}\\n \\n Each strike on a glowing blank moves it one step toward its shape; a strike\\n-on a dark blank moves it none.\\n\\\\ No newline at end of file\\n+on a dark blank moves it none.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0001` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0001` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "apply PR-0001 to design/strikes.md on main in <root> (applies; raises MEC-STRIKE 1 -> 2)? [y/N]"
+      ]
+    },
+    "probe": {
+      "base": "b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873",
+      "decision": "MEC-STRIKE",
+      "path": "design/strikes.md",
+      "target": "MEC-STRIKE"
+    },
+    "propose amendment": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0005\",\"project\":\"ember-forge\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"design/zz-wc-amends.md\",\"target_path\":\"design/zz-wc-amends.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nscope: [smithing]\\nclass: spec\\nstatus: draft\\nlinks:\\n  amends: [MEC-STRIKE]\\n---\\n\\n# Write cost amendment\\n\\nSee [the second probe](zz-wc-amends-b.md) here.\\n\\nSee [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"patch_hash\":\"b3:b125cf53f198c3834f5f61cccbc85ca53dac2bb4f6ceb2273b980f2a61b52a9d\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-amends.md\",\"line\":11,\"subject\":\"zz-wc-amends-b.md\",\"message\":\"`zz-wc-amends-b.md` names no walked document (tried `design/zz-wc-amends-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/zz-wc-amends.md\",\"line\":13,\"subject\":\"#zz-wc-amends-anchor\",\"message\":\"`#zz-wc-amends-anchor`: `design/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-amends.md\",\"line\":13,\"subject\":\"zz-wc-amends-a.md\",\"message\":\"`zz-wc-amends-a.md` names no walked document (tried `design/zz-wc-amends-a.md`)\"}],\"diff\":\"--- base design/zz-wc-amends.md\\n+++ proposed design/zz-wc-amends.md\\n@@ -0,0 +1,13 @@\\n+---\\n+scope: [smithing]\\n+class: spec\\n+status: draft\\n+links:\\n+  amends: [MEC-STRIKE]\\n+---\\n+\\n+# Write cost amendment\\n+\\n+See [the second probe](zz-wc-amends-b.md) here.\\n+\\n+See [the first probe](zz-wc-amends-a.md) and [its anchor](#zz-wc-amends-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"design/zz-wc-amends.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0005\nintroduced: 3\nwarning  design/zz-wc-amends.md:11: link-dangling: `zz-wc-amends-b.md` names no walked document (tried `design/zz-wc-amends-b.md`)\nwarning  design/zz-wc-amends.md:13: link-anchor: `#zz-wc-amends-anchor`: `design/zz-wc-amends.md` has no anchor or section `#zz-wc-amends-anchor`\nwarning  design/zz-wc-amends.md:13: link-dangling: `zz-wc-amends-a.md` names no walked document (tried `design/zz-wc-amends-a.md`)\n"
+    },
+    "propose amendment --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0006\",\"project\":\"ember-forge\",\"kind\":\"amendment\",\"status\":\"open\",\"target_id\":\"design/zz-wc-amends-brief.md\",\"target_path\":\"design/zz-wc-amends-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:ab262be2e74a854074a397cfdba0502ecca5f8f57551e9a28aa017e45ea32ba2\",\"rationale\":\"Amend the probe.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-amends-brief.md\",\"line\":11,\"subject\":\"zz-wc-amends-brief-b.md\",\"message\":\"`zz-wc-amends-brief-b.md` names no walked document (tried `design/zz-wc-amends-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/zz-wc-amends-brief.md\",\"line\":13,\"subject\":\"#zz-wc-amends-brief-anchor\",\"message\":\"`#zz-wc-amends-brief-anchor`: `design/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-amends-brief.md\",\"line\":13,\"subject\":\"zz-wc-amends-brief-a.md\",\"message\":\"`zz-wc-amends-brief-a.md` names no walked document (tried `design/zz-wc-amends-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"design/zz-wc-amends-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0006\nintroduced: 3\nwarning  design/zz-wc-amends-brief.md:11: link-dangling: `zz-wc-amends-brief-b.md` names no walked document (tried `design/zz-wc-amends-brief-b.md`)\nwarning  design/zz-wc-amends-brief.md:13: link-anchor: `#zz-wc-amends-brief-anchor`: `design/zz-wc-amends-brief.md` has no anchor or section `#zz-wc-amends-brief-anchor`\nwarning  design/zz-wc-amends-brief.md:13: link-dangling: `zz-wc-amends-brief-a.md` names no walked document (tried `design/zz-wc-amends-brief-a.md`)\n"
+    },
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0003\",\"project\":\"ember-forge\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"design/zz-wc-create.md\",\"target_path\":\"design/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: spec\\nstatus: in-progress\\nscope: [smithing]\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:4357279973eded23e3bba9825126eebd0c9db4ccd4b059ca74a87d6fd033bbed\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create.md\",\"line\":9,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `design/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create.md\",\"line\":11,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `design/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create.md\",\"line\":11,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `design/zz-wc-create-a.md`)\"}],\"diff\":\"--- base design/zz-wc-create.md\\n+++ proposed design/zz-wc-create.md\\n@@ -0,0 +1,11 @@\\n+---\\n+class: spec\\n+status: in-progress\\n+scope: [smithing]\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"design/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0003\nintroduced: 3\nwarning  design/zz-wc-create.md:9: link-dangling: `zz-wc-create-b.md` names no walked document (tried `design/zz-wc-create-b.md`)\nwarning  design/zz-wc-create.md:11: link-anchor: `#zz-wc-create-anchor`: `design/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  design/zz-wc-create.md:11: link-dangling: `zz-wc-create-a.md` names no walked document (tried `design/zz-wc-create-a.md`)\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"ember-forge\",\"kind\":\"create\",\"status\":null,\"target_id\":\"design/zz-wc-create-brief.md\",\"target_path\":\"design/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:9a3ebcb9d67f1de91e77ef54db8976e1d8e028eabd476da260cd9028cb841b08\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create-brief.md\",\"line\":9,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `design/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `design/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `design/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"design/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"design/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `design/zz-wc-create.md` titled as new `design/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 3\nwarning  design/zz-wc-create-brief.md:9: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `design/zz-wc-create-brief-b.md`)\nwarning  design/zz-wc-create-brief.md:11: link-anchor: `#zz-wc-create-brief-anchor`: `design/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  design/zz-wc-create-brief.md:11: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `design/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | design/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `design/zz-wc-create.md` titled as new `design/zz-wc-create-brief.md`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0004\",\"project\":\"ember-forge\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"design/zz-wc-create-brief.md\",\"target_path\":\"design/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:9a3ebcb9d67f1de91e77ef54db8976e1d8e028eabd476da260cd9028cb841b08\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create-brief.md\",\"line\":9,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `design/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `design/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/zz-wc-create-brief.md\",\"line\":11,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `design/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"design/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"design/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `design/zz-wc-create.md` titled as new `design/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0004\nintroduced: 3\nwarning  design/zz-wc-create-brief.md:9: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `design/zz-wc-create-brief-b.md`)\nwarning  design/zz-wc-create-brief.md:11: link-anchor: `#zz-wc-create-brief-anchor`: `design/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  design/zz-wc-create-brief.md:11: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `design/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | design/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `design/zz-wc-create.md` titled as new `design/zz-wc-create-brief.md`\n"
+    },
+    "propose interpretation": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: MEC-STRIKE is no accepted decision: spec document design/strikes.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: MEC-STRIKE is no accepted decision: spec document design/strikes.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose interpretation --brief": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: MEC-STRIKE is no accepted decision: spec document design/strikes.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: MEC-STRIKE is no accepted decision: spec document design/strikes.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose update": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"ember-forge\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\",\"base_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\",\"new_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\",\"patch_hash\":\"b3:148563cb6efa312ec9d76a3cd1ff54860f4164cb4e9ee95938332a99d63837d9\",\"rationale\":\"Probe MEC-STRIKE.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":12,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `design/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `design/zz-wc-update-a.md`)\"}],\"diff\":\"--- base design/strikes.md\\n+++ proposed design/strikes.md\\n@@ -1,4 +1,8 @@\\n # Strikes {#MEC-STRIKE}\\n \\n Each strike on a glowing blank moves it one step toward its shape; a strike\\n-on a dark blank moves it none.\\n\\\\ No newline at end of file\\n+on a dark blank moves it none.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"MEC-STRIKE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 3\nwarning  design/strikes.md:12: link-dangling: `zz-wc-update-b.md` names no walked document (tried `design/zz-wc-update-b.md`)\nwarning  design/strikes.md:14: link-anchor: `#zz-wc-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-update-anchor`\nwarning  design/strikes.md:14: link-dangling: `zz-wc-update-a.md` names no walked document (tried `design/zz-wc-update-a.md`)\n"
+    },
+    "propose update --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"ember-forge\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"0251e2a558b05749bb58a5be12d2aca6105a7fe3\",\"base_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:28f004c68041cbb8595fe7df30a6eb358d6ea3fbc0792d5d1b433e2172c77945\",\"rationale\":\"Probe MEC-STRIKE.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":12,\"subject\":\"zz-wc-update-brief-b.md\",\"message\":\"`zz-wc-update-brief-b.md` names no walked document (tried `design/zz-wc-update-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"#zz-wc-update-brief-anchor\",\"message\":\"`#zz-wc-update-brief-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-update-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"zz-wc-update-brief-a.md\",\"message\":\"`zz-wc-update-brief-a.md` names no walked document (tried `design/zz-wc-update-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"MEC-STRIKE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 3\nwarning  design/strikes.md:12: link-dangling: `zz-wc-update-brief-b.md` names no walked document (tried `design/zz-wc-update-brief-b.md`)\nwarning  design/strikes.md:14: link-anchor: `#zz-wc-update-brief-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-update-brief-anchor`\nwarning  design/strikes.md:14: link-dangling: `zz-wc-update-brief-a.md` names no walked document (tried `design/zz-wc-update-brief-a.md`)\n"
+    },
+    "raise decision": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0009\",\"created\":true,\"hits\":[],\"related\":[{\"id\":\"PR-0007\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0009\nrelated: PR-0007 | open | - | -\n"
+    },
+    "raise discrepancy": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0008\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0008\n"
+    },
+    "raise question": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0007\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0007\n"
+    }
+  },
+  "corpus": "apply-outputs/forge",
+  "http": {
+    "probe": {
+      "path": "design/strikes.md",
+      "target": "MEC-STRIKE"
+    },
+    "question commits": [
+      "<sha>\n<sha>\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100002\n\nDEC-100001: Keep it as written.\n\nProposal: PR-100002\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=developer model=claude-opus-5-5 run=unknown\nBase-commit: <sha>\n\n---\n docs/index.md                  |  4 ++++\n docs/records/DEC/DEC-100001.md | 46 ++++++++++++++++++++++++++++++++++++++++++\n 2 files changed, 50 insertions(+)\n\ndiff --git a/docs/index.md b/docs/index.md\n--- a/docs/index.md\n+++ b/docs/index.md\n@@ -15,6 +15,10 @@ Reading protocol (\u00a79): this index, then at most three documents. Needing a thir\n - [README.md](../README.md) Ember Forge \u00b7 root \u00b7 tier 2\n - [docs/canon/forge.md](canon/forge.md) The forge \u00b7 forge \u00b7 tier 2\n \n+## Decisions\n+\n+- [DEC-100001](records/DEC/DEC-100001.md) Keep it as written. \u00b7 decisions \u00b7 accepted\n+\n ## Specs\n \n - [design/strikes.md](../design/strikes.md) Strikes \u00b7 smithing \u00b7 in-progress\ndiff --git a/docs/records/DEC/DEC-100001.md b/docs/records/DEC/DEC-100001.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/records/DEC/DEC-100001.md\n@@ -0,0 +1,46 @@\n+---\n+id: DEC-100001\n+class: decision\n+status: accepted\n+date: <today>\n+title: \"Keep it as written.\"\n+canon: MEC-STRIKE\n+links:\n+  answers: [MEC-STRIKE]\n+ref: PR-100002\n+scope: [decisions]\n+---\n+\n+# Keep it as written.\n+\n+Choice:\n+\n+Keep it as written.\n+\n+Effect:\n+\n+\n+\n+Cost:\n+\n+\n+\n+Summary:\n+\n+Does the write cost probe hold as written?\n+\n+Options:\n+\n+\n+\n+Evidence:\n+\n+\n+\n+Note:\n+\n+\n+\n+Decided by:\n+\n+ann <ann@example.org>\n"
+    ],
+    "question confirm GET": {
+      "body": "{\"id\":\"PR-100002\",\"question\":\"introduced: 1\\nerror  docs/index.md:18: index-drift: differs from the render of `spec export index` from this line on: rebuild it with `spec export index`; manual edits are overwritten\\nrecord DEC-100001 at docs/records/DEC/DEC-100001.md:\\n  ---\\n  id: DEC-100001\\n  class: decision\\n  status: accepted\\n  date: <today>\\n  title: \\\"Keep it as written.\\\"\\n  canon: MEC-STRIKE\\n  links:\\n    answers: [MEC-STRIKE]\\n  ref: PR-100002\\n  scope: [decisions]\\n  ---\\n\\n  # Keep it as written.\\n\\n  Choice:\\n\\n  Keep it as written.\\n\\n  Effect:\\n\\n\\n\\n  Cost:\\n\\n\\n\\n  Summary:\\n\\n  Does the write cost probe hold as written?\\n\\n  Options:\\n\\n\\n\\n  Evidence:\\n\\n\\n\\n  Note:\\n\\n\\n\\n  Decided by:\\n\\n  ann <ann@example.org>\\nstaged 2026-10-05T21:14:03Z: spec approve PR-100002\\napply PR-100002 as DEC-100001 (the working answer, staged) on main in <root>? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "question confirm POST": {
+      "body": "{\"id\":\"PR-100002\",\"project\":\"ember-forge\",\"kind\":\"question\",\"status\":\"applied\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":\"DEC-100001\",\"record_path\":\"docs/records/DEC/DEC-100001.md\",\"record_title\":\"Keep it as written.\",\"record_text\":\"---\\nid: DEC-100001\\nclass: decision\\nstatus: accepted\\ndate: <today>\\ntitle: \\\"Keep it as written.\\\"\\ncanon: MEC-STRIKE\\nlinks:\\n  answers: [MEC-STRIKE]\\nref: PR-100002\\nscope: [decisions]\\n---\\n\\n# Keep it as written.\\n\\nChoice:\\n\\nKeep it as written.\\n\\nEffect:\\n\\n\\n\\nCost:\\n\\n\\n\\nSummary:\\n\\nDoes the write cost probe hold as written?\\n\\nOptions:\\n\\n\\n\\nEvidence:\\n\\n\\n\\nNote:\\n\\n\\n\\nDecided by:\\n\\nann <ann@example.org>\\n\",\"choice\":{\"working_answer\":true},\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "question raise": [
+      {
+        "exit": 0,
+        "json": "{\"id\":\"PR-100002\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "PR-100002\n"
+      }
+    ],
+    "question stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100002\",\"project\":\"ember-forge\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100002\nproject: ember-forge\nkind: question\nstatus: open\ntarget_id: MEC-STRIKE\ntarget_path: design/strikes.md\nworktree: <root>\nbranch: main\nbase_commit: <sha>\nbase_hash: -\nbase_text: -\nnew_text: -\npatch_hash: -\nrationale: -\nauthor: agent role=developer model=claude-opus-5-5 run=unknown\ndiagnostics: 0\ndiff: -\npreview: -\nconflict: -\nrevisions: -\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  MEC-STRIKE\nseverity: normal\ngap_type: -\nsummary: Does the write cost probe hold as written?\ngist: -\nmatters: -\nworking_answer: Keep it as written.\nprice_of_other: A new rule case.\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    },
+    "update commits": [
+      "<sha>\nb9600d4fc2066383b7ab6345a202007c2ea7719e\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100001\n\nProbe MEC-STRIKE.\n\nProposal: PR-100001\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown\nBase-commit: b9600d4fc2066383b7ab6345a202007c2ea7719e\nRevision: MEC-STRIKE 1 -> 2\n\n---\n design/strikes.md     |  6 +++++-\n docs/index-archive.md | 15 +++++++++++++++\n docs/index.md         | 25 +++++++++++++++++++++++++\n 3 files changed, 45 insertions(+), 1 deletion(-)\n\ndiff --git a/design/strikes.md b/design/strikes.md\n--- a/design/strikes.md\n+++ b/design/strikes.md\n@@ -4,7 +4,11 @@ status: in-progress\n scope: [smithing]\n ---\n \n-# Strikes {#MEC-STRIKE}\n+# Strikes {#MEC-STRIKE rev=2}\n \n Each strike on a glowing blank moves it one step toward its shape; a strike\n on a dark blank moves it none.\n+\n+See [the second probe](zz-wc-hub-update-b.md) here.\n+\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\ndiff --git a/docs/index-archive.md b/docs/index-archive.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/index-archive.md\n@@ -0,0 +1,15 @@\n+---\n+class: generated\n+generator: spec export index\n+source: front-matter of the repository's documents\n+---\n+\n+# Documentation index: Archive \u2014 Tier 3, by id only\n+\n+<!-- Built by `spec export index`. Manual edits are overwritten on rebuild, and `spec check` rejects them. -->\n+\n+A shard of [docs/index.md](index.md), the index's one entry point.\n+\n+## Archive \u2014 Tier 3, by id only\n+\n+- [docs/features/bellows.md](features/bellows.md) shipped\ndiff --git a/docs/index.md b/docs/index.md\nnew file mode 100644\n--- /dev/null\n+++ b/docs/index.md\n@@ -0,0 +1,25 @@\n+---\n+class: generated\n+generator: spec export index\n+source: front-matter of the repository's documents\n+---\n+\n+# Documentation index\n+\n+<!-- Built by `spec export index`. Manual edits are overwritten on rebuild, and `spec check` rejects them. -->\n+\n+Reading protocol (\u00a79): this index, then at most three documents. Needing a third step means the index is wrong: fix it rather than reading further.\n+\n+## Canon\n+\n+- [README.md](../README.md) Ember Forge \u00b7 root \u00b7 tier 2\n+- [docs/canon/forge.md](canon/forge.md) The forge \u00b7 forge \u00b7 tier 2\n+\n+## Specs\n+\n+- [design/strikes.md](../design/strikes.md) Strikes \u00b7 smithing \u00b7 in-progress\n+- [docs/features/quench.md](features/quench.md) Quench \u00b7 forge \u00b7 draft\n+\n+## Shards\n+\n+- [docs/index-archive.md](index-archive.md) Archive \u2014 Tier 3, by id only\n"
+    ],
+    "update confirm GET": {
+      "body": "{\"id\":\"PR-100001\",\"question\":\"staged 2026-10-05T21:14:03Z: spec approve PR-100001\\napply PR-100001 to design/strikes.md on main in <root> (applies; raises MEC-STRIKE 1 -> 2, staged)? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "update confirm POST": {
+      "body": "{\"id\":\"PR-100001\",\"project\":\"ember-forge\",\"kind\":\"update\",\"status\":\"applied\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"b9600d4fc2066383b7ab6345a202007c2ea7719e\",\"base_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\",\"base_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\",\"new_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\",\"patch_hash\":\"b3:af07717bf4c7109c7157ad375f9c9afc159d9ad4f48091ca69a9216c9d953ca6\",\"rationale\":\"Probe MEC-STRIKE.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":12,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `design/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `design/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base design/strikes.md\\n+++ proposed design/strikes.md\\n@@ -1,4 +1,8 @@\\n # Strikes {#MEC-STRIKE}\\n \\n Each strike on a glowing blank moves it one step toward its shape; a strike\\n-on a dark blank moves it none.\\n\\\\ No newline at end of file\\n+on a dark blank moves it none.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "update propose": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"ember-forge\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"b9600d4fc2066383b7ab6345a202007c2ea7719e\",\"base_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\",\"base_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\",\"new_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\",\"patch_hash\":\"b3:af07717bf4c7109c7157ad375f9c9afc159d9ad4f48091ca69a9216c9d953ca6\",\"rationale\":\"Probe MEC-STRIKE.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":12,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `design/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `design/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base design/strikes.md\\n+++ proposed design/strikes.md\\n@@ -1,4 +1,8 @@\\n # Strikes {#MEC-STRIKE}\\n \\n Each strike on a glowing blank moves it one step toward its shape; a strike\\n-on a dark blank moves it none.\\n\\\\ No newline at end of file\\n+on a dark blank moves it none.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"MEC-STRIKE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-100001\nintroduced: 3\nwarning  design/strikes.md:12: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `design/zz-wc-hub-update-b.md`)\nwarning  design/strikes.md:14: link-anchor: `#zz-wc-hub-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-hub-update-anchor`\nwarning  design/strikes.md:14: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `design/zz-wc-hub-update-a.md`)\n"
+    },
+    "update stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"ember-forge\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"MEC-STRIKE\",\"target_path\":\"design/strikes.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"b9600d4fc2066383b7ab6345a202007c2ea7719e\",\"base_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\",\"base_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\",\"new_text\":\"# Strikes {#MEC-STRIKE}\\n\\nEach strike on a glowing blank moves it one step toward its shape; a strike\\non a dark blank moves it none.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\",\"patch_hash\":\"b3:af07717bf4c7109c7157ad375f9c9afc159d9ad4f48091ca69a9216c9d953ca6\",\"rationale\":\"Probe MEC-STRIKE.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":12,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `design/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"design/strikes.md\",\"line\":14,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `design/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base design/strikes.md\\n+++ proposed design/strikes.md\\n@@ -1,4 +1,8 @@\\n # Strikes {#MEC-STRIKE}\\n \\n Each strike on a glowing blank moves it one step toward its shape; a strike\\n-on a dark blank moves it none.\\n\\\\ No newline at end of file\\n+on a dark blank moves it none.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"MEC-STRIKE\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"MEC-STRIKE\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\"},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100001\nproject: ember-forge\nkind: update\nstatus: open\ntarget_id: MEC-STRIKE\ntarget_path: design/strikes.md\nworktree: <root>\nbranch: main\nbase_commit: b9600d4fc2066383b7ab6345a202007c2ea7719e\nbase_hash: b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\nbase_text:\n  # Strikes {#MEC-STRIKE}\n\n  Each strike on a glowing blank moves it one step toward its shape; a strike\n  on a dark blank moves it none.\nnew_text:\n  # Strikes {#MEC-STRIKE}\n\n  Each strike on a glowing blank moves it one step toward its shape; a strike\n  on a dark blank moves it none.\n\n  See [the second probe](zz-wc-hub-update-b.md) here.\n\n  See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npatch_hash: b3:af07717bf4c7109c7157ad375f9c9afc159d9ad4f48091ca69a9216c9d953ca6\nrationale:\n  Probe MEC-STRIKE.\nauthor: agent role=spec-writer model=claude-opus-5-5 run=unknown\ndiagnostics: 3\n  warning  design/strikes.md:12: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `design/zz-wc-hub-update-b.md`)\n  warning  design/strikes.md:14: link-anchor: `#zz-wc-hub-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-hub-update-anchor`\n  warning  design/strikes.md:14: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `design/zz-wc-hub-update-a.md`)\ndiff:\n  --- base design/strikes.md\n  +++ proposed design/strikes.md\n  @@ -1,4 +1,8 @@\n   # Strikes {#MEC-STRIKE}\n   \n   Each strike on a glowing blank moves it one step toward its shape; a strike\n  -on a dark blank moves it none.\n  \\ No newline at end of file\n  +on a dark blank moves it none.\n  +\n  +See [the second probe](zz-wc-hub-update-b.md) here.\n  +\n  +See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n  \\ No newline at end of file\npreview: applies\nconflict: -\nrevisions: MEC-STRIKE 1 -> 2 (0 lock entries)\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  MEC-STRIKE\nseverity: -\ngap_type: -\nsummary: -\ngist: -\nmatters: -\nworking_answer: -\nprice_of_other: -\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873\"}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "path": "design/strikes.md",
+      "target": "MEC-STRIKE"
+    },
+    "propose_change amendment": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0003\nintroduced: 3\nwarning  design/zz-wc-mcp-amends.md:11: link-dangling: `zz-wc-mcp-amends-b.md` names no walked document (tried `design/zz-wc-mcp-amends-b.md`)\nwarning  design/zz-wc-mcp-amends.md:13: link-anchor: `#zz-wc-mcp-amends-anchor`: `design/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`\nwarning  design/zz-wc-mcp-amends.md:13: link-dangling: `zz-wc-mcp-amends-a.md` names no walked document (tried `design/zz-wc-mcp-amends-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "0251e2a558b05749bb58a5be12d2aca6105a7fe3",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 11,
+              "message": "`zz-wc-mcp-amends-b.md` names no walked document (tried `design/zz-wc-mcp-amends-b.md`)",
+              "path": "design/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 13,
+              "message": "`#zz-wc-mcp-amends-anchor`: `design/zz-wc-mcp-amends.md` has no anchor or section `#zz-wc-mcp-amends-anchor`",
+              "path": "design/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-amends-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 13,
+              "message": "`zz-wc-mcp-amends-a.md` names no walked document (tried `design/zz-wc-mcp-amends-a.md`)",
+              "path": "design/zz-wc-mcp-amends.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-amends-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0003",
+          "interpretation": null,
+          "kind": "amendment",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:dde6afec77a310ebeecdcc45e479b6ff7d826758dfcb46373e4eb5e2cc68bdc2",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "ember-forge",
+          "rationale": "Amend the probe.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "design/zz-wc-mcp-amends.md",
+          "target_ids": [
+            "design/zz-wc-mcp-amends.md"
+          ],
+          "target_path": "design/zz-wc-mcp-amends.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0002\nintroduced: 3\nwarning  design/zz-wc-mcp.md:9: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `design/zz-wc-mcp-b.md`)\nwarning  design/zz-wc-mcp.md:11: link-anchor: `#zz-wc-mcp-anchor`: `design/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  design/zz-wc-mcp.md:11: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `design/zz-wc-mcp-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "0251e2a558b05749bb58a5be12d2aca6105a7fe3",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 9,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `design/zz-wc-mcp-b.md`)",
+              "path": "design/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 11,
+              "message": "`#zz-wc-mcp-anchor`: `design/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "design/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 11,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `design/zz-wc-mcp-a.md`)",
+              "path": "design/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0002",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:f5691c84794d291d00efa40de9c0b7bc7f761fe182f19fea5497843f68700d2b",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "ember-forge",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "design/zz-wc-mcp.md",
+          "target_ids": [
+            "design/zz-wc-mcp.md"
+          ],
+          "target_path": "design/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  design/zz-wc-mcp-dry.md:9: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `design/zz-wc-mcp-dry-b.md`)\nwarning  design/zz-wc-mcp-dry.md:11: link-anchor: `#zz-wc-mcp-dry-anchor`: `design/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  design/zz-wc-mcp-dry.md:11: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `design/zz-wc-mcp-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 9,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `design/zz-wc-mcp-dry-b.md`)",
+              "path": "design/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 11,
+              "message": "`#zz-wc-mcp-dry-anchor`: `design/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "design/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 11,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `design/zz-wc-mcp-dry-a.md`)",
+              "path": "design/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:5f941a3ac7c54b8d5701332aff48c4e88056ac6d29f0f7e6db9c9cad72ad1b8b",
+          "preview": null,
+          "price_of_other": null,
+          "project": "ember-forge",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "design/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "design/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "design/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change interpretation": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "spec: --decision: MEC-STRIKE is no accepted decision: spec document design/strikes.md; nothing stored\n",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": null,
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": null,
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": null,
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": null,
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "--decision: MEC-STRIKE is no accepted decision: spec document design/strikes.md; nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": null,
+          "preview": null,
+          "price_of_other": null,
+          "project": null,
+          "rationale": null,
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": null,
+          "target_ids": [],
+          "target_path": null,
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": null
+        }
+      }
+    },
+    "propose_change update": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 3\nwarning  design/strikes.md:12: link-dangling: `zz-wc-mcp-update-b.md` names no walked document (tried `design/zz-wc-mcp-update-b.md`)\nwarning  design/strikes.md:14: link-anchor: `#zz-wc-mcp-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-mcp-update-anchor`\nwarning  design/strikes.md:14: link-dangling: `zz-wc-mcp-update-a.md` names no walked document (tried `design/zz-wc-mcp-update-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "0251e2a558b05749bb58a5be12d2aca6105a7fe3",
+          "base_hash": "b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-update-b.md` names no walked document (tried `design/zz-wc-mcp-update-b.md`)",
+              "path": "design/strikes.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-update-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-mcp-update-anchor`",
+              "path": "design/strikes.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-update-a.md` names no walked document (tried `design/zz-wc-mcp-update-a.md`)",
+              "path": "design/strikes.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:c2510643a944c81af5620dac316582483903869f0bb9447f14b4ce71df6d4afe",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "ember-forge",
+          "rationale": "Probe MEC-STRIKE.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "MEC-STRIKE",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "MEC-STRIKE",
+          "target_ids": [
+            "MEC-STRIKE"
+          ],
+          "target_path": "design/strikes.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  design/strikes.md:12: link-dangling: `zz-wc-mcp-update-dry-b.md` names no walked document (tried `design/zz-wc-mcp-update-dry-b.md`)\nwarning  design/strikes.md:14: link-anchor: `#zz-wc-mcp-update-dry-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`\nwarning  design/strikes.md:14: link-dangling: `zz-wc-mcp-update-dry-a.md` names no walked document (tried `design/zz-wc-mcp-update-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": "b3:8b5d0fdaa3729a7e4bd432803b32abd7d28772cf76f2ef68f3e6e7582deb2873",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 12,
+              "message": "`zz-wc-mcp-update-dry-b.md` names no walked document (tried `design/zz-wc-mcp-update-dry-b.md`)",
+              "path": "design/strikes.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 14,
+              "message": "`#zz-wc-mcp-update-dry-anchor`: `design/strikes.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`",
+              "path": "design/strikes.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 14,
+              "message": "`zz-wc-mcp-update-dry-a.md` names no walked document (tried `design/zz-wc-mcp-update-dry-a.md`)",
+              "path": "design/strikes.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:de2617a164ed638da65e175be3c0b45371e467ccae5781572b4a7be3d2933f7e",
+          "preview": null,
+          "price_of_other": null,
+          "project": "ember-forge",
+          "rationale": "Probe MEC-STRIKE.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "MEC-STRIKE",
+          "target_ids": [
+            "MEC-STRIKE"
+          ],
+          "target_path": "design/strikes.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}

@@ -23,6 +23,7 @@ mod ra;
 mod ron;
 mod scale;
 mod w;
+mod write_cost;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -120,6 +121,13 @@ enum Measurement {
     /// alone, and W_after over 20 targets. No corpus is read: no `--pilot`,
     /// `--config` or `--scheme`.
     Scale(ScaleArgs),
+    /// A write's introduced findings over the walked rows against the whole
+    /// disk check (`docs/features/write-cost.md`), on a scratch copy of the
+    /// corpus's walked files: `--sample` documents by `--seed`, each edit
+    /// of the catalogue; counts and total times on stdout, the cases that
+    /// differ in `--out/write-cost/<label>/differ.json`. Config from
+    /// `specengine.toml` at the corpus root.
+    WriteCost(WriteCostArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
     /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
@@ -234,6 +242,19 @@ pub struct WArgs {
     /// default 10000. Anything else: refused (exit 2).
     #[arg(long, value_name = "N")]
     pub budget: Option<u64>,
+}
+
+/// `write-cost`: the shared arguments plus the sample.
+#[derive(Args, Clone)]
+pub struct WriteCostArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+    /// Documents sampled.
+    #[arg(long, value_name = "N", default_value_t = 60)]
+    pub sample: usize,
+    /// The sample's seed.
+    #[arg(long, value_name = "S", default_value_t = 0)]
+    pub seed: u64,
 }
 
 /// `scale`: flags of its own (`docs/features/scale-eval.md`
@@ -464,6 +485,19 @@ fn main() -> ExitCode {
                 w::FIXTURE,
                 |root: &Path| w::prepare(root, &args, &run_label),
                 w::run,
+            )
+        }
+        Measurement::WriteCost(args) => {
+            if let Some(refused) = refuse_config(write_cost::MEASUREMENT, &args.common) {
+                return refused;
+            }
+            let (sample, seed) = (args.sample, args.seed);
+            measure_with(
+                write_cost::MEASUREMENT,
+                &args.common,
+                write_cost::FIXTURE,
+                move |root: &Path| write_cost::prepare(root, sample, seed),
+                write_cost::run,
             )
         }
         Measurement::Scale(args) => match scale::prepare(&args) {

@@ -1,0 +1,176 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "probe": null,
+    "propose create": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`kiln/zz-wc-create.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored\"]}\n",
+      "stderr": [
+        "spec: `kiln/zz-wc-create.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose create --brief": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`kiln/zz-wc-create-brief.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored\"]}\n",
+      "stderr": [
+        "spec: `kiln/zz-wc-create-brief.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored"
+      ],
+      "text": ""
+    }
+  },
+  "corpus": "import-layout/four",
+  "http": {
+    "probe": null
+  },
+  "mcp": {
+    "probe": null,
+    "propose_change create": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "spec: `kiln/zz-wc-mcp.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored\n",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": null,
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": null,
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": null,
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": null,
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "`kiln/zz-wc-mcp.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": null,
+          "preview": null,
+          "price_of_other": null,
+          "project": null,
+          "rationale": null,
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": null,
+          "target_ids": [],
+          "target_path": null,
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": null
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "spec: `kiln/zz-wc-mcp-dry.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored\n",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": null,
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": null,
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": null,
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": null,
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "`kiln/zz-wc-mcp-dry.md` is no file the walk would list (outside the `[paths]` roots, excluded, or a `.`-named component): a new spec file is a document of the corpus; nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": null,
+          "preview": null,
+          "price_of_other": null,
+          "project": null,
+          "rationale": null,
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": null,
+          "target_ids": [],
+          "target_path": null,
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": null
+        }
+      }
+    }
+  }
+}

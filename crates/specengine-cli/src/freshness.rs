@@ -114,8 +114,12 @@ impl Inner {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// The dirty mark, and the check memo in scope on this thread emptied
+    /// of its write findings (`write-cost`: a doubt empties D; C waits for
+    /// the next walk's digest).
     fn doubt(&self) {
         self.state().dirty = true;
+        specengine_store::check_memo::doubt();
     }
 
     /// The next read must walk: never walked, dirty, or the last walk began
@@ -307,6 +311,7 @@ pub(crate) fn step(
 /// cannot be).
 pub(crate) fn doubt(root: &Path) {
     if SCOPE.with_borrow(|scope| scope.trusts.is_empty()) {
+        specengine_store::check_memo::doubt();
         return;
     }
     if let Some(trust) = matching(&canonical(root)) {

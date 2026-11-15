@@ -83,10 +83,10 @@ use specengine_core::similar::{distinct_from_problem, keyword_problem};
 use specengine_core::{Paths, is_clean_relative, is_under};
 use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape, grammar};
 use specengine_store::{
-    CreateFileError, Decision, GitEnv, KindFamily, NamedBytes, NewProposal, Proposal,
-    ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation, SpecIndex as _,
-    WorkingTree, WorktreeGit, create_file, default_baseline, id_side, introduced_findings,
-    load_check, load_config, patch_hash,
+    CheckSetup, CreateFileError, Decision, GitEnv, KindFamily, NamedBytes, NewProposal, Proposal,
+    ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation, SetupFiles,
+    SpecIndex as _, SqliteIndex, WorkingTree, WorktreeGit, create_file, default_baseline, id_side,
+    introduced_from_rows, load_check, load_config, patch_hash,
 };
 
 use crate::amend::{Amended, amended_step, text_problem};
@@ -375,6 +375,7 @@ fn run_create(
     // 5. Validation: never a refusal.
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let diagnostics = validated(
+        Some(&open.index),
         project,
         &tree,
         today,
@@ -646,6 +647,7 @@ fn checked_sections(
         Err(reason) => return Ok(Err(reason)),
     };
     let span = match checked_span(
+        None,
         project,
         input,
         written,
@@ -767,8 +769,11 @@ fn generated_refusal(path: &str) -> String {
 }
 
 /// The findings the new file or span introduces in the project's check,
-/// the tree checked as is and with it; never a refusal.
+/// the tree checked as is and with it; never a refusal. `index`: the handle
+/// this call's walk updated, whose rows the check takes (the walked rows of
+/// `write-cost`); `None`, the whole tree read.
 pub(crate) fn validated(
+    index: Option<&SqliteIndex>,
     project: &ProjectRoot,
     tree: &WorkingTree,
     today: &str,
@@ -779,7 +784,22 @@ pub(crate) fn validated(
     let config = NamedBytes::read(CONFIG_FILE, &project.root.join(CONFIG_FILE));
     let baseline = default_baseline(&project.root);
     match load_check(&config, baseline.as_ref()) {
-        Ok(setup) => introduced_findings(tree, &setup, today, path, bytes),
+        Ok(setup) => {
+            let files = SetupFiles {
+                config: &config,
+                baseline: baseline.as_ref(),
+            };
+            rows_findings(
+                index,
+                tree,
+                &setup,
+                files,
+                today,
+                path,
+                bytes,
+                &project.root,
+            )
+        }
         Err(report) => {
             messages.push(Message::Warning(format!(
                 "the edit was not validated (no introduced findings stored): {}",
@@ -788,6 +808,27 @@ pub(crate) fn validated(
             Vec::new()
         }
     }
+}
+
+/// A write's introduced findings over `index`'s rows (the store's
+/// `introduced_from_rows`); a file read that differed from its row doubts
+/// the index of `root` (T4).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rows_findings(
+    index: Option<&SqliteIndex>,
+    tree: &WorkingTree,
+    setup: &CheckSetup,
+    files: SetupFiles<'_>,
+    today: &str,
+    path: &str,
+    bytes: Vec<u8>,
+    root: &Path,
+) -> Vec<ProposalFinding> {
+    let introduced = introduced_from_rows(index, tree, setup, files, today, path, bytes);
+    if introduced.doubted {
+        crate::freshness::doubt(root);
+    }
+    introduced.findings
 }
 
 /// `findings` without the `ref-dangling` on an ID a live create or

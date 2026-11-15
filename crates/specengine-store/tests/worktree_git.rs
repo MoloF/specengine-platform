@@ -1084,3 +1084,70 @@ fn top_and_common_dir_reads_both_in_one_call_in_a_linked_worktree() {
     fs::create_dir_all(&nowhere).unwrap();
     assert!(repo.handle(&nowhere).top_and_common_dir().is_err());
 }
+
+// ------------------------------------------------- write-cost WC8 (RM-0125)
+
+/// A logging `git` in `<scratch>/<name>`: it appends its arguments (each
+/// followed by a tab) to `log` in one write, then execs the sandbox's real
+/// git (docs/features/write-cost.md "Goldens and the git shim").
+fn logging_git(repo: &Repo, name: &str, log: &Path) -> PathBuf {
+    let dir = repo.scratch.join(name);
+    fs::create_dir_all(&dir).unwrap();
+    let shim = dir.join("git");
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    fs::write(
+        &shim,
+        format!(
+            "#!/bin/sh\nline=''\nfor arg in \"$@\"; do line=\"$line$arg\t\"; done\n\
+             printf '%s\\n' \"$line\" >> {}\nexec {} \"$@\"\n",
+            quote(log),
+            quote(repo.git.git_program())
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    dir
+}
+
+/// docs/features/write-cost.md (RM-0125) WC8 (G1): `rev-parse
+/// --local-env-vars` runs once per process per spawn `PATH`. Two handles
+/// under one `PATH` spawn it once; a handle under another `PATH` spawns it
+/// again. Counted through a logging `git` first on each of two `PATH`s, one
+/// log. At 0.47.0 every `WorktreeGit::new` spawned it (the second handle
+/// made 2). M: a cache ignoring `PATH` (the third handle spawns nothing):
+/// red.
+#[test]
+fn local_env_vars_runs_once_per_spawn_path() {
+    let repo = Repo::new("wt-local-env-once");
+    let log = repo.scratch.join("git.log");
+    let first = logging_git(&repo, "shim-a", &log);
+    let second = logging_git(&repo, "shim-b", &log);
+    let under = |dir: &Path| {
+        let vars = repo
+            .git
+            .vars()
+            .into_iter()
+            .map(|(name, value)| {
+                if name == "PATH" {
+                    (name, repo.git.path_with(dir))
+                } else {
+                    (name, value)
+                }
+            })
+            .collect::<Vec<_>>();
+        GitEnv::new(&repo.main, vars)
+    };
+    let spawned = || {
+        fs::read_to_string(&log)
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| line.split('\t').any(|arg| arg == "--local-env-vars"))
+            .count()
+    };
+    WorktreeGit::new(&repo.main, &under(&first)).expect("git runs");
+    assert_eq!(spawned(), 1, "the first handle under a PATH spawns it");
+    WorktreeGit::new(&repo.linked, &under(&first)).expect("git runs");
+    assert_eq!(spawned(), 1, "a second handle under the same PATH: cached");
+    WorktreeGit::new(&repo.main, &under(&second)).expect("git runs");
+    assert_eq!(spawned(), 2, "a handle under another PATH spawns it again");
+}

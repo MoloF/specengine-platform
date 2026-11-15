@@ -41,6 +41,9 @@ pub(crate) fn run(corpus: &Corpus<'_>, paths: &Paths, findings: &mut Vec<Finding
         link_base: paths.link_base.as_deref(),
     };
     for (index, parsed) in live_sources(corpus) {
+        if !corpus.kept(index) {
+            continue;
+        }
         for target in file_links(parsed) {
             links.check(index, target, findings);
         }

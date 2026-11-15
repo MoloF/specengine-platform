@@ -1,0 +1,762 @@
+{
+  "captured_at": {
+    "commit": "d38e70d4518d11ebf5e466fe8d2a7ba94ea6a4e6",
+    "src_diff_stat": ""
+  },
+  "cli": {
+    "approve decision": {
+      "answer": {
+        "error": "spec: `PR-0007` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0007`'s record: add it, or `spec reject PR-0007 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve discrepancy --option 1": {
+      "answer": {
+        "error": "spec: `PR-0006` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0006`'s record: add it, or `spec reject PR-0006 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve question": {
+      "answer": {
+        "error": "spec: `PR-0005` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-0005`'s record: add it, or `spec reject PR-0005 --reason <answer>`; nothing changed",
+        "exit": 2
+      },
+      "questions": []
+    },
+    "approve update": {
+      "answer": {
+        "exit": 1,
+        "json": "{\"id\":\"PR-0001\",\"project\":\"parent-ref\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"cliffs/NEST-01\",\"target_path\":\"docs/features/cliffs.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"f222900bccc33e857de3607833231eac8e220390\",\"base_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\",\"base_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\",\"new_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\",\"patch_hash\":\"b3:796b306f4bae30bd915566a3ef3fde5bbec5da94d379bcfacf9a725b56e6fdc7\",\"rationale\":\"Probe NEST-01.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":18,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/features/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/features/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/features/cliffs.md\\n+++ proposed docs/features/cliffs.md\\n@@ -4,4 +4,8 @@ Wide ledges face the sea.\\n \\n ### Upper ledge {#NEST-02}\\n \\n-The upper ledge takes the late arrivals.\\n\\\\ No newline at end of file\\n+The upper ledge takes the late arrivals.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"cliffs/NEST-01\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"`PR-0001` not applied: the answer was not `y`; nothing changed\"]}\n",
+        "stderr": [
+          "spec: `PR-0001` not applied: the answer was not `y`; nothing changed"
+        ],
+        "text": ""
+      },
+      "questions": [
+        "apply PR-0001 to docs/features/cliffs.md on main in <root> (applies; raises cliffs/NEST-02 1 -> 2)? [y/N]"
+      ]
+    },
+    "probe": {
+      "base": "b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f",
+      "decision": "NEST-01",
+      "path": "docs/features/cliffs.md",
+      "target": "NEST-01"
+    },
+    "propose amendment": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"amends `NEST-01`: an amendment names the canonical ID `cliffs/NEST-01`; nothing stored\"]}\n",
+      "stderr": [
+        "spec: amends `NEST-01`: an amendment names the canonical ID `cliffs/NEST-01`; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose amendment --brief": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"amends `NEST-01`: an amendment names the canonical ID `cliffs/NEST-01`; nothing stored\"]}\n",
+      "stderr": [
+        "spec: amends `NEST-01`: an amendment names the canonical ID `cliffs/NEST-01`; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose create": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0003\",\"project\":\"parent-ref\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/features/zz-wc-create.md\",\"target_path\":\"docs/features/zz-wc-create.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"f222900bccc33e857de3607833231eac8e220390\",\"base_hash\":null,\"base_text\":null,\"new_text\":\"---\\nclass: spec\\nstatus: draft\\n---\\n\\n# Write cost probe\\n\\nSee [the second probe](zz-wc-create-b.md) here.\\n\\nSee [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"patch_hash\":\"b3:0a2d469f93977a083435232db7247032d157b62576bbe405a8a59a999e7714fe\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/features/zz-wc-create.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create.md\",\"line\":8,\"subject\":\"zz-wc-create-b.md\",\"message\":\"`zz-wc-create-b.md` names no walked document (tried `docs/features/zz-wc-create-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create.md\",\"line\":10,\"subject\":\"#zz-wc-create-anchor\",\"message\":\"`#zz-wc-create-anchor`: `docs/features/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create.md\",\"line\":10,\"subject\":\"zz-wc-create-a.md\",\"message\":\"`zz-wc-create-a.md` names no walked document (tried `docs/features/zz-wc-create-a.md`)\"}],\"diff\":\"--- base docs/features/zz-wc-create.md\\n+++ proposed docs/features/zz-wc-create.md\\n@@ -0,0 +1,10 @@\\n+---\\n+class: spec\\n+status: draft\\n+---\\n+\\n+# Write cost probe\\n+\\n+See [the second probe](zz-wc-create-b.md) here.\\n+\\n+See [the first probe](zz-wc-create-a.md) and [its anchor](#zz-wc-create-anchor) here.\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/features/zz-wc-create.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0003\nintroduced: 4\nerror  docs/features/zz-wc-create.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/features/zz-wc-create.md:8: link-dangling: `zz-wc-create-b.md` names no walked document (tried `docs/features/zz-wc-create-b.md`)\nwarning  docs/features/zz-wc-create.md:10: link-anchor: `#zz-wc-create-anchor`: `docs/features/zz-wc-create.md` has no anchor or section `#zz-wc-create-anchor`\nwarning  docs/features/zz-wc-create.md:10: link-dangling: `zz-wc-create-a.md` names no walked document (tried `docs/features/zz-wc-create-a.md`)\n"
+    },
+    "propose create --brief": {
+      "exit": 0,
+      "json": "{\"id\":null,\"project\":\"parent-ref\",\"kind\":\"create\",\"status\":null,\"target_id\":\"docs/features/zz-wc-create-brief.md\",\"target_path\":\"docs/features/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:18a96c3a300045a8205600f16e0aef8f523c9a9595aa61155662d2daa4925e5b\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":8,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/features/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":10,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/features/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":10,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/features/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[\"docs/features/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"docs/features/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/features/zz-wc-create.md` titled as new `docs/features/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[\"not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\"]}\n",
+      "stderr": [],
+      "text": "not stored: a similar entry gates; propose an update of it, or name each gating entry in `distinct_from` (--distinct-from) to store it anyway\nintroduced: 4\nerror  docs/features/zz-wc-create-brief.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/features/zz-wc-create-brief.md:8: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/features/zz-wc-create-brief-b.md`)\nwarning  docs/features/zz-wc-create-brief.md:10: link-anchor: `#zz-wc-create-brief-anchor`: `docs/features/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/features/zz-wc-create-brief.md:10: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/features/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | docs/features/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `docs/features/zz-wc-create.md` titled as new `docs/features/zz-wc-create-brief.md`\n"
+    },
+    "propose create --brief, distinct": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0004\",\"project\":\"parent-ref\",\"kind\":\"create\",\"status\":\"open\",\"target_id\":\"docs/features/zz-wc-create-brief.md\",\"target_path\":\"docs/features/zz-wc-create-brief.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"f222900bccc33e857de3607833231eac8e220390\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:18a96c3a300045a8205600f16e0aef8f523c9a9595aa61155662d2daa4925e5b\",\"rationale\":\"A new probe file.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"key-missing\",\"severity\":\"error\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":1,\"subject\":\"scope\",\"message\":\"key `scope` is required for class spec: a list, as [root]\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":8,\"subject\":\"zz-wc-create-brief-b.md\",\"message\":\"`zz-wc-create-brief-b.md` names no walked document (tried `docs/features/zz-wc-create-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":10,\"subject\":\"#zz-wc-create-brief-anchor\",\"message\":\"`#zz-wc-create-brief-anchor`: `docs/features/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/zz-wc-create-brief.md\",\"line\":10,\"subject\":\"zz-wc-create-brief-a.md\",\"message\":\"`zz-wc-create-brief-a.md` names no walked document (tried `docs/features/zz-wc-create-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"docs/features/zz-wc-create-brief.md\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":[{\"id\":\"PR-0003\",\"path\":\"docs/features/zz-wc-create.md\",\"title\":\"Write cost probe\",\"kind\":null,\"source\":\"queue\",\"reason\":\"`PR-0003` (open), a live create, adds `docs/features/zz-wc-create.md` titled as new `docs/features/zz-wc-create-brief.md`\",\"gates\":true}],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0004\nintroduced: 4\nerror  docs/features/zz-wc-create-brief.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/features/zz-wc-create-brief.md:8: link-dangling: `zz-wc-create-brief-b.md` names no walked document (tried `docs/features/zz-wc-create-brief-b.md`)\nwarning  docs/features/zz-wc-create-brief.md:10: link-anchor: `#zz-wc-create-brief-anchor`: `docs/features/zz-wc-create-brief.md` has no anchor or section `#zz-wc-create-brief-anchor`\nwarning  docs/features/zz-wc-create-brief.md:10: link-dangling: `zz-wc-create-brief-a.md` names no walked document (tried `docs/features/zz-wc-create-brief-a.md`)\nsimilar: PR-0003 | queue | gates | - | docs/features/zz-wc-create.md | Write cost probe | `PR-0003` (open), a live create, adds `docs/features/zz-wc-create.md` titled as new `docs/features/zz-wc-create-brief.md`\n"
+    },
+    "propose interpretation": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: NEST-01 is no accepted decision: spec document docs/features/cliffs.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: NEST-01 is no accepted decision: spec document docs/features/cliffs.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose interpretation --brief": {
+      "exit": 1,
+      "json": "{\"id\":null,\"project\":null,\"kind\":null,\"status\":null,\"target_id\":null,\"target_path\":null,\"worktree\":null,\"branch\":null,\"base_commit\":null,\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":null,\"diagnostics\":null,\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":null,\"updated_at\":null,\"target_ids\":[],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[\"--decision: NEST-01 is no accepted decision: spec document docs/features/cliffs.md; nothing stored\"]}\n",
+      "stderr": [
+        "spec: --decision: NEST-01 is no accepted decision: spec document docs/features/cliffs.md; nothing stored"
+      ],
+      "text": ""
+    },
+    "propose update": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0001\",\"project\":\"parent-ref\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"cliffs/NEST-01\",\"target_path\":\"docs/features/cliffs.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"f222900bccc33e857de3607833231eac8e220390\",\"base_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\",\"base_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\",\"new_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\\n\\nSee [the second probe](zz-wc-update-b.md) here.\\n\\nSee [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\",\"patch_hash\":\"b3:796b306f4bae30bd915566a3ef3fde5bbec5da94d379bcfacf9a725b56e6fdc7\",\"rationale\":\"Probe NEST-01.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":18,\"subject\":\"zz-wc-update-b.md\",\"message\":\"`zz-wc-update-b.md` names no walked document (tried `docs/features/zz-wc-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"#zz-wc-update-anchor\",\"message\":\"`#zz-wc-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"zz-wc-update-a.md\",\"message\":\"`zz-wc-update-a.md` names no walked document (tried `docs/features/zz-wc-update-a.md`)\"}],\"diff\":\"--- base docs/features/cliffs.md\\n+++ proposed docs/features/cliffs.md\\n@@ -4,4 +4,8 @@ Wide ledges face the sea.\\n \\n ### Upper ledge {#NEST-02}\\n \\n-The upper ledge takes the late arrivals.\\n\\\\ No newline at end of file\\n+The upper ledge takes the late arrivals.\\n+\\n+See [the second probe](zz-wc-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-update-a.md) and [its anchor](#zz-wc-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"cliffs/NEST-02\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"cliffs/NEST-01\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0001\nintroduced: 3\nwarning  docs/features/cliffs.md:18: link-dangling: `zz-wc-update-b.md` names no walked document (tried `docs/features/zz-wc-update-b.md`)\nwarning  docs/features/cliffs.md:20: link-anchor: `#zz-wc-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-update-anchor`\nwarning  docs/features/cliffs.md:20: link-dangling: `zz-wc-update-a.md` names no walked document (tried `docs/features/zz-wc-update-a.md`)\n"
+    },
+    "propose update --brief": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0002\",\"project\":\"parent-ref\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"cliffs/NEST-01\",\"target_path\":\"docs/features/cliffs.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"f222900bccc33e857de3607833231eac8e220390\",\"base_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\",\"base_text\":null,\"new_text\":null,\"patch_hash\":\"b3:0266032c7bb366af2817b77961af0af28ea112bdc60e5e56c070d5264db7acd0\",\"rationale\":\"Probe NEST-01.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":18,\"subject\":\"zz-wc-update-brief-b.md\",\"message\":\"`zz-wc-update-brief-b.md` names no walked document (tried `docs/features/zz-wc-update-brief-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"#zz-wc-update-brief-anchor\",\"message\":\"`#zz-wc-update-brief-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-update-brief-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"zz-wc-update-brief-a.md\",\"message\":\"`zz-wc-update-brief-a.md` names no walked document (tried `docs/features/zz-wc-update-brief-a.md`)\"}],\"diff\":null,\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"cliffs/NEST-02\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"cliffs/NEST-01\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0002\nintroduced: 3\nwarning  docs/features/cliffs.md:18: link-dangling: `zz-wc-update-brief-b.md` names no walked document (tried `docs/features/zz-wc-update-brief-b.md`)\nwarning  docs/features/cliffs.md:20: link-anchor: `#zz-wc-update-brief-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-update-brief-anchor`\nwarning  docs/features/cliffs.md:20: link-dangling: `zz-wc-update-brief-a.md` names no walked document (tried `docs/features/zz-wc-update-brief-a.md`)\n"
+    },
+    "raise decision": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0007\",\"created\":true,\"hits\":[],\"related\":[{\"id\":\"PR-0005\",\"source\":\"queue\",\"status\":\"open\",\"path\":null,\"answer\":null,\"record\":null}],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0007\nrelated: PR-0005 | open | - | -\n"
+    },
+    "raise discrepancy": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0006\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0006\n"
+    },
+    "raise question": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-0005\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-0005\n"
+    }
+  },
+  "corpus": "parent-ref",
+  "http": {
+    "probe": {
+      "path": "docs/features/cliffs.md",
+      "target": "NEST-01"
+    },
+    "question confirm GET": {
+      "body": "{\"status\":503,\"message\":\"spec: `PR-100002` not applied (step 3): <root>/specengine.toml has no `[decision_records]` (`prefix`, `dir`, `template`) for `PR-100002`'s record: add it, or `spec reject PR-100002 --reason <answer>`; nothing changed\"}",
+      "status": 503
+    },
+    "question raise": [
+      {
+        "exit": 0,
+        "json": "{\"id\":\"PR-100002\",\"created\":true,\"hits\":[],\"related\":[],\"linked\":null,\"diagnostics\":[],\"notes\":[]}\n",
+        "stderr": [],
+        "text": "PR-100002\n"
+      }
+    ],
+    "question stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100002\",\"project\":\"parent-ref\",\"kind\":\"question\",\"status\":\"open\",\"target_id\":\"cliffs/NEST-01\",\"target_path\":\"docs/features/cliffs.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"<sha>\",\"base_hash\":null,\"base_text\":null,\"new_text\":null,\"patch_hash\":null,\"rationale\":null,\"author\":{\"type\":\"agent\",\"role\":\"developer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[],\"diff\":null,\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"cliffs/NEST-01\"],\"severity\":\"normal\",\"gap_type\":null,\"summary\":\"Does the write cost probe hold as written?\",\"gist\":null,\"matters\":null,\"working_answer\":\"Keep it as written.\",\"price_of_other\":\"A new rule case.\",\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100002\nproject: parent-ref\nkind: question\nstatus: open\ntarget_id: cliffs/NEST-01\ntarget_path: docs/features/cliffs.md\nworktree: <root>\nbranch: main\nbase_commit: <sha>\nbase_hash: -\nbase_text: -\nnew_text: -\npatch_hash: -\nrationale: -\nauthor: agent role=developer model=claude-opus-5-5 run=unknown\ndiagnostics: 0\ndiff: -\npreview: -\nconflict: -\nrevisions: -\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  cliffs/NEST-01\nseverity: normal\ngap_type: -\nsummary: Does the write cost probe hold as written?\ngist: -\nmatters: -\nworking_answer: Keep it as written.\nprice_of_other: A new rule case.\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":null}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    },
+    "update commits": [
+      "<sha>\neb1080517e1059b6a2123f5b1dd97958f4168795\nann <ann@example.org>\nann <ann@example.org>\n\nspec: apply PR-100001\n\nProbe NEST-01.\n\nProposal: PR-100001\nDecided-by: ann <ann@example.org>\nProposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown\nBase-commit: eb1080517e1059b6a2123f5b1dd97958f4168795\nRevision: cliffs/NEST-02 1 -> 2\n\n---\n docs/features/cliffs.md | 6 +++++-\n 1 file changed, 5 insertions(+), 1 deletion(-)\n\ndiff --git a/docs/features/cliffs.md b/docs/features/cliffs.md\n--- a/docs/features/cliffs.md\n+++ b/docs/features/cliffs.md\n@@ -11,6 +11,10 @@ The cliffs hold the colony's ledges.\n \n Wide ledges face the sea.\n \n-### Upper ledge {#NEST-02}\n+### Upper ledge {#NEST-02 rev=2}\n \n The upper ledge takes the late arrivals.\n+\n+See [the second probe](zz-wc-hub-update-b.md) here.\n+\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n"
+    ],
+    "update confirm GET": {
+      "body": "{\"id\":\"PR-100001\",\"question\":\"staged 2026-10-05T21:14:03Z: spec approve PR-100001\\napply PR-100001 to docs/features/cliffs.md on main in <root> (applies; raises cliffs/NEST-02 1 -> 2, staged)? [y/N]\",\"updated_at\":\"2026-10-05T21:14:03Z\"}",
+      "status": 200
+    },
+    "update confirm POST": {
+      "body": "{\"id\":\"PR-100001\",\"project\":\"parent-ref\",\"kind\":\"update\",\"status\":\"applied\",\"target_id\":\"cliffs/NEST-01\",\"target_path\":\"docs/features/cliffs.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"eb1080517e1059b6a2123f5b1dd97958f4168795\",\"base_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\",\"base_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\",\"new_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\",\"patch_hash\":\"b3:e19506ecaa3cf2fdf01327b2ff45c675f61e935c33aa1b767315c009ef6dab7e\",\"rationale\":\"Probe NEST-01.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/features/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/features/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/features/cliffs.md\\n+++ proposed docs/features/cliffs.md\\n@@ -4,4 +4,8 @@ Wide ledges face the sea.\\n \\n ### Upper ledge {#NEST-02}\\n \\n-The upper ledge takes the late arrivals.\\n\\\\ No newline at end of file\\n+The upper ledge takes the late arrivals.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":null,\"conflict\":null,\"revisions\":null,\"drift\":null,\"decided_by\":\"ann <ann@example.org>\",\"decided_at\":\"<now>\",\"decision_note\":null,\"applied_commit\":\"<sha>\",\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"<now>\",\"target_ids\":[\"cliffs/NEST-01\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}",
+      "status": 200
+    },
+    "update propose": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"parent-ref\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"cliffs/NEST-01\",\"target_path\":\"docs/features/cliffs.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"eb1080517e1059b6a2123f5b1dd97958f4168795\",\"base_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\",\"base_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\",\"new_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\",\"patch_hash\":\"b3:e19506ecaa3cf2fdf01327b2ff45c675f61e935c33aa1b767315c009ef6dab7e\",\"rationale\":\"Probe NEST-01.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/features/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/features/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/features/cliffs.md\\n+++ proposed docs/features/cliffs.md\\n@@ -4,4 +4,8 @@ Wide ledges face the sea.\\n \\n ### Upper ledge {#NEST-02}\\n \\n-The upper ledge takes the late arrivals.\\n\\\\ No newline at end of file\\n+The upper ledge takes the late arrivals.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"cliffs/NEST-02\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"cliffs/NEST-01\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "PR-100001\nintroduced: 3\nwarning  docs/features/cliffs.md:18: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/features/zz-wc-hub-update-b.md`)\nwarning  docs/features/cliffs.md:20: link-anchor: `#zz-wc-hub-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-hub-update-anchor`\nwarning  docs/features/cliffs.md:20: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/features/zz-wc-hub-update-a.md`)\n"
+    },
+    "update stage": {
+      "exit": 0,
+      "json": "{\"id\":\"PR-100001\",\"project\":\"parent-ref\",\"kind\":\"update\",\"status\":\"open\",\"target_id\":\"cliffs/NEST-01\",\"target_path\":\"docs/features/cliffs.md\",\"worktree\":\"<root>\",\"branch\":\"main\",\"base_commit\":\"eb1080517e1059b6a2123f5b1dd97958f4168795\",\"base_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\",\"base_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\",\"new_text\":\"## Ledges {#NEST-01}\\n\\nWide ledges face the sea.\\n\\n### Upper ledge {#NEST-02}\\n\\nThe upper ledge takes the late arrivals.\\n\\nSee [the second probe](zz-wc-hub-update-b.md) here.\\n\\nSee [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\",\"patch_hash\":\"b3:e19506ecaa3cf2fdf01327b2ff45c675f61e935c33aa1b767315c009ef6dab7e\",\"rationale\":\"Probe NEST-01.\",\"author\":{\"type\":\"agent\",\"role\":\"spec-writer\",\"model\":\"claude-opus-5-5\",\"run\":null},\"diagnostics\":[{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":18,\"subject\":\"zz-wc-hub-update-b.md\",\"message\":\"`zz-wc-hub-update-b.md` names no walked document (tried `docs/features/zz-wc-hub-update-b.md`)\"},{\"code\":\"link-anchor\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"#zz-wc-hub-update-anchor\",\"message\":\"`#zz-wc-hub-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-hub-update-anchor`\"},{\"code\":\"link-dangling\",\"severity\":\"warning\",\"path\":\"docs/features/cliffs.md\",\"line\":20,\"subject\":\"zz-wc-hub-update-a.md\",\"message\":\"`zz-wc-hub-update-a.md` names no walked document (tried `docs/features/zz-wc-hub-update-a.md`)\"}],\"diff\":\"--- base docs/features/cliffs.md\\n+++ proposed docs/features/cliffs.md\\n@@ -4,4 +4,8 @@ Wide ledges face the sea.\\n \\n ### Upper ledge {#NEST-02}\\n \\n-The upper ledge takes the late arrivals.\\n\\\\ No newline at end of file\\n+The upper ledge takes the late arrivals.\\n+\\n+See [the second probe](zz-wc-hub-update-b.md) here.\\n+\\n+See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\\n\\\\ No newline at end of file\\n\",\"preview\":\"applies\",\"conflict\":null,\"revisions\":[{\"id\":\"cliffs/NEST-02\",\"rev\":1,\"to\":2,\"lock_entries\":0,\"refused\":null}],\"drift\":null,\"decided_by\":null,\"decided_at\":null,\"decision_note\":null,\"applied_commit\":null,\"created_at\":\"2026-10-05T21:14:03Z\",\"updated_at\":\"2026-10-05T21:14:03Z\",\"target_ids\":[\"cliffs/NEST-01\"],\"severity\":null,\"gap_type\":null,\"summary\":null,\"gist\":null,\"matters\":null,\"working_answer\":null,\"price_of_other\":null,\"evidence\":[],\"pair\":null,\"options\":[],\"recommendation\":null,\"distinct_from\":[],\"linked\":null,\"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":{\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\"},\"staged_at\":\"2026-10-05T21:14:03Z\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":[]}\n",
+      "stderr": [],
+      "text": "id: PR-100001\nproject: parent-ref\nkind: update\nstatus: open\ntarget_id: cliffs/NEST-01\ntarget_path: docs/features/cliffs.md\nworktree: <root>\nbranch: main\nbase_commit: eb1080517e1059b6a2123f5b1dd97958f4168795\nbase_hash: b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\nbase_text:\n  ## Ledges {#NEST-01}\n\n  Wide ledges face the sea.\n\n  ### Upper ledge {#NEST-02}\n\n  The upper ledge takes the late arrivals.\nnew_text:\n  ## Ledges {#NEST-01}\n\n  Wide ledges face the sea.\n\n  ### Upper ledge {#NEST-02}\n\n  The upper ledge takes the late arrivals.\n\n  See [the second probe](zz-wc-hub-update-b.md) here.\n\n  See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\npatch_hash: b3:e19506ecaa3cf2fdf01327b2ff45c675f61e935c33aa1b767315c009ef6dab7e\nrationale:\n  Probe NEST-01.\nauthor: agent role=spec-writer model=claude-opus-5-5 run=unknown\ndiagnostics: 3\n  warning  docs/features/cliffs.md:18: link-dangling: `zz-wc-hub-update-b.md` names no walked document (tried `docs/features/zz-wc-hub-update-b.md`)\n  warning  docs/features/cliffs.md:20: link-anchor: `#zz-wc-hub-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-hub-update-anchor`\n  warning  docs/features/cliffs.md:20: link-dangling: `zz-wc-hub-update-a.md` names no walked document (tried `docs/features/zz-wc-hub-update-a.md`)\ndiff:\n  --- base docs/features/cliffs.md\n  +++ proposed docs/features/cliffs.md\n  @@ -4,4 +4,8 @@ Wide ledges face the sea.\n   \n   ### Upper ledge {#NEST-02}\n   \n  -The upper ledge takes the late arrivals.\n  \\ No newline at end of file\n  +The upper ledge takes the late arrivals.\n  +\n  +See [the second probe](zz-wc-hub-update-b.md) here.\n  +\n  +See [the first probe](zz-wc-hub-update-a.md) and [its anchor](#zz-wc-hub-update-anchor) here.\n  \\ No newline at end of file\npreview: applies\nconflict: -\nrevisions: cliffs/NEST-02 1 -> 2 (0 lock entries)\ndrift: -\ndecided_by: -\ndecided_at: -\ndecision_note: -\napplied_commit: -\ncreated_at: 2026-10-05T21:14:03Z\nupdated_at: 2026-10-05T21:14:03Z\ntarget_ids: 1\n  cliffs/NEST-01\nseverity: -\ngap_type: -\nsummary: -\ngist: -\nmatters: -\nworking_answer: -\nprice_of_other: -\nevidence: 0\noptions: 0\nrecommendation: -\ndistinct_from: 0\nlinked: -\nrecord_id: -\nrecord_path: -\nrecord_title: -\nrecord_text: -\nchoice: -\ntask_id: -\nstaged: {\"decision\":\"approve\",\"option\":null,\"answer\":null,\"canon\":null,\"editorial\":null,\"note\":null,\"span_hash\":\"b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f\"}\nstaged_at: 2026-10-05T21:14:03Z\ninterpretation: -\ncard_id: -\nwhy: -\nnotes: 0\n"
+    }
+  },
+  "mcp": {
+    "probe": {
+      "path": "docs/features/cliffs.md",
+      "target": "NEST-01"
+    },
+    "propose_change amendment": {
+      "id": 5,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "spec: amends `NEST-01`: an amendment names the canonical ID `cliffs/NEST-01`; nothing stored\n",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": null,
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": null,
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": null,
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": null,
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "amends `NEST-01`: an amendment names the canonical ID `cliffs/NEST-01`; nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": null,
+          "preview": null,
+          "price_of_other": null,
+          "project": null,
+          "rationale": null,
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": null,
+          "target_ids": [],
+          "target_path": null,
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": null
+        }
+      }
+    },
+    "propose_change create": {
+      "id": 4,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0002\nintroduced: 4\nerror  docs/features/zz-wc-mcp.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/features/zz-wc-mcp.md:8: link-dangling: `zz-wc-mcp-b.md` names no walked document (tried `docs/features/zz-wc-mcp-b.md`)\nwarning  docs/features/zz-wc-mcp.md:10: link-anchor: `#zz-wc-mcp-anchor`: `docs/features/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`\nwarning  docs/features/zz-wc-mcp.md:10: link-dangling: `zz-wc-mcp-a.md` names no walked document (tried `docs/features/zz-wc-mcp-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "f222900bccc33e857de3607833231eac8e220390",
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "key-missing",
+              "line": 1,
+              "message": "key `scope` is required for class spec: a list, as [root]",
+              "path": "docs/features/zz-wc-mcp.md",
+              "severity": "error",
+              "subject": "scope"
+            },
+            {
+              "code": "link-dangling",
+              "line": 8,
+              "message": "`zz-wc-mcp-b.md` names no walked document (tried `docs/features/zz-wc-mcp-b.md`)",
+              "path": "docs/features/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 10,
+              "message": "`#zz-wc-mcp-anchor`: `docs/features/zz-wc-mcp.md` has no anchor or section `#zz-wc-mcp-anchor`",
+              "path": "docs/features/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 10,
+              "message": "`zz-wc-mcp-a.md` names no walked document (tried `docs/features/zz-wc-mcp-a.md`)",
+              "path": "docs/features/zz-wc-mcp.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0002",
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:b9d09387a31aacb75921c0e0f574ace8ba4e63ca2290575c37a16faeb0101eea",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "parent-ref",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [],
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "docs/features/zz-wc-mcp.md",
+          "target_ids": [
+            "docs/features/zz-wc-mcp.md"
+          ],
+          "target_path": "docs/features/zz-wc-mcp.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change create dry_run": {
+      "id": 3,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 4\nerror  docs/features/zz-wc-mcp-dry.md:1: key-missing: key `scope` is required for class spec: a list, as [root]\nwarning  docs/features/zz-wc-mcp-dry.md:8: link-dangling: `zz-wc-mcp-dry-b.md` names no walked document (tried `docs/features/zz-wc-mcp-dry-b.md`)\nwarning  docs/features/zz-wc-mcp-dry.md:10: link-anchor: `#zz-wc-mcp-dry-anchor`: `docs/features/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`\nwarning  docs/features/zz-wc-mcp-dry.md:10: link-dangling: `zz-wc-mcp-dry-a.md` names no walked document (tried `docs/features/zz-wc-mcp-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "key-missing",
+              "line": 1,
+              "message": "key `scope` is required for class spec: a list, as [root]",
+              "path": "docs/features/zz-wc-mcp-dry.md",
+              "severity": "error",
+              "subject": "scope"
+            },
+            {
+              "code": "link-dangling",
+              "line": 8,
+              "message": "`zz-wc-mcp-dry-b.md` names no walked document (tried `docs/features/zz-wc-mcp-dry-b.md`)",
+              "path": "docs/features/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 10,
+              "message": "`#zz-wc-mcp-dry-anchor`: `docs/features/zz-wc-mcp-dry.md` has no anchor or section `#zz-wc-mcp-dry-anchor`",
+              "path": "docs/features/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 10,
+              "message": "`zz-wc-mcp-dry-a.md` names no walked document (tried `docs/features/zz-wc-mcp-dry-a.md`)",
+              "path": "docs/features/zz-wc-mcp-dry.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "create",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:12bb29b43a3cc6ec491c3fc3ad6d8c5ee881b9200272ef6d18743b327c620694",
+          "preview": null,
+          "price_of_other": null,
+          "project": "parent-ref",
+          "rationale": "A new probe file.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": [],
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "docs/features/zz-wc-mcp-dry.md",
+          "target_ids": [
+            "docs/features/zz-wc-mcp-dry.md"
+          ],
+          "target_path": "docs/features/zz-wc-mcp-dry.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change interpretation": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "spec: --decision: NEST-01 is no accepted decision: spec document docs/features/cliffs.md; nothing stored\n",
+            "type": "text"
+          }
+        ],
+        "isError": true,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": null,
+          "base_commit": null,
+          "base_hash": null,
+          "base_text": null,
+          "branch": null,
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": null,
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": null,
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "--decision: NEST-01 is no accepted decision: spec document docs/features/cliffs.md; nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": null,
+          "preview": null,
+          "price_of_other": null,
+          "project": null,
+          "rationale": null,
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": null,
+          "target_ids": [],
+          "target_path": null,
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": null
+        }
+      }
+    },
+    "propose_change update": {
+      "id": 2,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "PR-0001\nintroduced: 3\nwarning  docs/features/cliffs.md:18: link-dangling: `zz-wc-mcp-update-b.md` names no walked document (tried `docs/features/zz-wc-mcp-update-b.md`)\nwarning  docs/features/cliffs.md:20: link-anchor: `#zz-wc-mcp-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-mcp-update-anchor`\nwarning  docs/features/cliffs.md:20: link-dangling: `zz-wc-mcp-update-a.md` names no walked document (tried `docs/features/zz-wc-mcp-update-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": "f222900bccc33e857de3607833231eac8e220390",
+          "base_hash": "b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": "<now>",
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 18,
+              "message": "`zz-wc-mcp-update-b.md` names no walked document (tried `docs/features/zz-wc-mcp-update-b.md`)",
+              "path": "docs/features/cliffs.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 20,
+              "message": "`#zz-wc-mcp-update-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-mcp-update-anchor`",
+              "path": "docs/features/cliffs.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 20,
+              "message": "`zz-wc-mcp-update-a.md` names no walked document (tried `docs/features/zz-wc-mcp-update-a.md`)",
+              "path": "docs/features/cliffs.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": "PR-0001",
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:723d7293dec02dd3e8e5201eb6fa439df68d82704787e223801bf2a24cba4af7",
+          "preview": "applies",
+          "price_of_other": null,
+          "project": "parent-ref",
+          "rationale": "Probe NEST-01.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": [
+            {
+              "id": "cliffs/NEST-02",
+              "lock_entries": 0,
+              "refused": null,
+              "rev": 1,
+              "to": 2
+            }
+          ],
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": "open",
+          "summary": null,
+          "target_id": "cliffs/NEST-01",
+          "target_ids": [
+            "cliffs/NEST-01"
+          ],
+          "target_path": "docs/features/cliffs.md",
+          "task_id": null,
+          "updated_at": "<now>",
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    },
+    "propose_change update dry_run": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "dry run: nothing stored\nintroduced: 3\nwarning  docs/features/cliffs.md:18: link-dangling: `zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/features/zz-wc-mcp-update-dry-b.md`)\nwarning  docs/features/cliffs.md:20: link-anchor: `#zz-wc-mcp-update-dry-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`\nwarning  docs/features/cliffs.md:20: link-dangling: `zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/features/zz-wc-mcp-update-dry-a.md`)\n",
+            "type": "text"
+          }
+        ],
+        "isError": false,
+        "resultType": "complete",
+        "structuredContent": {
+          "applied_commit": null,
+          "author": {
+            "model": "claude-opus-5-5",
+            "role": "spec-writer",
+            "run": null,
+            "type": "agent"
+          },
+          "base_commit": null,
+          "base_hash": "b3:6d298bc562f31e4c3c2d2d13216ed53f4747ad02c6a6831d8138b37d7783ed0f",
+          "base_text": null,
+          "branch": "main",
+          "card_id": null,
+          "choice": null,
+          "conflict": null,
+          "created_at": null,
+          "decided_at": null,
+          "decided_by": null,
+          "decision_note": null,
+          "diagnostics": [
+            {
+              "code": "link-dangling",
+              "line": 18,
+              "message": "`zz-wc-mcp-update-dry-b.md` names no walked document (tried `docs/features/zz-wc-mcp-update-dry-b.md`)",
+              "path": "docs/features/cliffs.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-b.md"
+            },
+            {
+              "code": "link-anchor",
+              "line": 20,
+              "message": "`#zz-wc-mcp-update-dry-anchor`: `docs/features/cliffs.md` has no anchor or section `#zz-wc-mcp-update-dry-anchor`",
+              "path": "docs/features/cliffs.md",
+              "severity": "warning",
+              "subject": "#zz-wc-mcp-update-dry-anchor"
+            },
+            {
+              "code": "link-dangling",
+              "line": 20,
+              "message": "`zz-wc-mcp-update-dry-a.md` names no walked document (tried `docs/features/zz-wc-mcp-update-dry-a.md`)",
+              "path": "docs/features/cliffs.md",
+              "severity": "warning",
+              "subject": "zz-wc-mcp-update-dry-a.md"
+            }
+          ],
+          "diff": null,
+          "distinct_from": [],
+          "drift": null,
+          "evidence": [],
+          "gap_type": null,
+          "gist": null,
+          "id": null,
+          "interpretation": null,
+          "kind": "update",
+          "linked": null,
+          "matters": null,
+          "new_text": null,
+          "notes": [
+            "dry run: nothing stored"
+          ],
+          "options": [],
+          "pair": null,
+          "patch_hash": "b3:5163adeb1a1a666faefee3509a3383a84f507159bca89c8657a62458ef991c03",
+          "preview": null,
+          "price_of_other": null,
+          "project": "parent-ref",
+          "rationale": "Probe NEST-01.",
+          "recommendation": null,
+          "record_id": null,
+          "record_path": null,
+          "record_text": null,
+          "record_title": null,
+          "revisions": null,
+          "severity": null,
+          "similar": null,
+          "staged": null,
+          "staged_at": null,
+          "status": null,
+          "summary": null,
+          "target_id": "cliffs/NEST-01",
+          "target_ids": [
+            "cliffs/NEST-01"
+          ],
+          "target_path": "docs/features/cliffs.md",
+          "task_id": null,
+          "updated_at": null,
+          "why": null,
+          "working_answer": null,
+          "worktree": "<root>"
+        }
+      }
+    }
+  }
+}
