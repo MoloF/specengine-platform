@@ -543,9 +543,10 @@ fn open_items(env: &Env, slug: &str, common_dir: Option<&Path>) -> Result<Items,
 
 // ------------------------------------------------------------------ git
 
-/// What git said of the rows' files.
+/// What git said of the rows' files (`spec library` reads it too: task
+/// spec `doc-library`, "`spec library`").
 #[derive(Default)]
-struct GitRead {
+pub(crate) struct GitRead {
     /// The repository's canonical common dir; `None` when git was not read.
     common_dir: Option<PathBuf>,
     /// By root-relative path.
@@ -566,32 +567,57 @@ impl GitRead {
     /// The notes of what hid a shown row's last change, the files counted
     /// once each.
     fn notes(&self, rows: &[CatalogRow]) -> Vec<String> {
+        self.notes_of("catalog", rows.iter().map(|row| row.path.as_str()))
+    }
+
+    /// The notes of what hid the last change of one of `paths`, each file
+    /// counted once, worded for the read `word` names (`catalog`,
+    /// `library`).
+    pub(crate) fn notes_of<'p>(
+        &self,
+        word: &str,
+        paths: impl IntoIterator<Item = &'p str>,
+    ) -> Vec<String> {
         if let Some(cause) = &self.unread {
-            return vec![one_line(&format!("catalog: last change not read: {cause}"))];
+            return vec![one_line(&format!("{word}: last change not read: {cause}"))];
         }
-        let files = |wanted: Reach| {
-            rows.iter()
-                .filter(|row| self.known.get(&row.path) == Some(&Known::Unreached(wanted)))
-                .map(|row| row.path.as_str())
-                .collect::<BTreeSet<&str>>()
-                .len()
-        };
+        let mut shallow: BTreeSet<&str> = BTreeSet::new();
+        let mut capped: BTreeSet<&str> = BTreeSet::new();
+        for path in paths {
+            match self.known.get(path) {
+                Some(Known::Unreached(Reach::Shallow)) => {
+                    shallow.insert(path);
+                }
+                Some(Known::Unreached(Reach::Cap)) => {
+                    capped.insert(path);
+                }
+                _ => {}
+            }
+        }
         let mut notes = Vec::new();
-        let shallow = files(Reach::Shallow);
-        if shallow > 0 {
+        if !shallow.is_empty() {
             notes.push(format!(
-                "catalog: a shallow clone: {shallow} files its history does not reach read no \
-                 last change"
+                "{word}: a shallow clone: {} files its history does not reach read no last \
+                 change",
+                shallow.len()
             ));
         }
-        let capped = files(Reach::Cap);
-        if capped > 0 {
+        if !capped.is_empty() {
             notes.push(format!(
-                "catalog: {capped} files not reached in the last {LAST_CHANGE_SCAN_MAX} commits \
-                 read no last change"
+                "{word}: {} files not reached in the last {LAST_CHANGE_SCAN_MAX} commits read no \
+                 last change",
+                capped.len()
             ));
         }
         notes
+    }
+
+    /// The last change `path` reads (root-relative), when one is read.
+    pub(crate) fn change(&self, path: &str) -> Option<&LastChange> {
+        match self.known.get(path) {
+            Some(Known::Change(change)) => Some(change),
+            _ => None,
+        }
     }
 }
 
@@ -599,7 +625,7 @@ impl GitRead {
 /// repository and `HEAD` read by `rev-parse`, the paths `cache` holds at
 /// that `HEAD` taken, one walk for the rest, kept there. A failure is the
 /// note's cause and no last change; `HEAD` unborn holds no file.
-fn git_read(
+pub(crate) fn git_read(
     project: &ProjectRoot,
     env: &GitEnv,
     paths: &BTreeSet<String>,

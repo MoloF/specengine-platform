@@ -8,6 +8,7 @@ import {
   type FeedOptions,
   type FlowOptions,
   type GraphOptions,
+  type LibraryOptions,
   type MapOptions,
   type NodeOptions,
   type RoadmapOptions,
@@ -50,6 +51,7 @@ import type {
   Inbox,
   IntakeDocument,
   LockDiffView,
+  LibraryDocument,
   MapDocument,
   NodeView,
   Project,
@@ -77,6 +79,7 @@ import {
   aCheckReport,
   aCardWrite,
   aCatalog,
+  aLibrary,
   aMap,
   aRings,
   aDelivery,
@@ -234,6 +237,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getFeed: vi.fn<(project: string, options: FeedOptions, signal?: AbortSignal) => Promise<FeedDocument>>(() => Promise.resolve(aFeed())),
     // The map (docs/features/corpus-map.md "Acceptance criteria", CM3): no node, the archive asked; a test overriding what it answers.
     getMap: vi.fn<(project: string, options: MapOptions, signal?: AbortSignal) => Promise<MapDocument>>((_project, options) => Promise.resolve(aMap([], [], { archive: options.archive }))),
+    // The library (docs/features/doc-library.md "The UI seam"): no row, the archive asked; a test overriding what it answers.
+    getLibrary: vi.fn<(project: string, options: LibraryOptions, signal?: AbortSignal) => Promise<LibraryDocument>>((_project, options) => Promise.resolve(aLibrary([], { archive: options.archive }))),
     // The lock diff (docs/features/lock-diff.md "Data"): the REF's one holder, no drifted row with a lock entry.
     getLockDiff: vi.fn<(project: string, ref: string, signal?: AbortSignal) => Promise<LockDiffView>>((_project, ref) =>
       Promise.resolve({ ref, reason: null, notes: [], nodes: [{ id: ref, path: "docs/spec/doc-1.md", line: 5, rows: [] }] }),

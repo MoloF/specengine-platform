@@ -114,7 +114,7 @@ describe("useWorkspaceChoice", () => {
 
   it("serves the implicit workspace and no module for a project that configures none", () => {
     const { result } = renderHook(() => useWorkspaceChoice("p", null, anImplicitWorkspaces()));
-    expect(result.current.workspace?.sections).toEqual(["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"]);
+    expect(result.current.workspace?.sections).toEqual(["inbox", "board", "roadmap", "flow", "tree", "documents", "graph", "health", "questions"]);
     expect(result.current.module).toBeNull();
   });
 });

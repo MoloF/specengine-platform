@@ -179,6 +179,13 @@
 //!   with its version, the trace's state, open items, tasks and its file's
 //!   last change on `HEAD`'s first-parent line, computed per read and never
 //!   stored; [`catalog_with_view`] takes the daemon's [`LastChangeCache`];
+//! - [`library()`]: `spec library [--archive]` (task spec `doc-library`),
+//!   every document as a library over the index, updated first, and the
+//!   `[[module]]` tables: core's `library` rows with their tags, modules,
+//!   uses and the decisions whose `canon:` lands on them, joined with each
+//!   file's last change read as `spec catalog` reads it, computed per read
+//!   and never stored; [`library_with_view`] takes the daemon's
+//!   [`LastChangeCache`];
 //! - [`rings()`]: `spec rings` (task spec `scope-rings`), the nodes the
 //!   `[[map.ring]]` tables choose, a tree read per ring, innermost first,
 //!   each node in one ring and filled with the trace's state, computed per
@@ -293,6 +300,7 @@ mod layer_c;
 mod layer_c_reply;
 #[cfg(unix)]
 mod layer_c_run;
+mod library;
 mod links;
 mod location;
 mod lock;
@@ -463,6 +471,10 @@ pub use interpret::{InterpretRequest, propose_interpretation, propose_interpreta
 pub use layer_c::{
     LayerCState, RESOLVE_TIMEOUT_DEFAULT, RESOLVE_TIMEOUT_MAX, RESOLVE_TIMEOUT_MIN, ResolveByState,
     ResolveOutcome, ResolveRequest, ResolvedWorkspace, layer_c_state, resolve,
+};
+pub use library::{
+    LibraryCounts, LibraryDocument, LibraryEntry, LibraryOutcome, LibraryRequest, library,
+    library_with_view,
 };
 pub use links::{LinkUsage, ShownLink, ShownLinks};
 pub use location::{
@@ -777,6 +789,8 @@ pub enum Outcome {
     Delivery(Box<DeliveryOutcome>),
     /// `catalog`: a kinds direction's nodes, their work and last change.
     Catalog(Box<CatalogOutcome>),
+    /// `library`: every document, its facets, decisions and last change.
+    Library(Box<LibraryOutcome>),
     /// `rings`: the scope rings and their sectors' work.
     Rings(Box<RingsOutcome>),
     /// `feed`: the project's events and what needs the owner.
@@ -936,6 +950,8 @@ impl Outcome {
             Self::Delivery(outcome) => return outcome.stderr_lines(),
             // The notes, then the tree's warnings, escaped.
             Self::Catalog(outcome) => return outcome.stderr_lines(),
+            // The notes, then the input's and the tree's warnings, escaped.
+            Self::Library(outcome) => return outcome.stderr_lines(),
             // The notes, then the tree's warnings, escaped.
             Self::Rings(outcome) => return outcome.stderr_lines(),
             // The notes, escaped, as JSON `notes` holds them raw.
@@ -1091,6 +1107,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
         Outcome::Delivery(outcome) => delivery::render_text(outcome),
         Outcome::Catalog(outcome) => catalog::render_text(outcome),
+        Outcome::Library(outcome) => library::render_text(outcome),
         Outcome::Rings(outcome) => rings::render_text(outcome),
         Outcome::Feed(outcome) => feed::render_text(outcome),
         Outcome::Collisions(outcome) => collisions::render_text(outcome),
@@ -1159,6 +1176,7 @@ impl serde::Serialize for Outcome {
             Self::Roadmap(outcome) => outcome.serialize(serializer),
             Self::Delivery(outcome) => outcome.serialize(serializer),
             Self::Catalog(outcome) => outcome.serialize(serializer),
+            Self::Library(outcome) => outcome.serialize(serializer),
             Self::Rings(outcome) => outcome.serialize(serializer),
             Self::Feed(outcome) => outcome.serialize(serializer),
             Self::Collisions(outcome) => outcome.serialize(serializer),

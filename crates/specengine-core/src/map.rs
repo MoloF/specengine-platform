@@ -59,30 +59,55 @@ pub struct MapNaming<'a> {
 /// else its file's path. Two nodes share a name only when one ID is held
 /// more than once outside feature documents, or twice in one.
 pub fn node_names(graph: &SpecGraph<'_>, map: &CorpusMap, naming: &MapNaming<'_>) -> Vec<String> {
-    let mut held: BTreeMap<&str, usize> = BTreeMap::new();
-    for file in 0..graph.paths().len() {
-        for node in graph.nodes(file) {
-            if let Some(id) = node.id.as_deref() {
-                *held.entry(id).or_insert(0) += 1;
+    let names = CanonicalNames::new(graph, *naming);
+    map.nodes.iter().map(|node| names.name(node.at)).collect()
+}
+
+/// [`node_names`]' rule for any node of a graph, mapped or not (task spec
+/// `doc-library`: a generated document, a parent or a decision is named
+/// as the map names a node): the IDs' holders counted once.
+#[derive(Clone)]
+pub struct CanonicalNames<'g, 'a> {
+    graph: &'g SpecGraph<'a>,
+    naming: MapNaming<'g>,
+    /// How many nodes of the graph hold each ID, any file.
+    held: BTreeMap<&'a str, usize>,
+}
+
+impl<'g, 'a> CanonicalNames<'g, 'a> {
+    /// The holders of every ID of `graph`, counted once.
+    pub fn new(graph: &'g SpecGraph<'a>, naming: MapNaming<'g>) -> Self {
+        let mut held: BTreeMap<&'a str, usize> = BTreeMap::new();
+        for file in 0..graph.paths().len() {
+            for node in graph.nodes(file) {
+                if let Some(id) = node.id.as_deref() {
+                    *held.entry(id).or_insert(0) += 1;
+                }
             }
         }
+        Self {
+            graph,
+            naming,
+            held,
+        }
     }
-    map.nodes
-        .iter()
-        .map(|node| {
-            let path = graph.paths()[node.at.file];
-            let Some(id) = graph.node(node.at).and_then(|found| found.id.as_deref()) else {
-                return path.to_owned();
-            };
-            let shared = held.get(id).is_some_and(|&holders| holders > 1);
-            match feature_stem(naming.features, path) {
-                Some(slug) if shared || feature_scoped(naming.scheme, id) => {
-                    format!("{slug}/{id}")
-                }
-                _ => id.to_owned(),
+
+    /// `at`'s canonical reference: `slug/ID` in a feature document for a
+    /// feature-scoped or repeated ID, else its ID, else its file's path; a
+    /// node `at` names none of is named by its file's path, else `""`.
+    pub fn name(&self, at: NodeAt) -> String {
+        let path = self.graph.paths().get(at.file).copied().unwrap_or_default();
+        let Some(id) = self.graph.node(at).and_then(|found| found.id.as_deref()) else {
+            return path.to_owned();
+        };
+        let shared = self.held.get(id).is_some_and(|&holders| holders > 1);
+        match feature_stem(self.naming.features, path) {
+            Some(slug) if shared || feature_scoped(self.naming.scheme, id) => {
+                format!("{slug}/{id}")
             }
-        })
-        .collect()
+            _ => id.to_owned(),
+        }
+    }
 }
 
 /// One node of the map (task spec `corpus-map` CM1).

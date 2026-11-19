@@ -705,7 +705,11 @@ describe("source policy", () => {
     const appCode = (path: string) =>
       path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
     const quoted = new RegExp(`["'\`](${types.join("|")})["'\`]`);
-    expect(offending(quoted, appCode)).toEqual([]);
+    // The one class word Documents starts at (docs/features/doc-library.md "Description and interactions", A3): the
+    // convention's class `canon`, which a link type shares, compared with a row's class alone.
+    const startClass = /^\/src\/documents\/library\.ts:\d+: const START_CLASS = "canon";$/;
+    expect(offending(quoted, appCode).filter((line) => startClass.test(line))).toHaveLength(1);
+    expect(offending(quoted, appCode).filter((line) => !startClass.test(line))).toEqual([]);
     // The detector itself: the slice's mutation M5 is caught.
     expect(quoted.test('const walked = edge.type === "follows";')).toBe(true);
   });
@@ -1012,6 +1016,29 @@ describe("source policy", () => {
     expect(spelled.test('const none = "in work";')).toBe(true);
     for (const line of ["<Badge look={rollupLook(row.state, t)} />", "const state = row.state;"]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  // DL18 of docs/features/doc-library.md "Acceptance criteria" and its "Rules and edge cases": Documents
+  // branches on no class, kind, status, tag, owner or scope word, and reads a decision's served group
+  // through src/documents/library.ts's one table alone. No module of src/documents/ compares one of
+  // those fields with a quoted word, and none but library.ts compares or looks up a `group`.
+  // M: `row.status === "accepted"` in DocumentsView.tsx.
+  it("branches on no served word in Documents, and reads a decision's group in src/documents/library.ts alone (DL18 of doc-library)", () => {
+    const documents = (path: string) => !path.startsWith("/src/documents/") || isTestPath(path);
+    expect(Object.keys(sources).filter((path) => !documents(path))).toEqual(["/src/documents/DocumentsView.tsx", "/src/documents/library.ts"]);
+    const field = "\\.(class|kind|status|tags|owner|scope|tier)\\b";
+    const quotedWord = new RegExp([`${field}\\s*[!=]==?\\s*["'\`]`, `["'\`]\\s*[!=]==?\\s*[\\w.?]*${field}`, `${field}\\.(includes|indexOf|startsWith|endsWith)\\(\\s*["'\`]`].join("|"));
+    expect(offending(quotedWord, documents)).toEqual([]);
+    const group = "\\.group\\b";
+    const groupRead = new RegExp([`${group}\\s*[!=]==?`, `[!=]==?\\s*[\\w.?]*${group}`, `switch\\s*\\([^)]*${group}`, `\\[\\s*[\\w?.]*${group}\\s*\\]`].join("|"));
+    expect(offending(groupRead, (path) => documents(path) || path === "/src/documents/library.ts")).toEqual([]);
+    // The detector itself.
+    for (const line of ['if (row.status === "accepted") {', 'const canon = "canon" === row.class;', 'row.tags.includes("tides")', "if (decision.group === known) {", "const look = LOOKS[decision.group];"]) {
+      expect([line, quotedWord.test(line) || groupRead.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["<Written value={row.kind} />", "const chosen = filters.chosen[facet];", "groupLabel(group, t)"]) {
+      expect([line, quotedWord.test(line) || groupRead.test(line)]).toEqual([line, false]);
     }
   });
 

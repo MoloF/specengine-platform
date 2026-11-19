@@ -8,6 +8,7 @@ import homeSource from "../overview/HomeView.tsx?raw";
 import roundItemSource from "../round/RoundItemCard.tsx?raw";
 import deliverySource from "../roadmap/RoadmapDelivery.tsx?raw";
 import roadmapSource from "../roadmap/RoadmapView.tsx?raw";
+import nodePaneSource from "../tree/NodePane.tsx?raw";
 import treeSource from "../tree/TreeView.tsx?raw";
 import shellSource from "./Shell.tsx?raw";
 
@@ -23,6 +24,8 @@ describe("the lazy views", () => {
   it.each([
     ["../roadmap/RoadmapView", "RoadmapView"],
     ["../graph/GraphView", "GraphView"],
+    // DL19 of docs/features/doc-library.md: Documents, a chunk of its own; M: a static import of DocumentsView.
+    ["../documents/DocumentsView", "DocumentsView"],
   ])("reaches %s by lazy(() => import(...)) only, never by a value import", (path, name) => {
     const fromIt = importLines(shellSource).filter((line) => line.endsWith(`"${path}";`));
     // Any static import of the module is a type import alone.
@@ -36,6 +39,9 @@ describe("the lazy views", () => {
   it("stands each lazy view in a Suspense whose fallback is its skeleton", () => {
     expect(shellSource).toMatch(/<Suspense key=\{route\.project\} fallback=\{<Skeleton label=\{t\("app\.lazy\.roadmap"\)\}/);
     expect(shellSource).toMatch(/<Suspense key=\{route\.project\} fallback=\{<Skeleton label=\{t\("app\.lazy\.graph"\)\}/);
+    expect(shellSource).toMatch(/<Suspense key=\{route\.project\} fallback=\{<Skeleton label=\{t\("app\.lazy\.documents"\)\}/);
+    // Nothing else reaches the view's modules: the library's facets ride in its chunk.
+    expect(importLines(shellSource).filter((line) => line.includes("/documents/") && !line.startsWith("import type "))).toEqual([]);
   });
 });
 
@@ -199,5 +205,20 @@ describe("the Graph home's lazy Map view (CM11 of corpus-map)", () => {
   it("stands the view in a Suspense whose fallback is its skeleton, the Map first", () => {
     expect(graphHomeSource).toMatch(/<Suspense fallback=\{<Skeleton label=\{t\("map\.loading"\)\} lines=\{6\} \/>\}>\s*<MapView project=\{project\} \/>/);
     expect(graphHomeSource).toContain('const VIEWS: readonly GraphHomeView[] = ["map", "rings"];');
+  });
+});
+
+// docs/canon/ui-languages.md "Size": Documents' chrome joins first load (docs/features/doc-library.md
+// "Description and interactions"), so the Spec tree's Bindings tab, its lock diffs and drift lines, leaves it: a chunk of
+// its own, reached from NodePane by a dynamic import alone, standing in a Suspense whose fallback is
+// the tab's own skeleton. M: a static import of BindingsPanel.
+describe("the Spec tree's lazy Bindings tab (doc-library's first-load move)", () => {
+  it("NodePane reaches ./BindingsPanel by lazy(() => import(...)) only, never by a value import", () => {
+    const fromIt = importLines(nodePaneSource).filter((line) => line.endsWith('"./BindingsPanel";'));
+    for (const line of fromIt) {
+      expect(line.startsWith("import type ")).toBe(true);
+    }
+    expect(nodePaneSource).toContain('const BindingsPanel = lazy(() => import("./BindingsPanel").then((module) => ({ default: module.BindingsPanel })));');
+    expect(nodePaneSource).toMatch(/<Suspense fallback=\{<Skeleton label=\{t\("tree\.bindings\.loading", \{ ref: nodeRef \}\)\} lines=\{4\} \/>\}>\s*<BindingsPanel project=\{project\} nodeRef=\{nodeRef\} onFollow=\{onFollow\} \/>/);
   });
 });

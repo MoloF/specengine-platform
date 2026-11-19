@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, scripts, fixtures]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-19
 ---
 
 # Presets: `spec init` and the packs it installs
@@ -64,11 +64,11 @@ Each is a header comment, `[[card.flow]]` tables, `[[workspace]]` tables, then c
 
 | Workspace | Sections | Landing | Flows |
 |---|---|---|---|
-| `writing` | flow, tree, board, questions, inbox | flow | narrative |
-| `development` | board, inbox, tree, flow, graph, health, roadmap, questions | board | development |
-| `art` "Art and levels" | board, flow, tree, questions, inbox | board | art, level-design |
-| `sound` | board, flow, tree, questions, inbox | board | sound |
-| `production` | inbox, roadmap, board, flow, tree, graph, health, questions | overview | all |
+| `writing` | flow, tree, documents, board, questions, inbox | flow | narrative |
+| `development` | board, inbox, tree, documents, flow, graph, health, roadmap, questions | board | development |
+| `art` "Art and levels" | board, flow, tree, documents, questions, inbox | board | art, level-design |
+| `sound` | board, flow, tree, documents, questions, inbox | board | sound |
+| `production` | inbox, roadmap, board, flow, tree, documents, graph, health, questions | overview | all |
 
 **`software.toml`**, a software product team's departments, 4 231 bytes. Five flows, the return column `reopened` "Reopened", unlike gamedev's so no reader leans on one word; names that are code literals (`docs`, `review`, `layout`) unused:
 
@@ -82,11 +82,11 @@ Each is a header comment, `[[card.flow]]` tables, `[[workspace]]` tables, then c
 
 | Workspace | Sections | Landing | Flows |
 |---|---|---|---|
-| `product` | roadmap, board, tree, flow, questions, inbox | roadmap | product |
-| `experience` "UX design" | board, flow, tree, questions, inbox | board | experience |
-| `engineering` "Engineering and quality" | board, inbox, tree, flow, graph, health, roadmap, questions | board | engineering, quality |
-| `documentation` | board, tree, flow, questions, inbox | board | documentation |
-| `leadership` | inbox, roadmap, board, flow, tree, graph, health, questions | overview | all |
+| `product` | roadmap, board, tree, documents, flow, questions, inbox | roadmap | product |
+| `experience` "UX design" | board, flow, tree, documents, questions, inbox | board | experience |
+| `engineering` "Engineering and quality" | board, inbox, tree, documents, flow, graph, health, roadmap, questions | board | engineering, quality |
+| `documentation` | board, tree, documents, flow, questions, inbox | board | documentation |
+| `leadership` | inbox, roadmap, board, flow, tree, documents, graph, health, questions | overview | all |
 
 After them, a commented direction `stories` (`kinds = ["story"]`) and a commented `[[card.split]]` row, `epic`, all five disciplines.
 

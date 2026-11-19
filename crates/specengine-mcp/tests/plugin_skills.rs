@@ -1293,8 +1293,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // `get_node`'s links `usage`); 0.46.1 since the patch of RM-0114 to
     // RM-0119 (a version-only bump); 0.47.0 since auto-mode (RM-0120 to
     // RM-0124, the runner `scripts/autopilot.sh`); 0.47.1 since the patch of
-    // RM-0125 (write-cost, a version-only bump).
-    assert_eq!(manifest["version"], "0.47.1");
+    // RM-0125 (write-cost, a version-only bump); 0.47.2 since the patch of
+    // RM-0127 (doc-library, a version-only bump).
+    assert_eq!(manifest["version"], "0.47.2");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1415,8 +1416,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // `get_node`'s links `usage`); 0.46.1 since the patch of RM-0114 to
     // RM-0119 (a version-only bump); 0.47.0 since auto-mode (RM-0120 to
     // RM-0124, the runner `scripts/autopilot.sh`); 0.47.1 since the patch of
-    // RM-0125 (write-cost, a version-only bump).
-    assert_eq!(manifest["version"], "0.47.1");
+    // RM-0125 (write-cost, a version-only bump); 0.47.2 since the patch of
+    // RM-0127 (doc-library, a version-only bump).
+    assert_eq!(manifest["version"], "0.47.2");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1521,7 +1523,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.47.1",
+        manifest["version"], "0.47.2",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1541,7 +1543,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          collision-pairs (the review document's `pair`): 0.45.0; usage-orphans (`get_node`'s \
          links `usage`): 0.46.0; the patch of RM-0114 to RM-0119 (no key): 0.46.1; \
          auto-mode (the runner `scripts/autopilot.sh`, no key): 0.47.0; the patch of RM-0125 \
-         (write-cost, no key): 0.47.1"
+         (write-cost, no key): 0.47.1; the patch of RM-0127 (doc-library, no key): 0.47.2"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2697,8 +2699,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // four keys); 0.44.0 since collision-pass (RM-0060); 0.45.0 since
     // collision-pairs (RM-0088, PP7); 0.46.0 since usage-orphans (RM-0111,
     // UO6); 0.46.1 since the patch of RM-0114 to RM-0119; 0.47.0 since
-    // auto-mode (RM-0120 to RM-0124); 0.47.1 since the patch of RM-0125.
-    assert_eq!(manifest["version"], "0.47.1");
+    // auto-mode (RM-0120 to RM-0124); 0.47.1 since the patch of RM-0125;
+    // 0.47.2 since the patch of RM-0127.
+    assert_eq!(manifest["version"], "0.47.2");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s

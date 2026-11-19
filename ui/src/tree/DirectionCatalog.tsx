@@ -31,6 +31,7 @@ import {
   type CatalogSort,
 } from "./catalog";
 import { placeKey, rowName } from "./rows";
+import { UsedCell } from "./UsedCell";
 
 // A kinds direction as a table of its nodes, in the Spec tree's node column while no node is open
 // (docs/features/direction-catalog.md "Acceptance criteria", DC-6, DC-10), a chunk of its own: the
@@ -81,39 +82,6 @@ function LastChange({ change }: { change: CatalogChange | null }) {
         <>
           {" "}
           <span className="catalog-of-file">{t("tree.catalog.ofFile")}</span>
-        </>
-      )}
-    </>
-  );
-}
-
-/**
- * What uses a row, as served: the count; its mentions, beside a 0 at full weight ("0 · 6 mentions",
- * so a record cited only through mentions never reads as unused), else small after a "+"; then a
- * neutral Orphan badge where the core flags one.
- */
-function UsedCell({ row }: { row: CatalogRow }) {
-  const t = useTranslate();
-  const mentions = t("tree.catalog.mentions", { count: row.mentioned_by });
-  return (
-    <>
-      {row.used_by}
-      {row.mentioned_by > 0 &&
-        (row.used_by === 0 ? (
-          <>
-            {" · "}
-            <span className="catalog-used-cited">{mentions}</span>
-          </>
-        ) : (
-          <>
-            {" "}
-            <span className="catalog-used-mentions">+ {mentions}</span>
-          </>
-        ))}
-      {row.orphan === true && (
-        <>
-          {" "}
-          <Badge look={{ label: t("tree.catalog.orphan"), tone: "usage-orphan", icon: "linkDangling" }} />
         </>
       )}
     </>

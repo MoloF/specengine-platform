@@ -69,23 +69,26 @@ use workspaces_common::{
     press_config, press_with_logins, variants, with_logins, without_tables,
 };
 
-/// The nine section IDs of "Data", in `sections.ts`'s order.
-const NINE: [&str; 9] = [
+/// The section IDs of "Data", in `sections.ts`'s order: nine, ten since
+/// docs/features/doc-library.md (DL17, `documents` right after `tree`).
+const TEN: [&str; 10] = [
     "inbox",
     "tasks",
     "board",
     "roadmap",
     "flow",
     "tree",
+    "documents",
     "graph",
     "health",
     "questions",
 ];
 
-/// The implicit workspace as a row of [`row`].
+/// The implicit workspace as a row of [`row`] (docs/features/doc-library.md
+/// DL17: `documents` after `tree`).
 const IMPLICIT_ROW: &str = "all | All sections | landing overview | sections inbox, board, \
-                            roadmap, flow, tree, graph, health, questions | flows (all) | module \
-                            (none)";
+                            roadmap, flow, tree, documents, graph, health, questions | flows \
+                            (all) | module (none)";
 
 /// The suffix of a malformed `[[workspace]]` note.
 const IMPLICIT_SERVED: &str = "; the implicit workspace is served";
@@ -93,7 +96,9 @@ const IMPLICIT_SERVED: &str = "; the implicit workspace is served";
 const NO_MODULE_SERVED: &str = "; no module is served";
 
 /// The spec's list of section IDs inside the unknown-section note.
-const SECTION_LIST: &str = "(inbox, tasks, board, roadmap, flow, tree, graph, health, questions)";
+/// Ten names since docs/features/doc-library.md (DL17).
+const SECTION_LIST: &str =
+    "(inbox, tasks, board, roadmap, flow, tree, documents, graph, health, questions)";
 
 /// A project with no table, so the tests below add their own.
 const PROJECT: &str = "[project]\nslug = \"press\"\n";
@@ -182,7 +187,17 @@ fn assert_implicit(config: &WorkspaceConfig, context: &str) {
 /// `tasks`. M1: `tasks` kept in `IMPLICIT_SECTIONS`.
 #[test]
 fn ws1_the_constants_are_the_spec_s() {
-    assert_eq!(SECTIONS, NINE);
+    assert_eq!(SECTIONS, TEN);
+    // docs/features/doc-library.md DL17: ten and nine, `documents` after
+    // `tree` in both. M: `IMPLICIT_SECTIONS` without `documents`.
+    assert_eq!((SECTIONS.len(), IMPLICIT_SECTIONS.len()), (10, 9));
+    fn after_tree(list: &[&'static str]) -> Option<Option<&'static str>> {
+        list.iter()
+            .position(|section| *section == "tree")
+            .map(|at| list.get(at + 1).copied())
+    }
+    assert_eq!(after_tree(&SECTIONS), Some(Some("documents")));
+    assert_eq!(after_tree(&IMPLICIT_SECTIONS), Some(Some("documents")));
     let without_tasks: Vec<&str> = SECTIONS
         .iter()
         .copied()
@@ -287,8 +302,8 @@ fn every_absent_key_takes_its_default() {
     assert_eq!(
         rows(&config),
         [
-            "desk | desk | landing overview | sections inbox, board, roadmap, flow, tree, graph, \
-          health, questions | flows (all) | module (none)"
+            "desk | desk | landing overview | sections inbox, board, roadmap, flow, tree, documents, \
+          graph, health, questions | flows (all) | module (none)"
         ]
     );
     assert_eq!(module_rows(&config), ["front | front | SHT-FRONT"]);
@@ -355,6 +370,61 @@ fn ws4a_an_unknown_section_is_left_out_with_its_note() {
         config.notes[0].message,
         format!("workspace `newsroom`: `stage` is no section {SECTION_LIST}: left out")
     );
+}
+
+/// docs/features/doc-library.md DL17: `sections = ["documents"]` serves
+/// the section with no note, and a workspace may land on it; the
+/// unknown-section note lists the ten names.
+#[test]
+fn dl17_documents_is_a_section() {
+    let text = format!(
+        "{PROJECT}\n[[workspace]]\nname = \"shelf\"\nsections = [\"documents\"]\nlanding = \
+         \"documents\"\n\n[[workspace]]\nname = \"desk\"\nsections = [\"tree\", \"atlas\", \
+         \"documents\"]\n"
+    );
+    let config = read(&text);
+    assert_eq!(config.source, WorkspaceSource::Config);
+    assert_eq!(config.workspaces[0].sections, ["documents"]);
+    assert_eq!(config.workspaces[0].landing, "documents");
+    assert_eq!(config.workspaces[1].sections, ["tree", "documents"]);
+    let line = line_holding(&text, "\"atlas\"");
+    assert_eq!(
+        config.notes_at(CONFIG),
+        [note(
+            line,
+            &format!("workspace `desk`: `atlas` is no section {SECTION_LIST}: left out")
+        )]
+    );
+    assert_eq!(SECTION_LIST.matches(", ").count() + 1, 10, "ten names");
+}
+
+/// docs/features/doc-library.md DL17, "Sections and presets": in both
+/// presets each department lists `documents` right after `tree`, with no
+/// note.
+#[test]
+fn dl17_each_preset_department_lists_documents_after_tree() {
+    for name in ["gamedev", "software"] {
+        let path = repository_root().join(format!("scripts/presets/{name}.toml"));
+        let text =
+            fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        let config = read(&format!("{PROJECT}\n{text}"));
+        assert!(config.notes.is_empty(), "{name}: {:?}", config.notes);
+        assert_eq!(config.workspaces.len(), 5, "{name}");
+        for workspace in &config.workspaces {
+            let tree = workspace
+                .sections
+                .iter()
+                .position(|section| section == "tree")
+                .unwrap_or_else(|| panic!("{name}/{}: no tree", workspace.name));
+            assert_eq!(
+                workspace.sections.get(tree + 1).map(String::as_str),
+                Some("documents"),
+                "{name}/{}: {:?}",
+                workspace.name,
+                workspace.sections
+            );
+        }
+    }
 }
 
 /// "Notes, exactly": a section listed twice keeps its first place; a
@@ -1175,17 +1245,19 @@ fn preset() -> String {
 /// The workspaces of "The gamedev preset", as [`row`]s: four, five since
 /// docs/features/department-split.md (S9: `sound` after `art`, before
 /// `production`).
+/// docs/features/doc-library.md DL17: each lists `documents` right after
+/// `tree`.
 const PRESET_ROWS: [&str; 5] = [
-    "writing | Writing | landing flow | sections flow, tree, board, questions, inbox | flows \
-     narrative | module (none)",
-    "development | Development | landing board | sections board, inbox, tree, flow, graph, \
-     health, roadmap, questions | flows development | module (none)",
-    "art | Art and levels | landing board | sections board, flow, tree, questions, inbox | flows \
-     art, level-design | module (none)",
-    "sound | Sound | landing board | sections board, flow, tree, questions, inbox | flows sound | \
-     module (none)",
+    "writing | Writing | landing flow | sections flow, tree, documents, board, questions, inbox \
+     | flows narrative | module (none)",
+    "development | Development | landing board | sections board, inbox, tree, documents, flow, \
+     graph, health, roadmap, questions | flows development | module (none)",
+    "art | Art and levels | landing board | sections board, flow, tree, documents, questions, \
+     inbox | flows art, level-design | module (none)",
+    "sound | Sound | landing board | sections board, flow, tree, documents, questions, inbox | \
+     flows sound | module (none)",
     "production | Production | landing overview | sections inbox, roadmap, board, flow, tree, \
-     graph, health, questions | flows (all) | module (none)",
+     documents, graph, health, questions | flows (all) | module (none)",
 ];
 
 /// The five flows of "The gamedev preset": name, disciplines, `(id, title)`

@@ -521,6 +521,64 @@ Owed, his:
 1. the hub upgraded to 0.47.1. From 0.46.x or 0.47.0 the image alone is enough, a dump first;
 2. WC16, read with `SPECENGINE_SLOW_MS=0` for the session, then removed.
 
+#### Owner's word, 2026-11-19: documents, department practices, a guide
+
+**His words**, four chat messages in Russian; this is a translation:
+1. "I want to see up-to-date documentation of the project: for example, how this or that feature works. It looks like ADRs with decisions, but ADRs can override each other's decisions, whereas this is always a fresh summary of this or that mechanic. Maybe that is the /graph page, but it must also be shown as documents, not just a ring, with classifications, tags and so on."
+2. "I need common documents per department: a documentation corner that each department fills and that is served over MCP — common practices, decisions taken. E.g. to generate a 3D model a list of agreed rules must be kept; for development, take these and these points into account; for production, back your arguments with certain things. Just documents, formatted as documents, holding instructions or conditions to keep or to reckon with. E.g. for 3D models: decide the degree of realism, and account for normal maps, the level of detail, limits and optimisations. Development and review will refer to these; if a developer does not keep something, there is a direct, current link to the documentation on that point."
+3. "Instructions on using SpecEngine itself are a must — for example, a description of how this or that feature works and what it solves, so that when it is implemented in some project there is a full knowledge base and an effective distribution during development that one can refer to and keep, instead of keeping in one's head what should go where."
+4. "Yes, the language is English; the canon is for the project as such, and the interface is a presentation and does not belong to the project itself."
+5. Later that day, confirming the analyst's reading of word 4: "The analyst understood it right: English is the main language for this project, its documentation and so on; in another project the implementation, tasks and so on may be in any language."
+
+**Language, decided by the owner** (words 4 and 5):
+- SpecEngine's own repository is in English: its canon, the guide and the preset example practices. ADR-0024 is unchanged.
+- A consumer project's canon, tags, practices, cards and code may be in any language, and are shown as written (`architecture.md#ui`).
+- Only the UI chrome has its Russian catalog (ADR-0072).
+
+**The analysis** (the analyst's, 2026-11-19). One requirement in three shelves: the project's own canon (wish 1), each department's practices (wish 2), SpecEngine's own guide (wish 3). Wish 1 is a discovery gap, not a data gap: a fresh summary of a mechanic is already a `class: canon` document with `rev`, `reviewed`, `owner` and `parent`, and a decision points at it with `canon:`. What he cannot do is browse those as documents:
+- the Tree's direction catalog shows one kinds direction at a time;
+- Graph's Map List shows names and links, not front-matter;
+- the document modal lists decisions as raw `canon` In rows, accepted and superseded mixed;
+- there is no `tags` key.
+
+He asked for this before ("Owner's vision, 2026-11-11": "Full documentation, with proofs", "A game-development catalog"). Wish 2 is new: nothing ties a document to a discipline, so no card or task receives its department's rules. Wish 3: no user guide exists, and the root `README.md`'s Status is stale.
+
+**Working answers**, the analyst's, adopted by the orchestrator; each is his to revise:
+
+| Q | Working answer | Cost of the other |
+|---|---|---|
+| tags | a free typed `tags:` list in front-matter, capped, stored in the index, never in `norm_hash`, changed only by a proposal | a configured vocabulary: a new config table, which older binaries refuse |
+| who confirms a practice | anyone proposes; a department's lead confirms inside its `[zones]`; the owner anywhere | a new entitlement |
+| `[auto]` and practices | not applied: the presets and the guide put the practices' zone in `exclude_zones` | an agent changing its own standing instructions overnight |
+| a `T-` task no card lists | gets no practices | a discipline guessed for it |
+| the guide | a read-only shelf served from the build, never inside the project's corpus | a `spec init` copy: frozen at an old version, written outside `apply_proposal` (ADR-0004), in the project's check, map and ID space |
+| order | 1, then 2, then 3 | - |
+
+**Fixed now**, three plan items in the pool; the release is his to name:
+
+| # | Slice | Item | Fixed now |
+|---|---|---|---|
+| 1 | `doc-library` (`docs/features/doc-library.md`) | RM-0127 | must, first; no ADR; `tags:`, `spec library` and its route, the Documents section; `INDEX_FORMAT` 18; no MCP tool; **shipped 2026-11-19** (`docs/canon/spec-library.md`), plugin 0.47.2 |
+| 2 | `department-practices` | RM-0128 | must, after 1; a new ADR: a document naming disciplines becomes standing context for their cards and tasks, gating nothing; `get_card` and `get_task` change, so the plugin version does; unspecified |
+| 3 | `specengine-guide` | RM-0129 | must, after 1; a new ADR: the guide ships in the build and is served read-only beside a project's corpus, never in it; a hub tool, so `HUB_TOOLS` and the plugin version change; unspecified |
+
+**Ten people at once** (his word of 2026-11-15) binds slice 1:
+- its read is trusted on a hub (`run_read`) and shows no trace data, so it never walks the tree there;
+- it adds no cache: it uses the bounded `LastChangeCache`;
+- its turn hold is barred, and an `#[ignore]`d soak judges the daemon's memory over repeated library reads by a Theil-Sen slope, two runs of at least 5 minutes (`doc-library.md` DL14).
+
+Like every route today, the read still holds the project's turn. Reads outside the turn stay the planned concurrent-trusted-reads ADR.
+
+**Slice 1 shipped 2026-11-19**, after three iterations; the deviations are in the spec's "Implementation".
+- No ADR, MCP tool or plugin file change. `INDEX_FORMAT` goes to 18, so `spec`, the plugin's server and a hub's image come from one commit. It goes out as plugin 0.47.2, a version-only bump (`docs/canon/plugin-files.md` "Changing it"), the next tag `v0.47.2`; from 0.46.x or 0.47.x a hub takes the image alone, a dump first (`docs/canon/hub-ops.md` "Upgrade"), and re-indexes by the stamp.
+- Measured at 10k nodes (1 631 documents): the hub's warm read takes 71 ms in the turn, 322 ms after a commit.
+- Under 10 readers, 8 MCP writers and the Inbox, every page answered within 2.1 s.
+- The soak, DL14, ran two runs of 300 s: slopes 0.0 and 0.062 MiB/min against 0.5.
+- The UI's first load is 829 030 B, with the Spec tree's Bindings tab made lazy.
+- Open for him: `behind: null` looks the same as `false`.
+
+**His word, 2026-11-20**: "do all the remaining parts and publish each intermediate result to the hub yourself". It authorises the main session to commit, tag, push and upgrade the hub for RM-0127 to RM-0129, each slice's release on its own; RM-0127 goes first, as 0.47.2.
+
 ## 3. Product acceptance criteria
 
 | # | Criterion | How it is checked |

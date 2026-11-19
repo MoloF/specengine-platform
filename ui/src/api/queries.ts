@@ -117,6 +117,8 @@ export const queryKeys = {
   rings: (project: string) => ["rings", project] as const,
   /** The whole corpus as one graph, `spec map [--archive] --json` (`docs/features/corpus-map.md` "Acceptance criteria", CM8): each archive its own entry. */
   map: (project: string, archive: boolean) => ["map", project, archive] as const,
+  /** Every document as a library, `spec library [--archive] --json` (`docs/features/doc-library.md` "The UI seam"): each archive its own entry. */
+  library: (project: string, archive: boolean) => ["library", project, archive] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
   /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does; `parent` is never asked here. */
@@ -430,9 +432,10 @@ function eventId(payload: unknown): string | null {
  * table lists the tree's nodes with their versions, states and last changes;
  * `docs/features/scope-rings.md` "Acceptance criteria", SR7: the rings list the tree's nodes with
  * their states; `docs/features/corpus-map.md` "Acceptance criteria", CM8: the map draws every node
- * and link of the spec).
+ * and link of the spec; `docs/features/doc-library.md` "The UI seam": the library lists every
+ * document with its front-matter, decisions and last changes).
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards", "catalog", "rings", "map"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards", "catalog", "rings", "map", "library"] as const;
 
 /** The spec reads that walk the whole corpus, kept when in flight and never followed by a second walk (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
@@ -1318,6 +1321,18 @@ export function useRings(project: string) {
 export function useMap(project: string, archive: boolean) {
   const client = useClient();
   return useQuery({ queryKey: queryKeys.map(project, archive), queryFn: ({ signal }) => client.getMap(project, { archive }, signal), placeholderData: keepPreviousData });
+}
+
+/**
+ * Every document as a library (docs/features/doc-library.md "The UI seam"): `spec library
+ * [--archive] --json`, its query's AbortSignal taken, the last answer kept while Include archive
+ * reads again. Read while Documents is on screen; read again on an apply and a gap (useLiveQueue), a
+ * read of the spec: it serves no queue or card data. Never on window focus. The rows, uses,
+ * decisions and marks are the daemon's: nothing here counts or judges them.
+ */
+export function useLibrary(project: string, archive: boolean) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.library(project, archive), queryFn: ({ signal }) => client.getLibrary(project, { archive }, signal), placeholderData: keepPreviousData });
 }
 
 /**

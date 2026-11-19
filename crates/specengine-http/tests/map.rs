@@ -163,7 +163,7 @@ fn cm3_the_map_query() {
         assert!(
             reply
                 .error_message()
-                .contains(", delivery, catalog, map, rings, workspaces}"),
+                .contains(", delivery, catalog, map, rings, library, workspaces}"),
             "{path}: {}",
             reply.error_message()
         );

@@ -94,6 +94,11 @@ import type {
   IntakeMatch,
   Interpretation,
   LeadDays,
+  LibraryChange,
+  LibraryCounts,
+  LibraryDecision,
+  LibraryDocument,
+  LibraryRow,
   LinkUsage,
   LockDiffCodeSide,
   LockDiffNode,
@@ -278,7 +283,9 @@ import type {
 // key the file already names fails. While that file is absent the comparison is skipped, saying
 // so; once it exists it names all one hundred and fifty-one written so far, in the slices' order,
 // one hundred and fifty-four once scope-rings' Rust test writes its three, and one hundred and
-// sixty once corpus-map's writes its six.
+// sixty once corpus-map's writes its six; and doc-library's five (docs/features/doc-library.md
+// "The route", DL2: the library document, its counts, a row, a decision and a last change, sets 170
+// to 174), written by its Rust test, a hundred and seventy-four in all.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -1227,6 +1234,48 @@ const KEYS = {
   FeedUnlanded: { task: true, status: true, pack: true } satisfies Record<keyof FeedUnlanded, true>,
   // hub-auto's mark on a rule's apply, set 169 (docs/features/hub-auto.md "Acceptance criteria", HA7).
   Delegated: { by: true, rule: true, commit: true } satisfies Record<keyof Delegated, true>,
+  // docs/features/doc-library.md "The route" (DL2): the library document, its counts, a row, a
+  // decision and a last change, sets 170 to 174 in "`spec library`"'s order, the fixture's names;
+  // `Library` is the document's type.
+  Library: { archive: true, notes: true, counts: true, rows: true, truncated: true, omitted: true } satisfies Record<keyof LibraryDocument, true>,
+  LibraryCounts: { documents: true, archived: true, decisions: true, behind: true, orphans: true } satisfies Record<keyof LibraryCounts, true>,
+  LibraryRow: {
+    name: true,
+    id: true,
+    path: true,
+    title: true,
+    class: true,
+    kind: true,
+    status: true,
+    archived: true,
+    tier: true,
+    owner: true,
+    reviewed: true,
+    scope: true,
+    tags: true,
+    rev: true,
+    parent: true,
+    modules: true,
+    used_by: true,
+    mentioned_by: true,
+    orphan: true,
+    last_change: true,
+    decisions: true,
+    behind: true,
+  } satisfies Record<keyof LibraryRow, true>,
+  LibraryDecision: {
+    name: true,
+    id: true,
+    title: true,
+    path: true,
+    status: true,
+    group: true,
+    date: true,
+    section: true,
+    last_change: true,
+    newer: true,
+  } satisfies Record<keyof LibraryDecision, true>,
+  LibraryChange: { at: true, by: true, by_name: true, commit: true, proposal: true } satisfies Record<keyof LibraryChange, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1417,6 +1466,11 @@ const CITED: Record<Named, string> = {
   FeedGateObserved: "seq, at, path, zone, branch",
   FeedUnlanded: "task, status, pack",
   Delegated: "by, rule, commit",
+  Library: "archive, notes, counts, rows, truncated, omitted",
+  LibraryCounts: "documents, archived, decisions, behind, orphans",
+  LibraryRow: "name, id, path, title, class, kind, status, archived, tier, owner, reviewed, scope, tags, rev, parent, modules, used_by, mentioned_by, orphan, last_change, decisions, behind",
+  LibraryDecision: "name, id, title, path, status, group, date, section, last_change, newer",
+  LibraryChange: "at, by, by_name, commit, proposal",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1784,7 +1838,7 @@ const CORPUS_MAP_KEYS: readonly (readonly [Named, string])[] = [
 ];
 
 /** The types each set names in `provisional.ts`, where the fixture's name is not the type's own. */
-const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument", Rings: "RingsDocument", Feed: "FeedDocument" };
+const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument", Rings: "RingsDocument", Feed: "FeedDocument", Library: "LibraryDocument" };
 
 /** The hundred and sixty types the fixture names before auto-feed, corpus-map's six among them. */
 const BEFORE_AUTO_FEED: readonly Named[] = [...BEFORE_CORPUS_MAP, ...CORPUS_MAP];
@@ -1795,8 +1849,14 @@ const AUTO_FEED: readonly Named[] = ["Feed", "FeedEntry", "FeedNeedsMe", "FeedHe
 /** hub-auto's one, set 169: a delegated apply's mark (docs/features/hub-auto.md "Acceptance criteria", HA7). */
 const HUB_AUTO: readonly Named[] = ["Delegated"];
 
+/** The hundred and sixty-nine types the fixture names before doc-library, hub-auto's last. */
+const BEFORE_DOC_LIBRARY: readonly Named[] = [...BEFORE_AUTO_FEED, ...AUTO_FEED, ...HUB_AUTO];
+
+/** doc-library's five, sets 170 to 174: the library document, its counts, a row, a decision, a last change (docs/features/doc-library.md "The route", DL2). */
+const DOC_LIBRARY: readonly Named[] = ["Library", "LibraryCounts", "LibraryRow", "LibraryDecision", "LibraryChange"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_AUTO_FEED, ...AUTO_FEED, ...HUB_AUTO];
+const ALL: readonly Named[] = [...BEFORE_DOC_LIBRARY, ...DOC_LIBRARY];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1935,7 +1995,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_SCOPE_RINGS.at(-1)).toBe("HealthOrphan");
     expect(BEFORE_CORPUS_MAP.at(-1)).toBe("RingSector");
     expect(BEFORE_AUTO_FEED.at(-1)).toBe("MapGhost");
-    expect(ALL.at(-1)).toBe("Delegated");
+    expect(BEFORE_DOC_LIBRARY.at(-1)).toBe("Delegated");
+    expect(ALL.at(-1)).toBe("LibraryChange");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1964,7 +2025,8 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(169);
+    // 174 since doc-library's five (docs/features/doc-library.md "The route", DL2).
+    expect(ALL).toHaveLength(174);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -2432,8 +2494,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_SCOPE_RINGS).toHaveLength(151);
     expect(BEFORE_CORPUS_MAP).toHaveLength(154);
     expect(BEFORE_AUTO_FEED).toHaveLength(160);
-    expect(ALL).toHaveLength(169);
-    expect(new Set(ALL).size).toBe(169);
+    expect(BEFORE_DOC_LIBRARY).toHaveLength(169);
+    expect(ALL).toHaveLength(174);
+    expect(new Set(ALL).size).toBe(174);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -2886,7 +2949,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(expected).toEqual([...ALL]);
     // auto-feed's eight since its Rust test wrote them (docs/features/auto-feed.md "Acceptance criteria", FD3): all hundred and sixty-eight.
     // hub-auto's `Delegated` since its Rust test wrote it (HA7): a hundred and sixty-nine.
-    expect(expected).toHaveLength(169);
+    // doc-library's five since its Rust test wrote them (docs/features/doc-library.md "The route", DL2): a hundred and seventy-four.
+    expect(expected).toHaveLength(174);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -3184,10 +3248,21 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.Proposal).not.toContain("delegated");
   });
 
-  it("names hub-auto's Delegated last, after FeedUnlanded, set 169: by, rule, commit, as provisional.ts declares it (HA7 of hub-auto)", () => {
-    expect(Object.keys(sets).slice(BEFORE_AUTO_FEED.length + AUTO_FEED.length)).toEqual([...HUB_AUTO]);
+  it("names hub-auto's Delegated after FeedUnlanded, set 169: by, rule, commit, as provisional.ts declares it (HA7 of hub-auto)", () => {
+    expect(Object.keys(sets).slice(BEFORE_AUTO_FEED.length + AUTO_FEED.length, BEFORE_DOC_LIBRARY.length)).toEqual([...HUB_AUTO]);
     expect(sets.Delegated).toEqual(["by", "rule", "commit"]);
     expect(sets.Delegated).toEqual(declaredKeys("Delegated"));
+  });
+
+  it("names doc-library's five last, after Delegated, sets 170 to 174: 6, 5, 22, 10, 5 keys in the types' order, each as provisional.ts declares it (DL2 of doc-library)", () => {
+    expect(Object.keys(sets).slice(BEFORE_DOC_LIBRARY.length)).toEqual([...DOC_LIBRARY]);
+    expect(Object.keys(sets).indexOf("Library")).toBe(169);
+    expect(Object.keys(sets).at(BEFORE_DOC_LIBRARY.length - 1)).toBe("Delegated");
+    expect(DOC_LIBRARY.map((name) => sets[name])).toEqual(DOC_LIBRARY.map((name) => served(name)));
+    expect(DOC_LIBRARY.map((name) => sets[name])).toEqual(DOC_LIBRARY.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
+    expect(DOC_LIBRARY.map((name) => sets[name]?.length)).toEqual([6, 5, 22, 10, 5]);
+    // A row's last change and a decision's are one shape: the catalog's less `of_file`.
+    expect(sets.LibraryChange).toEqual((sets.CatalogChange ?? []).filter((key) => key !== "of_file"));
   });
 
   it("names lock-diff's five after ShownBindings, before flow-read's five: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {

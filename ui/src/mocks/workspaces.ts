@@ -22,8 +22,8 @@ import type { Scenario } from "./scenario";
 /** Where the notes say the config is, as given: the project's own file. */
 const CONFIG = "specengine.toml";
 
-/** The implicit workspace's sections: `sections.ts`'s nine but `tasks`, in order (D3). */
-const IMPLICIT_SECTIONS = ["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"];
+/** The implicit workspace's sections: `sections.ts`'s ten but `tasks`, in order (D3; `documents` since docs/features/doc-library.md "Sections and presets"). */
+const IMPLICIT_SECTIONS = ["inbox", "board", "roadmap", "flow", "tree", "documents", "graph", "health", "questions"];
 
 /** What a project with no `[[workspace]]` table is served, notes aside. */
 function implicit(notes: string[]): WorkspaceDocument {
@@ -42,7 +42,7 @@ function harbor(notes: string[]): WorkspaceDocument {
     source: "config",
     notes,
     workspaces: [
-      { name: "galley", title: "Galley", landing: "flow", sections: ["board", "flow", "tree", "inbox"], flows: ["copy"], disciplines: ["copy", "captions"], module: "berths" },
+      { name: "galley", title: "Galley", landing: "flow", sections: ["board", "flow", "tree", "documents", "inbox"], flows: ["copy"], disciplines: ["copy", "captions"], module: "berths" },
       { name: "foundry", title: "Foundry", landing: "overview", sections: ["board", "health", "graph", "tree"], flows: ["plates"], disciplines: ["plates"], module: null },
       { name: "harbourmaster", title: "Harbourmaster", landing: "overview", sections: ["inbox", "board", "roadmap", "flow"], flows: null, disciplines: [], module: null },
     ],
@@ -58,7 +58,7 @@ function harbor(notes: string[]): WorkspaceDocument {
 
 /** `config-notes`: harbor-sim's two wrong values, each left out, in line order, as the reader words them. */
 export const HARBOR_NOTES: readonly string[] = [
-  `${CONFIG}:41: workspace \`galley\`: \`stage\` is no section (inbox, tasks, board, roadmap, flow, tree, graph, health, questions): left out`,
+  `${CONFIG}:41: workspace \`galley\`: \`stage\` is no section (inbox, tasks, board, roadmap, flow, tree, documents, graph, health, questions): left out`,
   `${CONFIG}:49: workspace \`foundry\`: no \`[[card.flow]]\` is named \`inks\`: left out`,
 ];
 

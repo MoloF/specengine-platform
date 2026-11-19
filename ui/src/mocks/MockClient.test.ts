@@ -75,7 +75,7 @@ describe("the normal scenario", () => {
     const harbor = await client.getWorkspaces("harbor-sim");
     expect(harbor.source).toBe("config");
     expect(harbor.workspaces.map(({ name, landing, sections, flows, disciplines, module }) => [name, landing, sections, flows, disciplines, module])).toEqual([
-      ["galley", "flow", ["board", "flow", "tree", "inbox"], ["copy"], ["copy", "captions"], "berths"],
+      ["galley", "flow", ["board", "flow", "tree", "documents", "inbox"], ["copy"], ["copy", "captions"], "berths"],
       ["foundry", "overview", ["board", "health", "graph", "tree"], ["plates"], ["plates"], null],
       ["harbourmaster", "overview", ["inbox", "board", "roadmap", "flow"], null, [], null],
     ]);

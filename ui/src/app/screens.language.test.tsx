@@ -5,7 +5,7 @@ import type { ShownLinks } from "../api/types";
 import type { Translate } from "../i18n";
 import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
-import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aLink, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView, aWorkspace, aWorkspaces } from "../test/builders";
+import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aLibrary, aLibraryRow, aLink, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView, aWorkspace, aWorkspaces } from "../test/builders";
 import { ASIDE, asideClient } from "../test/asideStub";
 import { renderApp } from "../test/render";
 import { stubClient, STAGED_AT, type StubClient } from "../test/stubClient";
@@ -95,6 +95,18 @@ const SCREENS: SweptScreen[] = [
     },
     heading: () => "Card C-1",
     own: (t) => [t("board.page.openOnBoard"), t("board.handoff.action"), t("board.modal.handOffs")],
+  },
+  {
+    // DL19 of docs/features/doc-library.md: Documents, its filter bar's words; a served title and tag stay as written.
+    name: "Documents",
+    hash: "#/alpha/documents",
+    client: () => {
+      const client = stubClient();
+      client.getLibrary.mockResolvedValue(aLibrary([aLibraryRow({ name: "DOC-A", title: "Arrival", tags: ["tides"] })]));
+      return client;
+    },
+    heading: (t) => t("documents.title"),
+    own: (t) => [t("documents.archive"), t("documents.behindOnly"), t("documents.all.class")],
   },
   {
     name: "Roadmap",

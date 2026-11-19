@@ -73,35 +73,35 @@ return = "reopened"
 [[workspace]]
 name = "product"
 title = "Product"
-sections = ["roadmap", "board", "tree", "flow", "questions", "inbox"]
+sections = ["roadmap", "board", "tree", "documents", "flow", "questions", "inbox"]
 landing = "roadmap"
 flows = ["product"]
 
 [[workspace]]
 name = "experience"
 title = "UX design"
-sections = ["board", "flow", "tree", "questions", "inbox"]
+sections = ["board", "flow", "tree", "documents", "questions", "inbox"]
 landing = "board"
 flows = ["experience"]
 
 [[workspace]]
 name = "engineering"
 title = "Engineering and quality"
-sections = ["board", "inbox", "tree", "flow", "graph", "health", "roadmap", "questions"]
+sections = ["board", "inbox", "tree", "documents", "flow", "graph", "health", "roadmap", "questions"]
 landing = "board"
 flows = ["engineering", "quality"]
 
 [[workspace]]
 name = "documentation"
 title = "Documentation"
-sections = ["board", "tree", "flow", "questions", "inbox"]
+sections = ["board", "tree", "documents", "flow", "questions", "inbox"]
 landing = "board"
 flows = ["documentation"]
 
 [[workspace]]
 name = "leadership"
 title = "Leadership"
-sections = ["inbox", "roadmap", "board", "flow", "tree", "graph", "health", "questions"]
+sections = ["inbox", "roadmap", "board", "flow", "tree", "documents", "graph", "health", "questions"]
 
 # A direction: a module chosen by node kind, with no root. Use your project's
 # own kinds, and add it only once every terminal, plugin and hub runs a build

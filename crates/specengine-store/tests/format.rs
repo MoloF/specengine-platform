@@ -29,7 +29,12 @@
 //! too), and the dump reads `fixtures/parent-ref`, the corpus that sets them;
 //! docs/features/read-trust.md "Data" makes it `INDEX_FORMAT` 17 for the
 //! freshness step's `file_stats` and `walk_notes`, which the dump leaves
-//! out, so the dump differs from 16's only in `index_meta`.
+//! out, so the dump differs from 16's only in `index_meta`;
+//! docs/features/doc-library.md "`INDEX_FORMAT` 18" makes it 18 for the
+//! typed `tags` (`fields`, no longer `extra` with `unknown-key`): no table
+//! or column changes and no dumped corpus writes `tags`, so the dump differs
+//! from 17's (and 16's) only in `index_meta`; the move is proved on a row a
+//! format-17 build leaves (`specengine-cli`'s `tests/library.rs`, DL9).
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -468,16 +473,15 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/read-trust.md "Data" (AC-9): the freshness step's tables
-/// (`file_stats`, `walk_notes`, outside the dump) make `INDEX_FORMAT` 17,
-/// and the history is the sixteen earlier lines, verbatim (edge-table's
-/// `16` among them), followed by exactly one `17 <hash>` line (no earlier
-/// `17`). Replaces edge-table's format-16 pin
-/// (docs/features/edge-table.md AC-3), whose line stays verbatim.
-/// M: `INDEX_FORMAT` kept at 16; an earlier line edited.
+/// docs/features/doc-library.md DL9: the typed `tags` makes `INDEX_FORMAT`
+/// 18, and the history is the seventeen earlier lines, verbatim
+/// (read-trust's `17` among them), followed by exactly one `18 <hash>` line
+/// (no earlier `18`). Replaces read-trust's format-17 pin
+/// (docs/features/read-trust.md AC-9), whose line stays verbatim.
+/// M: `INDEX_FORMAT` kept at 17; an earlier line edited.
 #[test]
-fn read_trust_pins_format_17_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 17);
+fn doc_library_pins_format_18_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 18);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -503,11 +507,12 @@ fn read_trust_pins_format_17_with_one_new_history_line() {
         "14 f4ce2bdef1ce75632e1347967df4cf91671ec7abef451aa03876597bb2b0b28a",
         "15 ce09e78513dbcf7ee55173fb3ab2bb78cc6d42b2ea87b04c845d75fe40b6d3b2",
         "16 dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72",
+        "17 f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "edge-table's history plus exactly one new line:\n{history}"
+        "read-trust's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -516,15 +521,15 @@ fn read_trust_pins_format_17_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "17", "the new line is format 17: {last}");
+    assert_eq!(format, "18", "the new line is format 18: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("17 ")).count(),
+        lines.iter().filter(|line| line.starts_with("18 ")).count(),
         1,
-        "no earlier `17` line"
+        "no earlier `18` line"
     );
 }
 
@@ -535,29 +540,48 @@ fn read_trust_pins_format_17_with_one_new_history_line() {
 /// table in the dump.
 #[test]
 fn read_trust_the_dump_differs_from_16s_only_in_index_meta() {
-    let dump = format_dump();
+    assert_eq!(
+        stamped_back(&format_dump(), "16"),
+        "dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72",
+        "format 16's dump, but for the stamp"
+    );
+}
+
+/// The BLAKE3 of `dump` with each corpus's `index_meta` stamp (the current
+/// `INDEX_FORMAT`, asserted) written back as `format`.
+fn stamped_back(dump: &str, format: &str) -> String {
+    let current = format!("\"{INDEX_FORMAT}\"");
     let stamps: Vec<&str> = dump
         .lines()
         .filter(|line| line.starts_with("index_meta\t"))
         .collect();
     assert!(
-        !stamps.is_empty() && stamps.iter().all(|line| line.contains("\"17\"")),
-        "premise: each corpus's `index_meta` holds the stamp 17: {stamps:?}"
+        !stamps.is_empty() && stamps.iter().all(|line| line.contains(&current)),
+        "premise: each corpus's `index_meta` holds the stamp {INDEX_FORMAT}: {stamps:?}"
     );
     let back: String = dump
         .split_inclusive('\n')
         .map(|line| {
             if line.starts_with("index_meta\t") {
-                line.replace("\"17\"", "\"16\"")
+                line.replace(&current, &format!("\"{format}\""))
             } else {
                 line.to_owned()
             }
         })
         .collect();
+    blake3_hex(back.as_bytes())
+}
+
+/// docs/features/doc-library.md "`INDEX_FORMAT` 18": no table or column
+/// changes, and `tags` lives in the stored node JSON only when written,
+/// which no dumped corpus does: the dump differs from format 17's only in
+/// `index_meta`. M: a column or table added; `tags` serialised when absent.
+#[test]
+fn doc_library_the_dump_differs_from_17s_only_in_index_meta() {
     assert_eq!(
-        blake3_hex(back.as_bytes()),
-        "dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72",
-        "format 16's dump, but for the stamp"
+        stamped_back(&format_dump(), "17"),
+        "f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5",
+        "format 17's dump, but for the stamp"
     );
 }
 

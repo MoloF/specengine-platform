@@ -3227,3 +3227,117 @@ export interface Delegated {
   rule: string;
   commit: string;
 }
+
+// Every document of the project as a library (RM-0127): `spec library [--archive] --json` as the
+// daemon's browser view sends it, never cut, every key present, absent null. One row per file
+// holding a document, by path; front-matter as written, the uses and the orphan flag core
+// `usage_of`'s, the last changes git's, the decisions every `class: decision` document whose
+// canon links land on it. The UI filters, sorts and pages the served rows; it never counts a use,
+// resolves a link, reads git or judges a decision. A title, a class, a kind, a status, an owner, a
+// tag and a scope are project data in any script, shown as written.
+
+/**
+ * The four decision groups the core sorts a status into (`decision_group`), as the keys of a record:
+ * one of them is also a word of the mocks' spec statuses, which app code never quotes; their words
+ * told in `src/documents/library.ts`. Source: `docs/features/doc-library.md` "`spec library`".
+ */
+interface DecisionGroups {
+  accepted: true;
+  superseded: true;
+  rejected: true;
+  other: true;
+}
+
+/** A decision's group as the core sorts its status. Source: `docs/features/doc-library.md` "`spec library`". */
+export type KnownDecisionGroup = keyof DecisionGroups;
+
+/**
+ * `spec library [--archive] --json`, the answer of `GET .../library[?archive=true]`: `archive` as
+ * asked; `notes` the read's notes verbatim, sorted, each once; `counts` over the rows; `rows` one per
+ * document in path order; `truncated` false and `omitted` null, as the route never cuts.
+ * Source: `docs/features/doc-library.md` "`spec library`".
+ */
+export interface LibraryDocument {
+  archive: boolean;
+  notes: string[];
+  counts: LibraryCounts;
+  rows: LibraryRow[];
+  truncated: boolean;
+  omitted: number | null;
+}
+
+/** The totals over the rows served: the rows, the Tier 3 ones, the decision entries, the rows `behind: true`, the orphans. Source: `docs/features/doc-library.md` "`spec library`". */
+export interface LibraryCounts {
+  documents: number;
+  archived: number;
+  decisions: number;
+  behind: number;
+  orphans: number;
+}
+
+/**
+ * One document: `name` the REF the document view opens (`slug/ID`, the ID, else the path); `tier`
+ * and `reviewed` as written, an invalid date kept; `scope` the list as written, null when absent;
+ * `tags` the kept entries in written order, `[]` when none; `rev` 1 where none is written, null when
+ * unreadable; `parent` the resolved parent's name; `modules` the served `[[module]]` names holding it,
+ * in config order; `used_by`, `mentioned_by` and `orphan` as the map serves them; `last_change` its
+ * file's newest commit on `HEAD`, null when none is read; `decisions` grouped accepted, superseded,
+ * rejected, other; `behind` true when an accepted decision was committed after it, null when that
+ * cannot be told. Source: `docs/features/doc-library.md` "`spec library`".
+ */
+export interface LibraryRow {
+  name: string;
+  id: string | null;
+  path: string;
+  title: string | null;
+  class: string | null;
+  kind: string | null;
+  status: string | null;
+  archived: boolean;
+  tier: number | null;
+  owner: string | null;
+  reviewed: string | null;
+  scope: string[] | null;
+  tags: string[];
+  rev: number | null;
+  parent: string | null;
+  modules: string[];
+  used_by: number;
+  mentioned_by: number;
+  orphan: boolean | null;
+  last_change: LibraryChange | null;
+  decisions: LibraryDecision[];
+  behind: boolean | null;
+}
+
+/**
+ * A decision whose `canon:` lands on the row: `status` as written; `group` the core's, another word
+ * kept and shown raw; `date` its `date:` as written; `section` the ID section the link lands on;
+ * `last_change` its file's; `newer` true when committed after the row's last change, null when
+ * either is not read. Source: `docs/features/doc-library.md` "`spec library`".
+ */
+export interface LibraryDecision {
+  name: string;
+  id: string | null;
+  title: string | null;
+  path: string;
+  status: string | null;
+  group: KnownDecisionGroup | Unlisted;
+  date: string | null;
+  section: string | null;
+  last_change: LibraryChange | null;
+  newer: boolean | null;
+}
+
+/**
+ * A file's last change, the catalog's without `of_file`: `at` the commit's time in UTC; `by` raw, an
+ * email in it, never drawn; `by_name` the name alone, the one drawn; `commit` and `proposal` never
+ * drawn. Source: `docs/features/doc-library.md` "`spec library`".
+ */
+export interface LibraryChange {
+  at: string;
+  by: string;
+  by_name: string;
+  commit: string;
+  proposal: string | null;
+}

@@ -241,7 +241,7 @@ fn sr4_any_query_name_is_a_400() {
         assert_eq!(reply.status, 404, "{path}: {}", reply.text());
         let message = reply.error_message();
         assert!(
-            message.contains(", catalog, map, rings, workspaces}"),
+            message.contains(", catalog, map, rings, library, workspaces}"),
             "{path}: `rings` after `map`: {message}"
         );
     }

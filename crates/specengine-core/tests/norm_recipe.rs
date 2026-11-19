@@ -313,6 +313,7 @@ release: v1
 priority: should
 estimate: 2-4
 stage: gather
+tags: [light]
 links:
   derived_from: [R-12, A-101]
   depends_on: [MEC-SPRINT]
@@ -660,6 +661,9 @@ fn never_counted_changes() -> Vec<(&'static str, &'static str, &'static str)> {
         // docs/features/trace-views.md AC-01: re-cutting stages raises no
         // revision and marks no card.
         ("stage", "stage: gather\n", "stage: print\n"),
+        // docs/features/doc-library.md DL6: a tag is a label, never part of
+        // the meaning.
+        ("tags", "tags: [light]\n", "tags: [light, dark]\n"),
     ]
 }
 
@@ -710,6 +714,7 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
         "priority",
         "estimate",
         "stage",
+        "tags",
     ]
     .into_iter()
     .collect();
@@ -718,6 +723,63 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
     assert_eq!(
         typed.difference(&counted).copied().collect::<BTreeSet<_>>(),
         never
+    );
+}
+
+/// docs/features/doc-library.md DL6, "Never counted": tags are free labels:
+/// written, changed, reordered, taken away, in any script, an ID, a bad
+/// entry (`tag-invalid` is a check finding, never a parser's) or none, no
+/// node's input moves, on the sections neither. A mistyped `tags:` is the
+/// List rule's `frontmatter-type`, which nulls the document's input as every
+/// mistyped key does. M: counting the key in `norm_input`.
+#[test]
+fn a_tag_is_never_counted_whatever_it_says() {
+    const WRITTEN: &str = "tags: [light]\n";
+    let scheme = spec_a();
+    let base = inputs(BASE.as_bytes(), &scheme);
+    assert_eq!(base.len(), 4, "the document and three sections");
+    assert!(base.iter().all(Option::is_some), "the base is hashed");
+    let parsed = parse("docs/spec/lantern.md", BASE.as_bytes(), &scheme);
+    let tags = parsed.document().and_then(|node| node.fields.as_ref());
+    assert_eq!(
+        tags.and_then(|fields| fields.tags.clone()),
+        Some(vec!["light".to_owned()]),
+        "the base carries the key this test turns"
+    );
+    for value in [
+        "tags: [dark]\n",
+        "tags: [dark, light]\n",
+        "tags: [light, light]\n",
+        "tags: [MEC-SPRINT, RM-0048]\n",
+        "tags: [\u{0441}\u{0432}\u{0435}\u{0442}]\n",
+        "tags: [\"two words\"]\n",
+        "tags: [\"\", \"x \"]\n",
+        "tags: []\n",
+        "tags:\n",
+        "",
+    ] {
+        let variant = BASE.replacen(WRITTEN, value, 1);
+        assert_ne!(variant, BASE, "the base holds the line");
+        assert_eq!(
+            inputs(variant.as_bytes(), &scheme),
+            base,
+            "{value:?} (M: counting the key in `norm_input`)"
+        );
+    }
+    let mistyped = BASE.replacen(WRITTEN, "tags: light\n", 1);
+    let parsed = parse("docs/spec/lantern.md", mistyped.as_bytes(), &scheme);
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|d| d.code == DiagnosticCode::FrontmatterType),
+        "the List rule: {:?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        inputs(mistyped.as_bytes(), &scheme)[0],
+        None,
+        "a mistyped key nulls the document's input"
     );
 }
 

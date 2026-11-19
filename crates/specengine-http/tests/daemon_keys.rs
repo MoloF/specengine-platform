@@ -409,6 +409,15 @@
 //! row a hub applied by rule; `Proposal` keeps its keys (the mark is left
 //! out of every other row, as `Author.login`). M: the key written `null`
 //! on every row.
+//!
+//! docs/features/doc-library.md (RM-0127) "Acceptance criteria", DL2: five
+//! sets more, 174 in all, last, in "Data"'s order: `Library` (6),
+//! `LibraryCounts` (5), `LibraryRow` (22), `LibraryDecision` (10) and
+//! `LibraryChange` (5, a row's and a decision's `last_change` alike), from
+//! `GET .../library?archive=true` over the spec's scene at C2 (the shared
+//! scene of `specengine-cli`'s `tests/library_scene`: every row and every
+//! decision holds a last change) on a daemon of its own. M: a key only the
+//! route adds.
 
 mod common;
 mod task_state;
@@ -424,6 +433,9 @@ mod catalog_scene;
 
 #[path = "../../specengine-cli/tests/counts_scene/mod.rs"]
 mod counts_scene;
+
+#[path = "../../specengine-cli/tests/library_scene/mod.rs"]
+mod library_scene;
 
 use std::ffi::OsStr;
 use std::fmt;
@@ -986,6 +998,25 @@ fn delegated_review() -> String {
     }
 }
 
+/// docs/features/doc-library.md DL2: `GET .../library?archive=true` over
+/// the scene at C2 (DEC-0023 newer than stamina, so a decision's `newer` is
+/// `true` and another's `false`) on a daemon of its own, its body raw (the
+/// keys' order kept).
+fn library_document() -> String {
+    let scene = library_scene::Scene::new("daemon-keys-library");
+    scene.c2();
+    let cwd = scene.dir("cwd");
+    let server = Server::serve(&scene.home, &cwd, &[&scene.root]);
+    server
+        .get(&format!(
+            "/api/projects/{}/library?archive=true",
+            library_scene::SLUG
+        ))
+        .status(200)
+        .text()
+        .to_owned()
+}
+
 /// docs/features/auto-feed.md FD3: `GET .../feed?since=0&needs_me=1` over a
 /// git copy of `fixtures/auto-mini` with `rules/on.toml` committed, on a
 /// daemon of its own, every `needs_me` list holding a row; its body raw
@@ -1177,6 +1208,21 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         assert!(!rows.is_empty(), "no {list} row: {feed}");
         rows
     };
+    // docs/features/doc-library.md DL2: the library, its counts, its 15
+    // rows, their three decisions and every last change of both.
+    let library = library_document();
+    let library_rows = raw_items(&library, "rows");
+    assert_eq!(library_rows.len(), 15, "{library}");
+    let library_decisions: Vec<String> = library_rows
+        .iter()
+        .flat_map(|row| raw_items(row, "decisions"))
+        .collect();
+    assert_eq!(library_decisions.len(), 3, "{library}");
+    let library_changes: Vec<String> = library_rows
+        .iter()
+        .chain(&library_decisions)
+        .map(|item| raw_object(item, "last_change"))
+        .collect();
     // docs/features/direction-catalog.md DC-9: both rows hold a last change.
     let catalog = catalog_document();
     // docs/features/collision-pairs.md PP8: the example's review, its pair
@@ -2822,6 +2868,27 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "Delegated",
             one_key_set("Delegated", std::slice::from_ref(&delegated_mark), keys_of),
         ),
+        // docs/features/doc-library.md DL2, sets 170 to 174.
+        (
+            "Library",
+            one_key_set("Library", std::slice::from_ref(&library), keys_of),
+        ),
+        (
+            "LibraryCounts",
+            one_key_set("LibraryCounts", &[raw_object(&library, "counts")], keys_of),
+        ),
+        (
+            "LibraryRow",
+            one_key_set("LibraryRow", &library_rows, keys_of),
+        ),
+        (
+            "LibraryDecision",
+            one_key_set("LibraryDecision", &library_decisions, keys_of),
+        ),
+        (
+            "LibraryChange",
+            one_key_set("LibraryChange", &library_changes, keys_of),
+        ),
     ]
 }
 
@@ -3178,7 +3245,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        169,
+        174,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -3188,7 +3255,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          node-history: 124; upstream-signal: 126; delivery-analytics: 137; \
          direction-catalog: 140; department-overview: 143; collision-pairs: 145; \
          delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160; \
-         auto-feed: 168; hub-auto: 169)"
+         auto-feed: 168; hub-auto: 169; doc-library: 174)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -4387,9 +4454,74 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("FeedUnlanded", vec!["task", "status", "pack"]),
         ]
     );
-    // docs/features/hub-auto.md HA7: set 169, last; `Proposal` without it.
+    // docs/features/hub-auto.md HA7: set 169; `Proposal` without it.
     assert_eq!(sets[168].0, "Delegated");
     assert_eq!(sets[168].1, ["by", "rule", "commit"]);
+    // docs/features/doc-library.md DL2: sets 170 to 174, last, each "Data"'s
+    // keys in order.
+    let library: Vec<(&str, Vec<&str>)> = sets[169..174]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        library,
+        [
+            (
+                "Library",
+                vec!["archive", "notes", "counts", "rows", "truncated", "omitted"]
+            ),
+            (
+                "LibraryCounts",
+                vec!["documents", "archived", "decisions", "behind", "orphans"]
+            ),
+            (
+                "LibraryRow",
+                vec![
+                    "name",
+                    "id",
+                    "path",
+                    "title",
+                    "class",
+                    "kind",
+                    "status",
+                    "archived",
+                    "tier",
+                    "owner",
+                    "reviewed",
+                    "scope",
+                    "tags",
+                    "rev",
+                    "parent",
+                    "modules",
+                    "used_by",
+                    "mentioned_by",
+                    "orphan",
+                    "last_change",
+                    "decisions",
+                    "behind"
+                ]
+            ),
+            (
+                "LibraryDecision",
+                vec![
+                    "name",
+                    "id",
+                    "title",
+                    "path",
+                    "status",
+                    "group",
+                    "date",
+                    "section",
+                    "last_change",
+                    "newer"
+                ]
+            ),
+            (
+                "LibraryChange",
+                vec!["at", "by", "by_name", "commit", "proposal"]
+            ),
+        ]
+    );
     let proposal = &sets.iter().find(|(name, _)| *name == "Proposal").unwrap().1;
     assert!(
         !proposal.iter().any(|key| key == "delegated"),
@@ -4463,7 +4595,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 169 sets (41 until
+/// unchanged, no new key): the fixture holds 174 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4499,7 +4631,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/scope-rings.md its three, SR4, and
 /// docs/features/corpus-map.md its six, CM3, and
 /// docs/features/auto-feed.md its eight, FD3, and
-/// docs/features/hub-auto.md its `Delegated`, HA7); a decision
+/// docs/features/hub-auto.md its `Delegated`, HA7, and
+/// docs/features/doc-library.md its five, DL2); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -4513,8 +4646,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        169,
-        "169 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        174,
+        "174 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4530,7 +4663,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          collision-pairs' two (PP8), delivery-timeline's three (DT6), \
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
-         hub-auto's `Delegated` (HA7)"
+         hub-auto's `Delegated` (HA7) and doc-library's five (DL2)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -4647,7 +4780,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 169 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 174 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4681,7 +4814,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/scope-rings.md its three, SR4, and
 /// docs/features/corpus-map.md its six, CM3, and
 /// docs/features/auto-feed.md its eight, FD3, and
-/// docs/features/hub-auto.md its `Delegated`, HA7); the amendment of
+/// docs/features/hub-auto.md its `Delegated`, HA7, and
+/// docs/features/doc-library.md its five, DL2); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -4698,8 +4832,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        169,
-        "169 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        174,
+        "174 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4715,7 +4849,7 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          collision-pairs' two (PP8), delivery-timeline's three (DT6), \
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
-         hub-auto's `Delegated` (HA7)"
+         hub-auto's `Delegated` (HA7) and doc-library's five (DL2)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

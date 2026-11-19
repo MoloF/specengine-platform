@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-19
 ---
 
 # The document view: one modal and page everywhere
@@ -34,7 +34,7 @@ As the card modal's (`board-screen.md` "The card modal and page"):
 
 ## DocLink
 
-`DocLink({project, docRef, children, className?, tabIndex?, draggable?, ref?})` renders `<a href={docPageHash(project, docRef)}>`. A click with button 0, no Meta, Ctrl, Shift or Alt, not `defaultPrevented`, prevents the default and opens the modal, the anchor its opener; any other click, `auxclick` and `contextmenu` stay the browser's (a new tab opens the page). Every document link outside the Spec tree is one: Tasks, the Inbox, Board tiles and a card's targets, Roadmap lanes, Health, Graph's list, Questions, Flow's Records, `Markdown` outside the tree; `openDoc` serves the palette and Health's Enter.
+`DocLink({project, docRef, children, className?, tabIndex?, draggable?, ref?})` renders `<a href={docPageHash(project, docRef)}>`. A click with button 0, no Meta, Ctrl, Shift or Alt, not `defaultPrevented`, prevents the default and opens the modal, the anchor its opener; any other click, `auxclick` and `contextmenu` stay the browser's (a new tab opens the page). Every document link outside the Spec tree is one: Tasks, the Inbox, Board tiles and a card's targets, Roadmap lanes, Health, Graph's list, Documents, Questions, Flow's Records, `Markdown` outside the tree; `openDoc` serves the palette and Health's Enter.
 
 **Spec tree links stay** where the tree is meant. `policy.test.ts` pins `sectionHash(…, "tree", …)` outside tests to 17 calls in 14 files: the tree's own navigation (`TextPanel`, `LinksPanel`, `TreeView` 2, `BundlePanel` 2, `NodePane`'s trail); explicit acts (`RoadmapView`'s, `GraphDetails`') and the `o` key (`GraphView`; `FlowView` 2 with its lost-name link); `FlowRecords`' ID-less line; the tree branches of `Markdown` and `DriftPart`; the view's own Open in Spec tree (`DocBody`) and ID-less count (`DocInside`). Inside the tree, links keep moving the tree; `NodePane` adds Open document.
 

@@ -22,12 +22,12 @@ export type Route =
       id: string | null;
       /** Flow's alone: what follows the first raw `?`, undecoded, less every `doc` pair; absent with none (docs/features/writer-studio.md D4). */
       query?: string;
-      /** A card's page (`board/<C>/page`) or a document's (`tree/<REF>/page`), never a tenth section (`ui/README.md` "Screen rules", Shell). */
+      /** A card's page (`board/<C>/page`) or a document's (`tree/<REF>/page`), never an eleventh section (`ui/README.md` "Screen rules", Shell). */
       view?: "page";
       /** The document modal's REF, decoded; absent with none. */
       doc?: string;
     }
-  /** Activity, `#/<p>/feed[/needs-me]`: the nav's second entry, never a tenth section (docs/features/auto-feed.md "The UI"). */
+  /** Activity, `#/<p>/feed[/needs-me]`: the nav's second entry, never an eleventh section (docs/features/auto-feed.md "The UI"). */
   | { type: "feed"; project: string; tab: FeedTab }
   | { type: "not_found" };
 
@@ -294,13 +294,13 @@ export interface NavEntry {
   hash: string;
 }
 
-/** The nine section IDs in `sections.ts` order: the palette's list, and the nav's when no workspace was read. */
+/** The ten section IDs in `sections.ts` order: the palette's list, and the nav's when no workspace was read. */
 export const ALL_SECTIONS: readonly SectionId[] = SECTIONS.map((section) => section.id);
 
 /**
  * The nav in order: Overview first, Activity second (the feed, in every department: the owner's
  * word of 2026-11-15, over docs/features/auto-feed.md's off-nav), then `sections` in their order
- * (07 §3 "Web UI — screens"), each drawn only if it is one of the nine and only once: a workspace's
+ * (07 §3 "Web UI — screens"), each drawn only if it is one of the ten and only once: a workspace's
  * served list (`docs/features/workspaces.md` "The UI"), or ALL_SECTIONS. Activity stays no section.
  */
 export function navOf(project: string, sections: readonly string[], t: Translate): NavEntry[] {

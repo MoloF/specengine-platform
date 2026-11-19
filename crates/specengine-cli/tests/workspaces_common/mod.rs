@@ -25,7 +25,7 @@ pub const TABLES_START: &str = "\n[[workspace]]\n";
 /// `--login`.
 pub const IMPLICIT_JSON: &str = "{\"source\":\"implicit\",\"notes\":[],\"workspaces\":[{\"name\":\
      \"all\",\"title\":\"All sections\",\"landing\":\"overview\",\"sections\":[\"inbox\",\"board\",\
-     \"roadmap\",\"flow\",\"tree\",\"graph\",\"health\",\"questions\"],\"flows\":null,\
+     \"roadmap\",\"flow\",\"tree\",\"documents\",\"graph\",\"health\",\"questions\"],\"flows\":null,\
      \"disciplines\":[],\"module\":null}],\"modules\":[],\"default\":null}";
 
 /// card-press's document of the spec's "Data", compact. Since
@@ -47,16 +47,20 @@ pub const PRESS_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\"
 /// S9, `sound` before `production`), two rooted modules and the direction
 /// `scenes`.
 pub const LAMP_TEXT: &str = "workspaces config | workspaces 5, modules 3\n\
-     workspace writing | Writing | landing flow | sections flow, tree, board, questions, inbox | \
+     workspace writing | Writing | landing flow | sections flow, tree, documents, board, \
+     questions, inbox | \
      flows narrative | module (none)\n\
-     workspace development | Development | landing board | sections board, inbox, tree, flow, \
+     workspace development | Development | landing board | sections board, inbox, tree, \
+     documents, flow, \
      graph, health, roadmap, questions | flows development | module (none)\n\
-     workspace art | Art and levels | landing board | sections board, flow, tree, questions, \
+     workspace art | Art and levels | landing board | sections board, flow, tree, documents, \
+     questions, \
      inbox | flows art, level-design | module (none)\n\
-     workspace sound | Sound | landing board | sections board, flow, tree, questions, inbox | \
+     workspace sound | Sound | landing board | sections board, flow, tree, documents, \
+     questions, inbox | \
      flows sound | module (none)\n\
      workspace production | Production | landing overview | sections inbox, roadmap, board, \
-     flow, tree, graph, health, questions | flows (all) | module (none)\n\
+     flow, tree, documents, graph, health, questions | flows (all) | module (none)\n\
      module shore | The shore | root CHP-SHORE\n\
      module island | The lamp island | root ISL-LAMP\n\
      module scenes | Scenes | kinds scene\n";
@@ -69,18 +73,22 @@ pub const LAMP_TEXT: &str = "workspaces config | workspaces 5, modules 3\n\
 /// `--login`.
 pub const LAMP_JSON: &str = "{\"source\":\"config\",\"notes\":[],\"workspaces\":[{\"name\":\
      \"writing\",\"title\":\"Writing\",\"landing\":\"flow\",\"sections\":[\"flow\",\"tree\",\
-     \"board\",\"questions\",\"inbox\"],\"flows\":[\"narrative\"],\"disciplines\":[\"narrative\"],\
+     \"documents\",\"board\",\"questions\",\"inbox\"],\"flows\":[\"narrative\"],\
+     \"disciplines\":[\"narrative\"],\
      \"module\":null},{\"name\":\"development\",\"title\":\"Development\",\"landing\":\"board\",\
-     \"sections\":[\"board\",\"inbox\",\"tree\",\"flow\",\"graph\",\"health\",\"roadmap\",\
+     \"sections\":[\"board\",\"inbox\",\"tree\",\"documents\",\"flow\",\"graph\",\"health\",\
+     \"roadmap\",\
      \"questions\"],\"flows\":[\"development\"],\"disciplines\":[\"development\"],\"module\":null},\
      {\"name\":\"art\",\"title\":\"Art and levels\",\"landing\":\"board\",\"sections\":[\"board\",\
-     \"flow\",\"tree\",\"questions\",\"inbox\"],\"flows\":[\"art\",\"level-design\"],\
+     \"flow\",\"tree\",\"documents\",\"questions\",\"inbox\"],\"flows\":[\"art\",\"level-design\"],\
      \"disciplines\":[\"art\",\"level-design\"],\"module\":null},{\"name\":\"sound\",\"title\":\
-     \"Sound\",\"landing\":\"board\",\"sections\":[\"board\",\"flow\",\"tree\",\"questions\",\
+     \"Sound\",\"landing\":\"board\",\"sections\":[\"board\",\"flow\",\"tree\",\"documents\",\
+     \"questions\",\
      \"inbox\"],\"flows\":[\"sound\"],\"disciplines\":[\"sound\"],\"module\":null},{\"name\":\
      \"production\",\"title\":\
      \"Production\",\"landing\":\"overview\",\"sections\":[\"inbox\",\"roadmap\",\"board\",\"flow\",\
-     \"tree\",\"graph\",\"health\",\"questions\"],\"flows\":null,\"disciplines\":[\"narrative\",\
+     \"tree\",\"documents\",\"graph\",\"health\",\"questions\"],\"flows\":null,\
+     \"disciplines\":[\"narrative\",\
      \"development\",\"art\",\"level-design\",\"production\",\"sound\"],\"module\":null}],\"modules\":[{\"name\":\
      \"shore\",\"title\":\"The shore\",\"root\":\"CHP-SHORE\",\"kinds\":null},{\"name\":\"island\",\
      \"title\":\"The lamp island\",\"root\":\"ISL-LAMP\",\"kinds\":null},{\"name\":\"scenes\",\
@@ -98,7 +106,7 @@ pub const PRESS_TEXT: &str = "workspaces config | workspaces 2, modules 2\n\
 /// spec-a's `spec workspace` text (WS-1).
 pub const IMPLICIT_TEXT: &str = "workspaces implicit | workspaces 1, modules 0\n\
      workspace all | All sections | landing overview | sections inbox, board, roadmap, flow, \
-     tree, graph, health, questions | flows (all) | module (none)\n";
+     tree, documents, graph, health, questions | flows (all) | module (none)\n";
 
 pub fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

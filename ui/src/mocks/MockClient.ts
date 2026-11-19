@@ -9,6 +9,7 @@ import {
   type FeedOptions,
   type FlowOptions,
   type GraphOptions,
+  type LibraryOptions,
   type MapOptions,
   type NodeOptions,
   type RoadmapOptions,
@@ -52,6 +53,7 @@ import type {
   IntakeDocument,
   IntakeMatch,
   LockDiffView,
+  LibraryDocument,
   MapDocument,
   NodeView,
   Project,
@@ -118,6 +120,7 @@ import { plainQuestionsScenario } from "./plainQuestions";
 import { collisionPairsScenario } from "./collisionPairs";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { mockMap } from "./map";
+import { libraryOf } from "./library";
 import { mockRings } from "./rings";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
@@ -428,6 +431,15 @@ export class MockClient implements SpecEngineClient {
   async getMap(project: string, options: MapOptions): Promise<MapDocument> {
     await this.read();
     return structuredClone(mockMap(this.project(project).corpus, project, this.scenario, options.archive));
+  }
+
+  /**
+   * The project's library for the scenario (src/mocks/library.ts), read only; the daemon serves its
+   * own (docs/features/doc-library.md "The UI seam").
+   */
+  async getLibrary(project: string, options: LibraryOptions): Promise<LibraryDocument> {
+    await this.read();
+    return structuredClone(libraryOf(this.project(project).corpus, project, this.scenario, options.archive));
   }
 
   /**

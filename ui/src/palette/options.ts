@@ -170,7 +170,7 @@ export function paletteGroups(input: PaletteInput, t: Translate): PaletteGroup[]
     const sections = navOf(project, ALL_SECTIONS, t)
       .filter((entry) => holds(needle, [entry.label]))
       .map((entry): PaletteOption => ({ type: "section", key: `section:${entry.key}`, label: entry.label, hash: entry.hash }));
-    // The nav's entries whole: Overview, Activity and the nine are never cut to GROUP_LIMIT.
+    // The nav's entries whole: Overview, Activity and the ten are never cut to GROUP_LIMIT.
     built.push(build("Sections", sections, null, false, sections.length));
   }
 

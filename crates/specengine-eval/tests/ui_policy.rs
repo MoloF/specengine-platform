@@ -2159,8 +2159,9 @@ fn section_ids(text: &str) -> Vec<String> {
 }
 
 /// docs/features/workspaces.md (RM-0081) "Acceptance criteria", the eval
-/// half: the core's nine section IDs are the nav's, in the nav's order, and the
+/// half: the core's section IDs are the nav's, in the nav's order, and the
 /// reader of `sections.ts` sees an ID added to one side alone (M).
+/// docs/features/doc-library.md DL17: ten, `documents` right after `tree`.
 #[test]
 fn workspaces_core_sections_are_the_nav_s_ids_in_order() {
     let text = read(&ui_dir().join("src/app/sections.ts"));
@@ -2169,16 +2170,18 @@ fn workspaces_core_sections_are_the_nav_s_ids_in_order() {
         .iter()
         .map(|id| (*id).to_owned())
         .collect();
-    assert_eq!(ui.len(), 9, "sections.ts's nine: {ui:?}");
+    assert_eq!(ui.len(), 10, "sections.ts's ten: {ui:?}");
     assert_eq!(core, ui, "core's SECTIONS against ui/src/app/sections.ts");
+    let tree = ui.iter().position(|id| id == "tree").expect("tree");
+    assert_eq!(ui[tree + 1], "documents", "{ui:?}");
 
     let added = text.replacen(
         "] as const;",
-        "  { id: \"atlas\", label: \"Atlas\", about: \"A tenth.\" },\n] as const;",
+        "  { id: \"atlas\", label: \"Atlas\", about: \"An eleventh.\" },\n] as const;",
         1,
     );
     let read_added = section_ids(&added);
-    assert_eq!(read_added.len(), 10);
+    assert_eq!(read_added.len(), 11);
     assert_ne!(core, read_added, "a section added to the UI alone is seen");
 }
 

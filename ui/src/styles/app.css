@@ -5420,6 +5420,312 @@ mark {
   gap: var(--space-100);
 }
 
+/* Documents (docs/features/doc-library.md "Description and interactions"): the count line, the filter bar and the
+   library table. The bar wraps at any width: a facet's head, its All button, the toggles and Include
+   archive each wrap whole; a facet's values open in a full-width panel under the bar, their chips
+   wrapping. The table keeps each column's minimum width and scrolls sideways in its own focusable
+   region, never the page, so 320 px reads it whole; titles, tags and names in any script wrap
+   between words, a long one anywhere. An expanded Decisions cell opens a full-width row below its
+   row. Every colour, size and space a token. */
+.documents-view {
+  min-width: 0;
+}
+
+.documents-count {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.documents-filters {
+  display: grid;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
+.documents-search {
+  display: grid;
+  gap: var(--space-050);
+  max-width: 32rem;
+}
+
+.documents-facets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
+.documents-facet {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.documents-facet-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+  max-width: 100%;
+  min-height: var(--control-height);
+  padding: var(--space-050) var(--space-100);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out;
+}
+
+.documents-facet-button:hover {
+  border-color: var(--focus-ring);
+}
+
+.documents-facet-button[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.documents-facet-name {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.documents-facet-value {
+  font-weight: var(--font-weight-semibold);
+}
+
+.documents-facet-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-075) var(--space-100);
+  padding: var(--space-100);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-sunken);
+  min-width: 0;
+}
+
+.documents-facet-panel[hidden] {
+  display: none;
+}
+
+.documents-chip {
+  max-width: 100%;
+}
+
+.documents-chip-label {
+  overflow-wrap: anywhere;
+}
+
+/* Under a failed read: the rows shown are the last answer, whose archive the checkbox no longer says. */
+.documents-shown {
+  color: var(--text-secondary);
+}
+
+.documents-archive {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+  min-height: var(--target-min);
+  cursor: pointer;
+}
+
+.documents-view > .error-panel,
+.documents-table-wrap {
+  justify-self: stretch;
+}
+
+.documents-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.documents-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.documents-table th,
+.documents-table td {
+  padding: var(--space-075) var(--space-100);
+  border-top: 1px solid var(--border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.documents-table thead th {
+  padding: var(--space-025) 0;
+  border-top: 0;
+  vertical-align: bottom;
+  overflow-wrap: break-word;
+}
+
+.documents-table thead .button {
+  text-align: start;
+}
+
+/* A header that sorts nothing stands where the cells' words start. */
+.documents-table thead th:not([aria-sort]):not(:has(.button)) {
+  padding: var(--space-025) var(--space-100);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.documents-table tbody th {
+  min-width: 18ch;
+  font-weight: var(--font-weight-regular);
+  overflow-wrap: break-word;
+}
+
+.documents-table td {
+  min-width: 8ch;
+  overflow-wrap: break-word;
+}
+
+.documents-link {
+  font-weight: var(--font-weight-medium);
+}
+
+/* The name below the title, whole: never broken at a hyphen unless it cannot fit. */
+.documents-name {
+  display: block;
+  padding-top: var(--space-025);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  overflow-wrap: anywhere;
+}
+
+.documents-figure,
+.documents-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.documents-changed {
+  min-width: 14ch;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  overflow-wrap: anywhere;
+}
+
+.documents-used .badge {
+  white-space: nowrap;
+}
+
+.documents-none {
+  color: var(--text-secondary);
+}
+
+.documents-decisions {
+  min-width: 16ch;
+}
+
+.documents-decisions .lozenge {
+  margin-top: var(--space-050);
+}
+
+.documents-decisions-button {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-050);
+  min-height: var(--target-min);
+  padding: var(--space-025) var(--space-050);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--font-size-body);
+  text-align: start;
+  cursor: pointer;
+}
+
+.documents-decisions-button:hover {
+  background: var(--surface-hovered);
+}
+
+.documents-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050);
+  min-width: 12ch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.documents-tag {
+  max-width: 100%;
+  padding: 0 var(--space-075);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  overflow-wrap: anywhere;
+}
+
+/* The expanded decisions: a full-width row, its groups side by side while they fit, then stacked. */
+.documents-decisions-row > td {
+  background: var(--surface-sunken);
+}
+
+.documents-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-200) var(--space-400);
+  max-width: 100%;
+}
+
+.documents-group {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+  max-width: var(--reading-width);
+}
+
+.documents-group-title {
+  font-weight: var(--font-weight-semibold);
+}
+
+.documents-decision-list {
+  display: grid;
+  gap: var(--space-075);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.documents-decision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-025) var(--space-100);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.documents-decision-fact {
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
 /* The chain canvas: lanes' names as text above their boxes, the cut's rule down the gap. */
 .chain-lane {
   display: grid;

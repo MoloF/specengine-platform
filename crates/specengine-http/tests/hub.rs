@@ -1461,7 +1461,13 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// the project's queue events a login already reads through `events`, and
 /// its `auto` head judged for the hub's surface, never `[team]` beyond the
 /// switch.
-const GET_ROUTES: [&str; 34] = [
+///
+/// docs/features/doc-library.md (RM-0127, DL2) judged
+/// `/api/projects/{p}/library`, the 35th: mounted for every login, a trusted
+/// read of the front-matter of the spec files a login already reads through
+/// `tree`, `map` and `nodes`, their `canon` links and each file's last commit
+/// (as `catalog` serves it), no trace data, never `[team]`.
+const GET_ROUTES: [&str; 35] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1478,6 +1484,7 @@ const GET_ROUTES: [&str; 34] = [
     "/api/projects/{p}/graph",
     "/api/projects/{p}/health",
     "/api/projects/{p}/inbox",
+    "/api/projects/{p}/library",
     "/api/projects/{p}/lock-diff",
     "/api/projects/{p}/map",
     "/api/projects/{p}/nodes/{*ref}",
@@ -2278,8 +2285,9 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
     // docs/features/department-overview.md DO10 (`cards/counts`); 33 since
     // docs/features/corpus-map.md CM3 (`map`) and
     // docs/features/scope-rings.md SR4 (`rings`); 34 since
-    // docs/features/auto-feed.md FD3 (`feed`).
-    assert_eq!(GET_ROUTES.len(), 34);
+    // docs/features/auto-feed.md FD3 (`feed`); 35 since
+    // docs/features/doc-library.md DL2 (`library`).
+    assert_eq!(GET_ROUTES.len(), 35);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

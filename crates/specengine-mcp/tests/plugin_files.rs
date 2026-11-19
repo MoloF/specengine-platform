@@ -306,6 +306,10 @@
 //!   with plugin.json's version set back 0.47.0's; no `SCHEMA_PINS` entry,
 //!   the last still 0.46.0. M: plugin.json left at 0.47.0; another file
 //!   changed.
+//! - doc-library (RM-0127): 0.47.1 -> 0.47.2, PATCH, a version-only bump
+//!   (RM-0127 changed no plugin file). A `PINS` entry 0.47.2, the tree with
+//!   plugin.json's version set back 0.47.1's; no `SCHEMA_PINS` entry, the
+//!   last still 0.46.0. M: plugin.json left at 0.47.1; another file changed.
 //!
 //! The repository is only read.
 
@@ -767,6 +771,12 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.47.1",
         "4666014489434cc9b9b36572f0196dc04231188b03b247444f283297c119b314",
+    ),
+    // doc-library (RM-0127: 0.47.1 -> 0.47.2, PATCH): plugin.json's version
+    // alone; set back, the tree hashes as 0.47.1's pin.
+    (
+        "0.47.2",
+        "3710d1bc27f2a453da994ac2939b7ea98362674c5e1a9ee38a561a9905085d9d",
     ),
 ];
 
@@ -2372,7 +2382,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// PP7: no skill text changed), 0.46.0 since usage-orphans (RM-0111, UO6: no
 /// skill text changed), 0.46.1 since the patch of RM-0114 to RM-0119 (no skill
 /// text changed), 0.47.0 since auto-mode (RM-0120 to RM-0124: no skill text
-/// changed), 0.47.1 since write-cost (RM-0125: no skill text changed).
+/// changed), 0.47.1 since write-cost (RM-0125: no skill text changed),
+/// 0.47.2 since doc-library (RM-0127: no skill text changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2395,7 +2406,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.47.1")
+        json!("0.47.2")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2548,11 +2559,36 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // doc-library (RM-0127: 0.47.1 -> 0.47.2, PATCH): plugin.json's version
+    // alone; set back, the tree is 0.47.1's pinned content, every skill and
+    // role byte-equal. M: plugin.json left at 0.47.1; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.47.2"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.47.2"),
+        "plugin.json's version"
+    );
+    let at_0_47_1 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.47.2\"",
+        "\"version\": \"0.47.1\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_47_1),
+        PINS[PINS.len() - 2].1,
+        "0.47.2 changes plugin.json's version only"
+    );
+    let tree = at_0_47_1;
+    let pins_0_47_1 = &PINS[..PINS.len() - 1];
     // write-cost (RM-0125, WC17: 0.47.0 -> 0.47.1, PATCH): plugin.json's
     // version alone; set back, the tree is 0.47.0's pinned content, every
     // skill and role byte-equal. M: plugin.json left at 0.47.0; another file
     // changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.47.1"));
+    assert_eq!(
+        pins_0_47_1.last().map(|(version, _)| *version),
+        Some("0.47.1")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.47.1"),
@@ -2566,11 +2602,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_47_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_47_1[pins_0_47_1.len() - 2].1,
         "0.47.1 changes plugin.json's version only"
     );
     let tree = at_0_47_0;
-    let pins_0_47_0 = &PINS[..PINS.len() - 1];
+    let pins_0_47_0 = &pins_0_47_1[..pins_0_47_1.len() - 1];
     // auto-mode (RM-0120 to RM-0124, auto-runner.md RN8: 0.46.1 -> 0.47.0,
     // MINOR): plugin.json's version and the runner `scripts/autopilot.sh`;
     // both set back, the tree is 0.46.1's pinned content, every skill and

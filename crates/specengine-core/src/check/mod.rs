@@ -137,10 +137,11 @@ pub use working_set::worst_w;
 /// `parent-cycle`), then slice 4b-2's `rev-not-raised` (added by the
 /// store's runs against `HEAD` only), then `team-config`, a bad `[team]`,
 /// and `card-config`, a bad `[card]` (task spec `release-hardening` RH-R4),
-/// each added by every store run from its setup, never a `cannot-check`. A
-/// stale baseline entry is no finding: it goes to [`Report::stale`], labelled
-/// `debt-stale` only in the detail lines.
-pub const CHECK_CODES: [&str; 38] = [
+/// each added by every store run from its setup, never a `cannot-check`,
+/// then `tag-invalid`, a warning per `tags:` entry left out (task spec
+/// `doc-library`). A stale baseline entry is no finding: it goes to
+/// [`Report::stale`], labelled `debt-stale` only in the detail lines.
+pub const CHECK_CODES: [&str; 39] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -179,4 +180,5 @@ pub const CHECK_CODES: [&str; 38] = [
     "rev-not-raised",
     "team-config",
     "card-config",
+    "tag-invalid",
 ];

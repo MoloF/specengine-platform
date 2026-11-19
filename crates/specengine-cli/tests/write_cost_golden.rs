@@ -528,3 +528,74 @@ golden! {
     verify_ecs => "verify-ecs",
     verify_tests => "verify-tests",
 }
+
+// ------------------------------------------- the compare's own rules
+
+/// A scratch directory removed on drop, the test's own.
+struct TempDir(std::path::PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// docs/features/doc-library.md (RM-0127): the `<today>` mask is the
+/// clock's alone. A run masks its own day
+/// unless the corpus's files hold that date; a fixture's own date is never
+/// masked, on its day or another; two runs on days the files do not hold
+/// give one form. The limit, pinned: on a day the files hold, a date the
+/// clock gave that day stays as written too (one string, two sources).
+#[test]
+fn today_is_the_clocks_date_alone() {
+    use write_cost_common::WallClock;
+    let fixture = TempDir(std::env::temp_dir().join(format!(
+        "wc-dates-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos())
+    )));
+    std::fs::create_dir_all(fixture.0.join("docs")).expect("a scratch corpus");
+    std::fs::write(
+        fixture.0.join("docs/core.md"),
+        "---\nreviewed: 2026-11-15\nshipped: 2026-11-19\n---\n",
+    )
+    .expect("a file");
+    let answer = |day: &str| {
+        json!({
+            "diff": "@@ -9,11 +9,15 @@ reviewed: 2026-11-15",
+            "created_at": format!("{day}T09:01:00Z"),
+            "staged_on": day,
+            "shipped": "shipped: 2026-11-19",
+        })
+    };
+    let on = |day: &str| {
+        WallClock::between(&format!("{day}T09:00:00Z"), &format!("{day}T09:05:00Z"))
+            .with_dates_of(&fixture.0)
+            .normalized(answer(day))
+    };
+    let form = json!({
+        "diff": "@@ -9,11 +9,15 @@ reviewed: 2026-11-15",
+        "created_at": "<now>",
+        "staged_on": "<today>",
+        "shipped": "shipped: 2026-11-19",
+    });
+    assert_eq!(on("2026-11-14"), form);
+    assert_eq!(on("2026-11-20"), form, "another day, one form");
+    // On a day the corpus's files hold, the fixture's dates stay, and so
+    // does the clock's date of that day (the limit).
+    for held in ["2026-11-15", "2026-11-19"] {
+        let got = on(held);
+        assert_eq!(
+            got["diff"], form["diff"],
+            "{held}: the fixture's date stays"
+        );
+        assert_eq!(got["shipped"], form["shipped"], "{held}");
+        assert_eq!(got["created_at"], "<now>", "{held}: a stamp is the clock's");
+        assert_eq!(
+            got["staged_on"], held,
+            "{held}: the clock's date stays as written"
+        );
+    }
+}

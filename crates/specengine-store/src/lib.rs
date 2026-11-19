@@ -301,7 +301,12 @@ pub use worktree::{
 ///
 /// 17: `file_stats` and `walk_notes`, the freshness step's tables, outside
 /// the dump (`docs/features/read-trust.md` "Data").
-pub const INDEX_FORMAT: u32 = 17;
+///
+/// 18: the typed front-matter key `tags` (`fields.tags`), no longer kept
+/// in `extra` with `unknown-key`; no column. An unchanged file is re-parsed
+/// only on a new stamp
+/// (`docs/features/doc-library.md`, "`INDEX_FORMAT` 18").
+pub const INDEX_FORMAT: u32 = 18;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

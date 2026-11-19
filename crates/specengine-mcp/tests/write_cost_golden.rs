@@ -93,7 +93,7 @@ fn cases(corpus: &str) -> BTreeMap<String, Value> {
     let repo = Repo::new("mcp", corpus);
     let mut cases = BTreeMap::new();
     let found = probe(&repo.env(), &repo.git_env());
-    let mut clock = WallClock::start();
+    let mut clock = WallClock::start().with_dates_of(&repo.root);
     let mut session = Session::open(Era::Stateless, &[], Some(&repo.root), Home::At(&repo.home));
     match found {
         Err(error) => {

@@ -556,12 +556,13 @@ const SOUND_FLOW: [&str; 8] = [
     "return = \"sent-back\"",
 ];
 
-/// The preset's `sound` workspace, its lines in order.
+/// The preset's `sound` workspace, its lines in order (`documents` right
+/// after `tree` since docs/features/doc-library.md DL17).
 const SOUND_WORKSPACE: [&str; 6] = [
     "[[workspace]]",
     "name = \"sound\"",
     "title = \"Sound\"",
-    "sections = [\"board\", \"flow\", \"tree\", \"questions\", \"inbox\"]",
+    "sections = [\"board\", \"flow\", \"tree\", \"documents\", \"questions\", \"inbox\"]",
     "landing = \"board\"",
     "flows = [\"sound\"]",
 ];

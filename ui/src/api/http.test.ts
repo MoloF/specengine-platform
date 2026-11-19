@@ -12,6 +12,8 @@ import {
   aGraphNode,
   aGraphView,
   aHealthReport,
+  aLibrary,
+  aLibraryRow,
   aLink,
   aMap,
   aMapEdge,
@@ -292,6 +294,38 @@ describe("the map read (CM3 of corpus-map)", () => {
   it("is judged: a 404 that is no error body rejects too, never read as the map", async () => {
     stubFetch(() => jsonAnswer(404, served));
     expect((await rejection(new HttpClient().getMap("alpha", { archive: false }))).status).toBe(404);
+  });
+});
+
+// docs/features/doc-library.md "The route", "The UI seam": the library read GETs `/library`, `archive`
+// only as true, with its query's AbortSignal; its 200 resolves as sent; it is judged, so a query's 400,
+// an older daemon's 404 and a 503 reject in the daemon's words, and a 404 that is no error body is
+// never read as the library.
+describe("the library read (DL2 of doc-library)", () => {
+  const served = aLibrary([aLibraryRow({ name: "DOM-HARBOR", tags: ["clock"] })]);
+
+  it("asks `/library`, `?archive=true` only when asked, its answer resolved as sent, with the caller's AbortSignal", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    const controller = new AbortController();
+    expect(await new HttpClient().getLibrary("my project", { archive: false }, controller.signal)).toEqual(served);
+    expect(await new HttpClient().getLibrary("my project", { archive: true })).toEqual(served);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/my%20project/library", "/api/projects/my%20project/library?archive=true"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it.each([
+    [400, "`kinds` is no query name of library: it takes archive"],
+    [404, "no route /api/projects/alpha/library: the routes are /api/projects and the web UI"],
+    [503, "spec library: the index's format 19 is newer than this binary's 18"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getLibrary("alpha", { archive: false })))).toEqual({ status, message });
+  });
+
+  it("is judged: a 404 that is no error body rejects too, never read as the library", async () => {
+    stubFetch(() => jsonAnswer(404, served));
+    expect((await rejection(new HttpClient().getLibrary("alpha", { archive: false }))).status).toBe(404);
   });
 });
 

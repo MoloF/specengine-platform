@@ -62,25 +62,27 @@ use crate::project_toml::ProjectError;
 use crate::team_toml::TEAM_ENTRIES_MAX;
 
 /// The section IDs, as `ui/src/app/sections.ts` lists them, in its order.
-pub const SECTIONS: [&str; 9] = [
+pub const SECTIONS: [&str; 10] = [
     "inbox",
     "tasks",
     "board",
     "roadmap",
     "flow",
     "tree",
+    "documents",
     "graph",
     "health",
     "questions",
 ];
 
 /// [`SECTIONS`] without `tasks`: the implicit workspace's nav.
-pub const IMPLICIT_SECTIONS: [&str; 8] = [
+pub const IMPLICIT_SECTIONS: [&str; 9] = [
     "inbox",
     "board",
     "roadmap",
     "flow",
     "tree",
+    "documents",
     "graph",
     "health",
     "questions",

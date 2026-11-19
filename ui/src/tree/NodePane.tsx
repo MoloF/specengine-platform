@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNode, useProjectName, type InboxQuery } from "../api/queries";
 import { openDocFrom } from "../app/location";
@@ -20,7 +20,6 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { BindingsPanel } from "./BindingsPanel";
 import { BundlePanel } from "./BundlePanel";
 import { factsOf } from "./Facts";
 import { LinksPanel } from "./LinksPanel";
@@ -28,6 +27,13 @@ import { proposalsFor } from "./matching";
 import { ProposalsPanel } from "./ProposalsPanel";
 import { rowName, type TreeRow } from "./rows";
 import { TextPanel, type TextTarget } from "./TextPanel";
+
+/**
+ * The Bindings tab, with its lock diffs and drift lines, a chunk of its own, read on the tab's first
+ * opening: first load stays under its bar (`docs/canon/ui-languages.md` "Size") as Documents' chrome
+ * joins it (docs/features/doc-library.md "Description and interactions").
+ */
+const BindingsPanel = lazy(() => import("./BindingsPanel").then((module) => ({ default: module.BindingsPanel })));
 
 type TabId = "text" | "links" | "bindings" | "bundle" | "proposals";
 
@@ -255,7 +261,9 @@ export function NodePane({
         <TabPanel base={base} id="bindings" selected={tab === "bindings"}>
           {opened.has("bindings") && (
             <RegionBoundary name={t("tree.node.boundary.bindings")}>
-              <BindingsPanel project={project} nodeRef={nodeRef} onFollow={onFollow} />
+              <Suspense fallback={<Skeleton label={t("tree.bindings.loading", { ref: nodeRef })} lines={4} />}>
+                <BindingsPanel project={project} nodeRef={nodeRef} onFollow={onFollow} />
+              </Suspense>
             </RegionBoundary>
           )}
         </TabPanel>

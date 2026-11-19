@@ -1842,7 +1842,8 @@ fn ac_r9_tasks_list_it_bound_or_by_the_nodes_it_amends() {
 /// docs/features/ui-node-bindings.md added `ShownNode` and
 /// `ShownBindings`, TE-1; 81 since docs/features/lock-diff.md added its
 /// five, TE-2; 151 now, the last three docs/features/usage-orphans.md's,
-/// UO9; the amendment adds none).
+/// UO9; 174 since docs/features/doc-library.md added its five, DL2; the
+/// amendment adds none).
 /// M: a key added.
 #[test]
 fn ac_r10_the_review_is_a_new_files_46_keys() {
@@ -1868,7 +1869,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        169,
+        174,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1889,8 +1890,9 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          (docs/features/usage-orphans.md, UO9: `LinkUsage`, `HealthOrphans`, \
          `HealthOrphan`), scope-rings' three (docs/features/scope-rings.md, SR4), \
          corpus-map's six (docs/features/corpus-map.md, CM3), auto-feed's eight \
-         (docs/features/auto-feed.md, FD3) and hub-auto's `Delegated` \
-         (docs/features/hub-auto.md, HA7)"
+         (docs/features/auto-feed.md, FD3), hub-auto's `Delegated` \
+         (docs/features/hub-auto.md, HA7) and doc-library's five \
+         (docs/features/doc-library.md, DL2)"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

@@ -466,10 +466,10 @@ describe("nav, switcher and keys (AC-08 of ui-home)", () => {
     return client;
   }
 
-  it("lists nine entries, Overview first to the home, current only there; Tasks off the nav (docs/features/workspaces.md WS-1)", async () => {
+  it("lists the entries, Overview first to the home, current only there; Tasks off the nav (docs/features/workspaces.md WS-1), Documents after Spec tree (DL17 of doc-library)", async () => {
     await openHome(stubClient());
     await waitFor(() => {
-      expect(navLinks()).toHaveLength(10);
+      expect(navLinks()).toHaveLength(11);
     });
     expect(navLinks().map((link) => [link.textContent, link.getAttribute("href"), link.getAttribute("aria-current")])).toEqual([
       ["Overview", "#/alpha", "page"],
@@ -480,6 +480,7 @@ describe("nav, switcher and keys (AC-08 of ui-home)", () => {
       ["Roadmap", "#/alpha/roadmap", null],
       ["Flow", "#/alpha/flow", null],
       ["Spec tree", "#/alpha/tree", null],
+      ["Documents", "#/alpha/documents", null],
       ["Graph", "#/alpha/graph", null],
       ["Health", "#/alpha/health", null],
       ["Questions", "#/alpha/questions", null],

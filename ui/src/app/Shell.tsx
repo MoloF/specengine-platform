@@ -8,6 +8,7 @@ import { DocModal } from "../doc/DocModal";
 import { DocPage } from "../doc/DocPage";
 import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
 import { HealthView } from "../health/HealthView";
+import type { DocumentsMemory, DocumentsState } from "../documents/DocumentsView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
 import { HomeView } from "../overview/HomeView";
 import { InboxView } from "../inbox/InboxView";
@@ -52,6 +53,8 @@ const GraphView = lazy(() => import("../graph/GraphView").then((module) => ({ de
  */
 const CardPage = lazy(() => import("../board/CardPage").then((module) => ({ default: module.CardPage })));
 const FeedView = lazy(() => import("../feed/FeedView").then((module) => ({ default: module.FeedView })));
+/** Documents, every document as a library, a chunk of its own (docs/features/doc-library.md "Description and interactions", DL19). */
+const DocumentsView = lazy(() => import("../documents/DocumentsView").then((module) => ({ default: module.DocumentsView })));
 
 /**
  * Calls `onLanded` once committed beside a lazy view: a Suspense boundary resolves without the
@@ -290,6 +293,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
       recall: (project) => boardStates.current.get(project),
       remember: (project, state) => {
         boardStates.current.set(project, state);
+      },
+    }),
+    [],
+  );
+  /** Documents' facets, Include archive and order per project for this page's life; its module is the stored choice (docs/features/doc-library.md "Description and interactions"). */
+  const documentsStates = useRef(new Map<string, DocumentsState>());
+  const documentsMemory = useMemo<DocumentsMemory>(
+    () => ({
+      recall: (project) => documentsStates.current.get(project),
+      remember: (project, state) => {
+        documentsStates.current.set(project, state);
       },
     }),
     [],
@@ -687,6 +701,21 @@ export function Shell({ scenario }: { scenario: string | null }) {
         moduleTitle={moduleKinds === null ? null : (choice.module?.title ?? null)}
         moduleKnown={moduleRoot !== undefined}
       />
+    );
+  } else if (route.section === "documents") {
+    // The Module facet is the module bar's stored choice, read and written here (docs/features/doc-library.md "Description and interactions").
+    view = (
+      <Suspense key={route.project} fallback={<Skeleton label={t("app.lazy.documents")} lines={6} />}>
+        <DocumentsView
+          project={route.project}
+          memory={documentsMemory}
+          modules={workspaces.data?.modules ?? []}
+          module={choice.module}
+          onChooseModule={choice.chooseModule}
+          moduleKnown={moduleRoot !== undefined}
+        />
+        <Landed onLanded={onLanded} />
+      </Suspense>
     );
   } else if (route.section === "graph") {
     view = (

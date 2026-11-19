@@ -25,8 +25,12 @@ use super::resolve::{Resolution, Resolver, declared_references, reference_line, 
 use super::text::{FileText, Written, front_matter_failed, is_calendar_date, is_date_shaped};
 use super::working_set::worst_w;
 use super::{generated, graph, links, rules};
+use crate::library::judge_tags;
 use crate::record::{HUB_ID_START, record_id};
 use crate::{Paths, is_under};
+
+/// The front-matter key of a document's free labels.
+const TAGS_KEY: &str = "tags";
 
 /// The one table: how a parser diagnostic reaches the report. Every code
 /// keeps the parser's severity but `homoglyph` and `duplicate-id`, which are
@@ -527,6 +531,39 @@ impl FileCheck<'_, '_> {
         self.ids(document);
         self.canon_path(document);
         self.references(document);
+        self.tags(document);
+    }
+
+    /// `tag-invalid`, a warning per `tags:` entry the library leaves out
+    /// ([`judge_tags`]; task spec `doc-library`, "Front-matter `tags`"), at
+    /// the key's line, subject `tags`. A mistyped `tags:` is the parser's
+    /// `frontmatter-type` alone.
+    fn tags(&mut self, document: &Node) {
+        let Some(written) = document
+            .fields
+            .as_ref()
+            .and_then(|fields| fields.tags.as_deref())
+        else {
+            return;
+        };
+        let problems = judge_tags(written).problems;
+        if problems.is_empty() {
+            return;
+        }
+        let line = self.key_line(TAGS_KEY);
+        for problem in problems {
+            self.findings.push(Finding {
+                code: "tag-invalid".to_owned(),
+                severity: Severity::Warning,
+                path: self.file.path.clone(),
+                line,
+                subject: TAGS_KEY.to_owned(),
+                message: problem.message,
+                fix: None,
+                debt: None,
+                introduced: None,
+            });
+        }
     }
 
     fn push(&mut self, code: &str, line: usize, subject: &str, message: String) {

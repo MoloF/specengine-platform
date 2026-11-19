@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-19
 ---
 
 # Workspaces: a trade's lens on a project
@@ -25,20 +25,20 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 |---|---|
 | `name` | required; `name_problem`'s `[a-z0-9_-]`, 1-64 bytes; once |
 | `title` | any script, 1-64 UTF-8 bytes, no control character; the name |
-| `sections` | at most 32 of `inbox`, `tasks`, `board`, `roadmap`, `flow`, `tree`, `graph`, `health`, `questions` (`SECTIONS`); the eight but `tasks` |
+| `sections` | at most 32 of `inbox`, `tasks`, `board`, `roadmap`, `flow`, `tree`, `documents` (`spec-library.md`), `graph`, `health`, `questions` (`SECTIONS`); the nine but `tasks` |
 | `landing` | `overview` or a kept section; `overview` |
 | `flows` | at most 32 `[[card.flow]]` names; `null`, every flow |
 | `module` | a served module; `null` |
 | `logins` | at most 256 hub logins landing here, judged last: `hub-department.md` "Config"; none |
 
-`[[module]]`: `name` as above; `title` as a workspace's; exactly one of `root`, 1-256 bytes, no control character or end space, a REF in `spec show`'s forms, unresolved, and `kinds`, a direction (`directions.md` "Config"). At most 32 workspaces, 64 modules; an empty array is no key. No `[[workspace]]`: the implicit `all`, "All sections", the eight, `overview`, every flow, no module, no note.
+`[[module]]`: `name` as above; `title` as a workspace's; exactly one of `root`, 1-256 bytes, no control character or end space, a REF in `spec show`'s forms, unresolved, and `kinds`, a direction (`directions.md` "Config"). At most 32 workspaces, 64 modules; an empty array is no key. No `[[workspace]]`: the implicit `all`, "All sections", the nine, `overview`, every flow, no module, no note.
 
 **Judging.** `[[module]]`, then `[[workspace]]`: a malformed table (not an array of tables, an unknown key, a wrong type, `name` missing, neither or both of `root` and `kinds`, a bad name, title, root or `kinds`, a name twice, a limit passed) gives its default, no module or the implicit workspace, and one note, the first problem by line. `logins` is the seventh key; its notes name a type and a position, never the value (`hub-department.md` "Privacy"). Then each workspace: an unknown or repeated section or flow is left out, a landing not kept is `overview`, an unserved module `null`, each with a note; no flow left, or `flows = []` (`[card]` unread), is `null`. `[card]` is read once per workspaces read (`card_from_toml`), judging flows and giving `disciplines`; if it does not read, every `disciplines` is `[]` and listed flows are served as written, repeats too, with one note, pushed only there. Not TOML: the implicit workspace, one note (`ProjectConfig` refuses it first). A note's line: the value's, a missing key's header's, else 1. `<config>` as given:
 
 ```text
 <config>:<line>: <problem>; the implicit workspace is served
 <config>:<line>: <problem>; no module is served
-<config>:<line>: workspace `<w>`: `<s>` is no section (inbox, tasks, board, roadmap, flow, tree, graph, health, questions): left out
+<config>:<line>: workspace `<w>`: `<s>` is no section (inbox, tasks, board, roadmap, flow, tree, documents, graph, health, questions): left out
 <config>:<line>: workspace `<w>`: section `<s>` is listed twice: the second left out
 <config>:<line>: workspace `<w>`: no `[[card.flow]]` is named `<f>`: left out
 <config>:<line>: workspace `<w>`: flow `<f>` is listed twice: the second left out
@@ -61,7 +61,7 @@ A workspace is never an entitlement, a control point, a filter that hides work o
 
 UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edit raises no event).
 
-- **Nav** (`routes.ts` `navOf`): Overview, Activity (`spec-feed.md` "UI", in every department, no section), then the workspace's sections that pass `isSectionId`. Pending: a skeleton, `aria-busy`; failed: the nine, or the kept answer's. A section off the nav renders on its route, no redirect, no item `aria-current`; the palette's Sections lists Overview, Activity and all nine, uncut.
+- **Nav** (`routes.ts` `navOf`): Overview, Activity (`spec-feed.md` "UI", in every department, no section), then the workspace's sections that pass `isSectionId`. Pending: a skeleton, `aria-busy`; failed: the ten, or the kept answer's. A section off the nav renders on its route, no redirect, no item `aria-current`; the palette's Sections lists Overview, Activity and all ten, uncut.
 - **Keys** (`choice.ts`): `specengine.workspace.<p>`, a name, unserved: the `default`, else the first workspace; a hub's keys end `.<login>` (`hub-department.md` "Screen"). `specengine.module.<p>`: `""` All modules; a served name; none or unserved: the workspace's `module`. Choosing a workspace removes it. Storage refusing: held until a reload.
 - **Switcher**: a select "Department" in the header, titles in served order, `workspaceHint` its description and `title`, with two or more. Choosing stores, removes the module key, pushes the landing (`#/<p>` for `overview`).
 - **Landing**: `#/` is replaced, no history entry, by the first project's landing once read, `#/<p>` on failure; a typed `#/<p>` is the Overview, the chosen department's numbers (`card-counts.md` "Overview").
@@ -80,7 +80,7 @@ http `tests/no_domain.rs` takes each `[[workspace]]` and `[[module]]` name and `
 
 ## Known limits
 
-- **Older binaries.** `RawFile` is `deny_unknown_fields`, so a `spec`, daemon or MCP server older than `workspaces` refuses a whole config holding either table; a `v0.29.1` hub fails every read with 503. One older than `departments` refuses a flow's `title` and drops every module when one holds `kinds`, one note. The rule: **commit no such key before every hub, terminal and plugin serving the project runs a build that reads it**. The gate's hook is unaffected (`gate.md`).
+- **Older binaries.** `RawFile` is `deny_unknown_fields`, so a `spec`, daemon or MCP server older than `workspaces` refuses a whole config holding either table; a `v0.29.1` hub fails every read with 503. One older than `departments` refuses a flow's `title` and drops every module when one holds `kinds`, one note. One older than `doc-library` leaves `documents` out, one note. The rule: **commit no such key before every hub, terminal and plugin serving the project runs a build that reads it**. The gate's hook is unaffected (`gate.md`).
 - Flow draws no direction (RM-0102). A local choice is per browser. No `spec check` finding: only the notes.
 
 ## Tests

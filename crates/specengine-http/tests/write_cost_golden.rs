@@ -84,7 +84,7 @@ fn cases(corpus: &str) -> BTreeMap<String, Value> {
         json!({"target": found.target, "path": found.path}),
     );
     let slug = slug(&repo).expect("a slug");
-    let mut clock = WallClock::start();
+    let mut clock = WallClock::start().with_dates_of(&repo.root);
     let server = start(&repo, &hub_env(&repo));
 
     let (answer, update) = propose_update(&repo, &found, "wc-hub-update");

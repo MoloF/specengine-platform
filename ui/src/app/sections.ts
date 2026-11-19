@@ -1,8 +1,9 @@
 import type { Translate } from "../i18n";
 
 /**
- * The nine sections of the nav, in order (07 §3 "Web UI — screens"). Each one's label and what it
- * shows are the catalog's `app.sections.<id>` (docs/features/ui-languages.md "Description and interactions").
+ * The ten sections of the nav, in order (07 §3 "Web UI — screens"; Documents after Spec tree since
+ * docs/features/doc-library.md "Sections and presets"). Each one's label and what it shows are the
+ * catalog's `app.sections.<id>` (docs/features/ui-languages.md "Description and interactions").
  */
 export const SECTIONS = [
   { id: "inbox" },
@@ -11,6 +12,7 @@ export const SECTIONS = [
   { id: "roadmap" },
   { id: "flow" },
   { id: "tree" },
+  { id: "documents" },
   { id: "graph" },
   { id: "health" },
   { id: "questions" },

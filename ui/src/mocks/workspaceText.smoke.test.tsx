@@ -116,6 +116,6 @@ describe("one place for the strings (WS-15)", () => {
   });
 
   it("keeps every section label in the catalog's app.sections", () => {
-    expect(SECTIONS.map((section) => en.app.sections[section.id].label)).toEqual(["Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+    expect(SECTIONS.map((section) => en.app.sections[section.id].label)).toEqual(["Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
   });
 });

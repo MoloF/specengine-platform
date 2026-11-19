@@ -167,5 +167,10 @@
   "FeedFailedRun": ["task", "run", "outcome", "summary", "ended_at"],
   "FeedGateObserved": ["seq", "at", "path", "zone", "branch"],
   "FeedUnlanded": ["task", "status", "pack"],
-  "Delegated": ["by", "rule", "commit"]
+  "Delegated": ["by", "rule", "commit"],
+  "Library": ["archive", "notes", "counts", "rows", "truncated", "omitted"],
+  "LibraryCounts": ["documents", "archived", "decisions", "behind", "orphans"],
+  "LibraryRow": ["name", "id", "path", "title", "class", "kind", "status", "archived", "tier", "owner", "reviewed", "scope", "tags", "rev", "parent", "modules", "used_by", "mentioned_by", "orphan", "last_change", "decisions", "behind"],
+  "LibraryDecision": ["name", "id", "title", "path", "status", "group", "date", "section", "last_change", "newer"],
+  "LibraryChange": ["at", "by", "by_name", "commit", "proposal"]
 }

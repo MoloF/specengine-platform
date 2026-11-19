@@ -165,6 +165,7 @@ mod glob;
 pub mod health_toml;
 pub mod history;
 pub mod intake;
+pub mod library;
 mod lines;
 pub mod lock;
 pub mod map;

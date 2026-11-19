@@ -82,35 +82,35 @@ return = "sent-back"
 [[workspace]]
 name = "writing"
 title = "Writing"
-sections = ["flow", "tree", "board", "questions", "inbox"]
+sections = ["flow", "tree", "documents", "board", "questions", "inbox"]
 landing = "flow"
 flows = ["narrative"]
 
 [[workspace]]
 name = "development"
 title = "Development"
-sections = ["board", "inbox", "tree", "flow", "graph", "health", "roadmap", "questions"]
+sections = ["board", "inbox", "tree", "documents", "flow", "graph", "health", "roadmap", "questions"]
 landing = "board"
 flows = ["development"]
 
 [[workspace]]
 name = "art"
 title = "Art and levels"
-sections = ["board", "flow", "tree", "questions", "inbox"]
+sections = ["board", "flow", "tree", "documents", "questions", "inbox"]
 landing = "board"
 flows = ["art", "level-design"]
 
 [[workspace]]
 name = "sound"
 title = "Sound"
-sections = ["board", "flow", "tree", "questions", "inbox"]
+sections = ["board", "flow", "tree", "documents", "questions", "inbox"]
 landing = "board"
 flows = ["sound"]
 
 [[workspace]]
 name = "production"
 title = "Production"
-sections = ["inbox", "roadmap", "board", "flow", "tree", "graph", "health", "questions"]
+sections = ["inbox", "roadmap", "board", "flow", "tree", "documents", "graph", "health", "questions"]
 
 # A direction: a module chosen by node kind, with no root. The Spec tree lists
 # its kinds' nodes and a document's Inside groups them under its title; Flow,

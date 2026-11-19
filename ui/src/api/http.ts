@@ -7,6 +7,7 @@ import {
   type FeedOptions,
   type FlowOptions,
   type GraphOptions,
+  type LibraryOptions,
   type MapOptions,
   type NodeOptions,
   type RoadmapOptions,
@@ -49,6 +50,7 @@ import type {
   Identity,
   Inbox,
   IntakeDocument,
+  LibraryDocument,
   LockDiffView,
   MapDocument,
   NodeView,
@@ -531,6 +533,17 @@ export class HttpClient implements SpecEngineClient {
   async getMap(project: string, options: MapOptions, signal?: AbortSignal): Promise<MapDocument> {
     const query = queryOf([["archive", options.archive ? true : undefined]]);
     return (await request("GET", `${projectPath(project)}/map${query}`, { signal, judged: true })) as MapDocument;
+  }
+
+  /**
+   * `spec library [--archive] --json` as the browser view, never cut
+   * (`docs/features/doc-library.md` "The route"): `archive` sent only as true. Judged, so only a 200
+   * resolves: a query's 400, an older daemon's 404 and a 503 reject in the daemon's words. Takes its
+   * query's AbortSignal.
+   */
+  async getLibrary(project: string, options: LibraryOptions, signal?: AbortSignal): Promise<LibraryDocument> {
+    const query = queryOf([["archive", options.archive ? true : undefined]]);
+    return (await request("GET", `${projectPath(project)}/library${query}`, { signal, judged: true })) as LibraryDocument;
   }
 
   /**

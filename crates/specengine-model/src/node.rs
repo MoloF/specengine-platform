@@ -168,6 +168,11 @@ pub struct Fields {
     /// vocabulary nothing resolves or branches on; never counted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stage: Option<String>,
+    /// A document's free labels, every string entry as written, in written
+    /// order (task spec `doc-library` "Front-matter `tags`"): the check
+    /// judges each entry, the library serves the kept ones; never counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 /// A place a `path#name` link can land on: a heading's GitHub slug, a

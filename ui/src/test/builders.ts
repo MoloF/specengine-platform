@@ -44,6 +44,10 @@ import type {
   HealthUnbound,
   HistoryEntry,
   InboxEntry,
+  LibraryChange,
+  LibraryDecision,
+  LibraryDocument,
+  LibraryRow,
   LinkUsage,
   MapDocument,
   MapEdge,
@@ -1048,7 +1052,7 @@ export function aTrace(nodes: TraceNode[], fields: Partial<TraceDocument> = {}):
 }
 
 /** The implicit workspace's eight sections: `sections.ts`'s nine but `tasks`, in order (docs/features/workspaces.md D3). */
-export const IMPLICIT_SECTIONS = ["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"];
+export const IMPLICIT_SECTIONS = ["inbox", "board", "roadmap", "flow", "tree", "documents", "graph", "health", "questions"];
 
 /** One workspace; omitted keys as the implicit one's (docs/features/workspaces.md "Data"). */
 export function aWorkspace(fields: Partial<Workspace> & Pick<Workspace, "name">): Workspace {
@@ -1237,6 +1241,74 @@ export function aMapNode(fields: Partial<MapNode> & Pick<MapNode, "name">): MapN
     used_by: 0,
     mentioned_by: 0,
     orphan: false,
+    ...fields,
+  };
+}
+
+/** A library row: a live canon document of the kind `scene`, its title from its name, version 1, no front-matter beyond, used by none, no change read, no decision, unless given (docs/features/doc-library.md "`spec library`"). */
+export function aLibraryRow(fields: Partial<LibraryRow> & Pick<LibraryRow, "name">): LibraryRow {
+  return {
+    id: fields.name,
+    path: `docs/spec/${fields.name.toLowerCase()}.md`,
+    title: `Title of ${fields.name}`,
+    class: "canon",
+    kind: "scene",
+    status: null,
+    archived: false,
+    tier: null,
+    owner: null,
+    reviewed: null,
+    scope: null,
+    tags: [],
+    rev: 1,
+    parent: null,
+    modules: [],
+    used_by: 0,
+    mentioned_by: 0,
+    orphan: false,
+    last_change: null,
+    decisions: [],
+    behind: false,
+    ...fields,
+  };
+}
+
+/** A last change by Ann Owner at `at`, a hand commit, unless given. */
+export function aLibraryChange(fields: Partial<LibraryChange> = {}): LibraryChange {
+  return { at: "2026-01-02T10:00:00Z", by: "Ann Owner <ann@example.org>", by_name: "Ann Owner", commit: "a".repeat(40), proposal: null, ...fields };
+}
+
+/** An accepted decision with no section, no change read, unless given. */
+export function aLibraryDecision(fields: Partial<LibraryDecision> & Pick<LibraryDecision, "name">): LibraryDecision {
+  return {
+    id: fields.name,
+    title: `Decision ${fields.name}`,
+    path: `docs/records/${fields.name}.md`,
+    status: "accepted",
+    group: "accepted",
+    date: null,
+    section: null,
+    last_change: null,
+    newer: null,
+    ...fields,
+  };
+}
+
+/** The library over `rows`, its counts from them, no note, uncut, unless given. */
+export function aLibrary(rows: LibraryRow[], fields: Partial<LibraryDocument> = {}): LibraryDocument {
+  return {
+    archive: false,
+    notes: [],
+    counts: {
+      documents: rows.length,
+      archived: rows.filter((row) => row.archived).length,
+      decisions: rows.reduce((sum, row) => sum + row.decisions.length, 0),
+      behind: rows.filter((row) => row.behind === true).length,
+      orphans: rows.filter((row) => row.orphan === true).length,
+    },
+    rows,
+    truncated: false,
+    omitted: null,
     ...fields,
   };
 }

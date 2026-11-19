@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-19
 ---
 
 # spec catalog: a direction as a table of its documents
 
-Built by `direction-catalog` (RM-0106), no ADR: it rests on ADR-0076 (a direction is a module the kind reads apply), ADR-0073 (a lens hiding no work), ADR-0056 (cards), ADR-0005 (the decision history readable from git), ADR-0008 and ADR-0012. Related: `directions.md`, `spec-trace.md`, `spec-history.md`. Code: core `catalog.rs`; store `worktree.rs` (`last_commits`, `last_commits_at`, `LastCommits`); CLI `catalog.rs`, `tree.rs` (`direction_lines`), `trace.rs` (`node_work`), `subset.rs` (seams `CatalogTrace`, `CatalogItems`, `CatalogWalk`); http `app.rs`. The screen: `directions.md` "Tree".
+Built by `direction-catalog` (RM-0106), no ADR: it rests on ADR-0076 (a direction is a module the kind reads apply), ADR-0073 (a lens hiding no work), ADR-0056 (cards), ADR-0005 (the decision history readable from git), ADR-0008 and ADR-0012. Related: `directions.md`, `spec-trace.md`, `spec-history.md`. Code: core `catalog.rs`; store `worktree.rs` (`last_commits`, `last_commits_at`, `LastCommits`); CLI `catalog.rs` (`git_read`, `GitRead::notes_of`: `spec library`'s too, `spec-library.md`), `tree.rs` (`direction_lines`), `trace.rs` (`node_work`), `subset.rs` (seams `CatalogTrace`, `CatalogItems`, `CatalogWalk`); http `app.rs`. The screen: `directions.md` "Tree".
 
 ## The rule
 
@@ -35,7 +35,7 @@ No present path: no log runs; none found: the second does not. Every command is 
 
 ## The cache
 
-`LastChangeCache` (`Default`, `Sync`), the daemon's alone (`App.catalogs`); the CLI passes none. Keyed by (git common dir, `HEAD` OID), it holds per path one of three answers: the change, absent, or not reached within the cap. A path a shallow clone's history did not reach is never kept: a deepening fetch changes it under the same `HEAD`. A read takes the cached paths, walks for the rest alone and keeps them: the second read at one `HEAD` runs the four `rev-parse` alone of git, a new commit walks again, one more kind walks for its new files only. At most `LAST_CHANGE_HEADS` (4) heads, first in first out, one cache for every project the daemon serves; worktrees of one repository share a head's paths. A cached answer's text and notes byte-equal the CLI's.
+`LastChangeCache` (`Default`, `Sync`), the daemon's alone (`App.catalogs`); the CLI passes none. Keyed by (git common dir, `HEAD` OID), it holds per path one of three answers: the change, absent, or not reached within the cap. A path a shallow clone's history did not reach is never kept: a deepening fetch changes it under the same `HEAD`. A read takes the cached paths, walks for the rest alone and keeps them: the second read at one `HEAD` runs three `rev-parse` alone of git (`--local-env-vars` once per process: `spec-check-write.md` G1), a new commit walks again, one more kind walks for its new files only. At most `LAST_CHANGE_HEADS` (4) heads, first in first out, one cache for every project the daemon serves; worktrees of one repository share a head's paths. A cached answer's text and notes byte-equal the CLI's.
 
 ## Text and JSON
 
@@ -57,7 +57,7 @@ These five are scoped to the rows shown: printed only when a row is shown, the f
 
 ## Daemon, hub
 
-`GET /api/projects/:p/catalog?kinds=K[&kinds=…][&archive=true]`: `spec catalog --json` less its final LF, the browser view (never cut), in the project's turn, with the daemon's cache. It walks (`run`, not `run_read`: `spec-read-freshness.md`), its rows showing the trace's state. 400s, nothing run: `` `kinds` is required (repeat it for more) ``; an unknown name `` `<name>` is no query name of catalog: it takes kinds, archive ``. The 404 list names `catalog` after `delivery`. Key sets 138-140 of `fixtures/daemon-keys.json`: `Catalog` (6), `CatalogRow` (16 since `usage-orphans`), `CatalogChange` (6). A hub serves the route to every login over its checkout and its own queue (its `--push` clone neither shallow nor partial, `hub-git.md`). No MCP tool; `HUB_TOOLS`, the plugin version, config keys, the queue schema and the backup format unchanged. A daemon before this slice answers 404; the table shows that with Retry.
+`GET /api/projects/:p/catalog?kinds=K[&kinds=…][&archive=true]`: `spec catalog --json` less its final LF, the browser view (never cut), in the project's turn, with the daemon's cache (`App.catalogs`, shared with `…/library`). It walks (`run`, not `run_read`: `spec-read-freshness.md`), its rows showing the trace's state. 400s, nothing run: `` `kinds` is required (repeat it for more) ``; an unknown name `` `<name>` is no query name of catalog: it takes kinds, archive ``. The 404 list names `catalog` after `delivery`. Key sets 138-140 of `fixtures/daemon-keys.json`: `Catalog` (6), `CatalogRow` (16 since `usage-orphans`), `CatalogChange` (6). A hub serves the route to every login over its checkout and its own queue (its `--push` clone neither shallow nor partial, `hub-git.md`). No MCP tool; `HUB_TOOLS`, the plugin version, config keys, the queue schema and the backup format unchanged. A daemon before this slice answers 404; the table shows that with Retry.
 
 ## Known limits
 

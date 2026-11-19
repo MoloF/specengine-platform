@@ -294,7 +294,7 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
     );
 }
 
-/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 17, the stamp
+/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 18, the stamp
 /// of the code index (docs/features/symbol-index.md "Tables", TE-3), of its
 /// role table (`docs/canon/code-roles.md` "Table"; bevy-roles S5), of the
 /// layer C snapshot (docs/features/layer-c-resolve.md "Tables", R7), of the
@@ -303,13 +303,15 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
 /// (docs/features/trace-views.md "The key `stage:`") and of the stored parser
 /// messages (docs/features/flow-authoring.md "Formats"), and of core's
 /// resolved edges (docs/features/edge-table.md "Data"), and of the
-/// freshness step's tables (docs/features/read-trust.md "Data"), and the
-/// store's format history is its seventeen lines: edge-table's sixteen,
-/// verbatim, and one `17 <hash>`. M: the dump changed, the stamp kept (the store's
-/// `format.rs` turns red on the dump; this pins the stamp and the file).
+/// freshness step's tables (docs/features/read-trust.md "Data"), and of
+/// the typed `tags` (docs/features/doc-library.md "`INDEX_FORMAT` 18"), and
+/// the store's format history is its eighteen lines: read-trust's
+/// seventeen, verbatim, and one `18 <hash>`. M: the dump changed, the stamp
+/// kept (the store's `format.rs` turns red on the dump; this pins the stamp
+/// and the file).
 #[test]
-fn ac16_index_format_is_seventeen() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 17);
+fn ac16_index_format_is_eighteen() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 18);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -331,20 +333,21 @@ fn ac16_index_format_is_seventeen() {
 14 f4ce2bdef1ce75632e1347967df4cf91671ec7abef451aa03876597bb2b0b28a
 15 ce09e78513dbcf7ee55173fb3ab2bb78cc6d42b2ea87b04c845d75fe40b6d3b2
 16 dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72
+17 f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5
 ";
-    let seventeenth = history
+    let eighteenth = history
         .strip_prefix(earlier)
-        .unwrap_or_else(|| panic!("the sixteen earlier lines stay verbatim:\n{history}"));
-    let (format, hash) = seventeenth
+        .unwrap_or_else(|| panic!("the seventeen earlier lines stay verbatim:\n{history}"));
+    let (format, hash) = eighteenth
         .strip_suffix('\n')
         .and_then(|line| line.split_once(' '))
-        .unwrap_or_else(|| panic!("one more line, `17 <hash>`:\n{history}"));
-    assert_eq!(format, "17", "{history}");
+        .unwrap_or_else(|| panic!("one more line, `18 <hash>`:\n{history}"));
+    assert_eq!(format, "18", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
-        "a BLAKE3 hex: {seventeenth:?}"
+        "a BLAKE3 hex: {eighteenth:?}"
     );
-    assert_eq!(history.lines().count(), 17, "seventeen lines:\n{history}");
+    assert_eq!(history.lines().count(), 18, "eighteen lines:\n{history}");
 }
 
 /// A garden-planning corpus: no programming stack, its own prefixes and

@@ -34,7 +34,7 @@ describe("hash routes", () => {
     expect(parseHash(hash)).toEqual(route);
   });
 
-  it("lists the nav over every section: Overview to the home, then the nine, Board third, Roadmap fourth, Flow fifth (the palette's list, and the nav when no workspace was read)", () => {
+  it("lists the nav over every section: Overview to the home, then the ten, Board third, Roadmap fourth, Flow fifth, Documents after Spec tree (the palette's list, and the nav when no workspace was read; DL17 of doc-library)", () => {
     expect(navOf("a b", ALL_SECTIONS, enT).map(({ label, hash }) => [label, hash])).toEqual([
       ["Overview", "#/a%20b"],
       // Activity second, no section (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
@@ -45,6 +45,7 @@ describe("hash routes", () => {
       ["Roadmap", "#/a%20b/roadmap"],
       ["Flow", "#/a%20b/flow"],
       ["Spec tree", "#/a%20b/tree"],
+      ["Documents", "#/a%20b/documents"],
       ["Graph", "#/a%20b/graph"],
       ["Health", "#/a%20b/health"],
       ["Questions", "#/a%20b/questions"],
@@ -53,8 +54,8 @@ describe("hash routes", () => {
   });
 
   // WS-1 of docs/features/workspaces.md: the implicit workspace's nav, Tasks off it (M2: the nav drawn from SECTIONS).
-  it("lists Overview, then a workspace's sections in its order: the implicit eight leave Tasks out", () => {
-    expect(navOf("ledger-api", IMPLICIT_SECTIONS, enT).map(({ label }) => label)).toEqual(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+  it("lists Overview, then a workspace's sections in its order: the implicit nine leave Tasks out", () => {
+    expect(navOf("ledger-api", IMPLICIT_SECTIONS, enT).map(({ label }) => label)).toEqual(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
     expect(navOf("p", ["health", "board", "tree"], enT).map(({ key, hash }) => [key, hash])).toEqual([
       ["overview", "#/p"],
       ["feed", "#/p/feed"],
@@ -64,10 +65,17 @@ describe("hash routes", () => {
     ]);
   });
 
-  it("draws a served ID only if it is one of the nine, and once; a list of none is Overview alone (A4 and the edge cases of workspaces)", () => {
+  it("draws a served ID only if it is one of the ten, and once; a list of none is Overview alone (A4 and the edge cases of workspaces)", () => {
     expect(navOf("p", ["board", "stage", "board", "overview", "Tree", "tasks", "feed"], enT).map(({ key }) => key)).toEqual(["overview", "feed", "board", "tasks"]);
     expect(navOf("p", [], enT).map(({ key }) => key)).toEqual(["overview", "feed"]);
     expect(navOf("p", ["stage"], enT).map(({ key }) => key)).toEqual(["overview", "feed"]);
+  });
+
+  // DL17 of docs/features/doc-library.md: Documents is a section of its own, routed whatever the nav lists.
+  it("routes Documents, #/<p>/documents, after Spec tree", () => {
+    expect(parseHash("#/alpha/documents")).toEqual({ type: "section", project: "alpha", section: "documents", id: null });
+    expect(sectionHash("a b", "documents")).toBe("#/a%20b/documents");
+    expect(ALL_SECTIONS.indexOf("documents")).toBe(ALL_SECTIONS.indexOf("tree") + 1);
   });
 
   // WS-2: Tasks leaves the nav by data, never the routes (M3: tasks dropped from isSectionId).
@@ -117,10 +125,10 @@ describe("the tree's REF in the hash", () => {
   });
 });
 
-// LG-3 of docs/features/ui-languages.md: each of the nine sections' label and about is ru.ts's under `ruT`.
+// LG-3 of docs/features/ui-languages.md: each of the ten sections' label and about is ru.ts's under `ruT`.
 describe("the sections in Russian (LG-3)", () => {
   it("label and describe each section from ru.ts", () => {
-    expect(SECTIONS).toHaveLength(9);
+    expect(SECTIONS).toHaveLength(10);
     for (const { id } of SECTIONS) {
       expect([id, sectionLabel(id, ruT), aboutOf(id, ruT)]).toEqual([id, ru.app.sections[id].label, ru.app.sections[id].about]);
     }
@@ -229,8 +237,8 @@ describe("a card's page", () => {
     expect(cardPageHash("a b", "C/3")).toBe("#/a%20b/board/C%2F3/page");
   });
 
-  it("is no section: the nine stay pinned", () => {
-    expect(ALL_SECTIONS).toHaveLength(9);
+  it("is no section: the ten stay pinned", () => {
+    expect(ALL_SECTIONS).toHaveLength(10);
     expect(isSectionId("page")).toBe(false);
   });
 });

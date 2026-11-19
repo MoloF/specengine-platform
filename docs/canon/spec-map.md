@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-19
 ---
 
 # The corpus map: every document and its links in one picture
@@ -52,7 +52,7 @@ Values through `one_line`; the cut at `OUTPUT_CAP_CHARS` falls at a line, the fi
 
 **Notes**, sorted, once: the walk's warnings as `spec tree` words them (a `parent:` cycle, a parent's several holders), the input's, and a name two or more mapped nodes hold, `` `<name>` has <n> holders, each mapped, its links on the first: <path>:<line>, … `` (an ID repeated outside feature documents, or twice in one). Unlike other reads, `notes` carries warnings. stderr, escaped, as `spec catalog`: `note:` lines, then `warning:` lines. Exit 0 answered, no node included; 2 on usage, no project, a config, `HOME` or store error; never 1.
 
-**Route.** `GET /api/projects/:p/map[?archive=true]`: `spec map --json` less its final LF, in the project's turn, trusted as `tree` (`run_read`). Another name, a non-boolean `archive`: a 400 naming it; exit 2: a 503. The 404 list: `… catalog, map, rings, workspaces`.
+**Route.** `GET /api/projects/:p/map[?archive=true]`: `spec map --json` less its final LF, in the project's turn, trusted as `tree` (`run_read`). Another name, a non-boolean `archive`: a 400 naming it; exit 2: a 503. The 404 list: `… catalog, map, rings, library, workspaces`.
 
 ## Graph flags
 

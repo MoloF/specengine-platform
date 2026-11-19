@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-19
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -39,7 +39,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../check`, `.../health` | -- | plain `spec check --json`; `spec health --json` (`health*.md`) |
 | GET `.../roadmap` | `release`, `pool` | `spec roadmap --json` |
 | GET `.../delivery` | `as_of`, `timeline` | `spec delivery --json`, `spec-delivery*.md` |
-| GET `.../catalog` | `kinds`, `archive` | `spec catalog --json`, `App.catalogs` per `HEAD`, `spec-catalog.md` |
+| GET `.../catalog`, `.../library` | `kinds`, `archive`; `archive` | `spec {catalog,library} --json`, `App.catalogs` per `HEAD` |
 | GET `.../map`, `.../rings` | `archive`; -- | `spec map --json`; `spec rings --json` |
 | GET `.../lock-diff` | `ref` | `spec lock diff REF --json` |
 | GET `.../inbox`, `.../proposals/:id`; `.../feed` | --; `spec-feed.md` | `spec inbox --json`; `spec review PR --json` (not `--brief`); `spec feed --json` |
@@ -53,7 +53,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 **Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` `links`, `bindings`, `history`, `status` by `TaskStatus::parse`. 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `health`, `tasks/:id` take none), a scalar repeated, a bad value, `release` with `pool=true`, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent`; an empty REF is an unknown route.
 
-**Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`) of `tree`, `nodes`, `search`, `graph`, `flow`, `roadmap`, `delivery`, `catalog`, `rings`, `trace`: no `OUTPUT_CAP_CHARS` cut (`truncated` false, `omitted` null, `roadmap`'s 0, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty.
+**Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`) of `tree`, `nodes`, `search`, `graph`, `flow`, `roadmap`, `delivery`, `catalog`, `rings`, `library`, `trace`: no `OUTPUT_CAP_CHARS` cut (`truncated` false, `omitted` null, `roadmap`'s 0, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty.
 
 ## Answers and statuses
 

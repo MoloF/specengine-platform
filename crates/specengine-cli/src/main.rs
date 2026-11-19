@@ -274,6 +274,12 @@ enum Command {
         #[arg(long)]
         archive: bool,
     },
+    /// Print every document as a library: one row per file holding a document (live and generated; Tier 3 with --archive), by path, with its class, kind, status, version, tier, owner, review date, scope, tags, parent, the `[[module]]` tables holding it, its use counts and orphan flag, its file's last commit on HEAD's first-parent line, and the decisions whose `canon:` lands on it grouped accepted, superseded, rejected and other with their dates, commits and whether the document is behind an accepted one; computed per read, never stored; read-only, exit 0 whatever is listed, 2 when it cannot run (no project, a config that cannot be used, an index that cannot be read). The text and the JSON are cut at the output cap between rows, each row whole with its decisions.
+    Library {
+        /// Include Tier 3 (archived) documents; their decisions are listed either way.
+        #[arg(long)]
+        archive: bool,
+    },
     /// Print the scope rings the `[[map.ring]]` tables of the config choose, innermost first: per ring the nodes `tree [ROOT] --kind K…` lists for its root and kinds, live files only, less those an inner ring holds, each with its work state (the trace's rollup); computed per read, never stored; read-only, exit 0 whatever is listed (a bad table, or a root naming no node, is a note), 2 when it cannot run (no project, an index or a queue that cannot be read).
     Rings,
     /// List what happened, oldest first: the project's queue events (tasks, runs, proposals, cards, auto packs, holds and lands, the gate's observed writes), each with its subject, title and what it did; with --needs-me also what waits for the owner (held items, open proposals, failed runs, observed writes, done tasks not landed); read-only, exit 0 whatever is listed, 2 when it cannot run (a bad value, no project, a queue of a newer build).
@@ -1533,6 +1539,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             env,
             globals,
             &CatalogRequest { kinds, archive },
+        )?)),
+        Command::Library { archive } => Outcome::Library(Box::new(specengine_cli::library(
+            env,
+            globals,
+            &specengine_cli::LibraryRequest { archive },
         )?)),
         Command::Rings => Outcome::Rings(Box::new(specengine_cli::rings(env, globals)?)),
         Command::Feed {

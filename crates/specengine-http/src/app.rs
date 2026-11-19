@@ -20,7 +20,9 @@
 //! CM3);
 //! `…/catalog` a read, its last changes cached per `HEAD` in [`App`]
 //! (docs/features/direction-catalog.md); `…/rings` a read, the scope rings
-//! (task spec `scope-rings` SR4).
+//! (task spec `scope-rings` SR4); `…/library` a trusted read, every
+//! document as a library, its last changes through the same cache (task
+//! spec `doc-library`).
 //! `…/feed` a read, the project's events and what needs the owner
 //! ([`crate::feed`], task spec `auto-feed`).
 //! `/api/identity` a read of the request's login, no project, no turn
@@ -85,11 +87,11 @@ use specengine_cli::{
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardCountsRequest, CardEditBody,
     CardListRequest, CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest,
     CardSplitBody, CatalogRequest, CheckRequest, CliError, DeliveryRequest, FlowRequest,
-    GraphRequest, HealthRequest, InboxRequest, IndexTrust, LastChangeCache, LockDiffRequest,
-    Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
-    SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow,
-    TraceRequest, TreeRequest, UnstageRequest, View, WorkspaceRequest, process_git, project_entry,
-    roadmap_flags, round_limit, team_read, utc_now,
+    GraphRequest, HealthRequest, InboxRequest, IndexTrust, LastChangeCache, LibraryRequest,
+    LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest,
+    RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest,
+    TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View, WorkspaceRequest,
+    process_git, project_entry, roadmap_flags, round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -118,9 +120,10 @@ pub(crate) struct App {
     /// A stream's maximum life: `Some(STREAM_LIFE)` on a hub, `None` locally,
     /// where no stream ends for its age ([`hub::lived`]).
     pub life: Option<Duration>,
-    /// `…/catalog`'s last changes per (git common dir, `HEAD`), in memory
-    /// alone, shared by every project served
-    /// (`docs/features/direction-catalog.md` "Acceptance criteria", DC-8).
+    /// `…/catalog`'s and `…/library`'s last changes per (git common dir,
+    /// `HEAD`), in memory alone, shared by every project served
+    /// (`docs/features/direction-catalog.md` "Acceptance criteria", DC-8;
+    /// task spec `doc-library` DL11): the daemon's one such cache.
     pub catalogs: LastChangeCache,
 }
 
@@ -277,6 +280,10 @@ pub(crate) fn router(app: Shared) -> Router {
         .route(
             "/api/projects/{p}/rings",
             read(rings).noted("/api/projects/{p}/rings"),
+        )
+        .route(
+            "/api/projects/{p}/library",
+            read(library).noted("/api/projects/{p}/library"),
         )
         .route(
             "/api/projects/{p}/feed",
@@ -642,7 +649,7 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, cards/counts, round, \
-             events, delivery, catalog, map, rings, workspaces}}, \
+             events, delivery, catalog, map, rings, library, workspaces}}, \
              /api/identity; the web UI: / and /assets/<file>",
             uri.path()
         ),
@@ -1070,6 +1077,35 @@ async fn catalog(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusa
             Some(&shared.catalogs),
         )
         .map(|outcome| Outcome::Catalog(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/library`: `spec library [--archive] --json`, the browser view (no
+/// row cut), with the daemon's last-change cache; in the project's turn as a
+/// trusted read, as `map` and `tree` are, since it serves no trace data
+/// (task spec `doc-library` "The route", DL10, DL11). `archive` is its one
+/// query name: another name, or a value that is no boolean, is a 400 naming
+/// it, nothing run; the CLI's exit 2 is a 503.
+async fn library(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("library", &["archive"], &uri)?;
+    let request = LibraryRequest {
+        archive: args
+            .boolean("archive")
+            .map_err(Refusal::bad_request)?
+            .unwrap_or(false),
+    };
+    let shared = Arc::clone(&app);
+    Ok(run_read(project, move |env, globals| {
+        specengine_cli::library_with_view(
+            env,
+            globals,
+            &request,
+            View::Browser,
+            Some(&shared.catalogs),
+        )
+        .map(|outcome| Outcome::Library(Box::new(outcome)))
     })
     .await)
 }

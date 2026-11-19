@@ -431,8 +431,9 @@ fn pk2_e_a_workspace_note_refuses_at_the_packs_line() {
     let scratch = Scratch::new("pk2-note");
     let home = scratch.home("h");
     let software = preset("software");
-    let sections =
-        "sections = [\"roadmap\", \"board\", \"tree\", \"flow\", \"questions\", \"inbox\"]";
+    // docs/features/doc-library.md DL17: `documents` right after `tree`.
+    let sections = "sections = [\"roadmap\", \"board\", \"tree\", \"documents\", \"flow\", \
+                    \"questions\", \"inbox\"]";
     assert_eq!(line_text(&software, 59), sections);
     let pack = replace_line(
         &software,

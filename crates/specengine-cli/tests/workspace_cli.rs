@@ -64,7 +64,9 @@ use workspaces_common::{
 };
 
 /// The spec's list of section IDs inside the unknown-section note.
-const SECTION_LIST: &str = "(inbox, tasks, board, roadmap, flow, tree, graph, health, questions)";
+/// Ten names since docs/features/doc-library.md (DL17).
+const SECTION_LIST: &str =
+    "(inbox, tasks, board, roadmap, flow, tree, documents, graph, health, questions)";
 
 /// `spec workspace --json` in `root`: exit 0, one document.
 fn document(home: &Path, root: &Path) -> Run {

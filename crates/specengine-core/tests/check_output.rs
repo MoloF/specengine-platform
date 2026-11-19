@@ -393,7 +393,9 @@ fn the_one_table_covers_every_parser_code() {
     // then hub-team's error `team-config` (docs/features/hub-team.md:
     // `CHECK_CODES` 37), then release-hardening's error `card-config`
     // (docs/features/release-hardening.md "Acceptance criteria" RH-R4:
-    // `CHECK_CODES` 38, the last); a stale entry is no finding.
+    // `CHECK_CODES` 38), then doc-library's warning `tag-invalid`
+    // (docs/features/doc-library.md DL7: `CHECK_CODES` 39, the last); a
+    // stale entry is no finding.
     assert_eq!(
         check::CHECK_CODES,
         [
@@ -435,10 +437,11 @@ fn the_one_table_covers_every_parser_code() {
             "rev-not-raised",
             "team-config",
             "card-config",
+            "tag-invalid",
         ]
     );
-    assert_eq!(check::CHECK_CODES.len(), 38);
-    assert_eq!(check::CHECK_CODES.last(), Some(&"card-config"));
+    assert_eq!(check::CHECK_CODES.len(), 39);
+    assert_eq!(check::CHECK_CODES.last(), Some(&"tag-invalid"));
     // No check code shadows a parser code.
     for code in DiagnosticCode::ALL {
         assert!(

@@ -122,9 +122,9 @@ async function go(hash: string) {
 }
 
 // Activity second in every department's nav (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
-const GALLEY_NAV = ["Overview", "Activity", "Board", "Flow", "Spec tree", "Inbox"];
+const GALLEY_NAV = ["Overview", "Activity", "Board", "Flow", "Spec tree", "Documents", "Inbox"];
 const FOUNDRY_NAV = ["Overview", "Activity", "Board", "Health", "Graph", "Spec tree"];
-const IMPLICIT_NAV = ["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"];
+const IMPLICIT_NAV = ["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"];
 const EVERY_NAV = ["Overview", "Activity", ...SECTIONS.map((section) => sectionLabel(section.id, enT))];
 
 describe("the implicit workspace on the screen (WS-1)", () => {
@@ -144,7 +144,7 @@ describe("the implicit workspace on the screen (WS-1)", () => {
     const implicit: WorkspaceDocument = {
       source: "implicit",
       notes: [],
-      workspaces: [{ name: "all", title: "All sections", landing: "overview", sections: ["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"], flows: null, disciplines: [], module: null }],
+      workspaces: [{ name: "all", title: "All sections", landing: "overview", sections: ["inbox", "board", "roadmap", "flow", "tree", "documents", "graph", "health", "questions"], flows: null, disciplines: [], module: null }],
       modules: [],
       default: null,
     };

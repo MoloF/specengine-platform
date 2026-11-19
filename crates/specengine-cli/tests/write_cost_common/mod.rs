@@ -16,7 +16,9 @@
 //! MCP server read the wall clock (0.47.0's public API injects none there),
 //! so their answers' timestamps of the run become `<now>` and its date
 //! `<today>` ([`WallClock`]); the CLI's answers are on an injected clock and
-//! keep every byte.
+//! keep every byte. A date the corpus's own files hold is never masked
+//! ([`WallClock::with_dates_of`]): a fixture's `2026-11-15` stays as written,
+//! on that day as on any other.
 //!
 //! Every case writes to one node of the corpus ([`Probe`]): the first node
 //! with an ID in `spec tree`'s pre-order, Tier 3 aside. Its new texts add
@@ -662,6 +664,9 @@ pub fn normalized(value: Value, root: &Path, commits: &[String]) -> Value {
 pub struct WallClock {
     from: String,
     to: String,
+    /// The dates the corpus's own files hold ([`WallClock::with_dates_of`]):
+    /// never masked.
+    fixture_dates: std::collections::BTreeSet<String>,
 }
 
 /// The wall clock now, `YYYY-MM-DDTHH:MM:SSZ`.
@@ -672,10 +677,52 @@ pub fn utc_now() -> String {
 impl WallClock {
     pub fn start() -> Self {
         let now = utc_now();
+        Self::between(&now, &now)
+    }
+
+    /// A run read from `from` to `to` (`YYYY-MM-DDTHH:MM:SSZ`): the
+    /// harness's own tests, which cannot move the wall clock.
+    pub fn between(from: &str, to: &str) -> Self {
         Self {
-            from: now.clone(),
-            to: now,
+            from: from.to_owned(),
+            to: to.to_owned(),
+            fixture_dates: std::collections::BTreeSet::new(),
         }
+    }
+
+    /// With every `YYYY-MM-DD` in the files under `root` (`.git` aside)
+    /// known as the corpus's own, never masked.
+    ///
+    /// The limit: on a day the corpus's files also hold, a date the clock
+    /// gave that day stays as written too (the two are one string).
+    pub fn with_dates_of(mut self, root: &Path) -> Self {
+        fn walk(dir: &Path, out: &mut std::collections::BTreeSet<String>) {
+            let Ok(entries) = fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if entry.file_name() == ".git" {
+                    continue;
+                }
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if let Ok(bytes) = fs::read(&path) {
+                    for window in bytes.windows(10) {
+                        if date_bytes(window) {
+                            out.insert(String::from_utf8_lossy(window).into_owned());
+                        }
+                    }
+                }
+            }
+        }
+        walk(root, &mut self.fixture_dates);
+        self
+    }
+
+    /// Whether `date` is the run's day and no date of the corpus's own.
+    fn masks(&self, date: &str) -> bool {
+        (date == &self.from[..10] || date == &self.to[..10]) && !self.fixture_dates.contains(date)
     }
 
     pub fn stop(&mut self) {
@@ -718,7 +765,7 @@ impl WallClock {
             }
             if let Some(date) = text.get(at..at + 10)
                 && is_date(date)
-                && (date == &self.from[..10] || date == &self.to[..10])
+                && self.masks(date)
             {
                 out.push_str("<today>");
                 at += 10;
