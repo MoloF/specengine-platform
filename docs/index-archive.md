@@ -121,6 +121,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/lock-levels.md](features/lock-levels.md) shipped
 - [docs/features/lock-rebase.md](features/lock-rebase.md) shipped
 - [docs/features/mcp-read.md](features/mcp-read.md) shipped
+- [docs/features/mixed-load-memory.md](features/mixed-load-memory.md) shipped
 - [docs/features/node-history.md](features/node-history.md) shipped
 - [docs/features/norm-hash.md](features/norm-hash.md) shipped
 - [docs/features/pack.md](features/pack.md) shipped
@@ -314,4 +315,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0131.md](roadmap/RM-0131.md) shipped
 - [docs/roadmap/RM-0132.md](roadmap/RM-0132.md) shipped
 - [docs/roadmap/RM-0133.md](roadmap/RM-0133.md) shipped
+- [docs/roadmap/RM-0134.md](roadmap/RM-0134.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

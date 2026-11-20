@@ -25,7 +25,7 @@
 use serde::Serialize;
 use specengine_store::{
     GitEnv, KindFamily, Proposal, ProposalFilter, ProposalKind, ProposalQueue as _, ProposalStatus,
-    same_repository,
+    Readable, same_repository,
 };
 
 use crate::proposals::{QueueContext, escaped_error, open_context, queue_cannot, repository_gone};
@@ -125,8 +125,9 @@ fn run_inbox(
     } else {
         vec![ProposalStatus::Open, ProposalStatus::Approved]
     };
-    let (ours, notes) = repository_proposals(&context, statuses)?;
-    let proposals = ours.iter().map(entry).collect();
+    // Each row projected as it decodes: no proposal is kept for the list
+    // (task spec `mixed-load-memory`, (i)).
+    let (proposals, notes) = repository_proposals(&context, statuses, |proposal| entry(&proposal))?;
     let messages = notes.iter().cloned().map(Message::Note).collect();
     Ok(InboxOutcome {
         proposals,
@@ -136,53 +137,63 @@ fn run_inbox(
 }
 
 /// The current repository's proposals of `statuses` (none given: every
-/// state), by ID number, and the notes on what is left out: a row that does
-/// not decode, another repository's, a gone repository's (`spec inbox`,
-/// `spec approve --open`).
-pub(crate) fn repository_proposals(
+/// state), by ID number, each kept as `keep` makes it, and the notes on what
+/// is left out: a row that does not decode, another repository's, a gone
+/// repository's (`spec inbox`, `spec approve --open`). The rows are stepped
+/// one by one (task spec `mixed-load-memory`, (i)): each is projected at
+/// once, another repository's into its counts and the at most
+/// [`GONE_IDS_MAX`] IDs the notes name, an unreadable one into its note;
+/// no other row is held.
+pub(crate) fn repository_proposals<T>(
     context: &QueueContext,
     statuses: Vec<ProposalStatus>,
-) -> Result<(Vec<Proposal>, Vec<String>), CliError> {
-    let listed = context
+    mut keep: impl FnMut(Proposal) -> T,
+) -> Result<(Vec<T>, Vec<String>), CliError> {
+    let mut ours = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
+    let mut existing = 0_usize;
+    let mut gone = 0_usize;
+    let mut gone_ids: Vec<String> = Vec::new();
+    context
         .queue
-        .list_readable(&ProposalFilter {
-            git_common_dir: None,
-            statuses,
-        })
+        .each_readable(
+            &ProposalFilter {
+                git_common_dir: None,
+                statuses,
+            },
+            &mut |row| match row {
+                Readable::Unreadable(row) => notes.push(one_line(&format!("{row}; not listed"))),
+                Readable::Proposal(proposal) => {
+                    if same_repository(&proposal.place.git_common_dir, &context.common_dir) {
+                        ours.push(keep(proposal));
+                    } else if repository_gone(&proposal) {
+                        if gone_ids.len() < GONE_IDS_MAX {
+                            gone_ids.push(proposal.id);
+                        }
+                        gone += 1;
+                    } else {
+                        existing += 1;
+                    }
+                }
+            },
+        )
         .map_err(queue_cannot)?;
-    let (ours, others): (Vec<_>, Vec<_>) = listed
-        .proposals
-        .into_iter()
-        .partition(|proposal| same_repository(&proposal.place.git_common_dir, &context.common_dir));
-    let mut notes: Vec<String> = listed
-        .unreadable
-        .iter()
-        .map(|row| one_line(&format!("{row}; not listed")))
-        .collect();
-    let (gone, existing): (Vec<_>, Vec<_>) = others.iter().partition(|p| repository_gone(p));
-    if !existing.is_empty() {
+    if existing > 0 {
         notes.push(format!(
-            "{} proposal(s) of another repository of the project `{}` not listed: \
+            "{existing} proposal(s) of another repository of the project `{}` not listed: \
              `spec inbox` lists the current repository's",
-            existing.len(),
             context.slug
         ));
     }
-    if !gone.is_empty() {
-        let mut ids = gone
-            .iter()
-            .take(GONE_IDS_MAX)
-            .map(|proposal| proposal.id.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-        if gone.len() > GONE_IDS_MAX {
-            ids.push_str(&format!(" … and {} more", gone.len() - GONE_IDS_MAX));
+    if gone > 0 {
+        let mut ids = gone_ids.join(", ");
+        if gone > GONE_IDS_MAX {
+            ids.push_str(&format!(" … and {} more", gone - GONE_IDS_MAX));
         }
         notes.push(format!(
-            "{} proposal(s) of a repository that no longer exists not listed: {ids}; `spec \
+            "{gone} proposal(s) of a repository that no longer exists not listed: {ids}; `spec \
              reject <ID> --reason …` takes an open or approved one out of the inbox unless its \
-             commit is in history",
-            gone.len()
+             commit is in history"
         ));
     }
     Ok((ours, notes))

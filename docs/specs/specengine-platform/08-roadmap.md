@@ -630,6 +630,18 @@ Open:
 - WM10, his Linux gate: the live hub read 254.4 MiB on 0.49.0 after 7 h, and the main session records it again after the upgrade.
 - RM-0134 `mixed-load-memory` (must), the next slice: under writers and readers together, about 200 MB is held between calls that malloc does not count.
 
+**`mixed-load-memory` in progress, 2026-11-20** (`docs/features/mixed-load-memory.md`, MX1-MX10), the next release, 0.49.3, a version-only PATCH with no ADR.
+- **The diagnosis** on 0.49.2: no leak. The live heap stays flat; libmalloc keeps freed large blocks. It takes writers and inbox readers together: each alone is flat to 3 100 pending, while M over 2 000 pending climbs 34 MiB/min of RSS. One `spec inbox --json` peaks at about 6.6 KB per pending item against a 304 B answer per item, since the store reads every row and column of the project before decoding. Each call of a project runs alone in its turn, so the "ten concurrent inbox reads" hypothesis was wrong.
+- **The fix:** the rows decode one by one into the inbox's answer, closed rows filtered in SQL with NULL and unknown states kept, and `queue_matches` streams its rows; answers stay byte-identical, behind goldens and oracles.
+- **On his word "fix what remains, to the end"**, the main session decided his questions: the second judge is the quiet-moment footprint, 5 MiB/min on macOS for every variant, both runs, beside the live heap; the inbox is not paged unless the fix and the answer's buffers leave M red; delivery and the other per-event reads that read every state go to the pool as RM-0135 (should); `queue_matches` streams only, with no SQL prefilter.
+- Open after it: WM10 and MX10, his Linux gate, the live hub's passive RSS after the upgrade.
+
+**`mixed-load-memory` shipped 2026-11-20**: plugin 0.49.3 (a version-only PATCH), the next tag `v0.49.3`, `INDEX_FORMAT` unchanged at 21.
+- The store hands each row to its caller as it decodes, and the inbox keeps only its answer, so one read peaks 1 611 B per pending item (6 641 before). Closed rows stay in SQLite, and NULL and unknown states are still noted. Answers are byte-identical to 540db8ff's goldens and oracles.
+- M over 2 000 pending: quiet footprint −1.22 and −2.13 MiB/min (25.0 and 12.5 before), RSS 79 → 79 MiB (216 → 443 before). W, U, M and R pass both judges twice each.
+- (iv), the answer's buffers, was not needed. M with no prefill still shows 1.4 MiB/min of RSS on macOS, reported only: his Linux gate reads it.
+- Open: WM10 and MX10, the full run (the spec's "Release"), and RM-0135 in the pool.
+
 ## 3. Product acceptance criteria
 
 | # | Criterion | How it is checked |

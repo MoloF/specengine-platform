@@ -37,6 +37,14 @@
 //!   the footprint falls for minutes as those pages go back, which hid a
 //!   2 KiB per write leak in 4 of 5 runs; the probe read that leak as
 //!   2.16 MiB/min and a clean run as 0.0.
+//! - **Judged beside it on macOS** ([`judge_footprint`], RM-0134 MX6): the
+//!   footprint at the quiet probe's moments, memory malloc does not count
+//!   (the allocator's kept pages, which the live heap never sees): its
+//!   Theil-Sen slope from `SOAK_SECS/3` on against
+//!   [`FOOTPRINT_BUDGET_MIB_PER_MIN`], every judged variant (W, U, R, M);
+//!   fewer than [`MIN_QUIET`] such readings break the run. RM-0134's
+//!   diagnosis: clean runs read at most 0 there, M over 2 000 pending 25.0
+//!   and 12.5, WM8's M 73.
 //! - **Every call answers** (200, a JSON-RPC response, no `isError`; a W or
 //!   U write stored, an H repeat a hit, an R read with its document); a
 //!   request open
@@ -55,6 +63,15 @@
 //!   `Cargo.lock`, or (the daemon) than `ui/dist` names the build command.
 //!   An http-only change refuses the daemon alone: cargo does not relink
 //!   `spec` after it.
+//!
+//! RM-0134's knobs (the mixed-load resident step): `WRITE_SOAK_READS`, a
+//! comma list of `node`, `search` and `inbox` (default all three), the
+//! reads each reader cycles; `WRITE_SOAK_PENDING=N` fills a template `HOME`
+//! once with `N` stored questions through a hub of its own (then stopped),
+//! and each run starts its fresh daemon on a copy of it. Each run reports
+//! the pending count beside RSS and the footprint every
+//! [`TIMELINE_EVERY`] (`timeline`) and each inbox read's response bytes
+//! (`inbox`).
 //!
 //! Settings: `SOAK_SECS` (default and least 300); `WRITE_SOAK_RUNS`
 //! (default 2); `WRITE_SOAK_SMOKE=1` lets `SOAK_SECS` go below 300 and
@@ -101,6 +118,10 @@ const MIN_SOAK_SECS: u64 = 300;
 const WRITE_BUDGET_MIB_PER_MIN: f64 = 0.25;
 /// The readers' budget (R), DL14's and DP17's, MiB per minute.
 const READ_BUDGET_MIB_PER_MIN: f64 = 0.5;
+/// RM-0134 MX6: the second bar on macOS, MiB per minute: the footprint at
+/// the quiet probe's moments, its Theil-Sen slope from `SOAK_SECS/3` on,
+/// every judged variant (W, U, R, M).
+const FOOTPRINT_BUDGET_MIB_PER_MIN: f64 = 5.0;
 /// A request open this long is a hang.
 const HANG: Duration = Duration::from_secs(30);
 /// The client's own give-up, past the hang's.
@@ -131,6 +152,9 @@ const BINARIES: [(&str, &str); 2] = [
     ("spec", "specengine-cli"),
     ("specengine-http", "specengine-http"),
 ];
+/// How often a run's `timeline` takes RSS, the footprint and the pending
+/// count (RM-0134).
+const TIMELINE_EVERY: f64 = 10.0;
 /// The release build WM4 names.
 const BUILD: &str = "cargo build --release -p specengine-cli -p specengine-http --bins";
 
@@ -188,6 +212,65 @@ impl Variant {
             Self::H => None,
         }
     }
+
+    /// The footprint's bar at the quiet moments (macOS, RM-0134 MX6): every
+    /// variant [`Self::budget`] judges.
+    fn footprint_budget(self) -> Option<f64> {
+        self.budget().map(|_| FOOTPRINT_BUDGET_MIB_PER_MIN)
+    }
+}
+
+/// The reads a reader cycles (RM-0134), in this order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Reads {
+    node: bool,
+    search: bool,
+    inbox: bool,
+}
+
+impl Reads {
+    const ALL: Self = Self {
+        node: true,
+        search: true,
+        inbox: true,
+    };
+
+    /// `WRITE_SOAK_READS`'s comma list (`node`, `search`, `inbox`); unset
+    /// or empty, all three.
+    fn parse(text: Option<&str>) -> Result<Self, String> {
+        let Some(text) = text.map(str::trim).filter(|text| !text.is_empty()) else {
+            return Ok(Self::ALL);
+        };
+        let mut reads = Self {
+            node: false,
+            search: false,
+            inbox: false,
+        };
+        for word in text.split(',').map(str::trim) {
+            match word {
+                "node" => reads.node = true,
+                "search" => reads.search = true,
+                "inbox" => reads.inbox = true,
+                other => {
+                    return Err(format!(
+                        "WRITE_SOAK_READS: {other:?} is none of node, search, inbox"
+                    ));
+                }
+            }
+        }
+        Ok(reads)
+    }
+
+    fn names(self) -> Vec<&'static str> {
+        [
+            (self.node, "node"),
+            (self.search, "search"),
+            (self.inbox, "inbox"),
+        ]
+        .into_iter()
+        .filter_map(|(on, name)| on.then_some(name))
+        .collect()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -197,6 +280,11 @@ struct Settings {
     runs: usize,
     smoke: bool,
     heap: bool,
+    /// The reads each reader cycles (RM-0134).
+    reads: Reads,
+    /// Questions stored before each run, in a copied template `HOME`
+    /// (RM-0134; 0: none).
+    pending: usize,
 }
 
 fn flag(name: &str) -> bool {
@@ -224,12 +312,21 @@ impl Settings {
                 .unwrap_or_else(|_| panic!("WRITE_SOAK_RUNS={value:?}: a count"))
         });
         assert!((1..=5).contains(&runs), "WRITE_SOAK_RUNS={runs}: 1 to 5");
+        let reads = Reads::parse(std::env::var("WRITE_SOAK_READS").ok().as_deref())
+            .unwrap_or_else(|error| panic!("{error}"));
+        let pending = std::env::var("WRITE_SOAK_PENDING").ok().map_or(0, |value| {
+            value
+                .parse()
+                .unwrap_or_else(|_| panic!("WRITE_SOAK_PENDING={value:?}: a count"))
+        });
         Self {
             variant: Variant::from_env(),
             secs,
             runs,
             smoke,
             heap: flag("WRITE_SOAK_HEAP"),
+            reads,
+            pending,
         }
     }
 
@@ -817,6 +914,9 @@ struct Call {
     ms: u64,
 }
 
+/// A `timeline` point (RM-0134): `(at_s, rss_kib, footprint_kib, pending)`.
+type Point = (f64, u64, Option<u64>, usize);
+
 /// What every thread of one run shares.
 #[derive(Default)]
 struct Shared {
@@ -836,6 +936,12 @@ struct Shared {
     active: AtomicUsize,
     failures: Mutex<Vec<String>>,
     hang_samples: Mutex<Vec<String>>,
+    /// Writes stored so far in the run (RM-0134's pending count).
+    stored: AtomicUsize,
+    /// One point every [`TIMELINE_EVERY`].
+    timeline: Mutex<Vec<Point>>,
+    /// Each inbox read: `(at_s, response bytes, ms)`.
+    inbox_reads: Mutex<Vec<(f64, usize, u64)>>,
 }
 
 impl Shared {
@@ -860,6 +966,9 @@ struct Run<'a> {
     start: Instant,
     deadline: Instant,
     variant: Variant,
+    reads: Reads,
+    /// Questions pending before the run (RM-0134).
+    prefill: usize,
 }
 
 impl Run<'_> {
@@ -891,6 +1000,9 @@ impl Run<'_> {
                     || response["result"]["isError"] == json!(true)
                     || !content.is_object();
                 stored = content["id"].is_string();
+                if stored {
+                    self.shared.stored.fetch_add(1, Ordering::SeqCst);
+                }
                 hit = content["hits"]
                     .as_array()
                     .is_some_and(|hits| !hits.is_empty());
@@ -931,6 +1043,13 @@ impl Run<'_> {
         self.shared.in_flight.end(open);
         let at = started.duration_since(self.start).as_secs_f64();
         let took = ms(started.elapsed());
+        if let Ok(answer) = &answer {
+            self.shared.inbox_reads.lock().expect("inbox reads").push((
+                at,
+                answer.body.len(),
+                took,
+            ));
+        }
         let ok = match answer {
             Ok(answer) if answer.status == 200 => true,
             Ok(answer) => {
@@ -1051,23 +1170,284 @@ fn writer(run: &Run<'_>, tree: &Tree, targets: &[Target], index: usize) {
     }
 }
 
-/// A reader: `get_node`, `search`, the inbox, in turn, until the deadline.
+/// A reader: `get_node`, `search`, the inbox, in turn (those
+/// `WRITE_SOAK_READS` names), until the deadline.
 fn reader(run: &Run<'_>, corpus: &Corpus, index: usize) {
     let login = format!("reader-{index}");
     let mut n = index;
     while run.running() {
-        let id = &corpus.sections[n % corpus.sections.len()];
-        run.call(&login, "get_node", json!({"id": id}), false);
-        if !run.running() {
-            break;
+        if run.reads.node {
+            let id = &corpus.sections[n % corpus.sections.len()];
+            run.call(&login, "get_node", json!({"id": id}), false);
+            if !run.running() {
+                break;
+            }
         }
-        let word = &corpus.words[n % corpus.words.len()];
-        run.call(&login, "search", json!({"query": word, "limit": 20}), false);
-        if !run.running() {
-            break;
+        if run.reads.search {
+            let word = &corpus.words[n % corpus.words.len()];
+            run.call(&login, "search", json!({"query": word, "limit": 20}), false);
+            if !run.running() {
+                break;
+            }
         }
-        run.inbox(&login);
+        if run.reads.inbox {
+            run.inbox(&login);
+        }
         n += 1;
+    }
+}
+
+/// RM-0134: a template `HOME` holding at least `pending` stored questions,
+/// filled by a hub of its own (8 logins `filler-N`, fresh text, as W asks),
+/// the hub then stopped; each run copies it. With how many it holds (8
+/// writers overshoot `pending` by up to 7).
+fn prefill(tree: &Tree, pending: usize) -> (PathBuf, usize) {
+    let home = tree.scratch.join("hub-home-template");
+    let hub = Hub::start(&tree.root, &home, &tree.git, 3600);
+    let started = Instant::now();
+    let stored = fill(&hub, tree, pending, &AtomicU64::new(0));
+    drop(hub);
+    println!(
+        "write_soak prefill: {stored} questions in {:.0} s",
+        started.elapsed().as_secs_f64()
+    );
+    (home, stored)
+}
+
+/// RM-0134: `count` more questions stored through `hub` by 8 logins
+/// `filler-N`, fresh text as W asks, `next` numbering them across calls;
+/// how many were stored (at least `count`, else a panic).
+fn fill(hub: &Hub, tree: &Tree, count: usize, next: &AtomicU64) -> usize {
+    let stored = AtomicUsize::new(0);
+    let failed = AtomicUsize::new(0);
+    thread::scope(|scope| {
+        for index in 0..WRITERS {
+            let (stored, failed) = (&stored, &failed);
+            scope.spawn(move || {
+                let login = format!("filler-{index}");
+                while stored.load(Ordering::SeqCst) < count && failed.load(Ordering::SeqCst) < 20
+                {
+                    let n = next.fetch_add(1, Ordering::SeqCst) + 1;
+                    let seed = (1u64 << 62) | n;
+                    let answered = mcp_call(
+                        hub.port,
+                        &tree.slug,
+                        &login,
+                        i64::try_from(n).unwrap_or(1),
+                        "ask_question",
+                        json!({
+                            "node_ids": [tree.part_id(usize::try_from(seed % 1_000_003).unwrap_or(0))],
+                            "text": format!("{}?", nonce_words(seed, 6)),
+                            "working_answer": nonce_words(seed ^ 0xa11, 3),
+                            "price_of_other": nonce_words(seed ^ 0xb22, 3),
+                            "author_role": "drafter",
+                            "author_model": "m-1",
+                            "run": format!("r-{login}"),
+                        }),
+                        TIMEOUT,
+                    );
+                    match answered {
+                        Ok((_, Some(response)))
+                            if response["result"]["structuredContent"]["id"].is_string() =>
+                        {
+                            stored.fetch_add(1, Ordering::SeqCst);
+                        }
+                        _ => {
+                            failed.fetch_add(1, Ordering::SeqCst);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    let stored = stored.load(Ordering::SeqCst);
+    assert!(
+        stored >= count,
+        "the fill stored {stored} of {count} ({} failed)",
+        failed.load(Ordering::SeqCst)
+    );
+    stored
+}
+
+/// One `spec` run under `/usr/bin/time -l` (macOS): its maximum resident
+/// set and peak footprint (bytes), its stdout's bytes and its wall ms.
+fn peak_of(
+    spec: &Path,
+    vars: &[(std::ffi::OsString, std::ffi::OsString)],
+    root: &Path,
+    args: &[&str],
+) -> Value {
+    let started = Instant::now();
+    let output = Command::new("/usr/bin/time")
+        .arg("-l")
+        .arg(spec)
+        .args(args)
+        .env_clear()
+        .envs(vars.iter().map(|(name, value)| (name, value)))
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .output()
+        .expect("spec under time");
+    let took = ms(started.elapsed());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let field = |label: &str| -> Option<u64> {
+        stderr
+            .lines()
+            .find(|line| line.trim_end().ends_with(label))
+            .and_then(|line| line.split_whitespace().next())
+            .and_then(|number| number.parse().ok())
+    };
+    assert!(output.status.success(), "spec {args:?}: {stderr}");
+    let document: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+    json!({
+        "max_rss": field("maximum resident set size"),
+        "peak_footprint": field("peak memory footprint"),
+        "stdout_bytes": output.stdout.len(),
+        "listed": document["proposals"].as_array().map(Vec::len),
+        "ms": took,
+    })
+}
+
+/// RM-0134: one inbox read's peak against the pending count. A hub over
+/// the tree stores questions to 0, 1 000, 2 000, 3 000 and 4 000 pending;
+/// at each level the release `spec inbox --json` runs three times on the
+/// hub's `HOME` under `/usr/bin/time -l` (a process of its own: the read's
+/// whole working set, not the daemon's kept pages). One JSON line per
+/// level, then the judged one (RM-0134 MX3): each level's pending count
+/// and each read's response bytes are 540db8ff's ([`HEAD_INBOX_BYTES`]), and
+/// the median peak footprint's rise per pending item from the 1 000 level to
+/// the 4 000 one is at most [`INBOX_PEAK_BYTES_PER_ITEM`] (540db8ff: about
+/// 6 600). macOS only (`/usr/bin/time -l`); elsewhere it runs nothing.
+#[test]
+#[ignore = "RM-0134, release, about 12 min: cargo nextest run -p specengine-eval --release \
+            --test write_soak rm0134_inbox_peak --run-ignored only --no-capture"]
+fn rm0134_inbox_peak_by_pending() {
+    if !cfg!(target_os = "macos") {
+        println!("rm0134_inbox_peak_by_pending: macOS's /usr/bin/time -l only; not run");
+        return;
+    }
+    fresh_binaries();
+    let tree = Tree::new("inbox-peak", NODES, COMMITS);
+    let home = tree.scratch.join("hub-home-peak");
+    let hub = Hub::start(&tree.root, &home, &tree.git, 3600);
+    let spec = library_common::release_bin("spec");
+    let vars = tree.spec_vars(&home);
+    let next = AtomicU64::new(0);
+    let mut pending = 0;
+    let mut medians: Vec<(usize, Option<u64>)> = Vec::new();
+    let mut bytes: Vec<(usize, Vec<u64>)> = Vec::new();
+    for level in [0usize, 1_000, 2_000, 3_000, 4_000] {
+        if level > pending {
+            pending += fill(&hub, &tree, level - pending, &next);
+        }
+        let reads: Vec<Value> = (0..3)
+            .map(|_| peak_of(&spec, &vars, &tree.root, &["inbox", "--json"]))
+            .collect();
+        let mut peaks: Vec<u64> = reads
+            .iter()
+            .filter_map(|read| read["peak_footprint"].as_u64())
+            .collect();
+        peaks.sort_unstable();
+        medians.push((pending, (peaks.len() == 3).then(|| peaks[1])));
+        bytes.push((
+            pending,
+            reads
+                .iter()
+                .map(|read| read["stdout_bytes"].as_u64().unwrap_or(0))
+                .collect(),
+        ));
+        println!(
+            "{}",
+            json!({"test": "rm0134_inbox_peak", "pending": pending, "reads": reads})
+        );
+    }
+    drop(hub);
+    let head: Vec<(usize, Vec<u64>)> = HEAD_INBOX_BYTES
+        .iter()
+        .map(|&(pending, answer)| (pending, vec![answer; 3]))
+        .collect();
+    assert_eq!(
+        bytes, head,
+        "each level's pending count and each read's response bytes are 540db8ff's"
+    );
+    let per_item = inbox_peak_per_item(&medians).expect("the 1 000 and 4 000 levels' peaks");
+    println!(
+        "{}",
+        json!({"test": "rm0134_inbox_peak", "bytes_per_item": per_item,
+               "bar": INBOX_PEAK_BYTES_PER_ITEM})
+    );
+    assert!(
+        per_item <= INBOX_PEAK_BYTES_PER_ITEM,
+        "one inbox read's peak footprint rises {per_item:.0} B per pending item > \
+         {INBOX_PEAK_BYTES_PER_ITEM} (540db8ff: about 6 600)"
+    );
+}
+
+/// RM-0134 MX3: the most one `spec inbox --json` read's peak footprint may
+/// rise per pending item, bytes: a third of 540db8ff's 6.6 KB.
+const INBOX_PEAK_BYTES_PER_ITEM: f64 = 2_200.0;
+
+/// 540db8ff's `(pending, stdout bytes)` of `spec inbox --json` at each level
+/// of [`rm0134_inbox_peak_by_pending`] (RM-0134's diagnosis; the fix's first
+/// run read the same): the fill stores 7 past each level (8 writers in flight), the
+/// questions' texts fixed by their numbers, so the answer's length is the
+/// level's whatever order the turn stored them in.
+const HEAD_INBOX_BYTES: [(usize, u64); 5] = [
+    (0, 28),
+    (1_007, 306_155),
+    (2_007, 610_155),
+    (3_007, 914_155),
+    (4_007, 1_218_155),
+];
+
+/// The median peak's rise per pending item from the level nearest 1 000 to
+/// the one nearest 4 000 (`(pending, median peak)` pairs), bytes.
+fn inbox_peak_per_item(medians: &[(usize, Option<u64>)]) -> Option<f64> {
+    let near = |level: usize| {
+        medians
+            .iter()
+            .min_by_key(|(pending, _)| pending.abs_diff(level))
+            .and_then(|(pending, peak)| peak.map(|peak| (*pending as f64, peak as f64)))
+    };
+    let ((low_n, low), (high_n, high)) = (near(1_000)?, near(4_000)?);
+    (high_n > low_n).then(|| (high - low) / (high_n - low_n))
+}
+
+/// The diagnosis' curve (RM-0134, 540db8ff) reads about 6.6 KB per item,
+/// red; a third of it passes.
+#[test]
+fn mx3_the_inbox_peak_is_judged_per_pending_item() {
+    let mib = |m: u64| m * 1024 * 1024;
+    let head = [
+        (0, Some(mib(3))),
+        (1_007, Some(mib(10))),
+        (2_007, Some(mib(17))),
+        (3_007, Some(mib(23))),
+        (4_007, Some(mib(29))),
+    ];
+    let per_item = inbox_peak_per_item(&head).expect("a rise");
+    assert!((per_item - 6_641.0).abs() < 1.0, "{per_item}");
+    assert!(per_item > INBOX_PEAK_BYTES_PER_ITEM);
+    let fixed = [(1_000, Some(10_000_000)), (4_000, Some(16_000_000))];
+    assert_eq!(inbox_peak_per_item(&fixed), Some(2_000.0));
+    assert_eq!(
+        inbox_peak_per_item(&[(1_000, None), (4_000, Some(1))]),
+        None
+    );
+}
+
+/// `from` copied to `to`, every directory and file (a stopped hub's `HOME`:
+/// its index and queue, their WAL files included).
+fn copy_tree(from: &Path, to: &Path) {
+    fs::create_dir_all(to).expect("the copy's directory");
+    for entry in fs::read_dir(from).expect("the template").flatten() {
+        let (path, target) = (entry.path(), to.join(entry.file_name()));
+        let kind = entry.file_type().expect("a file type");
+        if kind.is_dir() {
+            copy_tree(&path, &target);
+        } else if kind.is_file() {
+            fs::write(&target, fs::read(&path).expect("a template file")).expect("the copy");
+        }
     }
 }
 
@@ -1097,6 +1477,7 @@ fn watchdog(run: &Run<'_>, label: &str) {
 /// past the middle.
 fn sampler(run: &Run<'_>, secs: u64) {
     let pid = run.hub.pid;
+    let mut next_point = 0.0;
     while run.running() {
         let at = run.start.elapsed().as_secs_f64();
         if let Some((rss_kib, footprint_kib)) = memory(pid) {
@@ -1105,6 +1486,16 @@ fn sampler(run: &Run<'_>, secs: u64) {
                 rss_kib,
                 footprint_kib,
             });
+            if at >= next_point {
+                next_point += TIMELINE_EVERY;
+                let pending = run.prefill + run.shared.stored.load(Ordering::SeqCst);
+                run.shared.timeline.lock().expect("timeline").push((
+                    at,
+                    rss_kib,
+                    footprint_kib,
+                    pending,
+                ));
+            }
         }
         if at >= secs as f64 / 2.0 {
             let mut middle = run.shared.middle.lock().expect("middle");
@@ -1206,6 +1597,47 @@ fn judge(
     (slope, broken)
 }
 
+/// RM-0134 MX6, the second judge (macOS; elsewhere `(None, [])`: RSS is
+/// the first): the quiet readings' footprint, its slope from
+/// `SOAK_SECS/3` on, MiB per minute, and what it breaks against `budget`
+/// (`None`: reported, not judged); fewer than [`MIN_QUIET`] judged readings
+/// with a footprint break the run.
+fn judge_footprint(
+    quiet: &[Quiet],
+    secs: u64,
+    macos: bool,
+    budget: Option<f64>,
+) -> (Option<f64>, Vec<String>) {
+    if !macos {
+        return (None, Vec::new());
+    }
+    let points: Vec<(f64, u64)> = quiet
+        .iter()
+        .filter_map(|q| q.footprint_kib.map(|kib| (q.at, kib)))
+        .collect();
+    let slope = point_slopes(&points, secs)["judged"].as_f64();
+    let mut broken = Vec::new();
+    let Some(budget) = budget else {
+        return (slope, broken);
+    };
+    let third = secs as f64 / 3.0;
+    let count = points.iter().filter(|(at, _)| *at >= third).count();
+    if count < MIN_QUIET {
+        broken.push(format!(
+            "{count} quiet_footprint readings judged (from SOAK_SECS/3 on): fewer than {MIN_QUIET}"
+        ));
+    }
+    match slope {
+        Some(slope) if slope > budget => broken.push(format!(
+            "the footprint grows {slope:.3} MiB/min (quiet_footprint, from SOAK_SECS/3 on) > \
+             the budget {budget}"
+        )),
+        Some(_) => {}
+        None => broken.push("no quiet_footprint slope".to_owned()),
+    }
+    (slope, broken)
+}
+
 /// The quiet probe's readings: the live heap between calls and the
 /// footprint at the same moments, their slopes, KiB kept per write; `null`
 /// off macOS (no probe), every key present on it, a run with no reading
@@ -1232,6 +1664,11 @@ fn quiet_report(
     json!({
         "count": quiet.len(),
         "heap_kib": heap.iter().map(|(at, kib)| json!([at.round(), kib])).collect::<Vec<_>>(),
+        // RM-0134 MX6: the series `judge_footprint` judges.
+        "footprint_kib": footprint
+            .iter()
+            .map(|(at, kib)| json!([at.round(), kib]))
+            .collect::<Vec<_>>(),
         "heap_slope_mib_per_min": heap_slopes,
         "heap_kib_per_write": per_write,
         "footprint_slope_mib_per_min": point_slopes(&footprint, secs),
@@ -1247,6 +1684,7 @@ fn soak_run(
     corpus: &Corpus,
     daemon: &Path,
     run_no: usize,
+    template: Option<(&Path, usize)>,
 ) -> (Value, Vec<String>) {
     let variant = settings.variant;
     let secs = settings.secs;
@@ -1257,13 +1695,13 @@ fn soak_run(
     } else {
         Vec::new()
     };
-    let hub = Hub::start_with(
-        &tree.root,
-        &tree.scratch.join(&format!("hub-home-{run_no}")),
-        &tree.git,
-        secs + 900,
-        &extra,
-    );
+    let home = tree.scratch.join(&format!("hub-home-{run_no}"));
+    // The questions the template holds: the run's pending count at its start.
+    let prefilled = template.map_or(0, |(_, stored)| stored);
+    if let Some((template, _)) = template {
+        copy_tree(template, &home);
+    }
+    let hub = Hub::start_with(&tree.root, &home, &tree.git, secs + 900, &extra);
     let targets = if variant == Variant::U {
         targets(&hub, &tree.slug, corpus)
     } else {
@@ -1279,6 +1717,8 @@ fn soak_run(
         start,
         deadline: start + Duration::from_secs(secs),
         variant,
+        reads: settings.reads,
+        prefill: prefilled,
     };
     thread::scope(|scope| {
         for at in 0..variant.writers() {
@@ -1334,6 +1774,12 @@ fn soak_run(
         macos,
         variant.budget().filter(|_| settings.judged()),
     );
+    let (footprint_slope, footprint_broken) = judge_footprint(
+        &quiet,
+        secs,
+        macos,
+        variant.footprint_budget().filter(|_| settings.judged()),
+    );
     let per = |slope: &Value, count: f64| -> Option<f64> {
         let slope = slope["judged"].as_f64()?;
         (count > 0.0).then(|| rounded(slope * 1024.0 / (count / judged_minutes)))
@@ -1355,19 +1801,23 @@ fn soak_run(
     };
     let mut broken = shared.failures.lock().expect("failures").clone();
     broken.extend(judged_broken);
+    broken.extend(footprint_broken);
     if variant.writers() > 0 && writes.is_empty() {
         broken.push("no write ran".to_owned());
     }
     if variant.readers() > 0 && reads.is_empty() {
         broken.push("no read ran".to_owned());
     }
+    let inbox_reads = shared.inbox_reads.lock().expect("inbox reads").clone();
+    let timeline = shared.timeline.lock().expect("timeline").clone();
+    let stored_now = shared.stored.load(Ordering::SeqCst);
     let stored_count = writes.iter().filter(|call| call.stored).count();
     if variant == Variant::H && stored_count > 1 {
         broken.push(format!(
             "H stored {stored_count} items: the repeat must hit, not store"
         ));
     }
-    let report = json!({
+    let mut report = json!({
         "test": "write_soak",
         "variant": variant.name(),
         "run": run_no,
@@ -1434,6 +1884,32 @@ fn soak_run(
         "broken": broken.iter().take(20).collect::<Vec<_>>(),
         "broken_count": broken.len(),
     });
+    // RM-0134 (beside the macro's recursion limit): the reads cycled, the
+    // pending count, each inbox read's bytes, and RSS and the footprint
+    // beside the pending count every TIMELINE_EVERY.
+    report["reads_mix"] = json!(settings.reads.names());
+    // RM-0134 MX6: the second judge, macOS's (`null` elsewhere).
+    report["quiet_footprint_slope_mib_per_min"] = json!(footprint_slope);
+    report["quiet_footprint_budget_mib_per_min"] =
+        json!(variant.footprint_budget().filter(|_| macos));
+    report["pending"] = json!({"start": prefilled, "end": prefilled + stored_now});
+    report["inbox"] = if inbox_reads.is_empty() {
+        Value::Null
+    } else {
+        json!({
+            "count": inbox_reads.len(),
+            "bytes_first": inbox_reads.first().map(|read| read.1),
+            "bytes_last": inbox_reads.last().map(|read| read.1),
+            "bytes_max": inbox_reads.iter().map(|read| read.1).max(),
+            "ms": spread(&inbox_reads.iter().map(|read| read.2).collect::<Vec<_>>()),
+        })
+    };
+    report["timeline"] = Value::Array(
+        timeline
+            .iter()
+            .map(|(at, rss, footprint, pending)| json!([at.round(), rss, footprint, pending]))
+            .collect(),
+    );
     println!("{report}");
     (report, broken)
 }
@@ -1449,9 +1925,13 @@ fn write_soak() {
     let daemon = fresh_binaries();
     let tree = Tree::new("write-soak", NODES, COMMITS);
     let corpus = Corpus::of(&tree);
+    let template = (settings.pending > 0).then(|| prefill(&tree, settings.pending));
+    let template = template
+        .as_ref()
+        .map(|(home, stored)| (home.as_path(), *stored));
     let mut all = Vec::new();
     for run_no in 1..=settings.runs {
-        let (_, broken) = soak_run(&settings, &tree, &corpus, &daemon, run_no);
+        let (_, broken) = soak_run(&settings, &tree, &corpus, &daemon, run_no, template);
         all.extend(
             broken
                 .into_iter()
@@ -1476,9 +1956,48 @@ fn wm4_the_release_binaries_are_fresh() {
     println!("fresh: {}", binary_facts(&daemon));
 }
 
+/// A variant's bars, MiB per minute: the live heap's (WM6; Linux RSS) and
+/// the footprint's at the quiet moments (MX6, macOS); `None`: not judged.
+type Bars = (Option<f64>, Option<f64>);
+
+/// One "Memory bar" cell's bars: parts split on `;`, each `reported only`
+/// or `<number>, <measure>`, the measure starting `live heap` or
+/// `footprint`, each at most once.
+fn cell_bars(cell: &str) -> Bars {
+    let (mut live, mut footprint) = (None, None);
+    for part in cell.split(';').map(str::trim) {
+        if part.starts_with("reported only") {
+            continue;
+        }
+        let (number, measure) = part
+            .split_once(',')
+            .unwrap_or_else(|| panic!("a bar `<number>, <measure>`: {part:?}"));
+        let value = number
+            .trim()
+            .parse::<f64>()
+            .unwrap_or_else(|_| panic!("a bar {part:?} in {cell:?}"));
+        let measure = measure.trim();
+        let slot = if measure.starts_with("live heap") {
+            &mut live
+        } else if measure.starts_with("footprint") {
+            &mut footprint
+        } else {
+            panic!("{part:?}: a bar of the live heap or of the footprint");
+        };
+        assert!(
+            slot.replace(value).is_none(),
+            "two bars of one measure: {cell:?}"
+        );
+    }
+    (live, footprint)
+}
+
 /// The `write-memory` rows of a canon's "Budgets" table: each variant its
-/// memory bar, MiB per minute (`None`: reported only).
-fn canon_budgets(text: &str) -> BTreeMap<String, Option<f64>> {
+/// bars ([`cell_bars`] of the "Memory bar" column). A row's first cell is
+/// `write-memory <V>[, <V>…]`, optionally followed by ` over <N> pending`
+/// (a prefilled run of the same variants): a variant in two rows holds one
+/// pair of bars.
+fn canon_budgets(text: &str) -> BTreeMap<String, Bars> {
     let section = text
         .split("\n## ")
         .find(|part| part.starts_with("Budgets\n"))
@@ -1500,31 +2019,28 @@ fn canon_budgets(text: &str) -> BTreeMap<String, Option<f64>> {
         .unwrap_or_else(|| panic!("no \"Memory bar\" column: {header:?}"));
     let mut out = BTreeMap::new();
     for row in &rows {
-        let Some(variants) = row[0].strip_prefix("write-memory ") else {
+        let Some(label) = row[0].strip_prefix("write-memory ") else {
             continue;
         };
-        let cell = &row[bar];
-        let value = if cell.starts_with("reported only") {
-            None
-        } else {
-            let number = cell.split(',').next().unwrap_or("").trim();
-            Some(
-                number
-                    .parse::<f64>()
-                    .unwrap_or_else(|_| panic!("a bar {cell:?} in {row:?}")),
-            )
-        };
+        let variants = label.split(" over ").next().unwrap_or(label);
+        let bars = cell_bars(&row[bar]);
         for variant in variants.split(',') {
-            let previous = out.insert(variant.trim().to_owned(), value);
-            assert!(previous.is_none(), "{variant} twice in the table");
+            let variant = variant.trim().to_owned();
+            if let Some(previous) = out.insert(variant.clone(), bars) {
+                assert_eq!(previous, bars, "{variant} in two rows with other bars");
+            }
         }
     }
     out
 }
 
-/// WM6 [budget]: the harness's budget constants are the numbers of
-/// `docs/canon/soak-runs.md` "Budgets", its `write-memory` rows, variant by
-/// variant (`WRITE_SOAK_CANON` reads another copy, for the mutation).
+/// WM6 [budget] and RM-0134 MX6 [judge]: the harness's bars are the
+/// numbers of `docs/canon/soak-runs.md` "Budgets", its `write-memory` rows,
+/// variant by variant: the live heap's (`WRITE_BUDGET_MIB_PER_MIN`,
+/// `READ_BUDGET_MIB_PER_MIN`) and the quiet footprint's
+/// (`FOOTPRINT_BUDGET_MIB_PER_MIN`), e.g. `0.25, live heap (Linux RSS); 5,
+/// footprint at the quiet moments (macOS)` (`WRITE_SOAK_CANON` reads
+/// another copy, for the mutation: 6 in the table is red).
 #[test]
 fn wm6_the_budgets_are_the_canons() {
     let path = std::env::var_os("WRITE_SOAK_CANON").map_or_else(
@@ -1534,18 +2050,69 @@ fn wm6_the_budgets_are_the_canons() {
     let text =
         fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     let canon = canon_budgets(&text);
-    let harness: BTreeMap<String, Option<f64>> =
+    let harness: BTreeMap<String, Bars> =
         [Variant::W, Variant::U, Variant::R, Variant::M, Variant::H]
             .into_iter()
-            .map(|variant| (variant.name().to_owned(), variant.budget()))
+            .map(|variant| {
+                (
+                    variant.name().to_owned(),
+                    (variant.budget(), variant.footprint_budget()),
+                )
+            })
             .collect();
     assert_eq!(
         canon,
         harness,
-        "{}'s write-memory budgets against WRITE_BUDGET_MIB_PER_MIN \
-         ({WRITE_BUDGET_MIB_PER_MIN}) and READ_BUDGET_MIB_PER_MIN ({READ_BUDGET_MIB_PER_MIN})",
+        "{}'s write-memory bars (live heap, footprint) against WRITE_BUDGET_MIB_PER_MIN \
+         ({WRITE_BUDGET_MIB_PER_MIN}), READ_BUDGET_MIB_PER_MIN ({READ_BUDGET_MIB_PER_MIN}) and \
+         FOOTPRINT_BUDGET_MIB_PER_MIN ({FOOTPRINT_BUDGET_MIB_PER_MIN})",
         path.display()
     );
+}
+
+/// The bars' cell grammar: both bars, one, none; a prefilled row's
+/// variants; a repeated variant with other bars, an unknown measure and a
+/// bar given twice refused.
+#[test]
+fn mx6_the_canons_cells_read_both_bars() {
+    assert_eq!(
+        cell_bars("0.25, live heap (Linux RSS); 5, footprint at the quiet moments (macOS)"),
+        (Some(0.25), Some(5.0))
+    );
+    assert_eq!(cell_bars("0.5, live heap (Linux RSS)"), (Some(0.5), None));
+    assert_eq!(cell_bars("reported only"), (None, None));
+    let table = "x\n## Budgets\n\n| Soak | Test | Memory bar, MiB/min |\n|---|---|---|\n\
+                 | write-memory W, M | t | 0.25, live heap (Linux RSS); 5, footprint (macOS) |\n\
+                 | write-memory M over 2 000 pending | t | 0.25, live heap; 5, footprint |\n\
+                 | write-memory H | t | reported only |\n| DL14 | t | 0.5, RSS |\n\n## Next\n";
+    let read = canon_budgets(table);
+    assert_eq!(
+        read.into_iter().collect::<Vec<_>>(),
+        [
+            ("H".to_owned(), (None, None)),
+            ("M".to_owned(), (Some(0.25), Some(5.0))),
+            ("W".to_owned(), (Some(0.25), Some(5.0))),
+        ]
+    );
+    for bad in [
+        table.replace(
+            "0.25, live heap; 5, footprint |",
+            "0.25, live heap; 6, footprint |",
+        ),
+        table.replace(
+            "0.25, live heap; 5, footprint |",
+            "0.25, live heap; 5, heap |",
+        ),
+        table.replace(
+            "0.25, live heap; 5, footprint |",
+            "0.25, live heap; 5, live heap |",
+        ),
+    ] {
+        assert!(
+            std::panic::catch_unwind(|| canon_budgets(&bad)).is_err(),
+            "refused: {bad}"
+        );
+    }
 }
 
 /// `vmmap --summary`'s sizes and its MALLOC ZONE total, as the live-heap
@@ -1725,6 +2292,7 @@ fn the_quiet_object_holds_every_key() {
     for key in [
         "count",
         "heap_kib",
+        "footprint_kib",
         "heap_slope_mib_per_min",
         "heap_kib_per_write",
         "drain_ms",
@@ -1737,6 +2305,11 @@ fn the_quiet_object_holds_every_key() {
         report["heap_kib"][0],
         json!([31.0, per_minute(1750, 2.16, 31.0)])
     );
+    assert_eq!(
+        report["footprint_kib"][8],
+        json!([271.0, per_minute(60_000, -2.5, 271.0)])
+    );
+    assert_eq!(report["footprint_kib"].as_array().map(Vec::len), Some(9));
     let per_write = report["heap_kib_per_write"].as_f64().expect("a number");
     assert!((per_write - 2.16 * 1024.0 / 600.0).abs() < 0.02, "{report}");
     for third in report["heap_slope_mib_per_min"]["thirds"]
@@ -1749,7 +2322,90 @@ fn the_quiet_object_holds_every_key() {
     assert_eq!(empty["count"], json!(0));
     assert_eq!(empty["heap_slope_mib_per_min"]["judged"], Value::Null);
     assert_eq!(empty["heap_kib_per_write"], Value::Null);
+    assert_eq!(empty["footprint_kib"], json!([]));
     assert_eq!(quiet_report(&leak, 300, false, 2000.0, 3.0), Value::Null);
+}
+
+/// [`quiet_series`]'s moments with the live heap level and the footprint
+/// moving `mib_per_min`.
+fn footprint_series(mib_per_min: f64) -> Vec<Quiet> {
+    quiet_series(|_| 1750)
+        .into_iter()
+        .map(|quiet| Quiet {
+            footprint_kib: Some(per_minute(200_000, mib_per_min, quiet.at)),
+            ..quiet
+        })
+        .collect()
+}
+
+/// RM-0134 MX6: the footprint at the quiet moments is judged on macOS
+/// beside the live heap, against 5 MiB/min, for W, U, R and M (H and an
+/// unjudged run report it): RM-0134's M (the live heap level, the footprint
+/// +25 MiB/min) passes the live-heap judge and breaks this one; a clean
+/// run's falling footprint passes; the bar is inclusive; off macOS it is
+/// not read; fewer than five judged readings with a footprint break the
+/// run.
+#[test]
+fn mx6_the_quiet_footprint_is_judged_on_macos() {
+    let budget = Some(FOOTPRINT_BUDGET_MIB_PER_MIN);
+    let m = footprint_series(25.0);
+    let (_, live) = judge(
+        &page_series(34.0, 32.0),
+        &m,
+        300,
+        true,
+        Some(WRITE_BUDGET_MIB_PER_MIN),
+    );
+    assert!(live.is_empty(), "the live heap is level: {live:?}");
+    let (slope, broken) = judge_footprint(&m, 300, true, budget);
+    assert!(
+        slope.is_some_and(|slope| (slope - 25.0).abs() < 0.01),
+        "{slope:?}"
+    );
+    assert_eq!(
+        broken,
+        vec![
+            "the footprint grows 25.000 MiB/min (quiet_footprint, from SOAK_SECS/3 on) > the \
+             budget 5"
+                .to_owned()
+        ]
+    );
+    for clean in [-5.0, -0.1, 0.0, 4.9, 5.0] {
+        let (slope, broken) = judge_footprint(&footprint_series(clean), 300, true, budget);
+        assert!(
+            slope.is_some_and(|slope| (slope - clean).abs() < 0.01) && broken.is_empty(),
+            "{clean}: {slope:?} {broken:?}"
+        );
+    }
+    let (_, broken) = judge_footprint(&footprint_series(5.1), 300, true, budget);
+    assert_eq!(broken.len(), 1, "{broken:?}");
+    assert_eq!(judge_footprint(&m, 300, false, budget), (None, Vec::new()));
+    let (slope, broken) = judge_footprint(&m, 300, true, None);
+    assert!(slope.is_some() && broken.is_empty(), "unjudged: {broken:?}");
+    let blind: Vec<Quiet> = m
+        .iter()
+        .map(|quiet| Quiet {
+            footprint_kib: (quiet.at < 100.0 || quiet.at > 160.0).then_some(0),
+            ..*quiet
+        })
+        .collect();
+    let (_, broken) = judge_footprint(&blind, 300, true, budget);
+    assert_eq!(
+        broken.first().map(String::as_str),
+        Some("4 quiet_footprint readings judged (from SOAK_SECS/3 on): fewer than 5")
+    );
+    let (_, broken) = judge_footprint(&[], 300, true, budget);
+    assert_eq!(
+        broken,
+        vec![
+            "0 quiet_footprint readings judged (from SOAK_SECS/3 on): fewer than 5".to_owned(),
+            "no quiet_footprint slope".to_owned()
+        ]
+    );
+    for variant in [Variant::W, Variant::U, Variant::R, Variant::M] {
+        assert_eq!(variant.footprint_budget(), Some(5.0), "{variant:?}");
+    }
+    assert_eq!(Variant::H.footprint_budget(), None);
 }
 
 // ------------------------------------------------------------ WM4
@@ -1933,4 +2589,24 @@ fn wm4_spec_is_not_built_from_the_daemons_crates() {
     }
     assert!(spec.is_subset(&daemon), "{spec:?} {daemon:?}");
     assert!(spec.contains("specengine-store"), "{spec:?}");
+}
+
+/// RM-0134's `WRITE_SOAK_READS`: unset or empty, all three reads; a list
+/// names its own, in the reader's order; an unknown word is refused.
+#[test]
+fn the_reads_knob_names_what_readers_cycle() {
+    assert_eq!(Reads::parse(None), Ok(Reads::ALL));
+    assert_eq!(Reads::parse(Some(" ")), Ok(Reads::ALL));
+    assert_eq!(
+        Reads::parse(Some("search, node")).map(Reads::names),
+        Ok(vec!["node", "search"])
+    );
+    assert_eq!(
+        Reads::parse(Some("inbox")).map(Reads::names),
+        Ok(vec!["inbox"])
+    );
+    assert!(
+        Reads::parse(Some("node,cards"))
+            .is_err_and(|error| error.contains("\"cards\" is none of node, search, inbox"))
+    );
 }

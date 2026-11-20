@@ -61,9 +61,9 @@ use super::state::{TASK_LINKS_SCHEMA, stored_text};
 use super::{
     CARD_COLUMNS, CARD_ITEMS_SCHEMA, EVENT_CREATED, Event, ID_ORDER, IntakeResult, MANDATE_SCHEMA,
     NewIntake, Proposal, ProposalFilter, ProposalKind, ProposalList, ProposalStatus, QueueError,
-    RawRow, SqliteQueue, UnreadableRow, check_time, columns_of, created_payload, existing,
-    index_only, insert_intake, link_problem, log, log_text, queue_matches, raw_rows_in, readable,
-    to_json, user_version,
+    RawRow, Readable, SqliteQueue, UnreadableRow, check_time, columns_of, created_payload,
+    each_readable_in, existing, index_only, insert_intake, link_problem, log, log_text,
+    queue_matches, to_json, user_version,
 };
 use crate::error::{Db, StoreError};
 use crate::floor::read_floor;
@@ -1026,12 +1026,23 @@ impl QueueSnapshot<'_> {
         events_of_types(&self.tx, self.project, types)
     }
 
-    /// `ProposalQueue::list_readable` in this snapshot.
+    /// `ProposalQueue::each_readable` in this snapshot: each row handed to
+    /// `visit` as it decodes, nothing collected; `visit` never calls the
+    /// queue.
+    pub fn each_readable(
+        &self,
+        filter: &ProposalFilter,
+        visit: &mut dyn FnMut(Readable),
+    ) -> Result<(), QueueError> {
+        each_readable_in(&self.tx, self.project, filter, visit)
+    }
+
+    /// `ProposalQueue::list_readable` in this snapshot: [`Self::each_readable`],
+    /// collected.
     pub fn list_readable(&self, filter: &ProposalFilter) -> Result<ProposalList, QueueError> {
-        Ok(readable(
-            raw_rows_in(&self.tx, self.project, filter)?,
-            filter,
-        ))
+        let mut list = ProposalList::default();
+        self.each_readable(filter, &mut |row| list.push(row))?;
+        Ok(list)
     }
 }
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-20
 ---
 
 # Proposal queue: commands, states, store
@@ -35,7 +35,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 
 ## Exit codes
 
-0 done. 1 refused by the proposal or its target: unknown ID, creation, apply steps 3-10, applied or rejected, a declined prompt, a lost compare-and-set. 2 cannot run here: the CLI README's, `--config`, `PR` in `[ids]`, a look-alike ID, no terminal, another repository, an unbound place, no git identity, a corrupt row, a newer build's queue.
+0 done. 1 refused by the proposal or its target: unknown ID, creation, apply steps 3-10, applied or rejected, a declined prompt, a lost compare-and-set. 2 cannot run here: the CLI README's, `--config`, no terminal, another repository, an unbound place, no git identity, a corrupt row, a newer build's queue.
 
 ## States and events
 
@@ -70,8 +70,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 13 | `gist`, `matters` | 50 | `plain-questions.md` "Shapes" |
 | 14 | `collision_marks`, never dumped | 50 | `collision-pass.md` "Ledger" |
 
-- **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly.
-- **Not derived**: backup `queue-backup.md` (ADR-0003).
+- **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly. Not derived: backup `queue-backup.md` (ADR-0003).
 
 `trait ProposalQueue`, `SqliteQueue::open(db, project)`; `QueueError` (`Status` names an applied one's commit; `Store`, `SchemaTooNew` exit 2). `Seen {status, updated_at, staged}` (`Proposal::seen()`), a run's compare-and-set key; `Decision {decided_by, note, staged_at}`.
 
@@ -80,13 +79,12 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | `create(&NewProposal, now)` | `open` under the next ID, `proposal.created`; a kind whose `family()` is not `Applies` -> `Invalid`; a reserved new ID -> `Reserved` |
 | `create_drift(&[NewDrift], now)` | a raise's drift items, deduplicated (`proposal-drift-item.md` "Dedup") |
 | `get`, `list(&ProposalFilter {git_common_dir, statuses})` | by ID number; a corrupt row fails, named |
-| `list_readable` | `list` skipping a corrupt row into `ProposalList.unreadable` (`UnreadableRow {id, column, reason}`) |
+| `list_readable`, `each_readable` | `list` skipping a corrupt row into `ProposalList.unreadable` (`UnreadableRow {id, column, reason}`), read row by row (`proposal-review.md` "Inbox") |
 | `approve_from(id, seen, decision, now)` | step 7: `open -> approved` (event), or `approved` kept with the decision replaced, no event, when `now` is later than `seen.updated_at` (else `Invalid`); state not `seen` -> `Changed`, nothing written |
 | `reopen_from(id, held, failure, now)` | one `apply_failed`; `approved -> open`, decision cleared, only while still `held`, never at step 10 (`APPLY_VERIFY_STEP`) |
 | `log_failure(id, failure, now)` | one `apply_failed`, state untouched |
 | `applied_with(id, commit, decision, now)` | `open -> applied` (`.approved`, `.applied`) or `approved -> applied`, decision kept |
-| `reject_from(id, seen, decision, now)` | `open`/`approved` -> `rejected`, `.rejected`, compare-and-set as above |
-| `reject_orphan` | `reject_from`, for an orphan |
+| `reject_from(id, seen, decision, now)`, `reject_orphan` | `open`/`approved` -> `rejected`, `.rejected`, compare-and-set as above |
 | `reject_with_task(id, seen, decision, task, now)` | a drift item's `reject_from` and a `draft` task, one transaction (`proposal-completion.md` "Reject") |
 
 Also `events()`, `dump()`, `reserved()`; unconditional ops for tests. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.

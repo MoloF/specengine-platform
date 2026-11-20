@@ -140,6 +140,9 @@ mod collisions;
 mod card_counts_seam;
 mod feed;
 mod gate;
+// docs/features/mixed-load-memory.md MX2, MX5: HEAD's reads kept as oracles.
+#[cfg(test)]
+mod mixed_load_oracle;
 mod stage;
 mod state;
 mod tasks;
@@ -1131,6 +1134,30 @@ pub struct ProposalList {
     pub unreadable: Vec<UnreadableRow>,
 }
 
+/// One row of a readable list, as it decodes: what
+/// [`ProposalQueue::each_readable`] hands its visitor (task spec
+/// `mixed-load-memory`, "Data").
+// Handed over by value, one row at a time: boxing the proposal would cost
+// each row an allocation for nothing.
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Readable {
+    /// A row that decodes.
+    Proposal(Proposal),
+    /// A row that does not, named with the first column that fails.
+    Unreadable(UnreadableRow),
+}
+
+impl ProposalList {
+    /// `row` kept at the end of its list.
+    fn push(&mut self, row: Readable) {
+        match row {
+            Readable::Proposal(proposal) => self.proposals.push(proposal),
+            Readable::Unreadable(row) => self.unreadable.push(row),
+        }
+    }
+}
+
 /// One event of the log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
@@ -1459,10 +1486,26 @@ pub trait ProposalQueue {
     fn get(&self, id: &str) -> Result<Option<Proposal>, QueueError>;
     /// The project's proposals `filter` admits, by ID number.
     fn list(&self, filter: &ProposalFilter) -> Result<Vec<Proposal>, QueueError>;
+    /// [`Self::list_readable`]'s rows in its order, each handed to `visit`
+    /// as it decodes and dropped before the next row is stepped; nothing is
+    /// collected (task spec `mixed-load-memory`, (i)). A filter naming
+    /// states leaves the other known states' rows in SQLite; a row whose
+    /// state is NULL or none of the four still comes, as an unreadable one.
+    /// `visit` never calls the queue: the read's transaction is open.
+    fn each_readable(
+        &self,
+        filter: &ProposalFilter,
+        visit: &mut dyn FnMut(Readable),
+    ) -> Result<(), QueueError>;
     /// [`Self::list`] that skips a row which does not decode and names it
     /// in [`ProposalList::unreadable`] (a row whose stored state reads and
-    /// `filter` excludes is skipped silently).
-    fn list_readable(&self, filter: &ProposalFilter) -> Result<ProposalList, QueueError>;
+    /// `filter` excludes is skipped silently): [`Self::each_readable`],
+    /// collected.
+    fn list_readable(&self, filter: &ProposalFilter) -> Result<ProposalList, QueueError> {
+        let mut list = ProposalList::default();
+        self.each_readable(filter, &mut |row| list.push(row))?;
+        Ok(list)
+    }
     /// Apply step 7: `open` → `approved` with the decision (`decided_at` =
     /// `now`), logging `proposal.approved`; `approved` stays, the decision
     /// replaced, no event (no state change). Else [`QueueError::Status`].
@@ -1900,14 +1943,16 @@ impl SqliteQueue {
         })
     }
 
-    /// The project's rows `filter`'s repository admits, by ID number, in
-    /// one snapshot, not decoded; none in an index-only DB
-    /// ([`Self::open_existing`]: no schema step runs; `index_only`).
-    fn raw_rows(&self, filter: &ProposalFilter) -> Result<Vec<RawRow>, QueueError> {
+    /// `read` inside one deferred transaction of the queue's connection:
+    /// one snapshot of every row it steps.
+    fn in_snapshot<T>(
+        &self,
+        read: impl FnOnce(&Connection) -> Result<T, QueueError>,
+    ) -> Result<T, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
-        let raws = raw_rows_in(&tx, &self.project, filter)?;
+        let value = read(&tx)?;
         tx.commit().db()?;
-        Ok(raws)
+        Ok(value)
     }
 
     /// [`ProposalQueue::approve`] (`seen` `None`) and
@@ -2421,52 +2466,96 @@ fn user_version(conn: &Connection) -> Result<i64, QueueError> {
         .db()?)
 }
 
-/// The project's proposal rows as stored, by ID number, of `filter`'s
-/// repository when it names one; none in an index-only DB. Read inside
-/// `conn`'s open transaction: [`SqliteQueue`]'s own, or a
-/// [`QueueSnapshot`]'s (task spec `release-hardening` RH-R5).
-fn raw_rows_in(
+/// Which rows [`each_raw_row_in`] steps by their stored state.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum States {
+    /// Every row, whatever its state ([`ProposalQueue::list`]: a corrupt
+    /// row of any state fails it).
+    Every,
+    /// The rows of the filter's states when it names any, and every row
+    /// whose state is NULL or none of [`ProposalStatus::ALL`]: those are
+    /// noted as unreadable, never dropped (task spec `mixed-load-memory`,
+    /// "Data", the prefilter).
+    Filtered,
+}
+
+/// The project's proposal rows as stored, every column ([`columns_of`]), by
+/// ID number, of `filter`'s repository when it names one, each handed to
+/// `visit` as it is stepped and dropped before the next: no row is
+/// collected. None in an index-only DB. Read inside `conn`'s open
+/// transaction: [`SqliteQueue`]'s own, or a [`QueueSnapshot`]'s (task spec
+/// `release-hardening` RH-R5). `visit`'s error ends the read.
+fn each_raw_row_in(
     conn: &Connection,
     project: &str,
     filter: &ProposalFilter,
-) -> Result<Vec<RawRow>, QueueError> {
+    states: States,
+    visit: &mut dyn FnMut(RawRow) -> Result<(), QueueError>,
+) -> Result<(), QueueError> {
     if index_only(conn)? {
-        return Ok(Vec::new());
+        return Ok(());
     }
     let columns = columns_of(conn)?;
+    let wanted: &[ProposalStatus] = match states {
+        States::Every => &[],
+        States::Filtered => &filter.statuses,
+    };
+    // `proposals` is STRICT with `status TEXT`: SQL's `=` is
+    // `ProposalStatus::parse`'s exact match. The known states are the
+    // store's own constants; the wanted ones are bound.
+    let state_clause = if wanted.is_empty() {
+        String::new()
+    } else {
+        let known = ProposalStatus::ALL
+            .iter()
+            .map(|status| format!("'{}'", status.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let slots = (0..wanted.len())
+            .map(|at| format!("?{}", at + 3))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(" AND (status IS NULL OR status NOT IN ({known}) OR status IN ({slots}))")
+    };
     let mut statement = conn
         .prepare(&format!(
             "SELECT {columns} FROM main.proposals \
-             WHERE project = ?1 AND (?2 IS NULL OR git_common_dir = ?2) {ID_ORDER}"
+             WHERE project = ?1 AND (?2 IS NULL OR git_common_dir = ?2){state_clause} \
+             {ID_ORDER}"
         ))
         .db()?;
-    let raws = statement
-        .query_map(
-            rusqlite::params![project, filter.git_common_dir],
-            RawRow::read,
-        )
-        .db()?
-        .collect::<rusqlite::Result<_>>()
-        .db()?;
-    Ok(raws)
+    let names: Vec<&str> = wanted.iter().map(|status| status.as_str()).collect();
+    let mut params: Vec<&dyn rusqlite::ToSql> = vec![&project, &filter.git_common_dir];
+    params.extend(names.iter().map(|name| name as &dyn rusqlite::ToSql));
+    let mut rows = statement.query(params.as_slice()).db()?;
+    while let Some(row) = rows.next().db()? {
+        visit(RawRow::read(row).db()?)?;
+    }
+    Ok(())
 }
 
-/// `raws` within `filter`'s statuses, each decoded, else named as a row that
-/// does not decode: [`ProposalQueue::list_readable`]'s list.
-fn readable(raws: Vec<RawRow>, filter: &ProposalFilter) -> ProposalList {
+/// [`ProposalQueue::each_readable`] inside `conn`'s open transaction: the
+/// rows [`States::Filtered`] steps within `filter`'s statuses, each decoded,
+/// else named as a row that does not decode, handed to `visit` one by one.
+fn each_readable_in(
+    conn: &Connection,
+    project: &str,
+    filter: &ProposalFilter,
+    visit: &mut dyn FnMut(Readable),
+) -> Result<(), QueueError> {
     let admits =
         |status: ProposalStatus| filter.statuses.is_empty() || filter.statuses.contains(&status);
-    let mut list = ProposalList::default();
-    for raw in raws {
+    each_raw_row_in(conn, project, filter, States::Filtered, &mut |raw| {
+        // The prefilter returns a superset; this check stays the judge.
         if raw.status().is_some_and(|status| !admits(status)) {
-            continue;
+            return Ok(());
         }
-        match raw.decode() {
-            Ok(proposal) => list.proposals.push(proposal),
-            Err(row) => list.unreadable.push(row),
-        }
-    }
-    list
+        visit(match raw.decode() {
+            Ok(proposal) => Readable::Proposal(proposal),
+            Err(row) => Readable::Unreadable(row),
+        });
+        Ok(())
+    })
 }
 
 /// A DB no queue step has run on (`user_version` 0, no `proposals`): the
@@ -4163,24 +4252,12 @@ fn queue_matches(
         ))
         .db()?;
     let params = std::iter::once(project).chain(family.iter().copied());
-    let rows: Vec<MatchRow> = statement
-        .query_map(rusqlite::params_from_iter(params), |row| {
-            Ok(MatchRow {
-                id: row.get(0)?,
-                status: row.get(1)?,
-                target_ids: row.get(2)?,
-                summary: row.get(3)?,
-                decision_note: row.get(4)?,
-                record_id: row.get(5)?,
-                record_path: row.get(6)?,
-                record_title: row.get(7)?,
-            })
-        })
-        .db()?
-        .collect::<rusqlite::Result<_>>()
-        .db()?;
+    // Stepped row by row (task spec `mixed-load-memory`, (ii)): one row
+    // read at a time, never the family's rows collected.
+    let mut rows = statement.query(rusqlite::params_from_iter(params)).db()?;
     let (mut hits, mut related) = (Vec::new(), Vec::new());
-    for row in rows {
+    while let Some(row) = rows.next().db()? {
+        let row = MatchRow::read(row).db()?;
         let MatchRow {
             id,
             status,
@@ -4244,6 +4321,21 @@ struct MatchRow {
     record_id: Option<String>,
     record_path: Option<String>,
     record_title: Option<String>,
+}
+
+impl MatchRow {
+    fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            status: row.get(1)?,
+            target_ids: row.get(2)?,
+            summary: row.get(3)?,
+            decision_note: row.get(4)?,
+            record_id: row.get(5)?,
+            record_path: row.get(6)?,
+            record_title: row.get(7)?,
+        })
+    }
 }
 
 impl ProposalQueue for SqliteQueue {
@@ -4497,17 +4589,24 @@ impl ProposalQueue for SqliteQueue {
 
     fn list(&self, filter: &ProposalFilter) -> Result<Vec<Proposal>, QueueError> {
         let mut proposals = Vec::new();
-        for raw in self.raw_rows(filter)? {
-            let proposal = raw.decode()?;
-            if filter.statuses.is_empty() || filter.statuses.contains(&proposal.status) {
-                proposals.push(proposal);
-            }
-        }
+        self.in_snapshot(|conn| {
+            each_raw_row_in(conn, &self.project, filter, States::Every, &mut |raw| {
+                let proposal = raw.decode()?;
+                if filter.statuses.is_empty() || filter.statuses.contains(&proposal.status) {
+                    proposals.push(proposal);
+                }
+                Ok(())
+            })
+        })?;
         Ok(proposals)
     }
 
-    fn list_readable(&self, filter: &ProposalFilter) -> Result<ProposalList, QueueError> {
-        Ok(readable(self.raw_rows(filter)?, filter))
+    fn each_readable(
+        &self,
+        filter: &ProposalFilter,
+        visit: &mut dyn FnMut(Readable),
+    ) -> Result<(), QueueError> {
+        self.in_snapshot(|conn| each_readable_in(conn, &self.project, filter, visit))
     }
 
     fn approve(

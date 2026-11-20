@@ -353,7 +353,8 @@ fn run_open(
     // Listed once, at the start: a row raised during the walk waits for
     // the next one. Each approve opens the queue for itself.
     let context = open_context(env, globals, &request.git)?;
-    let (proposals, listing_notes) = repository_proposals(&context, vec![ProposalStatus::Open])?;
+    let (proposals, listing_notes) =
+        repository_proposals(&context, vec![ProposalStatus::Open], |proposal| proposal)?;
     let (mut applying, mut deciding, mut drifts) = (Vec::new(), Vec::new(), Vec::new());
     for proposal in proposals {
         match proposal.kind.family() {
