@@ -38,9 +38,14 @@ pub(crate) const PAGE_SIZE: usize = 200;
 const TEXT_PLAIN: &str = "text/plain";
 const TEXT_MARKDOWN: &str = "text/markdown";
 
-/// The resource templates: the node template alone.
+/// The resource templates: the node template, then the guide's (task spec
+/// `specengine-guide`, "MCP"), read with or without a project
+/// ([`crate::guide::read_guide`]); `resources/list` lists no guide page.
 pub(crate) fn templates() -> Vec<ResourceTemplate> {
-    vec![ResourceTemplate::new(NODE_TEMPLATE, "node").with_mime_type(TEXT_MARKDOWN)]
+    vec![
+        ResourceTemplate::new(NODE_TEMPLATE, "node").with_mime_type(TEXT_MARKDOWN),
+        ResourceTemplate::new(crate::guide::GUIDE_TEMPLATE, "guide").with_mime_type(TEXT_MARKDOWN),
+    ]
 }
 
 /// One `resources/list` page: its resources and the cursor of the next.

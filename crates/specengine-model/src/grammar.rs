@@ -20,8 +20,12 @@
 //! letter, digit, `_`, nor a `-` before a letter or digit; (5) qualifiers are
 //! read by look-back, `slug/` then `slug:`, and kept only when the char before
 //! them is none of letter, digit, `_ - . / :`; (6) the script class is that
-//! of the ID as written. [`is_slug`] is the `slug` rule, also the stem of a
-//! feature document (ADR-0026).
+//! of the ID as written; (7) a run right after `guide:<slug>#`, the same
+//! left boundary holding before `guide`, is a citation of SpecEngine's own
+//! guide (task spec `specengine-guide`, ADR-0085), never a project's node:
+//! no reference, so plain text in every project, whatever its `[ids]`.
+//! [`is_slug`] is the `slug` rule, also the stem of a feature document
+//! (ADR-0026).
 //!
 //! Every scan is one pass: each byte is visited a bounded number of times,
 //! whatever the input (no rescan from a line start per `[[`, `#`, `@`, `-`).
@@ -192,6 +196,10 @@ fn match_at(
     base: usize,
 ) -> Option<(Found, usize)> {
     let bytes = text.as_bytes();
+    // (7) the guide's citation is no reference.
+    if cites_the_guide(text, run_start) {
+        return None;
+    }
     let head = match_id(text, run_start, run_end_at, scheme, true, base)?;
     let mut end = head.end;
     let mut homoglyphs: Vec<Homoglyph> = head.homoglyph.into_iter().collect();
@@ -423,6 +431,31 @@ fn name_body(text: &str, start: usize, id: &mut String, changed: &mut bool) -> u
         at += 1;
     }
     end
+}
+
+/// The qualifier of a guide citation, `guide:<topic>#<ID>`.
+const GUIDE_QUALIFIER: &[u8] = b"guide";
+
+/// (7): the run at `run_start` is the `<ID>` of a guide citation: right
+/// after `#`, a slug (its topic), `:` and `guide`, with the qualifiers' left
+/// boundary (5) before `guide`. One look-back over the topic's slug, which
+/// no other run looks back over: the scan stays one pass.
+fn cites_the_guide(text: &str, run_start: usize) -> bool {
+    let bytes = text.as_bytes();
+    if run_start == 0 || bytes[run_start - 1] != b'#' {
+        return false;
+    }
+    let Some(topic) = slug_before(bytes, run_start - 1) else {
+        return false;
+    };
+    let Some(qualifier) = topic
+        .checked_sub(1 + GUIDE_QUALIFIER.len())
+        .filter(|&at| bytes[topic - 1] == b':' && &bytes[at..topic - 1] == GUIDE_QUALIFIER)
+    else {
+        return false;
+    };
+    !char_before(text, qualifier)
+        .is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | ':'))
 }
 
 /// (4): the end, or a char that is no letter, digit, `_`, nor a `-` before

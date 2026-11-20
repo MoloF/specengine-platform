@@ -202,14 +202,14 @@ fn ac10_the_card_tools_and_their_schemas() {
     // docs/features/department-split.md "Acceptance criteria", S8: thirty.
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
-    assert_eq!(TOOLS.len(), 32);
+    assert_eq!(TOOLS.len(), 33);
     for name in CARD_TOOLS {
         assert!(TOOLS.contains(&name), "{name}");
     }
     assert_eq!(CARDS_LINE.len(), 130);
     let instructions = specengine_mcp::INSTRUCTIONS;
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(instructions.len(), 2039);
+    assert_eq!(instructions.len(), 2046);
     assert_eq!(instructions.matches(CARDS_LINE).count(), 1);
     assert!(
         instructions.contains(&format!(
@@ -1152,7 +1152,7 @@ fn board_handoff_the_descriptions_name_the_new_keys() {
         }
     }
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2039);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
     drop(session.finish());
 }
 
@@ -1359,7 +1359,7 @@ fn card_tasks_edit_card_links_and_get_card_reads_each_task() {
 fn card_tasks_the_stdio_descriptions_name_task() {
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
-    assert_eq!(TOOLS.len(), 32);
+    assert_eq!(TOOLS.len(), 33);
     let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
     let list = session.tools();
     for (name, word, sentence) in [

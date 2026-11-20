@@ -1004,11 +1004,13 @@ impl<'a> SpecGraph<'a> {
     /// One file's `parent:` (documents with a readable front-matter) and
     /// its links, in written order: front-matter references, a path-form
     /// `canon:`, then the body's inline links; every lookup goes to
-    /// `reads`.
+    /// `reads`, and so does each `summarises:` entry's file, which no edge
+    /// names ([`summarised_reads`]).
     fn file_links(&self, file: usize, reads: &mut Reads) -> (Option<Parent>, Vec<Edge>) {
         let Some(sites) = self.sites(file) else {
             return (None, Vec::new());
         };
+        summarised_reads(self.files[file], reads);
         let from = self.paths()[file];
         let at = NodeAt { file, ord: 0 };
         let parent = match sites.parent {
@@ -1451,5 +1453,30 @@ fn canon_written(text: &FileText<'_>, target: &PathTarget) -> String {
         (Some(span), _) if !text.is_empty() => text.text(span),
         (_, Some(anchor)) => format!("{}#{anchor}", target.path),
         (_, None) => target.path.clone(),
+    }
+}
+
+/// The files `summary-stale` reads for `file` (task spec
+/// `specengine-guide`, "Front-matter `summarises`"): each `summarises:`
+/// entry's path, its `#anchor` dropped, recorded in `reads` so a write to a
+/// summarised page judges the summarising one again (`write-cost`'s
+/// affected set). No edge, no link: the key is never counted. Nothing for
+/// a front-matter that failed, as the check judges nothing there.
+fn summarised_reads(file: &CheckFile, reads: &mut Reads) {
+    let Some(entries) = file
+        .parsed
+        .as_ref()
+        .filter(|parsed| !front_matter_failed(parsed))
+        .and_then(|parsed| parsed.document())
+        .and_then(|document| document.fields.as_ref())
+        .and_then(|fields| fields.summarises.as_deref())
+    else {
+        return;
+    };
+    for entry in entries {
+        let path = entry
+            .split_once('#')
+            .map_or(entry.as_str(), |(path, _)| path);
+        reads.path(path);
     }
 }

@@ -39,13 +39,13 @@ use specengine_cli::{
     CheckRequest, CheckedTree, CliError, CollisionsRequest, CreateRequest, DecisionRequest,
     DeliveryRequest, DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest,
     ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
-    GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
-    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
-    InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest,
-    LockRegenRequest, Mandate, MarkPairsRequest, Outcome, ProposeRequest, ProposedText,
-    QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest,
-    RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest,
-    ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    GateStage, Globals, GraphRequest, GuideRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES,
+    ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity,
+    IntakeSource, InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt,
+    LockRebaseRequest, LockRegenRequest, Mandate, MarkPairsRequest, Outcome, ProposeRequest,
+    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest,
+    RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve,
+    ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
     TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
     TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest, UnmappedRequest,
     VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
@@ -282,6 +282,12 @@ enum Command {
         /// Include Tier 3 (archived) documents; their decisions are listed either way.
         #[arg(long)]
         archive: bool,
+    },
+    /// Print SpecEngine's own guide, embedded in this build: with no TOPIC the topics, each with its title, its one-line summary and its rule count; with TOPIC its page; with TOPIC#ID one rule's section. Needs no project, reads no file and writes nothing; --root and --config are not read. Exit 1 for a topic or a rule the guide does not hold, naming the ones it does; 2 for a REF holding a space or a control character.
+    Guide {
+        /// A topic, or a topic and one of its rules: `proposals`, `proposals#GD-PROPOSALS-ONE-DOOR`.
+        #[arg(value_name = "TOPIC[#ID]")]
+        reference: Option<String>,
     },
     /// Print the scope rings the `[[map.ring]]` tables of the config choose, innermost first: per ring the nodes `tree [ROOT] --kind K…` lists for its root and kinds, live files only, less those an inner ring holds, each with its work state (the trace's rollup); computed per read, never stored; read-only, exit 0 whatever is listed (a bad table, or a root naming no node, is a note), 2 when it cannot run (no project, an index or a queue that cannot be read).
     Rings,
@@ -1309,6 +1315,11 @@ fn main() -> ExitCode {
         };
         return run_serve(&globals, cli.json, dirs, port);
     }
+    // No project, no `HOME`, no current directory: the guide is the
+    // build's (task spec `specengine-guide`, GU1, GU2).
+    if let Command::Guide { reference } = cli.command {
+        return run_guide(cli.json, reference);
+    }
     if let Command::Auto { command } = cli.command {
         let globals = Globals {
             root: cli.root,
@@ -2279,6 +2290,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 "spec: auto runs apart from the other commands",
             ));
         }
+        Command::Guide { .. } => {
+            return Err(CliError::cannot(
+                "spec: guide runs apart from the other commands",
+            ));
+        }
     })
 }
 
@@ -2544,6 +2560,28 @@ fn give_up(progress: &GateProgress, session: Option<&std::path::Path>, cause: St
     };
     let _ = stderr.flush();
     std::process::exit(i32::from(code));
+}
+
+/// `spec guide`: the embedded guide, before any `Env` is read; its globals
+/// are never read.
+fn run_guide(json: bool, reference: Option<String>) -> ExitCode {
+    match specengine_cli::guide(&GuideRequest { reference }) {
+        Ok(outcome) => {
+            let outcome = Outcome::Guide(outcome);
+            let stdout = if json {
+                render_json(&outcome)
+            } else {
+                render_text(&outcome)
+            };
+            // A closed stdout (`| head`) is no failure of the command.
+            let _ = std::io::stdout().lock().write_all(stdout.as_bytes());
+            ExitCode::from(outcome.exit().code())
+        }
+        Err(error) => {
+            let _ = writeln!(std::io::stderr().lock(), "{error}");
+            ExitCode::from(error.exit.code())
+        }
+    }
 }
 
 /// `spec serve` (task spec `spec-serve`): the library's decision, then

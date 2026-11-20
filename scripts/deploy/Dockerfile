@@ -18,11 +18,14 @@ COPY ui/ ./
 RUN pnpm build
 
 # The workspace's `rust-version`, 1.90; `ui/dist` in place before cargo runs, so
-# the page is compiled into specengine-http.
+# the page is compiled into specengine-http, and `docs/guide/`, so the guide is
+# compiled into both binaries (specengine-cli's build script fails without it;
+# docs/features/specengine-guide.md GU13).
 FROM rust:1.90.0-slim-trixie@sha256:7fa728f3678acf5980d5db70960cf8491aff9411976789086676bdf0c19db39e AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
+COPY docs/guide/ docs/guide/
 COPY --from=ui /src/ui/dist ui/dist
 RUN cargo build --locked --release -p specengine-cli -p specengine-http
 

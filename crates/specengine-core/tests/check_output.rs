@@ -396,7 +396,9 @@ fn the_one_table_covers_every_parser_code() {
     // `CHECK_CODES` 38), then doc-library's warning `tag-invalid`
     // (docs/features/doc-library.md DL7: `CHECK_CODES` 39), then
     // department-practices' warning `practice-discipline`
-    // (docs/features/department-practices.md "Data": `CHECK_CODES` 40, the
+    // (docs/features/department-practices.md "Data": `CHECK_CODES` 40), then
+    // specengine-guide's warning `summary-stale`
+    // (docs/features/specengine-guide.md "Data": `CHECK_CODES` 41, the
     // last); a stale entry is no finding.
     assert_eq!(
         check::CHECK_CODES,
@@ -441,10 +443,11 @@ fn the_one_table_covers_every_parser_code() {
             "card-config",
             "tag-invalid",
             "practice-discipline",
+            "summary-stale",
         ]
     );
-    assert_eq!(check::CHECK_CODES.len(), 40);
-    assert_eq!(check::CHECK_CODES.last(), Some(&"practice-discipline"));
+    assert_eq!(check::CHECK_CODES.len(), 41);
+    assert_eq!(check::CHECK_CODES.last(), Some(&"summary-stale"));
     // No check code shadows a parser code.
     for code in DiagnosticCode::ALL {
         assert!(

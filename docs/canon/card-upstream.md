@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-20
 ---
 
 # Card upstream: what changed above an open subtask
@@ -50,7 +50,7 @@ upstream: 9 | decision PR-0040 | record DEC-0031 | on TIDE-NEAP | Ann Owner | 20
 - **Mirror** (`deny_unknown_fields`): `CardShowDocument.upstream: Option<CardUpstreamShape>` (6 keys), `CardRowShape.upstream: Option<bool>`, `CardUpstreamChangeShape` (9); enums `CardUpstreamMark`, `CardUpstreamSource`, `CardUpstreamField`, `CardUpstreamKind`, the words above.
 - **Texts**: `GET_DESCRIPTION` 2 041 of 2 048 B (`upstream: what changed above an open subtask, as list_cards names it, or null.`), so a later key on `get_card` trims first; `LIST_DESCRIPTION` 1 588 B, the flag's sentence after `a mark changes nothing.`; `INSTRUCTIONS`, `HUB_INSTRUCTIONS`, `read-spec` unchanged.
 - **The daemon**: an index that cannot be read is the card route's 503 for an open subtask only, 200 for a card with no parent or a closed one; `GET …/cards?marks=true` rows carry the flag. Key sets `Card` 36, `CardRow` 23, `CardUpstream` 6, `CardUpstreamChange` 9 (`fixtures/daemon-keys.json`, 137).
-- **The hub**: `/mcp/<slug>` `get_card`, `list_cards` and the routes are the same code over its queue and checkout, 18 tools; `get_card` and a marked list walk, the card route trusts (`spec-read-freshness.md` "Routes and tools"). A hub takes it at its next upgrade.
+- **The hub**: `/mcp/<slug>` `get_card`, `list_cards` and the routes are the same code over its queue and checkout, 19 tools; `get_card` and a marked list walk, the card route trusts (`spec-read-freshness.md` "Routes and tools"). A hub takes it at its next upgrade.
 - **Plugin** 0.41.0, a MINOR (`plugin-files.md` "Changing it").
 
 ## Screen

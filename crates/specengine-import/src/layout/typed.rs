@@ -72,10 +72,11 @@ enum TypedKey {
     Stage,
     Tags,
     Disciplines,
+    Summarises,
 }
 
 /// Every [`TypedKey`], in core's table order.
-const TYPED: [TypedKey; 33] = [
+const TYPED: [TypedKey; 34] = [
     TypedKey::Id,
     TypedKey::Kind,
     TypedKey::Class,
@@ -109,6 +110,7 @@ const TYPED: [TypedKey; 33] = [
     TypedKey::Stage,
     TypedKey::Tags,
     TypedKey::Disciplines,
+    TypedKey::Summarises,
 ];
 
 impl TypedKey {
@@ -133,7 +135,9 @@ impl TypedKey {
             | Self::Priority
             | Self::Stage => CoreType::Text,
             Self::Tier | Self::Rev => CoreType::Integer,
-            Self::Scope | Self::Aliases | Self::Tags | Self::Disciplines => CoreType::List,
+            Self::Scope | Self::Aliases | Self::Tags | Self::Disciplines | Self::Summarises => {
+                CoreType::List
+            }
             Self::Parent | Self::WorkingAnswer | Self::Canon => CoreType::Reference,
             Self::Supersedes | Self::Adrs | Self::Refs => CoreType::ReferenceList,
             Self::Links | Self::RaisedBy => CoreType::Mapping,

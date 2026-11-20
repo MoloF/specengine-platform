@@ -6,6 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 description = "The `spec` command line of SpecEngine: init, index, search and show over the project's spec index; check and export index over a fresh parse"
+# std only (docs/features/specengine-guide.md "The embedded guide (CLI)";
+# ADR-0085): embeds `docs/guide/*.md` as `GUIDE`, reruns when the directory
+# or a page changes, and fails the build on a missing directory or a page
+# out of `GUIDE_ORDER`; no build dependency, no feature. At the crate root,
+# outside `src/`, whose sources name no repository path.
+build = "build.rs"
 
 # `spec`, installed with `cargo install --path crates/specengine-cli`.
 [[bin]]

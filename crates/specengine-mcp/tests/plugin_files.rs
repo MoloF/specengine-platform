@@ -314,6 +314,12 @@
 //!   (RM-0130 changed no plugin file). A `PINS` entry 0.48.1, the tree with
 //!   plugin.json's version set back 0.48.0's; no `SCHEMA_PINS` entry, the
 //!   last still 0.48.0. M: plugin.json left at 0.48.0; another file changed.
+//! - specengine-guide (RM-0129, docs/features/specengine-guide.md GU12):
+//!   0.48.1 -> 0.49.0, MINOR: a tool added, `get_guide`. A `PINS` entry
+//!   0.49.0, the tree with plugin.json's version and `read-spec`'s edits set
+//!   back 0.48.1's; a `SCHEMA_PINS` entry 0.49.0, today's schemas without
+//!   `get_guide` 0.48.0's pin. M: plugin.json left at 0.48.1; another file
+//!   changed; `SCHEMA_PINS` not appended.
 //!
 //! The repository is only read.
 
@@ -795,6 +801,14 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.48.1",
         "cc67d79510cebd724d557ed08f4739ea02efe8f6c1dba8a636e6ce8db7fd0ee4",
+    ),
+    // specengine-guide (RM-0129, GU12: 0.48.1 -> 0.49.0, MINOR: `get_guide`
+    // added): plugin.json's version and `read-spec` (the guide's bullet, two
+    // sentences shortened to make room); set back, the tree hashes as
+    // 0.48.1's pin.
+    (
+        "0.49.0",
+        "c116d73b17d476f030294d9711f6cbbbca9a56d7bfab20e2d54ddee8e5462943",
     ),
 ];
 
@@ -1385,6 +1399,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.48.0",
         "297ed0c970ffbb63701c0809f1914dbdcb2be71e3083b6182bfc0a547643578b",
+    ),
+    // specengine-guide (RM-0129, GU5, GU12): `get_guide`, its input and
+    // output schemas ([`as_of_0_48_1`] takes the tool out; 0.48.1 changed
+    // no schema, so that is 0.48.0's pin).
+    (
+        "0.49.0",
+        "8999e51e55be70f11ad0a6314da1a6f647a2e2edc996e00dce956c872427c058",
     ),
 ];
 
@@ -2414,7 +2435,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// 0.47.2 since doc-library (RM-0127: no skill text changed), 0.48.0 since
 /// department-practices (RM-0128: `read-spec`'s card sentence, its
 /// description unchanged), 0.48.1 since hub-backups (RM-0130: no skill text
-/// changed).
+/// changed), 0.49.0 since specengine-guide (RM-0129: `read-spec`'s guide
+/// bullet, its description unchanged).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2437,7 +2459,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.48.1")
+        json!("0.49.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2590,10 +2612,57 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // specengine-guide (RM-0129, GU12: 0.48.1 -> 0.49.0, MINOR):
+    // plugin.json's version and `read-spec` (the guide's bullet after the
+    // code bullets, `find_symbols`' glosses and the cut answer's sentence
+    // shortened for it); all set back, the tree is 0.48.1's pinned content,
+    // every other skill and role byte-equal. M: plugin.json left at 0.48.1;
+    // another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.49.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.49.0"),
+        "plugin.json's version"
+    );
+    let at_0_48_1 = edited(
+        &edited(
+            &edited(
+                &edited(
+                    &tree,
+                    PLUGIN_JSON,
+                    "\"version\": \"0.49.0\"",
+                    "\"version\": \"0.48.1\"",
+                ),
+                READ_SPEC,
+                "`find_symbols` with exactly one of `at` (a path, a colon and the line), `query` (a \
+                 name or the end of a qualified path), `node` (an ID) or `file` (a code file);",
+                "`find_symbols` with exactly one of `at` (a root-relative path, a colon and the \
+                 line), `query` (a name, the end of a qualified path or a whole one), `node` (an \
+                 ID: the items bound to it) or `file` (a code file's items);",
+            ),
+            READ_SPEC,
+            "or without one for every root;\n   - where does X go in a project: `get_guide`, \
+             then a `topic` of its index.\n",
+            "or without one for every root.\n",
+        ),
+        READ_SPEC,
+        "how to narrow the request: follow it.\n",
+        "how to narrow the request: follow it instead of asking for everything again.\n",
+    );
+    assert_eq!(
+        content_hash(&at_0_48_1),
+        PINS[PINS.len() - 2].1,
+        "0.49.0 changes plugin.json's version and read-spec's three places only"
+    );
+    let tree = at_0_48_1;
+    let pins_0_48_1 = &PINS[..PINS.len() - 1];
     // hub-backups (RM-0130: 0.48.0 -> 0.48.1, PATCH): plugin.json's version
     // alone; set back, the tree is 0.48.0's pinned content, every skill and
     // role byte-equal. M: plugin.json left at 0.48.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.48.1"));
+    assert_eq!(
+        pins_0_48_1.last().map(|(version, _)| *version),
+        Some("0.48.1")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.48.1"),
@@ -2607,11 +2676,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_48_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_48_1[pins_0_48_1.len() - 2].1,
         "0.48.1 changes plugin.json's version only"
     );
     let tree = at_0_48_0;
-    let pins_0_48_0 = &PINS[..PINS.len() - 1];
+    let pins_0_48_0 = &pins_0_48_1[..pins_0_48_1.len() - 1];
     // department-practices (RM-0128: 0.47.2 -> 0.48.0, MINOR): plugin.json's
     // version and `read-spec`'s card sentence; both set back, the tree is
     // 0.47.2's pinned content, every other skill and role byte-equal. M:
@@ -4211,6 +4280,13 @@ fn as_of_0_45_0(schemas: &mut Value) {
     }
 }
 
+/// specengine-guide (RM-0129): `schemas` as 0.48.1 listed them: no
+/// `get_guide`, every other tool's schemas as they are.
+fn as_of_0_48_1(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("the schemas by tool");
+    assert!(tools.remove("get_guide").is_some(), "get_guide is listed");
+}
+
 /// department-practices (RM-0128): `schemas` as 0.47.2 listed them: no
 /// `practices` or `cited` in a card (one holds `context` and `practices`),
 /// no `practices` in a task package (one holds `bundle` and `practices`),
@@ -5209,7 +5285,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[36].0, "0.45.0", "an entry for 0.45.0");
     assert_eq!(SCHEMA_PINS[37].0, "0.46.0", "an entry for 0.46.0");
     assert_eq!(SCHEMA_PINS[38].0, "0.48.0", "an entry for 0.48.0");
-    assert_eq!(SCHEMA_PINS.len(), 39, "0.48.0 the last entry");
+    assert_eq!(SCHEMA_PINS[39].0, "0.49.0", "an entry for 0.49.0");
+    assert_eq!(SCHEMA_PINS.len(), 40, "0.49.0 the last entry");
+    // specengine-guide (RM-0129): 0.48.1's schemas (0.48.0's pin) are
+    // today's without `get_guide`. M: `SCHEMA_PINS` not appended.
+    let mut at_0_48_1 = schemas.clone();
+    as_of_0_48_1(&mut at_0_48_1);
+    let at_0_48_1_hash = schema_hash(&at_0_48_1);
+    assert_eq!(
+        at_0_48_1_hash, SCHEMA_PINS[38].1,
+        "0.48.1's schemas are today's without get_guide"
+    );
+    assert_ne!(
+        at_0_48_1_hash, current,
+        "specengine-guide changed the schemas"
+    );
+    let (schemas, current) = (at_0_48_1, at_0_48_1_hash);
     // department-practices (RM-0128): 0.47.2's schemas (0.46.0's pin) are
     // today's without the slice's keys. M: `SCHEMA_PINS` not appended.
     let mut at_0_47_2 = schemas.clone();

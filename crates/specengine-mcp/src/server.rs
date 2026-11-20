@@ -18,6 +18,7 @@ use rmcp::service::{QuitReason, RequestContext, ServerInitializeError};
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt, tool_handler};
 use specengine_cli::{Env, Globals, OUTPUT_CAP_CHARS};
 
+use crate::guide;
 use crate::hub::{self, HUB_INSTRUCTIONS, HubSeam};
 use crate::read::{holds, holds_number};
 use crate::resources;
@@ -83,18 +84,22 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// `search`'s `limit?, archive?` (18 bytes) stay in its schema alone: 2 048
 /// bytes, the limit; task spec `collision-pass` (CP8) drops the resources
 /// sentence (74 bytes: `resources/list` and `resources/templates/list`
-/// still list them) and adds the collisions line (65 bytes): 2 039 bytes.
+/// still list them) and adds the collisions line (65 bytes): 2 039 bytes;
+/// task spec `specengine-guide` adds `get_guide(topic?, rule?) = guide` to
+/// the reads (34 bytes) and drops `get_tree`'s and `get_node`'s `,
+/// archive?` (20 bytes, still in their schemas) and report_drift's
+/// `queues ` (7 bytes): 2 046 bytes.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
 output, structuredContent its --json document.
 
 Reads:
-- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
+- get_tree(root?, depth?, kinds?) = tree; get_node(id, with?) = show; \
 search(query, kinds?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
 get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?, trace?) = flow; \
-get_trace(ref?) = trace.
+get_trace(ref?) = trace; get_guide(topic?, rule?) = guide.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):
@@ -103,7 +108,7 @@ against its span_hash; create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
 distinct_from names each; work on your working answer.
-- report_drift = spec propose drift: queues HEAD's lock drift.
+- report_drift = spec propose drift: HEAD's lock drift.
 - review_proposal = review --brief after the owner's form; only when the owner asks.
 ",
     collisions_line!(),
@@ -139,6 +144,8 @@ const _: () = assert!(tasks_line!().len() < TASKS_LINE_LIMIT);
 const _: () = assert!(holds(INSTRUCTIONS, tasks_line!()));
 const _: () = assert!(holds(INSTRUCTIONS, cards_line!()));
 const _: () = assert!(holds(INSTRUCTIONS, collisions_line!()));
+// The guide's tool is named with its twin (task spec `specengine-guide`).
+const _: () = assert!(holds(INSTRUCTIONS, "get_guide(topic?, rule?) = guide"));
 // The owner's form is named with its twin, and when it may be called
 // (canon `review-form`, "Tool").
 const _: () = assert!(holds(
@@ -208,7 +215,8 @@ impl SpecEngineServer {
             + Self::review_tools()
             + Self::task_tools()
             + Self::card_tools()
-            + Self::collision_tools();
+            + Self::collision_tools()
+            + Self::guide_tools();
         #[cfg(feature = "probes")]
         let tool_router = tool_router + Self::probe_tools();
         Self {
@@ -344,6 +352,15 @@ impl ServerHandler for SpecEngineServer {
         context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResponse, ErrorData> {
         let uri = request.uri;
+        // The guide's, in place: no project, no turn, on a hub too (task
+        // spec `specengine-guide`, "MCP").
+        if guide::is_guide_uri(&uri) {
+            let mut result = ReadResourceResult::new(vec![guide::read_guide(&uri)?]);
+            if cache_hints(&context) {
+                result = result.with_ttl_ms(0).with_cache_scope(CacheScope::Public);
+            }
+            return Ok(result.into());
+        }
         let parsed = resources::parse(&uri)?;
         let contents = if let Some(seam) = self.seam() {
             // A hub: in the project's turn, as `resources/list`.

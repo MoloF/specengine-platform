@@ -45,6 +45,8 @@ import type {
   FeedDocument,
   FlowView,
   GraphView,
+  GuideIndex,
+  GuidePage,
   HealthReport,
   HubSync,
   Identity,
@@ -87,6 +89,8 @@ import {
   aFlowView,
   aGraphNode,
   aGraphView,
+  aGuideIndex,
+  aGuidePage,
   aHealthReport,
   aNode,
   aRoadmap,
@@ -239,6 +243,9 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getMap: vi.fn<(project: string, options: MapOptions, signal?: AbortSignal) => Promise<MapDocument>>((_project, options) => Promise.resolve(aMap([], [], { archive: options.archive }))),
     // The library (docs/canon/spec-library.md "The screen"): no row, the archive asked; a test overriding what it answers.
     getLibrary: vi.fn<(project: string, options: LibraryOptions, signal?: AbortSignal) => Promise<LibraryDocument>>((_project, options) => Promise.resolve(aLibrary([], { archive: options.archive }))),
+    // SpecEngine's guide (docs/features/specengine-guide.md "The daemon"): no topic; a topic's page made from its name; a test overriding what they answer.
+    getGuide: vi.fn<(signal?: AbortSignal) => Promise<GuideIndex>>(() => Promise.resolve(aGuideIndex([]))),
+    getGuideTopic: vi.fn<(topic: string, signal?: AbortSignal) => Promise<GuidePage>>((topic) => Promise.resolve(aGuidePage(topic))),
     // The lock diff (docs/features/lock-diff.md "Data"): the REF's one holder, no drifted row with a lock entry.
     getLockDiff: vi.fn<(project: string, ref: string, signal?: AbortSignal) => Promise<LockDiffView>>((_project, ref) =>
       Promise.resolve({ ref, reason: null, notes: [], nodes: [{ id: ref, path: "docs/spec/doc-1.md", line: 5, rows: [] }] }),

@@ -21,7 +21,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/specengine-guide.md](features/specengine-guide.md) specengine-guide: SpecEngine's own guide, embedded and served beside every project (RM-0129) · docs, crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, crates/specengine-import, crates/specengine-eval, plugin, scripts, ui · draft
 - [docs/features/zone-index.md](features/zone-index.md) zone-index: canon under the index entry's unlisted globs takes no line, and canon retires by status (RM-0055) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, docs · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
@@ -39,6 +38,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`
 - [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`
 - [docs/index-canon.md](index-canon.md) `docs/canon/*.md`
+- [docs/index-guide.md](index-guide.md) `docs/guide/*.md`
 - [docs/index-decisions-0.md](index-decisions-0.md) `docs/decisions/ADR-000*.md`, `docs/decisions/ADR-001*.md`, `docs/decisions/ADR-002*.md`, `docs/decisions/ADR-003*.md`
 - [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`
 - [docs/index-crates.md](index-crates.md) `crates/*/README.md`

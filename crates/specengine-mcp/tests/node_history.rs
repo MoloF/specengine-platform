@@ -60,9 +60,9 @@ use specengine_mcp::{
 // Re-pinned by docs/features/collision-pass.md "Acceptance criteria", CP8
 // (the collisions line in, the resources sentence out; `mcp_code.rs`' RD-5
 // steps back to the value this slice pinned, `7de2fdaa…`).
-const INSTRUCTIONS_B3: &str = "72797a127dbf98ef66644c92d46870dacb4c072d9cc10819654c38fd82d95fe4";
+const INSTRUCTIONS_B3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
 const HUB_INSTRUCTIONS_B3: &str =
-    "a1762b8eee9cc29a6a6590e12a346f249927e106b01cfc9aea2b28be34734fa1";
+    "81c580c0e384a3e9257bc1d51d176e04e9cc995e44dda809a980f65ee1f8ec8d";
 
 /// NH11: the description's new head and its sentence, as the spec gives
 /// them (NH11).
@@ -621,8 +621,8 @@ async fn nh6_a_hub_answers_alike_and_nh11_its_texts() {
     drop(session.finish());
     let hub = hub_answers(&repo, &calls).await;
     let listed = tool_names(&hub[0]);
-    assert_eq!(listed.len(), 18, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 18);
+    assert_eq!(listed.len(), 19, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 19);
     for (n, (args, local)) in calls.iter().zip(&stdio).enumerate() {
         let remote = &hub[n + 1];
         assert_ne!(remote["isError"], json!(true), "{args}: {remote}");
@@ -683,6 +683,6 @@ fn nh11_the_description_holds_the_history_sentence() {
     );
     assert!(NODE_SENTENCE.contains(&format!("at most {HISTORY_MAX},")));
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(INSTRUCTIONS.len(), 2039);
+    assert_eq!(INSTRUCTIONS.len(), 2046);
     assert_eq!(blake3_hex(INSTRUCTIONS.as_bytes()), INSTRUCTIONS_B3);
 }

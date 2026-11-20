@@ -179,6 +179,13 @@ pub struct Fields {
     /// entry, the index keeps the passing ones; never counted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disciplines: Option<Vec<String>>,
+    /// The canon pages a page summarises, every string entry as written
+    /// (a root-relative `.md` path, an optional `#anchor`), in written
+    /// order (task spec `specengine-guide`, "Front-matter `summarises`";
+    /// ADR-0085): the check's `summary-stale` judges each entry; never
+    /// counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summarises: Option<Vec<String>>,
 }
 
 /// A place a `path#name` link can land on: a heading's GitHub slug, a

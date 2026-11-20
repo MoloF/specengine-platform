@@ -132,7 +132,11 @@ fn ac10_both_eras_advertise_resources_and_the_template() {
     let templates = result(&legacy.request(1, "resources/templates/list", Some(json!({})))).clone();
     assert_eq!(
         templates["resourceTemplates"],
-        json!([{"uriTemplate": "spec://{project}/node/{id}", "name": "node", "mimeType": "text/markdown"}])
+        json!([
+            {"uriTemplate": "spec://{project}/node/{id}", "name": "node", "mimeType": "text/markdown"},
+            // docs/features/specengine-guide.md GU5: the guide's template.
+            {"uriTemplate": "guide://{topic}", "name": "guide", "mimeType": "text/markdown"}
+        ])
     );
     drop(legacy);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
@@ -145,7 +149,11 @@ fn ac10_both_eras_advertise_resources_and_the_template() {
     assert_cache_hints(Era::Stateless, &templates, "templates");
     assert_eq!(
         templates["resourceTemplates"],
-        json!([{"uriTemplate": "spec://{project}/node/{id}", "name": "node", "mimeType": "text/markdown"}])
+        json!([
+            {"uriTemplate": "spec://{project}/node/{id}", "name": "node", "mimeType": "text/markdown"},
+            // docs/features/specengine-guide.md GU5: the guide's template.
+            {"uriTemplate": "guide://{topic}", "name": "guide", "mimeType": "text/markdown"}
+        ])
     );
 }
 

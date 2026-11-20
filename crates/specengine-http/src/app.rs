@@ -26,7 +26,10 @@
 //! `…/feed` a read, the project's events and what needs the owner
 //! ([`crate::feed`], task spec `auto-feed`).
 //! `/api/identity` a read of the request's login, no project, no turn
-//! (docs/features/hub-identity.md); `…/workspaces` a read of the config
+//! (docs/features/hub-identity.md); `/api/guide` and `/api/guide/<topic>`
+//! SpecEngine's own guide as this build embedded it, no project, no turn,
+//! locally and on a hub alike, any login's (task spec `specengine-guide`,
+//! "The daemon"); `…/workspaces` a read of the config
 //! alone, no turn, locally and on a hub alike
 //! (docs/features/workspaces.md), a hub's adding its login's `default`
 //! alone (task spec `hub-department` HD1); a hub has its own fence
@@ -86,12 +89,12 @@ use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardCountsRequest, CardEditBody,
     CardListRequest, CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest,
-    CardSplitBody, CatalogRequest, CheckRequest, CliError, DeliveryRequest, FlowRequest,
-    GraphRequest, HealthRequest, InboxRequest, IndexTrust, LastChangeCache, LibraryRequest,
-    LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest,
-    RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest,
-    TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View, WorkspaceRequest,
-    process_git, project_entry, roadmap_flags, round_limit, team_read, utc_now,
+    CardSplitBody, CatalogRequest, CheckRequest, CliError, DeliveryRequest, Exit, FlowRequest,
+    GraphRequest, GuideRequest, HealthRequest, InboxRequest, IndexTrust, LastChangeCache,
+    LibraryRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody,
+    RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest,
+    TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View,
+    WorkspaceRequest, process_git, project_entry, roadmap_flags, round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -219,6 +222,11 @@ pub(crate) fn router(app: Shared) -> Router {
     let routes = Router::new()
         .route("/api/identity", read(identity).noted("/api/identity"))
         .route("/api/projects", read(projects).noted("/api/projects"))
+        .route("/api/guide", read(guide).noted("/api/guide"))
+        .route(
+            "/api/guide/{topic}",
+            read(guide).noted("/api/guide/{topic}"),
+        )
         .route(
             "/api/projects/{p}/tree",
             read(tree).noted("/api/projects/{p}/tree"),
@@ -650,7 +658,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, cards/counts, round, \
              events, delivery, catalog, map, rings, library, workspaces}}, \
-             /api/identity; the web UI: / and /assets/<file>",
+             /api/identity, /api/guide and /api/guide/<topic>; the web UI: / and \
+             /assets/<file>",
             uri.path()
         ),
     )
@@ -672,6 +681,34 @@ async fn identity(request: Request) -> Result<Response, Refusal> {
         .map(|Login(login)| login.as_str());
     let body = serde_json::json!({ "login": login }).to_string();
     Ok(json(StatusCode::OK, body))
+}
+
+/// `GET /api/guide` and `GET /api/guide/<topic>` (task spec
+/// `specengine-guide`, "The daemon"; ADR-0085): `spec guide [REF] --json`
+/// less its final line end, SpecEngine's own guide as this build embedded
+/// it. No project, no turn, no index, no write: the CLI library reads the
+/// binary's static pages in place, so a guide read never waits behind a
+/// project's writer, and holds nothing after it. `<topic>` is one raw path
+/// segment, percent-decoded once (`<topic>%23<ID>` reads one rule). An
+/// unknown topic or rule: a 404 with the CLI's line; a query, a bad percent
+/// sequence, or a REF the CLI refuses (a space, a control character): a
+/// 400 with its line. On a hub, past the fence, any login's.
+async fn guide(uri: Uri) -> Result<Response, Refusal> {
+    args("guide", &[], &uri)?;
+    let reference = match uri.path().strip_prefix("/api/guide/") {
+        Some(raw) => Some(percent_decode(raw).map_err(Refusal::bad_request)?),
+        None => None,
+    };
+    match specengine_cli::guide(&GuideRequest { reference }) {
+        Ok(outcome) => Ok(json(
+            StatusCode::OK,
+            answer::document(&Outcome::Guide(outcome)),
+        )),
+        Err(error) if error.exit == Exit::NotFound => {
+            Err(Refusal::new(StatusCode::NOT_FOUND, error.message))
+        }
+        Err(error) => Err(Refusal::bad_request(error.message)),
+    }
 }
 
 /// `GET …/team`, a hub's alone: the asker's own row of the `[team]` the root

@@ -5726,6 +5726,155 @@ mark {
   line-height: var(--line-height-small);
 }
 
+/* Documents' View group (docs/features/specengine-guide.md "The UI"): two pressed chips, wrapping. */
+.documents-shelves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-100);
+  padding-top: var(--space-050);
+}
+
+/* SpecEngine's guide (docs/features/specengine-guide.md "The UI"): the shelf's topics as a list, each
+   its title, summary and facts; a topic's page, its rules listed beside the text while they fit, then
+   above it; each rule's heading with Copy citation after it, wrapping under it when narrow. English
+   served text, any width down to 320 px; every colour, size and space a token. */
+.guide-shelf {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+.guide-about {
+  max-width: var(--reading-width);
+  color: var(--text-secondary);
+}
+
+.guide-topics {
+  display: grid;
+  gap: var(--space-100);
+  max-width: var(--reading-width);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide-topic {
+  display: grid;
+  gap: var(--space-050);
+  padding: var(--space-100) var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+  overflow-wrap: anywhere;
+}
+
+.guide-topic-link {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.guide-topic-facts,
+.guide-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-025) var(--space-150);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.guide-view {
+  min-width: 0;
+}
+
+.guide-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-050);
+  justify-self: start;
+  min-height: var(--target-min);
+}
+
+.guide-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-300);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 64rem) {
+  .guide-page {
+    grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr);
+  }
+}
+
+.guide-rules {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+  padding: var(--space-100) var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-sunken);
+  overflow-wrap: anywhere;
+}
+
+.guide-rules-title {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.guide-rules-list {
+  display: grid;
+  gap: var(--space-075);
+  margin: 0;
+  padding-left: var(--space-250);
+}
+
+.guide-rules-list a[aria-current] {
+  font-weight: var(--font-weight-semibold);
+}
+
+.guide-rule-id {
+  display: block;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.guide-article {
+  min-width: 0;
+}
+
+.guide-text {
+  font-size: var(--font-size-document);
+}
+
+/* A heading its holder made an anchor (a guide rule): the heading, then its tool, wrapping below it. */
+.markdown .md-anchor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-150);
+  margin-top: var(--space-150);
+}
+
+.markdown .md-anchor > .md-heading {
+  margin: 0;
+  /* A rule's route scrolls its heading to the top and focuses it: clear of the sticky header. */
+  scroll-margin-top: calc(var(--nav-height) + var(--space-100));
+}
+
+/* Below the header's one-row width it wraps to two rows: the heading clears both. */
+@media (max-width: 68.74rem) {
+  .markdown .md-anchor > .md-heading {
+    scroll-margin-top: calc(2 * var(--nav-height) + var(--space-100));
+  }
+}
+
 /* The chain canvas: lanes' names as text above their boxes, the cut's rule down the gap. */
 .chain-lane {
   display: grid;

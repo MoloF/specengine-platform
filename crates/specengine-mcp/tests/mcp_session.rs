@@ -201,8 +201,17 @@ fn ac06_no_project_starts_both_eras_and_every_tool_names_spec_init() {
             assert_eq!(names, TOOLS, "{era:?}");
         }
         let schemas = output_schemas(&list);
-        // Every tool, the queue tools of task spec `agent-intake` too.
-        for tool in TOOLS {
+        // docs/features/specengine-guide.md GU5: `get_guide` needs no
+        // project, so it answers here, its index the CLI library's.
+        let guide = session.call("get_guide", json!({}));
+        let guide = result(&guide);
+        assert_ne!(guide["isError"], json!(true), "{era:?}: {guide}");
+        let index = specengine_cli::render_text(&specengine_cli::Outcome::Guide(
+            specengine_cli::guide(&specengine_cli::GuideRequest::default()).expect("the index"),
+        ));
+        assert_eq!(common::read::content_text(guide), index, "{era:?}");
+        // Every other tool, the queue tools of task spec `agent-intake` too.
+        for tool in TOOLS.iter().copied().filter(|tool| *tool != "get_guide") {
             let result = checked_call(
                 &mut session,
                 &schemas,

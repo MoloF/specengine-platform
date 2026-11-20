@@ -44,7 +44,7 @@ function charAt(text: string, at: number): string | null {
 }
 
 /** Whether the occurrence at `start..end` stands alone: nothing of an ID or its qualifier runs on into it. */
-function standsAlone(text: string, start: number, end: number): boolean {
+export function standsAlone(text: string, start: number, end: number): boolean {
   const before = charBefore(text, start);
   if (before !== null && (JOINS.test(before) || QUALIFIERS.has(before))) {
     return false;

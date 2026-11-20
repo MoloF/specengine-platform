@@ -38,6 +38,10 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  GuideIndex,
+  GuidePage,
+  GuideRule,
+  GuideTopic,
   HealthAssumes,
   HealthDrift,
   HealthOrphan,
@@ -1378,4 +1382,31 @@ export function aFeedEntry(fields: Partial<FeedEntry> & Pick<FeedEntry, "seq">):
 /** Needs me with every list empty, unless given. */
 export function aFeedNeedsMe(fields: Partial<FeedNeedsMe> = {}): FeedNeedsMe {
   return { held: [], open: [], failed_runs: [], gate_observed: [], unlanded: [], ...fields };
+}
+
+/** A guide topic of the index: its title and summary made from the topic, 2 rules, unless given. */
+export function aGuideTopic(topic: string, fields: Partial<GuideTopic> = {}): GuideTopic {
+  return { topic, title: `Title of ${topic}`, summary: `What ${topic} solves.`, rules: 2, ...fields };
+}
+
+/** The guide's index: these topics, in this order. */
+export function aGuideIndex(topics: GuideTopic[]): GuideIndex {
+  return { topics };
+}
+
+/** A rule of a guide page, its title made from the ID and its line 20, unless given. */
+export function aGuideRule(id: string, fields: Partial<GuideRule> = {}): GuideRule {
+  return { id, title: `Rule ${id}`, line: 20, ...fields };
+}
+
+/**
+ * A guide topic's page: its text a blank line, the title's heading, the summary, the five parts and
+ * each rule a `###` section under "What not to do" (the spec's page shape), unless given.
+ */
+export function aGuidePage(topic: string, rules: GuideRule[] = [aGuideRule(`GD-${topic.toUpperCase()}-FIRST`)], fields: Partial<GuidePage> = {}): GuidePage {
+  const title = fields.title ?? `Title of ${topic}`;
+  const summary = fields.summary ?? `What ${topic} solves.`;
+  const sections = rules.map((rule) => `### ${rule.title} {#${rule.id}}\n\nWhy ${rule.id} holds.\n`).join("\n");
+  const text = `\n# ${title}\n\n${summary} More words.\n\n## What it solves\n\nA need.\n\n## When to use it\n\nOften.\n\n## How\n\n### CLI\n\n\`spec guide ${topic}\`\n\n## Where it lives\n\nIn git.\n\n## What not to do\n\n${sections}`;
+  return { topic, title, summary, summarises: [`docs/canon/${topic}.md`], reviewed: "2026-11-20", rules, text, ...fields };
 }

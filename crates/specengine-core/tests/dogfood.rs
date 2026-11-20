@@ -42,11 +42,14 @@ const QUOTED_BY_Q2: [(&str, &str); 4] = [
 ];
 
 /// The repository's scheme: `ADR` and, since docs/features/roadmap-items.md
-/// SW-4, `RM` (the plan items under `docs/roadmap/`); the root config's
-/// `[ids]` is exactly it.
+/// SW-4, `RM` (the plan items under `docs/roadmap/`), and since
+/// docs/features/specengine-guide.md `GD` (the guide's rules, `shape =
+/// "name"`, in `[ids]` order between them); the root config's `[ids]` is
+/// exactly it.
 fn adr_scheme() -> IdScheme {
     let scheme = IdScheme::new(vec![
         PrefixSpec::number("ADR", "decision", 4),
+        PrefixSpec::name("GD", "guide-rule"),
         PrefixSpec::number("RM", "plan-item", 4),
     ])
     .unwrap();

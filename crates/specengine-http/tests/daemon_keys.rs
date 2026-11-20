@@ -427,6 +427,15 @@
 //! title, path`) from it and from `GET .../proposals/PR-0001`, over the
 //! spec's scene (`specengine-cli`'s `tests/practices_scene`) on a daemon of
 //! its own. M: a key left out of the fixture.
+//!
+//! docs/features/specengine-guide.md (RM-0129) "Acceptance criteria", GU6:
+//! five sets more, 181 in all, last, in "The daemon"'s order: `GuideIndex`
+//! (1, `GET /api/guide`), `GuideTopic` (4, its `topics` items), `GuidePage`
+//! (7, `GET /api/guide/<topic>` for every topic), `GuideRule` (3, every
+//! page's `rules` item and every rule read's `rule`) and `GuideRuleRead` (3,
+//! `GET /api/guide/<topic>%23<ID>` for every rule of `proposals`), on a
+//! daemon of its own over a git copy of spec-a. M: a key the route adds or
+//! drops.
 
 mod common;
 mod task_state;
@@ -1052,6 +1061,56 @@ fn practices_documents() -> (String, String) {
     (card, review)
 }
 
+/// docs/features/specengine-guide.md GU6: `GET /api/guide`, every topic's
+/// page and every rule of `proposals`, raw, from a daemon of its own over a
+/// git copy of spec-a: (the index, the pages, the rule reads).
+fn guide_documents() -> (String, Vec<String>, Vec<String>) {
+    let scratch = Scratch::new("daemon-keys-guide");
+    let root = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let index = server.get("/api/guide").status(200).text().to_owned();
+    let topics: Vec<String> = raw_items(&index, "topics")
+        .iter()
+        .map(|entry| {
+            serde_json::from_str::<serde_json::Value>(entry).expect("JSON")["topic"]
+                .as_str()
+                .expect("a topic")
+                .to_owned()
+        })
+        .collect();
+    let pages: Vec<String> = topics
+        .iter()
+        .map(|topic| {
+            server
+                .get(&format!("/api/guide/{topic}"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .collect();
+    let proposals = &pages[topics
+        .iter()
+        .position(|topic| topic == "proposals")
+        .expect("the proposals topic")];
+    let rules: Vec<String> = raw_items(proposals, "rules")
+        .iter()
+        .map(|rule| {
+            let id = serde_json::from_str::<serde_json::Value>(rule).expect("JSON")["id"]
+                .as_str()
+                .expect("an ID")
+                .to_owned();
+            server
+                .get(&format!("/api/guide/proposals%23{id}"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .collect();
+    (index, pages, rules)
+}
+
 /// docs/features/auto-feed.md FD3: `GET .../feed?since=0&needs_me=1` over a
 /// git copy of `fixtures/auto-mini` with `rules/on.toml` committed, on a
 /// daemon of its own, every `needs_me` list holding a row; its body raw
@@ -1263,6 +1322,17 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let review_citations = raw_items(&practices_review, "cited");
     assert_eq!(review_citations.len(), 1, "{practices_review}");
     citations.extend(review_citations);
+    // docs/features/specengine-guide.md GU6: the index, its ten topics,
+    // the ten pages, every page's rules and every rule read's `rule`.
+    let (guide_index, guide_pages, guide_rule_reads) = guide_documents();
+    let guide_topics = raw_items(&guide_index, "topics");
+    assert_eq!(guide_topics.len(), 10, "{guide_index}");
+    let mut guide_rules: Vec<String> = guide_pages
+        .iter()
+        .flat_map(|page| raw_items(page, "rules"))
+        .collect();
+    guide_rules.extend(guide_rule_reads.iter().map(|read| raw_object(read, "rule")));
+    assert!(!guide_rule_reads.is_empty(), "proposals holds rules");
     let library_changes: Vec<String> = library_rows
         .iter()
         .chain(&library_decisions)
@@ -2940,6 +3010,21 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             one_key_set("CardPractice", &card_practices, keys_of),
         ),
         ("Cited", one_key_set("Cited", &citations, keys_of)),
+        // docs/features/specengine-guide.md GU6, sets 177 to 181.
+        (
+            "GuideIndex",
+            one_key_set("GuideIndex", std::slice::from_ref(&guide_index), keys_of),
+        ),
+        (
+            "GuideTopic",
+            one_key_set("GuideTopic", &guide_topics, keys_of),
+        ),
+        ("GuidePage", one_key_set("GuidePage", &guide_pages, keys_of)),
+        ("GuideRule", one_key_set("GuideRule", &guide_rules, keys_of)),
+        (
+            "GuideRuleRead",
+            one_key_set("GuideRuleRead", &guide_rule_reads, keys_of),
+        ),
     ]
 }
 
@@ -3299,7 +3384,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        176,
+        181,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -3309,7 +3394,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          node-history: 124; upstream-signal: 126; delivery-analytics: 137; \
          direction-catalog: 140; department-overview: 143; collision-pairs: 145; \
          delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160; \
-         auto-feed: 168; hub-auto: 169; doc-library: 174; department-practices: 176)"
+         auto-feed: 168; hub-auto: 169; doc-library: 174; department-practices: 176; \
+         specengine-guide: 181)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -4518,7 +4604,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/hub-auto.md HA7: set 169; `Proposal` without it.
     assert_eq!(sets[168].0, "Delegated");
     assert_eq!(sets[168].1, ["by", "rule", "commit"]);
-    // docs/features/department-practices.md DP14: sets 175 and 176, last.
+    // docs/features/department-practices.md DP14: sets 175 and 176.
     assert_eq!(sets[174].0, "CardPractice");
     assert_eq!(
         sets[174].1,
@@ -4526,7 +4612,34 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     );
     assert_eq!(sets[175].0, "Cited");
     assert_eq!(sets[175].1, ["written", "name", "title", "path"]);
-    assert_eq!(sets.len(), 176);
+    // docs/features/specengine-guide.md GU6: sets 177 to 181, last, each
+    // "Data"'s keys in order.
+    let guide: Vec<(&str, Vec<&str>)> = sets[176..181]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        guide,
+        [
+            ("GuideIndex", vec!["topics"]),
+            ("GuideTopic", vec!["topic", "title", "summary", "rules"]),
+            (
+                "GuidePage",
+                vec![
+                    "topic",
+                    "title",
+                    "summary",
+                    "summarises",
+                    "reviewed",
+                    "rules",
+                    "text"
+                ]
+            ),
+            ("GuideRule", vec!["id", "title", "line"]),
+            ("GuideRuleRead", vec!["topic", "rule", "text"]),
+        ]
+    );
+    assert_eq!(sets.len(), 181);
     // docs/features/doc-library.md DL2: sets 170 to 174, each "Data"'s
     // keys in order.
     let library: Vec<(&str, Vec<&str>)> = sets[169..174]
@@ -4675,7 +4788,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 176 sets (41 until
+/// unchanged, no new key): the fixture holds 181 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4713,7 +4826,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/auto-feed.md its eight, FD3, and
 /// docs/features/hub-auto.md its `Delegated`, HA7, and
 /// docs/features/doc-library.md its five, DL2, and
-/// docs/features/department-practices.md its two, DP14); a decision
+/// docs/features/department-practices.md its two, DP14, and
+/// docs/features/specengine-guide.md its five, GU6); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -4727,8 +4841,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        176,
-        "176 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        181,
+        "181 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4745,7 +4859,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
          hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
-         department-practices' two (DP14)"
+         department-practices' two (DP14) and specengine-guide's five (GU6)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -4864,7 +4978,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 176 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 181 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4900,7 +5014,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/auto-feed.md its eight, FD3, and
 /// docs/features/hub-auto.md its `Delegated`, HA7, and
 /// docs/features/doc-library.md its five, DL2, and
-/// docs/features/department-practices.md its two, DP14); the amendment of
+/// docs/features/department-practices.md its two, DP14, and
+/// docs/features/specengine-guide.md its five, GU6); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -4917,8 +5032,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        176,
-        "176 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        181,
+        "181 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4935,7 +5050,7 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
          hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
-         department-practices' two (DP14)"
+         department-practices' two (DP14) and specengine-guide's five (GU6)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

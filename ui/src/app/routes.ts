@@ -152,6 +152,36 @@ export function docPageHash(project: string, ref: string): string {
   return `${sectionHash(project, "tree", ref)}/${PAGE}`;
 }
 
+/** What opens a citation of SpecEngine's guide, and its topic route's id: `guide:<topic>[#<ID>]` (docs/features/specengine-guide.md "The UI"). */
+export const GUIDE_PREFIX = "guide:";
+
+/** A topic of the guide and, when named, one of its rules. */
+export interface GuideRef {
+  topic: string;
+  rule: string | null;
+}
+
+/**
+ * A guide topic's page, `#/<p>/documents/guide:<topic>`, or one of its rules,
+ * `#/<p>/documents/guide:<topic>%23<ID>`: Documents' route with the citation as its id, the topic and
+ * the rule each encoded once, the `#` between them too, so the hash holds one raw `#`, its first.
+ */
+export function guideHash(project: string, topic: string, rule: string | null = null): string {
+  return `${sectionHash(project, "documents")}/${GUIDE_PREFIX}${encodeURIComponent(topic)}${rule === null ? "" : `%23${encodeURIComponent(rule)}`}`;
+}
+
+/** A Documents id read as a guide citation, `guide:<topic>[#<ID>]`: a topic not empty; an empty rule none. Anything else names no topic. */
+export function guideRefOf(id: string | null): GuideRef | null {
+  if (id === null || !id.startsWith(GUIDE_PREFIX)) {
+    return null;
+  }
+  const rest = id.slice(GUIDE_PREFIX.length);
+  const mark = rest.indexOf("#");
+  const topic = mark < 0 ? rest : rest.slice(0, mark);
+  const rule = mark < 0 ? "" : rest.slice(mark + 1);
+  return topic === "" ? null : { topic, rule: rule === "" ? null : rule };
+}
+
 /** A hash split at its first raw `?`: the part before, and the pairs after (null with no `?`). */
 function hashParts(hash: string): { base: string; pairs: string[] | null } {
   const mark = hash.indexOf("?");

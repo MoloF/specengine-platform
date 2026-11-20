@@ -109,8 +109,9 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// docs/features/card-store.md ([`CARD_TOOLS`]), twenty-nine since
 /// docs/features/card-trace.md (`get_trace`), thirty since
 /// docs/features/department-split.md (`split_card`), thirty-two since
-/// docs/features/collision-pass.md (`get_collisions`, `mark_pairs`).
-pub const TOOLS: [&str; 32] = [
+/// docs/features/collision-pass.md (`get_collisions`, `mark_pairs`),
+/// thirty-three since docs/features/specengine-guide.md (`get_guide`).
+pub const TOOLS: [&str; 33] = [
     "ask_question",
     "check_binding",
     "claim_task",
@@ -122,6 +123,7 @@ pub const TOOLS: [&str; 32] = [
     "get_collisions",
     "get_context_bundle",
     "get_flow",
+    "get_guide",
     "get_impact",
     "get_node",
     "get_proposal",

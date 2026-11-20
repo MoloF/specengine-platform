@@ -562,12 +562,12 @@ describe("source policy", () => {
   });
 
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/", "/src/doc/"];
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/", "/src/doc/", "/src/guide/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     // Flow's place is routes.ts's too (docs/features/writer-studio.md D4): `flowHash`; a document's page (docs/features/doc-modal.md DM-7): `docPageHash`.
-    // Activity's (docs/features/auto-feed.md "The UI"): `feedHash`.
-    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash|cardPageHash|docPageHash|feedHash)\()/;
+    // Activity's (docs/features/auto-feed.md "The UI"): `feedHash`. A guide topic's, at a rule (docs/features/specengine-guide.md "The UI"): `guideHash`.
+    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash|cardPageHash|docPageHash|feedHash|guideHash)\()/;
     expect(offending(rule, views)).toEqual([]);
     // The detector itself: a hash spelled by hand is caught, one from routes.ts is not.
     expect(rule.test("<a href={`#/${project}/tasks`}>")).toBe(true);
@@ -576,6 +576,9 @@ describe("source policy", () => {
     expect(rule.test('<a href={sectionHash(project, "tasks")}>')).toBe(false);
     expect(rule.test("<a href={homeHash(project)}>")).toBe(false);
     expect(rule.test("<a href={flowHash(project, place)}>")).toBe(false);
+    expect(rule.test("<a href={guideHash(project, topic, rule)}>")).toBe(false);
+    // The guide's views are views of spec data too.
+    expect(Object.keys(sources).filter((path) => path.startsWith("/src/guide/") && !views(path)).length).toBeGreaterThan(0);
   });
 
   // DM-8 of docs/features/doc-modal.md: a document opens as a document (src/doc/DocLink.tsx) everywhere

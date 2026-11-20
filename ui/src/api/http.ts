@@ -45,6 +45,8 @@ import type {
   FeedDocument,
   FlowView,
   GraphView,
+  GuideIndex,
+  GuidePage,
   HealthReport,
   HubSync,
   Identity,
@@ -88,7 +90,8 @@ import type {
 // `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the counts
 // `docs/features/department-overview.md` "Acceptance criteria", DO10, the rings
 // `docs/features/scope-rings.md` "Acceptance criteria", SR4, the map
-// `docs/features/corpus-map.md` "Acceptance criteria", CM3):
+// `docs/features/corpus-map.md` "Acceptance criteria", CM3, the guide
+// `docs/features/specengine-guide.md` "The daemon", under no project):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -544,6 +547,24 @@ export class HttpClient implements SpecEngineClient {
   async getLibrary(project: string, options: LibraryOptions, signal?: AbortSignal): Promise<LibraryDocument> {
     const query = queryOf([["archive", options.archive ? true : undefined]]);
     return (await request("GET", `${projectPath(project)}/library${query}`, { signal, judged: true })) as LibraryDocument;
+  }
+
+  /**
+   * `spec guide --json` (`docs/features/specengine-guide.md` "The daemon"): SpecEngine's own guide as
+   * the daemon's build embedded it, under no project, no query. Judged, so only a 200 resolves: an
+   * older daemon's 404 rejects in its words. Takes its query's AbortSignal.
+   */
+  async getGuide(signal?: AbortSignal): Promise<GuideIndex> {
+    return (await request("GET", "/guide", { signal, judged: true })) as GuideIndex;
+  }
+
+  /**
+   * `spec guide TOPIC --json` (`docs/features/specengine-guide.md` "The daemon"): the topic one path
+   * segment, encoded once. Judged: an unknown topic's 404 rejects with the CLI's line, as an older
+   * daemon's 404 with its own. Takes its query's AbortSignal.
+   */
+  async getGuideTopic(topic: string, signal?: AbortSignal): Promise<GuidePage> {
+    return (await request("GET", `/guide/${segment(topic)}`, { signal, judged: true })) as GuidePage;
   }
 
   /**

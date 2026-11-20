@@ -2902,17 +2902,24 @@ fn import_s_typed_key_table_is_core_s_and_core_reads_by_it() {
     // docs/features/roadmap-items.md RD-2: `release`, `priority`, `estimate`;
     // docs/features/trace-views.md "The key `stage:`": `stage`, typed `Text`;
     // docs/features/doc-library.md "Implementation": `tags`, typed `List`
-    // (32); `disciplines`, typed `List`, appended last (33):
-    // docs/features/department-practices.md "Front-matter `disciplines`".
-    assert_eq!(core.len(), 33);
+    // (32); `disciplines`, typed `List` (33):
+    // docs/features/department-practices.md "Front-matter `disciplines`";
+    // `summarises`, typed `List`, appended last (34):
+    // docs/features/specengine-guide.md "Front-matter `summarises`".
+    assert_eq!(core.len(), 34);
     assert!(
         core.contains(&("stage".to_owned(), "Text".to_owned())),
         "{core:?}"
     );
     assert_eq!(core[31], ("tags".to_owned(), "List".to_owned()), "{core:?}");
     assert_eq!(
+        core[32],
+        ("disciplines".to_owned(), "List".to_owned()),
+        "{core:?}"
+    );
+    assert_eq!(
         core.last(),
-        Some(&("disciplines".to_owned(), "List".to_owned())),
+        Some(&("summarises".to_owned(), "List".to_owned())),
         "{core:?}"
     );
 

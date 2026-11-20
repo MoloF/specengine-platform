@@ -101,7 +101,7 @@ export const en = {
       failed: "The mock data could not be loaded: {{error}}. Reload the page to try again.",
     },
     // A view arriving in a chunk of its own (Shell.tsx): its skeleton's label meanwhile.
-    lazy: { roadmap: "Opening the roadmap", graph: "Opening the graph", documents: "Opening the documents" },
+    lazy: { roadmap: "Opening the roadmap", graph: "Opening the graph", documents: "Opening the documents", guide: "Opening the guide" },
     // Key names in the shortcut list: caps the same in both catalogs, the arrows and Space in words.
     keys: {
       down: "Down arrow",
@@ -2910,6 +2910,31 @@ export const en = {
     lastWith: "Showing the last answer, with the archive",
     lastWithout: "Showing the last answer, without the archive",
     notes: "Notes from the daemon",
+    // The View group: the project's documents, or SpecEngine's own guide (docs/features/specengine-guide.md "The UI").
+    shelf: { label: "View", project: "Project documents", guide: "SpecEngine guide" },
+  },
+  // SpecEngine's own guide: Documents' shelf and a topic's page (docs/features/specengine-guide.md "The UI"); its text is served English.
+  guide: {
+    about: "SpecEngine's own guide, as this daemon's build carries it: what each feature solves and where things go in a project. Read only; a project cites a rule as guide:TOPIC#ID.",
+    loading: "Reading the guide",
+    failed: "The guide could not be read",
+    empty: "No guide topic",
+    emptyText: "This daemon's build carries no guide page.",
+    topics_one: "{{count}} topic",
+    topics_other: "{{count}} topics",
+    rules_one: "{{count}} rule",
+    rules_other: "{{count}} rules",
+    back: "SpecEngine guide",
+    readOnly: "Read only",
+    copyCitation: "Copy citation",
+    copyFailed: "Copy failed: select the citation and copy it",
+    page: {
+      loading: "Reading the guide topic {{topic}}",
+      failed: "The guide topic {{topic}} could not be read",
+      rules: "Rules",
+      reviewed: "Reviewed {{date}}",
+      noRule: "This page has no rule {{id}}: this build's guide may have renamed or dropped it.",
+    },
   },
   // A task's Practices part (docs/features/department-practices.md "Acceptance criteria", DP21): the documents naming its discipline.
   practices: {

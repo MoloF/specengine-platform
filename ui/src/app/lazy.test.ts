@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import cardItemsSource from "../board/CardItems.tsx?raw";
+import documentsSource from "../documents/DocumentsView.tsx?raw";
+import citedTextSource from "../markdown/CitedText.tsx?raw";
 import graphHomeSource from "../graph/GraphHome.tsx?raw";
 import graphViewSource from "../graph/GraphView.tsx?raw";
 import pairSlotSource from "../inbox/PairSlot.tsx?raw";
@@ -220,5 +222,31 @@ describe("the Spec tree's lazy Bindings tab (doc-library's first-load move)", ()
     }
     expect(nodePaneSource).toContain('const BindingsPanel = lazy(() => import("./BindingsPanel").then((module) => ({ default: module.BindingsPanel })));');
     expect(nodePaneSource).toMatch(/<Suspense fallback=\{<Skeleton label=\{t\("tree\.bindings\.loading", \{ ref: nodeRef \}\)\} lines=\{4\} \/>\}>\s*<BindingsPanel project=\{project\} nodeRef=\{nodeRef\} onFollow=\{onFollow\} \/>/);
+  });
+});
+
+// docs/features/specengine-guide.md "Acceptance criteria", GU14; docs/canon/ui-languages.md "Size": the
+// guide's views stay out of first load. A topic's page is a chunk of its own, reached from the Shell by
+// a dynamic import alone, standing in a Suspense whose fallback is its skeleton; the shelf rides in
+// Documents' chunk, imported by DocumentsView alone. M: a static import of GuideTopicView in the Shell.
+describe("the guide's lazy views (GU14 of specengine-guide)", () => {
+  it("reaches ../guide/GuideTopicView by lazy(() => import(...)) only, never by a value import; nothing of src/guide/ statically", () => {
+    expect(importLines(shellSource).filter((line) => line.includes("/guide/"))).toEqual([]);
+    expect(shellSource).toContain('const GuideTopicView = lazy(() => import("../guide/GuideTopicView").then((module) => ({ default: module.GuideTopicView })));');
+    expect(shellSource).not.toMatch(/^import \{[^}]*\bGuideTopicView\b[^}]*\} from "\.\.\/guide\/GuideTopicView";$/m);
+  });
+
+  it("stands the topic in a Suspense whose fallback is its skeleton", () => {
+    expect(shellSource).toMatch(/<Suspense key=\{`\$\{route\.project\}\/\$\{guideTopic\.topic\}`\} fallback=\{<Skeleton label=\{t\("app\.lazy\.guide"\)\} lines=\{6\} \/>\}>\s*<GuideTopicView /);
+  });
+
+  it("puts the shelf in Documents' chunk: DocumentsView imports GuideShelf, nothing else of src/guide/", () => {
+    expect(importLines(documentsSource).filter((line) => line.includes("/guide/"))).toEqual(['import { GuideShelf } from "../guide/GuideShelf";']);
+  });
+
+  it("reaches a plain text's guide citations by a dynamic import alone: CitedText, in first load, holds none of their scanning (M: a static import of GuideCitedText)", () => {
+    expect(importLines(citedTextSource).filter((line) => line.includes("GuideCitedText") || line.endsWith('"./guide";'))).toEqual(['import type { Shown } from "./GuideCitedText";']);
+    expect(citedTextSource).toContain('const GuideCitedText = lazy(() => import("./GuideCitedText").then((module) => ({ default: module.GuideCitedText })));');
+    expect(citedTextSource).toMatch(/<Suspense fallback=\{shown\(text\)\}>\s*<GuideCitedText text=\{text\} links=\{links\} shown=\{shown\} \/>/);
   });
 });

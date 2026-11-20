@@ -33,6 +33,13 @@ use crate::{Paths, is_under};
 /// The front-matter key of a document's free labels.
 const TAGS_KEY: &str = "tags";
 
+/// The front-matter key naming the canon pages a page summarises (task
+/// spec `specengine-guide`, "Front-matter `summarises`").
+const SUMMARISES_KEY: &str = "summarises";
+
+/// The warning of a summary whose summarised page moved on, or names none.
+pub(super) const SUMMARY_STALE: &str = "summary-stale";
+
 /// The one table: how a parser diagnostic reaches the report. Every code
 /// keeps the parser's severity but `homoglyph` and `duplicate-id`, which are
 /// errors here (`#ids`: mixed scripts and doubled IDs block).
@@ -534,6 +541,81 @@ impl FileCheck<'_, '_> {
         self.references(document);
         self.tags(document);
         self.disciplines(document);
+        self.summarises(document);
+    }
+
+    /// `summary-stale`, a warning per `summarises:` entry (task spec
+    /// `specengine-guide`, "Front-matter `summarises`"; ADR-0085), at the
+    /// key's line, subject `summarises`, in written order: an entry naming
+    /// no walked canon document (its path not walked or not read, its
+    /// document not canon, its `#anchor` naming nothing, as a path-form
+    /// `canon:` judges an anchor), or one whose document's `reviewed:` is
+    /// strictly later than this page's, both reading as `YYYY-MM-DD`.
+    /// Never an error, so no exit moves on it (ADR-0012); a mistyped
+    /// `summarises:` is the parser's `frontmatter-type` alone. Any project
+    /// may use the key.
+    fn summarises(&mut self, document: &Node) {
+        let Some(fields) = document.fields.as_ref() else {
+            return;
+        };
+        let Some(entries) = fields.summarises.as_deref() else {
+            return;
+        };
+        let own = fields
+            .reviewed
+            .as_deref()
+            .filter(|date| is_calendar_date(date));
+        let line = self.key_line(SUMMARISES_KEY);
+        for entry in entries {
+            let message = match self.summarised_review(entry) {
+                None => format!("summarises `{entry}`: names no walked canon document"),
+                Some(Some(theirs)) => match own {
+                    Some(own) if theirs > own => {
+                        format!("summarises `{entry}`: reviewed {theirs}, after this page's {own}")
+                    }
+                    _ => continue,
+                },
+                Some(None) => continue,
+            };
+            self.findings.push(Finding {
+                code: SUMMARY_STALE.to_owned(),
+                severity: Severity::Warning,
+                path: self.file.path.clone(),
+                line,
+                subject: SUMMARISES_KEY.to_owned(),
+                message,
+                fix: None,
+                debt: None,
+                introduced: None,
+            });
+        }
+    }
+
+    /// The `reviewed:` of the canon document a `summarises:` entry names,
+    /// when it reads as `YYYY-MM-DD`; `None` when the entry names no walked
+    /// canon document (or an anchor it lacks).
+    fn summarised_review(&self, entry: &str) -> Option<Option<&str>> {
+        let (path, anchor) = match entry.split_once('#') {
+            Some((path, anchor)) => (path, Some(anchor)),
+            None => (entry, None),
+        };
+        let &index = self.corpus.by_path.get(path)?;
+        let parsed = self.corpus_parse(index)?;
+        let fields = parsed.document()?.fields.as_ref()?;
+        if fields.class.as_deref() != Some(DocClass::Canon.as_str()) {
+            return None;
+        }
+        if let Some(anchor) = anchor
+            && !has_anchor(parsed, &self.corpus.resolver.sections[index], anchor)
+        {
+            return None;
+        }
+        Some(
+            fields
+                .reviewed
+                .as_deref()
+                .filter(|date| is_calendar_date(date)),
+        )
     }
 
     /// `practice-discipline`, a warning per `disciplines:` problem

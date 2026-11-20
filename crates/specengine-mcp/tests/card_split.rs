@@ -212,7 +212,7 @@ fn split_args(extra: &Value) -> Value {
 fn s8_tools_list_holds_split_card() {
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
-    assert_eq!(TOOLS.len(), 32);
+    assert_eq!(TOOLS.len(), 33);
     assert!(TOOLS.contains(&"split_card"));
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -462,7 +462,7 @@ fn s8_both_texts_hold() {
     let stdio = described("split_card");
     let stdio_create = described("create_card");
     drop(session.finish());
-    assert_eq!(HUB_TOOLS.len(), 18);
+    assert_eq!(HUB_TOOLS.len(), 19);
     assert!(
         HUB_TOOLS.contains(&"split_card"),
         "M: split_card missing from HUB_TOOLS"
@@ -514,7 +514,7 @@ fn s8_both_texts_hold() {
     // `split`; the stdio text stays at its 2 048-byte cap (2 039 since
     // docs/features/collision-pass.md).
     // 2 039 since docs/features/collision-pass.md CP8 (65 bytes in, 74 out).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2039);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
     assert!(specengine_mcp::INSTRUCTIONS.contains(
         "- list_cards, get_card, create_card, split_card, edit_card, move_card = spec card \
          list|show|new|split|edit|move; no tool accepts.\n"

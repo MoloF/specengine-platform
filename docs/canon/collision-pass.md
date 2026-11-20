@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-eval, plugin]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-20
 ---
 
 # Collision pass: pairs that may collide, an agent's verdicts, a local ledger
@@ -76,7 +76,7 @@ Queue schema 14 (`STEP_14`, in `migrate`'s one transaction): `collision_marks (p
 ## MCP, hub, plugin
 
 - `get_collisions {kinds?, any_kind?, limit?}` is `spec collisions`: the reads' annotations and `_meta`, output mirror `CollisionsDocument`. `mark_pairs {pairs: [{a, a_norm, b, b_norm, verdict, proposal?}], author_role, author_model?, run?}` is `spec collisions mark --input -`: the queue writers' annotations, `MarkDocument`, `verdict` an enum, items closed.
-- `INSTRUCTIONS` name both: `- get_collisions, mark_pairs = spec collisions, collisions mark.` (`mcp-read.md` "Texts"). The stdio server lists 32 tools.
+- `INSTRUCTIONS` name both: `- get_collisions, mark_pairs = spec collisions, collisions mark.` (`mcp-read.md` "Texts"). The stdio server lists 33 tools.
 - **A hub** serves neither (a local cache), both in `LEFT_OUT` (`hub-mcp.md` "Tools"); its queue migrates to 14, the ledger empty.
 - **Plugin 0.44.0**, the eighth skill `check-collisions`, its steps in `plugin.md` "Skills".
 

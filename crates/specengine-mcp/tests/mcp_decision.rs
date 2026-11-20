@@ -393,14 +393,17 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 931 and 2 039 since docs/features/collision-pass.md CP8 (D8: the
     // collisions line, 65 bytes, in; the resources sentence, 74, out); the
     // values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1931);
+    // 1 938 and 2 046 since docs/features/specengine-guide.md (`get_guide`
+    // in the reads, 34 bytes; two `, archive?` and `queues ` out, 27); the
+    // values `mcp_code.rs`' `GUIDE_BLAKE3`.
+    assert_eq!(before.len(), 1938);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "f58908267db5315641e3c4b1cfa209f9e7b72257c8b6e898f3f0b3fb9c136d77"
+        "aeb0e7dcced593d133bacc1f02be68f4f016070653a3a70916a383ac195e16f1"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2039);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "72797a127dbf98ef66644c92d46870dacb4c072d9cc10819654c38fd82d95fe4"
+        "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9"
     );
 }

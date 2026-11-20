@@ -69,9 +69,9 @@ use specengine_mcp::{
 /// `INSTRUCTIONS` as collision-pass edits them (`mcp_code.rs`' RD-5 builds the
 /// text and steps back to department-split's), and `HUB_INSTRUCTIONS` as
 /// they were (D3: no hub change).
-const INSTRUCTIONS_B3: &str = "72797a127dbf98ef66644c92d46870dacb4c072d9cc10819654c38fd82d95fe4";
+const INSTRUCTIONS_B3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
 const HUB_INSTRUCTIONS_B3: &str =
-    "a1762b8eee9cc29a6a6590e12a346f249927e106b01cfc9aea2b28be34734fa1";
+    "81c580c0e384a3e9257bc1d51d176e04e9cc995e44dda809a980f65ee1f8ec8d";
 
 /// "MCP": the line `INSTRUCTIONS` gains after the review line.
 const COLLISIONS_LINE: &str = "- get_collisions, mark_pairs = spec collisions, collisions mark.\n";
@@ -251,7 +251,7 @@ fn cp8_the_two_tools_answer_as_their_twins() {
         let repo = Repo::new(&format!("mcp-cp8-{era:?}"));
         let mut session = repo.session(era);
         let list = session.tools();
-        assert_eq!(tool_names(&list).len(), 32, "{era:?}");
+        assert_eq!(tool_names(&list).len(), 33, "{era:?}");
         assert_eq!(tool_names(&list), TOOLS, "{era:?}");
         let schemas = output_schemas(&list);
         let called = |session: &mut Session, tool: &str, args: Value| -> Value {
@@ -446,7 +446,7 @@ fn cp8_the_schemas_texts_and_instructions() {
 
     // `INSTRUCTIONS` (D8): 2 039 bytes, the line after the review line, no
     // resources sentence; served on `server/discover`.
-    assert_eq!(INSTRUCTIONS.len(), 2039);
+    assert_eq!(INSTRUCTIONS.len(), 2046);
     assert!(INSTRUCTIONS.is_ascii());
     assert!(
         INSTRUCTIONS.contains(&format!("{REVIEW_LINE}{COLLISIONS_LINE}")),
@@ -710,8 +710,8 @@ async fn cp8_a_hub_lists_18_and_knows_neither_tool() {
     ];
     let hub = hub_messages(&repo.root, &repo.home, &calls).await;
     let listed = tool_names(&hub[0]["result"]);
-    assert_eq!(listed.len(), 18, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 18);
+    assert_eq!(listed.len(), 19, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 19);
     for name in ["get_collisions", "mark_pairs"] {
         assert!(!listed.iter().any(|tool| tool == name), "{name} listed");
         assert!(!HUB_TOOLS.contains(&name), "{name} in HUB_TOOLS");
@@ -818,6 +818,29 @@ const TOOLS_LIST_PRACTICES_B3: [(Era, &str); 2] = [
         "e3740325b23cdbec8899d1f1fb4828bc6956849d03b41118f97a8b151a6cf432",
     ),
 ];
+
+/// The same listing since docs/features/specengine-guide.md (RM-0129,
+/// "MCP"): `get_guide` added, no other tool touched ([`without_guide`]
+/// takes it out).
+const TOOLS_LIST_GUIDE_B3: [(Era, &str); 2] = [
+    (
+        Era::Legacy,
+        "14a2b6ebcba592ea678dd25425fca84e93066ee1fac852fdcefcfc2759932891",
+    ),
+    (
+        Era::Stateless,
+        "193e98209eb61751fe0139d8cfb486563ec650358486ad30ea7eab1c6d3a79e0",
+    ),
+];
+
+/// `list` as department-practices listed it: `get_guide` out. How many
+/// tools were taken.
+fn without_guide(list: &mut Value) -> usize {
+    let tools = list["tools"].as_array_mut().expect("tools");
+    let before = tools.len();
+    tools.retain(|tool| tool["name"] != "get_guide");
+    before - tools.len()
+}
 
 /// docs/features/department-practices.md: each description edit of the
 /// slice, `(tool, now, before)`, exactly as written (the descriptions'
@@ -1072,18 +1095,32 @@ fn cn7_the_tools_list_is_byte_equal_to_collision_pass() {
     assert_eq!(TOOLS_LIST_PAIR_B3.map(|(era, _)| era), ERAS);
     assert_eq!(TOOLS_LIST_USAGE_B3.map(|(era, _)| era), ERAS);
     assert_eq!(TOOLS_LIST_PRACTICES_B3.map(|(era, _)| era), ERAS);
-    for ((((era, pinned), (_, paired)), (_, used)), (_, practiced)) in TOOLS_LIST_B3
+    assert_eq!(TOOLS_LIST_GUIDE_B3.map(|(era, _)| era), ERAS);
+    for (((((era, pinned), (_, paired)), (_, used)), (_, practiced)), (_, guided)) in TOOLS_LIST_B3
         .into_iter()
         .zip(TOOLS_LIST_PAIR_B3)
         .zip(TOOLS_LIST_USAGE_B3)
         .zip(TOOLS_LIST_PRACTICES_B3)
+        .zip(TOOLS_LIST_GUIDE_B3)
     {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let mut list = session.tools();
         assert_eq!(
             blake3_hex(canonical(&list).as_bytes()),
-            practiced,
+            guided,
             "{era:?}: tools/list changed"
+        );
+        // docs/features/specengine-guide.md: without `get_guide`, the
+        // listing is department-practices'.
+        assert_eq!(
+            without_guide(&mut list),
+            1,
+            "{era:?}: get_guide listed once"
+        );
+        assert_eq!(
+            blake3_hex(canonical(&list).as_bytes()),
+            practiced,
+            "{era:?}: tools/list without get_guide is department-practices'"
         );
         // docs/features/department-practices.md: without the slice's edits
         // and keys, the listing is usage-orphans'.

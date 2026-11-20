@@ -156,7 +156,11 @@ fn pp1_get_proposal_serves_the_pair() {
     let repo = Repo::new("mcp-cpair-pp1");
     let mut session = repo.session();
     let list = session.tools();
-    assert_eq!(tool_names(&list).len(), 32, "stdio keeps 32 tools");
+    assert_eq!(
+        tool_names(&list).len(),
+        33,
+        "stdio keeps 33 tools (32 until specengine-guide)"
+    );
     let schemas = output_schemas(&list);
     let id = stored(&session.call(
         "report_discrepancy",
@@ -289,8 +293,16 @@ fn pp7_the_schema_holds_a_closed_pair() {
     let repo = Repo::new("mcp-cpair-pp7");
     let mut session = repo.session();
     let list = session.tools();
-    assert_eq!(tool_names(&list).len(), 32, "stdio keeps 32 tools");
-    assert_eq!(HUB_TOOLS.len(), 18, "a hub keeps 18 tools");
+    assert_eq!(
+        tool_names(&list).len(),
+        33,
+        "stdio keeps 33 tools (32 until specengine-guide)"
+    );
+    assert_eq!(
+        HUB_TOOLS.len(),
+        19,
+        "a hub keeps 19 tools (18 until specengine-guide)"
+    );
     let schemas = output_schemas(&list);
     let mut seen = 0;
     for name in ["get_proposal", "review_proposal", "propose_change"] {

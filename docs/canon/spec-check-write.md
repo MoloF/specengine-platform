@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-20
 ---
 
 # spec check inside a write: the walked rows, the affected set, the memos
@@ -35,7 +35,7 @@ From disk the check reads only the target, `specengine.toml` and the baseline, a
 
 Core `check::affected` (`Dependents`, `Affected`, `AsIs`), stated in model terms only (ADR-0008): keys a file gives or reads, never a directory, prefix, kind or class.
 - **N**: the keys P, the changed or created file, gives before and after (`given_keys`): its path, its `id:`, `{#ID}` sections and `aliases:` entries.
-- **The set**: P; every reader of a key in N (a file whose recorded resolution looked it up, hit or miss: a reference dangling today, a name-fallback candidate, a `slug/ID`'s feature path, a link candidate: `spec-index-edges.md` "Keys"); every holder of a key in N (`id-taken`). For a reader whose `status:` is `superseded-by`, the set also takes every reader of its own keys: the superseded-date exemption's second hop. Then it takes the files every set file's lookups read, on both sides, until no holder joins. A created P sorts in path order.
+- **The set**: P; every reader of a key in N (a file whose recorded resolution looked it up, hit or miss: a reference dangling today, a name-fallback candidate, a `slug/ID`'s feature path, a link candidate: `spec-index-edges.md` "Keys"); every holder of a key in N (`id-taken`). For a reader whose `status:` is `superseded-by`, the set also takes every reader of its own keys: the superseded-date exemption's second hop. Then it takes the files every set file's lookups read, on both sides, until no holder joins. A `summarises:` entry's file is a read of its page (core `summarised_reads`), so a write to a summarised page judges the summarising one again (`spec-guide.md`). A created P sorts in path order.
 - **The global passes** (`Globals`):
   - `depends-cycle` reruns when a set file has a `depends_on` list on either side;
   - `parent-cycle` reruns when one has a `parent:`;

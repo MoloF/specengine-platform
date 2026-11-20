@@ -35,12 +35,14 @@ pub const INDEX_SHARD: &str = "docs/index-archive.md";
 /// docs/features/collision-pass.md (shard `docs/index-canon-code.md`); the
 /// decisions split in two since auto-mode (docs/features/auto-rule.md RL1:
 /// `docs/index-decisions-0.md` holds ADR-0001 to ADR-0039 by four claims,
-/// `docs/index-decisions.md` the rest). Claims overlap
+/// `docs/index-decisions.md` the rest); SpecEngine's guide after the canon,
+/// since docs/features/specengine-guide.md (shard `docs/index-guide.md`,
+/// `docs/guide/*.md`). Claims overlap
 /// (`docs/canon/spec-*.md`, `docs/canon/proposal-*.md`, `docs/canon/hub*.md`,
 /// `docs/canon/card*.md` and `docs/canon/code-*.md` are within
 /// `docs/canon/*.md`; the `ADR-00..3*` claims within `docs/decisions/*.md`):
 /// the first matching claim wins ([`claiming_shard`]).
-pub const INDEX_LIVE_SHARDS: [(&str, &[&str]); 10] = [
+pub const INDEX_LIVE_SHARDS: [(&str, &[&str]); 11] = [
     ("docs/index-canon-spec.md", &["docs/canon/spec-*.md"]),
     (
         "docs/index-canon-proposal.md",
@@ -50,6 +52,7 @@ pub const INDEX_LIVE_SHARDS: [(&str, &[&str]); 10] = [
     ("docs/index-canon-card.md", &["docs/canon/card*.md"]),
     ("docs/index-canon-code.md", &["docs/canon/code-*.md"]),
     ("docs/index-canon.md", &["docs/canon/*.md"]),
+    ("docs/index-guide.md", &["docs/guide/*.md"]),
     (
         "docs/index-decisions-0.md",
         &[
@@ -82,7 +85,7 @@ pub const VIEW: &str = "docs/generated/roadmap.md";
 /// The outputs of the root config's index entry in config order: the root,
 /// then the shards, then the roadmap view. The index entry's `writes`, the
 /// render's outputs and the export's lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 13] = [
+pub const INDEX_OUTPUTS: [&str; 14] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
@@ -95,6 +98,7 @@ pub const INDEX_OUTPUTS: [&str; 13] = [
     INDEX_LIVE_SHARDS[7].0,
     INDEX_LIVE_SHARDS[8].0,
     INDEX_LIVE_SHARDS[9].0,
+    INDEX_LIVE_SHARDS[10].0,
     VIEW,
 ];
 

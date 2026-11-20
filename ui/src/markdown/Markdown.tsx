@@ -1,8 +1,9 @@
-import { createContext, createElement, memo, use, useEffect, useMemo, useRef, type JSX, type MouseEvent, type ReactElement } from "react";
+import { createContext, createElement, memo, use, useEffect, useMemo, useRef, type JSX, type MouseEvent, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useGuide } from "../api/queries";
 import type { Cited, ShownLink } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { GUIDE_PREFIX, guideHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { linkStateLook } from "../tree/labels";
 import type { LineTarget } from "../tree/TextView";
@@ -51,6 +52,24 @@ export interface MarkdownProps {
    * (docs/features/department-practices.md "Acceptance criteria", DP21). Null or absent: none.
    */
   cited?: readonly Cited[] | null;
+  /**
+   * Headings made anchors (docs/features/specengine-guide.md "The UI": a guide page's rules): each
+   * heading whose `{#ID}` is listed takes the ID as its `id`, `tool` drawn beside it. Null or absent:
+   * no heading is one.
+   */
+  anchors?: HeadingAnchors | null;
+}
+
+/** The headings of a text that are anchors, what stands beside each, and the one to bring into view. */
+export interface HeadingAnchors {
+  /** The `{#ID}`s that are anchors: only these. */
+  ids: readonly string[];
+  /** Drawn beside the anchor's heading, after it. */
+  tool: (id: string) => ReactNode;
+  /** The anchor the holder asks for; null: none. */
+  wanted: string | null;
+  /** Called with the wanted anchor's heading once it is drawn, and again when it is asked anew. */
+  onReach: (heading: HTMLElement) => void;
 }
 
 interface LinkScope {
@@ -63,6 +82,9 @@ interface LinkScope {
 
 // The links read reaches the anchors through context: its landing re-renders them, never the parse.
 const LinkScopeContext = createContext<LinkScope>({ project: "", links: null, path: null, linkTo: "doc", onFollow: undefined });
+
+// The anchors reach the headings through context too: a holder's tool or wanted anchor never parses again.
+const AnchorContext = createContext<HeadingAnchors | null>(null);
 
 type Props<Tag extends keyof JSX.IntrinsicElements> = JSX.IntrinsicElements[Tag] & ExtraProps;
 
@@ -98,6 +120,15 @@ function Anchor({ node, children }: Props<"a">) {
   if (kind === "autolink") {
     return <span className="md-url">{children}</span>;
   }
+  const topic = kind === "guide" ? stringProperty(node, "dataTopic") : null;
+  if (topic !== null) {
+    // A citation of the guide whose topic the served index holds (./plugin, ./guide): its page, at the rule.
+    return (
+      <a className="md-link" href={guideHash(scope.project, topic, stringProperty(node, "dataRule"))}>
+        {children}
+      </a>
+    );
+  }
   const citedName = kind === "cited" ? stringProperty(node, "dataName") : null;
   if (citedName !== null) {
     // A served citation: the document view at the node the daemon resolved (./plugin, ./cited).
@@ -131,9 +162,40 @@ function Anchor({ node, children }: Props<"a">) {
   );
 }
 
+/**
+ * A heading its holder made an anchor: the ID its `id`, focusable from script alone, the holder's tool
+ * beside it; handed to the holder once drawn when it is the wanted one.
+ */
+function AnchorHeading({ level, id, line, anchors, children }: { level: number; id: string; line: number | null; anchors: HeadingAnchors; children: ReactNode }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  const wanted = anchors.wanted === id;
+  const { onReach } = anchors;
+  useEffect(() => {
+    if (wanted && ref.current !== null) {
+      onReach(ref.current);
+    }
+  }, [wanted, onReach]);
+  return (
+    <div className="md-anchor" data-line={line ?? undefined}>
+      {createElement(`h${String(level)}`, { ref, id, tabIndex: -1, className: "md-heading" }, children)}
+      {anchors.tool(id)}
+    </div>
+  );
+}
+
 function heading(level: 1 | 2 | 3 | 4 | 5 | 6) {
   return function Heading({ node, children }: Props<"h1">) {
-    return createElement(`h${String(level)}`, { className: "md-heading", "data-line": numberProperty(node, "dataLine") ?? undefined }, children);
+    const anchors = use(AnchorContext);
+    const id = stringProperty(node, "dataAnchor");
+    const line = numberProperty(node, "dataLine");
+    if (anchors !== null && id !== null && anchors.ids.includes(id)) {
+      return (
+        <AnchorHeading level={level} id={id} line={line} anchors={anchors}>
+          {children}
+        </AnchorHeading>
+      );
+    }
+    return createElement(`h${String(level)}`, { className: "md-heading", "data-line": line ?? undefined }, children);
   };
 }
 
@@ -219,16 +281,17 @@ function specWords(t: Translate): SpecWords {
   };
 }
 
-/** What a parse keeps of a text: all of it, less a title said again, or its first paragraph alone; the served citations it links. */
+/** What a parse keeps of a text: all of it, less a title said again, or its first paragraph alone; the served citations and guide topics it links. */
 interface Cut {
   dropTitle: string | null;
   firstParagraph: boolean;
   cited: readonly Cited[];
+  guideTopics: readonly string[];
 }
 
 /** The text's elements: react-markdown's sync component called once per text, lines, level, cut and language. */
 function parsed(body: string, lineBase: number, baseLevel: number, cut: Cut, language: string, words: SpecWords): ReactElement {
-  const key = `${language}:${String(lineBase)}:${String(baseLevel)}:${cut.firstParagraph ? "lead" : "all"}:${JSON.stringify(cut.dropTitle)}:${JSON.stringify(cut.cited.map((entry) => [entry.written, entry.name]))}:${body}`;
+  const key = `${language}:${String(lineBase)}:${String(baseLevel)}:${cut.firstParagraph ? "lead" : "all"}:${JSON.stringify(cut.dropTitle)}:${JSON.stringify(cut.cited.map((entry) => [entry.written, entry.name]))}:${JSON.stringify(cut.guideTopics)}:${body}`;
   const kept = parses.get(key);
   if (kept !== undefined) {
     parses.delete(key);
@@ -254,6 +317,7 @@ const Rendered = memo(function Rendered({
   dropTitle,
   firstParagraph,
   cited,
+  guideTopics,
   language,
   words,
 }: {
@@ -263,14 +327,32 @@ const Rendered = memo(function Rendered({
   dropTitle: string | null;
   firstParagraph: boolean;
   cited: readonly Cited[];
+  guideTopics: readonly string[];
   language: string;
   words: SpecWords;
 }) {
-  return parsed(body, lineBase, baseLevel, { dropTitle, firstParagraph, cited }, language, words);
+  return parsed(body, lineBase, baseLevel, { dropTitle, firstParagraph, cited, guideTopics }, language, words);
 });
 
 /** No served citation. */
 const NONE_CITED: readonly Cited[] = [];
+
+/** No guide topic. */
+const NO_TOPICS: readonly string[] = [];
+
+type RenderedProps = Parameters<typeof Rendered>[0];
+
+/**
+ * A text holding `guide:` (docs/features/specengine-guide.md "The UI"): parsed with the guide's topics
+ * it cites, as the served index lists them; none while the index is out or when it failed. Only such a
+ * text reads the index.
+ */
+function GuideRendered(props: Omit<RenderedProps, "guideTopics">) {
+  const { body } = props;
+  const topics = useGuide({ citing: true }).data?.topics;
+  const guideTopics = useMemo(() => (topics === undefined ? NO_TOPICS : topics.map((entry) => entry.topic).filter((topic) => topic !== "" && body.includes(`${GUIDE_PREFIX}${topic}`))), [topics, body]);
+  return <Rendered {...props} guideTopics={guideTopics} />;
+}
 
 /** Markdown prose as React elements; a document's front-matter verbatim above it, but in a lead. */
 export function Markdown({
@@ -288,6 +370,7 @@ export function Markdown({
   firstParagraph = false,
   className,
   cited = null,
+  anchors = null,
 }: MarkdownProps) {
   const t = useTranslate();
   const { language } = useLanguage();
@@ -329,14 +412,20 @@ export function Markdown({
 
   return (
     <LinkScopeContext value={scope}>
-      <div ref={container} className={className === undefined ? "markdown" : `markdown ${className}`}>
-        {split.block !== null && !firstParagraph && (
-          <pre className="md-front-matter" data-line={firstLine}>
-            {split.block}
-          </pre>
-        )}
-        <Rendered body={body} lineBase={firstLine + split.lines - 1} baseLevel={baseLevel} dropTitle={dropTitle} firstParagraph={firstParagraph} cited={held} language={language} words={words} />
-      </div>
+      <AnchorContext value={anchors}>
+        <div ref={container} className={className === undefined ? "markdown" : `markdown ${className}`}>
+          {split.block !== null && !firstParagraph && (
+            <pre className="md-front-matter" data-line={firstLine}>
+              {split.block}
+            </pre>
+          )}
+          {body.includes(GUIDE_PREFIX) ? (
+            <GuideRendered body={body} lineBase={firstLine + split.lines - 1} baseLevel={baseLevel} dropTitle={dropTitle} firstParagraph={firstParagraph} cited={held} language={language} words={words} />
+          ) : (
+            <Rendered body={body} lineBase={firstLine + split.lines - 1} baseLevel={baseLevel} dropTitle={dropTitle} firstParagraph={firstParagraph} cited={held} guideTopics={NO_TOPICS} language={language} words={words} />
+          )}
+        </div>
+      </AnchorContext>
     </LinkScopeContext>
   );
 }

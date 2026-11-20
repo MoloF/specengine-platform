@@ -174,5 +174,10 @@
   "LibraryDecision": ["name", "id", "title", "path", "status", "group", "date", "section", "last_change", "newer"],
   "LibraryChange": ["at", "by", "by_name", "commit", "proposal"],
   "CardPractice": ["name", "title", "path", "disciplines", "rules"],
-  "Cited": ["written", "name", "title", "path"]
+  "Cited": ["written", "name", "title", "path"],
+  "GuideIndex": ["topics"],
+  "GuideTopic": ["topic", "title", "summary", "rules"],
+  "GuidePage": ["topic", "title", "summary", "summarises", "reviewed", "rules", "text"],
+  "GuideRule": ["id", "title", "line"],
+  "GuideRuleRead": ["topic", "rule", "text"]
 }

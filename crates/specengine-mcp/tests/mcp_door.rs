@@ -575,6 +575,23 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"ref": "MEC-STAMINA", "bogus": true}),
             ],
         ),
+        // docs/features/specengine-guide.md GU5: the index, a page, a rule,
+        // `rule` alone and an unknown topic (error results); a wrong type
+        // and an unknown field are bad arguments. The guide reads no
+        // project file, so nothing is written under the root.
+        "get_guide" => (
+            vec![
+                json!({}),
+                json!({"topic": "proposals"}),
+                json!({"topic": "proposals", "rule": "GD-PROPOSALS-ONE-DOOR"}),
+                json!({"rule": "GD-PROPOSALS-ONE-DOOR"}),
+                json!({"topic": "nope"}),
+            ],
+            vec![
+                json!({"topic": 7}),
+                json!({"topic": "proposals", "bogus": true}),
+            ],
+        ),
         // docs/features/card-store.md AC-01: spec-a has no `[card]`, so the
         // default flow answers; `create_card` runs first (tools by name), so
         // `C-0001` stands for the rest; a refusal is an error result, a wrong

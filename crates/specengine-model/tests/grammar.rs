@@ -650,3 +650,93 @@ fn qualifier_recognition_agrees_with_is_slug() {
         assert_eq!(found[0].reference.scope, None, "{text:?}");
     }
 }
+
+/// docs/features/specengine-guide.md "Rules and edge cases": recognition
+/// rule (7), a guide citation `guide:<topic>#<ID>` is no reference in any
+/// project, its `<ID>` dropped whatever the project's `[ids]` hold. The
+/// rows dropped have `guide:` standing alone (rule (5)'s left boundary), a
+/// slug, `#` and the ID; the rows kept break one of those. `R` and `S` are
+/// configured here, so every kept row's ID is a reference.
+fn guide_scheme() -> IdScheme {
+    IdScheme::new(vec![
+        PrefixSpec::number("R", "requirement", 2),
+        PrefixSpec::number("S", "section", 1),
+    ])
+    .expect("valid scheme")
+}
+
+/// Rule (7): the dropped rows give no reference; each kept row gives its one
+/// ID, bare (no section, scope or project). M: the early return of
+/// `cites_the_guide` removed (the dropped rows read their IDs).
+#[test]
+fn rule_seven_drops_the_guides_citations_alone() {
+    let scheme = guide_scheme();
+    let ids = |text: &str| -> Vec<String> {
+        scan(text, 0, &scheme)
+            .into_iter()
+            .map(|found| found.reference.id)
+            .collect()
+    };
+    for dropped in [
+        "guide:x#R-12@3",
+        "[[guide:x#R-1|l]]",
+        "(guide:x-1#R-2)",
+        "See guide:records#R-12 for the rule.",
+    ] {
+        assert_eq!(ids(dropped), Vec::<String>::new(), "dropped: {dropped:?}");
+    }
+    for (kept, id) in [
+        ("guide: see #R-12", "R-12"),
+        ("guide:#R-1", "R-1"),
+        ("a-guide:x#R-1", "R-1"),
+        ("myguide:x#R-1", "R-1"),
+        ("foo:guide:x#R-1", "R-1"),
+        ("https://h.io/guide:x#R-1", "R-1"),
+        ("guide:Ab#R-1", "R-1"),
+        ("guide:9x#R-1", "R-1"),
+    ] {
+        let found = scan(kept, 0, &scheme);
+        assert_eq!(
+            found
+                .iter()
+                .map(|found| found.reference.id.as_str())
+                .collect::<Vec<_>>(),
+            [id],
+            "kept: {kept:?}"
+        );
+        let reference = &found[0].reference;
+        assert_eq!(
+            (
+                reference.section.as_deref(),
+                reference.scope.as_deref(),
+                reference.project.as_deref()
+            ),
+            (None, None, None),
+            "kept bare: {kept:?}"
+        );
+    }
+}
+
+/// Rule (7), a documented edge: `guide:x#R-1#S-2` drops `R-1` (the
+/// citation's ID) and keeps `S-2` as a bare reference, no section of
+/// anything: `#` joins only after a reference, and `R-1` is none. Pinned as
+/// the grammar answers today.
+#[test]
+fn rule_seven_edge_a_second_hash_after_a_citation() {
+    let scheme = guide_scheme();
+    let found = scan("guide:x#R-1#S-2", 0, &scheme);
+    assert_eq!(
+        found
+            .iter()
+            .map(|found| found.reference.id.as_str())
+            .collect::<Vec<_>>(),
+        ["S-2"],
+        "{found:?}"
+    );
+    let reference = &found[0].reference;
+    assert_eq!(reference.section, None);
+    assert_eq!(reference.scope, None);
+    assert_eq!(reference.project, None);
+    let start = "guide:x#R-1#".len();
+    assert_eq!(reference.span, Some(Span::new(start, start + "S-2".len())));
+}

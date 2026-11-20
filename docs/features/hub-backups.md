@@ -52,7 +52,7 @@ The `authelia` stub in `tests/deploy_admin.rs` loads a configuration as 4.39.28 
 - [x] HB8 — **Fixed in place.** `restic_env` written whole between two rounds: the next round runs `restic backup --tag queue` and `--tag door` and touches `state/ok`; `fresh` exits 0.
 - [x] HB9 — **Nothing else moves.** `deploy.rs`, `deploy_ops.rs`, `deploy_admin.rs` pass, their pins changed only where this slice changed the files; `image.yml`'s checks pass; `hub-ops.md` "Exits" says the new sentence.
 - [x] HB10 — **The runbook.** `scripts/deploy/README.md` "Install" and "Going live", within 10 240 B: `backup` waits unconfigured, its line(s) each round, until the owner turns backups on; then his steps: a restic backend, `restic_env` written in place (or `backup` restarted), the secrets kept off the host, `backup init` once, `backup snapshots` listing `queue` and `door` under 35 minutes old with `backup` healthy, a restore drill on a scratch host.
-- [ ] HB11 — **[live hub, after the upgrade to 0.48.1]** `dump-door` logs `dumped …` each round; `backup` is up and unhealthy, its line(s) each round, no restart. When the owner turns backups on: `backup` healthy, `snapshots` lists both tags, a restore drill reads both back.
+- [x] HB11 — **[live hub, after the upgrade to 0.48.1]** `dump-door` logs `dumped …` each round; `backup` is up and unhealthy, its line(s) each round, no restart. Seen 2026-11-20: `dump-door` logged `dumped users.yml mcp-users acts.log webauthn.yml totp.yml` at 01:12, 01:15 and 01:30 UTC, 0 restarts; `backup` 0 restarts, one line a round on the grid at 01:20 and 01:35. When the owner turns backups on (his word keeps them off): `backup` healthy, `snapshots` lists both tags, a restore drill reads both back.
 
 ## Out of scope
 

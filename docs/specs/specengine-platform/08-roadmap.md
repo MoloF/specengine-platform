@@ -560,7 +560,7 @@ He asked for this before ("Owner's vision, 2026-11-11": "Full documentation, wit
 |---|---|---|---|
 | 1 | `doc-library` (`docs/features/doc-library.md`) | RM-0127 | must, first; no ADR; `tags:`, `spec library` and its route, the Documents section; `INDEX_FORMAT` 18; no MCP tool; **shipped 2026-11-19** (`docs/canon/spec-library.md`), plugin 0.47.2 |
 | 2 | `department-practices` (`docs/features/department-practices.md`) | RM-0128 | must, after 1; ADR-0084: a document naming disciplines is a practice, standing context for their cards and tasks, gating nothing; `INDEX_FORMAT` 19; plugin 0.48.0 (MINOR: `get_card`, `get_task`, `get_context_bundle` return new keys); **shipped 2026-11-20** (`docs/canon/card-practices.md`), tag `v0.48.0` |
-| 3 | `specengine-guide` (`docs/features/specengine-guide.md`) | RM-0129 | must, after 1; ADR-0085: the guide ships in the build and is served read-only beside a project's corpus, never in it; `get_guide` on stdio and the hub (`HUB_TOOLS` 19), plugin 0.49.0 (MINOR); `INDEX_FORMAT` 20; ten topics written by the spec-writer in the slice; specified 2026-11-20 |
+| 3 | `specengine-guide` (`docs/features/specengine-guide.md`) | RM-0129 | must, after 1; ADR-0085: the guide ships in the build and is served read-only beside a project's corpus, never in it; `get_guide` on stdio and the hub (`HUB_TOOLS` 19), plugin 0.49.0 (MINOR); `INDEX_FORMAT` 20; ten topics written by the spec-writer in the slice; **shipped 2026-11-20** (`docs/canon/spec-guide.md`), tag `v0.49.0` |
 
 **Ten people at once** (his word of 2026-11-15) binds slice 1:
 - its read is trusted on a hub (`run_read`) and shows no trace data, so it never walks the tree there;
@@ -580,6 +580,8 @@ Like every route today, the read still holds the project's turn. Reads outside t
 **His word, 2026-11-20** (in chat, in Russian, translated): "do all the remaining parts and publish each intermediate result to the hub yourself". Slice 1 was committed and tagged `v0.47.2` (690fe65e) and pushed, and the hub's upgrade followed. Slices 2 and 3 follow in turn, each released to the hub when it ships.
 
 **Slice 2 shipped 2026-11-20**, after three iterations: plugin 0.48.0 (MINOR), tag `v0.48.0`, `INDEX_FORMAT` 19. A card's context and a task's package carry their disciplines' practices; rule IDs in cards and proposals link to their documents. At 10k nodes with 20 practices × 30 rules, a card's context costs 31 ms and a hub's `get_card` 76 ms; the soak's slopes were 0.0 and 0.0 MiB/min. The UI's first load is 835 195 B of 845 kB, so the next UI slice plans a lazy chunk.
+
+**Slice 3 shipped 2026-11-20**: plugin 0.49.0 (MINOR), tag `v0.49.0`, `INDEX_FORMAT` 20. Ten guide pages in `docs/guide/`, embedded in every build and served read-only by `spec guide`, `get_guide`, `/api/guide` and a Documents shelf; `summary-stale` keeps them fresh. A `guide:` citation is plain text in every project. Under 10 readers beside 8 writers a guide read took at most 118 ms with no turn; the daemon's memory grew 1.68 MiB/min with the writers and not at all without them, so RM-0132 `write-memory` (must) takes the write path. The UI's first load is 838 633 B of 845 kB: the next UI slice plans lazily.
 
 **Ops findings, 2026-11-20** (the orchestrator's, at the hub's upgrade to 0.47.2; RM-0130 `hub-backups`, must):
 - `backup` restarts in a loop: `restic_env` names no `RESTIC_REPOSITORY`, so no off-host snapshot has ever been taken. Choosing the repository and its credentials is the owner's step.

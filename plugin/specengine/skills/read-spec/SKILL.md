@@ -19,9 +19,10 @@ The spec is a tree of documents and sections named by IDs; the SpecEngine tools 
    - the shape of the spec, or where a new piece belongs: `get_tree`, from a `root`, to a `depth`;
    - the ordered flow, its typed edges and gap rows, which stop nothing: `get_flow`; if too large, from a `root`, to a `depth`, or `in_flow: true` to keep only what is in the flow;
    - the state of a node against the cards answering it, which stops nothing: `get_trace`, with a `ref` to read one node and what it holds;
-   - an item at a line or a name, and the spec markers bound to it, before you change code (the project's config needs a `[code]` table): `find_symbols` with exactly one of `at` (a root-relative path, a colon and the line), `query` (a name, the end of a qualified path or a whole one), `node` (an ID: the items bound to it) or `file` (a code file's items);
+   - an item at a line or a name, and the spec markers bound to it, before you change code (the project's config needs a `[code]` table): `find_symbols` with exactly one of `at` (a path, a colon and the line), `query` (a name or the end of a qualified path), `node` (an ID) or `file` (a code file);
    - what in the code binds a node: `refs` with its `id`, the markers and the mentions naming it;
-   - where code has no spec: `unmapped`, with a `path` (a code root, a directory or a code file), or without one for every root.
+   - where code has no spec: `unmapped`, with a `path` (a code root, a directory or a code file), or without one for every root;
+   - where does X go in a project: `get_guide`, then a `topic` of its index.
 3. **Files last.** Open spec files directly only for what the tools did not give you; never list or read the whole spec instead of a `search`.
 
 ## Using what you read
@@ -29,7 +30,7 @@ The spec is a tree of documents and sections named by IDs; the SpecEngine tools 
 - Cite the IDs you relied on: in your answer, your plan and your report.
 - A node's `tested`, in `get_node` with its bindings, in `get_task`, in `get_impact` and as lines under a bundle's headers, says whether the owner's own passing test run still vouches for that node, judged now: evidence to read, never yours to claim, and nothing waits on it.
 - The answers are deterministic: reading an unchanged node again only spends context.
-- An answer cut for size says how to narrow the request: follow it instead of asking for everything again.
+- An answer cut for size says how to narrow the request: follow it.
 - A reference that names nothing is an error with the reason: check the ID, or `search` for it. A look-alike or mixed-script ID is refused with its Latin fix: use the fix.
 - If a tool answers that there is no project (no `specengine.toml` here or above), stop using these tools, do not set one up, and say so rather than guess what the spec holds.
 - When the spec is silent or ambiguous, or the code disagrees with it, do not fill the gap silently: raise it with the ask-owner skill.

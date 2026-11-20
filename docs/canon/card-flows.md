@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-20
 ---
 
 # Card flows: config, hand-off and return
@@ -102,7 +102,7 @@ No card write moves, creates or refuses another card; a split (`card-split.md`, 
 
 ## MCP and hub
 
-Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `create_card`'s and `move_card`'s descriptions name `reviewer` and `note`, `list_cards`' names `parent` and `return`, its flows `title` (0.35.0); each hub text ASCII and at most 2 048 B, 18 hub tools. `move_card`'s `note` is free text or null, never a staged choice: `mcp_stage.rs` exempts it from decision-staging's walk, as `edit_card`'s `reason`. Plugin 0.31.0 (`plugin-files.md`); `read-spec` says a hand-off is a child card and a return needs a note.
+Arguments stay `deny_unknown_fields`, so an older server refuses the new keys. `create_card`'s and `move_card`'s descriptions name `reviewer` and `note`, `list_cards`' names `parent` and `return`, its flows `title` (0.35.0); each hub text ASCII and at most 2 048 B, 19 hub tools. `move_card`'s `note` is free text or null, never a staged choice: `mcp_stage.rs` exempts it from decision-staging's walk, as `edit_card`'s `reason`. Plugin 0.31.0 (`plugin-files.md`); `read-spec` says a hand-off is a child card and a return needs a note.
 
 **On a hub** both acts are plain writes for any login, `as` bound to it (`hub-team.md` "Acts"). Naming a reviewer at creation is what `assign` already allows (ADR-0060 "Cost"). Accepting the child takes a `[team]` login that is its reviewer. Every login reads every reason (ADR-0065 "Cost").
 

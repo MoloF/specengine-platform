@@ -16,7 +16,7 @@ const SEGMENT = /^[a-z][A-Za-z0-9_]*$/;
 // "map" since docs/features/corpus-map.md "Acceptance criteria", CM13: the Graph's Map;
 // "documents" since docs/features/doc-library.md "Acceptance criteria", DL19: the Documents section;
 // "practices" since docs/features/department-practices.md "Acceptance criteria", DP21: a task's Practices part (src/practices/).
-const FIRST_SEGMENTS = ["app", "palette", "home", "ui", "workspace", "board", "flow", "health", "inbox", "tasks", "tree", "roadmap", "round", "graph", "trace", "markdown", "language", "doc", "rings", "map", "feed", "documents", "practices"];
+const FIRST_SEGMENTS = ["app", "palette", "home", "ui", "workspace", "board", "flow", "health", "inbox", "tasks", "tree", "roadmap", "round", "graph", "trace", "markdown", "language", "doc", "rings", "map", "feed", "documents", "practices", "guide"];
 
 /** Every leaf by its dotted path. */
 function flat(messages: Messages, prefix = ""): Map<string, string> {

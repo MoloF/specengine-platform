@@ -421,7 +421,7 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // resources sentence out; the change line untouched).
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2039);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(

@@ -271,6 +271,8 @@ fn export_index_recreates_this_repository_s_index() {
         // docs/features/collision-pass.md: the `code-*` code-layer canons.
         "## Canon",
         "## Canon",
+        // docs/features/specengine-guide.md: SpecEngine's guide, canon.
+        "## Canon",
         // auto-mode (docs/features/auto-rule.md RL1): ADR-0001 to ADR-0039.
         "## Decisions",
         "## Decisions",

@@ -3088,3 +3088,77 @@ pub(crate) struct MarkDocument {
     pub replaced: usize,
     pub notes: Vec<String>,
 }
+
+// ------------------------------------------------------------------- guide
+
+/// `spec guide [TOPIC[#ID]] --json` (task spec `specengine-guide`, "The
+/// embedded guide (CLI)"): one of three closed objects, the index, a page
+/// or one rule; [`guide_output_schema`] gives it a root `type: object`.
+#[derive(JsonSchema)]
+#[schemars(untagged)]
+pub(crate) enum GuideDocument {
+    Index(GuideIndexShape),
+    Page(GuidePageShape),
+    Rule(GuideRuleReadShape),
+}
+
+/// No topic: every topic, in the guide's order.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct GuideIndexShape {
+    pub topics: Vec<GuideTopicShape>,
+}
+
+/// One topic of the index: its rule count.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct GuideTopicShape {
+    pub topic: String,
+    pub title: String,
+    /// The first sentence of the page's opening paragraph.
+    pub summary: String,
+    pub rules: u64,
+}
+
+/// A topic: its page.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct GuidePageShape {
+    pub topic: String,
+    pub title: String,
+    pub summary: String,
+    /// The canon pages it summarises, as written.
+    pub summarises: Vec<String>,
+    pub reviewed: String,
+    pub rules: Vec<GuideRuleShape>,
+    /// The page's Markdown after its front-matter.
+    pub text: String,
+}
+
+/// A rule: its ID, its heading's text and the heading's line in the page's
+/// file.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct GuideRuleShape {
+    pub id: String,
+    pub title: String,
+    pub line: u64,
+}
+
+/// A topic and a rule: that rule's section.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct GuideRuleReadShape {
+    pub topic: String,
+    pub rule: GuideRuleShape,
+    /// The rule's section, its heading to the next of its level or above.
+    pub text: String,
+}
+
+/// `get_guide`'s output schema: [`GuideDocument`]'s, a root `anyOf` of the
+/// three objects, with the root `type: object` an output schema needs.
+pub(crate) fn guide_output_schema() -> Arc<JsonObject> {
+    let mut schema = (*output_schema::<GuideDocument>()).clone();
+    schema.insert("type".to_owned(), Value::String("object".to_owned()));
+    Arc::new(schema)
+}

@@ -1467,8 +1467,17 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// read of the front-matter of the spec files a login already reads through
 /// `tree`, `map` and `nodes`, their `canon` links and each file's last commit
 /// (as `catalog` serves it), no trace data, never `[team]`.
-const GET_ROUTES: [&str; 35] = [
+///
+/// docs/features/specengine-guide.md (RM-0129, "The daemon"; ADR-0085)
+/// judged `/api/guide` and `/api/guide/{topic}`, the 36th and 37th: mounted
+/// for every login, on a hub "behind the fence, for any login": SpecEngine's
+/// own guide as the build embedded it, the same bytes in every project and
+/// with none; no project file, no index, no queue, never `[team]`, so a
+/// login learns nothing of any project from it.
+const GET_ROUTES: [&str; 37] = [
     "/",
+    "/api/guide",
+    "/api/guide/{topic}",
     "/api/identity",
     "/api/projects",
     "/api/projects/{p}/bundle",
@@ -2023,7 +2032,12 @@ fn the_identity_route_is_a_plain_read_in_both_modes() {
     let message = reply.error_message();
     assert!(
         message.starts_with("no route /no/such/route: the routes are /api/projects ")
-            && message.ends_with("/api/identity; the web UI: / and /assets/<file>"),
+            // docs/features/specengine-guide.md GU6: the guide's two routes
+            // named after `/api/identity`.
+            && message.ends_with(
+                "/api/identity, /api/guide and /api/guide/<topic>; the web UI: / and \
+                 /assets/<file>"
+            ),
         "{message}"
     );
 
@@ -2286,8 +2300,9 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
     // docs/features/corpus-map.md CM3 (`map`) and
     // docs/features/scope-rings.md SR4 (`rings`); 34 since
     // docs/features/auto-feed.md FD3 (`feed`); 35 since
-    // docs/features/doc-library.md DL2 (`library`).
-    assert_eq!(GET_ROUTES.len(), 35);
+    // docs/features/doc-library.md DL2 (`library`); 37 since
+    // docs/features/specengine-guide.md GU6 (`guide`, `guide/{topic}`).
+    assert_eq!(GET_ROUTES.len(), 37);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

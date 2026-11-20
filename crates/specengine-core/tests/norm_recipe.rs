@@ -316,6 +316,7 @@ estimate: 2-4
 stage: gather
 tags: [light]
 disciplines: [art]
+summarises: [docs/canon/light.md]
 links:
   derived_from: [R-12, A-101]
   depends_on: [MEC-SPRINT]
@@ -673,6 +674,13 @@ fn never_counted_changes() -> Vec<(&'static str, &'static str, &'static str)> {
             "disciplines: [art]\n",
             "disciplines: [art, sound]\n",
         ),
+        // docs/features/specengine-guide.md "Front-matter `summarises`":
+        // which canon pages a page summarises is no part of its meaning.
+        (
+            "summarises",
+            "summarises: [docs/canon/light.md]\n",
+            "summarises: [docs/canon/light.md, docs/canon/dark.md#the-rule]\n",
+        ),
     ]
 }
 
@@ -727,6 +735,9 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
         // Never counted: docs/features/department-practices.md
         // "Front-matter `disciplines`".
         "disciplines",
+        // Never counted: docs/features/specengine-guide.md
+        // "Front-matter `summarises`".
+        "summarises",
     ]
     .into_iter()
     .collect();

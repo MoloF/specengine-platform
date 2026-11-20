@@ -119,6 +119,10 @@ export const queryKeys = {
   map: (project: string, archive: boolean) => ["map", project, archive] as const,
   /** Every document as a library, `spec library [--archive] --json` (`docs/canon/spec-library.md` "The screen"): each archive its own entry. */
   library: (project: string, archive: boolean) => ["library", project, archive] as const,
+  /** SpecEngine's own guide (`docs/features/specengine-guide.md` "The UI"): no project, the build's, so no event reads it. */
+  guide: ["guide"] as const,
+  /** One topic's page of the guide: under the guide's key, no project. */
+  guideTopic: (topic: string) => ["guide", topic] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
   /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does; `parent` is never asked here. */
@@ -1330,9 +1334,29 @@ export function useMap(project: string, archive: boolean) {
  * read of the spec: it serves no queue or card data. Never on window focus. The rows, uses,
  * decisions and marks are the daemon's: nothing here counts or judges them.
  */
-export function useLibrary(project: string, archive: boolean) {
+export function useLibrary(project: string, archive: boolean, enabled = true) {
   const client = useClient();
-  return useQuery({ queryKey: queryKeys.library(project, archive), queryFn: ({ signal }) => client.getLibrary(project, { archive }, signal), placeholderData: keepPreviousData });
+  return useQuery({ queryKey: queryKeys.library(project, archive), queryFn: ({ signal }) => client.getLibrary(project, { archive }, signal), placeholderData: keepPreviousData, enabled });
+}
+
+/**
+ * SpecEngine's own guide, its topics (docs/features/specengine-guide.md "The UI"; ADR-0085): `spec
+ * guide --json` as the daemon's build embedded it, its query's AbortSignal taken. No project and no
+ * turn: one entry for the page, read by the guide's shelf and by any text holding `guide:`, whose
+ * citations link only its topics. Static per build, so never stale and never dropped for the page's
+ * life, and read again by no event and no focus. A failure is asked again by the shelf's Retry or the
+ * shelf's next mount; a citation reader (`citing`) never asks again on mount, so a daemon without the
+ * route is asked once a page however many texts cite the guide.
+ */
+export function useGuide({ citing = false }: { citing?: boolean } = {}) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.guide, queryFn: ({ signal }) => client.getGuide(signal), staleTime: Infinity, gcTime: Infinity, retryOnMount: !citing });
+}
+
+/** One topic's page of the guide (docs/features/specengine-guide.md "The UI"): `spec guide TOPIC --json`, static per build as the index. */
+export function useGuideTopic(topic: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.guideTopic(topic), queryFn: ({ signal }) => client.getGuideTopic(topic, signal), staleTime: Infinity });
 }
 
 /**

@@ -53,6 +53,8 @@ import type {
   IntakeDocument,
   IntakeMatch,
   LockDiffView,
+  GuideIndex,
+  GuidePage,
   LibraryDocument,
   MapDocument,
   NodeView,
@@ -121,6 +123,7 @@ import { plainQuestionsScenario } from "./plainQuestions";
 import { collisionPairsScenario } from "./collisionPairs";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { mockMap } from "./map";
+import { guideIndexOf, guidePageOf, noGuideTopic } from "./guide";
 import { libraryOf } from "./library";
 import { mockRings } from "./rings";
 import { SLOW_MS, type Scenario } from "./scenario";
@@ -443,6 +446,26 @@ export class MockClient implements SpecEngineClient {
   async getLibrary(project: string, options: LibraryOptions): Promise<LibraryDocument> {
     await this.read();
     return structuredClone(libraryOf(this.project(project).corpus, project, this.scenario, options.archive));
+  }
+
+  /**
+   * SpecEngine's guide (src/mocks/guide.ts; docs/features/specengine-guide.md "The daemon"): the
+   * build's, under no project. It reads no index, so the `error` scenario's locked index leaves it
+   * answering, as the daemon's would; `slow` delays it as every read.
+   */
+  async getGuide(): Promise<GuideIndex> {
+    await this.wait();
+    return guideIndexOf();
+  }
+
+  /** A topic's page (src/mocks/guide.ts); a topic the guide lacks, the daemon's 404 with the CLI's line. */
+  async getGuideTopic(topic: string): Promise<GuidePage> {
+    await this.wait();
+    const page = guidePageOf(topic);
+    if (page === null) {
+      throw new ClientError({ status: 404, message: noGuideTopic(topic) });
+    }
+    return page;
   }
 
   /**

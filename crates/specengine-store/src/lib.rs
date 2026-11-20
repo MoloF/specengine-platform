@@ -312,7 +312,14 @@ pub use worktree::{
 /// the table `disciplines`, a document's kept entries, with the index
 /// `disciplines_by_name`
 /// (`docs/features/department-practices.md` "The index: `INDEX_FORMAT` 19").
-pub const INDEX_FORMAT: u32 = 19;
+///
+/// 20: the typed front-matter key `summarises` (`fields.summarises`), no
+/// longer kept in `extra` with `unknown-key`, and its entries' paths among
+/// a document's recorded reads (`edge_deps`), so a summarised page's change
+/// judges the summarising one again (`summary-stale`); no table, no
+/// column. An unchanged file is re-parsed only on a new stamp
+/// (`docs/features/specengine-guide.md` "Front-matter `summarises`").
+pub const INDEX_FORMAT: u32 = 20;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

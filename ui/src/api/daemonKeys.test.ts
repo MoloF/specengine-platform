@@ -81,6 +81,11 @@ import type {
   GraphEdge,
   GraphNode,
   GraphView,
+  GuideIndex,
+  GuidePage,
+  GuideRule,
+  GuideRuleRead,
+  GuideTopic,
   HealthAssumes,
   HealthCode,
   HealthDrift,
@@ -1293,6 +1298,13 @@ const KEYS = {
   // and a cited ID, sets 175 and 176, the names DP14 gives them; ahead of the file until its Rust test writes them.
   CardPractice: { name: true, title: true, path: true, disciplines: true, rules: true } satisfies Record<keyof CardPractice, true>,
   Cited: { written: true, name: true, title: true, path: true } satisfies Record<keyof Cited, true>,
+  // docs/features/specengine-guide.md "Data" (GU6): SpecEngine's own guide, its index, a topic, a page,
+  // a rule and one rule's read, sets 177 to 181, the names the spec gives them.
+  GuideIndex: { topics: true } satisfies Record<keyof GuideIndex, true>,
+  GuideTopic: { topic: true, title: true, summary: true, rules: true } satisfies Record<keyof GuideTopic, true>,
+  GuidePage: { topic: true, title: true, summary: true, summarises: true, reviewed: true, rules: true, text: true } satisfies Record<keyof GuidePage, true>,
+  GuideRule: { id: true, title: true, line: true } satisfies Record<keyof GuideRule, true>,
+  GuideRuleRead: { topic: true, rule: true, text: true } satisfies Record<keyof GuideRuleRead, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1491,6 +1503,11 @@ const CITED: Record<Named, string> = {
   LibraryChange: "at, by, by_name, commit, proposal",
   CardPractice: "name, title, path, disciplines, rules",
   Cited: "written, name, title, path",
+  GuideIndex: "topics",
+  GuideTopic: "topic, title, summary, rules",
+  GuidePage: "topic, title, summary, summarises, reviewed, rules, text",
+  GuideRule: "id, title, line",
+  GuideRuleRead: "topic, rule, text",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1897,8 +1914,14 @@ const DEPARTMENT_PRACTICES_KEYS: readonly (readonly [Named, string])[] = [
   ["LibraryRow", "disciplines"],
 ];
 
+/** The hundred and seventy-six types the fixture names before specengine-guide, department-practices' two last. */
+const BEFORE_SPECENGINE_GUIDE: readonly Named[] = [...BEFORE_DEPARTMENT_PRACTICES, ...DEPARTMENT_PRACTICES];
+
+/** specengine-guide's five, sets 177 to 181: the index, a topic, a page, a rule, one rule's read (docs/features/specengine-guide.md "Data", GU6). */
+const SPECENGINE_GUIDE: readonly Named[] = ["GuideIndex", "GuideTopic", "GuidePage", "GuideRule", "GuideRuleRead"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_DEPARTMENT_PRACTICES, ...DEPARTMENT_PRACTICES];
+const ALL: readonly Named[] = [...BEFORE_SPECENGINE_GUIDE, ...SPECENGINE_GUIDE];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -2042,7 +2065,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_AUTO_FEED.at(-1)).toBe("MapGhost");
     expect(BEFORE_DOC_LIBRARY.at(-1)).toBe("Delegated");
     expect(BEFORE_DEPARTMENT_PRACTICES.at(-1)).toBe("LibraryChange");
-    expect(ALL.at(-1)).toBe("Cited");
+    expect(BEFORE_SPECENGINE_GUIDE.at(-1)).toBe("Cited");
+    expect(ALL.at(-1)).toBe("GuideRuleRead");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -2072,8 +2096,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
     // 174 since doc-library's five (docs/features/doc-library.md "Acceptance criteria", DL2); 176 since
-    // department-practices' two (docs/features/department-practices.md "Acceptance criteria", DP14).
-    expect(ALL).toHaveLength(176);
+    // department-practices' two (docs/features/department-practices.md "Acceptance criteria", DP14);
+    // 181 since specengine-guide's five (docs/features/specengine-guide.md "Data", GU6).
+    expect(ALL).toHaveLength(181);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -2272,7 +2297,30 @@ describe("the daemon's document types (AC-09)", () => {
     expect(declaredKeys("TaskBundle")).toEqual(["node_ids", "budget", "disciplines", "bundle_hash"]);
     expect(declaredKeys("BundleLayers")).toEqual(["targets", "open_questions", "ancestors", "criteria", "bindings", "decisions", "neighbours", "terms", "tests", "practices"]);
     expect(source).toMatch(/^ {2}practices: BundleItem\[\];\n\}$/m);
-    expect(ALL.slice(BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...DEPARTMENT_PRACTICES]);
+    expect(ALL.slice(BEFORE_DEPARTMENT_PRACTICES.length, BEFORE_SPECENGINE_GUIDE.length)).toEqual([...DEPARTMENT_PRACTICES]);
+  });
+
+  it('types specengine-guide\'s five as the spec writes them: 1, 4, 7, 3, 3 keys in "Data"\'s order, every one present, none nullable, a page\'s and a rule read\'s rule the GuideRule, each citing `docs/features/specengine-guide.md` "Data" (GU6 of specengine-guide)', () => {
+    expect(SPECENGINE_GUIDE.map((name) => served(name))).toEqual([
+      ["topics"],
+      ["topic", "title", "summary", "rules"],
+      ["topic", "title", "summary", "summarises", "reviewed", "rules", "text"],
+      ["id", "title", "line"],
+      ["topic", "rule", "text"],
+    ]);
+    for (const name of SPECENGINE_GUIDE) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} `);
+      expect([name, source.slice(source.lastIndexOf("/**", at), at).includes('`docs/features/specengine-guide.md` "Data"')]).toEqual([name, true]);
+    }
+    expect(source).toMatch(/^export interface GuideIndex \{\n {2}topics: GuideTopic\[\];\n\}$/m);
+    expect(source).toMatch(/^export interface GuideTopic \{\n {2}topic: string;\n {2}title: string;\n {2}summary: string;\n {2}rules: number;\n\}$/m);
+    expect(source).toMatch(
+      /^export interface GuidePage \{\n {2}topic: string;\n {2}title: string;\n {2}summary: string;\n {2}summarises: string\[\];\n {2}reviewed: string;\n {2}rules: GuideRule\[\];\n {2}text: string;\n\}$/m,
+    );
+    expect(source).toMatch(/^export interface GuideRule \{\n {2}id: string;\n {2}title: string;\n {2}line: number;\n\}$/m);
+    expect(source).toMatch(/^export interface GuideRuleRead \{\n {2}topic: string;\n {2}rule: GuideRule;\n {2}text: string;\n\}$/m);
+    expect(ALL.slice(BEFORE_SPECENGINE_GUIDE.length)).toEqual([...SPECENGINE_GUIDE]);
   });
 
   it('types intake-similar\'s key as the spec writes it: the review document\'s `similar` always null, after `why`, 51 keys then, 53 since plain-questions\' two, 54 since collision-pairs\' `pair`, the key citing `docs/features/intake-similar.md` "Acceptance criteria" (IS10 of intake-similar)', () => {
@@ -2583,8 +2631,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_AUTO_FEED).toHaveLength(160);
     expect(BEFORE_DOC_LIBRARY).toHaveLength(169);
     expect(BEFORE_DEPARTMENT_PRACTICES).toHaveLength(174);
-    expect(ALL).toHaveLength(176);
-    expect(new Set(ALL).size).toBe(176);
+    expect(BEFORE_SPECENGINE_GUIDE).toHaveLength(176);
+    expect(ALL).toHaveLength(181);
+    expect(new Set(ALL).size).toBe(181);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -3042,8 +3091,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // auto-feed's eight since its Rust test wrote them (docs/features/auto-feed.md "Acceptance criteria", FD3): all hundred and sixty-eight.
     // hub-auto's `Delegated` since its Rust test wrote it (HA7): a hundred and sixty-nine.
     // doc-library's five since its Rust test wrote them (docs/features/doc-library.md "Acceptance criteria", DL2): a hundred and seventy-four;
-    // a hundred and seventy-six once department-practices' Rust test writes its two (DP14).
-    expect(expected).toHaveLength(DEPARTMENT_PRACTICES.every((name) => Object.hasOwn(sets, name)) ? 176 : 174);
+    // a hundred and seventy-six once department-practices' Rust test writes its two (DP14);
+    // a hundred and eighty-one since specengine-guide's Rust test wrote its five (docs/features/specengine-guide.md "Data", GU6).
+    expect(expected).toHaveLength(181);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -3353,7 +3403,7 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names department-practices' two last, after LibraryChange, sets 175 and 176: a practice's 5 keys and a cited ID's 4; a card's `practices` and `cited` after `context`, the review's `cited` last, a row's `disciplines` after `tags`, the package's `practices` after `bundle`, its bundle's `disciplines` after `budget` (DP14 of department-practices)", () => {
-    expect(Object.keys(sets).slice(BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...DEPARTMENT_PRACTICES]);
+    expect(Object.keys(sets).slice(BEFORE_DEPARTMENT_PRACTICES.length, BEFORE_SPECENGINE_GUIDE.length)).toEqual([...DEPARTMENT_PRACTICES]);
     expect(Object.keys(sets).indexOf("CardPractice")).toBe(174);
     expect(DEPARTMENT_PRACTICES.map((name) => sets[name])).toEqual(DEPARTMENT_PRACTICES.map((name) => declaredKeys(name)));
     for (const [name, key, after] of [
@@ -3370,6 +3420,14 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
       expect([name, file]).toEqual([name, served(name)]);
     }
     expect(sets.Proposal?.at(-1)).toBe("cited");
+  });
+
+  it("names specengine-guide's five last, after Cited, sets 177 to 181: 1, 4, 7, 3, 3 keys, each as provisional.ts declares it (GU6 of specengine-guide)", () => {
+    expect(Object.keys(sets).slice(BEFORE_SPECENGINE_GUIDE.length)).toEqual([...SPECENGINE_GUIDE]);
+    expect(Object.keys(sets).indexOf("GuideIndex")).toBe(176);
+    expect(Object.keys(sets).at(BEFORE_SPECENGINE_GUIDE.length - 1)).toBe("Cited");
+    expect(SPECENGINE_GUIDE.map((name) => sets[name])).toEqual(SPECENGINE_GUIDE.map((name) => declaredKeys(name)));
+    expect(SPECENGINE_GUIDE.map((name) => sets[name]?.length)).toEqual([1, 4, 7, 3, 3]);
   });
 
   it("names doc-library's five last, after Delegated, sets 170 to 174: 6, 5, 22, 10, 5 keys in the types' order, each as provisional.ts declares it (DL2 of doc-library)", () => {

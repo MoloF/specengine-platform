@@ -4,6 +4,7 @@ import { useLibrary } from "../api/queries";
 import type { LibraryChange, LibraryDecision, LibraryDocument, LibraryRow, WorkspaceModule } from "../api/types";
 import { aboutOf } from "../app/sections";
 import { DocLink } from "../doc/DocLink";
+import { GuideShelf } from "../guide/GuideShelf";
 import { useLanguage, useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { UsedCell } from "../tree/UsedCell";
@@ -53,18 +54,53 @@ import {
 // `canon:` lands on the row; nothing here writes, gates or moves anything (ADR-0004, ADR-0012). The
 // Module facet is the module bar's stored choice, read and written through the Shell; every other
 // choice is kept per project for the page's life. Served values are shown as written, in any script.
+// A View group picks the shelf: the project's documents, or SpecEngine's own guide
+// (docs/features/specengine-guide.md "The UI"), read only, the build's, read with no project turn;
+// the library is not read while the guide's shelf shows.
 
-/** A project's choices for this page's life: the facets (null until a person picks, so the start follows the rows read), Include archive as last answered, the order. */
+/** Documents' two shelves: the project's library, SpecEngine's guide. */
+export type DocumentsShelf = "project" | "guide";
+
+/** The shelves in the View group's order. */
+const SHELVES: readonly DocumentsShelf[] = ["project", "guide"];
+
+/**
+ * A project's choices for this page's life: the facets (null until a person picks, so the start follows the rows read), Include archive as last answered, the order;
+ * the shelf shown, absent: the project's documents.
+ */
 export interface DocumentsState {
   filters: LibraryFilters | null;
   archive: boolean;
   sort: LibrarySort | null;
+  shelf?: DocumentsShelf;
 }
 
 /** Where the Shell keeps each project's DocumentsState for the page's life. */
 export interface DocumentsMemory {
   recall: (project: string) => DocumentsState | undefined;
   remember: (project: string, state: DocumentsState) => void;
+}
+
+/** The View group: the project's documents or SpecEngine's guide, the shown one pressed. */
+function ShelfGroup({ shelf, onShelf }: { shelf: DocumentsShelf; onShelf: (shelf: DocumentsShelf) => void }) {
+  const t = useTranslate();
+  return (
+    <div className="documents-shelves" role="group" aria-label={t("documents.shelf.label")}>
+      {SHELVES.map((name) => (
+        <button
+          key={name}
+          type="button"
+          className="chip"
+          aria-pressed={shelf === name}
+          onClick={() => {
+            onShelf(name);
+          }}
+        >
+          {t(`documents.shelf.${name}`)}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** A served value as written, or a dash where none is. */
@@ -643,7 +679,9 @@ export function DocumentsView({
   const [archive, setArchive] = useState(remembered?.archive ?? false);
   const [held, setHeld] = useState<LibraryFilters | null>(remembered?.filters ?? null);
   const [sort, setSort] = useState<LibrarySort | null>(remembered?.sort ?? null);
-  const read = useLibrary(project, archive);
+  const [shelf, setShelf] = useState<DocumentsShelf>(remembered?.shelf ?? "project");
+  const guide = shelf === "guide";
+  const read = useLibrary(project, archive, !guide);
   const failure = useRetainedFailure(read.error, read.isFetching);
   const retried = useRetryFocus(read.data, () => region.current?.querySelector<HTMLElement>(".documents-table-wrap") ?? region.current?.querySelector<HTMLElement>("h1"));
   // The last answer read for its own key, never a placeholder, with the archive it was asked with: a
@@ -666,8 +704,8 @@ export function DocumentsView({
   const filtered = isFiltered(filters, chosenModule);
 
   useEffect(() => {
-    memory.remember(project, { filters: held, archive: answeredArchive, sort });
-  }, [memory, project, held, answeredArchive, sort]);
+    memory.remember(project, { filters: held, archive: answeredArchive, sort, shelf });
+  }, [memory, project, held, answeredArchive, sort, shelf]);
 
   /** Every facet at All, the toggles off, the search empty; Module at All modules, stored. Focus to the search field, the bar's first stop. */
   function clear() {
@@ -722,19 +760,33 @@ export function DocumentsView({
     );
   }
 
+  const head = (
+    <header className="view-head">
+      <h1 id={titleId} tabIndex={-1}>
+        {t("documents.title")}
+      </h1>
+      <p className="view-about">{aboutOf("documents", t)}</p>
+      <ShelfGroup shelf={shelf} onShelf={setShelf} />
+      {!guide && rows !== undefined && rows.length > 0 && moduleKnown && (
+        <p id={countId} className="documents-count" aria-live="polite">
+          {countLine(rows, kept, filtered, t)}
+        </p>
+      )}
+    </header>
+  );
+
+  if (guide) {
+    return (
+      <section ref={region} className="view documents-view" aria-labelledby={titleId}>
+        {head}
+        <GuideShelf project={project} />
+      </section>
+    );
+  }
+
   return (
     <section ref={region} className="view documents-view" aria-labelledby={titleId} aria-busy={read.isFetching}>
-      <header className="view-head">
-        <h1 id={titleId} tabIndex={-1}>
-          {t("documents.title")}
-        </h1>
-        <p className="view-about">{aboutOf("documents", t)}</p>
-        {rows !== undefined && rows.length > 0 && moduleKnown && (
-          <p id={countId} className="documents-count" aria-live="polite">
-            {countLine(rows, kept, filtered, t)}
-          </p>
-        )}
-      </header>
+      {head}
       {failure !== null && (
         <ErrorPanel
           title={t("documents.failed")}

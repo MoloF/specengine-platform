@@ -712,11 +712,11 @@ fn ac10_no_tool_clears_and_get_trace_is_a_read() {
     // docs/features/department-split.md S8: thirty with `split_card`.
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
-    assert_eq!(TOOLS.len(), 32);
+    assert_eq!(TOOLS.len(), 33);
     assert!(TOOLS.contains(&"get_trace"));
     let instructions = specengine_mcp::INSTRUCTIONS;
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(instructions.len(), 2039);
+    assert_eq!(instructions.len(), 2046);
     assert_eq!(
         instructions.matches(TRACE_READ).count(),
         1,

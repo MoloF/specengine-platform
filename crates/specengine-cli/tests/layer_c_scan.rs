@@ -170,6 +170,10 @@ const LATER: &[&str] = &[
     // top joins its place to the rows' paths with `/`, as lock-diff's does;
     // no SCIP descriptor.
     "crates/specengine-cli/src/catalog.rs",
+    // docs/features/specengine-guide.md "The embedded guide (CLI)": the
+    // guide's REF `TOPIC#ID` splits at `#`; no SCIP descriptor. (Its build
+    // script lies at the crate's root, outside `src/`, so outside the scan.)
+    "crates/specengine-cli/src/guide.rs",
 ];
 
 /// R10's Cargo words: no literal of the store, core or CLI holds one.

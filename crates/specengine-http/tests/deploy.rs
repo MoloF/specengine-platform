@@ -2378,6 +2378,80 @@ fn d14_the_image_three_pinned_stages_and_its_context() {
     }
 }
 
+// ---------------------------------------------- GU13: the guide in the image
+
+/// The ten guide pages, `docs/guide/<topic>.md`, in
+/// docs/features/specengine-guide.md's `GUIDE_ORDER`.
+const GUIDE_TOPICS: [&str; 10] = [
+    "start",
+    "records",
+    "features",
+    "proposals",
+    "cards",
+    "practices",
+    "auto",
+    "markers",
+    "hub",
+    "documents",
+];
+
+/// docs/features/specengine-guide.md GU13: the image's build context
+/// carries `docs/guide/` (every page kept by `Dockerfile.dockerignore`), the
+/// build stage copies it to `docs/guide` under its `WORKDIR` (`/src`, so
+/// `crates/specengine-cli`'s `../../docs/guide` resolves) before `cargo
+/// build`, and `image.yml` runs the built image's `spec guide`. M: the
+/// pages left out of the context; the `COPY` after the build or missing.
+#[test]
+fn gu13_the_image_context_carries_the_guide() {
+    let patterns = ignore_patterns(&read(&deploy().join("Dockerfile.dockerignore")));
+    for topic in GUIDE_TOPICS {
+        let page = format!("docs/guide/{topic}.md");
+        assert!(repository().join(&page).is_file(), "{page} exists");
+        assert!(!excluded(&patterns, &page), "the context leaves out {page}");
+    }
+    let stages = stages(instructions(&read(&deploy().join("Dockerfile"))));
+    let build = stages
+        .iter()
+        .find(|stage| last_component(&image_parts(&stage.image).0) == "rust")
+        .expect("the build stage");
+    let workdir = build
+        .of("WORKDIR")
+        .last()
+        .map(|workdir| workdir.args.trim().to_owned())
+        .expect("the build stage's WORKDIR");
+    assert_eq!(workdir, "/src", "the build stage works in /src");
+    let position = |wanted: &dyn Fn(&Instruction) -> bool| build.body.iter().position(wanted);
+    let copy = position(&|instruction: &Instruction| {
+        if instruction.keyword != "COPY" {
+            return false;
+        }
+        let (flags, paths) = copy_parts(&instruction.args);
+        if flags.contains_key("from") || paths.len() != 2 {
+            return false;
+        }
+        let source = paths[0].trim_end_matches('/');
+        let target = paths[1].trim_end_matches('/');
+        source == "docs/guide" && (target == "docs/guide" || target == "/src/docs/guide")
+    })
+    .expect("the build stage copies docs/guide/ to /src/docs/guide");
+    let cargo = position(&|instruction: &Instruction| {
+        instruction.keyword == "RUN" && instruction.args.contains("cargo build")
+    })
+    .expect("the build stage runs cargo build");
+    assert!(copy < cargo, "the guide is in place before cargo runs");
+
+    let text = read(&workflow_path());
+    assert!(
+        text.lines().any(|line| {
+            line.contains("docker run")
+                && line.contains("REF")
+                && line.contains("guide")
+                && line.contains("spec")
+        }),
+        "image.yml runs the built image's `spec guide`"
+    );
+}
+
 // ------------------------------------------------------------- D15: the workflow
 
 fn steps(job: &Value) -> Vec<&Value> {

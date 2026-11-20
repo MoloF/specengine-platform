@@ -10,14 +10,17 @@
 //! from a session, `clientInfo` or an argument; every call that reads the
 //! corpus or writes the queue, the resource reads too, runs once in the
 //! project's turn ([`HubSeam::turn`]), as the daemon's own reads do.
-//! `initialize`, `ping`, the lists of tools and templates and
-//! `server/discover` take no turn.
+//! `initialize`, `ping`, the lists of tools and templates,
+//! `server/discover`, `get_guide` and a `guide://` read take no turn: the
+//! guide is the build's static pages, no project's (task spec
+//! `specengine-guide`, "MCP").
 //!
 //! A call cancelled while it waits for the turn never runs: the wait races
 //! the request's cancellation ([`turned`], [`in_request`]).
 //!
 //! The tools ([`HUB_TOOLS`]): eight reads, `get_proposal` among them, and
-//! `list_cards`, `get_card`, each its stdio twin's route, schema and answer;
+//! `list_cards`, `get_card` and `get_guide`, each its stdio twin's route,
+//! schema and answer;
 //! the four raising tools without `task_id`, their `Author.login` the login;
 //! `create_card`, `split_card` (`docs/features/department-split.md`
 //! "Acceptance criteria", S8), `edit_card` and `move_card`, their `actor`
@@ -52,6 +55,7 @@ use specengine_cli::{
 };
 
 use crate::cards::{CreateCardArgs, EditCardArgs, MoveCardArgs, SplitCardArgs};
+use crate::guide::GUIDE_DESCRIPTION;
 use crate::intake::{
     ChangeKind, HubChangeArgs, HubDecisionArgs, HubDiscrepancyArgs, HubQuestionArgs,
 };
@@ -203,9 +207,10 @@ where
     slot.lock().unwrap_or_else(PoisonError::into_inner).take()
 }
 
-/// A hub's `tools/list`, by name: the nine shared with stdio, then the nine
-/// with their own arguments or texts.
-pub const HUB_TOOLS: [&str; 18] = [
+/// A hub's `tools/list`, by name: the ten shared with stdio, `get_guide`
+/// the last of them (task spec `specengine-guide`), then the nine with their
+/// own arguments or texts.
+pub const HUB_TOOLS: [&str; 19] = [
     "get_tree",
     "get_node",
     "search",
@@ -215,6 +220,7 @@ pub const HUB_TOOLS: [&str; 18] = [
     "get_proposal",
     "list_cards",
     "get_card",
+    "get_guide",
     "get_roadmap",
     "propose_change",
     "ask_question",
@@ -227,7 +233,7 @@ pub const HUB_TOOLS: [&str; 18] = [
 ];
 
 /// How many of [`HUB_TOOLS`] are stdio's routes as they are.
-const SHARED: usize = 9;
+const SHARED: usize = 10;
 
 /// The hub tools that only read: their calls may trust the hub's index.
 /// Every other tool (a queue or card write, a probe, any tool added later)
@@ -335,7 +341,8 @@ Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
-get_flow(root?, depth?, trace?) = flow; get_trace(ref?) = trace.
+get_flow(root?, depth?, trace?) = flow; get_trace(ref?) = trace; get_guide(topic?, rule?) = \
+guide.
 ",
     hub_queue_line!(),
     "
@@ -729,9 +736,11 @@ const _: () = assert!(holds(
     HUB_ROADMAP_DESCRIPTION,
     "a person's Confirm, on this hub or on a terminal"
 ));
-// The shared nine and the nine variants are the eighteen.
+// The shared ten and the nine variants are the nineteen.
 const _: () = assert!(SHARED + HUB_DESCRIPTIONS.len() == HUB_TOOLS.len());
 const _: () = assert!(hub_texts_hold(&HUB_DESCRIPTIONS));
+// The guide's text is stdio's on a hub too: it holds what a hub's must.
+const _: () = assert!(hub_texts_hold(&[GUIDE_DESCRIPTION]));
 const _: () = assert!(holds(HUB_CHANGE_DESCRIPTION, hub_queue_tail!()));
 const _: () = assert!(holds(HUB_QUESTION_DESCRIPTION, hub_queue_tail!()));
 const _: () = assert!(holds(HUB_DISCREPANCY_DESCRIPTION, hub_queue_tail!()));
@@ -1030,12 +1039,14 @@ impl SpecEngineServer {
         }
     }
 
-    /// [`HUB_TOOLS`]: stdio's routes of the first nine, as they are, then the
+    /// [`HUB_TOOLS`]: stdio's routes of the first ten, as they are, then the
     /// nine hub routes. Built once per process, into [`HUB_ROUTER`].
     fn hub_tools() -> ToolRouter<Self> {
         let shared = &HUB_TOOLS[..SHARED];
         let mut router = ToolRouter::new();
-        for mut route in Self::read_tools() + Self::intake_tools() + Self::card_tools() {
+        for mut route in
+            Self::read_tools() + Self::intake_tools() + Self::card_tools() + Self::guide_tools()
+        {
             if shared.contains(&route.name()) {
                 // A shared read that trusts the hub's index says so.
                 if let Some(text) = hub_read_text(route.name()) {

@@ -1,6 +1,7 @@
 import type { ExtraProps, Options } from "react-markdown";
 import type { Cited } from "../api/types";
-import { citedEntries, runsOf, verbatimIn, verbatimPlaces, type CitedEntries } from "./cited";
+import { citedEntries, verbatimIn, verbatimPlaces, type CitedEntries } from "./cited";
+import { linkRuns } from "./guide";
 import {
   attributeBlock,
   definitionDestination,
@@ -32,6 +33,11 @@ import {
 //   (./cited); inline and fenced code are other nodes, never scanned. A node's text is decoded, so an
 //   occurrence links only where the source holds it verbatim: `R\-12` and `R&#45;12` stay text when
 //   `R-12` is served; a node with no place in the source links nothing. Nothing else becomes one.
+// - Given the guide's topics (docs/features/specengine-guide.md "The UI"), each `guide:<topic>[#<ID>]`
+//   citation of one of them in such a text node, verbatim in the source, becomes a link of kind
+//   `guide` to its topic and rule (./guide); one of any other topic stays text.
+// - A heading's `{#ID}` is kept on it as `dataAnchor`: the renderer makes it an anchor only where its
+//   holder names it one (the guide's rules), and shows nothing of it elsewhere.
 // Types come through react-markdown's own (no direct mdast or hast package).
 
 type ToHastOptions = NonNullable<Options["remarkRehypeOptions"]>;
@@ -53,7 +59,7 @@ type HastContent = NonNullable<MdData["hChildren"]>[number];
 type HastProperties = HastElement["properties"];
 
 /** How an anchor is to be shown: matched against the links read, as text with its URL, as text, or a served citation's document link. */
-export type LinkKind = "local" | "external" | "autolink" | "none" | "cited";
+export type LinkKind = "local" | "external" | "autolink" | "none" | "cited" | "guide";
 
 /** The words the rewrite writes into the text, in the language shown: an image's label, a footnote's. */
 export interface SpecWords {
@@ -76,6 +82,8 @@ export interface SpecOptions {
   firstParagraph?: boolean;
   /** The IDs the daemon resolved in this text's holder: only their `written` strings become links. */
   cited?: readonly Cited[];
+  /** The guide's topics this text cites, as its served index lists them: only their citations become links. */
+  guideTopics?: readonly string[];
 }
 
 /** Block nodes that carry `data-line`. */
@@ -184,13 +192,17 @@ class Rewrite {
     this.shift = shallowest > 6 ? 0 : this.options.baseLevel + 1 - shallowest;
     this.children(root);
     const cited = this.options.cited ?? [];
-    if (cited.length > 0) {
-      this.cite(root, citedEntries(cited));
+    const topics = this.options.guideTopics ?? [];
+    if (cited.length > 0 || topics.length > 0) {
+      this.cite(root, citedEntries(cited), topics);
     }
   }
 
-  /** A parent's text nodes, but inside a link, cut at the served citations: each a link of kind `cited` to its name. */
-  private cite(parent: MdParent, cited: CitedEntries): void {
+  /**
+   * A parent's text nodes, but inside a link, cut at the served citations: each a link of kind `cited`
+   * to its name, and each guide citation of a served topic a link of kind `guide`.
+   */
+  private cite(parent: MdParent, cited: CitedEntries, topics: readonly string[]): void {
     if (parent.type === "link" || parent.type === "linkReference") {
       return;
     }
@@ -198,7 +210,7 @@ class Rewrite {
     for (const child of parent.children as MdNode[]) {
       if (child.type !== "text" || child.data?.hName !== undefined) {
         if (isParent(child)) {
-          this.cite(child, cited);
+          this.cite(child, cited, topics);
         }
         kept.push(child);
         continue;
@@ -208,18 +220,21 @@ class Rewrite {
       const end = child.position?.end.offset;
       const raw = start === undefined || end === undefined ? null : this.options.source.slice(start, end);
       const accept = raw === child.value ? undefined : verbatimIn(raw === null ? null : verbatimPlaces(raw, child.value));
-      const runs = runsOf(child.value, cited, [], accept);
-      if (runs.every((run) => run.name === null)) {
+      const runs = linkRuns(child.value, cited, topics, [], accept);
+      if (runs.every((run) => run.name === null && run.guide === null)) {
         kept.push(child);
         continue;
       }
       for (const run of runs) {
-        if (run.name === null) {
+        if (run.name === null && run.guide === null) {
           kept.push({ type: "text", value: run.text });
           continue;
         }
         const link: MdOf<"link"> = { type: "link", url: "", children: [{ type: "text", value: run.text }] };
-        setProperties(link, { dataKind: "cited", dataName: run.name });
+        setProperties(
+          link,
+          run.guide === null ? { dataKind: "cited", dataName: run.name ?? "" } : { dataKind: "guide", dataTopic: run.guide.topic, dataRule: run.guide.rule ?? undefined },
+        );
         kept.push(link);
       }
     }
@@ -365,6 +380,7 @@ class Rewrite {
     if (id === undefined) {
       return;
     }
+    setProperties(node, { dataAnchor: id });
     if (node.children.length > 0) {
       node.children.push({ type: "text", value: " " });
     }

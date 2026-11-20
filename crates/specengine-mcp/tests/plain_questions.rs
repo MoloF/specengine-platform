@@ -66,9 +66,9 @@ use specengine_mcp::{
 // Re-pinned by docs/features/collision-pass.md "Acceptance criteria", CP8
 // (the collisions line in, the resources sentence out; `mcp_code.rs`' RD-5
 // steps back to the value this slice pinned, `7de2fdaa…`).
-const INSTRUCTIONS_B3: &str = "72797a127dbf98ef66644c92d46870dacb4c072d9cc10819654c38fd82d95fe4";
+const INSTRUCTIONS_B3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
 const HUB_INSTRUCTIONS_B3: &str =
-    "a1762b8eee9cc29a6a6590e12a346f249927e106b01cfc9aea2b28be34734fa1";
+    "81c580c0e384a3e9257bc1d51d176e04e9cc995e44dda809a980f65ee1f8ec8d";
 
 /// The "Data" example's fields.
 const TEXT: &str =
@@ -266,7 +266,11 @@ fn pq1_pq9_ask_question_answers_as_its_twin_and_get_proposal_returns_the_fields(
     let mut session = repo.session();
     let list = session.tools();
     // 32 since docs/features/collision-pass.md CP8.
-    assert_eq!(tool_names(&list).len(), 32, "stdio keeps 32 tools");
+    assert_eq!(
+        tool_names(&list).len(),
+        33,
+        "stdio keeps 33 tools (32 until specengine-guide)"
+    );
     let schemas = output_schemas(&list);
 
     let reply = session.call("ask_question", example());
@@ -728,8 +732,8 @@ async fn pq9_a_hub_stores_the_fields() {
     ];
     let hub = hub_answers(&remote.main, &remote.home, &calls).await;
     let listed = tool_names(&hub[0]);
-    assert_eq!(listed.len(), 18, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 18);
+    assert_eq!(listed.len(), 19, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 19);
     let asked = &hub[1];
     assert_ne!(asked["isError"], json!(true), "{asked}");
     assert_eq!(

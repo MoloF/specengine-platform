@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [docs]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-20
 ---
 
 # Documentation: how the convention is applied
@@ -18,18 +18,16 @@ The norm is `docs/canon/documentation-system.md` (ADR-0022). This document descr
 
 | Class | Answers | Where | Lifecycle |
 |---|---|---|---|
-| canon | how it works now | `CLAUDE.md`, `README.md`, `*/README.md`, `docs/canon/` | rewritten in place |
+| canon | how it works now | `CLAUDE.md`, `README.md`, `*/README.md`, `docs/canon/`, `docs/guide/` (ADR-0085) | rewritten in place |
 | decision | why, and when | `docs/decisions/ADR-NNNN.md` | never edited, only superseded |
 | spec | what we are doing now | `docs/features/<slug>.md`, `docs/specs/` | consumable: compacted after shipping |
 | generated | what exists | `docs/index.md`, its shards, `docs/generated/` | written by the generator only |
-
-Misclassification is the main source of rot: a spec in canon position lies within weeks, a canon written as a log forces a replay of history.
 
 ## Tiers
 
 - **Tier 0** — `CLAUDE.md`, always read.
 - **Tier 1** — a subtree's `README.md`, read when working inside it: `docs/README.md`, `crates/<crate>/README.md` (one per crate, created with the crate), `ui/README.md`. Canon lives next to the code it describes.
-- **Tier 2** — the index root `docs/index.md`, its live shards, and documents read on an explicit question: `docs/canon/`, the root `README.md`, decisions, live specs.
+- **Tier 2** — the index root `docs/index.md`, its live shards, and documents read on an explicit question: `docs/canon/`, `docs/guide/`, the root `README.md`, decisions, live specs.
 - **Tier 3** — archive by status: specs `shipped`/`abandoned`, decisions `superseded-by`/`rejected`. **Front-matter, not folder location**, excludes a document. Its index line keeps only the id link and the status (ADR-0028) and lives in the archive shard `docs/index-archive.md`, read by id only, outside W (ADR-0030).
 
 ## Budgets (bytes of the whole file, front-matter included)
@@ -54,6 +52,7 @@ tier: 0 | 1 | 2
 scope: [subtree]
 owner: owner
 reviewed: YYYY-MM-DD
+summarises: [path#anchor]  # optional: what a guide page summarises
 # decision — template docs/decisions/_template.md
 class: decision
 id: ADR-NNNN
@@ -96,7 +95,7 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Generated
 
-The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here eleven: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-canon-spec.md` (`spec-*`, the commands' canon), `docs/index-canon-proposal.md` (`proposal-*`), `docs/index-canon-hub.md` (`hub*`), `docs/index-canon-card.md` (`card*`), `docs/index-canon-code.md` (`code-*`), `docs/index-canon.md` (the rest of `docs/canon/*.md`; Tier 2 canon is cited by path, found by scope), `docs/index-decisions-0.md` and `docs/index-decisions.md` (ADR-0001 to ADR-0039, then the rest; read by id), `docs/index-crates.md` (`crates/*/README.md`, by path) and `docs/index-roadmap.md` (`docs/roadmap/*.md`, the plan items), so the root keeps what a task starts from (Tier 0–1 canon, the live specs), its `## Shards` points at the rest, and a read costs the root plus at most one live shard. The first claim matching a path wins, so a narrower glob stands before `docs/canon/*.md`; as canon grows, the next split is again such a glob. It also writes the roadmap view `docs/generated/roadmap.md`, unindexed (`docs/canon/spec-roadmap.md` "View"). All are written only by that generator, `cargo run -q -p specengine-cli -- export index` (or in an apply's commit); a manual edit fails the check (`index-drift`).
+The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here twelve: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-canon-spec.md` (`spec-*`, the commands' canon), `docs/index-canon-proposal.md` (`proposal-*`), `docs/index-canon-hub.md` (`hub*`), `docs/index-canon-card.md` (`card*`), `docs/index-canon-code.md` (`code-*`), `docs/index-canon.md` (the rest of `docs/canon/*.md`; Tier 2 canon is cited by path, found by scope), `docs/index-guide.md` (`docs/guide/*.md`), `docs/index-decisions-0.md` and `docs/index-decisions.md` (ADR-0001 to ADR-0039, then the rest; read by id), `docs/index-crates.md` (`crates/*/README.md`, by path) and `docs/index-roadmap.md` (`docs/roadmap/*.md`, the plan items), so the root keeps what a task starts from (Tier 0–1 canon, the live specs), its `## Shards` points at the rest, and a read costs the root plus at most one live shard. The first claim matching a path wins, so a narrower glob stands before `docs/canon/*.md`; as canon grows, the next split is again such a glob. It also writes the roadmap view `docs/generated/roadmap.md`, unindexed (`docs/canon/spec-roadmap.md` "View"). All are written only by that generator, `cargo run -q -p specengine-cli -- export index` (or in an apply's commit); a manual edit fails the check (`index-drift`).
 
 ## Enforcement
 

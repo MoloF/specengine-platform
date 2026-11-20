@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { IMPLICIT_SECTIONS } from "../test/builders";
-import { ALL_SECTIONS, cardPageHash, docOf, docPageHash, flowHash, homeHash, isBareFlow, navOf, parseFlowPlace, parseHash, sectionHash, withDoc, withoutDoc, type FlowPlace } from "./routes";
+import { ALL_SECTIONS, cardPageHash, docOf, docPageHash, flowHash, guideHash, guideRefOf, homeHash, isBareFlow, navOf, parseFlowPlace, parseHash, sectionHash, withDoc, withoutDoc, type FlowPlace } from "./routes";
 import { ru } from "../i18n/ru";
 import { enT, ruT } from "../test/text";
 import { aboutOf, isSectionId, sectionLabel, SECTIONS } from "./sections";
@@ -294,5 +294,40 @@ describe("the document modal's pair (DM-5 of doc-modal)", () => {
     expect(withoutDoc("#/p/inbox")).toBe("#/p/inbox");
     expect(parseFlowPlace(parseHash(withDoc(flow, "X")) as { id: string | null; query?: string })).toEqual(parseFlowPlace(parseHash(flow) as { id: string | null; query?: string }));
     expect(docOf(withDoc("#/p", "docs/a b.md"))).toBe("docs/a b.md");
+  });
+});
+
+// docs/features/specengine-guide.md "The UI", GU14: a guide topic's route is Documents' with the
+// citation as its id, `#/<p>/documents/guide:<topic>`, a rule after an encoded `#`; read back to the
+// topic and the rule, as the spec's raw `guide:<topic>#<ID>` form is too.
+describe("a guide topic's route (GU14 of specengine-guide)", () => {
+  it("writes the topic after `guide:`, a rule after %23, each encoded once, the hash's only raw `#` its first", () => {
+    expect(guideHash("alpha", "records")).toBe("#/alpha/documents/guide:records");
+    expect(guideHash("my project", "records", "GD-RECORDS-ONE-FILE")).toBe("#/my%20project/documents/guide:records%23GD-RECORDS-ONE-FILE");
+    expect(guideHash("alpha", "a/b", "X#Y")).toBe("#/alpha/documents/guide:a%2Fb%23X%23Y");
+    expect(guideHash("alpha", "records", "GD-X").split("#")).toHaveLength(2);
+  });
+
+  it.each([
+    ["#/alpha/documents/guide:records", { topic: "records", rule: null }],
+    ["#/alpha/documents/guide:records%23GD-RECORDS-ONE-FILE", { topic: "records", rule: "GD-RECORDS-ONE-FILE" }],
+    // The spec's form, the `#` raw, and `sectionHash`'s, every character encoded.
+    ["#/alpha/documents/guide:records#GD-RECORDS-ONE-FILE", { topic: "records", rule: "GD-RECORDS-ONE-FILE" }],
+    [sectionHash("alpha", "documents", "guide:records#GD-X"), { topic: "records", rule: "GD-X" }],
+    ["#/alpha/documents/guide:records%23", { topic: "records", rule: null }],
+  ])("%s reads as Documents at that topic and rule", (hash, ref) => {
+    const route = parseHash(hash);
+    expect(route.type === "section" && route.section === "documents" ? guideRefOf(route.id) : "not documents").toEqual(ref);
+  });
+
+  it.each([null, "", "guide:", "guide:#GD-X", "DOM-HARBOR", "Guide:records", "xguide:records"])("%s names no topic", (id) => {
+    expect(guideRefOf(id)).toBeNull();
+  });
+
+  it("round-trips any topic and rule through the hash", () => {
+    for (const [topic, rule] of [["records", null], ["records", "GD-RECORDS-ONE-FILE"], ["a b", "c#d"]] as const) {
+      const route = parseHash(guideHash("alpha", topic, rule));
+      expect(route.type === "section" ? guideRefOf(route.id) : null).toEqual({ topic, rule });
+    }
   });
 });

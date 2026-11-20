@@ -211,8 +211,12 @@
 //! - [`trace()`]: `spec trace [REF]` (task spec `card-trace`), each node's
 //!   computed state against its cards, the marks core's `trace` reads per
 //!   read and never stores; exit 0 whatever is listed;
+//! - [`guide()`]: `spec guide [TOPIC[#ID]]` (task spec `specengine-guide`
+//!   and its decision record), SpecEngine's own guide as this build
+//!   embedded it ([`GUIDE`]): no project, no `HOME`, no index, no write, no
+//!   turn; exit 1 for a topic or a rule it does not hold;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `flow`,
-//!   `bundle`, `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or
+//!   `bundle`, `refs`, `symbols`, `roadmap`, `guide`), blocked (`check`, `verify`) or
 //!   refused by the proposal or its target (the queue's commands), 2 could not run
 //!   (`check`: could not check; `verify`: could not verify).
 //!
@@ -286,6 +290,7 @@ mod gate;
 mod graph;
 #[cfg(unix)]
 mod group;
+mod guide;
 mod health;
 mod health_code;
 mod health_drift;
@@ -448,6 +453,9 @@ pub use gate::{
 };
 pub use graph::{
     FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph, graph_with_view,
+};
+pub use guide::{
+    GUIDE, GUIDE_ORDER, GuideOutcome, GuidePage, GuideRequest, GuideRule, guide, guide_page,
 };
 pub use health::{
     HealthOrphan, HealthOrphans, HealthOutcome, HealthRequest, UnappliedAmendment, health,
@@ -652,7 +660,8 @@ pub enum Exit {
     /// `spec show`, `spec tree`, `spec graph`, `spec bundle`, `spec refs`,
     /// `spec symbols --node`, `spec impact` found nothing: a dangling
     /// reference, no configured prefix, a `.md` path that is not indexed,
-    /// a `--symbol` naming no code item.
+    /// a `--symbol` naming no code item; `spec guide`: a topic or a rule
+    /// the guide does not hold.
     /// `spec check`: blocked. The queue's commands: refused by the proposal
     /// or its target (nothing stored, written or committed).
     NotFound = 1,
@@ -882,6 +891,8 @@ pub enum Outcome {
     Team(TeamOutcome),
     /// `workspace`: the project's workspaces and modules, as read.
     Workspace(Box<WorkspaceOutcome>),
+    /// `guide`: SpecEngine's own guide, its index, a page or a rule.
+    Guide(GuideOutcome),
 }
 
 impl Outcome {
@@ -1015,6 +1026,8 @@ impl Outcome {
             Self::Team(_) => return Vec::new(),
             // The tables' notes, escaped already, as JSON `notes` holds them.
             Self::Workspace(outcome) => return outcome.stderr_lines(),
+            // Static pages: nothing to note.
+            Self::Guide(_) => return Vec::new(),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -1156,6 +1169,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::SparseSet(outcome) => sparse::render_text(outcome),
         Outcome::Team(outcome) => team::render_text(outcome),
         Outcome::Workspace(outcome) => workspace::render_text(outcome),
+        Outcome::Guide(outcome) => guide::render_text(outcome),
     }
 }
 
@@ -1222,6 +1236,7 @@ impl serde::Serialize for Outcome {
             Self::SparseSet(outcome) => outcome.serialize(serializer),
             Self::Team(outcome) => outcome.serialize(serializer),
             Self::Workspace(outcome) => outcome.serialize(serializer),
+            Self::Guide(outcome) => outcome.serialize(serializer),
         }
     }
 }

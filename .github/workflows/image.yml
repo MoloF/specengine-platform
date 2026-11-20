@@ -152,6 +152,23 @@ jobs:
             -o "$page" -w '%{http_code}' http://127.0.0.1:7777/)
           [ "$code" = 200 ]
           grep -q '<div id="root">' "$page"
+      - name: The guide (GU13)
+        env: {REF: "${{ steps.ref.outputs.ref }}"}
+        run: |
+          set -eu
+          # The binaries embed docs/guide/ at build time: the built image's `spec
+          # guide` lists every page of the checkout, one line each, with no
+          # project and no network.
+          index="$RUNNER_TEMP/guide.txt"
+          docker run --rm --network none --entrypoint spec "$REF" guide > "$index"
+          cat "$index"
+          pages=0
+          for page in docs/guide/*.md; do
+            pages=$((pages + 1))
+            grep -q "^$(basename "$page" .md) | " "$index"
+          done
+          [ "$pages" -gt 0 ]
+          [ "$(wc -l < "$index")" -eq "$pages" ]
       - name: The probe (C4)
         env: {REF: "${{ steps.ref.outputs.ref }}"}
         run: |

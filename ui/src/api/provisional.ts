@@ -3391,3 +3391,59 @@ export interface LibraryChange {
   commit: string;
   proposal: string | null;
 }
+
+/**
+ * `spec guide --json` with no topic, the answer of `GET /api/guide`: SpecEngine's own guide as the
+ * daemon's build embedded it, every topic in the guide's order (ADR-0085). No project, no turn.
+ * Source: `docs/features/specengine-guide.md` "Data".
+ */
+export interface GuideIndex {
+  topics: GuideTopic[];
+}
+
+/**
+ * One topic of the index: `topic` its page's file stem, the route's and a citation's word; `title` its
+ * page's first heading as written; `summary` the first sentence of its opening paragraph; `rules` how
+ * many `GD-` rules the page holds. English, shown as written. Source: `docs/features/specengine-guide.md` "Data".
+ */
+export interface GuideTopic {
+  topic: string;
+  title: string;
+  summary: string;
+  rules: number;
+}
+
+/**
+ * `spec guide TOPIC --json`, the answer of `GET /api/guide/:topic`: the topic's page. `summarises` the
+ * canon pages of SpecEngine's own repository it sums up, as written; `reviewed` its `reviewed:` date as
+ * written; `rules` its rules in page order; `text` every byte after its front-matter (it starts with a
+ * blank line), English, shown as written. An unknown topic is a 404 in the CLI's words. Source:
+ * `docs/features/specengine-guide.md` "Data".
+ */
+export interface GuidePage {
+  topic: string;
+  title: string;
+  summary: string;
+  summarises: string[];
+  reviewed: string;
+  rules: GuideRule[];
+  text: string;
+}
+
+/** A rule of a page: its `GD-` ID, its heading's words, the heading's line in the page's file. Source: `docs/features/specengine-guide.md` "Data". */
+export interface GuideRule {
+  id: string;
+  title: string;
+  line: number;
+}
+
+/**
+ * `spec guide TOPIC#ID --json`, the answer of `GET /api/guide/:topic` with `<topic>%23<ID>`: one rule's
+ * section, its heading to the next of its level or above. The UI reads the whole page and finds the
+ * rule there; the type stands for the key set. Source: `docs/features/specengine-guide.md` "Data".
+ */
+export interface GuideRuleRead {
+  topic: string;
+  rule: GuideRule;
+  text: string;
+}

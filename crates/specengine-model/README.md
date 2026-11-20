@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-model]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-20
 ---
 
 # specengine-model — the corpus model and the reference grammar
@@ -32,7 +32,7 @@ AC   = { kind = "criterion",   width = 2, scope = "feature" }
 TERM = { kind = "term",        shape = "name" }
 ```
 
-Prefix (the key): `[A-Z][A-Z0-9]*`, case-sensitive, Latin (ADR-0009; no `script` key). `kind`: required string, the project's vocabulary, not validated (ADR-0031). `shape`: `"number"` (default) or `"name"` (`TERM-exhausted`, `RULE-STAM-REGEN`). `width` ≥ 1: required for `number`, forbidden for `name`; the zero-padded digit count `spec new` issues (`R-012` ≠ `R-12`), never checked on recognition. `aliases_from`: legacy prefixes in any script, `\p{L}[\p{L}\p{N}]*`, unique, never a prefix. `immutable_text`: carried only. `scope` (`"project"`, default | `"feature"`: defined in a feature document, cited from outside as `slug/ID`): enforced by `spec check` (`docs/canon/spec-check-links.md`). Unknown key, bad prefix, missing or forbidden `width`, colliding alias → a scheme error `file:line: message`; the scheme loads whole or not at all.
+Prefix (the key): `[A-Z][A-Z0-9]*`, case-sensitive, Latin (ADR-0009; no `script` key). `kind`: required string, the project's vocabulary, not validated (ADR-0031). `shape`: `"number"` (default) or `"name"` (`TERM-exhausted`, `RULE-STAM-REGEN`). `width` ≥ 1: required for `number`, forbidden for `name`; the zero-padded digit count an issued ID takes (`R-012` ≠ `R-12`), never checked on recognition. `aliases_from`: legacy prefixes in any script, `\p{L}[\p{L}\p{N}]*`, unique, never a prefix. `immutable_text`: carried only. `scope` (`"project"`, default | `"feature"`: defined in a feature document, cited from outside as `slug/ID`): enforced by `spec check` (`docs/canon/spec-check-links.md`). Unknown key, bad prefix, missing or forbidden `width`, colliding alias → a scheme error `file:line: message`; the scheme loads whole or not at all.
 
 ## Reference grammar
 
@@ -47,7 +47,7 @@ project   = slug ; scope = slug ; slug = [a-z][a-z0-9-]* ; rev = digit{1,9}
 
 Examples: `R-12@3`, `slug/AC-07`, `shared:PAT-PROBES@3`, `MEC-STAMINA#RULE-STAM-REGEN`, `[[R-12|label]]`. One grammar for text, front-matter and markers.
 
-Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph` even for a look-alike body digit; `id` = the written prefix + the normalised body), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0026#layout` → `ADR-0026`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`. `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one; `@0` is legal. A node's own `rev` (`Node.rev`: a document's front-matter `rev:`, a section's `rev=N` attribute, never inherited) is 1 to 999 999 999 given once: `0`, not 1–9 digits or a repeat → `bad-rev` and `None`, as is none written; core's `revision` tells them apart (ADR-0040, `docs/canon/node-revision.md`).
+Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph` even for a look-alike body digit; `id` = the written prefix + the normalised body), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0026#layout` → `ADR-0026`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`; (7) a run right after `guide:<slug>#`, (5)'s left boundary holding before `guide`, cites SpecEngine's guide (ADR-0085): no reference in any project, whatever its `[ids]` (`docs/canon/spec-guide.md` "Citations"); still references: `a-guide:x#R-1`, `guide:#R-1`, `myguide:x#R-1`, `foo:guide:x#R-1`; `guide:x#R-1#S-2` drops `R-1`, `S-2` bare. `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one; `@0` is legal. A node's own `rev` (`Node.rev`, `None` unless written and readable): `docs/canon/node-revision.md` "Revision" (ADR-0040).
 
 Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an alias. A reference-carrying front-matter scalar is exactly one reference; `canon:` tries a reference, else `path[#anchor]`. Nothing is resolved here (existence, aliases, `slug/`, `project:`, anchors): that is `spec check` (`docs/canon/spec-check.md`).
 
@@ -71,10 +71,10 @@ Walks (`Direction`; `docs/canon/spec-cli-graph.md`): `graph_direction` follows e
 
 ## Tests
 
-`tests/grammar.rs`: table-driven splits of every example above; `canon:` path + anchor, `status: superseded-by` → `supersedes` through core's `parse`. **Dev-only cycle**: core is a dev-dependency, so tests using it live in `tests/` (a `#[cfg(test)]` one would see a second copy of the model's types); never a normal edge (`cargo tree -e normal`).
+`tests/grammar.rs`: table-driven splits of every example above; `canon:` path + anchor, `status: superseded-by` → `supersedes` through core's `parse`. **Dev-only cycle**: core is a dev-dependency, so tests using it live in `tests/`; never a normal edge (`cargo tree -e normal`).
 
 ## Open minors
 
-- The look-alike table exists twice (here and `specengine-import` `script.rs`) → the importer increment. `specengine-code` `markers.rs` `is_latin_id` (ASCII letters, digits, `-_.:/#`, so `slug/ID`, `ID#SECTION` count as Latin) is a second Latin test; `spec refs` re-reads each marker ID with this crate's grammar (`docs/canon/code-bindings.md`) → the marker-parser increment: then it uses this crate.
+- The look-alike table exists twice (here and `specengine-import` `script.rs`) → the importer increment; `specengine-code` `markers.rs` `is_latin_id` is a second Latin test (`spec refs` re-reads each marker ID with this grammar: `docs/canon/code-bindings.md`) → the marker-parser increment.
 - `see:R-12` in prose reads as project `see` → the `project:` increment.
 - A name-shape body is greedy (`MEC-STAMINA-based` is one ID); the check's `Resolver` falls back (`docs/canon/spec-check-graph.md`).

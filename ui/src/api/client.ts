@@ -26,6 +26,8 @@ import type {
   FeedDocument,
   FlowView,
   GraphView,
+  GuideIndex,
+  GuidePage,
   HealthReport,
   HubSync,
   Identity,
@@ -208,7 +210,7 @@ export interface FeedOptions {
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
  * "Route", the flow's `docs/features/flow-canvas.md` "Data", the cards' `docs/features/board-ui.md`
  * "Routes", the identity's `docs/canon/hub.md` "Routes", the team's `docs/features/hub-team.md` "Data",
- * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog's `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the rings' `docs/features/scope-rings.md` "Acceptance criteria", SR4, the map's `docs/features/corpus-map.md` "Acceptance criteria", CM3, the library's `docs/canon/spec-library.md` "Daemon, hub"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog's `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the rings' `docs/features/scope-rings.md` "Acceptance criteria", SR4, the map's `docs/features/corpus-map.md` "Acceptance criteria", CM3, the library's `docs/canon/spec-library.md` "Daemon, hub", the guide's `docs/features/specengine-guide.md` "The daemon"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
  * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
@@ -303,6 +305,18 @@ export interface SpecEngineClient {
    * daemon's 404 and a 503 reject in the daemon's words.
    */
   getLibrary(project: string, options: LibraryOptions, signal?: AbortSignal): Promise<LibraryDocument>;
+  /**
+   * GET /api/guide (docs/features/specengine-guide.md "The daemon"; = spec guide --json): SpecEngine's
+   * own guide as the daemon's build embedded it, its topics; no project, no turn (ADR-0085). Judged, so
+   * only a 200 resolves; an older daemon's 404 rejects in its words.
+   */
+  getGuide(signal?: AbortSignal): Promise<GuideIndex>;
+  /**
+   * GET /api/guide/:topic (docs/features/specengine-guide.md "The daemon"; = spec guide TOPIC --json):
+   * one topic's page, `topic` one path segment. Judged: an unknown topic's 404 (the CLI's line), a
+   * query's 400 and an older daemon's 404 reject in the daemon's words.
+   */
+  getGuideTopic(topic: string, signal?: AbortSignal): Promise<GuidePage>;
   /**
    * GET /api/projects/:p/feed (docs/features/auto-feed.md "Data"; = spec feed --json, any login on a
    * hub): judged, so only a 200 resolves; a query's 400, an older daemon's 404 and a 503 reject in

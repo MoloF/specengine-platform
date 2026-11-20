@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-20
 ---
 
 # Card split: a task and a subtask per department, in one act
@@ -87,7 +87,7 @@ note: <note>
 
 ## MCP
 
-`split_card` on stdio (32 tools) and a hub's `/mcp` (18): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `mandate`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card with one; a hub as the login. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, with the determinism sentence: stdio 1 749 B, hub 1 764. `INSTRUCTIONS`, `HUB_INSTRUCTIONS` (`mcp-read.md`, `hub-mcp.md` "Tools") and `read-spec` name it.
+`split_card` on stdio (33 tools) and a hub's `/mcp` (19): `SplitCardArgs`, `deny_unknown_fields`, `target`, `title`, `goal`, `discipline`, `parent`, `child`, `mandate`, `reviewer`, `dry_run`, each nullable, no `as`. Stdio acts as `agent`, so it names a person reviewer or splits a card with one; a hub as the login. Output: the document; a refusal an error result with the reason and the document. Texts ASCII, under 2 048 B, with the determinism sentence: stdio 1 749 B, hub 1 764. `INSTRUCTIONS`, `HUB_INSTRUCTIONS` (`mcp-read.md`, `hub-mcp.md` "Tools") and `read-spec` name it.
 
 ## Screen
 

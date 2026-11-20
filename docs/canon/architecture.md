@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-20
 ---
 
 # SpecEngine architecture rules
@@ -97,7 +97,7 @@ A project's own generators (schemas, registries) stay in the project; their outp
 <a id="documentation-convention"></a>
 ## Documentation convention — mandatory for every project
 
-The convention `docs/canon/documentation-system.md` is built in, not an option: it applies to every project under SpecEngine and this repository, enforced here by `spec check` through roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
+The convention `documentation-system.md` is built in, not an option: it applies to every project under SpecEngine and this repository, enforced here by `spec check` through roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
 
 <a id="language"></a>
 ## Repository language
@@ -107,7 +107,7 @@ All content of this repository — documentation, decisions, role prompts, code 
 <a id="distribution"></a>
 ## Distribution and mode
 
-`cargo install` + a Claude Code plugin (MCP, hooks, roles and prompts in one version; stack roles: `#tasks`); a hub, a container image (`hub-deploy.md`). ADR-0015, ADR-0027, ADR-0066. A daemon is local, for one person, or a hub, for people behind a proxy (`hub.md`), only its `--push` online (`hub-git.md`). ADR-0058, ADR-0064.
+`cargo install` + a Claude Code plugin (MCP, hooks, roles and prompts in one version; stack roles: `#tasks`); a hub, a container image (`hub-deploy.md`). ADR-0015, ADR-0027, ADR-0066. A daemon is local or a hub behind a proxy (`hub.md`), only its `--push` online (`hub-git.md`). ADR-0058, ADR-0064. Its guide: `spec-guide.md`, ADR-0085.
 
 No authentication inside SpecEngine, ever, on any surface: no token, key, account, login session, WebAuthn or Touch ID; hosting or a shared machine needs infrastructure per service; a hub trusts its proxy's login header, no agent on its host. Threats: `serve.md#trust`, `hub.md#trust`. ADR-0034, ADR-0059, ADR-0065, ADR-0067, ADR-0068.
 

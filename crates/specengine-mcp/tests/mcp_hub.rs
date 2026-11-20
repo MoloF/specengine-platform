@@ -51,13 +51,15 @@ use specengine_mcp::{
 /// The hub's tools, sorted (docs/features/hub-mcp.md "Data"): seventeen,
 /// eighteen since docs/features/department-split.md "Acceptance criteria",
 /// S8 (`split_card`).
-const EIGHTEEN: [&str; 18] = [
+const EIGHTEEN: [&str; 19] = [
     "ask_question",
     "create_card",
     "edit_card",
     "get_card",
     "get_context_bundle",
     "get_flow",
+    // docs/features/specengine-guide.md GU5: nineteen with `get_guide`.
+    "get_guide",
     "get_node",
     "get_proposal",
     "get_roadmap",
@@ -468,7 +470,7 @@ const GET_TASKS_SENTENCE: &str = "tasks: each linked task {id, status, title, st
 #[test]
 fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
     // department-split S8: eighteen with `split_card`.
-    assert_eq!(HUB_TOOLS.len(), 18);
+    assert_eq!(HUB_TOOLS.len(), 19);
     let server = hub();
     for (name, word, sentence) in [
         ("edit_card", "task", HUB_EDIT_TASK_SENTENCE),

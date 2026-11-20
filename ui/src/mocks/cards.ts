@@ -279,6 +279,8 @@ function harborCards(at: number): StoredCard[] {
       column: "draft",
       position: 2,
       title: "Caption the berth plans",
+      // A citation of SpecEngine's guide whose topic the build serves, and one whose topic it lacks (docs/features/specengine-guide.md "The UI").
+      goal: "Each plan captioned and handed back as guide:cards#GD-CARDS-HANDOFF asks; guide:charts is no topic and stays text.",
       discipline: "copy",
       targets: ["DOM-BERTHS"],
       estimate: "1-2",

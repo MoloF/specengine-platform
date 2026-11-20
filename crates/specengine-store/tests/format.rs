@@ -473,15 +473,16 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/department-practices.md DP4: the `disciplines` table makes
-/// `INDEX_FORMAT` 19, and the history is the eighteen earlier lines,
-/// verbatim (doc-library's `18` among them), followed by exactly one `19
-/// <hash>` line (no earlier `19`). Replaces doc-library's format-18 pin
-/// (docs/features/doc-library.md DL9), whose line stays verbatim.
-/// M: `INDEX_FORMAT` kept at 18; an earlier line edited.
+/// docs/features/specengine-guide.md "Front-matter `summarises`" (the
+/// index): the typed `summarises` makes `INDEX_FORMAT` 20 (no table: a stored row keeps the key in `extra`
+/// until it is re-read), and the history is the nineteen earlier lines,
+/// verbatim (department-practices' `19` among them), followed by exactly
+/// one `20 <hash>` line (no earlier `20`). Replaces department-practices'
+/// format-19 pin (docs/features/department-practices.md DP4), whose line
+/// stays verbatim. M: `INDEX_FORMAT` kept at 19; an earlier line edited.
 #[test]
-fn department_practices_pins_format_19_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 19);
+fn specengine_guide_pins_format_20_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 20);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -509,11 +510,12 @@ fn department_practices_pins_format_19_with_one_new_history_line() {
         "16 dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72",
         "17 f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5",
         "18 dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59",
+        "19 8c3fd9327abf7c9b7fbf7549408aad98f7a5cb5c5d2ff0cb54cfa8fabc8cdc80",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "doc-library's history plus exactly one new line:\n{history}"
+        "department-practices' history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -522,15 +524,15 @@ fn department_practices_pins_format_19_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "19", "the new line is format 19: {last}");
+    assert_eq!(format, "20", "the new line is format 20: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("19 ")).count(),
+        lines.iter().filter(|line| line.starts_with("20 ")).count(),
         1,
-        "no earlier `19` line"
+        "no earlier `20` line"
     );
 }
 
@@ -1498,4 +1500,18 @@ fn the_stub_role_rows_are_stored_by_path_and_ord() {
         .filter(|line| line.starts_with("code_roles\t"))
         .collect();
     assert_eq!(again, lines, "the same role lines");
+}
+
+/// docs/features/specengine-guide.md "Front-matter `summarises`"
+/// (`INDEX_FORMAT` 20, no table): the typed `summarises` is kept in a stored node's fields, which
+/// no dumped corpus writes, so the dump differs from format 19's only in
+/// `index_meta` (the history's `20` line is format 19's dump but for the
+/// stamp). M: a table or column added; `summarises` serialised when absent.
+#[test]
+fn specengine_guide_the_dump_differs_from_19s_only_in_index_meta() {
+    assert_eq!(
+        stamped_back(&format_dump(), "19"),
+        "8c3fd9327abf7c9b7fbf7549408aad98f7a5cb5c5d2ff0cb54cfa8fabc8cdc80",
+        "format 19's dump, but for the stamp"
+    );
 }

@@ -298,6 +298,9 @@ fn cyrillic_exemption_is_exactly_the_two_fixture_directories_and_the_catalog() {
         "fixtures/token-calibration-extra/x.md",
         "fixtures/x/fixtures/spec-b/x.md",
         "docs/features/spec-parser.md",
+        // docs/features/specengine-guide.md GU7: the guide pages are scanned.
+        "docs/guide/proposals.md",
+        "docs/guide/x.md",
         "crates/specengine-core/tests/references.rs",
         "ui/src/i18n/index.ts",
         "ui/src/i18n/ru/x.ts",
@@ -677,4 +680,62 @@ fn dp18_a_cyrillic_line_in_a_practice_example_is_found() {
         letters,
         ["scripts/presets/practices/gamedev/sound.md:7: cyrillic"]
     );
+}
+
+/// The ten guide pages of docs/features/specengine-guide.md (RM-0129),
+/// `docs/guide/<topic>.md`, in its `GUIDE_ORDER`.
+const GUIDE_PAGES: [&str; 10] = [
+    "docs/guide/start.md",
+    "docs/guide/records.md",
+    "docs/guide/features.md",
+    "docs/guide/proposals.md",
+    "docs/guide/cards.md",
+    "docs/guide/practices.md",
+    "docs/guide/auto.md",
+    "docs/guide/markers.md",
+    "docs/guide/hub.md",
+    "docs/guide/documents.md",
+];
+
+/// GU7: the repository walk reads the ten guide pages and none is exempt,
+/// so LG-8 (`all_text_is_english_no_cyrillic_letters`) judges every line of
+/// them.
+#[test]
+fn gu7_the_repository_walk_reads_the_guide_pages() {
+    let root = repository_root();
+    let files = text_files();
+    for page in GUIDE_PAGES {
+        assert!(
+            files
+                .iter()
+                .any(|(path, _)| path.strip_prefix(&root).unwrap_or(path) == Path::new(page)),
+            "{page} is not scanned"
+        );
+        assert!(!cyrillic_exempt(Path::new(page)), "{page} is exempt");
+    }
+}
+
+/// GU7, M (named) "a Cyrillic line planted in a guide page", on a scratch
+/// tree: LG-8's scan finds it at its line; the clean page beside it gives
+/// nothing.
+#[test]
+fn gu7_a_cyrillic_line_in_a_guide_page_is_found() {
+    let letter = char::from_u32(0x0416).expect("a Cyrillic letter");
+    let tree = Scratch::new("guide-pages");
+    tree.write(
+        "docs/guide/hub.md",
+        &format!("---\nclass: canon\n---\n\n# The hub\n\nA door {letter}.\n"),
+    );
+    tree.write(
+        "docs/guide/start.md",
+        "---\nclass: canon\n---\n\n# Adopting SpecEngine\n\nPlain English.\n",
+    );
+    let letters = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &cyrillic_exempt,
+        "cyrillic",
+        has_cyrillic,
+    );
+    assert_eq!(letters, ["docs/guide/hub.md:7: cyrillic"]);
 }

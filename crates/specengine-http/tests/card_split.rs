@@ -502,7 +502,7 @@ fn s8_a_hubs_split_card_acts_as_the_login() {
     let hub = teamed("split-hub-mcp");
     let mut client = Session::open(hub.server.port, "card-press", "eve");
     let names = tool_names(&client.tools());
-    assert_eq!(names.len(), 18, "{names:?}");
+    assert_eq!(names.len(), 19, "{names:?}");
     assert!(
         names.iter().any(|name| name == "split_card"),
         "M: split_card missing from HUB_TOOLS: {names:?}"

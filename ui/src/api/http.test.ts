@@ -11,6 +11,9 @@ import {
   aGraphEdge,
   aGraphNode,
   aGraphView,
+  aGuideIndex,
+  aGuidePage,
+  aGuideTopic,
   aHealthReport,
   aLibrary,
   aLibraryRow,
@@ -326,6 +329,44 @@ describe("the library read (DL2 of doc-library)", () => {
   it("is judged: a 404 that is no error body rejects too, never read as the library", async () => {
     stubFetch(() => jsonAnswer(404, served));
     expect((await rejection(new HttpClient().getLibrary("alpha", { archive: false }))).status).toBe(404);
+  });
+});
+
+// docs/features/specengine-guide.md "The daemon", GU6: SpecEngine's guide is read at `/api/guide` and
+// `/api/guide/:topic`, under no project, the topic one segment encoded once, with the query's
+// AbortSignal; a 200 resolves as sent; judged, so an unknown topic's 404 (the CLI's line), a query's
+// 400 and an older daemon's unknown-route 404 reject in the daemon's words, and a 404 that is no error
+// body is never read as the guide.
+describe("the guide's reads (GU6, GU14 of specengine-guide)", () => {
+  const index = aGuideIndex([aGuideTopic("start"), aGuideTopic("records")]);
+  const page = aGuidePage("records");
+
+  it("asks `/guide` and `/guide/<topic>` with no project and no query, the answers resolved as sent, with the caller's AbortSignal", async () => {
+    const fetchStub = stubFetch((url) => jsonAnswer(200, url.endsWith("/guide") ? index : page));
+    const controller = new AbortController();
+    expect(await new HttpClient().getGuide(controller.signal)).toEqual(index);
+    expect(await new HttpClient().getGuideTopic("records", controller.signal)).toEqual(page);
+    expect(await new HttpClient().getGuideTopic("a b#c/d")).toEqual(page);
+    expect(urlsOf(fetchStub)).toEqual(["/api/guide", "/api/guide/records", "/api/guide/a%20b%23c%2Fd"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+    expect(fetchStub.mock.calls[1]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it.each([
+    [404, "spec: no guide topic `nope`; topics: start, records, features, proposals, cards, practices, auto, markers, hub, documents"],
+    [400, "`x` is no query name of guide: it takes none"],
+    [404, "no route /api/guide/nope: the routes are /api/projects and the web UI"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getGuideTopic("nope")))).toEqual({ status, message });
+    expect(apiErrorOf(await rejection(new HttpClient().getGuide()))).toEqual({ status, message });
+  });
+
+  it("is judged: a 404 that is no error body rejects too, never read as the guide", async () => {
+    stubFetch(() => jsonAnswer(404, index));
+    expect((await rejection(new HttpClient().getGuide())).status).toBe(404);
+    expect((await rejection(new HttpClient().getGuideTopic("start"))).status).toBe(404);
   });
 });
 

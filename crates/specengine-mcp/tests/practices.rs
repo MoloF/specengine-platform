@@ -351,6 +351,9 @@ fn dp14_the_schemas_and_descriptions() {
             "get_proposal",
             "list_cards",
             "get_card",
+            // docs/features/specengine-guide.md GU5: the guide's tool, the
+            // last shared with stdio.
+            "get_guide",
             "get_roadmap",
             "propose_change",
             "ask_question",
@@ -361,7 +364,7 @@ fn dp14_the_schemas_and_descriptions() {
             "edit_card",
             "move_card",
         ],
-        "HUB_TOOLS unchanged"
+        "HUB_TOOLS unchanged by department-practices (get_guide since specengine-guide)"
     );
     drop(session.finish());
 }

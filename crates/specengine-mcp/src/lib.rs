@@ -29,6 +29,9 @@
 //! spec `card-store` and `docs/features/department-split.md`
 //! "Acceptance criteria", S8, writing only the queue, and none accepts a
 //! card);
+//! the guide's `get_guide` (`spec guide [TOPIC[#ID]]`: task spec
+//! `specengine-guide`, the build's own guide, no project, no turn) and its
+//! resource template `guide://{topic}`;
 //! the collision tools `get_collisions` and `mark_pairs` (`spec
 //! collisions`, `spec collisions mark`: task spec `collision-pass`, the
 //! mark writing only the queue DB's ledger, no event);
@@ -50,13 +53,15 @@
 //!
 //! The hub mode (`hub.rs`, docs/features/hub-mcp.md): the same server in a
 //! hub's daemon at `/mcp/<slug>`, built by [`SpecEngineServer::hub`] over a
-//! [`HubSeam`] the daemon implements: seventeen tools, [`HUB_INSTRUCTIONS`],
-//! each call in the project's turn and under the request's login. This
+//! [`HubSeam`] the daemon implements: nineteen tools, [`HUB_INSTRUCTIONS`],
+//! each call but `get_guide`'s in the project's turn and under the
+//! request's login. This
 //! crate names no HTTP crate: the transport is the daemon's.
 
 mod cards;
 mod code;
 mod collisions;
+mod guide;
 mod hub;
 mod intake;
 mod mirror;

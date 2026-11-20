@@ -8,7 +8,7 @@ reviewed: 2026-11-20
 
 # spec library: every document as a library, with its decisions and tags
 
-Built by `doc-library` (RM-0127, 2026-11-19), no ADR. It rests on ADR-0022 (the four classes), ADR-0073 and ADR-0076 (a workspace is a lens), ADR-0004, ADR-0005, ADR-0008 and ADR-0012. Related: `spec-catalog.md` (last changes, their cache), `spec-map.md`, `spec-usage.md`, `doc-view.md`. Code: model `node.rs` `Fields.tags`; core `library.rs` (`library`, `judge_tags`, `kept_tags`, `decision_group`, `newer`, `behind`), `map.rs` `CanonicalNames`, `check/engine.rs` (`tag-invalid`), `SpecGraph::listed_under`; CLI `library.rs`, `catalog.rs` (`git_read`, `GitRead::notes_of`); http `app.rs`; UI `src/documents/`, `tree/UsedCell.tsx`.
+Built by `doc-library` (RM-0127, 2026-11-19), no ADR. It rests on ADR-0022 (the four classes), ADR-0073 and ADR-0076 (a workspace is a lens), ADR-0004, ADR-0005, ADR-0008 and ADR-0012. Related: `spec-catalog.md`, `spec-map.md`, `spec-usage.md`, `doc-view.md`. Code: model `node.rs` `Fields.tags`; core `library.rs` (`library`, `judge_tags`, `kept_tags`, `decision_group`, `newer`, `behind`), `map.rs` `CanonicalNames`, `check/engine.rs` (`tag-invalid`), `SpecGraph::listed_under`; CLI `library.rs`, `catalog.rs` (`git_read`, `GitRead::notes_of`); http `app.rs`; UI `src/documents/`, `tree/UsedCell.tsx`.
 
 ## The rule
 
@@ -75,7 +75,7 @@ On a hub the read trusts (`spec-read-freshness.md` "Routes and tools") and holds
 
 ## The screen
 
-`#/<p>/documents`, `documents` after `tree` in `SECTIONS` (`workspaces.md`); `DocumentsView`, a lazy chunk; `useLibrary`, key `["library", p, archive]`, in `READS_OF_THE_SPEC`.
+`#/<p>/documents`, `documents` after `tree` in `SECTIONS` (`workspaces.md`); its second shelf, SpecEngine's guide, holds no library row (`spec-guide.md`); `DocumentsView`, a lazy chunk; `useLibrary`, key `["library", p, archive]`, in `READS_OF_THE_SPEC`.
 - An `h1`; "N documents" or "K of N documents", "B behind their decision"; a case-folded search over title, name, path, tags.
 - Facets, in order Class, Kind, Status, Tags, Discipline, Module, Owner, Tier, Scope: ANDed, values ORed, each with the count the other facets keep, by count then `Intl.Collator`, "No <facet>" last. Class starts at `canon` when a row has it, the rest at All. Module is one choice, the module bar's stored `specengine.module.<p>` (`.<login>` on a hub), else the department's `module`; All modules one press. Toggles Behind its decision, Orphans; Include archive, a second read keeping the table; Clear filters, all to All. State per project for the page's life.
 - Columns: Title (`DocLink` by `name`, the name in mono below when it differs), Class, Kind, Status, Version, Owner, Reviewed, Last change ("Not committed"), Used by (`UsedCell`, the catalog's), Decisions ("N accepted · M superseded", a "Behind its decision" `Lozenge`; a button opening a full-width row of groups, each entry a `DocLink`, `date` or "No date", "Committed <time>", its section, "Newer than this document"; an unknown group raw, `lang="en"`), Tags (chips). Sort as the catalog's (Version, Reviewed, Last change, Used by descending first). 200 a page (`LIBRARY_SHOWN`), "Show 200 more".

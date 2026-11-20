@@ -2172,6 +2172,44 @@ const CODE_LINE: &str = "- Code: find_symbols(query|node|file|at, limit?) = symb
 const TASKS_LINE: &str = "- get_task, claim_task, submit_plan, report_run, complete_task = spec \
                           task show|claim|plan|report|complete.\n";
 
+/// docs/features/specengine-guide.md "MCP" (its instructions: the tool
+/// named within the cap, words elsewhere make room): the reads' line gains
+/// `get_guide` after `get_trace` (34 bytes) ...
+const GUIDE_READ: &str = "; get_guide(topic?, rule?) = guide";
+
+/// ... and loses `get_tree`'s and `get_node`'s `, archive?` (10 bytes each,
+/// still in their schemas) ...
+const ARCHIVE_INPUT: &str = ", archive?";
+
+/// ... and `report_drift`'s `queues ` (7 bytes): 2 046 bytes.
+const QUEUES_WORD: &str = "queues ";
+
+/// collision-pass' text ([`PLANNED_INSTRUCTIONS`], 2 039 bytes) out of
+/// specengine-guide's: no `get_guide`, the two `, archive?` and `queues `
+/// back.
+fn as_of_specengine_guide(instructions: &str) -> String {
+    instructions
+        .replacen(GUIDE_READ, "", 1)
+        .replacen(
+            "get_tree(root?, depth?, kinds?) = tree; get_node(id, with?) = show",
+            &format!(
+                "get_tree(root?, depth?, kinds?{ARCHIVE_INPUT}) = tree; \
+                 get_node(id, with?{ARCHIVE_INPUT}) = show"
+            ),
+            1,
+        )
+        .replacen(
+            "spec propose drift: HEAD's",
+            &format!("spec propose drift: {QUEUES_WORD}HEAD's"),
+            1,
+        )
+}
+
+/// The server's `INSTRUCTIONS` since docs/features/specengine-guide.md:
+/// its BLAKE3 (`mcp_path.rs`, `mcp_decision.rs` and the slices' tests pin
+/// the same value).
+const GUIDE_BLAKE3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
+
 /// The `probes` build's paragraph until docs/features/impact.md (Q-B: it
 /// goes; both builds send `INSTRUCTIONS` alone, `mcp_create.rs`).
 const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output, probe_sleep.";
@@ -2306,7 +2344,26 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// card-trace's byte for byte.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
-    let instructions = specengine_mcp::INSTRUCTIONS;
+    // docs/features/specengine-guide.md: 2 039 + 34 - 20 - 7 = 2 046; the
+    // text before it is collision-pass' byte for byte (every assertion
+    // below runs on that text).
+    let current = specengine_mcp::INSTRUCTIONS;
+    assert_eq!(GUIDE_READ.len(), 34);
+    assert_eq!(2 * ARCHIVE_INPUT.len() + QUEUES_WORD.len(), 27);
+    assert_eq!(current.len(), 2046, "2 039 + 34 - 27");
+    assert_eq!(blake3_hex(current.as_bytes()), GUIDE_BLAKE3);
+    assert!(
+        current.contains("get_trace(ref?) = trace; get_guide(topic?, rule?) = guide.\n"),
+        "the guide's read ends the reads' line"
+    );
+    assert_eq!(current.matches(GUIDE_READ).count(), 1);
+    assert_eq!(current.matches(ARCHIVE_INPUT).count(), 0, "both cut");
+    assert!(current.contains("- report_drift = spec propose drift: HEAD's lock drift.\n"));
+    for name in TOOLS {
+        assert!(has_word(current, name), "{name} unnamed");
+    }
+    let collision_pass = as_of_specengine_guide(current);
+    let instructions = collision_pass.as_str();
     // docs/features/collision-pass.md CP8: 2 048 - 74 + 65.
     assert_eq!(PLANNED_INSTRUCTIONS.len(), 2039, "collision-pass' figure");
     assert_eq!(COLLISIONS_LINE.len(), 65);
@@ -2435,7 +2492,8 @@ fn rd5_instructions_are_the_planned_text() {
         !instructions.contains(EVIDENCE_CLAUSE),
         "docs/features/card-trace.md cuts the clause"
     );
-    for name in TOOLS {
+    // `get_guide` is specengine-guide's, checked on the current text above.
+    for name in TOOLS.iter().filter(|name| **name != "get_guide") {
         assert!(has_word(instructions, name), "{name} unnamed");
     }
     for name in CODE_TOOLS {

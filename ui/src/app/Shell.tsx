@@ -36,7 +36,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { closeDoc, forgetDoc, openDocFrom, pushHash, replaceHash, useHash } from "./location";
-import { ALL_SECTIONS, feedHash, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
+import { ALL_SECTIONS, feedHash, guideRefOf, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { SyncLine } from "./SyncLine";
 import { NotFound, ViewFailure } from "./views";
@@ -55,6 +55,8 @@ const CardPage = lazy(() => import("../board/CardPage").then((module) => ({ defa
 const FeedView = lazy(() => import("../feed/FeedView").then((module) => ({ default: module.FeedView })));
 /** Documents, every document as a library, a chunk of its own (docs/features/doc-library.md "Acceptance criteria", DL19). */
 const DocumentsView = lazy(() => import("../documents/DocumentsView").then((module) => ({ default: module.DocumentsView })));
+/** A topic of SpecEngine's guide, a chunk of its own, reached by its link alone (docs/features/specengine-guide.md "The UI"). */
+const GuideTopicView = lazy(() => import("../guide/GuideTopicView").then((module) => ({ default: module.GuideTopicView })));
 
 /**
  * Calls `onLanded` once committed beside a lazy view: a Suspense boundary resolves without the
@@ -70,9 +72,14 @@ function Landed({ onLanded }: { onLanded: () => void }) {
 /** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl; the cap is the catalog's. */
 const CHORD_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "app.chordApple" : "app.chordOther";
 
-/** One key per view: per section of a project, per card's page, per project's home; `#/` is "home". */
+/** One key per view: per section of a project, per card's page, per guide topic, per project's home; `#/` is "home". */
 function viewKeyOf(route: Route): string {
   if (route.type === "section") {
+    // A guide topic is a view of its own; its rules, places in it.
+    const guide = route.section === "documents" ? guideRefOf(route.id) : null;
+    if (guide !== null) {
+      return `${route.project}/documents/guide/${guide.topic}`;
+    }
     return route.view === undefined ? `${route.project}/${route.section}` : `${route.project}/${route.section}/${route.id ?? ""}/${route.view}`;
   }
   if (route.type === "feed") {
@@ -583,6 +590,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
   const navPending = navProject === null ? projects.data === undefined && projectsFailure === null : lens === undefined && !workspacesFailed;
   const navSections = choice.workspace?.sections ?? ALL_SECTIONS;
   const routeModules = route.type === "section" && route.section === "tree" ? (workspaces.data?.modules ?? []) : [];
+  const guideTopic = route.type === "section" && route.section === "documents" ? guideRefOf(route.id) : null;
 
   let view;
   if (route.type === "not_found") {
@@ -701,6 +709,14 @@ export function Shell({ scenario }: { scenario: string | null }) {
         moduleTitle={moduleKinds === null ? null : (choice.module?.title ?? null)}
         moduleKnown={moduleRoot !== undefined}
       />
+    );
+  } else if (route.section === "documents" && guideTopic !== null) {
+    // A topic of SpecEngine's guide, read only, no project turn (docs/features/specengine-guide.md "The UI").
+    view = (
+      <Suspense key={`${route.project}/${guideTopic.topic}`} fallback={<Skeleton label={t("app.lazy.guide")} lines={6} />}>
+        <GuideTopicView project={route.project} topic={guideTopic.topic} rule={guideTopic.rule} memory={documentsMemory} />
+        <Landed onLanded={onLanded} />
+      </Suspense>
     );
   } else if (route.section === "documents") {
     // The Module facet is the module bar's stored choice, read and written here (docs/canon/spec-library.md "The screen").

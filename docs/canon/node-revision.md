@@ -75,7 +75,7 @@ Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (lin
 <type> path:<path>[#<anchor>]                                a canon: path target
 ```
 
-**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`, `stage`, `tags`, `disciplines`) or untyped (`extra`); a heading; a revision.
+**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`, `stage`, `tags`, `disciplines`, `summarises`) or untyped (`extra`); a heading; a revision.
 
 **Bytes**, framed as `specengine-hash/v2` (`crates/specengine-code/README.md` "Hash recipe"):
 
@@ -120,7 +120,7 @@ frame("Hold the sprint key to run; each second drains stamina (see\n[[MEC-STAMIN
 
 - Index: `nodes.norm_hash` after `own_text`, NULL when null, from the parse the row stores (`crates/specengine-store/README.md`). Read API `node_norms` (`spec-trace.md`); `spec lock accept` hashes the node's `HEAD` blob itself (`spec-lock-accept.md`).
 - `spec show`: ` | norm b3:<hex>` right before ` | span`, omitted when null; JSON `norm_hash` between `sections` and `span_hash`, a string or `null` (`spec-cli-read.md`). From a fresh parse of the bytes printed, never the stored column: a document's covers its own text and links, its `span_hash` the whole file printed.
-- The same key in MCP `get_node` (`docs/canon/mcp-read.md`), the daemon's show JSON and the UI's provisional `ShownNode.norm_hash`. A proposal's base stays `span_hash`: a `norm_hash` sent as `base` meets the stale-base refusal naming the current `span_hash` (untested).
+- The same key in MCP `get_node` (`mcp-read.md`), the daemon's show JSON and the UI's provisional `ShownNode.norm_hash`. A proposal's base stays `span_hash`: a `norm_hash` sent as `base` meets the stale-base refusal naming the current `span_hash` (untested).
 
 Determinism: the same bytes under the same `[ids]` give the same input from any root, cwd or creation order; an `[ids]` kind or width change keeps every input.
 
