@@ -5531,6 +5531,12 @@ mark {
   color: var(--text-secondary);
 }
 
+/* The line's live region stays mounted while it has no words: out of the view's grid then, so it adds no
+   gap, yet never hidden, so its words are announced when they appear. */
+.documents-shown:empty {
+  position: absolute;
+}
+
 .documents-archive {
   display: inline-flex;
   align-items: center;
@@ -5868,8 +5874,10 @@ mark {
   scroll-margin-top: calc(var(--nav-height) + var(--space-100));
 }
 
-/* Below the header's one-row width it wraps to two rows: the heading clears both. */
-@media (max-width: 68.74rem) {
+/* Below the header's one-row width it wraps to two rows: the heading clears both. The query is the
+   exact complement of the header's `(min-width: 68.75rem)`, no gap between them; Safari before 16.4
+   drops the range form `(width < 68.75rem)`. */
+@media not all and (min-width: 68.75rem) {
   .markdown .md-anchor > .md-heading {
     scroll-margin-top: calc(2 * var(--nav-height) + var(--space-100));
   }

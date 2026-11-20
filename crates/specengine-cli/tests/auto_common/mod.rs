@@ -735,6 +735,12 @@ pub fn utc(offset: i64) -> String {
         .expect("after the epoch")
         .as_secs() as i64
         + offset;
+    iso_of(secs)
+}
+
+/// The epoch second `secs`, UTC, `YYYY-MM-DDTHH:MM:SSZ` (so one clock
+/// reading can give a time and its epoch).
+pub fn iso_of(secs: i64) -> String {
     let (days, rest) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     // Howard Hinnant's civil_from_days.
     let z = days + 719_468;

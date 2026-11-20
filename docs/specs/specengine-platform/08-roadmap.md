@@ -589,9 +589,36 @@ Like every route today, the read still holds the project's turn. Reads outside t
 - `dump-queue` works, and a pre-upgrade copy sits in the host's `~/hub-snapshots/20261120-before-0.47.2/`.
 - **His word, 2026-11-20:** off-host backups stay off for now ("not required, don't worry about it, let it stay off"). The host copies taken before each upgrade remain the hub's only backups.
 - **Closed 2026-11-20**: RM-0130 shipped as 0.48.1, tag `v0.48.1`. Every storage call of `hub-admin` passes `--config`, a comment-only file, verified on the pinned 4.39.28, so `dump-door` dumps the door; `backup` waits unconfigured, its line(s) each round, never restart-looping.
-- Still his: the live check after the upgrade (HB11); turning backups on, by the steps in `scripts/deploy/README.md` "Going live"; and RM-0131's question, whether `reset` of a person with no TOTP should keep warning `totp-left`.
+- Still his: the live check after the upgrade (HB11); turning backups on, by the steps in `scripts/deploy/README.md` "Going live"; and RM-0131's question, whether `reset` of a person with no TOTP should keep warning `totp-left` (decided later that day: nothing to delete; `release-tail` below).
 
 **His word, 2026-11-20**: "do all the remaining parts and publish each intermediate result to the hub yourself". It authorises the main session to commit, tag, push and upgrade the hub for RM-0127 to RM-0129, each slice's release on its own; RM-0127 goes first, as 0.47.2.
+
+**His word, later on 2026-11-20** (in chat, in Russian, translated): "fix what remains, to the end". On it the main session decided the open questions of RM-0132 `write-memory` (must), now in progress (`docs/features/write-memory.md`, WM1-WM10):
+- the write soaks' budget is 0.25 MiB/min, and reads keep 0.5;
+- ADR-0086 records his stability policy: a rule in `architecture.md#stability` and the canon page `docs/canon/soak-runs.md`, with every soak's budget;
+- if glibc's arenas are the cause, the image may set `MALLOC_ARENA_MAX=2`; an allocator crate needs its own ADR;
+- the dedup may read fewer rows when its hits and related stay byte-identical, behind an oracle;
+- the Linux confirmation, WM10, is an owner's gate that blocks nothing. The main session records the live hub's passive RSS, with no synthetic writes on it, since it serves real projects; Docker is off on the laptop by his choice.
+
+On the same word the main session decided the questions of `release-tail` (`docs/features/release-tail.md`, RT1-RT12), now in progress. It is a version-only PATCH, 0.49.1 (tag `v0.49.1`), with no ADR, and it ships RM-0131 and the new plan item RM-0133:
+- RM-0131: the door's "no TOTP configuration" answer is nothing to delete; other failures keep the warning.
+- RM-0133:
+  - the install clones the current tag, pinned by a test alone;
+  - `rn4_until` takes a held-leg shape;
+  - Documents: `behind: null` gets its own "not known" look, the last-answer line a live region, and a failed Retry disarms the focus;
+  - guide citations: the `#ID` after one is skipped (`INDEX_FORMAT` 21), and the UI takes the grammar's left boundary;
+  - a 0.01rem gap in the scroll margin closed.
+
+RT3, the run on the pinned door image, is an owner's gate, since Docker is off on the laptop; RM-0131's record of 2026-11-20 stands until then. `write-memory` proceeds in parallel and ships after `release-tail`, as its own release.
+
+**`release-tail` shipped 2026-11-20**: plugin 0.49.1 (a version-only PATCH), the next tag `v0.49.1`, `INDEX_FORMAT` 21; RM-0131 and RM-0133 done.
+- `reset` reads the door's "no TOTP" line for its login as nothing to delete.
+- The install clones `v0.49.1`.
+- `rn4_until` waits past `--until` with a leg held.
+- Documents: the "Not known" mark, the announced last-answer line, the focus after a failed Retry.
+- A guide citation's tail is no reference, and the UI links a citation exactly where the grammar reads one: 17 shared rows agree.
+
+The full run: 6 554 of 6 557 tests passed, and the 3 failures were outside the slice's code (`release-tail.md` "Release"). `rn4_until` passed 20 of 20 under load. Open: RT3, the door-image run, his Docker gate. `write-memory` is next, as its own release.
 
 ## 3. Product acceptance criteria
 

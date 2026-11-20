@@ -4,7 +4,9 @@ import { runsOf, standsAlone, type CitedEntries } from "./cited";
 // Citations of SpecEngine's own guide (docs/features/specengine-guide.md "The UI"; ADR-0085): in a text,
 // `guide:<topic>` or `guide:<topic>#<ID>` whose topic is one of the guide's, as the daemon's build
 // serves its index, standing alone and outside code, links to that topic's page, at the rule when one
-// is named. Nothing else becomes one: a topic the served index does not hold stays text, whatever it
+// is named. Its left boundary is the grammar's, so where the daemon keeps the rule a reference no
+// guide links (`citesAlone`; `guide-citations.json`, the table both sides test). Nothing else becomes
+// one: a topic the served index does not hold stays text, whatever it
 // looks like, so a citation of a page this build lacks never links to nothing. The rule is not checked
 // against the page here (the index names no rules); the page says when it has no such rule. Shared by
 // the plain texts (`CitedText`) and the markdown renderer (`./plugin`), with the served `cited` IDs
@@ -15,6 +17,21 @@ const RULE = /^[A-Za-z0-9][A-Za-z0-9_-]*/;
 
 /** The longest a rule ID read here may be: past it the token is cut, and stands alone no more. */
 const RULE_MAX = 128;
+
+/**
+ * The grammar's rule (5) left boundary, the one rule (7) holds before `guide` (crates/specengine-model
+ * `grammar.rs` `cites_the_guide`; docs/features/release-tail.md RT10): a last character that is a
+ * letter or digit of any script (Rust's `char::is_alphanumeric`), `_`, `-`, `.`, `/` or `:` means no
+ * citation, so the daemon keeps the rule a reference and the UI links nothing; `#`, `@`, `(` or a space
+ * leaves it one. Tested on the last code point of the two units before `guide`, a surrogate pair whole.
+ */
+const GUIDE_STOP = /[\p{Alphabetic}\p{N}_\-./:]$/u;
+
+/** A citation at `at..end` stands alone: the grammar's left boundary before `guide`, `standsAlone`'s right side after it. */
+function citesAlone(text: string, at: number, end: number): boolean {
+  // `standsAlone` from the text's start has nothing on its left: only its right side is read.
+  return !GUIDE_STOP.test(text.slice(Math.max(0, at - 2), at)) && standsAlone(text, 0, end);
+}
 
 /** A citation found in a text: where it stands and what it opens. */
 export interface GuideCitation extends GuideRef {
@@ -47,12 +64,12 @@ function citationAt(text: string, at: number, topics: readonly string[]): GuideC
     const rule = text[end] === "#" ? RULE.exec(text.slice(end + 1, end + 1 + RULE_MAX))?.[0].replace(/[-_]+$/, "") : undefined;
     if (rule !== undefined && rule !== "") {
       const ruleEnd = end + 1 + rule.length;
-      if (standsAlone(text, at, ruleEnd)) {
+      if (citesAlone(text, at, ruleEnd)) {
         return { start: at, end: ruleEnd, topic, rule };
       }
       continue;
     }
-    if (standsAlone(text, at, end)) {
+    if (citesAlone(text, at, end)) {
       return { start: at, end, topic, rule: null };
     }
   }

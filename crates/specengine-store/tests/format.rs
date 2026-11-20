@@ -473,16 +473,16 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/specengine-guide.md "Front-matter `summarises`" (the
-/// index): the typed `summarises` makes `INDEX_FORMAT` 20 (no table: a stored row keeps the key in `extra`
-/// until it is re-read), and the history is the nineteen earlier lines,
-/// verbatim (department-practices' `19` among them), followed by exactly
-/// one `20 <hash>` line (no earlier `20`). Replaces department-practices'
-/// format-19 pin (docs/features/department-practices.md DP4), whose line
-/// stays verbatim. M: `INDEX_FORMAT` kept at 19; an earlier line edited.
+/// docs/features/release-tail.md "The grammar (RT9, RT10)", RT12: rule (7)
+/// taking a guide citation's `#ID` and `@rev` changes a stored reference set,
+/// so `INDEX_FORMAT` is 21 (no table, no column), and the history is the
+/// twenty earlier lines, verbatim (specengine-guide's `20` among them),
+/// followed by exactly one `21 <hash>` line (no earlier `21`). Replaces
+/// specengine-guide's format-20 pin, whose line stays verbatim. M:
+/// `INDEX_FORMAT` kept at 20; an earlier line edited.
 #[test]
-fn specengine_guide_pins_format_20_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 20);
+fn release_tail_pins_format_21_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 21);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -511,11 +511,12 @@ fn specengine_guide_pins_format_20_with_one_new_history_line() {
         "17 f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5",
         "18 dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59",
         "19 8c3fd9327abf7c9b7fbf7549408aad98f7a5cb5c5d2ff0cb54cfa8fabc8cdc80",
+        "20 0b3d0d8888ddf6bc4ec8393424b3073f3a390dd8d6908bd58e74ec7c2068b1c2",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "department-practices' history plus exactly one new line:\n{history}"
+        "specengine-guide's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -524,15 +525,15 @@ fn specengine_guide_pins_format_20_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "20", "the new line is format 20: {last}");
+    assert_eq!(format, "21", "the new line is format 21: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("20 ")).count(),
+        lines.iter().filter(|line| line.starts_with("21 ")).count(),
         1,
-        "no earlier `20` line"
+        "no earlier `21` line"
     );
 }
 
@@ -599,6 +600,21 @@ fn department_practices_the_dump_differs_from_18s_only_in_index_meta() {
         stamped_back(&format_dump(), "18"),
         "dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59",
         "format 18's dump, but for the stamp"
+    );
+}
+
+/// docs/features/release-tail.md "The grammar (RT9, RT10)": a stored
+/// reference set changes only for a text holding a guide citation with a
+/// `#ID` tail, which no dumped corpus holds, so the dump differs from
+/// format 20's only in `index_meta` (the history's `21` line is format
+/// 20's dump but for the stamp). M: a table or column moved; another
+/// stored reference changed.
+#[test]
+fn release_tail_the_dump_differs_from_20s_only_in_index_meta() {
+    assert_eq!(
+        stamped_back(&format_dump(), "20"),
+        "0b3d0d8888ddf6bc4ec8393424b3073f3a390dd8d6908bd58e74ec7c2068b1c2",
+        "format 20's dump, but for the stamp"
     );
 }
 

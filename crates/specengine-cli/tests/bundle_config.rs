@@ -308,13 +308,15 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
 /// of the `disciplines` table, docs/features/department-practices.md
 /// "The index: `INDEX_FORMAT` 19", and of the typed `summarises`
 /// (`INDEX_FORMAT` 20, no table), docs/features/specengine-guide.md
-/// "Front-matter `summarises`", and the store's format history is its twenty lines:
-/// department-practices' nineteen, verbatim, and one `20 <hash>`.
+/// "Front-matter `summarises`", and of rule (7)'s guide citation tail
+/// (`INDEX_FORMAT` 21, a stored reference set), docs/features/release-tail.md
+/// "The grammar (RT9, RT10)", and the store's format history is its
+/// twenty-one lines: specengine-guide's twenty, verbatim, and one `21 <hash>`.
 /// M: the dump changed, the stamp kept (the store's `format.rs` turns red
 /// on the dump; this pins the stamp and the file).
 #[test]
-fn ac16_index_format_is_twenty() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 20);
+fn ac16_index_format_is_twenty_one() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 21);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -339,20 +341,21 @@ fn ac16_index_format_is_twenty() {
 17 f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5
 18 dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59
 19 8c3fd9327abf7c9b7fbf7549408aad98f7a5cb5c5d2ff0cb54cfa8fabc8cdc80
+20 0b3d0d8888ddf6bc4ec8393424b3073f3a390dd8d6908bd58e74ec7c2068b1c2
 ";
-    let twentieth = history
+    let twenty_first = history
         .strip_prefix(earlier)
-        .unwrap_or_else(|| panic!("the nineteen earlier lines stay verbatim:\n{history}"));
-    let (format, hash) = twentieth
+        .unwrap_or_else(|| panic!("the twenty earlier lines stay verbatim:\n{history}"));
+    let (format, hash) = twenty_first
         .strip_suffix('\n')
         .and_then(|line| line.split_once(' '))
-        .unwrap_or_else(|| panic!("one more line, `20 <hash>`:\n{history}"));
-    assert_eq!(format, "20", "{history}");
+        .unwrap_or_else(|| panic!("one more line, `21 <hash>`:\n{history}"));
+    assert_eq!(format, "21", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
-        "a BLAKE3 hex: {twentieth:?}"
+        "a BLAKE3 hex: {twenty_first:?}"
     );
-    assert_eq!(history.lines().count(), 20, "twenty lines:\n{history}");
+    assert_eq!(history.lines().count(), 21, "twenty-one lines:\n{history}");
 }
 
 /// A garden-planning corpus: no programming stack, its own prefixes and

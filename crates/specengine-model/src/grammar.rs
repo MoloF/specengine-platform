@@ -23,7 +23,9 @@
 //! of the ID as written; (7) a run right after `guide:<slug>#`, the same
 //! left boundary holding before `guide`, is a citation of SpecEngine's own
 //! guide (task spec `specengine-guide`, ADR-0085), never a project's node:
-//! no reference, so plain text in every project, whatever its `[ids]`.
+//! no reference, nor is a `#ID` or `@rev` right after its ID (task spec
+//! `release-tail`, RT9), so plain text in every project, whatever its
+//! `[ids]`.
 //! [`is_slug`] is the `slug` rule, also the stem of a feature document
 //! (ADR-0026).
 //!
@@ -92,13 +94,18 @@ pub fn scan(text: &str, base: usize, scheme: &IdScheme) -> Vec<Found> {
         }
         // `pos` starts a maximal run: the char before it is no letter or digit.
         let run_end = run_end(text, pos);
-        if bytes.get(run_end) == Some(&b'-')
-            && !matches!(char_before(text, pos), Some('_' | '-'))
-            && let Some((one, end)) = match_at(text, pos, run_end, scheme, base)
-        {
-            found.push(one);
-            pos = end;
-            continue;
+        if bytes.get(run_end) == Some(&b'-') && !matches!(char_before(text, pos), Some('_' | '-')) {
+            // (7) the guide's citation is no reference, nor is the `#ID` or
+            // `@rev` right after its ID: the scan resumes past them.
+            if cites_the_guide(text, pos) {
+                pos = guide_citation_end(text, run_end);
+                continue;
+            }
+            if let Some((one, end)) = match_at(text, pos, run_end, scheme, base) {
+                found.push(one);
+                pos = end;
+                continue;
+            }
         }
         pos = run_end;
     }
@@ -196,10 +203,6 @@ fn match_at(
     base: usize,
 ) -> Option<(Found, usize)> {
     let bytes = text.as_bytes();
-    // (7) the guide's citation is no reference.
-    if cites_the_guide(text, run_start) {
-        return None;
-    }
     let head = match_id(text, run_start, run_end_at, scheme, true, base)?;
     let mut end = head.end;
     let mut homoglyphs: Vec<Homoglyph> = head.homoglyph.into_iter().collect();
@@ -456,6 +459,54 @@ fn cites_the_guide(text: &str, run_start: usize) -> bool {
     };
     !char_before(text, qualifier)
         .is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | ':'))
+}
+
+/// (7): the end of the guide citation whose ID's run ends at `run_end_at`,
+/// right before a `-`: its ID, then a `#ID`, then an `@rev`. The ID and the
+/// `#ID` are read by shape alone, `run "-" alnum+ ("-" alnum+)*`, never by
+/// the project's `[ids]`, since the guide's IDs are in none: unlike (3),
+/// any `#ID` of that shape is consumed, whatever its prefix, an alias or a
+/// look-alike among them (`guide:x#R-1#OLD-5` drops `OLD-5`, an
+/// `aliases_from` prefix's, which a plain `R-1#OLD-5` keeps). As in (3),
+/// the `#ID` joins only at a boundary or before `@`, and `@` only before
+/// 1-9 digits at a boundary. Forward only, from where the scan stands: the
+/// scan stays one pass.
+fn guide_citation_end(text: &str, run_end_at: usize) -> usize {
+    let bytes = text.as_bytes();
+    let mut end = id_body_end(text, run_end_at);
+    if bytes.get(end) == Some(&b'#') && char_at(text, end + 1).is_some_and(char::is_alphanumeric) {
+        let section_run = run_end(text, end + 1);
+        let section_end = id_body_end(text, section_run);
+        if section_end > section_run
+            && (is_boundary(text, section_end) || bytes.get(section_end) == Some(&b'@'))
+        {
+            end = section_end;
+        }
+    }
+    if bytes.get(end) == Some(&b'@') {
+        let digits_start = end + 1;
+        let digits = bytes[digits_start..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        if (1..=9).contains(&digits) && is_boundary(text, digits_start + digits) {
+            end = digits_start + digits;
+        }
+    }
+    end
+}
+
+/// The end of an ID's body read by shape alone, `alnum+ ("-" alnum+)*`,
+/// after the `-` at `dash`; `dash` itself when none follows, so a run with
+/// no body there is no ID.
+fn id_body_end(text: &str, dash: usize) -> usize {
+    let bytes = text.as_bytes();
+    let mut end = dash;
+    while bytes.get(end) == Some(&b'-') && char_at(text, end + 1).is_some_and(char::is_alphanumeric)
+    {
+        end = run_end(text, end + 1);
+    }
+    end
 }
 
 /// (4): the end, or a char that is no letter, digit, `_`, nor a `-` before

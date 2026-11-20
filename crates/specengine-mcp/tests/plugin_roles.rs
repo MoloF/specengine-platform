@@ -1403,10 +1403,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // 0.47.1; the 0.47.2 patch (RM-0127 doc-library, a version-only bump):
     // 0.47.2; department-practices (RM-0128, MINOR): 0.48.0; the 0.48.1
     // patch (RM-0130 hub-backups, a version-only bump): 0.48.1;
-    // specengine-guide (RM-0129, MINOR, `get_guide`): 0.49.0.
-    if plugin["version"] != "0.49.0" {
+    // specengine-guide (RM-0129, MINOR, `get_guide`): 0.49.0; the 0.49.1
+    // patch (release-tail, RM-0131 and RM-0133, a version-only bump): 0.49.1.
+    if plugin["version"] != "0.49.1" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.49.0",
+            "plugin.json: version {}, not 0.49.1",
             plugin["version"]
         ));
     }
@@ -1476,9 +1477,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.49.0\"", "\"0.48.1\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.49.0");
-    assert_names(&r2_problems(&older, &market), "not 0.49.0", "0.48.1");
+    let older = plugin.replacen("\"0.49.1\"", "\"0.49.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.49.1");
+    assert_names(&r2_problems(&older, &market), "not 0.49.1", "0.49.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

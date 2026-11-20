@@ -323,8 +323,8 @@ describe("a guide topic's page (GU14 of specengine-guide)", () => {
     expect(heading?.matches(".markdown .md-anchor > .md-heading")).toBe(true);
     const css = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
     expect(css).toMatch(/\n\.markdown \.md-anchor > \.md-heading \{[^}]*\bscroll-margin-top: calc\(var\(--nav-height\) \+ var\(--space-100\)\);/);
-    expect(css).toMatch(/@media \(max-width: 68\.74rem\) \{\s*\.markdown \.md-anchor > \.md-heading \{\s*scroll-margin-top: calc\(2 \* var\(--nav-height\) \+ var\(--space-100\)\);/);
-    // The header wraps below the width where it stops wrapping, the breakpoint the second rule takes.
+    expect(css).toMatch(/@media not all and \(min-width: 68\.75rem\) \{\s*\.markdown \.md-anchor > \.md-heading \{\s*scroll-margin-top: calc\(2 \* var\(--nav-height\) \+ var\(--space-100\)\);/);
+    // The header wraps below the width where it stops wrapping: the second rule takes that query's exact complement (RT11 of release-tail).
     expect(css).toMatch(/@media \(min-width: 68\.75rem\) \{\s*\.app-header \{\s*flex-wrap: nowrap;/);
   });
 

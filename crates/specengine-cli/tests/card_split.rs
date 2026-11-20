@@ -982,14 +982,120 @@ fn k1_a_parent_with_open_children_is_accepted() {
 /// The "Data" example's row, appended after the config's last line.
 const BAD_ROW: &str = "\n[[card.split]]\nkind = \"mechanic\"\ndisciplnes = [\"copy\"]\n";
 
-/// `run`'s three streams, the pair's scratch path written `<scratch>`.
+/// The keys of a wall-clock stamp, in the text and the JSON forms the twin
+/// steps print: a card's `created_at` and `updated_at`, `spec delivery`'s
+/// `as of` day, and any event's `at`.
+const STAMPED: [&str; 7] = [
+    "created_at: ",
+    "updated_at: ",
+    "\"created_at\":\"",
+    "\"updated_at\":\"",
+    "as of ",
+    "\"as_of\":\"",
+    "\"at\":\"",
+];
+
+/// The length of the stamp opening `text`: `YYYY-MM-DD`, or that, `T`,
+/// `HH:MM:SS`, an optional fraction and `Z`; none for anything else.
+fn stamp_len(text: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let digits = |from: usize, count: usize| {
+        bytes
+            .get(from..from + count)
+            .is_some_and(|run| run.iter().all(u8::is_ascii_digit))
+    };
+    let at = |index: usize, byte: u8| bytes.get(index) == Some(&byte);
+    if !(digits(0, 4) && at(4, b'-') && digits(5, 2) && at(7, b'-') && digits(8, 2)) {
+        return None;
+    }
+    if !at(10, b'T') {
+        return Some(10);
+    }
+    if !(digits(11, 2) && at(13, b':') && digits(14, 2) && at(16, b':') && digits(17, 2)) {
+        return None;
+    }
+    let mut end = 19;
+    if at(end, b'.') {
+        end += 1;
+        while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+            end += 1;
+        }
+    }
+    at(end, b'Z').then_some(end + 1)
+}
+
+/// `text` with the stamp after each [`STAMPED`] key written `<stamp>`; every
+/// other byte as it is (a key followed by no stamp is left whole).
+fn masked(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while !rest.is_empty() {
+        if let Some(key) = STAMPED.iter().find(|key| rest.starts_with(**key)) {
+            out.push_str(key);
+            rest = &rest[key.len()..];
+            if let Some(length) = stamp_len(rest) {
+                out.push_str("<stamp>");
+                rest = &rest[length..];
+            }
+            continue;
+        }
+        let next = rest.chars().next().expect("not empty");
+        out.push(next);
+        rest = &rest[next.len_utf8()..];
+    }
+    out
+}
+
+/// `run`'s three streams, the pair's scratch path written `<scratch>` and
+/// each wall-clock stamp `<stamp>` ([`masked`]): twin projects make their
+/// cards on seconds of their own, a loaded machine on different ones.
 fn answer(pair: &Pair, done: &common::Run) -> (i32, String, String) {
     let scratch = pair.scratch.path().to_str().expect("UTF-8").to_owned();
     (
         done.code,
-        done.stdout.replace(&scratch, "<scratch>"),
-        done.stderr.replace(&scratch, "<scratch>"),
+        masked(&done.stdout.replace(&scratch, "<scratch>")),
+        masked(&done.stderr.replace(&scratch, "<scratch>")),
     )
+}
+
+/// The wall clock's epoch second.
+fn epoch_second() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("after the epoch")
+        .as_secs()
+}
+
+/// [`masked`] hides a stamp under its keys alone: two cards a second apart
+/// read alike, and a key holding no stamp, a stamp under no key, or any
+/// other field still differs.
+#[test]
+fn rh_r4_the_twin_answers_mask_their_stamps_alone() {
+    let shown = |created: &str, title: &str| {
+        format!(
+            "title: {title}\ncreated_at: {created}\nupdated_at: {created}\n\
+             {{\"title\":\"{title}\",\"created_at\":\"{created}\",\"at\":\"{created}\"}}\n\
+             delivery | as of 2026-11-20 | tasks 1\n"
+        )
+    };
+    let early = shown("2026-11-20T11:03:10Z", "The weekly run");
+    let late = shown("2026-11-20T11:03:11.25Z", "The weekly run");
+    assert_ne!(early, late, "premise");
+    assert_eq!(masked(&early), masked(&late));
+    assert!(!masked(&early).contains("11:03"), "{}", masked(&early));
+    assert_ne!(
+        masked(&early),
+        masked(&shown("2026-11-20T11:03:10Z", "The weekly run!")),
+        "another title still differs"
+    );
+    for kept in [
+        "title: 2026-11-20T11:03:10Z",
+        "created_at: soon",
+        "created_at: 2026-11-20T11:03:10",
+        "revision: 1",
+    ] {
+        assert_eq!(masked(kept), kept, "{kept:?}");
+    }
 }
 
 /// `spec check`'s `card-config` lines and its exit.
@@ -1011,9 +1117,11 @@ fn card_config_lines(pair: &Pair) -> (i32, Vec<String>) {
 /// reported alike; card-press as it is, or with no `[card]`, gives none.
 /// With the row, twin projects (one with it, one without) answer `spec
 /// card list`, `new`, `show` and `move`, `spec gate`, `spec workspace`,
-/// `spec delivery` and `spec card counts` byte for byte alike; `spec card
-/// split`, dry run too, exits 2 with `<config>:<line>: <message>`. M: split
-/// errors joined to `[card]`'s again; the finding dropped.
+/// `spec delivery` and `spec card counts` byte for byte alike but for the
+/// wall-clock stamps (the twin's card is made a second later, so they
+/// differ every run); `spec card split`, dry run too, exits 2 with
+/// `<config>:<line>: <message>`. M: split errors joined to `[card]`'s
+/// again; the finding dropped.
 #[test]
 fn rh_r4_a_bad_split_row_is_a_finding_and_turns_splitting_off_alone() {
     let with = Pair::new("rh-r4-with", PRESS);
@@ -1069,6 +1177,14 @@ fn rh_r4_a_bad_split_row_is_a_finding_and_turns_splitting_off_alone() {
     for args in &steps {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let a = answer(&with, &run(&with, &args));
+        if args.contains(&"new") {
+            // The twin's card on a later second, as a loaded machine may
+            // make it: the stamps differ every run, and are masked.
+            let made = epoch_second();
+            while epoch_second() == made {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        }
         let b = answer(&without, &run(&without, &args));
         assert_eq!(a, b, "{args:?}");
     }

@@ -5,6 +5,7 @@ import { ApiProvider } from "../api/provider";
 import type { LibraryDocument, LibraryRow, WorkspaceDocument } from "../api/types";
 import { docOf } from "../app/routes";
 import { switchLanguage } from "../i18n";
+import appCss from "../styles/app.css?raw";
 import { aDirection, aLibrary, aLibraryChange, aLibraryDecision, aLibraryRow, aModule, aWorkspace, aWorkspaces } from "../test/builders";
 import { renderApp } from "../test/render";
 import { argsOf, stubClient, type StubClient } from "../test/stubClient";
@@ -618,6 +619,124 @@ describe("a failed Include archive (review of DL18)", () => {
     });
     expect(await screen.findByText("\u041f\u043e\u043a\u0430\u0437\u0430\u043d \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u043e\u0442\u0432\u0435\u0442, \u0441 \u0430\u0440\u0445\u0438\u0432\u043e\u043c")).not.toBeNull();
   });
+
+  // RT7 of docs/features/release-tail.md: the line is announced, so its live region is in the page
+  // before its words are, empty and never hidden. M: the region removed (the line mounted with its words).
+  it("puts the last-answer line in a polite live region mounted before its words appear (RT7 of release-tail)", async () => {
+    await open(archiveFails(message));
+    const region = document.querySelector<HTMLElement>(".documents-view .documents-shown");
+    expect(region?.getAttribute("aria-live")).toBe("polite");
+    expect(region?.textContent).toBe("");
+    expect([region?.hidden, region?.getAttribute("aria-hidden")]).toEqual([false, null]);
+    fireEvent.click(archiveBox());
+    expect(await screen.findByText(message)).not.toBeNull();
+    const line = screen.getByText("Showing the last answer, without the archive");
+    // The same node the page held before: its words changed inside a region already there.
+    expect(line.closest('[aria-live="polite"]')).toBe(region);
+    expect(region?.isConnected).toBe(true);
+    // Empty, it leaves the view's grid but stays in the accessibility tree: never `display: none`.
+    const empty = /\n\.documents-shown:empty \{([^}]*)\}/.exec(appCss.replace(/\/\*[\s\S]*?\*\//g, ""))?.[1] ?? "";
+    expect(empty).toMatch(/position:\s*absolute;/);
+    expect(empty).not.toMatch(/display:\s*none|visibility:\s*hidden/);
+  });
+
+  // RT8 of docs/features/release-tail.md: a Retry that failed leaves no table to go to, so the answer
+  // the lone Include archive awaits puts focus on the bar's checkbox; a successful Retry still takes
+  // focus to the table. M: the failed Retry stays armed (focus lands on the table).
+  it("after a failed Retry, pressing the lone Include archive puts focus on the bar's checkbox once the answer lands (RT8 of release-tail)", async () => {
+    const stub = archiveFails(message);
+    const answer = stub.getLibrary.getMockImplementation();
+    let land: () => void = () => undefined;
+    stub.getLibrary.mockImplementation((project, options, signal) =>
+      options.archive
+        ? Promise.reject(new ClientError({ status: 503, message }))
+        : new Promise((resolve, reject) => {
+            land = () => {
+              (answer?.(project, options, signal) ?? Promise.reject(new Error("no answer"))).then(resolve, reject);
+            };
+          }),
+    );
+    aloneWithArchive(stub);
+    expect(await screen.findByText(message)).not.toBeNull();
+    const retry = screen.getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    // The Retry asks the archive's read again, and it fails again.
+    await waitFor(() => {
+      expect(stub.getLibrary.mock.calls.filter(([, options]) => options.archive)).toHaveLength(2);
+    });
+    await waitFor(() => {
+      expect(document.querySelector(".documents-view")?.getAttribute("aria-busy")).toBe("false");
+    });
+    expect(screen.getByText(message)).not.toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    const lone = archiveBox();
+    lone.focus();
+    fireEvent.click(lone);
+    await waitFor(() => {
+      expect(argsOf(stub.getLibrary).at(-1)).toEqual(["alpha", { archive: false }]);
+    });
+    expect(document.activeElement).toBe(lone);
+    await act(async () => {
+      land();
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole("table")).not.toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(archiveBox());
+    });
+    expect(archiveBox().closest(".documents-facets")).not.toBeNull();
+    expect(document.activeElement).not.toBe(document.querySelector(".documents-table-wrap"));
+  });
+
+  it("a successful Retry still takes focus to the table (RT8 of release-tail)", async () => {
+    const stub = archiveFails(message);
+    const answer = stub.getLibrary.getMockImplementation();
+    let fail = true;
+    stub.getLibrary.mockImplementation((project, options, signal) =>
+      fail ? Promise.reject(new ClientError({ status: 503, message })) : (answer?.(project, options, signal) ?? Promise.reject(new Error("no answer"))),
+    );
+    renderApp(stub, "#/alpha/documents");
+    expect(await screen.findByText(message)).not.toBeNull();
+    fail = false;
+    const retry = screen.getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(await screen.findByRole("table")).not.toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.querySelector(".documents-table-wrap"));
+    });
+  });
+
+  it("a Retry that failed, then one that answers, takes focus to the table (RT8 of release-tail)", async () => {
+    const stub = archiveFails(message);
+    const answer = stub.getLibrary.getMockImplementation();
+    let failures = 2;
+    stub.getLibrary.mockImplementation((project, options, signal) => {
+      if (failures > 0) {
+        failures -= 1;
+        return Promise.reject(new ClientError({ status: 503, message }));
+      }
+      return answer?.(project, options, signal) ?? Promise.reject(new Error("no answer"));
+    });
+    renderApp(stub, "#/alpha/documents");
+    expect(await screen.findByText(message)).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(stub.getLibrary).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(document.querySelector(".documents-view")?.getAttribute("aria-busy")).toBe("false");
+    });
+    expect(screen.queryByRole("table")).toBeNull();
+    const retry = screen.getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(await screen.findByRole("table")).not.toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.querySelector(".documents-table-wrap"));
+    });
+  });
 });
 
 describe("the review's nits (DL18)", () => {
@@ -661,5 +780,67 @@ describe("the Discipline facet (DP21 of department-practices)", () => {
     // The panel stays open: "No discipline" keeps the rows naming none.
     fireEvent.click(within(screen.getByRole("group", { name: "Discipline" })).getByRole("button", { name: "No discipline 1" }));
     expect(shown()).toEqual(["DOM-WATER"]);
+  });
+});
+
+// RT6 of docs/features/release-tail.md: `behind: null` (an accepted decision's commit time unread) has a
+// neutral "Not known" mark of its own, named for a screen reader, distinct from `true`'s lozenge and
+// from `false`'s nothing; the toggle, its count and the count line count only `true` (ADR-0012: a
+// hint). M: null shown as false (no mark); null counted as behind.
+describe("a row whose behind is not known (RT6 of release-tail)", () => {
+  /** served() with DOM-WATER's one accepted decision's time unread: its `behind` null. */
+  function notKnown(): LibraryRow[] {
+    return served().map((row) =>
+      row.name === "DOM-WATER" ? { ...row, decisions: [aLibraryDecision({ name: "DEC-0020", title: "Tides are slow", group: "accepted", newer: null })], behind: null } : row,
+    );
+  }
+
+  /** A row's marks in its Decisions cell: each lozenge's appearance and label. */
+  function marks(name: string): (string | null)[][] {
+    const row = document.querySelector(`tr[data-row="${name}"]`) as HTMLElement;
+    return Array.from(row.querySelectorAll(".documents-decisions .lozenge"), (lozenge) => [lozenge.getAttribute("data-appearance"), lozenge.querySelector(".lozenge-label")?.textContent ?? null]);
+  }
+
+  it("shows a neutral Not known of its own, its words for a screen reader before it, the whole phrase on hover; true keeps its lozenge, false none (M: null shown as false; the title removed)", async () => {
+    await open(client(notKnown()));
+    expect(marks("DOM-WATER")).toEqual([["neutral", "Not known"]]);
+    expect(marks("DOM-HARBOR")).toEqual([["warning", "Behind its decision"]]);
+    expect(marks("MEC-TIDES")).toEqual([]);
+    const mark = document.querySelector('tr[data-row="DOM-WATER"] .documents-behind-unknown') as HTMLElement;
+    const described = mark.firstElementChild;
+    expect([described?.className, described?.textContent]).toEqual(["sr-only", "Behind its decision:"]);
+    expect(mark.textContent).toBe("Behind its decision:Not known");
+    // A sighted reader sees the whole phrase on hover; the wrapper has no role nor label, so a screen
+    // reader reads its words once, from the text (review of release-tail).
+    expect(mark.getAttribute("title")).toBe("Behind its decision: not known");
+    expect([mark.getAttribute("role"), mark.getAttribute("aria-label")]).toEqual([null, null]);
+    // Never the warning's look nor its icon.
+    const drawn = (lozenge: Element | null) => lozenge?.querySelector("svg path")?.getAttribute("d") ?? null;
+    expect(drawn(mark.querySelector(".lozenge"))).not.toBeNull();
+    expect(drawn(mark.querySelector(".lozenge"))).not.toBe(drawn(document.querySelector('tr[data-row="DOM-HARBOR"] .lozenge')));
+  });
+
+  it("in Russian too, in the catalog's words", async () => {
+    await open(client(notKnown()));
+    act(() => {
+      switchLanguage("ru");
+    });
+    await screen.findByRole("heading", { level: 1, name: "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b" });
+    expect(marks("DOM-WATER")).toEqual([["neutral", "\u041d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u043e"]]);
+    expect(document.querySelector('tr[data-row="DOM-WATER"] .documents-behind-unknown .sr-only')?.textContent).toBe("\u041e\u0442\u0441\u0442\u0430\u0451\u0442 \u043b\u0438 \u043e\u0442 \u0440\u0435\u0448\u0435\u043d\u0438\u044f:");
+    expect(document.querySelector('tr[data-row="DOM-WATER"] .documents-behind-unknown')?.getAttribute("title")).toBe("\u041e\u0442\u0441\u0442\u0430\u0451\u0442 \u043b\u0438 \u043e\u0442 \u0440\u0435\u0448\u0435\u043d\u0438\u044f: \u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u043e");
+  });
+
+  it("is never counted or kept as behind: the toggle's count, its rows and the count line count true alone (M: null counted as behind)", async () => {
+    await open(client(notKnown()));
+    expect(count()).toBe("3 of 5 documents · 1 behind its decision");
+    const behind = screen.getByRole("button", { name: "Behind its decision 1" });
+    fireEvent.click(behind);
+    expect(shown()).toEqual(["DOM-HARBOR"]);
+    expect(count()).toBe("1 of 5 documents · 1 behind its decision");
+    // The pure library agrees.
+    const start = { ...NO_FILTERS, chosen: { ...ALL_CHOSEN, class: ["canon"] } };
+    expect(toggleCount(notKnown(), start, null, "behind")).toBe(1);
+    expect(keptRows(notKnown(), { ...start, behind: true }, null).map((row) => row.name)).toEqual(["DOM-HARBOR"]);
   });
 });

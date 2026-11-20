@@ -1,0 +1,19 @@
+[
+  { "text": "guide:x#R-1", "refs": [], "guide_link": true },
+  { "text": "guide:x#R-1#S-2", "refs": [], "guide_link": false },
+  { "text": "guide:x#R-1#S-2@3", "refs": [], "guide_link": false },
+  { "text": "guide:x#R-1 S-2", "refs": ["S-2"], "guide_link": true },
+  { "text": "R-1#S-2", "refs": ["R-1"], "guide_link": false },
+  { "text": "#guide:x#R-1", "refs": [], "guide_link": true },
+  { "text": "@guide:x#R-1", "refs": [], "guide_link": true },
+  { "text": "(guide:x#R-1)", "refs": [], "guide_link": true },
+  { "text": "see guide:x#R-1.", "refs": [], "guide_link": true },
+  { "text": ".guide:x#R-1", "refs": ["R-1"], "guide_link": false },
+  { "text": ":guide:x#R-1", "refs": ["R-1"], "guide_link": false },
+  { "text": "/guide:x#R-1", "refs": ["R-1"], "guide_link": false },
+  { "text": "-guide:x#R-1", "refs": ["R-1"], "guide_link": false },
+  { "text": "_guide:x#R-1", "refs": ["R-1"], "guide_link": false },
+  { "text": "aguide:x#R-1", "refs": ["R-1"], "guide_link": false },
+  { "text": "7guide:x#R-1", "refs": ["R-1"], "guide_link": false },
+  { "text": "\u0436guide:x#R-1", "refs": ["R-1"], "guide_link": false }
+]

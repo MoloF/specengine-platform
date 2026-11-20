@@ -104,12 +104,14 @@ CLI `build.rs` reads `../../docs/guide/*.md` (`cargo:rerun-if-changed` for each 
 
 - **Documents** has a View group, "Project documents | SpecEngine guide" (`aria-pressed`), kept per project for the page's life. The shelf (`src/guide/GuideShelf.tsx`, a lazy chunk) lists the topics from `GET /api/guide`: title, summary, "N rules".
 - **A topic** opens at `#/<p>/documents/guide:<topic>`, a rule at `…guide:<topic>%23<ID>` (one raw `#` in the hash), rendered read-only through `src/markdown/` (`GuideTopicView.tsx`, `lang="en"`): rule headings are anchors with a scroll margin, each with "Copy citation" (`guide:<topic>#<ID>`); a rule the page lacks says so. No edit or propose act.
-- **Citations**: a `guide:<topic>[#<ID>]` token, standing alone and outside code, whose topic the served index holds links to that route (`src/markdown/guide.ts`); its rule is not checked there. Nothing else links.
+- **Citations**: a `guide:<topic>[#<ID>]` token, standing alone and outside code, whose topic the served index holds links to that route (`src/markdown/guide.ts`); its rule is not checked there. Nothing else links. Standing alone is the grammar's on the left (rule (5)'s boundary before `guide`: no letter or digit of any script, `_ - . / :`), so where the daemon keeps a reference the UI links no guide; on the right it is `standsAlone`'s, as for cited IDs.
 - **States**: a skeleton, an `ErrorPanel` with Retry, a daemon before this slice (404) as the library shows it. Chrome `guide.*`, `documents.shelf.*` in `en.ts` and `ru.ts`; the text as served.
 
 ## Citations
 
-Model rule (7) (`crates/specengine-model/README.md` "Reference grammar"): a run right after `guide:<slug>#`, with the qualifiers' left boundary before `guide`, is no reference in any project, this repository included. So `guide:<topic>#<ID>` and `[[guide:<topic>#<ID>]]` make no link, edge or finding, and a look-alike letter inside one gets no ADR-0009 error.
+Model rule (7) (`crates/specengine-model/README.md` "Reference grammar"): a run right after `guide:<slug>#`, with the qualifiers' left boundary before `guide`, is no reference in any project, this repository included, nor is its tail: a `#ID`, then an `@rev`, joined as a reference's. The ID and the `#ID` are read by shape alone, never by `[ids]`, so any `#ID` of that shape goes, an alias's or a look-alike's too: `guide:x#R-1#OLD-5` drops `OLD-5`, which a plain `R-1#OLD-5` keeps as its own reference; after a space, `guide:x#R-1 S-2`'s `S-2` is one. So `guide:<topic>#<ID>` and `[[guide:<topic>#<ID>]]` make no link, edge or finding, and a look-alike letter inside one gets no ADR-0009 error.
+
+One table of odd texts, 17 rows (`#`, `@`, `.`, `:`, `/`, `-` or `(` before `guide`, and the tail's forms), is checked by both sides: `fixtures/guide-citations.json` by the model's `tests/grammar.rs`, its byte-identical copy `ui/src/markdown/guide-citations.json` by `guide.test.ts`.
 
 ## Known limits
 
@@ -117,6 +119,7 @@ Model rule (7) (`crates/specengine-model/README.md` "Reference grammar"): a run 
 - Freshness is by page and date: an unrelated edit of a summarised page asks for a review.
 - A project cannot add pages to the shelf; its own canon does that in its library.
 - A citation's rule is checked by `spec guide` and the page, not where it is written.
+- The UI's right side is `standsAlone`'s, which differs from the grammar on two edges no table row holds: a `-` then a non-alphanumeric, and an `@` then a letter, right after the citation.
 
 ## Tests
 

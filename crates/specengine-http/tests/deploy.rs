@@ -64,6 +64,10 @@
 //! door's configuration is `hub-admin`'s own file, so `dump-door` and
 //! `admin` keep exactly the mounts, environment and secrets they had, no
 //! `/config` mount and no session or JWT secret, and `network_mode: none`.
+//!
+//! docs/features/release-tail.md (RM-0133) RT4, `rt04_*`: the guide's
+//! "Install" clones the plugin's version, so a fresh install runs the
+//! current release's image and scripts.
 
 #![cfg(unix)]
 
@@ -3131,6 +3135,66 @@ fn op06_no_version_moves() {
         .position(|run| run.contains("cargo "))
         .unwrap_or_else(|| panic!("the check job runs no cargo: {runs:?}"));
     assert!(cargo > 0, "the tests come after tag-check.sh: {runs:?}");
+}
+
+// ------------------------------------------------- release-tail RT4
+
+/// The repository the guide's "Install" clones (docs/features/release-tail.md
+/// "The README's install line").
+const CLONED: &str = "https://github.com/MoloF/specengine-platform";
+
+/// What is wrong with `readme`'s install line for the plugin's `version`:
+/// nothing when exactly one line clones [`CLONED`], and it is `git clone
+/// --branch v<version> <CLONED>`.
+fn install_problems(readme: &str, version: &str) -> Vec<String> {
+    let clones: Vec<&str> = readme
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("git clone") && line.contains(CLONED))
+        .collect();
+    let want = format!("git clone --branch v{version} {CLONED}");
+    match clones.as_slice() {
+        [one] if *one == want => Vec::new(),
+        [one] => vec![format!("the install line is `{one}`, not `{want}`")],
+        many => vec![format!(
+            "{} lines clone {CLONED}, not one: {many:?}",
+            many.len()
+        )],
+    }
+}
+
+/// docs/features/release-tail.md RT4: `scripts/deploy/README.md` has exactly
+/// one `git clone --branch v<X> https://github.com/MoloF/specengine-platform`
+/// line, X `plugin.json`'s version, so a fresh install's `.env.example` and
+/// scripts are the release's (`op06_no_version_moves` ties `.env.example`
+/// to the same version). The check itself refuses the README held one
+/// version behind, and a second clone line. M: the version bumped, the
+/// README left behind.
+#[test]
+fn rt04_the_install_clones_the_current_release() {
+    let version = plugin_version();
+    let readme = read(&deploy().join("README.md"));
+    assert_eq!(
+        install_problems(&readme, &version),
+        Vec::<String>::new(),
+        "scripts/deploy/README.md \"Install\" against plugin.json's {version}"
+    );
+    let parts: Vec<u64> = version
+        .split('.')
+        .map(|part| part.parse().expect("N.N.N"))
+        .collect();
+    let next = format!("{}.{}.{}", parts[0], parts[1], parts[2] + 1);
+    assert_eq!(
+        install_problems(&readme, &next).len(),
+        1,
+        "the version bumped to {next}, the README left behind"
+    );
+    let twice = format!("{readme}\ngit clone --branch v{version} {CLONED}\n");
+    assert_eq!(
+        install_problems(&twice, &version).len(),
+        1,
+        "two clone lines"
+    );
 }
 
 // ------------------------------------------------- slow-requests SR11

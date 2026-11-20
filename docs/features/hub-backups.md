@@ -59,7 +59,7 @@ The `authelia` stub in `tests/deploy_admin.rs` loads a configuration as 4.39.28 
 - choosing or paying for a backend, the owner's credentials;
 - off-host copies of the deploy key, Authelia's secrets or `traefik-acme` (ADR-0071);
 - the dumps' grid, retention or format; any crate change; monitoring beyond the healthcheck and the lines;
-- `reset` of a person with no TOTP, which warns `TOTP not deleted` and logs `totp-left`: RM-0131, the owner's question.
+- `reset` of a person with no TOTP, which warns `TOTP not deleted` and logs `totp-left`: RM-0131, decided 2026-11-20 as nothing to delete and shipped in `release-tail` (0.49.1).
 
 ## Implementation
 

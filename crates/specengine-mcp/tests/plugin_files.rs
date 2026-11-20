@@ -320,6 +320,11 @@
 //!   back 0.48.1's; a `SCHEMA_PINS` entry 0.49.0, today's schemas without
 //!   `get_guide` 0.48.0's pin. M: plugin.json left at 0.48.1; another file
 //!   changed; `SCHEMA_PINS` not appended.
+//! - release-tail (RM-0131 and RM-0133, docs/features/release-tail.md RT12):
+//!   0.49.0 -> 0.49.1, PATCH, a version-only bump (the slice changed no
+//!   plugin file). A `PINS` entry 0.49.1, the tree with plugin.json's
+//!   version set back 0.49.0's; no `SCHEMA_PINS` entry, the last still
+//!   0.49.0. M: plugin.json left at 0.49.0; another file changed.
 //!
 //! The repository is only read.
 
@@ -809,6 +814,12 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.49.0",
         "c116d73b17d476f030294d9711f6cbbbca9a56d7bfab20e2d54ddee8e5462943",
+    ),
+    // release-tail (RM-0131 and RM-0133, RT12: 0.49.0 -> 0.49.1, PATCH):
+    // plugin.json's version alone; set back, the tree hashes as 0.49.0's pin.
+    (
+        "0.49.1",
+        "a562c881d20157b1bc5c16885a205e8a0db20d44ef3537a5135c2b3de4df8aea",
     ),
 ];
 
@@ -2436,7 +2447,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// department-practices (RM-0128: `read-spec`'s card sentence, its
 /// description unchanged), 0.48.1 since hub-backups (RM-0130: no skill text
 /// changed), 0.49.0 since specengine-guide (RM-0129: `read-spec`'s guide
-/// bullet, its description unchanged).
+/// bullet, its description unchanged), 0.49.1 since release-tail (RM-0131
+/// and RM-0133: no skill text changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2459,7 +2471,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.49.0")
+        json!("0.49.1")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2612,13 +2624,39 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // release-tail (RM-0131 and RM-0133, RT12: 0.49.0 -> 0.49.1, PATCH):
+    // plugin.json's version alone; set back, the tree is 0.49.0's pinned
+    // content, every skill and role byte-equal. M: plugin.json left at
+    // 0.49.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.49.1"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.49.1"),
+        "plugin.json's version"
+    );
+    let at_0_49_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.49.1\"",
+        "\"version\": \"0.49.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_49_0),
+        PINS[PINS.len() - 2].1,
+        "0.49.1 changes plugin.json's version only"
+    );
+    let tree = at_0_49_0;
+    let pins_0_49_0 = &PINS[..PINS.len() - 1];
     // specengine-guide (RM-0129, GU12: 0.48.1 -> 0.49.0, MINOR):
     // plugin.json's version and `read-spec` (the guide's bullet after the
     // code bullets, `find_symbols`' glosses and the cut answer's sentence
     // shortened for it); all set back, the tree is 0.48.1's pinned content,
     // every other skill and role byte-equal. M: plugin.json left at 0.48.1;
     // another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.49.0"));
+    assert_eq!(
+        pins_0_49_0.last().map(|(version, _)| *version),
+        Some("0.49.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.49.0"),
@@ -2651,11 +2689,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_48_1),
-        PINS[PINS.len() - 2].1,
+        pins_0_49_0[pins_0_49_0.len() - 2].1,
         "0.49.0 changes plugin.json's version and read-spec's three places only"
     );
     let tree = at_0_48_1;
-    let pins_0_48_1 = &PINS[..PINS.len() - 1];
+    let pins_0_48_1 = &pins_0_49_0[..pins_0_49_0.len() - 1];
     // hub-backups (RM-0130: 0.48.0 -> 0.48.1, PATCH): plugin.json's version
     // alone; set back, the tree is 0.48.0's pinned content, every skill and
     // role byte-equal. M: plugin.json left at 0.48.0; another file changed.

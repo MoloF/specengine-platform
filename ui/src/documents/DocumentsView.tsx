@@ -498,9 +498,32 @@ function DecisionsRow({ project, row, id }: { project: string; row: LibraryRow; 
   );
 }
 
+/**
+ * A row's "behind its decision" hint (ADR-0012), never colour alone: `true` the warning lozenge; `null`
+ * (an accepted decision's commit time unread) a neutral "Not known" of its own, named for a screen
+ * reader by the words before it and for a sighted one by the whole phrase on hover (`title` on a
+ * generic span, no role: no accessible name, so the words are not read twice), never drawn as
+ * `false`'s nothing nor as `true` (docs/features/release-tail.md RT6). Neither filters nor counts:
+ * only `true` does that.
+ */
+function BehindMark({ behind }: { behind: boolean | null }) {
+  const t = useTranslate();
+  if (behind === true) {
+    return <Lozenge appearance="warning" icon="deferred" label={t("documents.behindMark")} />;
+  }
+  if (behind === null) {
+    return (
+      <span className="documents-behind-unknown" title={t("documents.behindUnknown.title")}>
+        <span className="sr-only">{t("documents.behindUnknown.described")}</span>
+        <Lozenge appearance="neutral" icon="unknown" label={t("documents.behindUnknown.mark")} />
+      </span>
+    );
+  }
+  return null;
+}
+
 /** One served row; its title opens the document modal. */
 function LibraryLine({ project, row, index, open, detailId, onToggle }: { project: string; row: LibraryRow; index: number; open: boolean; detailId: string; onToggle: () => void }) {
-  const t = useTranslate();
   const title = titleOf(row);
   return (
     <tr data-row={row.name} data-index={index}>
@@ -543,7 +566,7 @@ function LibraryLine({ project, row, index, open, detailId, onToggle }: { projec
             <DecisionsSummary decisions={row.decisions} />
           </button>
         )}
-        {row.behind === true && <Lozenge appearance="warning" icon="deferred" label={t("documents.behindMark")} />}
+        <BehindMark behind={row.behind} />
       </td>
       <td>
         {row.tags.length === 0 ? (
@@ -641,6 +664,24 @@ function countLine(rows: readonly LibraryRow[], kept: readonly LibraryRow[], fil
 }
 
 /**
+ * Retry's focus to the table (`useRetryFocus`), dropped by a Retry that failed (docs/features/release-tail.md
+ * RT8): a failure counted after the press (`failures`, the read's `errorUpdateCount`) leaves no table
+ * to go to, so an answer the lone Include archive awaits later puts focus on the bar's checkbox, never
+ * the table. A successful Retry still takes focus to the table. The shared hook stays as the other views use it.
+ */
+function useRetryFocusUnlessFailed(settled: unknown, failures: number, target: () => HTMLElement | null | undefined): () => void {
+  const failed = useRef(false);
+  useEffect(() => {
+    failed.current = true;
+  }, [failures]);
+  const retried = useRetryFocus(settled, () => (failed.current ? undefined : target()));
+  return () => {
+    failed.current = false;
+    retried();
+  };
+}
+
+/**
  * Documents: the library read while on screen, a skeleton until it and the module are known, then the
  * filter bar and the table; no document, an empty state; no match, one with Clear filters. A failure
  * in the daemon's words with Retry, an older daemon's 404 too; the last answered rows and their bar
@@ -683,7 +724,7 @@ export function DocumentsView({
   const guide = shelf === "guide";
   const read = useLibrary(project, archive, !guide);
   const failure = useRetainedFailure(read.error, read.isFetching);
-  const retried = useRetryFocus(read.data, () => region.current?.querySelector<HTMLElement>(".documents-table-wrap") ?? region.current?.querySelector<HTMLElement>("h1"));
+  const retried = useRetryFocusUnlessFailed(read.data, read.errorUpdateCount, () => region.current?.querySelector<HTMLElement>(".documents-table-wrap") ?? region.current?.querySelector<HTMLElement>("h1"));
   // The last answer read for its own key, never a placeholder, with the archive it was asked with: a
   // failed read has no placeholder (TanStack keeps one only while pending), so this keeps the rows up.
   const [answered, setAnswered] = useState<{ document: LibraryDocument; archive: boolean } | null>(null);
@@ -760,6 +801,9 @@ export function DocumentsView({
     );
   }
 
+  /** Under a failure, which archive the kept rows hold when the checkbox says otherwise; else none. */
+  const lastShown = failure !== null && answered !== null && data === answered.document && answered.archive !== archive ? (answered.archive ? t("documents.lastWith") : t("documents.lastWithout")) : null;
+
   const head = (
     <header className="view-head">
       <h1 id={titleId} tabIndex={-1}>
@@ -799,9 +843,11 @@ export function DocumentsView({
           }}
         />
       )}
-      {failure !== null && answered !== null && data === answered.document && answered.archive !== archive && (
-        <p className="documents-shown">{answered.archive ? t("documents.lastWith") : t("documents.lastWithout")}</p>
-      )}
+      {/* A polite live region mounted from the start, so the line is announced when its words appear
+          (docs/features/release-tail.md RT7); empty, it takes no place in the view's grid (app.css). */}
+      <p className="documents-shown" aria-live="polite">
+        {lastShown}
+      </p>
       {body}
       {data !== undefined && data.notes.length > 0 && (
         <ul className="note-list" aria-label={t("documents.notes")}>

@@ -3080,6 +3080,7 @@ export const ru: Catalog = {
     group: { accepted: "Принятые", superseded: "Заменённые", rejected: "Отклонённые", other: "Прочие" },
     decisionsOf: "Решения по документу {{title}}",
     behindMark: "Отстаёт от решения",
+    behindUnknown: { mark: "Неизвестно", described: "Отстаёт ли от решения:", title: "Отстаёт ли от решения: неизвестно" },
     noDate: "Без даты",
     committed: "В коммите {{at}}",
     inSection: "Раздел {{section}}",

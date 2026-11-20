@@ -6,6 +6,13 @@
 //! validation of prefixes, widths, shapes and aliases, and `file:line`
 //! errors of `IdScheme::from_toml`.
 //!
+//! docs/features/release-tail.md RT9 and RT10's Rust half: rule (7) takes
+//! a `#ID` and its `@rev` right after a guide citation's ID into the
+//! citation, in one pass; one table of odd texts, `fixtures/
+//! guide-citations.json`, byte for byte the UI's `ui/src/markdown/
+//! guide-citations.json`, is read here as the UI's `markdown/guide` test
+//! reads it.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 use specengine_core::IdSchemeToml;
@@ -717,26 +724,322 @@ fn rule_seven_drops_the_guides_citations_alone() {
     }
 }
 
-/// Rule (7), a documented edge: `guide:x#R-1#S-2` drops `R-1` (the
-/// citation's ID) and keeps `S-2` as a bare reference, no section of
-/// anything: `#` joins only after a reference, and `R-1` is none. Pinned as
-/// the grammar answers today.
+/// One reference as the table and the RT9 rows read it: the ID, its
+/// section, its revision and its span.
+type Read = (String, Option<String>, Option<u32>, Option<Span>);
+
+fn read_all(text: &str, scheme: &IdScheme) -> Vec<Read> {
+    scan(text, 0, scheme)
+        .into_iter()
+        .map(|found| {
+            let reference = found.reference;
+            assert_eq!(
+                (reference.scope.as_deref(), reference.project.as_deref()),
+                (None, None),
+                "no qualifier in {text:?}"
+            );
+            (
+                reference.id,
+                reference.section,
+                reference.rev,
+                reference.span,
+            )
+        })
+        .collect()
+}
+
+fn bare(id: &str, start: usize) -> Read {
+    (
+        id.to_owned(),
+        None,
+        None,
+        Some(Span::new(start, start + id.len())),
+    )
+}
+
+/// docs/features/release-tail.md RT9 (a), the decided answer to rule (7)'s
+/// edge (`specengine-guide` pinned `S-2` bare): when rule (7) fires, a `#ID`
+/// and its `@rev` right after the citation's ID are part of the citation,
+/// so `guide:x#R-1#S-2` and `guide:x#R-1#S-2@3` give no reference, `#ID`
+/// then `@rev` joining as (3) joins them to a reference. The tail is
+/// consumed only when rule (7) fires: `R-1#S-2`
+/// is still `R-1`, section `S-2`; `.guide:x#R-1#S-2` (no citation, rule
+/// (5)'s left boundary) is `R-1` with its section; a `#ID` after a space
+/// (`guide:x#R-1 #S-2`) or a word after one (`guide:x#R-1 S-2`) keeps its
+/// meaning, `S-2` bare. One `#ID` joins, as to a reference: a second one,
+/// `guide:x#R-1#S-2#S-3`, reads `S-3` as `R-1#S-2#S-3` does. M: the skip
+/// removed (the scan resuming right after the citation's ID).
 #[test]
-fn rule_seven_edge_a_second_hash_after_a_citation() {
+fn rt09_the_citations_tail_is_no_reference() {
     let scheme = guide_scheme();
-    let found = scan("guide:x#R-1#S-2", 0, &scheme);
+    for dropped in [
+        "guide:x#R-1",
+        "guide:x#R-1#S-2",
+        "guide:x#R-1#S-2@3",
+        "guide:x#R-1@2",
+        "See guide:records#R-12#S-2@3 for the rule.",
+        "(guide:x#R-1#S-2)",
+        "[[guide:x#R-1#S-2|the rule]]",
+        "guide:x#R-1#S-2.",
+    ] {
+        assert_eq!(
+            read_all(dropped, &scheme),
+            Vec::<Read>::new(),
+            "{dropped:?}"
+        );
+    }
     assert_eq!(
-        found
-            .iter()
-            .map(|found| found.reference.id.as_str())
-            .collect::<Vec<_>>(),
-        ["S-2"],
-        "{found:?}"
+        read_all("R-1#S-2", &scheme),
+        [(
+            "R-1".to_owned(),
+            Some("S-2".to_owned()),
+            None,
+            Some(Span::new(0, "R-1#S-2".len()))
+        )],
+        "a plain reference's section"
     );
-    let reference = &found[0].reference;
-    assert_eq!(reference.section, None);
-    assert_eq!(reference.scope, None);
-    assert_eq!(reference.project, None);
-    let start = "guide:x#R-1#".len();
-    assert_eq!(reference.span, Some(Span::new(start, start + "S-2".len())));
+    assert_eq!(
+        read_all(".guide:x#R-1#S-2@3", &scheme),
+        [(
+            "R-1".to_owned(),
+            Some("S-2".to_owned()),
+            Some(3),
+            Some(Span::new(".guide:x#".len(), ".guide:x#R-1#S-2@3".len()))
+        )],
+        "no citation: the reference keeps its section and revision"
+    );
+    for (text, id) in [
+        ("guide:x#R-1 S-2", "S-2"),
+        ("guide:x#R-1 #S-2", "S-2"),
+        ("guide:x#R-1, S-2", "S-2"),
+        ("guide:x#R-1#S-2 S-2", "S-2"),
+    ] {
+        let start = text.rfind(id).expect("the kept ID");
+        assert_eq!(read_all(text, &scheme), [bare(id, start)], "{text:?}");
+    }
+    // One `#ID` joins, as to a reference: the developer's probe of
+    // 2026-11-20, pinned beside the plain reference it mirrors.
+    let plain = read_all("R-1#S-2#S-3", &scheme);
+    assert_eq!(
+        plain.iter().map(|read| read.0.as_str()).collect::<Vec<_>>(),
+        ["R-1", "S-3"],
+        "premise: a plain reference's second `#`: {plain:?}"
+    );
+    assert_eq!(
+        read_all("guide:x#R-1#S-2#S-3", &scheme),
+        [bare("S-3", "guide:x#R-1#S-2#".len())]
+    );
+
+    // The tail is read by shape, not by the project's `[ids]`: with `OLD`
+    // an `aliases_from` prefix of `S`, `guide:x#R-1#OLD-5` (and a prefix no
+    // entry knows, `ZZZ`) gives no reference, while the plain `R-1#OLD-5`
+    // keeps rule (3)'s answer: `R-1` bare (a legacy alias joins as no
+    // section), then `OLD-5`, the alias of `S`.
+    let aliased = IdScheme::new(vec![
+        PrefixSpec::number("R", "requirement", 2),
+        PrefixSpec::number("S", "section", 1).with_aliases(["OLD"]),
+    ])
+    .expect("valid scheme");
+    for dropped in [
+        "guide:x#R-1#OLD-5",
+        "guide:x#R-1#OLD-5@2",
+        "guide:x#R-1#ZZZ-5",
+    ] {
+        assert_eq!(
+            read_all(dropped, &aliased),
+            Vec::<Read>::new(),
+            "{dropped:?}"
+        );
+    }
+    let plain = scan("R-1#OLD-5", 0, &aliased);
+    assert_eq!(
+        plain
+            .iter()
+            .map(|found| {
+                let reference = &found.reference;
+                (
+                    reference.id.as_str(),
+                    reference.section.as_deref(),
+                    reference.alias_of.as_deref(),
+                    reference.span,
+                )
+            })
+            .collect::<Vec<_>>(),
+        [
+            ("R-1", None, None, Some(Span::new(0, 3))),
+            ("OLD-5", None, Some("S"), Some(Span::new(4, 9))),
+        ],
+        "the plain reference's rule (3) answer"
+    );
+}
+
+/// One adversarial input of [`rt09_the_scan_stays_one_pass`]: its label,
+/// its text at `n` copies, and the references found in it.
+type Adversary = (&'static str, fn(usize) -> String, fn(usize) -> usize);
+
+/// RT9: "The scan stays one pass". Three adversarial shapes, each at 1 000
+/// and at 16 000 copies: citations with their tails, one citation whose ID
+/// runs on for the whole input, and one citation followed by sections. The
+/// larger input costs under 64 times the smaller (linear is 16, a rescan
+/// per citation 256: four times of room either side, for a loaded
+/// machine), the smaller the best of seven and floored at 200 us, the
+/// larger passing in one of three tries; the answer is the expected count
+/// (after the citation's own `#S-2`, each `S-2#S-2` is one reference). M:
+/// the tail read by a rescan from the text's start.
+#[test]
+fn rt09_the_scan_stays_one_pass() {
+    let scheme = guide_scheme();
+    let shapes: [Adversary; 3] = [
+        (
+            "citations with tails",
+            |n| "guide:x#R-1#S-2@3 ".repeat(n),
+            |_| 0,
+        ),
+        (
+            "one ID running on",
+            |n| format!("guide:x#R{}", "-1".repeat(n)),
+            |_| 0,
+        ),
+        (
+            "one citation, then sections",
+            |n| format!("guide:x#R-1{}", "#S-2".repeat(n)),
+            |n| n / 2,
+        ),
+    ];
+    let time = |text: &str| {
+        let at = std::time::Instant::now();
+        let found = scan(text, 0, &scheme).len();
+        (at.elapsed(), found)
+    };
+    for (label, make, count) in shapes {
+        let small_text = make(1_000);
+        let (small, found) = (0..7).map(|_| time(&small_text)).min().expect("seven runs");
+        assert_eq!(found, count(1_000), "{label}: 1 000");
+        let bound = small.max(std::time::Duration::from_micros(200)) * 64;
+        let large_text = make(16_000);
+        let mut tries = Vec::new();
+        for _ in 0..3 {
+            let (took, found) = time(&large_text);
+            assert_eq!(found, count(16_000), "{label}: 16 000");
+            tries.push(took);
+            if took < bound {
+                break;
+            }
+        }
+        assert!(
+            tries.last().is_some_and(|took| *took < bound),
+            "{label}: 16 times the input took {tries:?} against {small:?}"
+        );
+    }
+}
+
+/// The shared table's file, the model's copy (RT10).
+fn shared_table() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/guide-citations.json")
+}
+
+/// The UI's copy, read by its `markdown/guide` test through Vite's `?raw`.
+fn ui_table() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../ui/src/markdown/guide-citations.json")
+}
+
+/// docs/features/release-tail.md RT10: the UI's tests read only inside
+/// `ui/`, so the table lives at `ui/src/markdown/guide-citations.json` and
+/// the model's copy, `fixtures/guide-citations.json`, is the same bytes.
+/// M: a row edited on one side.
+#[test]
+fn rt10_the_two_copies_of_the_table_are_one() {
+    let model = std::fs::read(shared_table()).expect("fixtures/guide-citations.json");
+    let ui = std::fs::read(ui_table()).expect("ui/src/markdown/guide-citations.json");
+    assert!(
+        model == ui,
+        "fixtures/guide-citations.json and ui/src/markdown/guide-citations.json differ"
+    );
+}
+
+/// RT10 (b), the Rust half: every row of the shared table `{text, refs,
+/// guide_link}` scans to exactly its `refs` (IDs, in order, under `[ids]` R
+/// and S), and the row's `guide_link` agrees with the grammar: where Rust
+/// keeps `R-1` a reference the UI links no guide, and where Rust reads the
+/// citation `guide:x#R-1` (R-1 no reference) standing alone on its right
+/// (the end, or a char rule (4) ends an ID at that no `#ID` or `@rev`
+/// follows) the UI links it. The table covers `#`, `@`, `.`, `:`, `/`, `-`
+/// and `(` before `guide`, and the RT9 forms, each text once. M: the old
+/// left boundary (a row's `refs` no longer what Rust reads).
+#[test]
+fn rt10_both_sides_read_the_table_alike() {
+    let scheme = guide_scheme();
+    let text = std::fs::read_to_string(shared_table()).expect("the shared table");
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&text).expect("a JSON list");
+    let mut seen = std::collections::BTreeSet::new();
+    let mut linked = 0;
+    let mut kept = 0;
+    for row in &rows {
+        let object = row.as_object().expect("a row is an object");
+        assert_eq!(
+            object.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["guide_link", "refs", "text"],
+            "exactly {{text, refs, guide_link}}: {row}"
+        );
+        let text = row["text"].as_str().expect("text");
+        let refs: Vec<&str> = row["refs"]
+            .as_array()
+            .expect("refs")
+            .iter()
+            .map(|id| id.as_str().expect("an ID"))
+            .collect();
+        let link = row["guide_link"].as_bool().expect("guide_link");
+        assert!(seen.insert(text.to_owned()), "{text:?} twice");
+        let read: Vec<String> = scan(text, 0, &scheme)
+            .into_iter()
+            .map(|found| found.reference.id)
+            .collect();
+        assert_eq!(read, refs, "{text:?}: the IDs Rust keeps");
+        if refs.contains(&"R-1") {
+            kept += 1;
+            assert!(
+                !link,
+                "{text:?}: R-1 a reference, yet the UI links the guide"
+            );
+        }
+        if let Some(at) = text.find("guide:x#R-1") {
+            let after = &text[at + "guide:x#R-1".len()..];
+            let mut chars = after.chars();
+            let alone = match chars.next() {
+                None => true,
+                Some(c) if c.is_alphanumeric() || c == '_' => false,
+                Some('-') | Some('#') => !chars.next().is_some_and(char::is_alphanumeric),
+                Some('@') => !chars.next().is_some_and(|c| c.is_ascii_digit()),
+                Some(_) => true,
+            };
+            if !refs.contains(&"R-1") && alone {
+                linked += 1;
+                assert!(
+                    link,
+                    "{text:?}: a citation standing alone, yet no guide link"
+                );
+            }
+        }
+    }
+    assert!(
+        kept > 0 && linked > 0,
+        "both kinds of row: {kept} kept, {linked} linked"
+    );
+    for before in ['#', '@', '.', ':', '/', '-', '('] {
+        assert!(
+            seen.iter()
+                .any(|text| text.starts_with(&format!("{before}guide:x#R-1"))),
+            "a row with {before:?} before guide"
+        );
+    }
+    for form in [
+        "guide:x#R-1",
+        "guide:x#R-1#S-2",
+        "guide:x#R-1#S-2@3",
+        "guide:x#R-1 S-2",
+        "R-1#S-2",
+    ] {
+        assert!(seen.contains(form), "the RT9 form {form:?}");
+    }
 }

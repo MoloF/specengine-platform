@@ -2899,6 +2899,8 @@ export const en = {
     group: { accepted: "Accepted", superseded: "Superseded", rejected: "Rejected", other: "Other" },
     decisionsOf: "Decisions of {{title}}",
     behindMark: "Behind its decision",
+    // `behind: null`: whether the row is behind its decision is not known (docs/features/release-tail.md RT6); `described` is read before the mark by a screen reader, `title` the whole phrase on hover.
+    behindUnknown: { mark: "Not known", described: "Behind its decision:", title: "Behind its decision: not known" },
     noDate: "No date",
     committed: "Committed {{at}}",
     inSection: "Section {{section}}",

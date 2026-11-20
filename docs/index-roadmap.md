@@ -47,5 +47,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0109.md](roadmap/RM-0109.md) code-languages (Phase 7, pool, on a trigger): bind code in a second language · crates/specengine-code, crates/specengine-core · draft
 - [docs/roadmap/RM-0110.md](roadmap/RM-0110.md) config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0126.md](roadmap/RM-0126.md) git-reads (deferred from 0.47.1): in-process git reads on the write path · crates/specengine-store, crates/specengine-cli · draft
-- [docs/roadmap/RM-0131.md](roadmap/RM-0131.md) door-reset-totp (pool): hub-admin reset of a person with no TOTP reports a TOTP left · scripts · draft
-- [docs/roadmap/RM-0132.md](roadmap/RM-0132.md) write-memory (pool): the daemon's memory grows under agent writes · crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-eval · draft
+- [docs/roadmap/RM-0132.md](roadmap/RM-0132.md) write-memory (pool): the daemon's memory grows under agent writes · crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-eval · in-progress

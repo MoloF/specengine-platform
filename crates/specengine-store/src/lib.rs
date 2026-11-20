@@ -319,7 +319,13 @@ pub use worktree::{
 /// judges the summarising one again (`summary-stale`); no table, no
 /// column. An unchanged file is re-parsed only on a new stamp
 /// (`docs/features/specengine-guide.md` "Front-matter `summarises`").
-pub const INDEX_FORMAT: u32 = 20;
+///
+/// 21: the model grammar's rule (7) takes the `#ID` and `@rev` right after
+/// a guide citation's ID into the citation, so `guide:x#R-1#S-2` stores no
+/// reference to `S-2` and a stored reference set changes; no table, no
+/// column. An unchanged file is re-parsed only on a new stamp
+/// (`docs/features/release-tail.md` "The grammar (RT9, RT10)").
+pub const INDEX_FORMAT: u32 = 21;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

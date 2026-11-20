@@ -901,10 +901,20 @@ delete_passkeys() {
     door_run "" storage user webauthn delete --all --config "$door_conf" --sqlite.path "$door_db" -- "$1"
 }
 
-# The login `$1`'s TOTP deleted; `--` before the login (R7).
+# The pinned door's answer to a TOTP delete of the login `$1` who has none
+# (release-tail RT1): exit 1 and this line, the login filled in.
+no_totp_said() {
+    printf '%s' "Error: failed to delete TOTP configuration for user '$1': no TOTP configuration for user"
+}
+
+# The login `$1`'s TOTP deleted, or none to delete; `--` before the login
+# (R7). "None" is that exact answer for that login, as EMPTY_EXPORT is read:
+# any other exit, message or login is a failure.
 delete_totp() {
     stage=totp
-    door_run "" storage user totp delete --config "$door_conf" --sqlite.path "$door_db" -- "$1"
+    door_run "" storage user totp delete --config "$door_conf" --sqlite.path "$door_db" -- "$1" &&
+        return 0
+    [ "$door_status" -eq 1 ] && [ "$(door_said)" = "$(no_totp_said "$1")" ]
 }
 
 # ------------------------------------------------------------------ the writers
@@ -1155,7 +1165,8 @@ act_enable() {
 
 # R3: the hash first, whose failure changes nothing; then both deletes, each
 # run whatever the other answered, a failed one a warning quoting the door
-# and a `-left` in the log; then the password, written whatever they did.
+# and a `-left` in the log (a TOTP the door says never existed is no
+# failure); then the password, written whatever they did.
 act_reset() {
     one_login "$@"
     need_dir "$users_dir" ./authelia/users

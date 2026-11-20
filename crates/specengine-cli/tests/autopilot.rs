@@ -24,7 +24,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use auto_common::{Auto, utc};
+use auto_common::{Auto, iso_of};
 use common::repository_root;
 use runner::{Bench, finish, script, shells};
 use serde_json::Value;
@@ -342,8 +342,27 @@ fn rn4_stop_during_a_held_leg() {
     bench.assert_permissions();
 }
 
-/// RN4: `--until` two seconds ahead: no leg starts at or after it; exit 0
-/// `until`.
+/// The wall clock's epoch second, as the runner's `date -u +%s` reads it.
+fn epoch_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("after the epoch")
+        .as_secs() as i64
+}
+
+/// How far ahead of the one clock reading `rn4_until`'s `--until` lies: room
+/// for the runner's start and its first decision, under full load, to fall
+/// before it (docs/features/release-tail.md RT5).
+const UNTIL_AHEAD: i64 = 8;
+
+/// RN4, as docs/features/release-tail.md RT5 makes it deterministic, in
+/// `rn4_stop_during_a_held_leg`'s shape: one clock reading gives `--until
+/// <TIME>` and its epoch, [`UNTIL_AHEAD`] seconds on; the first leg holds;
+/// the test waits for `held`, then for the wall clock past the epoch, then
+/// releases, so the runner's next decision falls after `--until` whatever
+/// the load. Exactly one call; exit 0 with `autopilot: until <TIME>`;
+/// nothing landed; the held leg ran to its end (the shim's `end` mark, its
+/// plan recorded). M: the `past_until` check removed from the leg branch.
 #[test]
 fn rn4_until() {
     let bench = bench("rn4-until");
@@ -351,31 +370,64 @@ fn rn4_until() {
     let b = bench.make_task(&["R-04"], "Second");
     let c = bench.make_task(&["R-05"], "Third");
     bench.pack(&[&a, &b, &c], &[]);
-    let until = utc(2);
-    let until_epoch = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
-        + 2;
-    let run = bench.run(
-        "/bin/sh",
-        &args(&bench, &["--lanes", "1", "--until", &until]),
-        LIMIT,
-    );
+    bench.scenario(&[(a.as_str(), "1", "ok", "yes", 0, true)]);
+    let until_epoch = epoch_now() + UNTIL_AHEAD;
+    let until = iso_of(until_epoch);
+    let runner_args = args(&bench, &["--lanes", "1", "--until", &until]);
+    let child = bench.spawn("/bin/sh", &runner_args, None);
+    let waited = std::time::Instant::now();
+    while !fs::read_to_string(bench.log.join("events"))
+        .unwrap_or_default()
+        .contains("held ")
+    {
+        if waited.elapsed() > Duration::from_secs(60) {
+            bench.release();
+            let run = finish(child, "/bin/sh", &runner_args, LIMIT);
+            panic!(
+                "no leg held within 60 s (the first decision past --until {until}?): {}",
+                run.show()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // The runner's clock is `date -u +%s`: whole seconds, past the epoch
+    // once the second `until_epoch` has begun.
+    while epoch_now() < until_epoch {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    bench.release();
+    let run = finish(child, "/bin/sh", &runner_args, LIMIT);
     assert_eq!(run.code, 0, "{}", run.show());
     assert!(
         run.stderr.contains(&format!("autopilot: until {until}")),
         "{}",
         run.show()
     );
-    for call in bench.calls() {
-        assert!(
-            call.at < until_epoch,
-            "a leg at {} past {until_epoch}",
-            call.at
-        );
-    }
-    assert!(landed(&bench).is_empty());
+    let calls = bench.calls();
+    assert_eq!(calls.len(), 1, "no leg after --until: {calls:?}");
+    assert!(
+        calls[0].argv.iter().any(|arg| arg.contains(&a)),
+        "the one leg is {a}'s: {calls:?}"
+    );
+    assert!(landed(&bench).is_empty(), "nothing landed: {}", run.show());
+    let ended: Vec<_> = bench
+        .marks()
+        .into_iter()
+        .filter(|mark| !mark.start && mark.n == calls[0].n)
+        .collect();
+    assert_eq!(
+        ended.len(),
+        1,
+        "the held leg ran to its end: {:?}",
+        bench.marks()
+    );
+    assert_ne!(
+        bench.status(&a),
+        "draft",
+        "the held leg's plan was recorded"
+    );
+    assert_eq!(bench.status(&b), "draft");
+    assert_eq!(bench.status(&c), "draft");
 }
 
 /// RN4: a usage limit (`rate_limit_event` rejected, its `resetsAt` 58 s

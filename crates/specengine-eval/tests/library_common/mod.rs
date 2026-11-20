@@ -363,6 +363,18 @@ impl Hub {
     /// The hub over `root` under `home` at `--slow-ms 0`, its self-kill
     /// alarm `alarm_secs` away, until its `listening` line.
     pub fn start(root: &Path, home: &Path, git: &Sandbox, alarm_secs: u64) -> Self {
+        Self::start_with(root, home, git, alarm_secs, &[])
+    }
+
+    /// As [`Hub::start`], the daemon's environment given `extra` besides
+    /// (`write_soak.rs`'s heap attribution: `MallocStackLogging`).
+    pub fn start_with(
+        root: &Path,
+        home: &Path,
+        git: &Sandbox,
+        alarm_secs: u64,
+        extra: &[(String, String)],
+    ) -> Self {
         fs::create_dir_all(home).expect("the hub's home");
         let program = release_bin("specengine-http");
         let path = std::env::join_paths([
@@ -381,6 +393,7 @@ impl Hub {
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_ALLOW_PROTOCOL", "file")
+            .envs(extra.iter().map(|(name, value)| (name, value)))
             .arg("-e")
             .arg(format!(
                 "alarm {alarm_secs}; exec @ARGV or die \"exec: $!\""

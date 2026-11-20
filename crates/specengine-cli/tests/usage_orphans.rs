@@ -945,9 +945,10 @@ fn uo7_nothing_is_stored() {
 
     // 18 since docs/features/doc-library.md (the typed `tags`), 19 since
     // docs/features/department-practices.md (the `disciplines` table), 20
-    // since docs/features/specengine-guide.md (the typed `summarises`);
+    // since docs/features/specengine-guide.md (the typed `summarises`), 21
+    // since docs/features/release-tail.md (rule (7)'s citation tail);
     // usage-orphans itself moved no format.
-    assert_eq!(specengine_store::INDEX_FORMAT, 20, "the index format");
+    assert_eq!(specengine_store::INDEX_FORMAT, 21, "the index format");
     assert_eq!(
         specengine_store::QUEUE_SCHEMA_VERSION,
         14,

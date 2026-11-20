@@ -12,10 +12,15 @@ import { stubClient } from "../test/stubClient";
 
 /** The text of each `@media (<query>)` block, braces matched. */
 function mediaBlocks(query: string): string {
+  return blocksOf(`(${query})`);
+}
+
+/** The text of each block whose `@media` prelude starts with `prelude`, braces matched. */
+function blocksOf(prelude: string): string {
   const found: string[] = [];
   let from = 0;
   for (;;) {
-    const at = appCss.indexOf(`@media (${query})`, from);
+    const at = appCss.indexOf(`@media ${prelude}`, from);
     if (at < 0) {
       return found.join("\n");
     }
@@ -111,5 +116,19 @@ describe("the one-line header (DF-14)", () => {
     const wide = mediaBlocks("min-width: 68.75rem");
     expect(ruleOf(".app-header", wide)).toMatch(/flex-wrap:\s*nowrap;/);
     expect(ruleOf(".app-header", wide)).not.toMatch(/flex-wrap:\s*wrap;/);
+  });
+
+  // RT11 of docs/features/release-tail.md: below the one-row width the header wraps to two rows, and a
+  // rule's heading clears both. That query is the exact complement of `(min-width: 68.75rem)`, written
+  // `not all and (...)` (Safari before 16.4 drops `(width < ...)`): no width between 68.74rem and
+  // 68.75rem takes neither. M: `max-width: 68.74rem` restored.
+  it("takes the two-row scroll margin under the exact complement of the one-row query, no gap between them", () => {
+    const css = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).not.toMatch(/68\.74rem/);
+    expect(css).not.toMatch(/max-width:\s*68\.7/);
+    const twoRows = blocksOf("not all and (min-width: 68.75rem)");
+    expect(ruleOf(".markdown .md-anchor > .md-heading", twoRows)).toMatch(/scroll-margin-top:\s*calc\(2 \* var\(--nav-height\) \+ var\(--space-100\)\);/);
+    // The one-row query it complements is the header's own.
+    expect(ruleOf(".app-header", mediaBlocks("min-width: 68.75rem"))).toMatch(/flex-wrap:\s*nowrap;/);
   });
 });

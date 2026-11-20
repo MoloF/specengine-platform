@@ -19,7 +19,8 @@
 //!   without them (M, named: raising the finding to an error).
 //!
 //! `TYPED_KEYS` 34 and `CHECK_CODES` 41 are core `guide_keys.rs`; `INDEX_FORMAT`
-//! 20 the store's `format.rs` and this crate's `bundle_config.rs`.
+//! 21 (since docs/features/release-tail.md) the store's `format.rs` and this
+//! crate's `bundle_config.rs`.
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 

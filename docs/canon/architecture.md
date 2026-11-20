@@ -8,13 +8,13 @@ reviewed: 2026-11-20
 
 # SpecEngine architecture rules
 
-The rules all code is written by, each with the ADRs holding its reasons; a rule changes only through a new decision in the same change. Its detail is one step away, in the document its section names (the code layer's: `architecture-code.md`); the design: `docs/specs/specengine-platform/`.
+The rules all code is written by, each with its ADRs; a rule changes only through a new decision in the same change. Its detail is in the document its section names (the code layer's: `architecture-code.md`); the design: `docs/specs/specengine-platform/`.
 
 <a id="storage"></a>
 ## Storage
 
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
-- The operational database lives outside the repository, in the data directory (`serve.md`). Git will receive the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `queue-backup.md`). ADR-0003.
+- The operational database lives outside the repository, in the data directory (`serve.md`). Git receives the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `queue-backup.md`). ADR-0003.
 - A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position is computed per read, never stored, its `depends_on` chain ordering work, never gating it (`spec-roadmap.md`). ADR-0052.
 
 <a id="layout"></a>
@@ -31,9 +31,9 @@ Directories come from `[paths]`, so a consumer's `docs/` stays intact, each defa
 
 An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`proposal-apply.md`). Spec files are written only by `apply_proposal` once a person confirms: on a terminal, one `[y/N]` each, or on a hub alone under a login `[team]` entitles, one click per item; or, under a project's committed `[auto]` rule, by SpecEngine's code alone, a `Delegated-by:` commit each: a pack's covered task-bound `update` and `create` as its task lands, a hub's sole owner's over `/mcp` (`auto-mode.md`, `hub-auto.md`). A hub's `--push` sync merges others' commits, `spec.lock` too, never rebasing and authoring neither (`hub-git.md`); else the UI and the owner's MCP form only stage, and no tool takes a choice from an agent (`decision-staging.md`, `hub-confirm.md`, `review-form.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038, ADR-0054, ADR-0061, ADR-0064, ADR-0081, ADR-0082.
 
-A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue; SpecEngine the `index = true` entry's outputs, by `export index` or in its own commit: `proposal-outputs.md`; a project's generator its own). ADR-0003, ADR-0013, ADR-0022, ADR-0062, ADR-0064; owner, Q3, 2026-09-30.
+A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue; SpecEngine the index entry's outputs: `proposal-outputs.md`; a project's generator its own). ADR-0003, ADR-0013, ADR-0022, ADR-0062, ADR-0064; owner, Q3, 2026-09-30.
 
-`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the blobs the owner accepted, never the current tree; never otherwise `apply_proposal`, nor an MCP tool, a role, a rule, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
+`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the owner's accepted blobs alone; never otherwise `apply_proposal`, nor an MCP tool, a role, a rule, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 <a id="control"></a>
 ## Control and no blocking
@@ -59,7 +59,7 @@ EARS ("WHEN … the system SHALL …") is a suggested rule template, not a check
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `architecture-code.md#health`), what starts and ends a flow (`[flow]`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `architecture-code.md#health`), what starts and ends a flow (`[flow]`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. The core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
 
 Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` keeps its meaning and cycle warning (`flow-links.md`). ADR-0055.
 
@@ -94,10 +94,15 @@ The UI reads, stages or confirms decisions (`#apply`) and writes cards, their qu
 
 A project's own generators (schemas, registries) stay in the project; their output is class generated. Documentation checks move into `spec check` once it reaches parity with the project's checks. ADR-0013.
 
+<a id="stability"></a>
+## Stability
+
+A crash, a hang or a leak is a critical defect, above any logic bug; long-running work is soaked against written budgets (`soak-runs.md`). ADR-0086.
+
 <a id="documentation-convention"></a>
 ## Documentation convention — mandatory for every project
 
-The convention `documentation-system.md` is built in, not an option: it applies to every project under SpecEngine and this repository, enforced here by `spec check` through roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
+The convention `documentation-system.md` is built in: it applies to every project under SpecEngine and this repository, enforced here by `spec check` (`docs/README.md` "Enforcement"). ADR-0022.
 
 <a id="language"></a>
 ## Repository language

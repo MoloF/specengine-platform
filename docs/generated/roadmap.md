@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 37 open, 95 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
+roadmap: 36 open, 97 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -31,9 +31,9 @@ roadmap: 37 open, 95 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 une
 
 ## release v5 | 0 open, 23 done | 0 days
 
-## pool | 30 open, 21 done | 7-12 days, 26 unestimated
+## pool | 29 open, 23 done | 7-12 days, 25 unestimated
 
-- [RM-0132](../roadmap/RM-0132.md) | write-memory (pool): the daemon's memory grows under agent writes | draft | must | -
+- [RM-0132](../roadmap/RM-0132.md) | write-memory (pool): the daemon's memory grows under agent writes | in-progress | must | -
 - [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | -
 - [RM-0040](../roadmap/RM-0040.md) | check-parity: what pilot A's own docs check still does beside spec check | draft | should | -
 - [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch | draft | should | -
@@ -59,7 +59,6 @@ roadmap: 37 open, 95 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 une
 - [RM-0109](../roadmap/RM-0109.md) | code-languages (Phase 7, pool, on a trigger): bind code in a second language | draft | could | -
 - [RM-0110](../roadmap/RM-0110.md) | config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal | draft | could | -
 - [RM-0126](../roadmap/RM-0126.md) | git-reads (deferred from 0.47.1): in-process git reads on the write path | draft | could | -
-- [RM-0131](../roadmap/RM-0131.md) | door-reset-totp (pool): hub-admin reset of a person with no TOTP reports a TOTP left | draft | could | -
 - [RM-0020](../roadmap/RM-0020.md) | code-index-speed (6c): a faster code index | draft | - | -
 - [RM-0022](../roadmap/RM-0022.md) | layer-c-macros (11b): items under attribute macros keep their monikers | draft | - | -
 - [RM-0023](../roadmap/RM-0023.md) | layer-c-registration (11c): what the schedule dump cannot give | draft | - | - | waits on RM-0021

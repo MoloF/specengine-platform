@@ -17,7 +17,8 @@
 //! - DP3: on the scene `ghost.md` gives one warning naming `puppetry`; on
 //!   spec-a with the same file, none; with a broken `[card]`, `card-config`
 //!   and no `practice-discipline`. M: judging under `PLAIN_FLOW`.
-//! - DP4: `INDEX_FORMAT` 19, the `disciplines` table holds the kept
+//! - DP4: `INDEX_FORMAT` 19 (21 today, since docs/features/release-tail.md),
+//!   the `disciplines` table holds the kept
 //!   entries; an index left as a format-18 build leaves it (no table, no
 //!   `fields.disciplines`, stamp 18) serves them after this build's first
 //!   read, no file touched. M: the format left at 18. The literal form (a
@@ -506,13 +507,14 @@ const KEPT: &str = "docs/spec/practices/art/2025-photoreal.md|art\n\
                     docs/spec/practices/shared/naming.md|development\n";
 
 /// DP4: `INDEX_FORMAT` 19 (20 since docs/features/specengine-guide.md, the
-/// typed `summarises`); after `spec index` the table holds [`KEPT`], each
-/// file's `ord` distinct.
+/// typed `summarises`; 21 since docs/features/release-tail.md, rule (7)'s
+/// citation tail); after `spec index` the table holds [`KEPT`], each file's
+/// `ord` distinct.
 #[test]
 fn dp4_the_table_holds_the_kept_entries() {
     assert_eq!(
         specengine_store::INDEX_FORMAT,
-        20,
+        21,
         "M: the format left at 18"
     );
     let scene = Scene::files("dp4-table", false);
@@ -529,8 +531,8 @@ fn dp4_the_table_holds_the_kept_entries() {
     );
     assert_eq!(
         sql(&db, "SELECT value FROM index_meta WHERE key = 'format';"),
-        "20\n",
-        "the stored stamp is the build's (20 since specengine-guide)"
+        "21\n",
+        "the stored stamp is the build's (20 since specengine-guide, 21 since release-tail)"
     );
 }
 

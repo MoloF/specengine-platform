@@ -16,9 +16,13 @@
 //!   from the terminal" and usage), and with `--random` the lines `Random
 //!   Password: <value>` (of `--random.characters`, `--random.length` long)
 //!   and `Digest: <d>`. A control file lists the calls that exit 1
-//!   (`fail-at`; a delete then answers a recorded "nothing to delete" line),
-//!   answer a digest off its shape (`bad-at`) or wait for a release
-//!   (`hold-at`); `password.<n>` replaces call n's `Random Password:` line;
+//!   (`fail-at`; a passkey delete then answers an invented failure, a TOTP
+//!   delete the pinned door's answer for a login with no TOTP, exit 1, as
+//!   docs/features/release-tail.md "The door's answer" records it, its
+//!   message, exit and login bent by `totp-said`, `totp-exit` and
+//!   `totp-login`), answer a digest off its shape (`bad-at`) or wait for a
+//!   release (`hold-at`); `password.<n>` replaces call n's `Random Password:`
+//!   line;
 //! - a `base64` that wraps at 76 columns, as busybox's in the pinned image
 //!   does ("`mcp rotate`'s output"); macOS's does not wrap, so without it a
 //!   missing newline removal would pass on the laptop;
@@ -74,6 +78,17 @@
 //! beside OP11, whose harness (the stub and the real `hub-admin` under
 //! `hub-ops`) it needs; HB4 is `tests/deploy.rs`, HB7 and HB8
 //! `tests/deploy_ops.rs`. HB5 (`hb05_*`, `#[ignore]`) needs Docker.
+//!
+//! docs/features/release-tail.md (RM-0131) RT1-RT3: `reset` reads the pinned
+//! door's one answer for a login with no TOTP (exit 1, `Error: failed to
+//! delete TOTP configuration for user '<login>': no TOTP configuration for
+//! user`, that login) as nothing to delete, and every other failure as
+//! before. The stub's delete answers are the door's as recorded on
+//! 2026-11-20: a passkey delete on nothing exits 0, so a failing one answers
+//! an invented message claiming no "nothing to delete"; AC19's failing-TOTP
+//! cases take another message (hub-accounts.md AC19, amended 2026-11-20).
+//! RT3 (`rt03_*`, `#[ignore]`) is HB5's harness on the pinned image: an
+//! owner's gate, Docker being off on the laptop.
 
 #![cfg(unix)]
 
@@ -107,12 +122,27 @@ const REFUSAL: &str = "hub-admin: ";
 /// number in three digits (53 characters in all, the MCP file's shape).
 const BCRYPT_FILL: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX";
 
-/// The stub's answer, on stderr with exit 1, when a passkey delete fails:
-/// "nothing to delete", from memory until VF1 records the door's (AC19).
-const PASSKEYS_ANSWER: &str = "Error: the user has no WebAuthn credentials to delete";
+/// The stub's answer, on stderr with exit 1, when a passkey delete fails.
+/// Invented, and claiming no "nothing to delete": the pinned door's
+/// `webauthn delete --all` of a login with none exits 0
+/// (docs/features/release-tail.md "The door's answer", HB5's run).
+const PASSKEYS_ANSWER: &str = "Error: the stub fails the passkey delete";
 
-/// The same for a TOTP delete.
-const TOTP_ANSWER: &str = "Error: the user has no TOTP configuration to delete";
+/// The pinned door's answer, on stderr with exit 1, to `storage user totp
+/// delete` of a login with no TOTP, `<login>` that login
+/// (docs/features/release-tail.md "The door's answer", recorded 2026-11-20
+/// on `authelia/authelia` 4.39.28). The stub's TOTP delete in `fail-at`
+/// answers it, unless `totp-said`, `totp-exit` or `totp-login` bend it.
+const TOTP_ANSWER: &str =
+    "Error: failed to delete TOTP configuration for user '<login>': no TOTP configuration for user";
+
+/// [`TOTP_ANSWER`] naming `login`.
+fn no_totp(login: &str) -> String {
+    TOTP_ANSWER.replace("<login>", login)
+}
+
+/// A TOTP delete's failure that is no "nothing to delete" (AC19, amended).
+const TOTP_FAILS: &str = "Error: the stub fails the TOTP delete";
 
 /// R10's line when a passkey delete failed.
 const NO_ENABLE: &str = "hub-admin: passkeys not deleted: do not enable this account until reset ends without passkeys-left";
@@ -127,7 +157,8 @@ const NO_TERMINAL: &str = "Error: failed to read the password from the terminal:
 const HEX: &str = "0123456789abcdef";
 
 /// The stub of the door's CLI; `@DOOR@` is its records' folder, `@BCRYPT@`
-/// [`BCRYPT_FILL`], `@PASSKEYS@` and `@TOTP@` the delete answers,
+/// [`BCRYPT_FILL`], `@PASSKEYS@` the passkey delete's failure, `@TOTP_HEAD@`
+/// and `@TOTP_TAIL@` [`TOTP_ANSWER`] before and after its `<login>`,
 /// `@NO_TERMINAL@` [`NO_TERMINAL`].
 const DOOR_STUB: &str = r#"#!/bin/sh
 # The door's CLI as docs/features/hub-accounts.md "The door's CLI" records it
@@ -346,9 +377,19 @@ case "$1 $2 $3 $4" in
         fi
         ;;
     "storage user totp delete")
+        # A login with no TOTP, as the pinned door answers it (exit 1, the
+        # line naming the login, the call's last argument); `totp-said`
+        # replaces the line, `totp-login` names another login in it,
+        # `totp-exit` gives another status.
         if [ "$fail" = yes ]; then
-            echo '@TOTP@' >&2
-            exit 1
+            for login in "$@"; do :; done
+            if [ -f "$door/totp-login" ]; then login=$(cat "$door/totp-login"); fi
+            if [ -f "$door/totp-said" ]; then
+                cat "$door/totp-said" >&2
+            else
+                printf '%s%s%s\n' "@TOTP_HEAD@" "$login" "@TOTP_TAIL@" >&2
+            fi
+            exit "$(cat "$door/totp-exit" 2>/dev/null || echo 1)"
         fi
         ;;
     "storage user webauthn export" | "storage user totp export")
@@ -893,13 +934,21 @@ impl Hub {
         let door = scratch.dir("door");
         let runs = scratch.dir("runs");
         let home = scratch.home("h");
+        let (totp_head, totp_tail) = TOTP_ANSWER
+            .split_once("<login>")
+            .expect("the recorded line names its login");
+        assert!(
+            !TOTP_ANSWER.contains(['"', '$', '`', '\\']),
+            "the line goes into the stub inside double quotes"
+        );
         executable(
             &bin.join("authelia"),
             &DOOR_STUB
                 .replace("@DOOR@", text_of(&door))
                 .replace("@BCRYPT@", BCRYPT_FILL)
                 .replace("@PASSKEYS@", PASSKEYS_ANSWER)
-                .replace("@TOTP@", TOTP_ANSWER)
+                .replace("@TOTP_HEAD@", totp_head)
+                .replace("@TOTP_TAIL@", totp_tail)
                 .replace("@NO_TERMINAL@", NO_TERMINAL),
         );
         executable(
@@ -1021,6 +1070,13 @@ impl Hub {
     fn control(&self, name: &str, calls: &[usize]) {
         let listed: Vec<String> = calls.iter().map(usize::to_string).collect();
         fs::write(self.door.join(name), listed.join(" ")).expect("a control file");
+    }
+
+    /// The stub's TOTP delete answer, bent: `name` (`totp-said`, the whole
+    /// stderr; `totp-exit`, the status; `totp-login`, the login its line
+    /// names) holding `value`.
+    fn bend(&self, name: &str, value: &str) {
+        fs::write(self.door.join(name), value).expect("a control file");
     }
 
     /// The stub prints `text` in place of call `call`'s `Random Password:`
@@ -2752,21 +2808,23 @@ fn a_missing_or_off_shape_random_password_changes_nothing() {
 
 // ------------------------------------------------------------- AC19: a failing delete
 
-/// AC19 (R3, R10): `reset mira` with the stub's delete exiting 1 with its
-/// recorded "nothing to delete" answer still writes the new digest with every
-/// other byte kept and shows the password once, `hub-admin: warning: TOTP not
-/// deleted: <the answer>` (or `passkeys not deleted: ...`) on stderr and no
-/// warning for a delete that passed, the log's detail `totp-left`,
-/// `passkeys-left` or `passkeys-left totp-left`. The TOTP delete still runs
-/// after a failed passkey delete: three calls each time. A TOTP failure alone
-/// exits 0; a passkey left exits 1 with `hub-admin: passkeys not deleted: do
-/// not enable this account until reset ends without passkeys-left`. M: abort
-/// on the delete's failure; skip the TOTP delete after a failed passkey
-/// delete; exit 0 on `passkeys-left`.
+/// AC19 (R3, R10), as docs/features/hub-accounts.md amends it on 2026-11-20
+/// (release-tail RT1-RT2): `reset mira` with the stub's passkey delete
+/// exiting 1 with an invented failure, or its TOTP delete exiting 1 with a
+/// message other than the door's "no TOTP" line, still writes the new digest
+/// with every other byte kept and shows the password once, `hub-admin:
+/// warning: TOTP not deleted: <the answer>` (or `passkeys not deleted: ...`)
+/// on stderr and no warning for a delete that passed, the log's detail
+/// `totp-left`, `passkeys-left` or `passkeys-left totp-left`. The TOTP delete
+/// still runs after a failed passkey delete: three calls each time. A TOTP
+/// failure alone exits 0; a passkey left exits 1 with `hub-admin: passkeys
+/// not deleted: do not enable this account until reset ends without
+/// passkeys-left`. M: abort on the delete's failure; skip the TOTP delete
+/// after a failed passkey delete; exit 0 on `passkeys-left`.
 #[test]
 fn ac19_reset_completes_with_a_warning_when_a_delete_fails() {
     let passkeys = format!("{REFUSAL}warning: passkeys not deleted: {PASSKEYS_ANSWER}");
-    let totp = format!("{REFUSAL}warning: TOTP not deleted: {TOTP_ANSWER}");
+    let totp = format!("{REFUSAL}warning: TOTP not deleted: {TOTP_FAILS}");
     let cases: [(&str, &[usize], &str); 3] = [
         ("the TOTP delete fails", &[3], "totp-left"),
         ("the passkey delete fails", &[2], "passkeys-left"),
@@ -2780,6 +2838,7 @@ fn ac19_reset_completes_with_a_warning_when_a_delete_fails() {
             &users_file(&[&entry("mira", "Mira K", "mira@example.org", false), &olek]),
         );
         hub.control("fail-at", failing);
+        hub.bend("totp-said", &format!("{TOTP_FAILS}\n"));
 
         let act = hub.terminal(&["reset", "mira"], &[]);
         let passkeys_left = failing.contains(&2);
@@ -2842,6 +2901,246 @@ fn ac19_reset_completes_with_a_warning_when_a_delete_fails() {
         assert!(hub.temps().is_empty(), "{label}: {:?}", hub.temps());
         assert!(!hub.lock().exists(), "{label}: the lock is gone");
     }
+}
+
+// ------------------------------------------------------------- release-tail RT1-RT3: a login with no TOTP
+
+/// The stub's answer to one delete of `login` on its own, the hub's root as
+/// `HUB_ADMIN_ROOT` and a configuration file given: its exit, stdout and
+/// stderr.
+fn stub_delete(hub: &Hub, kind: &[&str], login: &str) -> (i32, String, String) {
+    let config = hub.root.join("tmp/stub-premise.yml");
+    fs::write(&config, "# a premise's configuration\n").expect("a configuration");
+    let mut args: Vec<String> = ["storage", "user"].map(str::to_owned).to_vec();
+    args.extend(kind.iter().map(|word| (*word).to_owned()));
+    args.extend([
+        "--config".to_owned(),
+        text_of(&config).to_owned(),
+        "--sqlite.path".to_owned(),
+        text_of(&hub.db()).to_owned(),
+        "--".to_owned(),
+        login.to_owned(),
+    ]);
+    let output = Command::new(hub.bin.join("authelia"))
+        .args(&args)
+        .env("HUB_ADMIN_ROOT", &hub.root)
+        .stdin(Stdio::null())
+        .output()
+        .expect("the stub runs");
+    fs::remove_file(&config).expect("the premise's configuration removed");
+    (
+        output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// The two users of RT1-RT2's resets: `mira`, reset, and `olek`, kept.
+fn mira_and_olek(hub: &Hub) -> String {
+    let olek = entry("olek", "Olek", "olek@example.org", false);
+    hub.put(
+        &hub.users(),
+        &users_file(&[&entry("mira", "Mira K", "mira@example.org", false), &olek]),
+    );
+    users_file(&[
+        &entry_with("mira", "Mira K", "mira@example.org", &argon(1), false),
+        &olek,
+    ])
+}
+
+/// A reset's written password, shown once, and the door's three calls.
+fn assert_reset_wrote(hub: &Hub, act: &Act, written: &str, label: &str) {
+    assert_eq!(
+        read(&hub.users()),
+        written,
+        "{label}: the new digest, every other byte kept"
+    );
+    let calls = hub.calls();
+    assert_eq!(
+        calls.len(),
+        3,
+        "{label}: the hash and both deletes: {calls:?}"
+    );
+    calls[0].assert_random_hash("argon2", 32, label);
+    assert!(
+        calls[1].starts(&["storage", "user", "webauthn", "delete"])
+            && calls[1].login_after_dashes("mira")
+            && calls[2].starts(&["storage", "user", "totp", "delete"])
+            && calls[2].login_after_dashes("mira"),
+        "{label}: the passkey delete, then the TOTP delete, of mira: {calls:?}"
+    );
+    let shown = hex_words(&act.stdout, 32);
+    assert_eq!(shown.len(), 1, "{label}: one password: {}", act.show());
+    assert_eq!(
+        calls[0].generated(),
+        shown[0],
+        "{label}: the shown password is the door's `Random Password:`"
+    );
+    assert_eq!(
+        act.everything().matches(&shown[0]).count(),
+        1,
+        "{label}: shown once"
+    );
+    assert!(hub.temps().is_empty(), "{label}: {:?}", hub.temps());
+    assert!(!hub.lock().exists(), "{label}: the lock is gone");
+}
+
+/// docs/features/release-tail.md RT1: the stub's TOTP delete answers the
+/// pinned door's recorded line for a login with no TOTP, naming `mira`,
+/// exit 1 (premise: the stub alone, as "The door's answer" records it; its
+/// passkey delete of nobody's passkeys exits 0). `reset mira` then exits 0
+/// with no `warning:` anywhere, logs `password passkeys totp`, writes the
+/// digest and shows the password once: nothing to delete is no failure. M:
+/// today's `if ! delete_totp` (any non-zero exit a failure).
+#[test]
+fn rt01_a_login_with_no_totp_is_nothing_to_delete() {
+    let premise = Hub::new("rt01-stub");
+    premise.control("fail-at", &[1]);
+    let (code, out, err) = stub_delete(&premise, &["totp", "delete"], "mira");
+    assert_eq!(
+        (code, out.as_str(), err.as_str()),
+        (1, "", format!("{}\n", no_totp("mira")).as_str()),
+        "the stub answers the door's recorded line, the login filled in"
+    );
+    assert_eq!(
+        no_totp("mira"),
+        "Error: failed to delete TOTP configuration for user 'mira': no TOTP configuration for user"
+    );
+    let (code, out, err) = stub_delete(
+        &Hub::new("rt01-stub"),
+        &["webauthn", "delete", "--all"],
+        "mira",
+    );
+    assert_eq!(
+        (code, out.as_str(), err.as_str()),
+        (0, "", ""),
+        "a passkey delete of none exits 0, as the door does"
+    );
+
+    let hub = Hub::new("rt01");
+    let written = mira_and_olek(&hub);
+    hub.control("fail-at", &[3]);
+    let act = hub.terminal(&["reset", "mira"], &[]);
+    act.code(0);
+    assert!(
+        !act.everything().contains("warning:"),
+        "no warning for a TOTP that never was: {}",
+        act.show()
+    );
+    assert_eq!(
+        act.lines().first().copied(),
+        Some("reset mira"),
+        "{}",
+        act.show()
+    );
+    assert_reset_wrote(&hub, &act, &written, "no TOTP");
+    let log = hub.log_lines();
+    assert_eq!(log.len(), 1, "{log:?}");
+    assert_logged(&log[0], "reset", "mira", "password passkeys totp");
+}
+
+/// docs/features/release-tail.md RT2: every other TOTP failure keeps
+/// today's warning and `totp-left`, exit 0 (the TOTP alone): another
+/// message with exit 1; the recorded line with more after it, exit 1; the
+/// recorded line with exit 2, or 124 (`timeout`'s); the same words naming
+/// another login. A failed passkey delete with the recorded TOTP answer
+/// gives `passkeys-left` alone, its warning and no TOTP one, exit 1 and
+/// "do not enable", the password still written and shown. M: any exit 1
+/// read as nothing to delete; a substring match.
+#[test]
+fn rt02_every_other_totp_failure_still_warns() {
+    let recorded = no_totp("mira");
+    let longer = format!("{recorded} (database is locked)");
+    let olek = no_totp("olek");
+    let amira = no_totp("amira");
+    let said = |line: &str| format!("{line}\n");
+    // Each case: its label, the stub's one bend (name, value), and the line
+    // the warning quotes.
+    let cases = [
+        (
+            "another message, exit 1",
+            ("totp-said", said(TOTP_FAILS)),
+            TOTP_FAILS,
+        ),
+        (
+            "the line with more after it, exit 1",
+            ("totp-said", said(&longer)),
+            longer.as_str(),
+        ),
+        (
+            "the recorded line, exit 2",
+            ("totp-exit", "2".to_owned()),
+            recorded.as_str(),
+        ),
+        (
+            "the recorded line, exit 124",
+            ("totp-exit", "124".to_owned()),
+            recorded.as_str(),
+        ),
+        (
+            "another login's line, exit 1",
+            ("totp-login", "olek".to_owned()),
+            olek.as_str(),
+        ),
+        (
+            "the line with mira inside another login",
+            ("totp-login", "amira".to_owned()),
+            amira.as_str(),
+        ),
+    ];
+    for (label, (name, value), quoted) in cases {
+        let hub = Hub::new("rt02");
+        let written = mira_and_olek(&hub);
+        hub.control("fail-at", &[3]);
+        hub.bend(name, &value);
+        let act = hub.terminal(&["reset", "mira"], &[]);
+        assert_eq!(
+            act.code,
+            0,
+            "{label}: a TOTP left alone exits 0: {}",
+            act.show()
+        );
+        let warning = format!("{REFUSAL}warning: TOTP not deleted: {quoted}");
+        assert_eq!(
+            act.stderr
+                .lines()
+                .filter(|line| line.contains("warning:"))
+                .collect::<Vec<_>>(),
+            [warning.as_str()],
+            "{label}: the TOTP warning quoting the door, and no other: {}",
+            act.show()
+        );
+        assert_reset_wrote(&hub, &act, &written, label);
+        let log = hub.log_lines();
+        assert_eq!(log.len(), 1, "{label}: {log:?}");
+        assert_logged(&log[0], "reset", "mira", "totp-left");
+    }
+
+    // A passkey left, the TOTP none to delete.
+    let hub = Hub::new("rt02-passkeys");
+    let written = mira_and_olek(&hub);
+    hub.control("fail-at", &[2, 3]);
+    let act = hub.terminal(&["reset", "mira"], &[]);
+    assert_eq!(act.code, 1, "a passkey left exits 1 (R10): {}", act.show());
+    assert!(
+        act.stderr.lines().any(|line| line == NO_ENABLE),
+        "`{NO_ENABLE}`: {}",
+        act.show()
+    );
+    let passkeys = format!("{REFUSAL}warning: passkeys not deleted: {PASSKEYS_ANSWER}");
+    assert_eq!(
+        act.stderr
+            .lines()
+            .filter(|line| line.contains("warning:"))
+            .collect::<Vec<_>>(),
+        [passkeys.as_str()],
+        "the passkey warning alone: {}",
+        act.show()
+    );
+    assert_reset_wrote(&hub, &act, &written, "a passkey left");
+    let log = hub.log_lines();
+    assert_eq!(log.len(), 1, "{log:?}");
+    assert_logged(&log[0], "reset", "mira", "passkeys-left");
 }
 
 // ------------------------------------------------------------- AC10-AC11: reading the files
@@ -5224,6 +5523,78 @@ fn hb05_the_pinned_door_image_agrees_with_the_stub() {
     assert_eq!(
         names_in(&into),
         ["acts.log", "mcp-users", "users.yml", "webauthn.yml"]
+    );
+}
+
+/// docs/features/release-tail.md RT3, by hand on a machine with Docker
+/// (`cargo test -p specengine-http --test deploy_admin rt03 -- --ignored`;
+/// an owner's gate, Docker being off on the laptop): HB5's harness, the
+/// pinned door image `dump-door` runs (read from the compose file), agrees
+/// with the stub's delete answers. On a scratch SQLite, `storage migrate up`,
+/// then the exact deletes `reset` makes of `mira`, who has neither: `storage
+/// user webauthn delete --all` exits 0, and `storage user totp delete`
+/// exits 1 with exactly [`TOTP_ANSWER`] naming `mira` as its one `Error: `
+/// line (what `door_said` reads). Until the owner runs it, the record of
+/// 2026-11-20 by RM-0131's developer stands ("The door's answer").
+#[test]
+#[ignore = "manual (RT3): needs Docker and the pinned door image; an owner's gate, its run recorded in docs/features/release-tail.md"]
+fn rt03_the_pinned_door_answers_a_delete_on_nothing_as_recorded() {
+    let compose = compose();
+    let image = scalar(
+        &service(&compose, "dump-door")["image"],
+        "dump-door's image",
+    );
+    let scratch = Scratch::new("admin-rt03");
+    let work = scratch.dir("work");
+    fs::write(work.join("key"), format!("{}\n", "4f".repeat(32))).expect("a storage key");
+    fs::write(
+        work.join("storage.yml"),
+        "# hub-admin's storage calls: the key and the database are\n\
+         # AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE and --sqlite.path.\n",
+    )
+    .expect("hub-admin's configuration");
+    let door = scratch.dir("door");
+    let cli = r#"exec "$(command -v authelia || echo /app/authelia)" "$@""#;
+    let key = [("AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE", "/work/key")];
+    let mounts = [
+        (work.as_path(), "/work", false),
+        (door.as_path(), "/var/lib/authelia", false),
+    ];
+    let run = |args: &[&str]| {
+        let mut full = vec!["-c", cli, "authelia"];
+        full.extend(args);
+        pinned(&image, &mounts, &key, "/bin/sh", &full)
+    };
+    let storage = [
+        "--config",
+        "/work/storage.yml",
+        "--sqlite.path",
+        "/var/lib/authelia/db.sqlite3",
+    ];
+    let (code, out, err) = run(&[&["storage", "migrate", "up"][..], &storage[..]].concat());
+    assert_eq!(code, 0, "migrate up:\n{out}\n{err}");
+
+    let (code, out, err) = run(&[
+        &["storage", "user", "webauthn", "delete", "--all"][..],
+        &storage[..],
+        &["--", "mira"][..],
+    ]
+    .concat());
+    assert_eq!(code, 0, "a passkey delete of none exits 0:\n{out}\n{err}");
+
+    let (code, out, err) = run(&[
+        &["storage", "user", "totp", "delete"][..],
+        &storage[..],
+        &["--", "mira"][..],
+    ]
+    .concat());
+    assert_eq!(code, 1, "a TOTP delete of none exits 1:\n{out}\n{err}");
+    assert_eq!(
+        err.lines()
+            .filter(|line| line.starts_with("Error: "))
+            .collect::<Vec<_>>(),
+        [no_totp("mira").as_str()],
+        "exactly the recorded line, naming mira:\n{err}"
     );
 }
 
