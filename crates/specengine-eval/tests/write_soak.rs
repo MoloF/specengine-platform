@@ -19,22 +19,24 @@
 //!   but the first call hit (reported, not judged).
 //! - **Memory** sampled every [`SAMPLE_EVERY`]: the resident set and, on
 //!   macOS, `phys_footprint` (`proc_pid_rusage`, what `footprint` reports).
-//!   Judged on `phys_footprint` on macOS and on the resident set elsewhere:
-//!   the Theil-Sen slope (the median of all pairwise slopes) of the samples
+//! - **The quiet probe** (macOS): every [`QUIET_EVERY`] the clients are
+//!   held, every call answers, after [`QUIET_SETTLE`] `vmmap --summary`
+//!   reads the malloc zones' allocated bytes: the live heap between calls,
+//!   without a call's working set or the pages the allocator keeps.
+//! - **Judged** ([`judge`]): the quiet probe's live heap on macOS, the
+//!   resident set elsewhere (`judged_on` `live_heap` or `rss`): the
+//!   Theil-Sen slope (the median of all pairwise slopes) of its readings
 //!   from `SOAK_SECS/3` on, against [`WRITE_BUDGET_MIB_PER_MIN`] (W, U, M)
-//!   or [`READ_BUDGET_MIB_PER_MIN`] (R); a breach fails the test (non-zero
-//!   exit). Reported beside it: each third's slope (a plateau falls third by
-//!   third, a leak stays positive in each), the whole run's, KiB kept per
-//!   write.
-//! - **The quiet probe** (macOS, reported, not judged): every
-//!   [`QUIET_EVERY`] the clients are held, every call answers, after
-//!   [`QUIET_SETTLE`] `vmmap --summary` reads the malloc zones' allocated
-//!   bytes: what the daemon holds between calls, without a call's working
-//!   set or the pages the allocator keeps. Its slope and KiB per write name
-//!   a leak the footprint can hide: after the step the footprint falls for
-//!   minutes as the allocator returns a call's pages, which masked a 2 KiB
-//!   per write leak in 4 of 5 runs (RM-0132's diagnosis), which this probe
-//!   read as 2.16 MiB/min against 0.0 clean.
+//!   or [`READ_BUDGET_MIB_PER_MIN`] (R); fewer than [`MIN_QUIET`] judged
+//!   quiet readings (or [`MIN_JUDGED_SAMPLES`] RSS samples) break the run; a
+//!   breach fails the test (non-zero exit). Reported beside it: the RSS and
+//!   footprint slopes, each whole, judged and by third (a plateau falls
+//!   third by third, a leak stays positive in each), KiB kept per write.
+//!   Why the probe (RM-0132's diagnosis): after each write's step libmalloc
+//!   keeps the freed pages resident, so RSS judged every clean W run red;
+//!   the footprint falls for minutes as those pages go back, which hid a
+//!   2 KiB per write leak in 4 of 5 runs; the probe read that leak as
+//!   2.16 MiB/min and a clean run as 0.0.
 //! - **Every call answers** (200, a JSON-RPC response, no `isError`; a W or
 //!   U write stored, an H repeat a hit, an R read with its document); a
 //!   request open
@@ -46,10 +48,13 @@
 //!   third, KiB per write, threads, open fds and child processes at start,
 //!   middle and end, the daemon binary's path, size and mtime, the write
 //!   lines' cost fields.
-//! - **A stale binary is refused** (WM4) before anything is seeded: a
-//!   release `spec` or `specengine-http` older than any file under the
-//!   `crates/*/src` it is built from (its workspace dependencies), than
+//! - **A stale binary is refused** (WM4) before anything is seeded: each
+//!   release binary is held to its own sources ([`stale_binaries`]), a
+//!   `spec` or `specengine-http` older than a file under `crates/<c>/src`
+//!   of a workspace crate in its own path-dependency closure, than
 //!   `Cargo.lock`, or (the daemon) than `ui/dist` names the build command.
+//!   An http-only change refuses the daemon alone: cargo does not relink
+//!   `spec` after it.
 //!
 //! Settings: `SOAK_SECS` (default and least 300); `WRITE_SOAK_RUNS`
 //! (default 2); `WRITE_SOAK_SMOKE=1` lets `SOAK_SECS` go below 300 and
@@ -115,6 +120,17 @@ const QUIET_EVERY: Duration = Duration::from_secs(30);
 /// The wait after the last call's answer, before the reading: a stored
 /// update's delegated apply and the request lines finish in the daemon.
 const QUIET_SETTLE: Duration = Duration::from_secs(1);
+/// The least quiet readings a judged run takes from `SOAK_SECS/3` on
+/// (macOS): a 300 s run gives 6.
+const MIN_QUIET: usize = 5;
+/// The least RSS samples a judged run takes from `SOAK_SECS/3` on (off
+/// macOS): a 300 s run gives about 200.
+const MIN_JUDGED_SAMPLES: usize = 60;
+/// The release binaries a run uses and the package each is built from.
+const BINARIES: [(&str, &str); 2] = [
+    ("spec", "specengine-cli"),
+    ("specengine-http", "specengine-http"),
+];
 /// The release build WM4 names.
 const BUILD: &str = "cargo build --release -p specengine-cli -p specengine-http --bins";
 
@@ -279,25 +295,17 @@ fn crate_closure(crates: &Path, package: &str) -> std::collections::BTreeSet<Str
     seen
 }
 
-/// WM4: the release `spec` and `specengine-http`, each no older than any
-/// file under the `crates/*/src` it is built from, `Cargo.lock`, or (the
-/// daemon, which embeds it) `ui/dist`; else a refusal naming [`BUILD`].
-/// Each binary is held to its own crates' sources: cargo relinks no binary
-/// a change does not reach, so one rule for both would refuse forever. The
-/// daemon's path.
-fn fresh_binaries() -> PathBuf {
-    let dir = library_common::release_dir();
-    assert!(
-        dir.file_name().is_some_and(|name| name == "release"),
-        "{}: run the write soak with `--release` (it measures the release daemon)",
-        dir.display()
-    );
-    let root = import_support::repository_root();
+/// WM4: the refusals of the release binaries under `release`, each held to
+/// its own sources under the workspace `root`: a file under `crates/<c>/src`
+/// of each crate in its package's path-dependency closure, `Cargo.lock`,
+/// and (the daemon, which embeds it) `ui/dist`. A binary older than the
+/// newest of them, or missing, is refused naming [`BUILD`]. Cargo relinks
+/// no binary a change does not reach, so one rule over every crate for
+/// both would refuse `spec` forever after an http-only change.
+fn stale_binaries(root: &Path, release: &Path) -> Vec<String> {
     let crates = root.join("crates");
-    for (name, package) in [
-        ("spec", "specengine-cli"),
-        ("specengine-http", "specengine-http"),
-    ] {
+    let mut refusals = Vec::new();
+    for (name, package) in BINARIES {
         let mut best = None;
         for member in crate_closure(&crates, package) {
             newest(&crates.join(member).join("src"), &mut best);
@@ -306,24 +314,38 @@ fn fresh_binaries() -> PathBuf {
         if package == "specengine-http" {
             newest(&root.join("ui/dist"), &mut best);
         }
-        let path = dir.join(name);
-        let built = fs::metadata(&path)
-            .and_then(|meta| meta.modified())
-            .unwrap_or_else(|_| {
-                panic!(
-                    "{}: no release build; refusing to measure: {BUILD}",
-                    path.display()
-                )
-            });
-        if let Some((at, source)) = &best {
-            assert!(
-                *at <= built,
+        let path = release.join(name);
+        let Ok(built) = fs::metadata(&path).and_then(|meta| meta.modified()) else {
+            refusals.push(format!(
+                "{}: no release build; refusing to measure: {BUILD}",
+                path.display()
+            ));
+            continue;
+        };
+        if let Some((at, source)) = &best
+            && *at > built
+        {
+            refusals.push(format!(
                 "{} is older than {}: refusing to measure a stale binary; rebuild: {BUILD}",
                 path.display(),
                 source.display()
-            );
+            ));
         }
     }
+    refusals
+}
+
+/// WM4 over this repository's release directory ([`stale_binaries`]),
+/// before anything is seeded; the daemon's path.
+fn fresh_binaries() -> PathBuf {
+    let dir = library_common::release_dir();
+    assert!(
+        dir.file_name().is_some_and(|name| name == "release"),
+        "{}: run the write soak with `--release` (it measures the release daemon)",
+        dir.display()
+    );
+    let refusals = stale_binaries(&import_support::repository_root(), &dir);
+    assert!(refusals.is_empty(), "WM4:\n{}", refusals.join("\n"));
     dir.join("specengine-http")
 }
 
@@ -1137,11 +1159,65 @@ fn point_slopes(points: &[(f64, u64)], secs: u64) -> Value {
     })
 }
 
-/// The quiet probe's readings, reported: the live heap between calls and
-/// the footprint at the same moments, their slopes, KiB kept per write;
-/// `null` with no reading (not macOS).
-fn quiet_report(quiet: &[Quiet], secs: u64, judged_writes: f64, judged_minutes: f64) -> Value {
-    if quiet.is_empty() {
+/// What memory is judged on: the quiet probe's live heap on macOS, the
+/// resident set elsewhere.
+fn judged_on(macos: bool) -> &'static str {
+    if macos { "live_heap" } else { "rss" }
+}
+
+/// The judged series' slope from `SOAK_SECS/3` on, MiB per minute, and
+/// what it breaks against `budget` (`None`: reported, not judged): on macOS
+/// the quiet readings' live heap, fewer than [`MIN_QUIET`] of them judged a
+/// break; elsewhere the resident set, fewer than [`MIN_JUDGED_SAMPLES`] a
+/// break. The other series never enter the verdict.
+fn judge(
+    samples: &[Sample],
+    quiet: &[Quiet],
+    secs: u64,
+    macos: bool,
+    budget: Option<f64>,
+) -> (Option<f64>, Vec<String>) {
+    let points: Vec<(f64, u64)> = if macos {
+        quiet.iter().map(|q| (q.at, q.heap_kib)).collect()
+    } else {
+        samples.iter().map(|s| (s.at, s.rss_kib)).collect()
+    };
+    let slope = point_slopes(&points, secs)["judged"].as_f64();
+    let mut broken = Vec::new();
+    let Some(budget) = budget else {
+        return (slope, broken);
+    };
+    let on = judged_on(macos);
+    let third = secs as f64 / 3.0;
+    let count = points.iter().filter(|(at, _)| *at >= third).count();
+    let least = if macos { MIN_QUIET } else { MIN_JUDGED_SAMPLES };
+    if count < least {
+        broken.push(format!(
+            "{count} {on} readings judged (from SOAK_SECS/3 on): fewer than {least}"
+        ));
+    }
+    match slope {
+        Some(slope) if slope > budget => broken.push(format!(
+            "memory grows {slope:.3} MiB/min ({on}, from SOAK_SECS/3 on) > the budget {budget}"
+        )),
+        Some(_) => {}
+        None => broken.push(format!("no {on} slope")),
+    }
+    (slope, broken)
+}
+
+/// The quiet probe's readings: the live heap between calls and the
+/// footprint at the same moments, their slopes, KiB kept per write; `null`
+/// off macOS (no probe), every key present on it, a run with no reading
+/// included.
+fn quiet_report(
+    quiet: &[Quiet],
+    secs: u64,
+    macos: bool,
+    judged_writes: f64,
+    judged_minutes: f64,
+) -> Value {
+    if !macos {
         return Value::Null;
     }
     let heap: Vec<(f64, u64)> = quiet.iter().map(|q| (q.at, q.heap_kib)).collect();
@@ -1174,6 +1250,7 @@ fn soak_run(
 ) -> (Value, Vec<String>) {
     let variant = settings.variant;
     let secs = settings.secs;
+    let macos = cfg!(target_os = "macos");
     let label = format!("wm-{}-run{run_no}", variant.name());
     let extra: Vec<(String, String)> = if settings.heap {
         vec![("MallocStackLogging".to_owned(), "lite".to_owned())]
@@ -1213,7 +1290,7 @@ fn soak_run(
             scope.spawn(move || reader(run, corpus, at));
         }
         scope.spawn(|| sampler(&run, secs));
-        if cfg!(target_os = "macos") {
+        if macos {
             scope.spawn(|| quiet_probe(&run));
         }
         scope.spawn(|| watchdog(&run, &label));
@@ -1250,16 +1327,13 @@ fn soak_run(
     let footprint = slopes(&samples, secs, |sample| sample.footprint_kib);
     let quiet = shared.quiet.lock().expect("quiet").clone();
     let rss = slopes(&samples, secs, |sample| Some(sample.rss_kib));
-    let judged_on = if cfg!(target_os = "macos") {
-        "phys_footprint"
-    } else {
-        "rss"
-    };
-    let judged_slope = if cfg!(target_os = "macos") {
-        footprint["judged"].as_f64()
-    } else {
-        rss["judged"].as_f64()
-    };
+    let (judged_slope, judged_broken) = judge(
+        &samples,
+        &quiet,
+        secs,
+        macos,
+        variant.budget().filter(|_| settings.judged()),
+    );
     let per = |slope: &Value, count: f64| -> Option<f64> {
         let slope = slope["judged"].as_f64()?;
         (count > 0.0).then(|| rounded(slope * 1024.0 / (count / judged_minutes)))
@@ -1280,28 +1354,7 @@ fn soak_run(
             .map(Sample::json)
     };
     let mut broken = shared.failures.lock().expect("failures").clone();
-    let judged_count = window(&samples, third, f64::INFINITY, |sample| {
-        if cfg!(target_os = "macos") {
-            sample.footprint_kib
-        } else {
-            Some(sample.rss_kib)
-        }
-    })
-    .len();
-    if settings.judged() {
-        let budget = variant.budget().expect("a judged variant has a budget");
-        match judged_slope {
-            Some(slope) if slope > budget => broken.push(format!(
-                "memory grows {slope:.3} MiB/min ({judged_on}, from SOAK_SECS/3 on) \
-                 > the budget {budget}"
-            )),
-            Some(_) => {}
-            None => broken.push(format!("no {judged_on} slope")),
-        }
-        if judged_count < 60 {
-            broken.push(format!("{judged_count} samples judged: too few"));
-        }
-    }
+    broken.extend(judged_broken);
     if variant.writers() > 0 && writes.is_empty() {
         broken.push("no write ran".to_owned());
     }
@@ -1345,18 +1398,18 @@ fn soak_run(
             "judged_from": pick(third),
             "last": samples.last().copied().map(Sample::json),
         },
-        "judged_on": judged_on,
+        "judged_on": judged_on(macos),
         "judged": settings.judged(),
         "slope_mib_per_min": judged_slope,
         "budget_mib_per_min": variant.budget(),
         "footprint_slope_mib_per_min": footprint,
-        // Reported, not judged: the quiet probe's live heap (macOS).
-        "quiet": quiet_report(&quiet, secs, judged_writes, judged_minutes),
+        "quiet": quiet_report(&quiet, secs, macos, judged_writes, judged_minutes),
         "rss_slope_mib_per_min": rss,
-        "kib_per_write": {
+        // `null` with no writer (R).
+        "kib_per_write": (variant.writers() > 0).then(|| json!({
             "footprint": per(&footprint, judged_writes),
             "rss": per(&rss, judged_writes),
-        },
+        })),
         "kib_per_call": {
             "footprint": per(&footprint, judged_calls),
             "rss": per(&rss, judged_calls),
@@ -1411,6 +1464,16 @@ fn write_soak() {
         all.len(),
         all.iter().take(40).collect::<Vec<_>>()
     );
+}
+
+/// WM4 alone on this repository: the refusal [`write_soak`] runs first,
+/// without seeding anything (seconds, not minutes).
+#[test]
+#[ignore = "WM4 [stale binary], release: cargo nextest run -p specengine-eval --release \
+            --test write_soak wm4_the_release_binaries --run-ignored only"]
+fn wm4_the_release_binaries_are_fresh() {
+    let daemon = fresh_binaries();
+    println!("fresh: {}", binary_facts(&daemon));
 }
 
 /// The `write-memory` rows of a canon's "Budgets" table: each variant its
@@ -1536,4 +1599,338 @@ fn the_slopes_tell_a_plateau_from_a_climb() {
         "{leveled}"
     );
     assert_eq!(leveled["judged"], json!(0.0), "{leveled}");
+}
+
+// ------------------------------------------------------------ the judge
+
+/// A 300 s run's quiet readings (macOS): every 30 s from 31 s, nine of
+/// them, six from `SOAK_SECS/3` on; the live heap `heap(at)` KiB, the
+/// footprint falling 2.5 MiB/min.
+fn quiet_series(heap: impl Fn(f64) -> u64) -> Vec<Quiet> {
+    (0..9)
+        .map(|k| {
+            let at = 31.0 + 30.0 * f64::from(k);
+            Quiet {
+                at,
+                heap_kib: heap(at),
+                footprint_kib: Some(per_minute(60_000, -2.5, at)),
+                drain_ms: 700,
+                scan_ms: 400,
+            }
+        })
+        .collect()
+}
+
+/// `base` KiB moving `mib_per_min` MiB a minute, at `at` seconds.
+fn per_minute(base: u64, mib_per_min: f64, at: f64) -> u64 {
+    (base as f64 + mib_per_min * 1024.0 * at / 60.0).round() as u64
+}
+
+/// A 300 s run's samples, one a second: RSS moving `rss` MiB/min, the
+/// footprint `footprint` MiB/min.
+fn page_series(rss: f64, footprint: f64) -> Vec<Sample> {
+    (0..300)
+        .map(|at| {
+            let at = f64::from(at);
+            Sample {
+                at,
+                rss_kib: per_minute(90_000, rss, at),
+                footprint_kib: Some(per_minute(60_000, footprint, at)),
+            }
+        })
+        .collect()
+}
+
+/// The judge reads the live heap on macOS and RSS elsewhere: a clean W as
+/// the diagnosis saw it (the live heap level, RSS climbing 0.5 MiB/min on
+/// libmalloc's kept pages, the footprint falling) passes on macOS and is
+/// red on RSS; a 2.16 MiB/min leak the falling footprint hides is red on
+/// the live heap; unjudged (smoke, heap mode, H) breaks nothing.
+#[test]
+fn the_judge_reads_the_live_heap_on_macos_and_rss_elsewhere() {
+    let budget = Some(WRITE_BUDGET_MIB_PER_MIN);
+    let level = quiet_series(|_| 1750);
+    let pages = page_series(0.5, -2.5);
+    let (slope, broken) = judge(&pages, &level, 300, true, budget);
+    assert_eq!((slope, broken.len()), (Some(0.0), 0), "{broken:?}");
+    let (slope, broken) = judge(&pages, &level, 300, false, budget);
+    assert!(
+        slope.is_some_and(|slope| (slope - 0.5).abs() < 0.01),
+        "{slope:?}"
+    );
+    assert!(
+        broken.len() == 1 && broken[0].contains("(rss, from SOAK_SECS/3 on) > the budget 0.25"),
+        "{broken:?}"
+    );
+    let leak = quiet_series(|at| per_minute(1750, 2.16, at));
+    let (slope, broken) = judge(&page_series(0.0, -2.5), &leak, 300, true, budget);
+    assert!(
+        slope.is_some_and(|slope| (slope - 2.16).abs() < 0.01),
+        "{slope:?}"
+    );
+    assert!(
+        broken.len() == 1 && broken[0].contains("(live_heap, from SOAK_SECS/3 on)"),
+        "{broken:?}"
+    );
+    let (slope, broken) = judge(&pages, &leak, 300, true, None);
+    assert!(slope.is_some() && broken.is_empty(), "{broken:?}");
+    let (_, broken) = judge(&pages, &[], 300, true, None);
+    assert!(broken.is_empty(), "unjudged: {broken:?}");
+    assert_eq!((judged_on(true), judged_on(false)), ("live_heap", "rss"));
+}
+
+/// Fewer than five quiet readings from `SOAK_SECS/3` on break a judged run
+/// on macOS, none at all included (`vmmap` failing); six pass.
+#[test]
+fn fewer_than_five_judged_quiet_readings_break_the_run() {
+    let budget = Some(READ_BUDGET_MIB_PER_MIN);
+    let six = quiet_series(|_| 1750);
+    assert_eq!(six.iter().filter(|q| q.at >= 100.0).count(), 6);
+    let (_, broken) = judge(&[], &six, 300, true, budget);
+    assert!(broken.is_empty(), "{broken:?}");
+    let four: Vec<Quiet> = six
+        .iter()
+        .filter(|q| q.at < 100.0 || q.at > 160.0)
+        .copied()
+        .collect();
+    let (_, broken) = judge(&page_series(0.0, 0.0), &four, 300, true, budget);
+    assert_eq!(
+        broken,
+        vec!["4 live_heap readings judged (from SOAK_SECS/3 on): fewer than 5".to_owned()]
+    );
+    let (slope, broken) = judge(&page_series(0.0, 0.0), &[], 300, true, budget);
+    assert_eq!(slope, None);
+    assert_eq!(
+        broken,
+        vec![
+            "0 live_heap readings judged (from SOAK_SECS/3 on): fewer than 5".to_owned(),
+            "no live_heap slope".to_owned()
+        ]
+    );
+    let (_, broken) = judge(&page_series(0.0, 0.0)[..150], &[], 300, false, budget);
+    assert_eq!(
+        broken,
+        vec!["50 rss readings judged (from SOAK_SECS/3 on): fewer than 60".to_owned()]
+    );
+}
+
+/// The `quiet` object (WM3): every key on macOS, a run with no reading
+/// included; `null` elsewhere. KiB per write is the judged slope over the
+/// judged writes per minute.
+#[test]
+fn the_quiet_object_holds_every_key() {
+    let leak = quiet_series(|at| per_minute(1750, 2.16, at));
+    // 600 writes a minute over the judged 200 s.
+    let report = quiet_report(&leak, 300, true, 2000.0, 200.0 / 60.0);
+    for key in [
+        "count",
+        "heap_kib",
+        "heap_slope_mib_per_min",
+        "heap_kib_per_write",
+        "drain_ms",
+        "scan_ms",
+    ] {
+        assert!(report.get(key).is_some(), "{key}: {report}");
+    }
+    assert_eq!(report["count"], json!(9));
+    assert_eq!(
+        report["heap_kib"][0],
+        json!([31.0, per_minute(1750, 2.16, 31.0)])
+    );
+    let per_write = report["heap_kib_per_write"].as_f64().expect("a number");
+    assert!((per_write - 2.16 * 1024.0 / 600.0).abs() < 0.02, "{report}");
+    for third in report["heap_slope_mib_per_min"]["thirds"]
+        .as_array()
+        .expect("thirds")
+    {
+        assert!(third.as_f64().is_some_and(|slope| slope > 2.0), "{report}");
+    }
+    let empty = quiet_report(&[], 300, true, 0.0, 200.0 / 60.0);
+    assert_eq!(empty["count"], json!(0));
+    assert_eq!(empty["heap_slope_mib_per_min"]["judged"], Value::Null);
+    assert_eq!(empty["heap_kib_per_write"], Value::Null);
+    assert_eq!(quiet_report(&leak, 300, false, 2000.0, 3.0), Value::Null);
+}
+
+// ------------------------------------------------------------ WM4
+
+/// A scratch workspace for WM4, removed on drop: `specengine-model` (no
+/// dependency), `specengine-cli` on it, `specengine-mcp` on cli,
+/// `specengine-http` on cli and mcp (and `specengine-eval` as a dev
+/// dependency only), `specengine-eval` on nothing; `Cargo.lock`, `ui/dist`;
+/// `release/spec` and `release/specengine-http`. Sources at [`Self::BASE`],
+/// the binaries 100 s later.
+struct Workspace {
+    root: PathBuf,
+}
+
+impl Workspace {
+    const BASE: u64 = 1_790_000_000;
+    const SOURCES: [&str; 7] = [
+        "crates/specengine-model/src/lib.rs",
+        "crates/specengine-cli/src/main.rs",
+        "crates/specengine-mcp/src/lib.rs",
+        "crates/specengine-http/src/main.rs",
+        "crates/specengine-eval/src/lib.rs",
+        "Cargo.lock",
+        "ui/dist/assets/index.js",
+    ];
+
+    fn new(label: &str) -> Self {
+        let root =
+            std::env::temp_dir().join(format!("specengine-wm4-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let manifests = [
+            ("specengine-model", ""),
+            (
+                "specengine-cli",
+                "[dependencies]\nspecengine-model = { path = \"../specengine-model\" }\n",
+            ),
+            (
+                "specengine-mcp",
+                "[dependencies]\nspecengine-cli = { path = \"../specengine-cli\" }\n",
+            ),
+            (
+                "specengine-http",
+                "[dependencies]\nspecengine-cli = { path = \"../specengine-cli\" }\n\
+                 specengine-mcp = { path = \"../specengine-mcp\" }\n\
+                 [dev-dependencies]\nspecengine-eval = { path = \"../specengine-eval\" }\n",
+            ),
+            ("specengine-eval", ""),
+        ];
+        for (name, deps) in manifests {
+            let dir = root.join("crates").join(name);
+            fs::create_dir_all(dir.join("src")).expect("a crate");
+            fs::write(
+                dir.join("Cargo.toml"),
+                format!("[package]\nname = \"{name}\"\n{deps}"),
+            )
+            .expect("a manifest");
+        }
+        let workspace = Self { root };
+        for relative in Self::SOURCES
+            .iter()
+            .chain(&["release/spec", "release/specengine-http"])
+        {
+            let path = workspace.root.join(relative);
+            fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
+            fs::write(&path, relative).expect("a file");
+        }
+        workspace.reset();
+        workspace
+    }
+
+    /// `relative`'s mtime set `secs` past [`Self::BASE`].
+    fn at(&self, relative: &str, secs: u64) {
+        fs::File::options()
+            .write(true)
+            .open(self.root.join(relative))
+            .and_then(|file| file.set_modified(UNIX_EPOCH + Duration::from_secs(Self::BASE + secs)))
+            .unwrap_or_else(|error| panic!("{relative}: {error}"));
+    }
+
+    /// Every source at the base, the binaries 100 s later.
+    fn reset(&self) {
+        for relative in Self::SOURCES {
+            self.at(relative, 0);
+        }
+        self.at("release/spec", 100);
+        self.at("release/specengine-http", 100);
+    }
+
+    /// The binaries refused, by name, and the refusals.
+    fn refused(&self) -> (Vec<&'static str>, Vec<String>) {
+        let release = self.root.join("release");
+        let refusals = stale_binaries(&self.root, &release);
+        let names = BINARIES
+            .iter()
+            .map(|(name, _)| *name)
+            .filter(|name| {
+                let path = release.join(name).display().to_string();
+                refusals.iter().any(|refusal| {
+                    refusal.starts_with(&format!("{path} "))
+                        || refusal.starts_with(&format!("{path}:"))
+                })
+            })
+            .collect();
+        (names, refusals)
+    }
+}
+
+impl Drop for Workspace {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+/// WM4: each binary is held to its own sources. An http-only change (the
+/// daemon's crate, a crate only it links, `ui/dist`) refuses the daemon
+/// alone; a crate both link, or `Cargo.lock`, refuses both; a crate
+/// neither links (a dev dependency included) refuses none; a missing
+/// binary is refused. Each refusal names the binary, the newer file and
+/// [`BUILD`].
+/// M (the old rule, every crate for every binary): the http-only change
+/// still refuses `spec`, and the unlinked crate refuses both: red.
+#[test]
+fn wm4_each_binary_is_held_to_its_own_sources() {
+    let workspace = Workspace::new("own-sources");
+    assert_eq!(workspace.refused(), (Vec::new(), Vec::new()), "fresh");
+    for (changed, expected) in [
+        (
+            "crates/specengine-http/src/main.rs",
+            &["specengine-http"][..],
+        ),
+        ("crates/specengine-mcp/src/lib.rs", &["specengine-http"]),
+        ("ui/dist/assets/index.js", &["specengine-http"]),
+        (
+            "crates/specengine-cli/src/main.rs",
+            &["spec", "specengine-http"],
+        ),
+        (
+            "crates/specengine-model/src/lib.rs",
+            &["spec", "specengine-http"],
+        ),
+        ("Cargo.lock", &["spec", "specengine-http"]),
+        ("crates/specengine-eval/src/lib.rs", &[]),
+    ] {
+        workspace.reset();
+        workspace.at(changed, 110);
+        let (names, refusals) = workspace.refused();
+        assert_eq!(names, expected, "after {changed}: {refusals:#?}");
+        for refusal in &refusals {
+            assert!(
+                refusal.contains(&format!(
+                    "is older than {}",
+                    workspace.root.join(changed).display()
+                )) && refusal.ends_with(&format!("rebuild: {BUILD}")),
+                "{refusal}"
+            );
+        }
+    }
+    workspace.reset();
+    fs::remove_file(workspace.root.join("release/spec")).expect("remove");
+    let (names, refusals) = workspace.refused();
+    assert_eq!(names, ["spec"], "{refusals:#?}");
+    assert!(
+        refusals[0].contains("no release build") && refusals[0].ends_with(BUILD),
+        "{refusals:#?}"
+    );
+}
+
+/// WM4 on this repository's manifests: `spec` is built from none of the
+/// daemon's own crates, so cargo does not relink it after an http-only
+/// change; the daemon is built from everything `spec` is.
+#[test]
+fn wm4_spec_is_not_built_from_the_daemons_crates() {
+    let crates = import_support::repository_root().join("crates");
+    let spec = crate_closure(&crates, "specengine-cli");
+    let daemon = crate_closure(&crates, "specengine-http");
+    for own in ["specengine-http", "specengine-mcp"] {
+        assert!(
+            !spec.contains(own) && daemon.contains(own),
+            "{own}: {spec:?} {daemon:?}"
+        );
+    }
+    assert!(spec.is_subset(&daemon), "{spec:?} {daemon:?}");
+    assert!(spec.contains("specengine-store"), "{spec:?}");
 }

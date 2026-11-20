@@ -58,7 +58,7 @@ Store `check_memo`, in memory, per process, never stored.
 
 **Keys.** These are computed, never stored, so there is no `INDEX_FORMAT` step.
 - **C** is keyed by the root and the walk-state digest: the index stamp, the worktree's `scheme_fp` and `paths_fp`, every `files` row (path, blake3 or read error, size) in path order, the `walk_notes` row, the config's and the baseline's BLAKE3, and today.
-- **D** is keyed by that digest, the root, the written path, the BLAKE3 of the new bytes, and the login (`-` off a hub). A confirm re-keys D under its `[team]` login (`check_memo::as_login`).
+- **D** is keyed by that digest, the written path, the BLAKE3 of the new bytes, and the login (`-` off a hub), with no root: a memo serves one root. A confirm re-keys D under its `[team]` login (`check_memo::as_login`).
 
 **What each holds.**
 - **C** holds per-path as-is findings and the global passes' findings for one digest, and is replaced when the digest changes. The region's as-is cycles are never kept in C. C holds the corpus's own findings, no login's data.
@@ -69,11 +69,24 @@ No findings cross logins. The POST takes D's findings when its key equals its GE
 **Home.**
 - A daemon has `Project.memo`, one per served project, a turned memo. Page routes, `/mcp` (after the login's line) and the delegated apply run their call inside the turn hold's `within`, and only there do `in_turn()` and `in_scope()` (thread-local) hold. A scope entered outside the turn panics in debug builds.
 - The `--push` sync's merge holds the turn but enters no memo scope, and its reindex moves the digest.
-- The stdio MCP server keeps one process-wide memo, with the root in every key.
+- The stdio MCP server keeps `check_memo::PerRoot`, one memo per root, made at the root's first write (`scoped_per_root`), so no lookup crosses roots; a doubt in its scope empties every root's D.
 - The terminal keeps none.
 - The lock is a leaf: it is held for one lookup or insert, never while computing or waiting on a turn, SQLite or git.
 
-**Budget.** `BUDGET` is 32 MiB of bytes for C and D together. D is evicted first, least recently used, then C. An entry over the budget is computed but not stored. A miss is slower, never wrong.
+**Budget.** `BUDGET` is 32 MiB of real heap per memo, for C and D together (ADR-0086's soak, `soak-runs.md`). Each entry counts as held:
+- its share of its map's nodes, at least the fill;
+- its boxed key and value (D `BTreeMap<Box<FindingsKey>, Box<Remembered>>`, C `BTreeMap<PathBuf, Box<Tree>>`);
+- every string, list and path it owns, by capacity;
+- each allocation rounded to the allocator's size class (macOS's; on `linux-gnu`, glibc's chunk, `max(32, round16(size + 8))`);
+- `D_ROOT`, 320 B, once while D holds an entry.
+
+`warm` and `by_login` are not counted. D is evicted first, least recently used, then C. `keep_findings` refuses an entry when `bytes + D_ROOT` would pass the budget, and an entry larger than the budget is computed but not stored: a miss is slower, never wrong. A hub serving P projects holds up to P × 32 MiB, and a stdio server that reached R roots, R × 32 MiB.
+
+**Measured** (write-memory WM7, a counting global allocator):
+- Before: a D entry held 578-580 B against 302-319 counted, so a 128 KiB cap held about 245 KiB, and a 400 B longer root added 400 B per entry.
+- Now: an entry holds 358 B against 372 counted (1.04 by block, 1.18 by size asked), 360 B whatever the root.
+
+Under 8 updaters (WM8) the live heap grows 0.056-0.058 MiB/min, 0.32 KiB per update (0.54 before), until the cap.
 
 **Doubt** (T4) empties D. C is used again only under the digest the call's own walk gives. `DoubtOnPanic` runs after the scope is restored, so it leaves D alone, which is harmless because D is keyed by the digest.
 
@@ -111,7 +124,7 @@ A question's GET and POST now spawn 11 and 25 git processes, against 25 and 45 i
 ## Tests
 
 - core `tests/introduced_oracle.rs`, `tests/common/write_cost.rs` (the catalogue, the cycle cases, the generator);
-- store `tests/introduced_rows.rs`, `check_rows`' and `check_memo`'s unit tests, `tests/worktree_git.rs` (G1);
+- store `tests/introduced_rows.rs`, `check_rows`' and `check_memo`'s unit tests, `tests/check_memo_heap.rs` (the real heap, a counting allocator), `tests/worktree_git.rs` (G1);
 - cli `tests/write_cost_memo.rs`, `tests/write_cost_golden.rs`;
 - http `tests/write_cost_golden.rs`, `tests/hub_concurrency.rs` (ten logins), `tests/write_cost_git.rs`, `tests/hub_confirm.rs` `wc5_*`, `tests/slow.rs`;
 - mcp `tests/write_cost_golden.rs`;

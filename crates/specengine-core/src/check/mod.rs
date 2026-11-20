@@ -90,7 +90,7 @@ mod text;
 mod unapplied;
 mod working_set;
 
-pub use affected::{Affected, AsIs, Dependents, affected, found_bytes};
+pub use affected::{Affected, AsIs, Dependents, affected};
 pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use bundle::{

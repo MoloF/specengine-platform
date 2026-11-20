@@ -49,8 +49,8 @@ The owner's stability policy (ADR-0086), how a soak measures it in this reposito
 | DP17, card practices | `practices_soak.rs` | 10 logins of `get_card {context}`, a page reader | 0.5, RSS | a call under 10 000 ms; one walk per call; the page `walked` ≤ 1 + ⌊`SOAK_SECS`/300⌋; no hang | 0.0 and 0.0 (2026-11-20) |
 | DL15, measure | `library_soak.rs` `dl15_` | DL14's readers, 8 `ask_question` writers, the Inbox every 5 s; 120 s | reported only | 200 under 10 000 ms; every call answers; no hang | 0.96 (2026-11-19) |
 | GU16, measure | `guide_soak.rs` | 10 guide readers beside 8 `ask_question` writers; 120 s | reported only | a guide read under 1 000 ms with no turn; every write answers; no hang | 0.64 and 0.73 whole, 1.68 second half; readers alone 0.0 (2026-11-20) |
-| write-memory W, U, M | `write_soak.rs` | 8 writers of `ask_question` (W) or `propose_change` update (U); W with R's readers (M) | 0.25, live heap (Linux RSS) | every call answers as expected; no hang; a stale binary refused | before the fix (2026-11-20): W 0.0, U 0.092 (the check memo) |
-| write-memory R | `write_soak.rs` | 10 readers of `get_node`, `search`, `GET …/inbox` | 0.5, live heap (Linux RSS) | as W | before the live-heap judge: 0.0 and 0.0, footprint (2026-11-20) |
+| write-memory W, U, M | `write_soak.rs` | 8 writers of `ask_question` (W) or `propose_change` update (U); W with R's readers (M) | 0.25, live heap (Linux RSS) | every call answers as expected; no hang; a stale binary refused | after the fix (2026-11-20): W 0.0 and 0.0; U 0.056 and 0.058, the check memo to its cap (0.092 before); M 0.0 and 0.0 |
+| write-memory R | `write_soak.rs` | 10 readers of `get_node`, `search`, `GET …/inbox` | 0.5, live heap (Linux RSS) | as W | 0.0 and 0.0 (2026-11-20) |
 | write-memory H | `write_soak.rs` | 8 writers repeating one question, a hit each | reported only | as W | RSS 0.215, one run (2026-11-20) |
 
 Why 0.25 for writes: at about 500 writes a minute it allows at most 0.5 KiB kept per write. On the live heap the readers and a clean writer read 0.0 and a 2 KiB-per-write leak 2.16, so the bar sits above the clean runs and below a real leak. `write_soak.rs`'s `WRITE_BUDGET_MIB_PER_MIN` and `READ_BUDGET_MIB_PER_MIN` hold the write-memory rows' numbers, and write-memory WM6 has a test compare them.
@@ -61,6 +61,12 @@ Why 0.25 for writes: at about 500 writes a minute it allows at most 0.5 KiB kept
 - DL15 and GU16 run for 120 s, under the 5-minute floor, so they judge no memory.
 - The quiet probe is macOS's (`vmmap`). It pauses the load every 30 s, 0.7-2.5 s each time, so a run's calls per minute include the pauses.
 - On Linux, RSS keeps glibc's freed arenas as well, so read a Linux run's thirds beside its slope.
+- **Memory malloc does not count** escapes the live heap. In both write-memory M runs:
+  - RSS stayed about 100 MB until about 200 s, then climbed about 110 MiB/min to about 300 MB by 299 s;
+  - the footprint went 36 → 230 MB, +194 MiB/min at the quiet moments in the last third;
+  - the live heap read 1 750 KiB at every reading.
+
+  That is about 200 MB of dirty memory held between calls, and the judge passes it. W alone and R alone stay flat, and one heap-mode M run did not reproduce it. RM-0134 takes it; until then, read an M run's footprint and RSS thirds as well.
 - The daemon has no watchdog thread of its own: a soak's request watchdog is the only one. The owner's frame watchdog is for his games.
 - macOS's allocator is not the hub's glibc (Debian trixie). A Linux run in the hub's image is an owner's gate (write-memory WM10).
 

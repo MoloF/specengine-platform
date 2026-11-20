@@ -90,6 +90,7 @@ After the gate (`hub-git.md` "Rules"):
 - **`specengine`**: `specengine-health`, bash for `/dev/tcp`, every 30 s. Its `GET /` has `Host: 127.0.0.1:<port>` alone. Alive: `HTTP/1.1 403 ` within 5 s (the fence refuses a loopback `Host`: `hub.md` "Fence" step 1), and `127.0.0.1:443` accepting, so a Traefik crash's dead namespace is unhealthy. Ports `SPECENGINE_HEALTH_PORT` (7777), `SPECENGINE_HEALTH_PROXY_PORT` (443); exit 0 or 1, a line.
 - **`backup`**: `fresh`. **`admin`, `dump-door`**: `healthcheck: {disable: true}`: the door image's own probes a server they never run.
 - **Outside**: `https://<DOOR_HOST>/` answers 200. Docker restarts nothing unhealthy; `docker compose logs dump-queue dump-door backup` say why.
+- **Memory**: the image's runtime stage sets `MALLOC_ARENA_MAX=2` (`scripts/deploy/Dockerfile`, pinned by a `deploy.rs` test), so glibc's arenas are capped at two and a write's transient corpus load is not kept in one arena per thread (write-memory WM10). It reaches the daemon; `dump-queue`, on the same image, inherits it harmlessly. After an upgrade, read `docker stats` under real use; the 0.49.0 baseline was 254.4 MiB after 7 h (2026-11-20).
 
 ## Auto
 

@@ -100,7 +100,8 @@ pub fn introduced_from_rows(
         return whole(patched);
     };
     let config = setup_hash(Some(files.config));
-    let scope = check_memo::current();
+    let root = index.root();
+    let scope = check_memo::current(root);
     let snapshot = match index.snapshot() {
         Ok(snapshot) => snapshot,
         Err(_) => return whole(patched),
@@ -116,9 +117,7 @@ pub fn introduced_from_rows(
     // and the rows (WC20); the snapshot must not see it.
     #[cfg(test)]
     between::run();
-    let root = index.root();
     let key = scope.as_ref().map(|(_, login)| FindingsKey {
-        root: root.to_path_buf(),
         tree: digest,
         path: path.to_owned(),
         bytes: *blake3::hash(&patched).as_bytes(),

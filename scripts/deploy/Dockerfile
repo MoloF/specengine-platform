@@ -55,5 +55,9 @@ COPY --chmod=0755 scripts/deploy/clone.sh /usr/local/bin/specengine-clone
 COPY --chmod=0755 scripts/deploy/health.sh /usr/local/bin/specengine-health
 # The data directory lies outside every root.
 ENV XDG_DATA_HOME=/data HOME=/var/lib/specengine/home
+# glibc's malloc arenas capped at two: the daemon's threads share them, so a
+# write's transient corpus load is not kept in an arena per thread
+# (write-memory, WM10). It changes no answer.
+ENV MALLOC_ARENA_MAX=2
 USER 10001:10001
 ENTRYPOINT ["specengine-entrypoint"]

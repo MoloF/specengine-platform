@@ -620,6 +620,16 @@ RT3, the run on the pinned door image, is an owner's gate, since Docker is off o
 
 The full run: 6 554 of 6 557 tests passed, and the 3 failures were outside the slice's code (`release-tail.md` "Release"). `rn4_until` passed 20 of 20 under load. Open: RT3, the door-image run, his Docker gate. `write-memory` is next, as its own release.
 
+**`write-memory` shipped 2026-11-20**: plugin 0.49.2 (a version-only PATCH), the next tag `v0.49.2`, `INDEX_FORMAT` unchanged at 21.
+- The diagnosis found no leak in the agents' questions: each write's corpus load is transient, and the RSS plateau is the allocator keeping freed pages.
+- The only growth was the check memo, whose budget counted about 2.7 times less than it held. It now counts its real heap, its D key holds no root, and the stdio server keeps one memo per root.
+- The hub's image sets `MALLOC_ARENA_MAX=2`.
+- The soaks judge the live heap on macOS (`docs/canon/soak-runs.md`, ADR-0086). After the fix, W, U, M and R pass two runs each.
+
+Open:
+- WM10, his Linux gate: the live hub read 254.4 MiB on 0.49.0 after 7 h, and the main session records it again after the upgrade.
+- RM-0134 `mixed-load-memory` (must), the next slice: under writers and readers together, about 200 MB is held between calls that malloc does not count.
+
 ## 3. Product acceptance criteria
 
 | # | Criterion | How it is checked |

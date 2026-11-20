@@ -24,8 +24,9 @@
 //! load balancer and only `specengine`'s points at the loopback; no
 //! `TRAEFIK_*` variable adds static configuration; no service mounts an
 //! absolute host path; every `{{ ... }}` template is a plain `env` read; the
-//! Dockerfile has three stages, sets `XDG_DATA_HOME=/data` and
-//! `HOME=/var/lib/specengine/home`, installs the three scripts under their
+//! Dockerfile has three stages, sets `XDG_DATA_HOME=/data`,
+//! `HOME=/var/lib/specengine/home` and (write-memory, RM-0132)
+//! `MALLOC_ARENA_MAX=2` in its runtime stage, installs the three scripts under their
 //! image names and runs the entrypoint; its context keeps every manifest, `Cargo.lock`,
 //! `crates/`, `ui/` and the three scripts, and every source a stage copies
 //! from it, each an existing path, and drops `ui/dist`;
@@ -2301,6 +2302,14 @@ fn d14_the_image_three_pinned_stages_and_its_context() {
     assert_eq!(
         env.get("HOME").map(String::as_str),
         Some("/var/lib/specengine/home")
+    );
+    // write-memory (RM-0132) "The fix": glibc's malloc arenas capped at two
+    // in the daemon's environment, the runtime stage's own `ENV` (WM10).
+    // M: the line dropped, moved to the build stage or another count: red.
+    assert_eq!(
+        env.get("MALLOC_ARENA_MAX").map(String::as_str),
+        Some("2"),
+        "the runtime stage caps glibc's malloc arenas (write-memory WM10): {env:?}"
     );
     let installs: Vec<Vec<String>> = runtime
         .of("COPY")

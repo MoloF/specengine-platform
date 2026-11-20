@@ -32,7 +32,7 @@ use rmcp::model::{CallToolResult, ContentBlock, JsonObject, MetaObject};
 use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use serde_json::Value;
-use specengine_cli::CheckMemo;
+use specengine_cli::check_memo::PerRoot;
 use specengine_cli::{
     BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, FlowRequest, GAP_ITEMS_SHOWN,
     Globals, ImpactRequest, MIN_TERM_CHARS, NODE_HISTORY_MAX, OUTPUT_CAP_CHARS, Outcome,
@@ -1101,9 +1101,9 @@ impl SpecEngineServer {
         }
         let globals = self.globals().clone();
         let joined = tokio::task::spawn_blocking(move || {
-            // Over stdio: the process's check memo, one for its roots (the
-            // root is in every key), no login (`write-cost`).
-            check_memo::scoped(stdio_memo(), "-", || {
+            // Over stdio: the process's check memos, one per root (D's key
+            // holds no root), no login (`write-cost`, `write-memory`).
+            check_memo::scoped_per_root(stdio_memos(), "-", || {
                 answer_of(Env::from_process().and_then(|env| command(&env, &globals)))
             })
         })
@@ -1112,11 +1112,11 @@ impl SpecEngineServer {
     }
 }
 
-/// The stdio server's check memo: one per process, its roots apart by key,
-/// its budget shared (a terminal's `spec` keeps none).
-fn stdio_memo() -> &'static Arc<CheckMemo> {
-    static MEMO: OnceLock<Arc<CheckMemo>> = OnceLock::new();
-    MEMO.get_or_init(|| Arc::new(CheckMemo::new()))
+/// The stdio server's check memos: one per root a write reaches, each its
+/// own budget, so no lookup crosses roots (a terminal's `spec` keeps none).
+fn stdio_memos() -> &'static Arc<PerRoot> {
+    static MEMOS: OnceLock<Arc<PerRoot>> = OnceLock::new();
+    MEMOS.get_or_init(|| Arc::new(PerRoot::new()))
 }
 
 /// A command's outcome rendered as [`SpecEngineServer::call`] renders it.

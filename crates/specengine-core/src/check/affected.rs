@@ -136,36 +136,6 @@ impl AsIs {
         let index = self.index.iter().flatten().filter(move |_| globals.index);
         paths.chain(cycles).chain(parents).chain(index)
     }
-
-    /// Bytes held, as a memo's budget counts them: every string's length
-    /// and a finding's fixed size.
-    pub fn bytes(&self) -> usize {
-        let findings = self
-            .by_path
-            .iter()
-            .map(|(path, found)| path.len() + found_bytes(found))
-            .sum::<usize>();
-        let globals = [&self.cycles, &self.parents, &self.index]
-            .into_iter()
-            .flatten()
-            .map(|found| found_bytes(found))
-            .sum::<usize>();
-        findings + globals
-    }
-}
-
-/// [`AsIs::bytes`] of a list of findings.
-pub fn found_bytes(found: &[Finding]) -> usize {
-    found
-        .iter()
-        .map(|finding| {
-            std::mem::size_of::<Finding>()
-                + finding.code.len()
-                + finding.path.len()
-                + finding.subject.len()
-                + finding.message.len()
-        })
-        .sum()
 }
 
 /// A global pass, by the codes it emits.
