@@ -59,6 +59,11 @@
 //! log in its `command:`, the fourteen flags of that spec's "Data" and no
 //! other, no client or path field kept, every header dropped. The daemon's
 //! criteria are `tests/slow.rs`.
+//!
+//! docs/features/hub-backups.md (RM-0130) HB4, `hb04_*`: under option A the
+//! door's configuration is `hub-admin`'s own file, so `dump-door` and
+//! `admin` keep exactly the mounts, environment and secrets they had, no
+//! `/config` mount and no session or JWT secret, and `network_mode: none`.
 
 #![cfg(unix)]
 
@@ -3241,5 +3246,96 @@ fn wc35_the_compose_passes_slow_ms_through() {
         passed.is_null() || passed == json!("SPECENGINE_SLOW_MS"),
         "SPECENGINE_SLOW_MS passed by name alone, not {passed}: an unset .env line must stay \
          unset"
+    );
+}
+
+// ------------------------------------------- hub-backups HB4: the compose pin
+
+/// docs/features/hub-backups.md HB4 under option A ("The door's
+/// configuration"): `dump-door` and `admin` carry exactly the mounts
+/// (source and target), environment and secrets they carried before the
+/// slice; neither mounts `/config` or anything under it, nor is granted the
+/// door's session or JWT secret, nor carries the door's configuration
+/// environment (`X_AUTHELIA_CONFIG_FILTERS`, `HUB_DOMAIN`, `DOOR_HOST`, the
+/// session and JWT `*_FILE`s); both keep `network_mode: none`. The door
+/// itself still reads `./authelia/config` at `/config`. M: option B's
+/// `./authelia/config:/config:ro` added to `dump-door`; its session secret
+/// granted.
+#[test]
+fn hb04_the_door_sidecars_carry_no_door_configuration() {
+    let compose = compose();
+    let key = (
+        "AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE".to_owned(),
+        "/run/secrets/authelia_storage_key".to_owned(),
+    );
+    let pairs = |items: &[(&str, &str)]| -> Vec<(String, String)> {
+        let mut pairs: Vec<(String, String)> = items
+            .iter()
+            .map(|(source, target)| ((*source).to_owned(), (*target).to_owned()))
+            .collect();
+        pairs.sort();
+        pairs
+    };
+    let cases = [
+        (
+            "dump-door",
+            pairs(&[
+                ("./ops", "/opt/hub-ops"),
+                ("./admin", "/opt/hub-admin"),
+                ("./admin-log", "/var/lib/hub-admin"),
+                ("./authelia/users", "/users"),
+                ("./traefik/mcp-users", "/mcp-users"),
+                ("authelia-data", "/var/lib/authelia"),
+                ("hub-dumps", "/dumps"),
+            ]),
+            BTreeMap::from([key.clone()]),
+        ),
+        (
+            ADMIN,
+            pairs(&[
+                ("./admin", "/opt/hub-admin"),
+                ("./admin-log", "/var/lib/hub-admin"),
+                ("./authelia/users", "/users"),
+                ("./traefik/mcp-users", "/mcp-users"),
+                ("./traefik/dynamic", "/traefik-dynamic"),
+                ("authelia-data", "/var/lib/authelia"),
+            ]),
+            BTreeMap::from([
+                ("HUB_HOST".to_owned(), "${HUB_HOST}".to_owned()),
+                key.clone(),
+            ]),
+        ),
+    ];
+    for (name, want_mounts, want_env) in cases {
+        let what = name.to_owned();
+        let sidecar = service(&compose, name);
+        let mut have = mounts(sidecar, &what);
+        have.sort();
+        assert_eq!(have, want_mounts, "{name}: its mounts, as before the slice");
+        assert!(
+            have.iter()
+                .all(|(_, target)| target != "/config" && !target.starts_with("/config/")),
+            "{name}: no /config mount: {have:?}"
+        );
+        let env = environment(sidecar, &what);
+        assert_eq!(
+            env, want_env,
+            "{name}: its environment, as before the slice"
+        );
+        assert_eq!(
+            grants(sidecar, &what),
+            BTreeSet::from(["authelia_storage_key".to_owned()]),
+            "{name}: the storage key alone, no session or JWT secret"
+        );
+        assert_eq!(
+            sidecar.get("network_mode").and_then(Value::as_str),
+            Some("none"),
+            "{name}: network_mode: none"
+        );
+    }
+    let door = service(&compose, "authelia");
+    assert!(
+        mounts(door, "authelia").contains(&("./authelia/config".to_owned(), "/config".to_owned())),
+        "the door itself reads its configuration at /config"
     );
 }

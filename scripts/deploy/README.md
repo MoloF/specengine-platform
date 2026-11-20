@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [scripts/deploy]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-20
 ---
 
 # scripts/deploy -- a hub on one host
 
-The operator's guide: from a clean Linux VPS with Docker to a running hub. Why the files are trusted: `docs/canon/hub-deploy.md`; the hub itself: `docs/canon/hub.md`. Accounts are `hub-admin`'s; dumps, restore, upgrades, health and `--push`: `docs/canon/hub-ops.md`.
+The operator's guide: from a clean Linux VPS with Docker to a running hub. Why the files are trusted: `docs/canon/hub-deploy.md`; the hub: `docs/canon/hub.md`; dumps, restore, upgrades, health, `--push`: `docs/canon/hub-ops.md`.
 
 ## Before you start
 
@@ -34,6 +34,7 @@ sudo install -d -o 10001 -g 10001 projects
 for s in authelia_session_secret authelia_storage_key authelia_jwt_secret restic_password; do
   openssl rand -hex 32 > secrets/$s
 done
+touch secrets/restic_env
 ssh-keygen -t ed25519 -N '' -C specengine-hub -f secrets/deploy_key
 chmod 600 secrets/*
 sudo chown 10001:10001 secrets/deploy_key
@@ -42,7 +43,7 @@ sudo chown 10001:10001 secrets/deploy_key
 - Add `secrets/deploy_key.pub` to the project's repository as a deploy key, read-only for now (write comes with `--push`: `docs/canon/hub-ops.md` "Push"). Then delete or move the `.pub` file out of `secrets/`.
 - `secrets/known_hosts` holds the forge's published SSH host keys, checked against the fingerprints it documents: `ssh-keyscan` alone trusts the network. `chown 10001:10001` it too.
 - `authelia_storage_key` encrypts the door's database: lose it and every account is lost with it.
-- `secrets/restic_env`: the dumps' backend, `RESTIC_REPOSITORY` and its keys, a `KEY=value` a line (`docs/canon/hub-ops.md` "Restic"); then `docker compose run --rm backup init`, once. Keep `.env`, `restic_password` and `restic_env` off the host too, or no dump can be read.
+- **Off-host backups** stay off until the owner turns them on ("Going live"): with `restic_env` empty, `backup` waits, unhealthy, its line(s) each round.
 
 The container user is 10001: if a mounted file or folder is not theirs, git refuses a "dubious ownership" and ssh a key file's mode.
 
@@ -56,7 +57,7 @@ Keep the printed password, then bring a project over: its step 3 is the first `u
 
 ## Accounts
 
-`docker compose run --rm admin <act>`: a one-shot container with no network or log on the door's own image (`docs/canon/hub-deploy.md` "Accounts"). Root is your shell here. Acts that write, and `code`, need a terminal: a piped `run -T` is refused. One act at a time; each is logged in `admin-log/acts.log`, never a secret.
+`docker compose run --rm admin <act>`: a one-shot container with no network or log on the door's own image. Root is your shell here. Acts that write, and `code`, need a terminal: a piped `run -T` is refused. One act at a time; each is logged in `admin-log/acts.log`, never a secret.
 
 | Act | Does |
 |---|---|
@@ -100,7 +101,7 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
      git@<forge>:<owner>/<repo>.git <name> "SpecEngine hub" hub@example.org
    ```
 
-   `<name>` is `[a-z0-9][a-z0-9-]*`; the identity signs the hub's merge commits (`docs/canon/hub-deploy.md` "Clone"). The project's `specengine.toml` must sit at its repository's top. A failure names the folder to remove.
+   `<name>` is `[a-z0-9][a-z0-9-]*`; the identity signs the hub's merge commits. The project's `specengine.toml` must sit at its repository's top. A failure names the folder to remove.
 3. `docker compose up -d`, or `docker compose restart specengine` for a later project: the entrypoint serves the folders it finds at start.
 4. Copy the dump to `projects/<name>.jsonl`, readable by 10001, then restore it into the empty queue and delete it:
 
@@ -113,17 +114,14 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 ## Going live
 
 - **TLS.** The staging CA gives untrusted certificates: check the whole flow with them. Then set `ACME_CA_SERVER=https://acme-v02.api.letsencrypt.org/directory`, `docker compose down`, remove the `traefik-acme` volume, `docker compose up -d`.
-- **Running.** `docker compose ps`: `specengine` and `backup` healthy; if not, `docker compose logs dump-queue dump-door backup` say why. Runbooks: `docs/canon/hub-ops.md` "Restore", "Upgrade", "Push".
+- **Running.** `docker compose ps`: `specengine` healthy, `backup` once backups are on; else `docker compose logs dump-queue dump-door backup` say why (`dump-door`: `dumped …` each round). Runbooks: `docs/canon/hub-ops.md` "Restore", "Upgrade", "Push".
 - **Slow pages.** `docker compose logs -t --since 2h specengine | grep ' slow '`, then `traefik`'s: `docs/canon/serve-slow.md` "Reading them". Every request's line: `SPECENGINE_SLOW_MS=0` in `.env`, `docker compose up -d`; after, remove it, `up -d`.
+- **Off-host backups**, the owner's step: choose a restic backend; write `RESTIC_REPOSITORY` and its keys into `secrets/restic_env` (`docs/canon/hub-restic.md`) in place, or `docker compose restart backup` after an editor that saves by rename (the secret is a bind mount of the old inode); keep it, `restic_password` and `.env` off the host too; `docker compose run --rm backup init` once. After a round, `docker compose run --rm backup snapshots` lists `queue` and `door` under 35 minutes old and `backup` is healthy; then a restore drill on a scratch host (`hub-ops.md` "Restore").
 - **The gate.** Before real people, the owner tries the hub by hand (step 11b-3, `docs/features/hub-deploy.md` H1-H17). `--push` waits for it.
 
 ## Before the gate
 
-`hub-admin` was tested against a stand-in for the door's CLI. On the pinned images, before real people (`docs/features/hub-accounts.md` VF1-VF3):
-1. **The door's image:** `sh`, `awk`, `od`, `base64`; `crypto hash generate --random`, its output, the lowest bcrypt cost; both `storage user ... delete` calls, and their answer on nothing; no default user for a missing users file; a start on a read-only one.
-2. **The proxy:** a new stamp (`mcp-stamp.yml`) makes it read the MCP users file again; `$2b$` digests pass; what a missing users file does to `/mcp`.
-3. **The door, on Linux:** a `disable` ends a live session at its next request; two edits in a row are both read.
-4. **Dumps and health:** VF4-VF9 of `docs/features/hub-ops.md`.
+`hub-admin` and `hub-ops` were tested against stand-ins; the door's storage calls were checked on its pinned image on 2026-11-20 (`docs/features/hub-backups.md` HB5). Before real people, on the pinned images: VF1-VF3 of `docs/features/hub-accounts.md` and VF4-VF9 of `docs/features/hub-ops.md`.
 
 ## Limits
 

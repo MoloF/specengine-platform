@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [scripts/deploy, .github/workflows]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-20
 ---
 
 # Hub ops: off-host dumps, restore, upgrade, health and `--push`
 
-ADR-0071, built by `hub-ops` (RM-0074, step 11b-2), working answers of 2026-11-04, the owner's review open. A hub's state leaves the host every 15 minutes, encrypted; no crate change, Docker socket or `docker exec`. Files: `scripts/deploy/`; setup: its guide.
+ADR-0071, built by `hub-ops` (RM-0074, step 11b-2), working answers of 2026-11-04, the owner's review open. A hub's state leaves the host every 15 minutes, encrypted, once the owner names a backend (`hub-restic.md`); no crate change, Docker socket or `docker exec`. Files: `scripts/deploy/`; setup: its guide.
 
 <a id="dumps"></a>
 ## Dumps
@@ -27,16 +27,11 @@ Three sidecars, `restart: unless-stopped`, `init: true`, run `/bin/sh /opt/hub-o
 - **`door`**: `hub-admin dump <tmp>` ("Door dump"); a failure empties the staging; 13 tries, 12 sleeps of 10 s, then `skipped: <its last line>`, exit 1; a timeout is not retried.
 - **`upload`**: `queue`, then `door`, its newest complete generation copied (`cp -Rp`) to `/snapshot/<part>`, then `restic backup --host "$HUB_HOST" --tag <part> /snapshot/<part>`. Not whole: none, one past 35 minutes or with `CARRIED` (still sent, its projects logged), a restic exit but 0. Exit 10 logs `run docker compose run --rm backup init`, never an `init`; 12, `the repository password is wrong`. At 03:05, per part, `forget --host <h> --tag <part> --keep-within 48h --keep-daily 30`, then `prune`. Whole: `/state/ok` touched.
 
-**Exits**: 0 whole; 1 failed or not whole, named; 2 a bad call or setting, before anything. A loop ends on 2 or a signal (TERM: child ended, staging removed, 143). **Lines** open `hub-ops: <mode> <t>: `. No dump blocks anything (ADR-0012).
+**Exits**: 0 whole; 1 failed or not whole, named; 2 a bad call or setting, before anything. A loop ends on a signal alone (TERM: child ended, staging removed, 143): a setting refused at its start or in a round (`HUB_HOST`, `restic_env`) fails that round with its line, so the service stays up, unhealthy, never restarting; `once` and the acts exit 2 on it. **Lines** open `hub-ops: <mode> <t>: `. No dump blocks anything (ADR-0012).
 
 ## Restic
 
-- **`secrets/restic_password`** (`openssl rand -hex 32`, `RESTIC_PASSWORD_FILE`) and **`secrets/restic_env`**, not `.env` (a URL may hold a password): Docker secrets of `backup` alone, 600. Encryption is restic's, client-side.
-- **`restic_env`**: a `KEY=value` per LF-ended line; empty and `#` lines skipped. Keys, each once: `RESTIC_REPOSITORY` (required), `RESTIC_REST_USERNAME`, `RESTIC_REST_PASSWORD`, or `AWS_`, `B2_`, `AZURE_`, `GOOGLE_`, `OS_`, `ST_` then `[A-Z0-9_]`. Read as data, never sourced: the value is the rest of the line. Another line, or a CR end, is exit 2 naming its number, and its key only as an upper-case shell name (`[A-Z_][A-Z0-9_]*`, at most 64 B), else `not KEY=value`: text before `=` may be a pasted secret. No value is printed.
-- **Redaction**: restic's last line is logged with every occurrence of each value covered as `<KEY>`, longest first, overlaps too.
-- **Retention**: per `--host <HUB_HOST>`, tags `queue` and `door` apart; every round for 48 hours, one a day for 30 days.
-- **Acts**, `docker compose run --rm backup <act>`: `init` (never automatic), `snapshots`, `check`, `restore DIR [QUEUE DOOR]` (`restic restore <id>:/snapshot/<part> --target DIR/<part>`, `DIR` empty; `latest`, the default, by host and tag).
-- **`fresh`**, `backup`'s healthcheck (5 min, one retry, 20 min start): 0 when `/state/ok` and both parts' newest generations are under 35 minutes old.
+The backend, its two secrets, `restic_env`'s lines, redaction, retention, `backup`'s acts and `fresh`: `hub-restic.md`.
 
 ## Door dump
 
@@ -44,7 +39,9 @@ Three sidecars, `restart: unless-stopped`, `init: true`, run `/bin/sh /opt/hub-o
 - Exit 2 before anything: not one existing empty `DIR`, or `-`-led.
 - The lock, never waited for or broken; held: exit 1, `another act or a dump holds admin-log/lock (taken <time>); if none runs, remove it` (every act's). A stale lock stops door dumps; `fresh` shows it.
 - No or empty users file: exit 1.
-- It copies by `cat`, each present: `users.yml`, the MCP users file as `mcp-users`, `acts.log`. With `db.sqlite3`: `authelia storage user webauthn export --file DIR/webauthn.yml`, then `totp`'s, each under `timeout` `DUMP_BOUND` (300 s; none: exit 1); exit 1 `the dump timed out` or `the door's passkey|TOTP export failed: <door said>`. stdout: `dumped <files>`.
+- It copies by `cat`, each present: `users.yml`, the MCP users file as `mcp-users`, `acts.log`. With `db.sqlite3`: `authelia storage user webauthn export --config C --file DIR/webauthn.yml`, then `totp`'s, each under `timeout` `DUMP_BOUND` (300 s; none: exit 1); exit 1 `the dump timed out` or `the door's passkey|TOTP export failed: <door said>`. stdout: `dumped <files>`.
+- **An empty export**, its file left out, is one that exits 1, writes no file and says exactly `Error: no data to export` (no one holds a passkey, or a TOTP); any other failure still refuses the dump, exit 1. `restore` skips a missing file.
+- **`C`**, on every storage call (the dump's exports, `restore`'s migration and imports, `reset`'s deletes; `disable` makes no door call): `<tmp>/hub-admin.<pid>.storage.yml`, comment-only, mode 600, written before each call and removed. Without it the CLI loads `/config/configuration.yml`, the image's `X_AUTHELIA_CONFIG`, which neither `admin` nor `dump-door` mounts. Verified on 4.39.28, 2026-11-20 (`hub-backups.md` HB5).
 
 Never dumped: the deploy key, Authelia's secrets (a restore imports under new ones), `traefik-acme`, the index, `proposal-floor`, `.env`.
 
@@ -73,9 +70,9 @@ Without `--push` the hub's commits die with the host: a restored `applied` propo
 ## Upgrade
 
 1. `git diff v<old> v<new> -- scripts/deploy`.
-2. A dump on the old version, each exit 0: `docker compose run --rm dump-queue queue once`, `... dump-door door once`, `... backup upload once`; note both snapshot IDs (no `backup` service: copy the dumps off tmpfs first).
+2. A dump on the old version, each exit 0: `docker compose run --rm dump-queue queue once`, `... dump-door door once`, `... backup upload once`; note both snapshot IDs (backups off, or no `backup` service: copy the dumps off tmpfs first).
 3. `git fetch --tags origin && git checkout v<new>`, `diff .env.example .env` (new optional keys may stay unset), `SPECENGINE_VERSION=<new>`.
-4. `docker compose pull`, `up -d`, `ps`: all healthy.
+4. `docker compose pull`, `up -d`, `ps`: all healthy (`backup` only once backups are on).
 
 Migrations run forward: an older binary refuses the DB. Back: `down`, the old tag and `.env`, remove `specengine-data`, the floor if raised, `up -d traefik authelia specengine`, the noted queue snapshot by Restore step 6, `up -d`; a door pin alike (`authelia-data`, the door snapshot). Every `spec` writing to its repositories runs 0.29.1+ before a hub's first record or create (`spec-ids.md` "Older binaries").
 
@@ -103,13 +100,11 @@ ADR-0082, from 0.47.0 (`hub-auto.md`). Older binaries refuse `[auto]`: upgrade t
 
 ## Known limits
 
-- Until VF4-VF9 (`docs/features/hub-ops.md`): the door's exports and imports (from memory), the images' `find -prune -mmin`, `date -u +%s`, `awk` `ENVIRON`, `tr`, `ls -A`, restic's exits 10, 12; redaction tried in BSD awk alone.
+- The door's storage calls verified on 4.39.28, 2026-11-20 ("Door dump"). Until VF4-VF9 (`docs/features/hub-ops.md`): the images' `find -prune -mmin`, `date -u +%s`, `awk` `ENVIRON`, `tr`, `ls -A`, restic's exits 10, 12; redaction tried in BSD awk alone.
 - tmpfs can be swapped: plaintext stays off the host's disk only without swap.
-- An all-upper-case pasted secret with `=` padding is named as a key; no backend key has that shape.
 - `fresh` turns unhealthy about 40 minutes after a part's last generation (busybox `-mmin +35` is 36, plus the check's 5).
 - A timeout is read by its exit: an OOM kill reads `timed out`; a door exiting 1 on TERM is retried (VF5).
 - A claim `mkdir` failing for space reads `claimed by another round`; a CRLF empty line is `not KEY=value`; the probe's connect waits Docker's 10 s.
-- An intruder on the host can delete the backups unless the backend locks objects.
 
 ## Tests
 

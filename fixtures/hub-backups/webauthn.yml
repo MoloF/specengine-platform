@@ -1,0 +1,18 @@
+webauthn_credentials:
+  - created_at: 2026-11-20T00:00:00Z
+    rpid: door.hub.example
+    username: alice
+    description: invented key
+    kid: aHViLWJhY2t1cHMtaW52ZW50ZWQta2V5LWlk
+    attestation_type: none
+    attachment: cross-platform
+    transports: [usb]
+    sign_count: 1
+    clone_warning: false
+    legacy: false
+    discoverable: false
+    present: true
+    verified: true
+    backup_eligible: false
+    backup_state: false
+    public_key: aHViLWJhY2t1cHMtaW52ZW50ZWQtcHVibGljLWtleS1ieXRlcw==

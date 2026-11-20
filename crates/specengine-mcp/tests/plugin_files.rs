@@ -310,6 +310,10 @@
 //!   (RM-0127 changed no plugin file). A `PINS` entry 0.47.2, the tree with
 //!   plugin.json's version set back 0.47.1's; no `SCHEMA_PINS` entry, the
 //!   last still 0.46.0. M: plugin.json left at 0.47.1; another file changed.
+//! - hub-backups (RM-0130): 0.48.0 -> 0.48.1, PATCH, a version-only bump
+//!   (RM-0130 changed no plugin file). A `PINS` entry 0.48.1, the tree with
+//!   plugin.json's version set back 0.48.0's; no `SCHEMA_PINS` entry, the
+//!   last still 0.48.0. M: plugin.json left at 0.48.0; another file changed.
 //!
 //! The repository is only read.
 
@@ -785,6 +789,12 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.48.0",
         "5a954b511846555898c0948715920bb8fb18bf14964ac85ac838511c7599f66e",
+    ),
+    // hub-backups (RM-0130: 0.48.0 -> 0.48.1, PATCH): plugin.json's version
+    // alone; set back, the tree hashes as 0.48.0's pin.
+    (
+        "0.48.1",
+        "cc67d79510cebd724d557ed08f4739ea02efe8f6c1dba8a636e6ce8db7fd0ee4",
     ),
 ];
 
@@ -2401,7 +2411,10 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// skill text changed), 0.46.1 since the patch of RM-0114 to RM-0119 (no skill
 /// text changed), 0.47.0 since auto-mode (RM-0120 to RM-0124: no skill text
 /// changed), 0.47.1 since write-cost (RM-0125: no skill text changed),
-/// 0.47.2 since doc-library (RM-0127: no skill text changed).
+/// 0.47.2 since doc-library (RM-0127: no skill text changed), 0.48.0 since
+/// department-practices (RM-0128: `read-spec`'s card sentence, its
+/// description unchanged), 0.48.1 since hub-backups (RM-0130: no skill text
+/// changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2424,7 +2437,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.48.0")
+        json!("0.48.1")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2577,11 +2590,36 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // hub-backups (RM-0130: 0.48.0 -> 0.48.1, PATCH): plugin.json's version
+    // alone; set back, the tree is 0.48.0's pinned content, every skill and
+    // role byte-equal. M: plugin.json left at 0.48.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.48.1"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.48.1"),
+        "plugin.json's version"
+    );
+    let at_0_48_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.48.1\"",
+        "\"version\": \"0.48.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_48_0),
+        PINS[PINS.len() - 2].1,
+        "0.48.1 changes plugin.json's version only"
+    );
+    let tree = at_0_48_0;
+    let pins_0_48_0 = &PINS[..PINS.len() - 1];
     // department-practices (RM-0128: 0.47.2 -> 0.48.0, MINOR): plugin.json's
     // version and `read-spec`'s card sentence; both set back, the tree is
     // 0.47.2's pinned content, every other skill and role byte-equal. M:
     // plugin.json left at 0.47.2; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.48.0"));
+    assert_eq!(
+        pins_0_48_0.last().map(|(version, _)| *version),
+        Some("0.48.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.48.0"),
@@ -2602,11 +2640,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_47_2),
-        PINS[PINS.len() - 2].1,
+        pins_0_48_0[pins_0_48_0.len() - 2].1,
         "0.48.0 changes plugin.json's version and read-spec's card sentence only"
     );
     let tree = at_0_47_2;
-    let pins_0_47_2 = &PINS[..PINS.len() - 1];
+    let pins_0_47_2 = &pins_0_48_0[..pins_0_48_0.len() - 1];
     // doc-library (RM-0127: 0.47.1 -> 0.47.2, PATCH): plugin.json's version
     // alone; set back, the tree is 0.47.1's pinned content, every skill and
     // role byte-equal. M: plugin.json left at 0.47.1; another file changed.

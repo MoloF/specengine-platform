@@ -40,6 +40,12 @@
 //!
 //! C4 and C5 run on CI alone; OP5 checks their steps exist. VF4-VF9 and
 //! HO1-HO17 are the owner's.
+//!
+//! docs/features/hub-backups.md (RM-0130) HB7 and HB8, `hb07_*` and
+//! `hb08_*`: an `upload` loop with a refused setting waits, one line a round,
+//! and takes a fixed `restic_env` at its next round (the stub `sleep`'s
+//! `sleep-put-at` writes it between two rounds). HB1-HB3, HB5 and HB6 are
+//! `tests/deploy_admin.rs`, HB4 `tests/deploy.rs`.
 
 #![cfg(unix)]
 
@@ -201,7 +207,9 @@ fi
 "#;
 
 /// The stub `sleep`: it returns at once. A hundredth call ends a loop that
-/// was never meant to run that long.
+/// was never meant to run that long. At the call `sleep-put-at` names it
+/// writes `sleep-put` whole (a sibling file renamed) over the path
+/// `sleep-put-to` holds: the operator's fix between two rounds (HB8).
 const SLEEP_STUB: &str = r#"#!/bin/sh
 rec='@REC@'
 n=1
@@ -213,6 +221,10 @@ if [ -f "$rec/sleep-advance" ]; then
         '' | *[!0-9]*) ;;
         *) printf '%s\n' "$(( $(cat "$rec/clock") + $1 ))" > "$rec/clock" ;;
     esac
+fi
+if [ "$(cat "$rec/sleep-put-at" 2>/dev/null)" = "$n" ]; then
+    to=$(cat "$rec/sleep-put-to")
+    cat "$rec/sleep-put" > "$to.put" && mv "$to.put" "$to"
 fi
 if [ "$(cat "$rec/sleep-term-at" 2>/dev/null)" = "$n" ] || [ "$n" -ge 100 ]; then
     kill -TERM "$PPID"
@@ -3642,6 +3654,232 @@ fn op21_the_loops_run_on_the_grid_and_end_on_term() {
             ops.entries("queue")
         );
         assert!(ops.entries("queue").is_empty(), "{shell}: no generation");
+    }
+}
+
+// ------------------------------------------------------------- HB7-HB8: upload waits
+
+/// A refused `upload` setting as docs/features/hub-backups.md HB7 lists
+/// them: its label, how a test makes it, whether `HUB_HOST` is given, and
+/// the line `hub-ops` says for it.
+struct Refused {
+    label: &'static str,
+    make: fn(&Ops),
+    host: bool,
+    line: fn(&Ops) -> String,
+}
+
+/// [`RESTIC_ENV`] without its `RESTIC_REPOSITORY` line.
+fn env_without_repository() -> String {
+    RESTIC_ENV
+        .lines()
+        .filter(|line| !line.starts_with("RESTIC_REPOSITORY="))
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
+fn cannot_read(ops: &Ops) -> String {
+    format!(
+        "cannot read {}: put restic_env in secrets/ beside restic_password",
+        ops.path("run/secrets/restic_env").display()
+    )
+}
+
+/// HB7's settings and "Rules"' "refused at a line": no `RESTIC_REPOSITORY`,
+/// `restic_env` missing, unreadable, refused at its second line, and
+/// `HUB_HOST` unset.
+fn refused_settings() -> [Refused; 5] {
+    [
+        Refused {
+            label: "no RESTIC_REPOSITORY",
+            make: |ops| ops.put("run/secrets/restic_env", &env_without_repository()),
+            host: true,
+            line: |_| "restic_env: no RESTIC_REPOSITORY line: name the repository".to_owned(),
+        },
+        Refused {
+            label: "restic_env missing",
+            make: |ops| fs::remove_file(ops.path("run/secrets/restic_env")).expect("removed"),
+            host: true,
+            line: cannot_read,
+        },
+        Refused {
+            label: "restic_env unreadable",
+            make: |ops| {
+                let path = ops.path("run/secrets/restic_env");
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).expect("000");
+                assert!(
+                    fs::read(&path).is_err(),
+                    "a mode 000 file this user still reads: run the tests as no root"
+                );
+            },
+            host: true,
+            line: cannot_read,
+        },
+        Refused {
+            label: "a refused line",
+            make: |ops| {
+                ops.put(
+                    "run/secrets/restic_env",
+                    &format!("{RESTIC_ENV}RESTIC_PASSWORD=restic-password-77aa\n"),
+                );
+            },
+            host: true,
+            line: |_| {
+                "restic_env:5: RESTIC_PASSWORD: the password is secrets/restic_password, read \
+                 through RESTIC_PASSWORD_FILE"
+                    .to_owned()
+            },
+        },
+        Refused {
+            label: "HUB_HOST unset",
+            make: |_| {},
+            host: false,
+            line: |_| "HUB_HOST is not set: give it in .env".to_owned(),
+        },
+    ]
+}
+
+/// The epochs an `upload` loop started at `e` says its lines at, with the
+/// stub `sleep` advancing the clock: the start, the round after `sleep 60`,
+/// then `slots` slots of the grid offset by 300 s.
+fn upload_times(e: i64, slots: usize) -> Vec<i64> {
+    let mut times = vec![e, e + 60];
+    let mut now = e + 60;
+    for _ in 0..slots {
+        now = now - (now - 300) % 900 + 900;
+        times.push(now);
+    }
+    times
+}
+
+/// docs/features/hub-backups.md HB7 and "The loop": `hub-ops upload`, loop
+/// mode, under the stub clock (each `sleep` advancing it), with a refused
+/// setting (no `RESTIC_REPOSITORY`; `restic_env` missing, unreadable or
+/// refused at a line; `HUB_HOST` unset) does not exit over three slots:
+/// `sleep 60`, then the grid; exactly one line at start and one per round,
+/// the setting's own, each with its round's time; no `restic` call;
+/// `state/ok` absent and `hub-ops fresh` exit 1 though both parts are
+/// fresh; TERM at the fifth `sleep` gives 143; no value printed (R5).
+/// `upload once` still exits 2 with the line and calls nothing. M: `need_host;
+/// read_env || exit 2` back before the loop (exit 2 at once).
+#[test]
+fn hb07_an_unconfigured_upload_loop_waits_and_says_why_each_round() {
+    let e = DAY + 12 * 3600 + 7 * 60 + 30;
+    let times = upload_times(e, 3);
+    for shell in shells() {
+        for refused in refused_settings() {
+            let label = format!("{shell}: {}", refused.label);
+            let ops = Ops::new("hb07", &shell);
+            ops.set_clock(e);
+            ops.fresh_parts();
+            (refused.make)(&ops);
+            let line = (refused.line)(&ops);
+            ops.control("sleep-advance", "");
+            ops.control("sleep-term-at", "5");
+            let ran = ops.run_with(&["upload"], refused.host, &mut |_: Option<u32>| {});
+            ran.code(143).holds_none(&SECRETS);
+            let want: Vec<String> = times
+                .iter()
+                .map(|t| format!("hub-ops: upload {}: {line}", stamp(*t)))
+                .collect();
+            assert_eq!(ran.lines(), want, "{label}: {}", ran.show());
+            let first_slot = times[2] - times[1];
+            assert_eq!(
+                ops.sleeps(),
+                ["60", &first_slot.to_string(), "900", "900", "900"],
+                "{label}: sleep 60, then the grid"
+            );
+            assert!(ops.restic_args().is_empty(), "{label}: no restic call");
+            assert!(!ops.path("state/ok").exists(), "{label}: no state/ok");
+
+            let fresh = ops.run(&["fresh"]);
+            fresh.code(1);
+            assert_eq!(
+                fresh.lines(),
+                [format!(
+                    "hub-ops: fresh {}: no whole round within 35 minutes: docker compose logs \
+                     dump-queue dump-door backup say why",
+                    stamp(ops.clock())
+                )],
+                "{label}: fresh fails on the round alone, both parts fresh"
+            );
+
+            let once = ops.run_with(&["upload", "once"], refused.host, &mut |_: Option<u32>| {});
+            once.code(2).holds_none(&SECRETS);
+            assert!(
+                once.lines()
+                    .iter()
+                    .any(|said| said.ends_with(&format!(": {line}"))),
+                "{label}: upload once says the line: {}",
+                once.show()
+            );
+            assert!(ops.restic_args().is_empty(), "{label}: once calls nothing");
+        }
+    }
+}
+
+/// docs/features/hub-backups.md HB8 and "Rules": with the loop of HB7 (no
+/// `RESTIC_REPOSITORY`, or no `restic_env` at all), `restic_env` written
+/// whole between the first and the second round (by the stub `sleep`) is
+/// taken by the next round with no restart: it runs `restic backup --host <h>
+/// --tag queue` then `--tag door`, the fixed file's keys in their
+/// environment, says `whole` and touches `state/ok`; `fresh` then exits 0.
+/// The two refused rounds said their line; TERM gives 143.
+#[test]
+fn hb08_a_fixed_restic_env_is_taken_by_the_next_round() {
+    let e = DAY + 12 * 3600 + 7 * 60 + 30;
+    let times = upload_times(e, 1);
+    for shell in shells() {
+        for start in ["no RESTIC_REPOSITORY", "restic_env missing"] {
+            let label = format!("{shell}: {start}");
+            let ops = Ops::new("hb08", &shell);
+            ops.set_clock(e);
+            ops.fresh_parts();
+            let refused = refused_settings()
+                .into_iter()
+                .find(|refused| refused.label == start)
+                .expect("a refused setting");
+            (refused.make)(&ops);
+            let line = (refused.line)(&ops);
+            ops.control("sleep-put", RESTIC_ENV);
+            ops.control("sleep-put-to", text_of(&ops.path("run/secrets/restic_env")));
+            ops.control("sleep-put-at", "2");
+            ops.control("sleep-advance", "");
+            ops.control("sleep-term-at", "3");
+            let ran = ops.run(&["upload"]);
+            ran.code(143).holds_none(&SECRETS);
+            assert_eq!(
+                ran.lines(),
+                [
+                    format!("hub-ops: upload {}: {line}", stamp(times[0])),
+                    format!("hub-ops: upload {}: {line}", stamp(times[1])),
+                    format!("hub-ops: upload {}: whole", stamp(times[2])),
+                ],
+                "{label}: {}",
+                ran.show()
+            );
+            let calls = ops.restic_calls();
+            assert_eq!(
+                calls
+                    .iter()
+                    .map(|call| call.args.clone())
+                    .collect::<Vec<_>>(),
+                [
+                    backup_call(&ops.root, "queue"),
+                    backup_call(&ops.root, "door")
+                ],
+                "{label}: the next round sends both parts"
+            );
+            for call in &calls {
+                assert_eq!(
+                    call.env.get("RESTIC_REPOSITORY").map(String::as_str),
+                    Some("s3:https://s3.example.org/hub-dumps"),
+                    "{label}: the fixed file's repository"
+                );
+            }
+            assert!(ops.path("state/ok").is_file(), "{label}: state/ok touched");
+            ops.run(&["fresh"]).code(0);
+        }
     }
 }
 

@@ -14,12 +14,14 @@
 #   init, snapshots, check, restore DIR [QUEUE DOOR]   backup's acts, by hand
 # A loop runs a round at start, then one a slot on a 15-minute UTC grid,
 # keeping no state but the clock and the generations' names (S5); a failed
-# round is logged and the next slot runs. Plaintext stays on tmpfs (R4):
-# the hub-dumps volume and backup's /snapshot and /state. restic_env is read
-# line by line, never sourced, and no line this prints holds a secret or one
-# of its values (R5). Every path sits under HUB_OPS_ROOT, empty in a
-# container, as HUB_ADMIN_ROOT is hub-admin's. POSIX sh: dash, busybox ash,
-# macOS's sh; bytes under LC_ALL=C.
+# round is logged and the next slot runs. A loop ends on a signal alone: a
+# setting refused at its start or in a round (HUB_HOST, restic_env) fails
+# that round with its line; `once` and the acts exit 2 on it. Plaintext
+# stays on tmpfs (R4): the hub-dumps volume and backup's /snapshot and
+# /state. restic_env is read line by line, never sourced, and no line this
+# prints holds a secret or one of its values (R5). Every path sits under
+# HUB_OPS_ROOT, empty in a container, as HUB_ADMIN_ROOT is hub-admin's.
+# POSIX sh: dash, busybox ash, macOS's sh; bytes under LC_ALL=C.
 set -u
 LC_ALL=C
 export LC_ALL
@@ -143,8 +145,25 @@ is_empty_dir() {
     [ -z "$entries" ]
 }
 
+# HUB_HOST is set; else 1, said.
+host_set() {
+    [ -n "${HUB_HOST:-}" ] && return 0
+    say "HUB_HOST is not set: give it in .env"
+    return 1
+}
+
 need_host() {
-    [ -n "${HUB_HOST:-}" ] || bad "HUB_HOST is not set: give it in .env"
+    host_set || exit 2
+}
+
+# upload's settings, HUB_HOST and restic_env, each refusal said: what a loop
+# checks at its start and every round reads anew, so a fixed restic_env is
+# taken by the next round with no restart. 1 when either is refused.
+upload_settings() {
+    settings_ok=1
+    host_set || settings_ok=
+    read_env || settings_ok=
+    [ -n "$settings_ok" ]
 }
 
 # `$1` is older than `$2` minutes (`find -mmin`); one find cannot judge is.
@@ -524,12 +543,13 @@ restic_round() {
 # "An `upload` round", `$1` non-empty in the 03:05 UTC one: the newest
 # complete generation of each part copied to /snapshot and sent; the round
 # is whole when each was there, young and carrying nothing, and every
-# restic call answered 0. Only a whole round touches /state/ok.
+# restic call answered 0. Only a whole round touches /state/ok. A refused
+# setting fails the round before restic, with its line, and the loop goes on.
 upload_round() {
     prunes=$1
     now_stamp
     whole=1
-    read_env || return 1
+    upload_settings || return 1
     if ! mkdir -p "$snapshot" "$state"; then
         say "cannot make /snapshot or /state: the round is skipped"
         return 1
@@ -720,12 +740,17 @@ case $mode in
         loop door_round 0
         ;;
     upload)
-        need_host
-        read_env || exit 2
         if [ -n "$once" ]; then
+            need_host
+            read_env || exit 2
             upload_round ""
             exit
         fi
+        # A loop never exits on a setting: restart: unless-stopped would run
+        # it again at once, a restart loop. A refused one is said here and
+        # by every round, which then runs no restic nor touches /state/ok, so
+        # `fresh` fails; the operator's fix is read by the next round.
+        upload_settings || :
         pause "$upload_delay"
         upload_round ""
         loop upload_round "$upload_offset"

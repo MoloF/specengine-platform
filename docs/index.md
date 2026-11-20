@@ -21,7 +21,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/hub-backups.md](features/hub-backups.md) hub-backups: the door's dump stops failing, and backup waits instead of restart-looping (RM-0130) · scripts, crates/specengine-http · draft
 - [docs/features/specengine-guide.md](features/specengine-guide.md) specengine-guide: SpecEngine's own guide, embedded and served beside every project (RM-0129) · docs, crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, crates/specengine-import, crates/specengine-eval, plugin, scripts, ui · draft
 - [docs/features/zone-index.md](features/zone-index.md) zone-index: canon under the index entry's unlisted globs takes no line, and canon retires by status (RM-0055) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, docs · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress

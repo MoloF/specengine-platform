@@ -19,5 +19,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/hub-git.md](canon/hub-git.md) Hub git: a --push hub fetches, merges and pushes, never rebasing · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/hub-mcp.md](canon/hub-mcp.md) Hub MCP: /mcp/<slug> under each request's login · crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, ui · tier 2
 - [docs/canon/hub-ops.md](canon/hub-ops.md) Hub ops: off-host dumps, restore, upgrade, health and --push · scripts/deploy, .github/workflows · tier 2
+- [docs/canon/hub-restic.md](canon/hub-restic.md) Hub restic: the off-host backend, off until the owner names one · scripts/deploy · tier 2
 - [docs/canon/hub-team.md](canon/hub-team.md) Hub team: who acts past the plain writes · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/hub.md](canon/hub.md) Hub mode: a public origin and one trusted login · crates/specengine-http, ui · tier 2

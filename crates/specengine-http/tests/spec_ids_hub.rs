@@ -905,7 +905,8 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
 /// since auto-mode (RM-0120 to RM-0124) 0.47.0; since the patch of RM-0125
 /// (write-cost, a version-only bump) 0.47.1; since the patch of RM-0127
 /// (doc-library, a version-only bump) 0.47.2; since department-practices
-/// (RM-0128, MINOR) 0.48.0.
+/// (RM-0128, MINOR) 0.48.0; since the patch of RM-0130 (hub-backups, a
+/// version-only bump) 0.48.1.
 #[test]
 fn ac8d_the_release_tag_is_the_plugin_version() {
     let scratch = common::Scratch::new("si-tag");
@@ -917,7 +918,7 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
     ];
     let output = alarmed(
         Path::new("/bin/sh"),
-        &[script.as_os_str(), OsStr::new("v0.48.0")],
+        &[script.as_os_str(), OsStr::new("v0.48.1")],
         &env,
     )
     .current_dir(&elsewhere)
@@ -929,13 +930,13 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.48.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.48.1\n");
     let example = read_text(&repository_root(), "scripts/deploy/.env.example");
     assert_eq!(
         example
             .lines()
             .filter(|line| line.starts_with("SPECENGINE_VERSION="))
             .collect::<Vec<_>>(),
-        ["SPECENGINE_VERSION=0.48.0"]
+        ["SPECENGINE_VERSION=0.48.1"]
     );
 }

@@ -1,6 +1,7 @@
 ---
 class: spec
-status: draft
+status: shipped
+shipped: 2026-11-20
 scope: [scripts, crates/specengine-http]
 ref: RM-0130; the orchestrator's findings at the hub's upgrade to 0.47.2, 2026-11-20 (08 s2 Phase 7, "Ops findings, 2026-11-20"); the owner's standing rule that a stability finding is a task with its evidence
 adrs: []
@@ -10,143 +11,75 @@ adrs: []
 
 ## Why
 
-On 2026-11-20 the hosted hub was upgraded to 0.47.2. Its logs showed that the off-host backups designed by ADR-0071 had never run:
-- `dump-door` fails every 15-minute round with this line (the error appears twice in it): `hub-ops: door <t>: skipped: hub-admin: the door's passkey export failed: Error: failed to load configuration from file path(/config/configuration.yml) source: stat /config/configuration.yml: no such file or directory`. So the door's users, passkeys and TOTP are not dumped at all.
-- `backup` restarts in a loop, logging `hub-ops: upload <t>: restic_env: no RESTIC_REPOSITORY line: name the repository`. So no snapshot has left the host.
-- Only `dump-queue` works. Beside it, the host keeps the copies taken by hand before each upgrade (`~/hub-snapshots/`).
+At the hub's upgrade to 0.47.2, 2026-11-20, its logs showed that ADR-0071's off-host backups had never run:
+- `dump-door` failed every round, the error twice in one line: `hub-ops: door <t>: skipped: hub-admin: the door's passkey export failed: Error: failed to load configuration from file path(/config/configuration.yml) source: stat /config/configuration.yml: no such file or directory`. `hub-admin`'s storage calls passed no `--config`, and neither `dump-door` nor `admin` mounts that file.
+- `backup` restarted in a loop: `hub-ops upload` exited 2 before its loop on a `restic_env` with no `RESTIC_REPOSITORY`, and `restart: unless-stopped` ran it again.
 
-**The causes, read from the committed files:**
-1. **The door's CLI finds no configuration.** `hub-admin dump` calls `authelia storage user webauthn export --file … --sqlite.path …` and `… totp export …` with no `--config`. The pinned image then reads `/config/configuration.yml`, and `dump-door` mounts nothing there (`scripts/deploy/docker-compose.yml`): only `authelia` mounts `./authelia/config:/config:ro`. The `admin` service mounts no `/config` either, so its own storage calls carry the same latent defect: the `webauthn` and `totp` deletes of `reset` and `disable`.
-2. **The loop exits on a setting.** `hub-ops upload` checks `restic_env` before its loop (`read_env || exit 2`, `scripts/deploy/ops/hub-ops`). A bad file ends the process, `restart: unless-stopped` starts it again, and the loop never runs. That is a restart loop: a crash-class defect under the owner's rule. The rounds themselves already fail softly ("a failed round is logged and the next slot runs").
-
-The repository and its credentials are the owner's choice (`hub-ops.md` "Restic"). **His word, 2026-11-20:** off-host backups stay off for now ("not required, don't worry about it, let it stay off"). So this slice:
-- makes the sidecars correct;
-- makes an unconfigured `backup` wait visibly, one line per round, never restart-looping;
-- writes into the runbook the steps for when he turns backups on.
-
-## Description and interactions
-
-- **`dump-door`** dumps the door every round: `users.yml`, `webauthn.yml`, `totp.yml`, the MCP users file and the act log, as `hub-ops.md` "Door dump" says.
-- **`admin`**'s storage acts load the same configuration, so `reset` and `disable` delete a person's passkeys and TOTP for real.
-- **`backup`** stays up with a missing or bad setting. It logs one line at start and one per round, never calls restic, and reports unhealthy (`fresh` fails) until the operator fixes the setting. The next round reads the fixed file; no restart is needed.
-- **`once` and the acts** (`init`, `snapshots`, `check`, `restore`) keep exit 2 on a bad setting: they are the operator's commands, and a loud failure is what he wants there.
-- **The operator's guide** (`scripts/deploy/README.md`) says what the owner does: choose a backend, write the two secrets, keep them off the host, `init` once, check the snapshots, and run a restore drill.
-
-**No crate changes.** The fix lives in `scripts/deploy/`: the compose file, `ops/hub-ops`, and, if option A holds, `admin/hub-admin`. Tests are in `crates/specengine-http/tests/deploy*.rs`, as today.
-
-**The release.** 0.48.1, after 0.48.0. The fix waits as a patch until then. The hub needs a new image. A hub image's tag must equal the plugin's version (`tag-check.sh`), so the plugin takes a version-only PATCH bump on top of the version current when this ships (`plugin-files.md` "Changing it").
-
-**No ADR.** ADR-0071 decided the sidecars, what they dump and that only `backup` has a network; none of that changes. How a loop treats a refused setting is canon detail (`hub-ops.md` "Exits"), changed in the same change. Option B, if needed, gives `dump-door` and `admin` two more door secrets, a hardening change recorded in `hub-deploy.md`. It does not reverse ADR-0071: no secret leaves the host.
+The owner's word, 2026-11-20: off-host backups stay off for now ("not required, don't worry about it, let it stay off"). So the slice fixed the sidecars, made an unconfigured `backup` wait visibly, and wrote his steps for turning backups on.
 
 ## Data
 
+Canon now: `docs/canon/hub-ops.md` "Dumps" (Exits), "Door dump", "Known limits"; `hub-restic.md`, the backend, moved out of `hub-ops.md` for its cap; `hub-deploy.md` "Gate"; `scripts/deploy/README.md` "Install", "Going live".
+
 ### The door's configuration: options A and B
 
-The developer first tries **A** on the pinned image `authelia/authelia:4.39.28@sha256:bd97cff4…` (HB5), and takes **B** only if A fails. The run, and why, go in "Implementation".
-
-| | A (preferred) | B (fallback) |
-|---|---|---|
-| What | `hub-admin` writes a minimal configuration and passes it to every storage call as `--config "$tmp_dir/storage.yml"` | `dump-door` and `admin` mount `./authelia/config:/config:ro` and carry the door's configuration environment |
-| The file | written fresh (umask 077) under `hub-admin`'s `tmp/`, holding only what a storage command needs; removed on exit | the committed `configuration.yml` |
-| Secrets | none new: the storage key is already `AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE` | adds `authelia_session_secret` and `authelia_jwt_secret`, with `X_AUTHELIA_CONFIG_FILTERS: template`, `HUB_DOMAIN`, `HUB_HOST`, and the three `*_FILE` variables as `authelia` has them |
-| Files changed | `admin/hub-admin` (its `door_run` storage calls) | `docker-compose.yml` (two services) |
-
-**Under either option:**
-- `network_mode: none` stays on `dump-door`.
-- `admin`'s network does not change.
-- No other mount, secret or environment is added.
+A was taken (why: "Implementation"); B, mounting the door's `configuration.yml` and its secrets, was not needed. Every storage call passes `--config <tmp>/hub-admin.<pid>.storage.yml`: per process, comment-only, mode 600, written before each call and removed. The calls are the dump's exports, `restore`'s migration and imports, and `reset`'s deletes; `disable` makes no door call. `dump-door` and `admin` keep their mounts, environment and secrets.
 
 ### The loop: `hub-ops upload`
 
-```sh
-upload)
-    need_host_or_note       # loop: log and go on; once: exit 2 as today
-    read_env_or_note        # loop: log and go on; once: exit 2 as today
-    ...
-```
-
-**In loop mode** (no `once`):
-- A refused `HUB_HOST` or `restic_env` at start is logged, as the line `need_host` or `read_env` writes today, and the loop starts.
-- Each round reads the settings anew (`upload_round` already calls `read_env`, and checks `HUB_HOST` the same way). A refused setting fails the round softly, with one line, and runs no restic. `/state/ok` is not touched, so `fresh` fails and the service is unhealthy.
-- A TERM still ends it with 143.
-
-**In `once` mode and the acts:** exit 2, unchanged.
-
-**The `hub-ops.md` "Exits" sentence** changes from "A loop ends on 2 or a signal" to: "A loop ends on a signal alone: a setting refused at its start or in a round (`HUB_HOST`, `restic_env`) fails that round with its line, so the service stays up, unhealthy, never restarting; `once` and the acts exit 2 on it."
+A loop says a refused `HUB_HOST` or `restic_env` at start and each round, runs no restic and touches no `/state/ok`: `backup` stays up, unhealthy, and takes a fixed `restic_env` at the next round. `once` and the acts keep exit 2; TERM gives 143.
 
 ### The test double for the door's CLI
 
-The `authelia` stub in `tests/deploy_admin.rs` gains the pinned image's loading rule, as recorded from the hub's log. A `storage …` call fails, exit 1, printing exactly `Error: failed to load configuration from file path(<p>) source: stat <p>: no such file or directory`, unless one of these holds:
-- under A, its `--config <p>` names an existing file;
-- under B, `<HUB_ADMIN_ROOT>/config/configuration.yml` exists.
-
-Here `<p>` is `--config`'s value, else `/config/configuration.yml`. The rule is recorded as observed, and HB5 checks it against the real image.
+The `authelia` stub in `tests/deploy_admin.rs` loads a configuration as 4.39.28 does: a `storage …` call whose `--config <p>` (else `/config/configuration.yml`) is no file exits 1, printing `Error: failed to load configuration from file path(<p>) source: stat <p>: no such file or directory` twice in one line.
 
 ## Rules and edge cases
 
-- WHEN `restic_env` is missing, unreadable, refused at a line, or names no `RESTIC_REPOSITORY`, `backup` SHALL stay up, log one line per round, call no `restic`, and fail `fresh`.
-- WHEN the operator fixes `restic_env`, the next round SHALL upload, with no restart.
-- WHEN `upload once`, `init`, `snapshots`, `check` or `restore` meet a refused setting, they SHALL exit 2 as today.
-- WHEN the door holds no `db.sqlite3`, the dump SHALL copy the users files and the act log alone, as today.
-- No line SHALL print a value of `restic_env` or a secret (R5 unchanged).
-- Nothing in this slice SHALL block a hub's request (ADR-0012): the dumps stay sidecars.
+- WHEN a setting is refused in loop mode, `backup` SHALL stay up, log its line(s) per round, call no `restic` and fail `fresh`, and SHALL take a fixed `restic_env` at the next round with no restart; `upload once` and the acts SHALL exit 2.
+- WHEN an export exits 1, writes no file and says exactly `Error: no data to export`, the dump SHALL leave that file out; any other failure SHALL refuse the dump, exit 1. `restore` already skips a missing file.
+- WHEN the door holds no `db.sqlite3`, the dump SHALL copy the users files and the act log alone.
+- No line SHALL print a secret; nothing SHALL block a hub's request (ADR-0012).
 
 ## Acceptance criteria
 
-- [ ] HB1 — **The stub reproduces the defect.** With the stub's loading rule, the new door-dump test on the base commit's `hub-admin` and compose layout fails with exactly the hub's line. This proves the tests see what the hub saw.
-- [ ] HB2 — **The door's dump.**
-  - `hub-admin dump DIR` (deploy_admin), with a users file of one user and a door database holding one passkey and one TOTP (the stub's exports write the files they are asked for), exits 0.
-  - It writes `users.yml`, `webauthn.yml`, `totp.yml`, `mcp-users` and `acts.log`, and prints `dumped …`.
-  - Every storage call passes the loading rule.
-  - Mutation: under A, `--config` removed; under B, the mount removed. Either turns it red.
-- [ ] HB3 — **A `door once` round.** `hub-ops door once` (deploy_ops), with the real `hub-admin` and the stub, exits 0, and `dumps/door/<t>/` holds the five files. Mutation as HB2.
-- [ ] HB4 — **The compose pin.**
-  - `dump-door` and `admin` carry exactly the chosen option's mounts, environment and secrets (OP-style YAML reading); under A, no session or JWT secret; `network_mode: none` on `dump-door`.
-  - Mutation: the option's addition removed turns it red.
-- [ ] HB5 — **[docker, `#[ignore]`] The pinned image agrees.**
-  - On a machine with Docker, the pinned `authelia` image runs `storage migrate up` on a scratch SQLite, then `storage user webauthn import` of `fixtures/hub-backups/webauthn.yml` (one invented credential), then the exact export call `hub-admin` makes. It exits 0 and the exported file holds that credential.
-  - Under A, without `--config`, the same export fails with the recorded line.
-  - The run is in "Implementation".
-- [ ] HB6 — **`admin`'s deletes.** `reset` and `disable` under the stub's loading rule exit 0 and their storage deletes pass it. They would have failed before, so this is a latent defect closed.
-- [ ] HB7 — **No restart loop.**
-  - `hub-ops upload`, loop mode, under the stub clock (deploy_ops), with `restic_env` naming no `RESTIC_REPOSITORY`: no exit over three slots; one `restic_env: no RESTIC_REPOSITORY line: name the repository` line at start and one per round; no `restic` call; `state/ok` absent; `hub-ops fresh` exits 1. A TERM gives 143.
-  - The same holds with `restic_env` unreadable, and with `HUB_HOST` unset.
-  - `upload once` still exits 2 with the line.
-  - Mutation: `read_env || exit 2` restored before the loop turns it red.
-- [ ] HB8 — **Fixed in place.** With the loop running as in HB7, `restic_env` is written whole between two rounds. The next round calls `restic backup --host <h> --tag queue` and `--tag door`, and touches `state/ok`; `fresh` exits 0.
-- [ ] HB9 — **Nothing else moves.** `tests/deploy.rs`, `deploy_ops.rs` and `deploy_admin.rs` pass, their pins changed only where this slice changes the files. The image workflow's checks (`image.yml`, `tag-check.sh`) pass. `hub-ops.md` "Exits" says the new sentence.
-- [ ] HB10 — **The runbook.** `scripts/deploy/README.md` "Install" and "Going live" say, within 10 240 B, that `backup` waits unconfigured, one line a round, until the owner turns backups on. Then they say what he does:
-  - choose a restic backend;
-  - write `secrets/restic_env` (`RESTIC_REPOSITORY` and its keys) and `secrets/restic_password`, kept off the host;
-  - run `docker compose run --rm backup init` once;
-  - after the next round, `docker compose run --rm backup snapshots` lists `queue` and `door` under 35 minutes old, and `docker compose ps` shows `backup` healthy;
-  - a restore drill on a scratch host (`hub-ops.md` "Restore").
-- [ ] HB11 — **[live hub, after the upgrade to 0.48.1]**
-  - `docker compose logs dump-door` shows `dumped users.yml … webauthn.yml totp.yml` each round.
-  - `backup` is up and unhealthy with one line a round, with no restart, in `docker compose ps` and its logs.
-  - **When the owner turns backups on** (his word of 2026-11-20 keeps them off for now): `backup` becomes healthy, `snapshots` lists both tags, and a restore drill on a scratch host reads both back.
+- [x] HB1 — **The stub reproduces the defect.** The base commit's `hub-admin` export, under the stub's loading rule, fails with exactly the hub's line.
+- [x] HB2 — **The door's dump.** `hub-admin dump DIR` over one user, a passkey and a TOTP exits 0, writes `users.yml`, `webauthn.yml`, `totp.yml`, `mcp-users`, `acts.log` and prints `dumped …`; every storage call passes the loading rule; an empty table's export is left out. Mutation: `--config` removed turns it red.
+- [x] HB3 — **A `door once` round.** `hub-ops door once` with the real `hub-admin` and the stub exits 0, `dumps/door/<t>/` holding the five files. Mutation as HB2.
+- [x] HB4 — **The compose pin.** `dump-door` and `admin` carry exactly their earlier mounts, environment and secrets: no `/config`, no session or JWT secret; `network_mode: none` on `dump-door`.
+- [x] HB5 — **[docker, `#[ignore]`] The pinned image agrees.** The developer's run in "Implementation" is the evidence.
+- [x] HB6 — **`admin`'s storage calls.** `reset`'s deletes and `restore`'s migration and imports pass the loading rule; a latent defect closed.
+- [x] HB7 — **No restart loop.** `hub-ops upload`, loop mode, with no `RESTIC_REPOSITORY`, an unreadable `restic_env` or `HUB_HOST` unset: no exit over three slots, its line(s) at start and each round, no `restic`, no `state/ok`, `fresh` exits 1, TERM 143; `upload once` exits 2. Mutation: `read_env || exit 2` restored before the loop turns it red.
+- [x] HB8 — **Fixed in place.** `restic_env` written whole between two rounds: the next round runs `restic backup --tag queue` and `--tag door` and touches `state/ok`; `fresh` exits 0.
+- [x] HB9 — **Nothing else moves.** `deploy.rs`, `deploy_ops.rs`, `deploy_admin.rs` pass, their pins changed only where this slice changed the files; `image.yml`'s checks pass; `hub-ops.md` "Exits" says the new sentence.
+- [x] HB10 — **The runbook.** `scripts/deploy/README.md` "Install" and "Going live", within 10 240 B: `backup` waits unconfigured, its line(s) each round, until the owner turns backups on; then his steps: a restic backend, `restic_env` written in place (or `backup` restarted), the secrets kept off the host, `backup init` once, `backup snapshots` listing `queue` and `door` under 35 minutes old with `backup` healthy, a restore drill on a scratch host.
+- [ ] HB11 — **[live hub, after the upgrade to 0.48.1]** `dump-door` logs `dumped …` each round; `backup` is up and unhealthy, its line(s) each round, no restart. When the owner turns backups on: `backup` healthy, `snapshots` lists both tags, a restore drill reads both back.
 
 ## Out of scope
 
-- Choosing or paying for a backend; the owner's credentials.
-- Off-host copies of the deploy key, Authelia's secrets or `traefik-acme` (ADR-0071: never dumped).
-- A change to the dumps' grid, retention or format.
-- Any crate change.
-- Monitoring beyond the healthcheck and the lines.
+- choosing or paying for a backend, the owner's credentials;
+- off-host copies of the deploy key, Authelia's secrets or `traefik-acme` (ADR-0071);
+- the dumps' grid, retention or format; any crate change; monitoring beyond the healthcheck and the lines;
+- `reset` of a person with no TOTP, which warns `TOTP not deleted` and logs `totp-left`: RM-0131, the owner's question.
 
 ## Implementation
 
-To be filled in after implementation. The plan:
+| Module | Lane | What it does |
+|---|---|---|
+| `scripts/deploy/admin/hub-admin` | `rust-developer` | `door_conf`; `door_run` writes it before each storage call; `--config` on every storage call; `dump_export` leaves an empty table's file out (`EMPTY_EXPORT`) |
+| `scripts/deploy/ops/hub-ops` | `rust-developer` | `host_set`, `upload_settings`: a loop never exits on a setting; `once` keeps exit 2 |
+| `fixtures/hub-backups/webauthn.yml` | `test-engineer` | one invented credential, for HB5 |
+| http `tests/deploy_admin.rs`, `deploy_ops.rs`, `deploy.rs` | `test-engineer` | the stub's loading rule and `empty-at`; `hb01`-`hb06` (HB3 here, beside the door's stub), `hb07`, `hb08`, `hb04` |
+| `plugin/`, `.env.example` | `rust-developer` | 0.48.1, a version-only PATCH (`plugin-files.md` "Changing it") |
 
-| Lane | Files |
-|---|---|
-| `rust-developer` | `scripts/deploy/admin/hub-admin` (A), or `scripts/deploy/docker-compose.yml` (B); `scripts/deploy/ops/hub-ops` (the loop); `fixtures/hub-backups/webauthn.yml` (an invented credential); `plugin/` version-only at release |
-| `test-engineer` | `crates/specengine-http/tests/deploy_admin.rs` (the stub's loading rule, HB1, HB2, HB6), `deploy_ops.rs` (HB3, HB7, HB8), `deploy.rs` (HB4, HB9), the `#[ignore]` HB5 |
+**HB5's run** (the developer's, 2026-11-20; `cargo test -p specengine-http --test deploy_admin hb05 -- --ignored`). The image is `authelia/authelia@sha256:bd97cff4…`, 4.39.28, the one `dump-door` runs. A scratch SQLite, the storage key a file as `AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE` gives it:
+- **Without `--config`**, every storage call prints `Error: failed to load configuration from file path(/config/configuration.yml) source: stat /config/configuration.yml: no such file or directory`, twice in one line, and exits 1. The image's `X_AUTHELIA_CONFIG` names that path, which no sidecar mounts. That is the hub's line, so option A, a `--config` of hub-admin's own, was tried first.
+- **With `--config`** naming a comment-only file, `storage migrate up` and `storage user webauthn import` of `fixtures/hub-backups/webauthn.yml` exit 0. The exact export call `hub-admin` makes, under `timeout 300`, exits 0, and its file holds the credential's `kid` and `public_key`. Both exports and the deletes exit 0. A file holding no key was enough, so B was not needed.
+- **An empty table:** the TOTP export of a door with no TOTP answers `Error: no data to export`, exit 1, and writes no file.
+- **The deletes on nothing:** `webauthn delete --all` exits 0; `totp delete` exits 1 with `no TOTP configuration for user`.
+- **Last,** the real `hub-admin dump`, mounted as `dump-door` mounts it, exits 0 with `dumped users.yml mcp-users acts.log webauthn.yml`.
 
-**Order:** HB5's run on the pinned image picks A or B; then the fix; then the tests.
+**Readings** (the orchestrator's): the file is `hub-admin.$$.storage.yml`, per process, not `storage.yml`; the stub prints the error doubled, as the image does; HB3 lives in `deploy_admin.rs`; `disable` makes no storage call.
 
-**Canon at ship:**
-- `hub-ops.md`: "Exits", "Door dump" (`--config` under A);
-- `hub-deploy.md`: the services' mounts and secrets under B;
-- `scripts/deploy/README.md` (HB10);
-- 08's "Ops findings" paragraph closed, with what the owner still owes.
+**Canon at ship:** `hub-ops.md` "Exits", "Door dump", "Upgrade" steps 2 and 4, "Known limits"; its "Restic" moved whole to `hub-restic.md` (the 12 288 B cap), with the file-secret inode rule; `hub-deploy.md` "Gate"; `plugin-files.md` 0.48.1; the guide's "Install", "Going live", "Before the gate".
+
+**Release.** 0.48.1, tag `v0.48.1`, a version-only PATCH of the plugin for the image's tag; no crate change, no ADR (ADR-0071 stands). The review: ACCEPT.

@@ -60,6 +60,20 @@
 //! first on `PATH`, no `HUB_HOST` (compose gives `dump-door` none), and under
 //! `/bin/sh` and `/bin/dash` (OP22). OP23 rewrites AC8 for the lock's new
 //! message.
+//!
+//! docs/features/hub-backups.md (RM-0130) HB1-HB3 and HB6, option A: the
+//! stub gains the pinned image's loading rule, as the hub logged it. A
+//! `storage` call loads `--config`'s file, else `/config/configuration.yml`
+//! (`<HUB_ADMIN_ROOT>/config/configuration.yml` here, option B's mount), and
+//! fails, exit 1, with the error twice in one line when that is not a file;
+//! it keeps what it loaded (`config.<n>`, its path and `ls -l` mode).
+//! `crypto hash` loads none. An export listed in `empty-at` answers an empty
+//! table as the image does: `Error: no data to export`, exit 1, no file
+//! (`empty-exit` and `empty-writes` bend that answer). OP11, OP14, AC6 and
+//! AC19 pin `--config <root>/tmp/hub-admin.<pid>.storage.yml`. HB3 is here
+//! beside OP11, whose harness (the stub and the real `hub-admin` under
+//! `hub-ops`) it needs; HB4 is `tests/deploy.rs`, HB7 and HB8
+//! `tests/deploy_ops.rs`. HB5 (`hb05_*`, `#[ignore]`) needs Docker.
 
 #![cfg(unix)]
 
@@ -132,6 +146,20 @@ listed() {
         *" $n "*) return 0 ;;
     esac
     return 1
+}
+# The pinned image's loading of the configuration file `$1`, named `$2`
+# (docs/features/hub-backups.md "The test double for the door's CLI", as the
+# hub logged it): not a file, exit 1 with the error twice in one line; else
+# its bytes, its name and its mode are kept for the call.
+load() {
+    if [ ! -f "$1" ]; then
+        said="failed to load configuration from file path($2) source: stat $2: no such file or directory"
+        printf 'Error: %s, %s\n' "$said" "$said" >&2
+        exit 1
+    fi
+    cat "$1" > "$door/config.$n"
+    printf '%s\n' "$2" > "$door/config-path.$n"
+    ls -ld "$1" | cut -c1-10 > "$door/config-mode.$n"
 }
 # `crypto hash generate <kind> [flags]`, as authelia 4.39.28 parses its flags
 # (`--flag value` or `--flag=value`). The defaults (alphanumeric, 72
@@ -264,6 +292,37 @@ if listed hold-at; then
         waited=$((waited + 1))
     done
 fi
+# A `storage` call loads `--config`'s file (`--config F`, `--config=F`, `-c
+# F`), else /config/configuration.yml, which is
+# `$HUB_ADMIN_ROOT/config/configuration.yml` here; flags end at `--`.
+# `crypto hash` loads none.
+if [ "$1" = storage ]; then
+    loaded=
+    expect=
+    for argument in "$@"; do
+        if [ -n "$expect" ]; then
+            expect=
+            load "$argument" "$argument"
+            loaded=yes
+            continue
+        fi
+        case $argument in
+            --) break ;;
+            --config | -c) expect=$argument ;;
+            --config=*)
+                load "${argument#--config=}" "${argument#--config=}"
+                loaded=yes
+                ;;
+        esac
+    done
+    if [ -n "$expect" ]; then
+        echo "Error: flag needs an argument: $expect" >&2
+        exit 1
+    fi
+    if [ -z "$loaded" ]; then
+        load "${HUB_ADMIN_ROOT:-}/config/configuration.yml" /config/configuration.yml
+    fi
+fi
 fail=no
 if listed fail-at; then fail=yes; fi
 bad=no
@@ -306,6 +365,16 @@ case "$1 $2 $3 $4" in
         if [ -z "$file" ]; then
             echo "Error: the stub's export was given no --file" >&2
             exit 1
+        fi
+        # An empty table, as the pinned image answers it: this line, exit 1,
+        # no file. `empty-exit` and `empty-writes` bend the answer, so a test
+        # can show a script takes that one answer alone.
+        if listed empty-at; then
+            if [ -f "$door/empty-writes" ]; then
+                printf '# the stub %s export, call %s, half\n' "$3" "$n" > "$file"
+            fi
+            echo 'Error: no data to export' >&2
+            exit "$(cat "$door/empty-exit" 2>/dev/null || echo 1)"
         fi
         printf '# the stub %s export, call %s\n' "$3" "$n" > "$file" || exit 1
         ;;
@@ -632,6 +701,17 @@ struct Call {
     on_terminal: bool,
     /// The random password the stub generated (`Random Password: `), if any.
     random: Option<String>,
+    /// The configuration a `storage` call loaded, as the stub found it at the
+    /// call: its name, its bytes and its `ls -l` mode.
+    config: Option<Loaded>,
+}
+
+/// A configuration file a `storage` call of the stub loaded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Loaded {
+    path: String,
+    text: String,
+    mode: String,
 }
 
 impl Call {
@@ -965,8 +1045,67 @@ impl Hub {
                 random: fs::read_to_string(self.door.join(format!("random.{n}")))
                     .ok()
                     .map(|text| text.trim_end_matches('\n').to_owned()),
+                config: fs::read_to_string(self.door.join(format!("config-path.{n}")))
+                    .ok()
+                    .map(|path| Loaded {
+                        path: path.trim_end_matches('\n').to_owned(),
+                        text: read(&self.door.join(format!("config.{n}"))),
+                        mode: read(&self.door.join(format!("config-mode.{n}")))
+                            .trim_end()
+                            .to_owned(),
+                    }),
             })
             .collect()
+    }
+
+    /// The configuration `hub-admin` hands every storage call under option A
+    /// of docs/features/hub-backups.md "The door's configuration: options A and B":
+    /// `<root>/tmp/hub-admin.<pid>.storage.yml`, the container's own `/tmp`.
+    fn config_shape(&self) -> Regex {
+        Regex::new(&format!(
+            r"^{}/tmp/hub-admin\.[0-9]+\.storage\.yml$",
+            regex::escape(text_of(&self.root))
+        ))
+        .expect("a pattern")
+    }
+
+    /// Every `storage` call of `calls` names one configuration by
+    /// `--config`, of [`Hub::config_shape`], the same in all of them, which
+    /// the stub loaded: mode 600, two comment lines, no key. That path.
+    fn one_config(&self, calls: &[Call], label: &str) -> String {
+        let storage: Vec<&Call> = calls
+            .iter()
+            .filter(|call| call.starts(&["storage"]))
+            .collect();
+        assert!(!storage.is_empty(), "{label}: no storage call: {calls:?}");
+        let conf = storage[0]
+            .flag("--config")
+            .unwrap_or_else(|| panic!("{label}: no --config: {:?}", storage[0]))
+            .to_owned();
+        assert!(
+            self.config_shape().is_match(&conf),
+            "{label}: the configuration's path {conf}"
+        );
+        for call in storage {
+            assert_eq!(
+                call.flag("--config"),
+                Some(conf.as_str()),
+                "{label}: one configuration for the run: {call:?}"
+            );
+            let loaded = call
+                .config
+                .as_ref()
+                .unwrap_or_else(|| panic!("{label}: the stub loaded nothing: {call:?}"));
+            assert_eq!(loaded.path, conf, "{label}: {call:?}");
+            assert_eq!(loaded.mode, "-rw-------", "{label}: mode 600: {call:?}");
+            let lines: Vec<&str> = loaded.text.lines().collect();
+            assert!(
+                lines.len() == 2 && lines.iter().all(|line| line.starts_with('#')),
+                "{label}: two comment lines, no key: {:?}",
+                loaded.text
+            );
+        }
+        conf
     }
 
     fn env(&self) -> Vec<(OsString, OsString)> {
@@ -2031,16 +2170,22 @@ fn ac06_reset_hashes_then_deletes_passkeys_then_totp() {
     assert!(
         calls[1].starts(&["storage", "user", "webauthn", "delete"])
             && calls[1].login_after_dashes("mira")
-            && calls[1].names("--all"),
-        "the WebAuthn delete with --all, `--` right before mira: {:?}",
+            && calls[1].names("--all")
+            && calls[1].names("--config"),
+        "the WebAuthn delete with --all and --config, `--` right before mira: {:?}",
         calls[1]
     );
     assert!(
         calls[2].starts(&["storage", "user", "totp", "delete"])
-            && calls[2].login_after_dashes("mira"),
-        "the TOTP delete, `--` right before mira: {:?}",
+            && calls[2].login_after_dashes("mira")
+            && calls[2].names("--config"),
+        "the TOTP delete with --config, `--` right before mira: {:?}",
         calls[2]
     );
+    // docs/features/hub-backups.md HB6: both deletes pass the loading rule.
+    hub.one_config(&calls, "reset");
+    assert!(calls[0].config.is_none(), "the hash loads no configuration");
+    assert!(hub.temps().is_empty(), "{:?}", hub.temps());
 
     assert_eq!(
         act.lines().first().copied(),
@@ -2666,8 +2811,10 @@ fn ac19_reset_completes_with_a_warning_when_a_delete_fails() {
         );
         assert!(
             calls[1].starts(&["storage", "user", "webauthn", "delete"])
-                && calls[2].starts(&["storage", "user", "totp", "delete"]),
-            "{label}: the passkey delete, then the TOTP delete: {calls:?}"
+                && calls[2].starts(&["storage", "user", "totp", "delete"])
+                && calls[1].names("--config")
+                && calls[2].names("--config"),
+            "{label}: the passkey delete, then the TOTP delete, each with --config: {calls:?}"
         );
         assert_eq!(
             act.stderr.lines().any(|line| line == passkeys),
@@ -3472,13 +3619,16 @@ fn filled_door(hub: &Hub, database: bool) {
 }
 
 /// The `--file` export call of `kind` into `dir`, as "`hub-admin`: `dump` and
-/// `restore`" gives it.
-fn export_call(kind: &str, dir: &str, db: &Path) -> Vec<String> {
+/// `restore`" gives it, with docs/features/hub-backups.md's `--config conf`
+/// (option A) between `export` and `--file`.
+fn export_call(kind: &str, dir: &str, db: &Path, conf: &str) -> Vec<String> {
     [
         "storage",
         "user",
         kind,
         "export",
+        "--config",
+        conf,
         "--file",
         &format!("{dir}/{kind}.yml"),
         "--sqlite.path",
@@ -3561,8 +3711,7 @@ fn op11_a_door_round_dumps_the_door_with_the_real_hub_admin() {
         let calls = hub.calls();
         assert_eq!(calls.len(), 2, "{shell}: {calls:?}");
         let file = calls[0]
-            .args
-            .get(5)
+            .flag("--file")
             .unwrap_or_else(|| panic!("{shell}: {calls:?}"));
         let staging = file
             .strip_suffix("/webauthn.yml")
@@ -3573,14 +3722,15 @@ fn op11_a_door_round_dumps_the_door_with_the_real_hub_admin() {
         ))
         .expect("a pattern");
         assert!(shape.is_match(staging), "{shell}: the staging {staging}");
+        let conf = hub.one_config(&calls, &shell);
         assert_eq!(
             calls[0].args,
-            export_call("webauthn", staging, &hub.db()),
+            export_call("webauthn", staging, &hub.db(), &conf),
             "{shell}"
         );
         assert_eq!(
             calls[1].args,
-            export_call("totp", staging, &hub.db()),
+            export_call("totp", staging, &hub.db(), &conf),
             "{shell}"
         );
         assert!(
@@ -4000,6 +4150,9 @@ fn data_a_stopped_restore_says_what_to_remove() {
     assert!(!hub.log().exists(), "no act log: {:?}", hub.log_lines());
     assert_eq!(read(&hub.users()), "", "the users file as it was");
     assert!(!hub.lock().exists(), "the lock gone");
+    // docs/features/hub-backups.md option A: the stopped import's
+    // configuration goes with the lock.
+    assert!(hub.temps().is_empty(), "no temp file: {:?}", hub.temps());
 }
 
 /// A restore folder as `hub-ops restore` leaves `restore/door/`: two
@@ -4062,14 +4215,28 @@ fn op14_restore_fills_an_empty_door_after_the_imports() {
         act.show()
     );
     let db = text_of(&hub.db()).to_owned();
-    let calls: Vec<Vec<String>> = hub.calls().into_iter().map(|call| call.args).collect();
+    let made = hub.calls();
+    // docs/features/hub-backups.md option A: each storage call loads the
+    // one configuration `hub-admin` wrote for the run.
+    let conf = hub.one_config(&made, "restore");
+    let calls: Vec<Vec<String>> = made.into_iter().map(|call| call.args).collect();
     let want: Vec<Vec<String>> = [
-        vec!["storage", "migrate", "up", "--sqlite.path", &db],
+        vec![
+            "storage",
+            "migrate",
+            "up",
+            "--config",
+            &conf,
+            "--sqlite.path",
+            &db,
+        ],
         vec![
             "storage",
             "user",
             "webauthn",
             "import",
+            "--config",
+            &conf,
             "--sqlite.path",
             &db,
             "--",
@@ -4080,6 +4247,8 @@ fn op14_restore_fills_an_empty_door_after_the_imports() {
             "user",
             "totp",
             "import",
+            "--config",
+            &conf,
             "--sqlite.path",
             &db,
             "--",
@@ -4335,6 +4504,727 @@ fn data_the_usage_names_dump_and_restore() {
             act.show()
         );
     }
+}
+
+// ------------------------------------------------------------- HB1-HB6: the door's configuration
+
+/// The pinned image's answer to a `storage` call whose configuration `path`
+/// is not a file, as the hub logged it: the error twice in one line
+/// (docs/features/hub-backups.md "Why").
+fn unloaded(path: &str) -> String {
+    let said = format!(
+        "failed to load configuration from file path({path}) source: stat {path}: no such file or directory"
+    );
+    format!("Error: {said}, {said}")
+}
+
+/// The stub `authelia` run with `args` and the hub's environment, stdin
+/// `/dev/null`: its exit, stdout and stderr.
+fn door_cli(hub: &Hub, args: &[&str]) -> (i32, String, String) {
+    let output = Command::new("/bin/sh")
+        .env_clear()
+        .envs(hub.env())
+        .current_dir(&hub.runs)
+        .arg(hub.bin.join("authelia"))
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .expect("the stub authelia");
+    (
+        output.status.code().expect("an exit status"),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// A door of one user (`mira`), her MCP line, an act log and a database: one
+/// passkey and one TOTP as far as the stub's exports go.
+fn one_user_door(hub: &Hub) {
+    hub.put(
+        &hub.users(),
+        &users_file(&[&entry("mira", "Mira K", "mira@example.org", false)]),
+    );
+    hub.put(&hub.mcp(), &mcp_line("mira", 'M'));
+    hub.put(&hub.log(), "2026-11-03T09:12:03Z\tadd\tmira\t-\n");
+    hub.put(&hub.db(), "the door's database, never copied\n");
+}
+
+/// docs/features/hub-backups.md HB1 and "The test double for the door's
+/// CLI": the stub loads a configuration as the pinned 4.39.28 does. The base
+/// commit's export (1575c837's `hub-admin`: `storage user webauthn export
+/// --file F --sqlite.path D`, no `--config`) answers exactly the hub's
+/// line for `/config/configuration.yml`, exit 1, no file; `--config` naming
+/// a missing file answers it for that path; an existing one, given as
+/// `--config F`, `--config=F` or `-c F`, is loaded; a `--config` with no
+/// value is refused; with no `--config`, option B's
+/// `<HUB_ADMIN_ROOT>/config/configuration.yml` is loaded when it exists; a
+/// `--config` after `--` is no flag; `crypto hash` loads none; and an
+/// export listed in `empty-at` answers `Error: no data to export`, exit 1,
+/// no file, as the pinned image answers an empty table.
+#[test]
+fn hb01_the_stub_loads_the_configuration_as_the_pinned_image() {
+    let hub = Hub::new("hb01");
+    let out = hub.scratch.dir("out");
+    let db = text_of(&hub.db()).to_owned();
+    let file = out.join("webauthn.yml");
+    let file_text = text_of(&file).to_owned();
+
+    let base = [
+        "storage",
+        "user",
+        "webauthn",
+        "export",
+        "--file",
+        &file_text,
+        "--sqlite.path",
+        &db,
+    ];
+    let (code, stdout, stderr) = door_cli(&hub, &base);
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!("{}\n", unloaded("/config/configuration.yml")).as_str()
+        ),
+        "the base commit's export"
+    );
+    assert!(!file.exists(), "no file written");
+
+    let missing = hub.root.join("tmp/missing.yml");
+    let missing = text_of(&missing).to_owned();
+    let (code, _, stderr) = door_cli(
+        &hub,
+        &[
+            "storage", "user", "totp", "delete", "--config", &missing, "--", "mira",
+        ],
+    );
+    assert_eq!(
+        (code, stderr),
+        (1, format!("{}\n", unloaded(&missing))),
+        "a --config naming no file"
+    );
+
+    let conf = hub.root.join("tmp/given.yml");
+    fs::write(&conf, "# a configuration\n").expect("a configuration");
+    let conf = text_of(&conf).to_owned();
+    for flags in [
+        vec!["--config", conf.as_str()],
+        vec!["-c", conf.as_str()],
+        vec![],
+    ] {
+        let joined = format!("--config={conf}");
+        let flags = if flags.is_empty() {
+            vec![joined.as_str()]
+        } else {
+            flags
+        };
+        let _ = fs::remove_file(&file);
+        let mut args = vec!["storage", "user", "webauthn", "export"];
+        args.extend(&flags);
+        args.extend(["--file", &file_text, "--sqlite.path", &db]);
+        let (code, _, stderr) = door_cli(&hub, &args);
+        assert_eq!(code, 0, "{flags:?}: {stderr}");
+        assert!(file.is_file(), "{flags:?}: the export is written");
+    }
+    let calls = hub.calls();
+    let last = calls.last().expect("calls");
+    assert_eq!(
+        last.config.as_ref().map(|loaded| loaded.text.as_str()),
+        Some("# a configuration\n"),
+        "the stub keeps what it loaded"
+    );
+
+    let (code, _, stderr) = door_cli(&hub, &["storage", "user", "totp", "delete", "--config"]);
+    assert_eq!(code, 1, "a --config with no value: {stderr}");
+    let (code, _, stderr) = door_cli(
+        &hub,
+        &["storage", "user", "totp", "delete", "--", "--config", &conf],
+    );
+    assert_eq!(
+        (code, stderr),
+        (1, format!("{}\n", unloaded("/config/configuration.yml"))),
+        "after `--` a --config is a login, not a flag"
+    );
+
+    fs::create_dir_all(hub.root.join("config")).expect("option B's mount");
+    fs::write(
+        hub.root.join("config/configuration.yml"),
+        "# the door's own\n",
+    )
+    .expect("option B's configuration");
+    let (code, _, stderr) = door_cli(&hub, &["storage", "migrate", "up", "--sqlite.path", &db]);
+    assert_eq!(code, 0, "option B's /config/configuration.yml: {stderr}");
+    fs::remove_dir_all(hub.root.join("config")).expect("option B's mount removed");
+
+    let (code, stdout, stderr) = door_cli(
+        &hub,
+        &[
+            "crypto",
+            "hash",
+            "generate",
+            "argon2",
+            "--random",
+            "--random.characters",
+            HEX,
+            "--random.length",
+            "32",
+        ],
+    );
+    assert_eq!(code, 0, "crypto hash loads no configuration: {stderr}");
+    assert!(stdout.contains("Digest: "), "{stdout}");
+
+    let _ = fs::remove_file(&file);
+    let count: usize = read(&hub.door.join("count"))
+        .trim()
+        .parse()
+        .expect("a count");
+    hub.control("empty-at", &[count + 1]);
+    let (code, stdout, stderr) = door_cli(
+        &hub,
+        &[
+            "storage",
+            "user",
+            "webauthn",
+            "export",
+            "--config",
+            &conf,
+            "--file",
+            &file_text,
+            "--sqlite.path",
+            &db,
+        ],
+    );
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (1, "", "Error: no data to export\n"),
+        "an empty table"
+    );
+    assert!(!file.exists(), "an empty table writes no file");
+}
+
+/// docs/features/hub-backups.md HB2 and "Rules": `hub-admin dump DIR` over a
+/// door of one user, her MCP line, the act log and a database exits 0 and
+/// prints `dumped users.yml mcp-users acts.log webauthn.yml totp.yml`, DIR
+/// holding those five files; both exports name `--config` between `export`
+/// and `--file`, one file of `<root>/tmp/hub-admin.<pid>.storage.yml`, mode
+/// 600, two comment lines and no key when the stub loaded it, and gone after.
+/// An empty table (the pinned image's `Error: no data to export`, exit 1, no
+/// file) leaves its file out: passkeys alone, TOTP alone, neither, each
+/// exit 0. That answer alone: the line with exit 2, or with a file written,
+/// and any other failure still refuse the dump with its line, the lock
+/// released and no temp file left. M: `--config "$door_conf"` dropped from
+/// `dump_export` (every case red, `/config/configuration.yml` named); the
+/// empty branch removed (the three empty cases red).
+#[test]
+fn hb02_the_door_dump_loads_its_configuration_and_leaves_an_empty_table_out() {
+    let cases: [(&str, &[usize], &[&str]); 4] = [
+        (
+            "one passkey and one TOTP",
+            &[],
+            &["webauthn.yml", "totp.yml"],
+        ),
+        ("passkeys alone", &[2], &["webauthn.yml"]),
+        ("TOTP alone", &[1], &["totp.yml"]),
+        ("neither", &[1, 2], &[]),
+    ];
+    for (label, empty, exported) in cases {
+        let hub = Hub::new("hb02");
+        one_user_door(&hub);
+        let before = door_state(&hub);
+        if !empty.is_empty() {
+            hub.control("empty-at", empty);
+        }
+        let dir = hub.scratch.dir("out");
+        let act = hub.null(&["dump", text_of(&dir)]);
+        act.code(0);
+        let mut dumped = vec!["users.yml", "mcp-users", "acts.log"];
+        dumped.extend(exported);
+        assert_eq!(
+            act.lines(),
+            [format!("dumped {}", dumped.join(" "))],
+            "{label}: {}",
+            act.show()
+        );
+        assert_eq!(act.stderr, "", "{label}: {}", act.show());
+        let mut names = dumped.clone();
+        names.sort_unstable();
+        assert_eq!(names_in(&dir), names, "{label}");
+        for (n, kind) in [(1, "webauthn"), (2, "totp")] {
+            let name = format!("{kind}.yml");
+            if exported.contains(&name.as_str()) {
+                assert_eq!(
+                    read(&dir.join(&name)),
+                    format!("# the stub {kind} export, call {n}\n"),
+                    "{label}: {name}"
+                );
+                assert_eq!(mode(&dir.join(&name)), 0o600, "{label}: {name}'s mode");
+            }
+        }
+
+        let calls = hub.calls();
+        assert_eq!(calls.len(), 2, "{label}: the two exports: {calls:?}");
+        let conf = hub.one_config(&calls, label);
+        let into = text_of(&dir);
+        assert_eq!(
+            calls[0].args,
+            export_call("webauthn", into, &hub.db(), &conf),
+            "{label}"
+        );
+        assert_eq!(
+            calls[1].args,
+            export_call("totp", into, &hub.db(), &conf),
+            "{label}"
+        );
+        assert!(
+            !Path::new(&conf).exists() && hub.temps().is_empty(),
+            "{label}: no configuration or temp file left: {:?}",
+            hub.temps()
+        );
+        assert!(!hub.lock().exists(), "{label}: the lock released");
+        assert_eq!(door_state(&hub), before, "{label}: the door unchanged");
+    }
+
+    let refused: [(&str, &[usize], &str, &str); 3] = [
+        (
+            "the empty line with exit 2",
+            &[2],
+            "exit",
+            "the door's TOTP export failed: Error: no data to export",
+        ),
+        (
+            "the empty line with a file written",
+            &[1],
+            "writes",
+            "the door's passkey export failed: Error: no data to export",
+        ),
+        (
+            "another failure",
+            &[],
+            "fail",
+            "the door's TOTP export failed: Error: the stub fails call 2",
+        ),
+    ];
+    for (label, empty, how, line) in refused {
+        let hub = Hub::new("hb02-refused");
+        one_user_door(&hub);
+        match how {
+            "exit" => {
+                hub.control("empty-at", empty);
+                fs::write(hub.door.join("empty-exit"), "2").expect("a control file");
+            }
+            "writes" => {
+                hub.control("empty-at", empty);
+                fs::write(hub.door.join("empty-writes"), "").expect("a control file");
+            }
+            _ => hub.control("fail-at", &[2]),
+        }
+        let dir = hub.scratch.dir("out");
+        let act = hub.null(&["dump", text_of(&dir)]);
+        act.refused(1);
+        assert!(act.says(line), "{label}: `{line}`: {}", act.show());
+        assert!(
+            !act.everything().contains("failed to load configuration"),
+            "{label}: {}",
+            act.show()
+        );
+        assert!(hub.temps().is_empty(), "{label}: {:?}", hub.temps());
+        assert!(!hub.lock().exists(), "{label}: the lock released");
+    }
+}
+
+/// docs/features/hub-backups.md HB3, beside OP11 (here because the door's
+/// stub and the real `hub-admin` under `hub-ops` are this file's harness):
+/// `hub-ops door once` under the stub's loading rule exits 0, its one
+/// generation holding the five files and its line `dumped users.yml
+/// mcp-users acts.log webauthn.yml totp.yml`; with no TOTP in the door the
+/// round is whole too, the generation without `totp.yml`. Never a `failed
+/// to load configuration`, one try, no temp file. M: as HB2.
+#[test]
+fn hb03_a_door_once_round_dumps_the_door_under_the_loading_rule() {
+    let cases: [(&str, &[usize], &[&str]); 2] = [
+        (
+            "one passkey and one TOTP",
+            &[],
+            &[
+                "acts.log",
+                "mcp-users",
+                "totp.yml",
+                "users.yml",
+                "webauthn.yml",
+            ],
+        ),
+        (
+            "passkeys alone",
+            &[2],
+            &["acts.log", "mcp-users", "users.yml", "webauthn.yml"],
+        ),
+    ];
+    for shell in ops_shells() {
+        for (label, empty, files) in cases {
+            let hub = Hub::new("hb03");
+            filled_door(&hub, true);
+            if !empty.is_empty() {
+                hub.control("empty-at", empty);
+            }
+            let ops = Ops::new(&hub, &shell);
+            let e = DAY + 12 * 3600 + 15 * 60;
+            ops.set_clock(e);
+            let t = stamp(e);
+            let act = ops.once();
+            act.code(0);
+            door_prefixed(&act, &t);
+            assert!(
+                !act.everything().contains("failed to load configuration"),
+                "{shell} {label}: {}",
+                act.show()
+            );
+            let mut said: Vec<&str> = vec!["users.yml", "mcp-users", "acts.log", "webauthn.yml"];
+            if files.contains(&"totp.yml") {
+                said.push("totp.yml");
+            }
+            assert!(
+                act.stderr
+                    .lines()
+                    .any(|line| line == format!("hub-ops: door {t}: dumped {}", said.join(" "))),
+                "{shell} {label}: the round's line: {}",
+                act.show()
+            );
+            assert_eq!(
+                names_in(&ops.door_dumps()),
+                std::slice::from_ref(&t),
+                "{shell} {label}"
+            );
+            let generation = ops.door_dumps().join(&t);
+            assert_eq!(names_in(&generation), files, "{shell} {label}");
+            for name in names_in(&generation) {
+                assert_eq!(
+                    mode(&generation.join(&name)),
+                    0o600,
+                    "{shell} {label}: {name}'s mode"
+                );
+            }
+            hub.one_config(&hub.calls(), &format!("{shell} {label}"));
+            assert_eq!(ops.tries().len(), 1, "{shell} {label}: one try");
+            assert!(ops.sleeps().is_empty(), "{shell} {label}: no retry");
+            assert!(hub.temps().is_empty(), "{shell} {label}: {:?}", hub.temps());
+            assert!(!hub.lock().exists(), "{shell} {label}: the lock released");
+        }
+    }
+}
+
+/// What the container's `/tmp` held while the stub held a storage call: the
+/// act's PID, the `*.storage.yml` names, and the first one's mode and bytes.
+type Held = (String, Vec<String>, Option<(u32, String)>);
+
+/// docs/features/hub-backups.md HB6 and "The door's configuration", option
+/// A: while `reset`'s passkey delete runs (the stub held), the container's
+/// `/tmp` holds `hub-admin.<pid>.storage.yml` of the act's own PID, mode
+/// 600, two comment lines and no key; it is gone when the act ends, and when
+/// a SIGTERM ends it during the TOTP delete; both deletes of the released
+/// act name it. `disable` makes no storage call. M: `--config` dropped from
+/// `delete_passkeys` or `delete_totp` (red here, in AC6 and in AC19); the
+/// configuration not removed by `cleanup` (red here, in AC6 and in AC19).
+#[test]
+fn hb06_a_delete_loads_the_acts_own_configuration_and_none_is_left() {
+    let users = users_file(&[
+        &entry("mira", "Mira K", "mira@example.org", false),
+        &entry("olek", "Olek", "olek@example.org", false),
+    ]);
+    for (label, held, signal) in [("released", 2, false), ("SIGTERM", 3, true)] {
+        let hub = Hub::new("hb06");
+        hub.put(&hub.users(), &users);
+        hub.control("hold-at", &[held]);
+        let kill = first_existing(&["/bin/kill", "/usr/bin/kill"], "kill");
+        let mut seen: Option<Held> = None;
+        let act = hub.terminal_with(&["reset", "mira"], &[], &mut |pid: &Path| {
+            if seen.is_some() || !hub.door.join("held").exists() {
+                return;
+            }
+            let pid = read(pid).trim().to_owned();
+            let names: Vec<String> = names_in(&hub.root.join("tmp"))
+                .into_iter()
+                .filter(|name| name.ends_with(".storage.yml"))
+                .collect();
+            let file = names
+                .first()
+                .map(|name| hub.root.join("tmp").join(name))
+                .map(|path| (mode(&path), read(&path)));
+            seen = Some((pid.clone(), names, file));
+            if signal {
+                let sent = Command::new(kill)
+                    .args(["-TERM", &pid])
+                    .status()
+                    .expect("kill");
+                assert!(sent.success(), "SIGTERM to {pid}");
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            fs::write(hub.door.join("release"), "").expect("the stub's release");
+        });
+        let (pid, names, file) =
+            seen.unwrap_or_else(|| panic!("{label}: the delete never held: {}", act.show()));
+        if !signal {
+            act.code(0);
+            let calls = hub.calls();
+            assert_eq!(
+                calls.len(),
+                3,
+                "{label}: the hash and two deletes: {calls:?}"
+            );
+            let conf = hub.one_config(&calls, label);
+            assert!(
+                conf.ends_with(&format!("/tmp/hub-admin.{pid}.storage.yml")),
+                "{label}: {conf}"
+            );
+        }
+        assert_eq!(
+            names,
+            [format!("hub-admin.{pid}.storage.yml")],
+            "{label}: the act's own configuration while the delete runs"
+        );
+        let (file_mode, text) = file.expect("its mode and bytes");
+        assert_eq!(file_mode, 0o600, "{label}: mode 600");
+        let lines: Vec<&str> = text.lines().collect();
+        assert!(
+            lines.len() == 2 && lines.iter().all(|line| line.starts_with('#')),
+            "{label}: two comment lines, no key: {text:?}"
+        );
+        assert!(
+            hub.temps().is_empty(),
+            "{label}: nothing left in /tmp: {:?}\n{}",
+            hub.temps(),
+            act.show()
+        );
+        assert!(!hub.lock().exists(), "{label}: the lock released");
+    }
+
+    let hub = Hub::new("hb06-disable");
+    hub.put(&hub.users(), &users);
+    hub.terminal(&["disable", "mira"], &[]).code(0);
+    assert!(hub.calls().is_empty(), "disable calls nothing of the door");
+}
+
+/// One `docker run --rm --network none` of the pinned door `image` as the
+/// host's user, under `perl`'s self-kill alarm: `mounts` as `-v`, `env` as
+/// `-e`, `entry` the entrypoint, then `args`. Its exit, stdout and stderr.
+fn pinned(
+    image: &str,
+    mounts: &[(&Path, &str, bool)],
+    env: &[(&str, &str)],
+    entry: &str,
+    args: &[&str],
+) -> (i32, String, String) {
+    let owner = fs::metadata(mounts[0].0).expect("a mounted folder");
+    let mut command = Command::new("/usr/bin/perl");
+    command
+        .arg("-e")
+        .arg("alarm 600; exec @ARGV or die \"exec: $!\"")
+        .arg("docker")
+        .args(["run", "--rm", "--network", "none"])
+        .arg("--user")
+        .arg(format!("{}:{}", owner.uid(), owner.gid()))
+        .arg("--entrypoint")
+        .arg(entry);
+    for (host, inside, read_only) in mounts {
+        let mut volume = format!("{}:{inside}", host.display());
+        if *read_only {
+            volume.push_str(":ro");
+        }
+        command.arg("-v").arg(volume);
+    }
+    for (name, value) in env {
+        command.arg("-e").arg(format!("{name}={value}"));
+    }
+    let output = command
+        .arg(image)
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .expect("docker: HB5 needs Docker on PATH");
+    (
+        output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// docs/features/hub-backups.md HB5, by hand on a machine with Docker
+/// (`cargo test -p specengine-http --test deploy_admin hb05 -- --ignored`):
+/// the pinned door image `dump-door` runs (read from the compose file) agrees
+/// with the stub. On a scratch SQLite, with the storage key a file as
+/// `AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE` gives it and hub-admin's
+/// two-comment-line configuration: `storage migrate up`, then `storage user
+/// webauthn import` of `fixtures/hub-backups/webauthn.yml` (one invented
+/// credential) exit 0; the exact export call `hub-admin` makes ([`export_call`]
+/// under `timeout 300`) exits 0 and its file holds that credential's `kid`
+/// and `public_key`. The same export without `--config` exits 1 with the
+/// hub's line for `/config/configuration.yml` (the stub's loading rule),
+/// writing nothing; the TOTP export of a door with no TOTP answers `Error:
+/// no data to export`, exit 1, no file (the stub's `empty-at`). Last, the
+/// real `hub-admin dump` in that image, mounted as `dump-door` mounts it,
+/// exits 0 with `dumped users.yml mcp-users acts.log webauthn.yml`.
+#[test]
+#[ignore = "manual (HB5): needs Docker and the pinned door image; the developer's run is in docs/features/hub-backups.md"]
+fn hb05_the_pinned_door_image_agrees_with_the_stub() {
+    let compose = compose();
+    let image = scalar(
+        &service(&compose, "dump-door")["image"],
+        "dump-door's image",
+    );
+    let scratch = Scratch::new("admin-hb05");
+    let work = scratch.dir("work");
+    let fixture = common::fixture("hub-backups/webauthn.yml");
+    fs::write(work.join("webauthn.yml"), bytes(&fixture)).expect("the invented credential");
+    fs::write(work.join("key"), format!("{}\n", "4f".repeat(32))).expect("a storage key");
+    fs::write(
+        work.join("storage.yml"),
+        "# hub-admin's storage calls: the key and the database are\n\
+         # AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE and --sqlite.path.\n",
+    )
+    .expect("hub-admin's configuration");
+    fs::create_dir_all(work.join("out")).expect("the export's folder");
+    fs::create_dir_all(work.join("bare")).expect("the bare export's folder");
+    // The door's volume, the same folder in every run, so `hub-admin dump`
+    // reads the database the CLI wrote, its journal included.
+    let door = scratch.dir("door");
+    let cli = r#"exec "$(command -v authelia || echo /app/authelia)" "$@""#;
+    let key = [("AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE", "/work/key")];
+    let mounts = [
+        (work.as_path(), "/work", false),
+        (door.as_path(), "/var/lib/authelia", false),
+    ];
+    let run = |args: &[&str]| {
+        let mut full = vec!["-c", cli, "authelia"];
+        full.extend(args);
+        pinned(&image, &mounts, &key, "/bin/sh", &full)
+    };
+    let db = Path::new("/var/lib/authelia/db.sqlite3");
+
+    let (code, out, err) = run(&[
+        "storage",
+        "migrate",
+        "up",
+        "--config",
+        "/work/storage.yml",
+        "--sqlite.path",
+        "/var/lib/authelia/db.sqlite3",
+    ]);
+    assert_eq!(code, 0, "migrate up:\n{out}\n{err}");
+    let (code, out, err) = run(&[
+        "storage",
+        "user",
+        "webauthn",
+        "import",
+        "--config",
+        "/work/storage.yml",
+        "--sqlite.path",
+        "/var/lib/authelia/db.sqlite3",
+        "--",
+        "/work/webauthn.yml",
+    ]);
+    assert_eq!(
+        code, 0,
+        "the import, as hub-admin's restore makes it:\n{out}\n{err}"
+    );
+
+    let call = export_call("webauthn", "/work/out", db, "/work/storage.yml");
+    let mut bounded = vec!["300".to_owned(), "/bin/sh".to_owned(), "-c".to_owned()];
+    bounded.extend([cli.to_owned(), "authelia".to_owned()]);
+    bounded.extend(call);
+    let bounded: Vec<&str> = bounded.iter().map(String::as_str).collect();
+    let (code, out, err) = pinned(&image, &mounts, &key, "timeout", &bounded);
+    assert_eq!(code, 0, "hub-admin's export call:\n{out}\n{err}");
+    let exported = read(&work.join("out/webauthn.yml"));
+    for value in [
+        "aHViLWJhY2t1cHMtaW52ZW50ZWQta2V5LWlk",
+        "aHViLWJhY2t1cHMtaW52ZW50ZWQtcHVibGljLWtleS1ieXRlcw==",
+    ] {
+        assert!(
+            exported.contains(value),
+            "the export holds the invented credential's {value}:\n{exported}"
+        );
+    }
+
+    let (code, out, err) = run(&[
+        "storage",
+        "user",
+        "webauthn",
+        "export",
+        "--file",
+        "/work/bare/webauthn.yml",
+        "--sqlite.path",
+        "/var/lib/authelia/db.sqlite3",
+    ]);
+    assert_eq!(code, 1, "the export without --config:\n{out}\n{err}");
+    assert!(
+        err.lines()
+            .any(|line| line == unloaded("/config/configuration.yml")),
+        "the hub's line:\n{err}"
+    );
+    assert!(!work.join("bare/webauthn.yml").exists(), "nothing written");
+
+    let (code, out, err) = run(&[
+        "storage",
+        "user",
+        "totp",
+        "export",
+        "--config",
+        "/work/storage.yml",
+        "--file",
+        "/work/bare/totp.yml",
+        "--sqlite.path",
+        "/var/lib/authelia/db.sqlite3",
+    ]);
+    assert_eq!(code, 1, "an empty TOTP table:\n{out}\n{err}");
+    assert!(
+        err.lines().any(|line| line == "Error: no data to export"),
+        "the empty table's answer:\n{err}"
+    );
+    assert!(!work.join("bare/totp.yml").exists(), "no file");
+
+    // `hub-admin dump` itself, as dump-door mounts it.
+    let users = scratch.dir("users");
+    fs::write(
+        users.join("users.yml"),
+        users_file(&[&entry("alice", "Alice", "alice@example.org", false)]),
+    )
+    .expect("the users file");
+    let mcp = scratch.dir("mcp-users");
+    fs::write(mcp.join("users"), mcp_line("alice", 'A')).expect("the MCP users file");
+    let log = scratch.dir("admin-log");
+    fs::set_permissions(&log, fs::Permissions::from_mode(0o700)).expect("700");
+    fs::write(
+        log.join("acts.log"),
+        "2026-11-20T00:00:00Z\tadd\talice\t-\n",
+    )
+    .expect("acts.log");
+    let into = scratch.dir("dump");
+    let admin = deploy().join("admin");
+    let (code, out, err) = pinned(
+        &image,
+        &[
+            (work.as_path(), "/work", true),
+            (admin.as_path(), "/opt/hub-admin", true),
+            (users.as_path(), "/users", true),
+            (mcp.as_path(), "/mcp-users", true),
+            (log.as_path(), "/var/lib/hub-admin", false),
+            (door.as_path(), "/var/lib/authelia", false),
+            (into.as_path(), "/out", false),
+        ],
+        &key,
+        "/bin/sh",
+        &["/opt/hub-admin/hub-admin", "dump", "/out"],
+    );
+    assert_eq!(code, 0, "hub-admin dump in the pinned image:\n{out}\n{err}");
+    assert_eq!(
+        out.lines().collect::<Vec<_>>(),
+        ["dumped users.yml mcp-users acts.log webauthn.yml"],
+        "{err}"
+    );
+    assert_eq!(
+        names_in(&into),
+        ["acts.log", "mcp-users", "users.yml", "webauthn.yml"]
+    );
 }
 
 // ------------------------------------------------------------- AC13-AC14: the host

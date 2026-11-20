@@ -48,4 +48,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0110.md](roadmap/RM-0110.md) config-proposal (Phase 7, pool): a writer's type change as a reviewed config proposal · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0126.md](roadmap/RM-0126.md) git-reads (deferred from 0.47.1): in-process git reads on the write path · crates/specengine-store, crates/specengine-cli · draft
 - [docs/roadmap/RM-0129.md](roadmap/RM-0129.md) specengine-guide (Phase 7, pool): SpecEngine's own user guide, served read-only beside a project · docs, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, crates/specengine-eval, plugin, ui · draft
-- [docs/roadmap/RM-0130.md](roadmap/RM-0130.md) hub-backups (Phase 7, pool): the hub's off-host backups run, and the door's dump stops failing · scripts, crates/specengine-cli · draft
+- [docs/roadmap/RM-0131.md](roadmap/RM-0131.md) door-reset-totp (pool): hub-admin reset of a person with no TOTP reports a TOTP left · scripts · draft

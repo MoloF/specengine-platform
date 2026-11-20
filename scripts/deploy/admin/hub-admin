@@ -7,7 +7,8 @@
 # unless stdin is a terminal. It writes the door's users file, the proxy's MCP
 # users file and its stamp (S1), each through a staging file renamed in its
 # own folder, under the lock admin-log/lock/, and appends the act log; the
-# door's output is caught under the container's own /tmp (R4). The door's CLI
+# door's output is caught under the container's own /tmp (R4), where each
+# storage call's configuration is written too, holding nothing. The door's CLI
 # draws each password and secret itself (`--random`), so none is ever an
 # argument; each is printed once, never logged. It never writes [team]: `add`
 # prints a row for a reviewed commit.
@@ -46,6 +47,10 @@ lock_dir=$log_dir/lock
 tmp_dir=$root/tmp
 door_out=$tmp_dir/hub-admin.$$.out.tmp
 door_err=$tmp_dir/hub-admin.$$.err.tmp
+# The configuration every storage call loads (`--config`): the pinned image
+# otherwise loads /config/configuration.yml, which neither `admin` nor
+# `dump-door` mounts (hub-backups, HB5). Written by door_run.
+door_conf=$tmp_dir/hub-admin.$$.storage.yml
 door_dir=$root/var/lib/authelia
 door_db=$door_dir/db.sqlite3
 notice_file=$door_dir/notification.txt
@@ -180,7 +185,7 @@ cleanup() {
     if [ -n "$lock_held" ]; then
         if [ "$status" -ne 0 ]; then stopped_log; fi
         rm -f "$users_tmp" "$users_prev_tmp" "$mcp_tmp" "$mcp_prev_tmp" "$stamp_tmp" \
-            "$log_tmp" "$door_out" "$door_err" "$lock_dir/taken" 2>/dev/null
+            "$log_tmp" "$door_out" "$door_err" "$door_conf" "$lock_dir/taken" 2>/dev/null
         rmdir "$lock_dir" 2>/dev/null
         lock_held=
     fi
@@ -774,10 +779,13 @@ find_door_cli() {
 # The door's CLI with `$1` (empty: none) on stdin and the rest as its
 # arguments, its stdout in door_out and its stderr in door_err, both under
 # tmp_dir (R4). In the background, so a signal stops the act at once and the
-# trap ends the CLI.
+# trap ends the CLI. A `storage` call names door_conf by `--config`, which
+# this writes fresh first.
 door_run() {
     door_input=$1
     shift
+    door_storage=
+    if [ "$1" = storage ]; then door_storage=1; fi
     if [ -n "$door_bound" ]; then
         set -- timeout "$door_bound" "$door_cli" "$@"
     else
@@ -785,6 +793,15 @@ door_run() {
     fi
     [ -d "$tmp_dir" ] || mkdir -p "$tmp_dir" ||
         refuse "cannot make $tmp_dir for the door's output; nothing changed"
+    if [ -n "$door_storage" ]; then
+        # All a storage call needs comes from elsewhere: the key from
+        # AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE, the database from
+        # `--sqlite.path`. The file only stands in for the door's own.
+        rm -f "$door_conf"
+        printf '%s\n' "# hub-admin's storage calls: the key and the database are" \
+            "# AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE and --sqlite.path." > "$door_conf" ||
+            refuse "cannot write $door_conf for the door's storage calls"
+    fi
     # Fresh files, so umask 077 makes them mode 600: door_out may hold a
     # password or secret the door drew.
     rm -f "$door_out" "$door_err"
@@ -881,13 +898,13 @@ hash_secret() {
 # The login `$1`'s passkeys deleted; `--` before the login (R7).
 delete_passkeys() {
     stage=passkeys
-    door_run "" storage user webauthn delete --all --sqlite.path "$door_db" -- "$1"
+    door_run "" storage user webauthn delete --all --config "$door_conf" --sqlite.path "$door_db" -- "$1"
 }
 
 # The login `$1`'s TOTP deleted; `--` before the login (R7).
 delete_totp() {
     stage=totp
-    door_run "" storage user totp delete --sqlite.path "$door_db" -- "$1"
+    door_run "" storage user totp delete --config "$door_conf" --sqlite.path "$door_db" -- "$1"
 }
 
 # ------------------------------------------------------------------ the writers
@@ -1290,6 +1307,22 @@ dump_failed() {
     refuse "the door's $1 export failed: $(door_said)"
 }
 
+# The pinned door's answer to an export of an empty table (hub-backups HB5):
+# exit 1, this line, no file written.
+EMPTY_EXPORT='Error: no data to export'
+
+# The door's `$1` export (webauthn or totp) into the dump as `$1.yml`, named
+# `$2` when it fails. A door where no one holds a passkey, or no one a TOTP,
+# has nothing of that kind to dump: its file is left out, not a failure.
+dump_export() {
+    door_run "" storage user "$1" export --config "$door_conf" --file "$into/$1.yml" --sqlite.path "$door_db" &&
+        return 0
+    if [ "$door_status" -eq 1 ] && [ ! -e "$into/$1.yml" ] && [ "$(door_said)" = "$EMPTY_EXPORT" ]; then
+        return 0
+    fi
+    dump_failed "$2"
+}
+
 # hub-ops' door round runs it with no terminal (S3). It never waits for the
 # lock nor breaks it (R8), and never writes the act log (stopped_log); the
 # door's database is read by the door's own exports alone, each bounded by
@@ -1317,12 +1350,10 @@ act_dump() {
             refuse "the door's image has no timeout to bound its exports; nothing dumped"
         stage=export
         door_bound=$DUMP_BOUND
-        door_run "" storage user webauthn export --file "$into/webauthn.yml" --sqlite.path "$door_db" ||
-            dump_failed passkey
-        door_run "" storage user totp export --file "$into/totp.yml" --sqlite.path "$door_db" ||
-            dump_failed TOTP
+        dump_export webauthn passkey
+        dump_export totp TOTP
         door_bound=
-        rm -f "$door_out" "$door_err"
+        rm -f "$door_out" "$door_err" "$door_conf"
         for name in webauthn.yml totp.yml; do
             [ -e "$into/$name" ] || continue
             chmod 600 "$into/$name" || refuse "cannot make the door's $name mode 600"
@@ -1428,21 +1459,21 @@ act_restore() {
         # From the first door call on, the database may exist.
         left="the door volume's db.sqlite3"
         stage=migrate
-        door_run "" storage migrate up --sqlite.path "$door_db" ||
+        door_run "" storage migrate up --config "$door_conf" --sqlite.path "$door_db" ||
             restore_refuse "the door's migration failed: $(door_said); the users files are as they were"
         if [ -n "$have_passkeys" ]; then
             stage=passkeys
-            door_run "" storage user webauthn import --sqlite.path "$door_db" -- "$from/webauthn.yml" ||
+            door_run "" storage user webauthn import --config "$door_conf" --sqlite.path "$door_db" -- "$from/webauthn.yml" ||
                 restore_refuse "the door's passkey import failed: $(door_said); the users files are as they were"
             detail="$detail passkeys"
         fi
         if [ -n "$have_totp" ]; then
             stage=totp
-            door_run "" storage user totp import --sqlite.path "$door_db" -- "$from/totp.yml" ||
+            door_run "" storage user totp import --config "$door_conf" --sqlite.path "$door_db" -- "$from/totp.yml" ||
                 restore_refuse "the door's TOTP import failed: $(door_said); the users files are as they were"
             detail="$detail totp"
         fi
-        rm -f "$door_out" "$door_err"
+        rm -f "$door_out" "$door_err" "$door_conf"
     fi
 
     # The users file, then the MCP users file, as `add` installs them:

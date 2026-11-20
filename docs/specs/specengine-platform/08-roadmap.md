@@ -586,7 +586,8 @@ Like every route today, the read still holds the project's turn. Reads outside t
 - `dump-door` fails every round: the door's passkey export finds no `/config/configuration.yml`, so the door's accounts are not dumped. This is a deployment defect.
 - `dump-queue` works, and a pre-upgrade copy sits in the host's `~/hub-snapshots/20261120-before-0.47.2/`.
 - **His word, 2026-11-20:** off-host backups stay off for now ("not required, don't worry about it, let it stay off"). The host copies taken before each upgrade remain the hub's only backups.
-- RM-0130 ships after 0.48.0, as 0.48.1. It fixes the door's dump, and `backup` waits unconfigured, one line per round, instead of restart-looping. Turning backups on is his, when he wants it.
+- **Closed 2026-11-20**: RM-0130 shipped as 0.48.1, tag `v0.48.1`. Every storage call of `hub-admin` passes `--config`, a comment-only file, verified on the pinned 4.39.28, so `dump-door` dumps the door; `backup` waits unconfigured, its line(s) each round, never restart-looping.
+- Still his: the live check after the upgrade (HB11); turning backups on, by the steps in `scripts/deploy/README.md` "Going live"; and RM-0131's question, whether `reset` of a person with no TOTP should keep warning `totp-left`.
 
 **His word, 2026-11-20**: "do all the remaining parts and publish each intermediate result to the hub yourself". It authorises the main session to commit, tag, push and upgrade the hub for RM-0127 to RM-0129, each slice's release on its own; RM-0127 goes first, as 0.47.2.
 

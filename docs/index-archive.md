@@ -85,6 +85,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/health-ui-follow-up.md](features/health-ui-follow-up.md) shipped
 - [docs/features/hub-accounts.md](features/hub-accounts.md) shipped
 - [docs/features/hub-auto.md](features/hub-auto.md) shipped
+- [docs/features/hub-backups.md](features/hub-backups.md) shipped
 - [docs/features/hub-confirm.md](features/hub-confirm.md) shipped
 - [docs/features/hub-department.md](features/hub-department.md) shipped
 - [docs/features/hub-deploy.md](features/hub-deploy.md) shipped
@@ -305,4 +306,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0125.md](roadmap/RM-0125.md) shipped
 - [docs/roadmap/RM-0127.md](roadmap/RM-0127.md) shipped
 - [docs/roadmap/RM-0128.md](roadmap/RM-0128.md) shipped
+- [docs/roadmap/RM-0130.md](roadmap/RM-0130.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped
