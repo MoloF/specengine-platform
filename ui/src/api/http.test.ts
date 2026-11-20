@@ -297,7 +297,7 @@ describe("the map read (CM3 of corpus-map)", () => {
   });
 });
 
-// docs/features/doc-library.md "The route", "The UI seam": the library read GETs `/library`, `archive`
+// docs/canon/spec-library.md "Daemon, hub", "The screen": the library read GETs `/library`, `archive`
 // only as true, with its query's AbortSignal; its 200 resolves as sent; it is judged, so a query's 400,
 // an older daemon's 404 and a 503 reject in the daemon's words, and a 404 that is no error body is
 // never read as the library.
@@ -671,7 +671,7 @@ describe("answers (AC-09)", () => {
     const list = { tasks: [aTaskEntry({ id: "T-0108", status: "ready", stale: true })], notes: ["T-0106: a corrupt row skipped"] };
     const pkg = aTaskPackage({
       id: "T-0107",
-      bundle: { node_ids: ["MEC-TIDES"], budget: 10000, bundle_hash: null },
+      bundle: { node_ids: ["MEC-TIDES"], budget: 10000, disciplines: [], bundle_hash: null },
       snapshot_diff: [{ id: "MEC-TIDES", path: "docs/spec/tides.md", span_hash: "b3:0", diff: null, cut: false }],
       notes: ["bundle: `MEC-TIDES` resolves to no ID", "snapshot_diff: no diff of `MEC-TIDES`: git failed"],
     });
@@ -1253,10 +1253,10 @@ describe("the cards (docs/features/board-ui.md \"Routes\")", () => {
     expect(stub.mock.calls[0]?.[1]?.signal).toBe(signal);
   });
 
-  it("reads one card, the ID a segment encoded once, a 404's {id, reason} as data", async () => {
+  it("reads one card with its practices asked, the ID a segment encoded once, a 404's {id, reason} as data (DP14 of department-practices)", async () => {
     const stub = stubFetch(() => jsonAnswer(404, { id: "C/1", reason: "no card C/1" }));
     expect(await new HttpClient().getCard("alpha", "C/1")).toEqual({ id: "C/1", reason: "no card C/1" });
-    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/cards/C%2F1"]);
+    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/cards/C%2F1?practices=true"]);
   });
 
   it("rejects a bad [card] as the daemon words it", async () => {

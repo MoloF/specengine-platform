@@ -527,13 +527,16 @@ fn cc1_the_bundle_is_spec_bundles_over_targets_then_records() {
     );
     assert_eq!(keys_at(&raw, "context"), ["parent", "bundle", "notes"]);
 
-    // The text: the card's lines, `history: -`, the three context lines,
-    // the body last.
+    // The text: the card's lines, `history: -`, the practices' two lines
+    // (docs/features/department-practices.md "The card: `practices` and `cited`": `--context`
+    // implies them; no discipline and no ID cited, so `-` each), the three
+    // context lines, the body last.
     let hash = bundle["bundle_hash"].as_str().expect("a hash");
     let body = body_of(&bundle_text.stdout);
     assert_eq!(bundle["body"], json!(body), "the body is the text's");
     let tail = format!(
-        "history: -\ncontext.parent: -\ncontext.parent.goal: -\ncontext.bundle: {hash}\n{body}"
+        "history: -\npractices: -\ncited: -\ncontext.parent: -\ncontext.parent.goal: -\n\
+         context.bundle: {hash}\n{body}"
     );
     assert!(
         text.stdout.ends_with(&tail),
@@ -560,10 +563,17 @@ fn cc1_the_bundle_is_spec_bundles_over_targets_then_records() {
         format!("{}{}", plain.stderr, bundle_text.stderr),
         "the read's messages, then the bundle's own"
     );
-    // The document is the plain one but `context`.
+    // The document is the plain one but `context`, and `practices` and
+    // `cited`, which `--context` implies (no discipline and no ID cited, so
+    // `[]` each): docs/features/department-practices.md
+    // "The card: `practices` and `cited`".
     let plain_document = doc_at(&pair, &cwd, &["card", "show", "C-0001"], 0);
+    assert_eq!(document["practices"], json!([]));
+    assert_eq!(document["cited"], json!([]));
     let mut without = document.clone();
     without["context"] = Value::Null;
+    without["practices"] = Value::Null;
+    without["cited"] = Value::Null;
     assert_eq!(without, plain_document);
 }
 
@@ -760,6 +770,10 @@ fn cc2_not_asked_is_the_read_before_plus_context_null() {
                 .expect("history")
                 + 1;
             want.insert(at, "context".to_owned());
+            // docs/features/department-practices.md "The card: `practices` and `cited`": `practices`
+            // and `cited` after `context`, `null` unless asked.
+            want.insert(at + 1, "practices".to_owned());
+            want.insert(at + 2, "cited".to_owned());
             assert_eq!(
                 keys(&after.stdout),
                 want,
@@ -768,7 +782,9 @@ fn cc2_not_asked_is_the_read_before_plus_context_null() {
             let mut document: Value = serde_json::from_str(&after.stdout).expect("JSON");
             assert_eq!(document["context"], Value::Null, "{context}");
             assert_eq!(document["upstream"], Value::Null, "{context}");
-            for key in ["context", "upstream"] {
+            assert_eq!(document["practices"], Value::Null, "{context}");
+            assert_eq!(document["cited"], Value::Null, "{context}");
+            for key in ["context", "upstream", "practices", "cited"] {
                 document.as_object_mut().expect("an object").remove(key);
             }
             // docs/features/plain-questions.md PQ10: each item's `gist` and

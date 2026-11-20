@@ -341,7 +341,8 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         // docs/features/intake-similar.md "Acceptance criteria" IS10.
         // 53 since docs/features/plain-questions.md PQ10; 54 since
         // docs/features/collision-pairs.md PP8 (`pair`, `null` on a stage).
-        assert_eq!(document.as_object().unwrap().len(), 54, "{document}");
+        // 55 since docs/features/department-practices.md "Proposals: `cited`".
+        assert_eq!(document.as_object().unwrap().len(), 55, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -1282,7 +1283,8 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     // docs/features/intake-similar.md "Acceptance criteria" IS10.
     // 53 since docs/features/plain-questions.md PQ10; 54 since
     // docs/features/collision-pairs.md PP8 (`pair`, `null` on a stage).
-    assert_eq!(document.as_object().unwrap().len(), 54, "{document}");
+    // 55 since docs/features/department-practices.md "Proposals: `cited`".
+    assert_eq!(document.as_object().unwrap().len(), 55, "{document}");
     assert_eq!(document["kind"], json!("interpretation"));
     assert_eq!(
         document["staged"],
@@ -1401,7 +1403,8 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     // docs/features/intake-similar.md "Acceptance criteria" IS10.
     // 53 since docs/features/plain-questions.md PQ10; 54 since
     // docs/features/collision-pairs.md PP8 (`pair`, `null` on a stage).
-    assert_eq!(document.as_object().unwrap().len(), 54, "{document}");
+    // 55 since docs/features/department-practices.md "Proposals: `cited`".
+    assert_eq!(document.as_object().unwrap().len(), 55, "{document}");
     assert_eq!(document["kind"], json!("decision"));
     assert_eq!(document["linked"], json!("PR-0005"));
     assert_eq!(document["options"], json!([]));

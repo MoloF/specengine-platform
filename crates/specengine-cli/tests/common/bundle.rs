@@ -11,8 +11,10 @@ use serde_json::Value;
 use super::graph::spec30;
 use super::{Run, spec};
 
-/// The JSON keys of the layers, in print order (spec, Data).
-pub const LAYERS: [&str; 9] = [
+/// The JSON keys of the layers, in print order (spec, Data); `practices`
+/// last since docs/features/department-practices.md (ADR-0084, layer 10,
+/// `[]` without `--discipline`).
+pub const LAYERS: [&str; 10] = [
     "targets",
     "open_questions",
     "ancestors",
@@ -22,6 +24,7 @@ pub const LAYERS: [&str; 9] = [
     "neighbours",
     "terms",
     "tests",
+    "practices",
 ];
 
 /// The top-level keys of `spec bundle --json` (spec, Data).

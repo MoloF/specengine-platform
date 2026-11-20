@@ -81,6 +81,8 @@ const LAYERS = [
   "neighbours",
   "terms",
   "tests",
+  // Layer 10, the practices' rules (docs/features/department-practices.md "Acceptance criteria", DP5).
+  "practices",
 ] as const satisfies readonly (keyof BundleLayers)[];
 
 /** The bundle's layers in print order with the CLI's headings, in the catalog's words. */

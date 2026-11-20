@@ -139,7 +139,11 @@
 //! - [`rings`] — the scope rings, the pure half (task spec `scope-rings`):
 //!   the document a read serves and a ring's members once inner rings took
 //!   theirs, over `[[map.ring]]` as [`map_toml`] reads it, computed per read
-//!   and never stored.
+//!   and never stored;
+//! - [`practice`] — practices, the pure half (task spec
+//!   `department-practices`, ADR-0084): `disciplines:` judged, a practice's
+//!   rules and the references a text cites; computed per read, never
+//!   cached.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -176,6 +180,7 @@ mod own_text;
 pub mod pair;
 pub mod patch;
 pub mod paths_toml;
+pub mod practice;
 pub mod project_toml;
 pub mod proposal;
 pub mod raise;

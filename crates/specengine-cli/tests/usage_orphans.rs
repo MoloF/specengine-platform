@@ -943,9 +943,10 @@ fn uo7_nothing_is_stored() {
     }
     assert_eq!(database_state(&copy.db()), before);
 
-    // 18 since docs/features/doc-library.md (the typed `tags`); usage-orphans
-    // itself moved no format.
-    assert_eq!(specengine_store::INDEX_FORMAT, 18, "the index format");
+    // 18 since docs/features/doc-library.md (the typed `tags`), 19 since
+    // docs/features/department-practices.md (the `disciplines` table);
+    // usage-orphans itself moved no format.
+    assert_eq!(specengine_store::INDEX_FORMAT, 19, "the index format");
     assert_eq!(
         specengine_store::QUEUE_SCHEMA_VERSION,
         14,

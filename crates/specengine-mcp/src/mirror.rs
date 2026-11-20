@@ -497,6 +497,10 @@ pub(crate) struct BundleLayers {
     /// The tests bound to the targets, the nodes within them and the
     /// criteria; never run here.
     pub tests: Vec<BundleRowShape>,
+    // `docs/features/department-practices.md` "Acceptance criteria", DP5.
+    /// The rules of the asked disciplines' practices, each a header and its
+    /// text; `[]` without `disciplines`.
+    pub practices: Vec<BundleItem>,
 }
 
 /// A code binding placed in the body: a binding row, key for key, then
@@ -591,6 +595,7 @@ pub(crate) enum LayerKey {
     Neighbours,
     Terms,
     Tests,
+    Practices,
 }
 
 // ------------------------------------------------------------------- queue
@@ -685,6 +690,12 @@ pub(crate) struct ReviewDocument {
     /// every other kind and in every review.
     pub similar: Option<Vec<SimilarShape>>,
     pub notes: Vec<String>,
+    // `docs/features/department-practices.md` "Acceptance criteria", DP13.
+    /// The IDs its texts cite, resolved to their first holder, first-seen
+    /// order, at most 64: a review's (`get_proposal`, `review_proposal`);
+    /// `null` in every other answer, and when the index could not be read
+    /// (a note says why).
+    pub cited: Option<Vec<CitedShape>>,
 }
 
 /// The two documents a contradicts discrepancy sets against each other:
@@ -1092,6 +1103,10 @@ pub(crate) struct TaskPackage {
     pub claim: Option<TaskClaim>,
     pub runs: Vec<TaskRun>,
     pub bundle: PackageBundle,
+    // `docs/features/department-practices.md` "Acceptance criteria", DP12.
+    /// The practices of the disciplines of every card listing the task, by
+    /// path, each once, at most 32; `[]` when no card lists it.
+    pub practices: Vec<CardPracticeShape>,
     /// The task's place on the plan; `null` without `[roadmap]`, with one
     /// that cannot be read (a note says why), or when the task executes no
     /// open item.
@@ -1241,7 +1256,38 @@ pub(crate) struct TaskRun {
 pub(crate) struct PackageBundle {
     pub node_ids: Vec<String>,
     pub budget: u32,
+    /// The disciplines of the cards listing the task, sorted, each once:
+    /// get_context_bundle's `disciplines`.
+    pub disciplines: Vec<String>,
     pub bundle_hash: Option<String>,
+}
+
+/// A practice (task spec `department-practices`; ADR-0084): a live
+/// document whose `disciplines:` names a card's discipline. Names,
+/// disciplines and titles free.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CardPracticeShape {
+    /// The map's canonical name of its document.
+    pub name: String,
+    pub title: Option<String>,
+    pub path: String,
+    /// Its document's kept `disciplines:` entries, in written order.
+    pub disciplines: Vec<String>,
+    /// Its rules: its direct child ID sections, else 1, the document.
+    pub rules: u64,
+}
+
+/// An ID a text cites, resolved to its first holder (task spec
+/// `department-practices`, "The card").
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct CitedShape {
+    /// The occurrence's bytes, verbatim.
+    pub written: String,
+    pub name: String,
+    pub title: Option<String>,
+    pub path: String,
 }
 
 /// `spec task claim|plan|report|complete --json`.
@@ -1649,6 +1695,13 @@ pub(crate) struct CardShowDocument {
     /// Its parent's goal and one bundle of its targets and records; `null`
     /// without `context`.
     pub context: Option<CardContextShape>,
+    // `docs/features/department-practices.md` "Acceptance criteria", DP9.
+    /// Its discipline's practices, by path, at most 32; `null` without
+    /// `context`, or when the index could not be read (a note says why).
+    pub practices: Option<Vec<CardPracticeShape>>,
+    /// The IDs its texts cite, resolved, first-seen order, at most 64;
+    /// `null` as `practices`.
+    pub cited: Option<Vec<CitedShape>>,
     pub notes: Vec<String>,
 }
 

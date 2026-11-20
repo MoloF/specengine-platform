@@ -103,6 +103,12 @@ CREATE TABLE diagnostics (
   diagnostic TEXT NOT NULL,
   PRIMARY KEY (file_id, ord)
 ) STRICT;
+CREATE TABLE disciplines (
+  file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  discipline TEXT NOT NULL,
+  PRIMARY KEY (file_id, ord)
+) STRICT;
 CREATE TABLE edges (
   file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
   ord INTEGER NOT NULL,
@@ -284,6 +290,7 @@ CREATE INDEX nodes_by_id ON nodes (id);
 CREATE INDEX links_by_dst_id ON links (dst_id);
 CREATE INDEX aliases_by_alias ON aliases (alias);
 CREATE INDEX anchors_by_name ON anchors (name);
+CREATE INDEX disciplines_by_name ON disciplines (discipline);
 CREATE INDEX edges_by_holder ON edges (file_id, holder);
 CREATE INDEX edges_by_end ON edges (end_path, end_ord);
 CREATE INDEX edge_parents_by_end ON edge_parents (end_path, end_ord);
@@ -330,13 +337,15 @@ const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "node
 /// (`code_monikers`, `code_resolve_files`, then `code_resolve`) before
 /// `code_worktrees`, which `code_resolve` references; format 16's edge
 /// tables before `files`, which they reference; format 17's `file_stats`
-/// before `files` and `walk_notes` before `worktrees`.
+/// before `files` and `walk_notes` before `worktrees`; format 19's
+/// `disciplines` before `files`.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",
     "aliases",
     "links",
     "anchors",
     "diagnostics",
+    "disciplines",
     "nodes",
     "edges",
     "edge_parents",

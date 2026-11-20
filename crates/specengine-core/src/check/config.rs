@@ -9,6 +9,7 @@
 //! a bad table then an error of these tables), so editing these tables
 //! leaves the `[ids]` fingerprint (and every stored parse) alone.
 
+use std::collections::BTreeSet;
 use std::fmt;
 use std::ops::Range;
 
@@ -17,6 +18,7 @@ use toml::Spanned;
 
 pub use super::rules_toml::CheckRule;
 use super::rules_toml::{RawRule, rules_from};
+use crate::card_toml::declared_disciplines;
 use crate::roadmap_toml::{RoadmapConfig, roadmap_from_toml};
 
 /// Default document caps in bytes of the whole file, front-matter and BOM
@@ -215,6 +217,11 @@ pub struct CheckConfig {
     /// The project's process rules (`[[check.rules]]`, ADR-0031), in the
     /// order written; none built in.
     pub rules: Vec<CheckRule>,
+    /// The disciplines `[card]`'s declared flows list, a practice's entries
+    /// are judged against (`practice-discipline`, task spec
+    /// `department-practices`); `None` when `[card]` does not read or
+    /// declares no `[[card.flow]]`: nothing is judged against them.
+    pub flow_disciplines: Option<BTreeSet<String>>,
 }
 
 impl CheckConfig {
@@ -457,6 +464,8 @@ pub fn check_config_from_toml(text: &str) -> Result<CheckConfig, ConfigError> {
     if let Some(rules) = raw_rules {
         config.rules = rules_from(text, rules)?;
     }
+    // Read apart: a bad `[card]` is `card-config`, never this config's error.
+    config.flow_disciplines = declared_disciplines(text);
     Ok(config)
 }
 

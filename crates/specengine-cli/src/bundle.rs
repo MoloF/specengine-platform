@@ -1,7 +1,8 @@
-//! `spec bundle REF… [--budget N]` (task spec `spec-cli-bundle`; 05 §6):
-//! one call that gives the context around named targets within a budget of
-//! estimated tokens and names the rest by ID, over the index-fed spec
-//! graph; MCP `get_context_bundle` wraps the same function.
+//! `spec bundle REF… [--budget N] [--discipline D]…` (task spec
+//! `spec-cli-bundle`; 05 §6): one call that gives the context around named
+//! targets within a budget of estimated tokens and names the rest by ID,
+//! over the index-fed spec graph; MCP `get_context_bundle` wraps the same
+//! function.
 //!
 //! - **Targets**: `spec show`'s `REF` forms and resolution; several holders
 //!   → all, one warning; REFs naming one node count once; a target within
@@ -49,6 +50,15 @@
 //!   (an outlined target's child ID sections first) prints at most
 //!   [`BUNDLE_TAIL_LINES`] lines, each while the body fits, the rest as
 //!   `- <k> more`. The CLI never cuts a bundle.
+//! - **Practices** (task spec `department-practices` and its decision
+//!   record): with `--discipline D` (at most [`DISCIPLINES_MAX`], each a
+//!   flow name), layer 10 holds the rules of the practices of those
+//!   disciplines (the index's one query, by path, at most `PRACTICES_MAX`,
+//!   32), each a header and its text, fitted after layers 1-9, which hold
+//!   back only their own not-included line; a rule that does not fit is a
+//!   not-included line, one past `PRACTICE_RULES_MAX` (128) of its practice
+//!   is counted in `more`. Without a discipline nothing is queried and the
+//!   body, the text and `bundle_hash` are those of a bundle before layer 10.
 //! - **`bundle_hash`**: `b3:` and the hex BLAKE3 of the body's bytes as
 //!   printed; the text and the JSON carry the same value.
 //!
@@ -87,9 +97,10 @@ use serde::Serialize;
 use serde::ser::SerializeMap as _;
 use specengine_core::check::{
     BundleCandidate, BundleLayer, BundleLayers, CheckInput, Endpoint, LinkState, NodeAt, SpecGraph,
-    bundle_layers, bundle_node_from_toml,
+    bundle_layers_with, bundle_node_from_toml,
 };
 use specengine_core::lock::LockRelation;
+use specengine_core::practice::{DISCIPLINES_MAX, discipline_name_problem};
 use specengine_core::tokens::{thousandths, tokens_of};
 use specengine_core::{CodeConfig, tokens_est};
 use specengine_model::{BindingRow, TestedRow};
@@ -102,6 +113,7 @@ use crate::graph::FollowedType;
 use crate::links::state_suffix;
 use crate::location::open_index;
 use crate::node_set::named_set;
+use crate::practice::{PracticeAsk, PracticeFiles, distinct_paths, from_graph};
 use crate::project::{ProjectRoot, discover_with_text};
 use crate::refs::{Corpus, NodeKey};
 use crate::search::notes;
@@ -110,7 +122,7 @@ use crate::subset::seams::{self, Event};
 use crate::subset::{self, Subset, SubsetRead, Wanted};
 use crate::tested::tested_line;
 use crate::verify::unprefixed;
-use crate::{CliError, Env, Globals, Message, one_line};
+use crate::{CliError, Env, Globals, Message, one_line, store_error};
 
 /// The budget without `--budget` or `[budgets] bundle_node`, in estimated
 /// tokens (05 §6: a node bundle, 2k).
@@ -130,6 +142,10 @@ pub struct BundleRequest {
     /// Git's environment: layers 5 and 9 judge their rows with it (task
     /// spec `bundle-bindings`).
     pub git: GitEnv,
+    /// `--discipline D`, each as given: layer 10's practices (task spec
+    /// `department-practices`); at most [`DISCIPLINES_MAX`], each a flow
+    /// name. Empty: no practice is read.
+    pub disciplines: Vec<String>,
 }
 
 /// What `spec bundle` answered: a bundle, or why a `REF` names nothing
@@ -328,7 +344,7 @@ pub fn bundle(
     globals: &Globals,
     request: &BundleRequest,
 ) -> Result<BundleOutcome, CliError> {
-    bundle_with(env, globals, request, None)
+    bundle_with(env, globals, request, None, None)
 }
 
 /// Test-only: [`bundle`] by the walk alone, the whole read the subset
@@ -340,36 +356,30 @@ pub fn bundle_walk(
     globals: &Globals,
     request: &BundleRequest,
 ) -> Result<BundleOutcome, CliError> {
-    run_bundle(env, globals, request, None, true, OUTPUT_CAP_CHARS)
+    run_bundle(env, globals, request, None, true, OUTPUT_CAP_CHARS, None)
 }
 
-/// [`bundle`], with `beside`'s rows read by its code read too.
+/// [`bundle`], with `beside`'s rows read by its code read too, and `ask`'s
+/// practices and citations read over its graph (task spec
+/// `department-practices`): a task's package, one read for both. With
+/// `ask`'s `room`, the body fits within the room it gives instead of
+/// [`OUTPUT_CAP_CHARS`]: a card's context, in the room its lines leave
+/// once they hold the practices (task spec `card-context` CC3); the frame
+/// over it is the same exit 2, naming the room.
 pub(crate) fn bundle_with(
     env: &Env,
     globals: &Globals,
     request: &BundleRequest,
     beside: Option<&mut Beside<'_>>,
+    ask: Option<&mut PracticeAsk<'_>>,
 ) -> Result<BundleOutcome, CliError> {
-    run_bundle(env, globals, request, beside, false, OUTPUT_CAP_CHARS)
-}
-
-/// [`bundle`] fitted within `chars_max` characters instead of
-/// [`OUTPUT_CAP_CHARS`]: a card's context, in the room its lines leave
-/// (task spec `card-context` CC3). The frame over it is the same exit 2,
-/// naming `chars_max`.
-pub(crate) fn bundle_within(
-    env: &Env,
-    globals: &Globals,
-    request: &BundleRequest,
-    chars_max: usize,
-) -> Result<BundleOutcome, CliError> {
-    run_bundle(env, globals, request, None, false, chars_max)
+    run_bundle(env, globals, request, beside, false, OUTPUT_CAP_CHARS, ask)
 }
 
 /// Step 1 (every `REF` classified, the budget), then the subset read
 /// (the `store-reads` spec), else the walk: `walk_only`, a code
 /// layer read (D7), or a subset read that could not vouch for its files.
-/// The body fits within `chars_max` characters.
+/// The body fits within `chars_max` characters, or `ask`'s room.
 fn run_bundle(
     env: &Env,
     globals: &Globals,
@@ -377,8 +387,10 @@ fn run_bundle(
     beside: Option<&mut Beside<'_>>,
     walk_only: bool,
     chars_max: usize,
+    ask: Option<&mut PracticeAsk<'_>>,
 ) -> Result<BundleOutcome, CliError> {
     let flag = budget_of(request.budget)?;
+    let disciplines = disciplines_of(&request.disciplines)?;
     if request.references.is_empty() {
         return Err(CliError::spec(
             "name at least one REF: an ID, an alias, `slug/ID`, `ID#SECTION` or a \
@@ -445,35 +457,50 @@ fn run_bundle(
         budget,
         source: &source,
         chars_max,
+        disciplines: &disciplines,
     };
     // A code layer (a `[code]` that is present or does not read, D7) keeps
     // the whole read.
     if walk_only || !matches!(CodeConfig::from_toml(&text), Ok(None)) {
-        return walk(env, &asked_for, outcome, messages, beside);
+        return walk(env, &asked_for, outcome, messages, beside, ask);
     }
-    match subset::read(env, &project, Wanted::Bundle { asked: &asked })? {
+    let references = ask.as_ref().map(|ask| ask.references()).unwrap_or_default();
+    let wanted = Wanted::Bundle {
+        asked: &asked,
+        disciplines: &disciplines,
+        references: &references,
+    };
+    let read = subset::read(env, &project, wanted)?;
+    drop(references);
+    match read {
         Subset::Read(subset) => {
             let SubsetRead {
                 mut open,
                 input,
                 rows,
                 warnings,
+                practices,
                 ..
             } = *subset;
             messages.extend(warnings);
             let graph = SpecGraph::from_rows(&input, scheme, &project.config.paths, rows);
+            let read = Read {
+                graph: &graph,
+                input: &input,
+                practices: &practices,
+            };
             answer(
                 &asked_for,
-                &graph,
-                &input,
+                &read,
                 &mut open.index,
                 outcome,
                 messages,
                 beside,
+                ask,
             )
         }
         Subset::Walk { fallback } => subset::walk(fallback, || {
-            walk(env, &asked_for, outcome, messages, beside)
+            walk(env, &asked_for, outcome, messages, beside, ask)
         }),
     }
 }
@@ -487,9 +514,40 @@ struct Asked<'a> {
     asked: &'a [(&'a str, Target)],
     budget: u32,
     source: &'a BudgetSource,
-    /// The body's character ceiling: [`OUTPUT_CAP_CHARS`], or a card's
-    /// room ([`bundle_within`]).
+    /// The body's character ceiling: [`OUTPUT_CAP_CHARS`] (a card's room
+    /// comes with its [`PracticeAsk`]).
     chars_max: usize,
+    /// `--discipline`'s, judged, sorted, each once; empty: no practice.
+    disciplines: &'a [String],
+}
+
+/// The graph a bundle is answered over, its input, and the practice files
+/// of its disciplines (none without a discipline).
+struct Read<'r, 'g> {
+    graph: &'r SpecGraph<'g>,
+    input: &'r CheckInput,
+    practices: &'r PracticeFiles,
+}
+
+/// `--discipline`'s values judged (task spec `department-practices`): each
+/// a flow name, at most [`DISCIPLINES_MAX`] given; sorted, each once.
+pub(crate) fn disciplines_of(given: &[String]) -> Result<Vec<String>, CliError> {
+    if given.len() > DISCIPLINES_MAX {
+        return Err(CliError::spec(format!(
+            "`--discipline` is given {} times; a bundle takes at most {DISCIPLINES_MAX}",
+            given.len()
+        )));
+    }
+    if let Some(problem) = given
+        .iter()
+        .find_map(|discipline| discipline_name_problem(discipline))
+    {
+        return Err(CliError::spec(problem));
+    }
+    let mut disciplines = given.to_vec();
+    disciplines.sort_unstable();
+    disciplines.dedup();
+    Ok(disciplines)
 }
 
 /// The walk (D5): today's whole read. One handle for the spec index and
@@ -500,20 +558,40 @@ fn walk(
     outcome: BundleOutcome,
     mut messages: Vec<Message>,
     beside: Option<&mut Beside<'_>>,
+    ask: Option<&mut PracticeAsk<'_>>,
 ) -> Result<BundleOutcome, CliError> {
     let project = asked.project;
     let mut open = open_index(env, project)?;
     let input = indexed_in(&mut open.index, project, &mut messages, true)?;
     seams::note(Event::WholeGraph);
     let graph = SpecGraph::new(&input, &project.config.scheme, &project.config.paths);
+    // The index's one query; a path is kept while it holds a document of
+    // the graph, as the subset read keeps one whose rows decode to it.
+    let practices = if asked.disciplines.is_empty() {
+        PracticeFiles::default()
+    } else {
+        let asked_for: Vec<&str> = asked.disciplines.iter().map(String::as_str).collect();
+        let rows = open.index.practices_of(&asked_for).map_err(store_error)?;
+        PracticeFiles::kept(&distinct_paths(&rows), |path| {
+            graph
+                .file_of(path)
+                .and_then(|file| graph.document(file))
+                .is_some()
+        })
+    };
+    let read = Read {
+        graph: &graph,
+        input: &input,
+        practices: &practices,
+    };
     answer(
         asked,
-        &graph,
-        &input,
+        &read,
         &mut open.index,
         outcome,
         messages,
         beside,
+        ask,
     )
 }
 
@@ -521,13 +599,34 @@ fn walk(
 /// rows, the fit; the walk's graph or a subset read's alike.
 fn answer(
     asked: &Asked<'_>,
-    graph: &SpecGraph<'_>,
-    input: &CheckInput,
+    read: &Read<'_, '_>,
     index: &mut SqliteIndex,
     mut outcome: BundleOutcome,
     mut messages: Vec<Message>,
     beside: Option<&mut Beside<'_>>,
+    ask: Option<&mut PracticeAsk<'_>>,
 ) -> Result<BundleOutcome, CliError> {
+    let graph = read.graph;
+    let input = read.input;
+    // The caller's practices and citations over this graph, before any
+    // target is located, so a bundle that is not made still gives them;
+    // then the room the caller's lines leave with them.
+    let mut chars_max = asked.chars_max;
+    if let Some(ask) = ask {
+        let citations = std::mem::take(&mut ask.citations);
+        let practices = from_graph(
+            graph,
+            asked.project,
+            asked.disciplines,
+            read.practices,
+            citations,
+        );
+        let room = ask.room.map(|room| room(&practices));
+        ask.read = Some(practices);
+        if let Some(room) = room {
+            chars_max = room.map_err(CliError::spec)?;
+        }
+    }
     let mut targets = Vec::new();
     for (written, target) in asked.asked {
         match locate(graph, target, written)? {
@@ -538,7 +637,13 @@ fn answer(
             Err(why) => return Ok(not_found(outcome, why, messages)),
         }
     }
-    let layers = bundle_layers(graph, &targets);
+    let practices: Vec<usize> = read
+        .practices
+        .listed
+        .iter()
+        .filter_map(|path| graph.file_of(path))
+        .collect();
+    let layers = bundle_layers_with(graph, &targets, &practices);
     for &(inner, outer) in &layers.merged {
         messages.push(Message::Note(format!(
             "`{}` is within `{}`: bundled as part of it",
@@ -547,22 +652,18 @@ fn answer(
         )));
     }
     // Layers 5 and 9, the read's note after the bundle's own messages.
-    let read = CodeRead {
+    let code_read = CodeRead {
         project: asked.project,
         text: asked.text,
         git: &asked.request.git,
         input,
     };
-    let code = code_rows(&read, index, graph, &layers, beside);
+    let code = code_rows(&code_read, index, graph, &layers, beside);
     messages.extend(code.note.clone().map(Message::Note));
-    outcome.bundle = Some(assemble(
-        graph,
-        &layers,
-        &code,
-        asked.budget,
-        asked.source,
-        asked.chars_max,
-    )?);
+    let (bundle, note) =
+        assemble_noted(graph, &layers, &code, asked.budget, asked.source, chars_max)?;
+    messages.extend(note.map(Message::Note));
+    outcome.bundle = Some(bundle);
     outcome.messages = messages;
     Ok(outcome)
 }
@@ -880,8 +981,8 @@ impl Measure {
     }
 }
 
-/// The frame, the minimum, then the greedy fit (see the module
-/// documentation), every fit within `chars_max` characters.
+/// [`assemble_noted`]'s bundle alone (the fit differential's).
+#[cfg(test)]
 fn assemble(
     graph: &SpecGraph<'_>,
     layers: &BundleLayers,
@@ -890,6 +991,20 @@ fn assemble(
     source: &BudgetSource,
     chars_max: usize,
 ) -> Result<Bundle, CliError> {
+    assemble_noted(graph, layers, code, budget, source, chars_max).map(|(bundle, _)| bundle)
+}
+
+/// The frame, the minimum, then the greedy fit (see the module
+/// documentation), every fit within `chars_max` characters; and the note
+/// naming layer 10's rules when their not-included line found no room.
+fn assemble_noted(
+    graph: &SpecGraph<'_>,
+    layers: &BundleLayers,
+    code: &CodeRows,
+    budget: u32,
+    source: &BudgetSource,
+    chars_max: usize,
+) -> Result<(Bundle, Option<String>), CliError> {
     let targets: Vec<TargetForms> = layers
         .targets
         .iter()
@@ -913,7 +1028,7 @@ fn assemble(
                 .map(|row| prepare_row(row, BundleLayer::Tests)),
         )
         .collect();
-    // Layers 1-4, 5, 6-8, 9; within a layer the order given (stable).
+    // Layers 1-4, 5, 6-8, 9, 10; within a layer the order given (stable).
     candidates.sort_by_key(|candidate| candidate.layer);
 
     let names: Vec<String> = layers
@@ -925,18 +1040,28 @@ fn assemble(
     // `body`'s measure: each part pushed onto it adds its own, so a fit is
     // decided over running sums, never over the body again.
     let mut measured = Measure::of(&body);
-    let reserved = candidates.len()
+    // Layer 10's rules past their practice's cap: never a line, always
+    // counted (task spec `department-practices`, "Caps").
+    let uncounted = layers.practices_more;
+    // The frame and layers 1-9 hold back the not-included line their own
+    // candidates may need, as a bundle without a discipline does, so they
+    // are that bundle's at any budget (DP7); layer 10 comes after them (the
+    // practices' decision record), each rule fitted against the line
+    // counting every candidate.
+    let practices = candidates
+        .iter()
+        .filter(|candidate| candidate.layer == BundleLayer::Practices)
+        .count()
+        + uncounted;
+    let reserved = candidates.len() + uncounted - practices
         + targets
             .iter()
             .map(|target| target.children.len())
             .sum::<usize>();
-    let reserved_more = format!("- {reserved} more\n");
-    let reserve = if reserved > 0 {
-        format!("\n## Not included\n{reserved_more}")
-    } else {
-        String::new()
-    };
+    let (reserved_more, reserve) = reserve_of(reserved);
     let reserve_measure = Measure::of(&reserve);
+    let (whole_more, whole_reserve) = reserve_of(reserved + practices);
+    let whole_reserve_measure = Measure::of(&whole_reserve);
     // The frame parts of targets `i..`: their marked headers (none past the
     // end, so an empty target list cannot panic).
     let rest = |from: usize| -> String {
@@ -1016,8 +1141,8 @@ fn assemble(
         placed[0].1.push(item);
     }
 
-    // Layers 2 to 9, in order: an item or a row enters iff the body with
-    // it and the reserve fits.
+    // Layers 2 to 10, in order: an item or a row enters iff the body with
+    // it and the reserve fits (layer 10's: the whole one).
     let mut current: Option<BundleLayer> = None;
     let mut bindings = Vec::new();
     let mut tests = Vec::new();
@@ -1028,11 +1153,12 @@ fn assemble(
             format!("\n## {}\n", layer_heading(candidate.layer))
         };
         let part = Measure::of(&heading).plus(Measure::of(&candidate.text));
-        if measured
-            .plus(part)
-            .plus(reserve_measure)
-            .fits(budget, chars_max)
-        {
+        let held = if candidate.layer == BundleLayer::Practices {
+            whole_reserve_measure
+        } else {
+            reserve_measure
+        };
+        if measured.plus(part).plus(held).fits(budget, chars_max) {
             body.push_str(&heading);
             body.push_str(&candidate.text);
             measured = measured.plus(part);
@@ -1055,19 +1181,32 @@ fn assemble(
     }
 
     // The not-included list: lines while the body fits, the rest counted.
+    // Layer 10's rules are listed when the whole line fits after layers
+    // 1-9; else (no rule was placed then) only theirs, which their reserve
+    // keeps room for, and a note counts the rules left unlisted.
     outlined.extend(not_included);
-    let listed = outlined;
+    let mut listed = outlined;
+    let mut counted = uncounted;
+    let mut more_text = &whole_more;
+    let mut unlisted = None;
+    if practices > 0 && !measured.plus(whole_reserve_measure).fits(budget, chars_max) {
+        let before = listed.len();
+        listed.retain(|entry| entry.layer != BundleLayer::Practices);
+        unlisted = Some(before - listed.len() + uncounted);
+        counted = 0;
+        more_text = &reserved_more;
+    }
     let mut tail = Vec::new();
-    if !listed.is_empty() {
+    if !listed.is_empty() || counted > 0 {
         let section = "\n## Not included\n";
         let section_measure = Measure::of(section);
-        let more_measure = Measure::of(&reserved_more);
+        let more_measure = Measure::of(more_text);
         let mut lines = String::new();
         let mut lines_measure = Measure::default();
         for (index, entry) in listed.iter().enumerate().take(BUNDLE_TAIL_LINES) {
             let line = tail_line(entry);
             let line_measure = Measure::of(&line);
-            let more = if index + 1 < listed.len() {
+            let more = if index + 1 < listed.len() || counted > 0 {
                 more_measure
             } else {
                 Measure::default()
@@ -1087,28 +1226,49 @@ fn assemble(
         body.push_str(section);
         body.push_str(&lines);
         measured = measured.plus(section_measure).plus(lines_measure);
-        let more = listed.len() - tail.len();
+        let more = listed.len() - tail.len() + counted;
         if more > 0 {
             let more_line = format!("- {more} more\n");
             body.push_str(&more_line);
             measured = measured.plus(Measure::of(&more_line));
         }
     }
-    let more = listed.len() - tail.len();
+    let more = listed.len() - tail.len() + counted;
+    let note = unlisted.map(|rules| {
+        format!(
+            "practices: {rules} rules left out and not listed: the budget leaves no room for \
+             their not-included line"
+        )
+    });
 
-    Ok(Bundle {
-        budget,
-        tokens: tokens_of(measured.thousandths),
-        chars: measured.chars,
-        bytes: body.len(),
-        bundle_hash: b3_hash(body.as_bytes()),
-        body,
-        layers: placed,
-        bindings,
-        tests,
-        tail,
-        more,
-    })
+    Ok((
+        Bundle {
+            budget,
+            tokens: tokens_of(measured.thousandths),
+            chars: measured.chars,
+            bytes: body.len(),
+            bundle_hash: b3_hash(body.as_bytes()),
+            body,
+            layers: placed,
+            bindings,
+            tests,
+            tail,
+            more,
+        },
+        note,
+    ))
+}
+
+/// The not-included reserve of `n` entries: its `- <n> more` line, and
+/// the section with it (none when `n` is 0).
+fn reserve_of(n: usize) -> (String, String) {
+    let more = format!("- {n} more\n");
+    let reserve = if n > 0 {
+        format!("\n## Not included\n{more}")
+    } else {
+        String::new()
+    };
+    (more, reserve)
 }
 
 /// A layer's JSON key.
@@ -1123,6 +1283,7 @@ pub fn layer_key(layer: BundleLayer) -> &'static str {
         BundleLayer::Neighbours => "neighbours",
         BundleLayer::Terms => "terms",
         BundleLayer::Tests => "tests",
+        BundleLayer::Practices => "practices",
     }
 }
 
@@ -1138,6 +1299,7 @@ pub fn layer_heading(layer: BundleLayer) -> &'static str {
         BundleLayer::Neighbours => "Neighbours",
         BundleLayer::Terms => "Terms",
         BundleLayer::Tests => "Tests",
+        BundleLayer::Practices => "Practices",
     }
 }
 
@@ -1238,7 +1400,8 @@ fn prepare(graph: &SpecGraph<'_>, candidate: &BundleCandidate, tested: &str) -> 
     let status = (layer == BundleLayer::OpenQuestions)
         .then(|| node.and_then(|node| node.fields.as_ref()?.status.clone()))
         .flatten();
-    let via = (layer != BundleLayer::Ancestors).then(|| {
+    // An ancestor and a practice's rule stand by no link: `via` is null.
+    let via = (layer != BundleLayer::Ancestors && layer != BundleLayer::Practices).then(|| {
         candidate
             .via
             .iter()
@@ -1260,7 +1423,7 @@ fn prepare(graph: &SpecGraph<'_>, candidate: &BundleCandidate, tested: &str) -> 
         header.push_str(&format!(" | via {}", pairs.join(", ")));
     }
     let mut text = format!("{header}\n{tested}");
-    let form = if layer == BundleLayer::Criteria {
+    let form = if layer == BundleLayer::Criteria || layer == BundleLayer::Practices {
         text.push_str(&with_line_end(&node_text(graph, at)));
         ItemForm::Text
     } else {

@@ -1007,8 +1007,10 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     // docs/features/card-questions.md D14; 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS6; 53 since
     // docs/features/plain-questions.md PQ10 (two after `summary`); 54 since
-    // docs/features/collision-pairs.md PP8 (`pair` after `evidence`).
-    assert_eq!(keys.len(), 54, "{keys:?}");
+    // docs/features/collision-pairs.md PP8 (`pair` after `evidence`); 55
+    // since docs/features/department-practices.md "Proposals: `cited`" (`cited`
+    // last).
+    assert_eq!(keys.len(), 55, "{keys:?}");
     assert_eq!(
         keys[47..],
         [
@@ -1018,7 +1020,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
             "card_id",
             "why",
             "similar",
-            "notes"
+            "notes",
+            "cited"
         ],
         "{keys:?}"
     );
@@ -1072,8 +1075,9 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     // 50 since docs/features/card-questions.md L1; 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS6; 53 since
     // docs/features/plain-questions.md PQ10; 54 since
-    // docs/features/collision-pairs.md PP8.
-    assert_eq!(task_common::keys(&brief_json).len(), 54);
+    // docs/features/collision-pairs.md PP8; 55 since
+    // docs/features/department-practices.md "Proposals: `cited`" (`cited`).
+    assert_eq!(task_common::keys(&brief_json).len(), 55);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);

@@ -30,6 +30,9 @@
 //!   then by name.
 //! - **Tags** ([`kept_tags`]): the kept entries of `tags:`; `spec check`
 //!   gives a `tag-invalid` warning for each entry left out.
+//! - **Disciplines** ([`kept_disciplines`]): the kept entries of
+//!   `disciplines:` (task spec `department-practices`); `spec check` gives
+//!   a `practice-discipline` warning for each entry left out.
 //!
 //! The core names no class beyond the convention's four and reads only the
 //! decision status words [`decision_group`] names (ADR-0008): every kind,
@@ -41,6 +44,7 @@ use specengine_model::{Fields, IdScript, LinkOrigin, grammar};
 
 use crate::check::{CANON_LINK, Endpoint, LinkState, NodeAt, SpecGraph, Standing};
 use crate::map::{CanonicalNames, MapNaming};
+use crate::practice::kept_disciplines;
 use crate::revision::revision;
 use crate::usage::usage_of;
 use crate::walk_scope::{DOCUMENT_EXTENSION, is_clean_relative};
@@ -282,6 +286,9 @@ pub struct LibraryRow {
     /// [`judge_tags`]' kept entries; none when `tags:` is absent or
     /// mistyped.
     pub tags: Vec<String>,
+    /// The kept `disciplines:` entries (task spec `department-practices`,
+    /// "The library"); none when absent or mistyped.
+    pub disciplines: Vec<String>,
     /// Its revision's number: 1 when none is written, `None` unreadable.
     pub rev: Option<u32>,
     pub parent: Option<String>,
@@ -373,6 +380,11 @@ pub fn library(
             reviewed: fields.reviewed.clone(),
             scope: fields.scope.clone(),
             tags: fields.tags.as_deref().map(kept_tags).unwrap_or_default(),
+            disciplines: fields
+                .disciplines
+                .as_deref()
+                .map(kept_disciplines)
+                .unwrap_or_default(),
             rev: graph
                 .file(document.file)
                 .and_then(|file| file.parsed.as_ref())

@@ -666,6 +666,9 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                         // docs/features/card-context.md CC7: `context: true`
                         // asks it; absent, `null` or `false` does not.
                         context: args["context"] == json!(true),
+                        // docs/features/department-practices.md "The card: `practices` and `cited`":
+                        // `context: true` asks the practices and `cited`.
+                        practices: args["context"] == json!(true),
                         budget: args["budget"].as_i64(),
                         // docs/canon/card-tasks.md "The rule": the stdio
                         // server reads each linked task in its repository.
@@ -969,6 +972,9 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
                 references: strings(&args["node_ids"]),
                 budget: number("budget"),
                 git: server_git(env),
+                // docs/features/department-practices.md "The bundle: layer 10, `--discipline`": MCP
+                // `get_context_bundle` takes `disciplines`, `--discipline`'s.
+                disciplines: strings(&args["disciplines"]),
             },
         )
         .map(Outcome::Bundle),

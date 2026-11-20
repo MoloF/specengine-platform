@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 ---
 
 # UI languages: the chrome in English and Russian
@@ -60,7 +60,7 @@ Every screen and panel. Every `src/` directory but `api/`, `i18n/`, `mocks/`, `s
 
 The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus every `<link rel="modulepreload">` it lists, raw bytes on disk, as the daemon sends them (no `content-encoding`, `serve-ui.md`). Each UI slice prints it in its "Implementation" with the first-load gzip (Vite's per-chunk figures, summed) and `ru-*.js` raw and gzip, for a hub behind a compressing proxy. Baseline, 2026-11-09 (RM-0090): 768.96 kB (`Icon-*.js` holding i18next and English), gzip 219.15 kB; `ru-*.js` 134.98 kB, gzip 31.13 kB.
 
-**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a part out of first load (a lazy chunk: `HealthRegions`, `RoundScreen`, `Markdown`, `DocBody`, `RoadmapView`, `GraphView`, `DepartmentOverview`, `MapView`, `RingsView`, `FeedView`, `CardPage`, `DocumentsView`, `BindingsPanel`) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's `index-*.js` 500 kB warning is not the gate. At `doc-library`: 829.03 kB, the tree's Bindings tab lazy.
+**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a part out of first load (a lazy chunk: `HealthRegions`, `RoundScreen`, `Markdown`, `DocBody`, `RoadmapView`, `GraphView`, `DepartmentOverview`, `MapView`, `RingsView`, `FeedView`, `CardPage`, `DocumentsView`, `BindingsPanel`) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's 500 kB warning is not the gate. At `department-practices`: 835 kB; the next slice goes lazy.
 
 **Reload.** A page open across a redeploy asks for lazy chunks that are gone, and `React.lazy` keeps the failure. `app/reload.ts`, installed by `main.tsx` before `readyLanguage()`, takes `vite:preloadError` (from first load's `preload-helper-*.js`) and reloads once per build, silently: `sessionStorage` `specengine.reloaded` holds the entry's hashed `import.meta.url`; holding this build, or a storage call throwing, leaves the route's error and Retry. Never `preventDefault`. `index.ts` chains Russian's handlers on the bare `import("./ru")`, outside Vite's wrapper, so its failure reaches the reload too.
 

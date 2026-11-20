@@ -133,6 +133,10 @@ sections = ["inbox", "roadmap", "board", "flow", "tree", "documents", "graph", "
 # [[card.split]]
 # kind = "scene"
 # disciplines = ["narrative", "level-design", "sound", "development"]
+
+# [ids] PRA = { kind = "practice", shape = "name" }
+# [zones] practices = ["docs/spec/practices/**"]   # a lead's zones may name it
+# [auto] exclude_zones = ["practices"]             # no delegated apply edits a practice
 # --- end of the preset ---
 
 [[module]]

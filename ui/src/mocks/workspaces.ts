@@ -22,7 +22,7 @@ import type { Scenario } from "./scenario";
 /** Where the notes say the config is, as given: the project's own file. */
 const CONFIG = "specengine.toml";
 
-/** The implicit workspace's sections: `sections.ts`'s ten but `tasks`, in order (D3; `documents` since docs/features/doc-library.md "Sections and presets"). */
+/** The implicit workspace's sections: `sections.ts`'s ten but `tasks`, in order (D3; `documents` since docs/canon/spec-library.md "The screen"). */
 const IMPLICIT_SECTIONS = ["inbox", "board", "roadmap", "flow", "tree", "documents", "graph", "health", "questions"];
 
 /** What a project with no `[[workspace]]` table is served, notes aside. */

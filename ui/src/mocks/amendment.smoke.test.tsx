@@ -133,8 +133,9 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     const review = await client.getProposal(SLUG, AMENDMENT);
     // A new file's review document: the 54 keys of any review, the card and why since card-questions (L1), similar since intake-similar (IS10),
     // the gist and why it matters since plain-questions (docs/features/plain-questions.md "Acceptance criteria", PQ10),
-    // the pair since collision-pairs (docs/features/collision-pairs.md "Acceptance criteria", PP8).
-    expect(Object.keys(review)).toHaveLength(54);
+    // the pair since collision-pairs (docs/features/collision-pairs.md "Acceptance criteria", PP8), the cited IDs
+    // last since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13): 55.
+    expect(Object.keys(review)).toHaveLength(55);
     expect(review).toMatchObject({
       id: AMENDMENT,
       project: SLUG,

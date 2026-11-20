@@ -76,6 +76,7 @@ use specengine_store::{
 
 use crate::cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
 use crate::location::prepared_data_dir;
+use crate::practice::Cited;
 use crate::project::{CONFIG_FILE, ProjectRoot, discover};
 use crate::revisions::rows_text as revisions_text;
 use crate::similar::similar_line;
@@ -256,6 +257,12 @@ pub struct ProposalDocument {
     /// Why the preview is unavailable, what a reader should know, and a
     /// refusal's reason last; each one line.
     pub notes: Vec<String>,
+    /// The resolved IDs its served texts cite, first-seen order, at most
+    /// 64 (task spec `department-practices`, "Proposals"), the last key:
+    /// filled by `spec review` alone (MCP `get_proposal`, the daemon's
+    /// proposal route); `null` in every other answer, and when the index
+    /// could not be read (a note says why).
+    pub cited: Option<Vec<Cited>>,
 }
 
 impl ProposalDocument {
@@ -341,6 +348,7 @@ impl ProposalDocument {
             why: intake.and_then(|intake| intake.why.clone()),
             similar: None,
             notes: Vec::new(),
+            cited: None,
         }
     }
 }

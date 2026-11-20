@@ -1140,15 +1140,18 @@ fn l1_the_raises_take_card_and_review_ends_with_card_id_and_why() {
     let keys = keys_of(raw.stdout.trim_end());
     // 51 since docs/features/intake-similar.md "Acceptance criteria" IS6
     // (`similar` after `why`, `null` in a review).
+    // 55 since docs/features/department-practices.md "Proposals: `cited`": `cited`
+    // last.
     assert_eq!(
-        keys[keys.len() - 4..],
-        ["card_id", "why", "similar", "notes"],
+        keys[keys.len() - 5..],
+        ["card_id", "why", "similar", "notes", "cited"],
         "{keys:?}"
     );
     // 53 since docs/features/plain-questions.md PQ10 (`gist`, `matters`
     // after `summary`); 54 since docs/features/collision-pairs.md PP8
-    // (`pair` after `evidence`).
-    assert_eq!(keys.len(), 54, "{keys:?}");
+    // (`pair` after `evidence`); 55 since docs/features/department-practices.md
+    // (`cited` last).
+    assert_eq!(keys.len(), 55, "{keys:?}");
 
     // The twin, on a second copy: the same question without the flag.
     let twin = Pair::new("cq-l1-twin", LAMP);

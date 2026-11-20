@@ -84,7 +84,7 @@ const WRITE_KEYS: [&str; 7] = [
 /// (docs/canon/cards.md "Documents and events": each linked task as read now),
 /// `items` after `tasks` (docs/features/card-questions.md D4), then
 /// `allowed`, `history`, `context`, `notes`.
-const SHOW_KEYS: [&str; 36] = [
+const SHOW_KEYS: [&str; 38] = [
     "id",
     "flow",
     "column",
@@ -124,6 +124,9 @@ const SHOW_KEYS: [&str; 36] = [
     "history",
     // docs/features/card-context.md CC2: `null` unless asked.
     "context",
+    // docs/features/department-practices.md "The card: `practices` and `cited`": `null` unless asked.
+    "practices",
+    "cited",
     "notes",
 ];
 
@@ -3342,8 +3345,13 @@ fn show_prints_key_lines_and_history() {
     make(&pair, "Other", &["--discipline", "copy"]);
     let text = ok(&pair, &["card", "show", "C-0001"]);
     let mut at = 0;
-    // `notes` go to stderr, as every command's.
-    for key in &SHOW_KEYS[..SHOW_KEYS.len() - 1] {
+    // `notes` go to stderr, as every command's; `practices` and `cited`
+    // print only when asked, plain `show` prints neither:
+    // docs/features/department-practices.md "The card: `practices` and `cited`".
+    for key in SHOW_KEYS[..SHOW_KEYS.len() - 1]
+        .iter()
+        .filter(|key| !["practices", "cited"].contains(*key))
+    {
         let Some(found) = text[at..]
             .lines()
             .position(|line| line.starts_with(&format!("{key}:")))
@@ -4322,9 +4330,10 @@ fn card_questions_k1_show_serves_items_after_tasks() {
     // `items`, `mandate` after `reviewer`; 35 since
     // docs/features/card-context.md CC2: `context` after `history`; 36
     // since docs/features/upstream-signal.md US-8: `upstream` after
-    // `correction`.
+    // `correction`; 38 since `practices`, `cited` after `context`:
+    // docs/features/department-practices.md "The card: `practices` and `cited`".
     assert_eq!(keys[tasks + 2], "subtask_items", "{keys:?}");
-    assert_eq!(keys.len(), 36, "{keys:?}");
+    assert_eq!(keys.len(), 38, "{keys:?}");
     let items = raw_array(&shown.stdout, "items");
     for item_keys in serde_json::from_str::<Vec<OrderedKeys>>(items).expect("items") {
         assert_eq!(item_keys.0, ITEM_KEYS, "{items}");

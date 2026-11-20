@@ -218,3 +218,48 @@ fn array(text: &str, bytes: &[u8], at: &mut usize, keys: Dropped<'_>, out: &mut 
         }
     }
 }
+
+/// docs/features/department-practices.md DP6: a bundle that names no
+/// discipline is the build before's JSON but for `layers.practices: []`,
+/// the one `,"practices":[]` closing `layers` this build adds: taken out
+/// (and required exactly once) before a golden of the build before is
+/// compared. A stream holding no bundle document passes as it is.
+pub fn without_empty_layer_ten(text: &str) -> String {
+    if !text.starts_with('{') || !text.contains("\"layers\":{") {
+        return text.to_owned();
+    }
+    assert_eq!(
+        text.matches(",\"practices\":[]}").count(),
+        1,
+        "one empty layer 10 closing `layers`: {text}"
+    );
+    text.replacen(",\"practices\":[]}", "}", 1)
+}
+
+/// docs/features/department-practices.md "The task package: `practices`": a
+/// task no card lists is the build before's package but for its empty
+/// `bundle.disciplines` and `practices` (`"disciplines":[],` after the
+/// bundle's `budget`, `,"practices":[]` after the bundle): both taken out,
+/// each required exactly once, before a golden of the build before is
+/// compared. A stream holding no package passes as it is.
+pub fn without_empty_task_practices(text: &str) -> String {
+    if !text.starts_with("{\"schema_version\":") {
+        return text.to_owned();
+    }
+    let at = text.find("\"bundle\":{").expect("a package's bundle");
+    let disciplines = text[at..]
+        .find(",\"disciplines\":[],")
+        .map(|offset| at + offset)
+        .expect("the bundle's empty disciplines");
+    let without = format!(
+        "{}{}",
+        &text[..disciplines],
+        &text[disciplines + ",\"disciplines\":[]".len()..]
+    );
+    assert_eq!(
+        without.matches("},\"practices\":[],\"roadmap\":").count(),
+        1,
+        "one empty `practices` after the bundle: {text}"
+    );
+    without.replacen("},\"practices\":[],\"roadmap\":", "},\"roadmap\":", 1)
+}

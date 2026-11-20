@@ -51,7 +51,9 @@ import {
   type LeadAct,
 } from "./labels";
 import { returnReasonOf } from "./rollup";
+import { CitedText, citedLinks, type CitedLinks } from "../markdown/CitedText";
 import { CardLink, type CardLinks } from "./CardLink";
+import { isPracticesNote, PracticesPart } from "../practices/PracticesPart";
 import { CardProgress } from "./CardProgress";
 import { CardTasks, ownNotes } from "./CardTasks";
 import { UpstreamPart } from "./CardUpstream";
@@ -68,6 +70,8 @@ export type { CardLinks } from "./CardLink";
 // lozenge and the Move menu), the people's fields with the empty ones folded, and Development, the
 // linked `T-` tasks (`docs/canon/card-tasks.md` "The rule"), folded. Nothing here judges a column: the
 // return column and the accept column are the flow's, looked up (`docs/canon/card-flows.md` "The rule").
+// After Source stand its discipline's Practices (src/practices/), and its texts link the IDs its read
+// cited (docs/features/department-practices.md "Acceptance criteria", DP21).
 
 /**
  * An item's block, in a chunk of its own with the dialogs that raise and answer items
@@ -154,8 +158,8 @@ function eventDetail(payload: unknown, flow: CardFlow | undefined, t: Translate)
   return parts.join(", ");
 }
 
-/** One event by `seq`: time, its words, who, from and to, and a move's note as written; an unknown type raw. */
-function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undefined }) {
+/** One event by `seq`: time, its words, who, from and to, and a move's note as written, its served citations linked; an unknown type raw. */
+function HistoryLine({ event, flow, links }: { event: CardEvent; flow: CardFlow | undefined; links: CitedLinks | null }) {
   const t = useTranslate();
   const by = payloadWord(event.payload, "as");
   const detail = eventDetail(event.payload, flow, t);
@@ -178,7 +182,17 @@ function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undef
           </span>
         )}
       </span>
-      {note !== null && <span className="board-text">{fill(t("board.history.why", { note: slot("note") }), { note: <bdi>{shownText(note)}</bdi> })}</span>}
+      {note !== null && (
+        <span className="board-text">
+          {fill(t("board.history.why", { note: slot("note") }), {
+            note: (
+              <bdi>
+                <CitedText text={note} links={links} />
+              </bdi>
+            ),
+          })}
+        </span>
+      )}
     </li>
   );
 }
@@ -188,11 +202,11 @@ function itemBy(event: CardEvent, item: CardItem | undefined): string | null {
   return payloadWord(event.payload, "as") ?? item?.author.login ?? item?.author.role ?? null;
 }
 
-/** An item's block, the chunk's, its ID standing in until it arrives. */
-function Item({ project, item }: { project: string; item: CardItem }) {
+/** An item's block, the chunk's, its ID standing in until it arrives; its texts' served citations linked. */
+function Item({ project, item, links }: { project: string; item: CardItem; links: CitedLinks | null }) {
   return (
     <Suspense fallback={<p className="mono muted">{shownSlot(item.id)}</p>}>
-      <ItemBlock project={project} item={item} />
+      <ItemBlock project={project} item={item} links={links} />
     </Suspense>
   );
 }
@@ -202,7 +216,7 @@ function Item({ project, item }: { project: string; item: CardItem }) {
  * its word (labels.ts; an unknown type raw), the item's ID and who; the event that raised it opens
  * the item's block under it.
  */
-function ItemLine({ project, event, items }: { project: string; event: CardEvent; items: readonly CardItem[] }) {
+function ItemLine({ project, event, items, links }: { project: string; event: CardEvent; items: readonly CardItem[]; links: CitedLinks | null }) {
   const t = useTranslate();
   const id = payloadWord(event.payload, "id");
   const item = items.find((candidate) => candidate.id === id);
@@ -215,7 +229,7 @@ function ItemLine({ project, event, items }: { project: string; event: CardEvent
         {id !== null && <span className="mono"> {shownSlot(id)}</span>}
         {by !== null && fill(t("board.history.by", { by: slot("by") }), { by: <bdi>{shownSlot(by)}</bdi> })}
       </span>
-      {raisesItem(event.type) && item !== undefined && <Item project={project} item={item} />}
+      {raisesItem(event.type) && item !== undefined && <Item project={project} item={item} links={links} />}
     </li>
   );
 }
@@ -232,6 +246,8 @@ function Activity({ project, card, flow }: { project: string; card: Card; flow: 
   const history = [...(card.history ?? [])].sort((a, b) => a.seq - b.seq);
   const raised = new Set(history.filter((event) => raisesItem(event.type)).map((event) => payloadWord(event.payload, "id")));
   const earlier = card.items.filter((item) => !raised.has(item.id));
+  // The IDs the daemon resolved in the items' texts and the history's notes: those strings alone link (docs/features/department-practices.md "Acceptance criteria", DP21).
+  const links = citedLinks(project, card.cited);
   return (
     <Part title={t("board.panel.activity")}>
       {history.length === 0 && earlier.length === 0 && <p className="muted">{t("board.panel.noneYet")}</p>}
@@ -241,7 +257,7 @@ function Activity({ project, card, flow }: { project: string; card: Card; flow: 
           <ul className="board-panel-list" aria-label={t("board.activity.earlier")}>
             {earlier.map((item) => (
               <li key={item.id}>
-                <Item project={project} item={item} />
+                <Item project={project} item={item} links={links} />
               </li>
             ))}
           </ul>
@@ -250,7 +266,11 @@ function Activity({ project, card, flow }: { project: string; card: Card; flow: 
       {history.length > 0 && (
         <ol className="board-panel-list board-activity">
           {history.map((event) =>
-            isItemEvent(event.type) ? <ItemLine key={event.seq} project={project} event={event} items={card.items} /> : <HistoryLine key={event.seq} event={event} flow={flow} />,
+            isItemEvent(event.type) ? (
+              <ItemLine key={event.seq} project={project} event={event} items={card.items} links={links} />
+            ) : (
+              <HistoryLine key={event.seq} event={event} flow={flow} links={links} />
+            ),
           )}
         </ol>
       )}
@@ -491,8 +511,8 @@ function ClosedActs({ card, onAct }: { card: Card; onAct: (action: CardAction, c
   );
 }
 
-/** Why a card standing in its flow's return column came back: the latest reason its history keeps, or that it keeps none now. */
-function ReturnReason({ card, column }: { card: Card; column: string }) {
+/** Why a card standing in its flow's return column came back: the latest reason its history keeps, its served citations linked, or that it keeps none now. */
+function ReturnReason({ card, column, links }: { card: Card; column: string; links: CitedLinks | null }) {
   const t = useTranslate();
   const reason = returnReasonOf(card.history ?? [], column);
   return (
@@ -508,20 +528,41 @@ function ReturnReason({ card, column }: { card: Card; column: string }) {
       ) : (
         <>
           <p>{fill(t("board.return.latest", { by: slot("by"), at: slot("at") }), { by: <bdi>{reason.by === null ? "-" : shownSlot(reason.by)}</bdi>, at: <At at={reason.at} /> })}</p>
-          <p className="board-text">{shownText(reason.note)}</p>
+          <p className="board-text">
+            <CitedText text={reason.note} links={links} />
+          </p>
         </>
       )}
     </Part>
   );
 }
 
-/** The main column of a card read: its blocks, then Goal, Criteria, Source, Subtasks, Evidence and Activity. */
-function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, stateFailure, links, onAct }: Omit<CardViewProps, "id" | "query" | "today"> & { card: Card; flow: CardFlow | undefined; subtasks: ChildrenQuery }) {
+/**
+ * The main column of a card read: its blocks, then Goal, Criteria, Source, Practices, Subtasks,
+ * Evidence and Activity. The texts the daemon scanned for citations (goal, criteria, a return's
+ * reason; the items and notes in Activity) link the strings it served, nothing else
+ * (docs/features/department-practices.md "Acceptance criteria", DP21).
+ */
+function MainParts({
+  project,
+  card,
+  flow,
+  mark,
+  rollups,
+  subtasks,
+  markFailure,
+  stateFailure,
+  links,
+  onAct,
+  onRetry,
+}: Omit<CardViewProps, "id" | "query" | "today"> & { card: Card; flow: CardFlow | undefined; subtasks: ChildrenQuery; onRetry: () => Promise<unknown> }) {
   const t = useTranslate();
   const allows = useAllowed(project);
   const cancelled = card.cancellation !== null;
   const back = flow?.return ?? null;
-  const notes = ownNotes(card);
+  // The notes on its practices stand in their part.
+  const notes = ownNotes(card).filter((note) => !isPracticesNote(note));
+  const cited = citedLinks(project, card.cited);
   const about = mandateAbout(card.mandate, t);
   // Its subtasks' decisions, served with the card in its one read; their questions stand on each subtask's Activity.
   const decisions = card.subtask_items.filter(isDecision);
@@ -556,7 +597,7 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
           <span>{fill(t("board.panel.stateFailed", { message: slot("message") }), { message: <span lang="en">{stateFailure}</span> })}</span>
         </p>
       )}
-      {back !== null && card.column === back && !cancelled && <ReturnReason card={card} column={back} />}
+      {back !== null && card.column === back && !cancelled && <ReturnReason card={card} column={back} links={cited} />}
       <Closure card={card} />
       {about !== null && (
         // What the task's mandate asks of its department (docs/features/task-mandate.md "Acceptance criteria", V2).
@@ -567,7 +608,9 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
       )}
       {card.goal !== null && (
         <Part title={t("board.panel.goal")} className="issue-document">
-          <p className="board-text">{shownText(card.goal)}</p>
+          <p className="board-text">
+            <CitedText text={card.goal} links={cited} />
+          </p>
         </Part>
       )}
       {card.criteria.length > 0 && (
@@ -575,7 +618,7 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
           <ul className="board-panel-list issue-criteria">
             {card.criteria.map((criterion, index) => (
               <li key={`${String(index)}-${criterion}`} className="board-text">
-                {shownText(criterion)}
+                <CitedText text={criterion} links={cited} />
               </li>
             ))}
           </ul>
@@ -598,6 +641,8 @@ function MainParts({ project, card, flow, mark, rollups, subtasks, markFailure, 
           </ul>
         )}
       </Part>
+      {/* The discipline's practices, after the targets (docs/features/department-practices.md "Acceptance criteria", DP21). */}
+      <PracticesPart project={project} card={card} onRetry={onRetry} />
       <Part title={t("board.modal.handOffs")}>
         <CardProgress card={card} query={subtasks} links={links} />
       </Part>
@@ -680,7 +725,14 @@ function CardMain(props: CardViewProps & { subtasks: ChildrenQuery }) {
       />
     );
   } else {
-    body = <MainParts {...props} card={answer} flow={flowOf(answer.flow)} />;
+    body = (
+      <MainParts
+        {...props}
+        card={answer}
+        flow={flowOf(answer.flow)}
+        onRetry={() => query.refetch({ cancelRefetch: false })}
+      />
+    );
   }
   return (
     <>
@@ -847,4 +899,9 @@ export function CardView({ heading, tools, notices, ...props }: CardViewProps & 
 /** The card's title once read, else null: the modal's heading and the page's `h1` fall back to its ID. */
 export function titleOf(query: CardQuery): string | null {
   return query.data !== undefined && isCard(query.data) ? query.data.title : null;
+}
+
+/** The citations the daemon served for the card's texts, its title among them, once read; else none. */
+export function titleLinks(project: string, query: CardQuery): CitedLinks | null {
+  return query.data !== undefined && isCard(query.data) ? citedLinks(project, query.data.cited) : null;
 }

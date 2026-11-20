@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-20
 ---
 
 # Proposal review: inbox, review document, preview
@@ -22,11 +22,11 @@ What the owner and agents read of the queue: `spec inbox`, `spec review PR`, and
 
 ## Review document
 
-Every key, absent = `null`, none starting `block`; 54, in this order:
+Every key, absent = `null`, none starting `block`; 55, in this order:
 
-`{id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, revisions, drift, decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, <fourteen intake keys>, <a record's five>, task_id, staged, staged_at, interpretation, card_id, why, similar, notes}`
+`{id, project, kind, status, target_id, target_path, worktree, branch, base_commit, base_hash, base_text, new_text, patch_hash, rationale, author, diagnostics, diff, preview, conflict, revisions, drift, decided_by, decided_at, decision_note, applied_commit, created_at, updated_at, <fourteen intake keys>, <a record's five>, task_id, staged, staged_at, interpretation, card_id, why, similar, notes, cited}`
 
-Keys defined elsewhere: `revisions` `proposal-revisions.md` "Review"; `drift` `{hash, rows, more}` (`null` on other kinds; rows as stored, later keys kept: `--json` and the daemon keep each row's key order, MCP sorts keys, parsing into `serde_json::Value`) `proposal-drift.md` "Review, stage, round"; the fourteen, `target_ids` to `linked` (`pair`: "Pair" there), `agent-intake-documents.md` "Review document"; `record_id` to `choice` `decision-record.md` "Queue and documents"; `task_id` `tasks.md` "Task-bound proposals"; `staged` (the stage object or `null`), `staged_at` `decision-staging.md` "The stage"; `interpretation` `proposal-interpretation.md` "Row and review"; `card_id`, `why` `card-questions.md` "Store"; `similar` `proposal-similar.md`. `diff`: base -> new hunks of the store's `diff_hunks` (`proposal-queue.md` "Terminal and git safety": `diff --no-index`, myers, `-U3`, git's defaults alone) under `--- base <path>`, `+++ proposed <path>` (from the worktree top).
+Keys defined elsewhere: `cited`, the last key of every proposal document, filled by `review --json`, `get_proposal`, `review_proposal` and `proposals/:id`, else `null`, no text line: `card-practices.md`; `revisions` `proposal-revisions.md` "Review"; `drift` `{hash, rows, more}` (`null` on other kinds; rows as stored, later keys kept: `--json` and the daemon keep each row's key order, MCP sorts keys, parsing into `serde_json::Value`) `proposal-drift.md` "Review, stage, round"; the fourteen, `target_ids` to `linked` (`pair`: "Pair" there), `agent-intake-documents.md` "Review document"; `record_id` to `choice` `decision-record.md` "Queue and documents"; `task_id` `tasks.md` "Task-bound proposals"; `staged` (the stage object or `null`), `staged_at` `decision-staging.md` "The stage"; `interpretation` `proposal-interpretation.md` "Row and review"; `card_id`, `why` `card-questions.md` "Store"; `similar` `proposal-similar.md`. `diff`: base -> new hunks of the store's `diff_hunks` (`proposal-queue.md` "Terminal and git safety": `diff --no-index`, myers, `-U3`, git's defaults alone) under `--- base <path>`, `+++ proposed <path>` (from the worktree top).
 
 **Pinned**: `fixtures/daemon-keys.json` holds the UI's key sets (145), among them `Proposal`, `InboxEntry`, `Pair`, `PairSide`, the stage's two shapes (`StagedApprove` 7 keys, `StagedReject` 2) and `DriftEvidence` (`hash`, `rows`, `more`; rows `StoredDriftRow` in the UI, unpinned). MCP `get_proposal` = `review --brief --json`, its output schema's `staged` two closed objects, `drift` `DriftShape`. UI `daemonKeys.test.ts` compares the provisional types with the file, set by set in the slices' order; its `AHEAD_OF_FIXTURE` (keys served before the file has them) is empty, and a listed key the file names fails. Backups keep stages (`queue-backup.md` "Format").
 

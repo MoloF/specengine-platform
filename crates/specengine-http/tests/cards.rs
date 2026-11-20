@@ -3122,8 +3122,12 @@ fn card_context_cc10_the_daemon_serves_context_null() {
             "M: the route asking context: true: {shown}"
         );
         // 36 since docs/features/upstream-signal.md US-12 (`upstream`,
-        // `null` on a card with no parent).
-        assert_eq!(card.as_object().map(serde_json::Map::len), Some(36));
+        // `null` on a card with no parent); 38 since
+        // docs/features/department-practices.md "The card: `practices` and `cited`" (`practices`,
+        // `cited`, `null` unless `?practices=true`).
+        assert_eq!(card.as_object().map(serde_json::Map::len), Some(38));
+        assert_eq!(card["practices"], Value::Null, "{shown}");
+        assert_eq!(card["cited"], Value::Null, "{shown}");
         assert_eq!(card["upstream"], Value::Null, "{shown}");
         let history = shown.find(",\"history\":").expect("history");
         let context = shown.find(",\"context\":null,").expect("context");

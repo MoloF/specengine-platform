@@ -81,8 +81,9 @@ use serde_json::{Value, json};
 const DOC_KEYS: [&str; 6] = ["archive", "notes", "counts", "rows", "truncated", "omitted"];
 /// "Data", **Counts**.
 const COUNT_KEYS: [&str; 5] = ["documents", "archived", "decisions", "behind", "orphans"];
-/// "Data": the 22 keys of a row, in order.
-const ROW_KEYS: [&str; 22] = [
+/// "Data": the 22 keys of a row, in order; `disciplines` the 23rd, after
+/// `tags`, since docs/features/department-practices.md "The library".
+const ROW_KEYS: [&str; 23] = [
     "name",
     "id",
     "path",
@@ -96,6 +97,7 @@ const ROW_KEYS: [&str; 22] = [
     "reviewed",
     "scope",
     "tags",
+    "disciplines",
     "rev",
     "parent",
     "modules",
@@ -1501,7 +1503,9 @@ fn assert_read_again(scene: &Scene) {
 /// read again, the row stays).
 #[test]
 fn dl9_a_format_17_index_is_read_again() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 18);
+    // 18 at doc-library; 19 since docs/features/department-practices.md (the
+    // `disciplines` table): a format-17 index is still read again.
+    assert_eq!(specengine_store::INDEX_FORMAT, 19);
     let scene = Scene::new("dl9");
     let run = spec(&scene, &["index"]);
     run.code(0);

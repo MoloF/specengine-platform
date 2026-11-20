@@ -318,13 +318,34 @@ pub struct TaskRun {
     pub changed_files: Vec<String>,
 }
 
-/// The bundle by reference: the targets, the budget, `spec bundle`'s hash
-/// now (`null` when it cannot be assembled).
+/// The bundle by reference: the targets, the budget, the disciplines of
+/// the cards listing the task, `spec bundle`'s hash now with them (`null`
+/// when it cannot be assembled).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PackageBundle {
     pub node_ids: Vec<String>,
     pub budget: u32,
+    /// The disciplines of every card whose `tasks` list the task, sorted,
+    /// each once, at most 16: the bundle's `--discipline`s (task spec
+    /// `department-practices`).
+    #[serde(default)]
+    pub disciplines: Vec<String>,
     pub bundle_hash: Option<String>,
+}
+
+/// A practice as a card or a task serves it (task spec
+/// `department-practices`; ADR-0084): a live document whose
+/// `disciplines:` names a card's discipline.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackagePractice {
+    /// The map's canonical name of its document.
+    pub name: String,
+    pub title: Option<String>,
+    pub path: String,
+    /// Its document's kept `disciplines:` entries, in written order.
+    pub disciplines: Vec<String>,
+    /// Its rules: its direct child ID sections, or 1, the document.
+    pub rules: usize,
 }
 
 /// The task's place on the plan of the reading root's `[roadmap]` items,
@@ -383,6 +404,11 @@ pub struct TaskPackage {
     pub claim: Option<TaskClaim>,
     pub runs: Vec<TaskRun>,
     pub bundle: PackageBundle,
+    /// Per read, never stored: the practices of the disciplines of every
+    /// card whose `tasks` list the task, by path, each once, at most 32;
+    /// `[]` when no card lists it (task spec `department-practices`).
+    #[serde(default)]
+    pub practices: Vec<PackagePractice>,
     /// `null` without `[roadmap]`, with one that cannot be read (a note
     /// says why), or when the task executes no open item.
     pub roadmap: Option<TaskRoadmap>,

@@ -46,8 +46,8 @@ pub use script::IdScript;
 pub use span::Span;
 pub use task::{
     BindingAnchor, BindingPlace, BindingRow, OwnerNote, PackageAssumption, PackageBundle,
-    PackageProposal, PackageTarget, RunOutcome, SnapshotDiff, SnapshotNode, SnapshotPlace,
-    SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskClaim,
-    TaskCriterion, TaskPackage, TaskRoadmap, TaskRun, TaskStatus, TestedRow,
+    PackagePractice, PackageProposal, PackageTarget, RunOutcome, SnapshotDiff, SnapshotNode,
+    SnapshotPlace, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType,
+    TaskClaim, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun, TaskStatus, TestedRow,
 };
 pub use value::{FmValue, OrderedMap};

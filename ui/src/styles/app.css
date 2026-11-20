@@ -5420,7 +5420,7 @@ mark {
   gap: var(--space-100);
 }
 
-/* Documents (docs/features/doc-library.md "Description and interactions"): the count line, the filter bar and the
+/* Documents (docs/canon/spec-library.md "The screen"): the count line, the filter bar and the
    library table. The bar wraps at any width: a facet's head, its All button, the toggles and Include
    archive each wrap whole; a facet's values open in a full-width panel under the bar, their chips
    wrapping. The table keeps each column's minimum width and scrolls sideways in its own focusable
@@ -7499,6 +7499,30 @@ mark {
   gap: var(--space-050) var(--space-100);
 }
 
+/* A card's practices (practices/PracticesPart.tsx; docs/features/department-practices.md "Acceptance criteria", DP21): a row per
+   document, its name a link, its title and rule count after it, wrapping in any script. */
+.practices-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  min-width: 0;
+}
+
+.practices-row-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.practices-empty {
+  display: grid;
+  gap: var(--space-050);
+}
+
+.practices-empty p {
+  margin: 0;
+}
+
 /* The card over the board (docs/features/design-foundation.md "The work item: the task modal and page"):
    the work item, 1200 px wide or the viewport less 2rem; how it scrolls is the work item's own (below,
    "The work item in a dialog"); the whole screen on a phone. */
@@ -7887,6 +7911,7 @@ mark {
 /* A link in a row of the work item stands at least the target's height. */
 .board-handoff a,
 .board-panel-target a,
+.practices-row a,
 .card-task-head a,
 .property-value a {
   display: inline-flex;

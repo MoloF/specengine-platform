@@ -10,11 +10,11 @@ import { useAnnounce } from "../ui/announcer";
 import { buttonClasses } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
-import { shownSlot } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { actingName, useActing, useAllowed } from "./acting";
 import { CardActDialog, moveChoicesOf, type BoardChoice, type OpenDialog, type Said } from "./CardActs";
-import { CardView, isCard, titleOf, type CardAction, type CardLinks } from "./CardPanel";
+import { CardView, isCard, titleLinks, titleOf, type CardAction, type CardLinks } from "./CardPanel";
+import { CitedText } from "../markdown/CitedText";
 import { useToday } from "./due";
 import { openRows, reorderOf } from "./filter";
 import { columnTitle, rowMark } from "./labels";
@@ -176,7 +176,7 @@ export function CardPage({ project, id }: { project: string; id: string }) {
       <CardView
         heading={
           <h1 ref={heading} id={titleId} tabIndex={-1}>
-            <bdi>{title === null ? id : shownSlot(title)}</bdi>
+            <bdi>{title === null ? id : <CitedText text={title} links={titleLinks(project, query)} slot />}</bdi>
           </h1>
         }
         tools={

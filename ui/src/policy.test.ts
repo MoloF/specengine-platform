@@ -705,7 +705,7 @@ describe("source policy", () => {
     const appCode = (path: string) =>
       path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
     const quoted = new RegExp(`["'\`](${types.join("|")})["'\`]`);
-    // The one class word Documents starts at (docs/features/doc-library.md "Description and interactions", A3): the
+    // The one class word Documents starts at (docs/canon/spec-library.md "The screen"; the analyst's A3): the
     // convention's class `canon`, which a link type shares, compared with a row's class alone.
     const startClass = /^\/src\/documents\/library\.ts:\d+: const START_CLASS = "canon";$/;
     expect(offending(quoted, appCode).filter((line) => startClass.test(line))).toHaveLength(1);

@@ -63,9 +63,10 @@ use specengine_store::QUEUE_SCHEMA_VERSION;
 const SPRINT: &str = "docs/spec/movement/sprint.md";
 const STAMINA: &str = "docs/spec/movement/stamina.md";
 
-/// The review document's 54 keys: plain-questions' 53 with `pair` after
-/// `evidence`.
-const REVIEW_KEYS: [&str; 54] = [
+/// The review document's 55 keys: plain-questions' 53 with `pair` after
+/// `evidence`, and `cited` last: docs/features/department-practices.md
+/// "Proposals: `cited`".
+const REVIEW_KEYS: [&str; 55] = [
     "id",
     "project",
     "kind",
@@ -120,6 +121,7 @@ const REVIEW_KEYS: [&str; 54] = [
     "why",
     "similar",
     "notes",
+    "cited",
 ];
 
 /// A round item's 22 keys: plain-questions' 21 with `pair` after

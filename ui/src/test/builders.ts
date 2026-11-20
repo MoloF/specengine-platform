@@ -16,6 +16,7 @@ import type {
   CardFlow,
   CardFlowCount,
   CardList,
+  CardPractice,
   CardRow,
   CardWrite,
   CheckCounts,
@@ -24,6 +25,7 @@ import type {
   CatalogChange,
   CatalogDocument,
   CatalogRow,
+  Cited,
   DeliveryCounts,
   DeliveryDocument,
   DeliveryLate,
@@ -141,6 +143,7 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     why: null,
     similar: null,
     notes: [],
+    cited: null,
     ...fields,
   };
 }
@@ -222,6 +225,7 @@ export function noReview(id: string): Proposal {
     why: null,
     similar: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
+    cited: null,
   };
 }
 
@@ -406,7 +410,7 @@ export function aBundleRow(fields: Partial<BundleBindingRow> & Pick<BundleBindin
   return { ...aBindingRow(row), tokens_est: tokens ?? 12 };
 }
 
-/** The nine layers, empty unless given. */
+/** The ten layers, empty unless given. */
 export function someLayers(layers: Partial<BundleLayers> = {}): BundleLayers {
   return {
     targets: [],
@@ -418,6 +422,7 @@ export function someLayers(layers: Partial<BundleLayers> = {}): BundleLayers {
     neighbours: [],
     terms: [],
     tests: [],
+    practices: [],
     ...layers,
   };
 }
@@ -614,6 +619,7 @@ export function aTaskPackage(fields: Partial<TaskPackage> & Pick<TaskPackage, "i
     claim: fields.claim ?? null,
     runs: fields.runs ?? [],
     bundle: fields.bundle ?? null,
+    practices: fields.practices ?? [],
     roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at ?? "2026-10-01T09:00:00Z",
@@ -1026,9 +1032,22 @@ export function aCard(fields: Partial<Card> & { id: string }): Card {
     allowed: [],
     history: [],
     context: null,
+    // Not asked unless given: the part stays away (docs/features/department-practices.md "Acceptance criteria", DP9, DP14).
+    practices: null,
+    cited: null,
     notes: [],
     ...fields,
   };
+}
+
+/** A practice of a card's discipline: a canon document of three rules, its name its ID, unless given (docs/features/department-practices.md "Acceptance criteria", DP9, DP14). */
+export function aPractice(fields: Partial<CardPractice> & Pick<CardPractice, "name">): CardPractice {
+  return { title: `Title of ${fields.name}`, path: `docs/practices/${fields.name.toLowerCase()}.md`, disciplines: ["art"], rules: 3, ...fields };
+}
+
+/** An ID a text cites, resolved to the node it names (its `written` unless given). */
+export function aCited(written: string, fields: Partial<Cited> = {}): Cited {
+  return { written, name: written, title: `Title of ${written}`, path: "docs/practices/art.md", ...fields };
 }
 
 /** A write's document for a card. */
@@ -1245,7 +1264,7 @@ export function aMapNode(fields: Partial<MapNode> & Pick<MapNode, "name">): MapN
   };
 }
 
-/** A library row: a live canon document of the kind `scene`, its title from its name, version 1, no front-matter beyond, used by none, no change read, no decision, unless given (docs/features/doc-library.md "`spec library`"). */
+/** A library row: a live canon document of the kind `scene`, its title from its name, version 1, no front-matter beyond, used by none, no change read, no decision, unless given (docs/canon/spec-library.md "Rows"). */
 export function aLibraryRow(fields: Partial<LibraryRow> & Pick<LibraryRow, "name">): LibraryRow {
   return {
     id: fields.name,
@@ -1260,6 +1279,7 @@ export function aLibraryRow(fields: Partial<LibraryRow> & Pick<LibraryRow, "name
     reviewed: null,
     scope: null,
     tags: [],
+    disciplines: [],
     rev: 1,
     parent: null,
     modules: [],

@@ -3,6 +3,7 @@ import { useProjectName } from "../api/queries";
 import type { Proposal } from "../api/types";
 import { homeHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
+import { CitedText, citedLinks } from "../markdown/CitedText";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
@@ -137,7 +138,10 @@ export function ClosedProposal({ project, proposal }: { project: string; proposa
         breadcrumbs={<Breadcrumbs items={crumbs} />}
         title={
           <h2 id={titleId} className="card-title">
-            <bdi>{shownSlot(title)}</bdi>
+            <bdi>
+              {/* Its served citations linked (docs/features/department-practices.md "Acceptance criteria", DP21). */}
+              <CitedText text={title} links={citedLinks(project, proposal.cited)} slot />
+            </bdi>
           </h2>
         }
         meta={proposal.status === null ? null : <Lozenge {...statusLozenge(proposal.status, t)} />}

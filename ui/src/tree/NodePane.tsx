@@ -31,7 +31,7 @@ import { TextPanel, type TextTarget } from "./TextPanel";
 /**
  * The Bindings tab, with its lock diffs and drift lines, a chunk of its own, read on the tab's first
  * opening: first load stays under its bar (`docs/canon/ui-languages.md` "Size") as Documents' chrome
- * joins it (docs/features/doc-library.md "Description and interactions").
+ * joins it (docs/canon/spec-library.md "The screen").
  */
 const BindingsPanel = lazy(() => import("./BindingsPanel").then((module) => ({ default: module.BindingsPanel })));
 

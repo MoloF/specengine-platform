@@ -40,7 +40,7 @@ const GET_TASK_DESCRIPTION: &str = concat!(
 show --next` (next: true: the first ready task in the roadmap's order of the items the tasks \
 execute, as get_roadmap lists them, then by number; without `[roadmap]`, the lowest-numbered). \
 content is the brief (goal, criteria, targets, assumptions, open proposals, owner notes, plan, \
-spec changes since approval, runs, code bindings, bundle), cut at 40000 characters; \
+spec changes since approval, runs, practices, code bindings, bundle), cut at 40000 characters; \
 structuredContent the versioned task package (--json), every key present, absent null.
 
 bindings: the code bound to the targets, the affected nodes and their sections, each with its \
@@ -52,8 +52,9 @@ cannot be read gives a note, never an error.
 stale: true when a node the owner approved (spec_snapshot) changed or went in the compared \
 place (the claimed worktree, else the snapshot's): snapshot_diff holds the diffs from the \
 approved text. Nothing is blocked by it: read the diff and keep working, or ask the owner. \
-The bundle comes by reference: get_context_bundle with bundle.node_ids and bundle.budget gives \
-its text. roadmap: the roadmap item the task executes and its place (null when none); \
+The bundle comes by reference: get_context_bundle with bundle.node_ids, bundle.budget and \
+bundle.disciplines gives its text. practices: those of bundle.disciplines (the cards listing \
+it), by path. roadmap: the roadmap item the task executes and its place (null when none); \
 advisory, nothing waits on it.
 
 task_id: T- and 4 or more digits, as spec task list writes it. next: true. Give exactly one of \

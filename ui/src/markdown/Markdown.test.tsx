@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import appCss from "../styles/app.css?raw";
 import type { ShownLink } from "../api/types";
+import { docPageHash } from "../app/routes";
 import { aLink } from "../test/builders";
 import { Markdown, type MarkdownProps } from "./Markdown";
 
@@ -423,5 +424,29 @@ describe("the document view's cuts (doc-modal)", () => {
     const root = show("# Only a heading\n\n- and a list\n", { firstParagraph: true });
     expect(root.textContent).toBe("");
     expect(root.querySelector("p")).toBeNull();
+  });
+});
+
+// docs/features/department-practices.md "Acceptance criteria", DP21: a served citation links only
+// where the source holds its string verbatim. A text node's value is decoded, so an escaped or
+// referenced copy (`R\-12`, `R&#45;12`, `R&#x2d;12`) reads `R-12` and stays text; a plain one links,
+// in a paragraph, across a block quote's marker, under a heading; one in code or a link never does.
+describe("cited links, verbatim only (DP21 of department-practices)", () => {
+  const CITED = [{ written: "R-12", name: "slug/R-12", title: "Rule twelve", path: "docs/spec/r.md" }];
+
+  function citedAnchors(root: HTMLElement): string[] {
+    return Array.from(root.querySelectorAll("a"), (anchor) => `${anchor.textContent} ${anchor.getAttribute("href") ?? ""}`);
+  }
+
+  it("links the plain occurrences alone, an escaped or referenced copy left as text", () => {
+    const source = ["# About R-12", "", "Escaped R\\-12, decimal R&#45;12, hex R&#x2d;12 and plain R-12.", "", "> quoted and", "> R-12 again", "", "`R-12` in code, [R-12 in a link](docs/x.md)."].join("\n");
+    const root = show(source, { cited: CITED });
+    // The heading's, the paragraph's plain one and the block quote's.
+    expect(citedAnchors(root)).toEqual(Array.from({ length: 3 }, () => `R-12 ${docPageHash("alpha", "slug/R-12")}`));
+    // The decoded copies read as the text says them, unlinked.
+    expect(root.textContent).toContain("Escaped R-12, decimal R-12, hex R-12 and plain R-12.");
+    cleanup();
+    // With no served list nothing links.
+    expect(citedAnchors(show(source))).toEqual([]);
   });
 });

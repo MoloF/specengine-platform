@@ -1077,3 +1077,92 @@ fn ring(title: &str) -> u16 {
         [(4, "bell rooms".to_owned()), (5, "reminders".to_owned())]
     );
 }
+
+/// The four practice examples of docs/features/department-practices.md
+/// (RM-0128) "Presets and examples".
+const PRACTICE_EXAMPLES: [&str; 4] = [
+    "scripts/presets/practices/gamedev/art-3d-models.md",
+    "scripts/presets/practices/gamedev/development.md",
+    "scripts/presets/practices/gamedev/sound.md",
+    "scripts/presets/practices/gamedev/production.md",
+];
+
+/// The practices' words, lowercased: the kind of the preset's commented
+/// `PRA` line and every example's `disciplines` entry, read when the test
+/// runs.
+fn practice_words() -> BTreeSet<String> {
+    let root = repository_root();
+    let preset = fs::read_to_string(root.join("scripts/presets/gamedev.toml")).expect("the preset");
+    let kind = preset
+        .lines()
+        .filter_map(|line| line.strip_prefix("# [ids]"))
+        .find_map(|rest| rest.split("kind = \"").nth(1))
+        .and_then(|rest| rest.split('"').next())
+        .expect("the preset's commented `PRA` line names a kind")
+        .to_lowercase();
+    let mut words = BTreeSet::from([kind]);
+    for example in PRACTICE_EXAMPLES {
+        let text = fs::read_to_string(root.join(example))
+            .unwrap_or_else(|error| panic!("{example}: {error}"));
+        let front = text
+            .strip_prefix("---\n")
+            .and_then(|rest| rest.split("\n---\n").next())
+            .unwrap_or_else(|| panic!("{example}: front-matter first"));
+        let list = front
+            .lines()
+            .find_map(|line| line.strip_prefix("disciplines: ["))
+            .and_then(|rest| rest.strip_suffix(']'))
+            .unwrap_or_else(|| panic!("{example}: a `disciplines: [..]` line"));
+        words.extend(list.split(',').map(|entry| entry.trim().to_lowercase()));
+    }
+    words
+}
+
+/// `path:line: word` for each daemon literal holding one of `banned` as a
+/// word.
+fn practice_hits(files: &[(PathBuf, String)], banned: &BTreeSet<String>) -> Vec<String> {
+    let mut hits = Vec::new();
+    for (path, text) in files {
+        let relative = path
+            .strip_prefix(repository_root())
+            .unwrap_or(path)
+            .display()
+            .to_string();
+        for literal in literals(text) {
+            for word in words(&literal.text) {
+                if banned.contains(&word) {
+                    hits.push(format!("{relative}:{}: {word}", literal.line));
+                }
+            }
+        }
+    }
+    hits
+}
+
+/// docs/features/department-practices.md DP20: no daemon literal holds, as
+/// a word, the practice kind or an example's discipline (the daemon passes
+/// `?practices=` through and never names a discipline: ADR-0008). A planted
+/// `"practice"` in a probe source is red; `"practices"`, the query's name,
+/// is another word.
+#[test]
+fn dp20_no_practice_kind_or_discipline_in_the_daemon() {
+    let banned = practice_words();
+    assert_eq!(
+        banned,
+        BTreeSet::from(
+            ["practice", "art", "development", "sound", "production"].map(str::to_owned)
+        ),
+        "the kind and the four examples' disciplines"
+    );
+    let hits = practice_hits(&sources(), &banned);
+    assert!(
+        hits.is_empty(),
+        "a practice word in the daemon:\n{}",
+        hits.join("\n")
+    );
+    let probe = vec![(
+        PathBuf::from("probe.rs"),
+        "fn f() { let _ = \"practice\"; let _ = \"practices\"; }\n".to_owned(),
+    )];
+    assert_eq!(practice_hits(&probe, &banned), ["probe.rs:1: practice"]);
+}

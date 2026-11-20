@@ -28,7 +28,7 @@ import { BoardColumn, BoardColumnHeader } from "./BoardColumn";
 import { statusLook } from "./category";
 import { CardActDialog, moveChoicesOf, type BoardChoice, type OpenDialog, type Said } from "./CardActs";
 import { CardModal } from "./CardModal";
-import { CardView, isCard, titleOf, type CardAction, type CardLinks } from "./CardPanel";
+import { CardView, isCard, titleLinks, titleOf, type CardAction, type CardLinks } from "./CardPanel";
 import { useToday } from "./due";
 import {
   ANY,
@@ -1388,6 +1388,7 @@ export function BoardView({
           project={project}
           id={shownId}
           title={titleOf(panel)}
+          cited={titleLinks(project, panel)}
           pending={writing}
           onClose={closeCard}
           view={({ heading, tools }) => (

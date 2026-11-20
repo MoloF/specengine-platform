@@ -5,7 +5,7 @@ import { aLibrary, aLibraryRow } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import { HttpClient, REOPEN_FIRST_MS } from "./http";
 
-// docs/features/doc-library.md "The UI seam" over HttpClient, the daemon a stubbed `fetch` and
+// docs/canon/spec-library.md "The screen" over HttpClient, the daemon a stubbed `fetch` and
 // `EventSource`: Documents reads `/library` once on screen, with its query's signal; the library is a
 // read of the spec (READS_OF_THE_SPEC), so an apply and a gap each read it once more; a proposal
 // raised, a stage, a card and a task event read nothing of it: it serves no queue or card data.

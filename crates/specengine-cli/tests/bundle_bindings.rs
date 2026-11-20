@@ -1104,6 +1104,23 @@ fn before_file() -> PathBuf {
     repository_root().join("crates/specengine-cli/tests/bundle_bindings_before.json")
 }
 
+/// docs/features/department-practices.md DP6: a bundle that names no
+/// discipline is the build before's JSON but for `layers.practices: []`,
+/// the one `,"practices":[]` closing `layers` this build adds; taken out
+/// (and required exactly once) before the bytes are compared. Any other
+/// document passes as it is.
+fn without_empty_layer_ten(json: &str) -> String {
+    if !json.contains("\"layers\":{") {
+        return json.to_owned();
+    }
+    assert_eq!(
+        json.matches(",\"practices\":[]}").count(),
+        1,
+        "one empty layer 10 closing `layers`: {json}"
+    );
+    json.replacen(",\"practices\":[]}", "}", 1)
+}
+
 /// `b3:` and the BLAKE3 of `text`.
 fn b3(text: &str) -> String {
     specengine_store::b3_hash(text.as_bytes())
@@ -1218,7 +1235,14 @@ fn before_cases(program: &Path, check: bool) -> Vec<Value> {
                     "case": format!("{fixture_name}: {}", args.join(" ")),
                     "exit": read.code(),
                     "text": b3(&read.text.stdout),
-                    "json": b3(&read.json_run.stdout),
+                    // docs/features/department-practices.md DP6: this
+                    // build's JSON less its empty layer 10 (the record is
+                    // the build before's, which has none).
+                    "json": b3(&if check {
+                        without_empty_layer_ten(&read.json_run.stdout)
+                    } else {
+                        read.json_run.stdout.clone()
+                    }),
                     "stderr": b3(&read.text.stderr),
                 }));
             }

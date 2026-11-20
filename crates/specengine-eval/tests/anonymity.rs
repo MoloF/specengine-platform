@@ -624,3 +624,57 @@ fn the_repository_walk_reads_the_preset() {
         "scripts/presets/gamedev.toml is not scanned"
     );
 }
+
+/// The four practice examples of docs/features/department-practices.md
+/// (RM-0128) "Presets and examples", where a project copies them from.
+const PRACTICE_EXAMPLES: [&str; 4] = [
+    "scripts/presets/practices/gamedev/art-3d-models.md",
+    "scripts/presets/practices/gamedev/development.md",
+    "scripts/presets/practices/gamedev/sound.md",
+    "scripts/presets/practices/gamedev/production.md",
+];
+
+/// DP18: the repository walk reads the four practice examples (under
+/// `scripts/presets`, so a planted pilot name or a Cyrillic letter in one
+/// is found by the scans above).
+#[test]
+fn dp18_the_repository_walk_reads_the_practice_examples() {
+    let root = repository_root();
+    let files = text_files();
+    for example in PRACTICE_EXAMPLES {
+        assert!(
+            files
+                .iter()
+                .any(|(path, _)| path.strip_prefix(&root).unwrap_or(path) == Path::new(example)),
+            "{example} is not scanned"
+        );
+    }
+}
+
+/// DP18 on a scratch tree: a Cyrillic line planted in a practice example
+/// is found by LG-8's scan, at its line (the mutation, written where it
+/// cannot reach the repository).
+#[test]
+fn dp18_a_cyrillic_line_in_a_practice_example_is_found() {
+    let letter = char::from_u32(0x0416).expect("a Cyrillic letter");
+    let tree = Scratch::new("practice-examples");
+    tree.write(
+        "scripts/presets/practices/gamedev/sound.md",
+        &format!("---\nclass: canon\n---\n\n# Sound\n\nLoud {letter}.\n"),
+    );
+    tree.write(
+        "scripts/presets/practices/gamedev/art-3d-models.md",
+        "---\nclass: canon\n---\n\n# Art\n\nPlain English.\n",
+    );
+    let letters = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &cyrillic_exempt,
+        "cyrillic",
+        has_cyrillic,
+    );
+    assert_eq!(
+        letters,
+        ["scripts/presets/practices/gamedev/sound.md:7: cyrillic"]
+    );
+}

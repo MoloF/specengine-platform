@@ -931,6 +931,7 @@ fn call_bundle(
         references: task.refs.clone(),
         budget: Some(i64::from(budget)),
         git: specengine_cli::process_git(env),
+        disciplines: Vec::new(),
     };
     let started = Instant::now();
     let answer = specengine_cli::bundle(env, globals, &request);

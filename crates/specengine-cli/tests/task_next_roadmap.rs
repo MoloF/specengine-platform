@@ -743,7 +743,10 @@ fn package_roadmap_places_the_task() {
             assert_eq!(task_common::keys(&text), PACKAGE_KEYS, "{context}");
             // `tested` the 17th since docs/features/tested-reads.md.
             assert_eq!(PACKAGE_KEYS[21], "bundle");
-            assert_eq!(PACKAGE_KEYS[22], "roadmap");
+            // docs/features/department-practices.md: `practices` after
+            // `bundle`.
+            assert_eq!(PACKAGE_KEYS[22], "practices");
+            assert_eq!(PACKAGE_KEYS[23], "roadmap");
             let package: Value = serde_json::from_str(&text).unwrap();
             assert_eq!(package["schema_version"], json!(1), "{context}");
             assert_eq!(roadmap_notes(&package), Vec::<String>::new(), "{context}");

@@ -5,7 +5,7 @@ import { fill, slot } from "../i18n/fill";
 import { Button, buttonClasses } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Icon } from "../ui/Icon";
-import { shownSlot } from "../ui/text";
+import { CitedText, type CitedLinks } from "../markdown/CitedText";
 
 /**
  * A card over the board (`#/<p>/board/<C>`, `ui/README.md` "Screen rules", Dialogs): a modal dialog
@@ -13,12 +13,14 @@ import { shownSlot } from "../ui/text";
  * beneath, so no column moves. It is the work item (CardPanel.tsx `CardView`), 1200 px wide: `view`
  * lays its heading out under the breadcrumbs, with "Open as a page" and Close on the breadcrumb line
  * as subtle buttons; the children (its Move menu) follow. Esc, Close and a click on the scrim close
- * it, the card holding no typed text; while a write is out none of them does.
+ * it, the card holding no typed text; while a write is out none of them does. The title links the
+ * strings the card's read cited in it (docs/features/department-practices.md "Acceptance criteria", DP21).
  */
 export function CardModal({
   project,
   id,
   title,
+  cited = null,
   pending,
   onClose,
   view,
@@ -28,6 +30,8 @@ export function CardModal({
   id: string;
   /** The card's title once read; its ID until then. */
   title: string | null;
+  /** The card's served citations: their strings in the title link to their documents. */
+  cited?: CitedLinks | null;
   /** A write is out: nothing closes. */
   pending: boolean;
   onClose: () => void;
@@ -57,7 +61,7 @@ export function CardModal({
 
   return (
     <Dialog
-      title={<bdi>{title === null ? id : shownSlot(title)}</bdi>}
+      title={<bdi>{title === null ? id : <CitedText text={title} links={cited} slot />}</bdi>}
       onClose={close}
       className="card-modal"
       closeOnScrim

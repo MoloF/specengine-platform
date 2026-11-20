@@ -815,8 +815,9 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         // since docs/features/card-questions.md L1 (`card_id`, `why`); 51
         // since docs/features/intake-similar.md "Acceptance criteria" IS6; 53
         // since docs/features/plain-questions.md PQ10 (two after `summary`);
-        // 54 since docs/features/collision-pairs.md PP8 (`pair`).
-        assert_eq!(keys.len(), 54, "{keys:?}");
+        // 54 since docs/features/collision-pairs.md PP8 (`pair`); 55 since
+        // docs/features/department-practices.md "Proposals: `cited`".
+        assert_eq!(keys.len(), 55, "{keys:?}");
         assert_eq!(
             keys[45..],
             [
@@ -828,7 +829,8 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
                 "card_id",
                 "why",
                 "similar",
-                "notes"
+                "notes",
+                "cited"
             ],
             "{keys:?}"
         );

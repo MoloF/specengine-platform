@@ -850,11 +850,18 @@ fn row_keys_order_as_lock_keys_keyless_first() {
 /// "Data"), release-hardening `card-config` as the 38th
 /// (docs/features/release-hardening.md "Acceptance criteria" RH-R4) and
 /// doc-library `tag-invalid` as the 39th (docs/features/doc-library.md
-/// DL7), no other. M: a verify code added to the check.
+/// DL7) and department-practices `practice-discipline` as the 40th
+/// (docs/features/department-practices.md "Data"), no other. M: a verify
+/// code added to the check.
 #[test]
 fn check_codes_stay_35() {
-    assert_eq!(CHECK_CODES.len(), 39, "{CHECK_CODES:?}");
-    assert_eq!(CHECK_CODES.last(), Some(&"tag-invalid"), "{CHECK_CODES:?}");
+    assert_eq!(CHECK_CODES.len(), 40, "{CHECK_CODES:?}");
+    assert_eq!(
+        CHECK_CODES.last(),
+        Some(&"practice-discipline"),
+        "{CHECK_CODES:?}"
+    );
+    assert_eq!(CHECK_CODES[38], "tag-invalid", "{CHECK_CODES:?}");
     assert_eq!(CHECK_CODES[37], "card-config", "{CHECK_CODES:?}");
     assert_eq!(CHECK_CODES[36], "team-config", "{CHECK_CODES:?}");
     assert_eq!(CHECK_CODES[35], "rev-not-raised", "{CHECK_CODES:?}");

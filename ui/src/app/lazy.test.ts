@@ -208,8 +208,8 @@ describe("the Graph home's lazy Map view (CM11 of corpus-map)", () => {
   });
 });
 
-// docs/canon/ui-languages.md "Size": Documents' chrome joins first load (docs/features/doc-library.md
-// "Description and interactions"), so the Spec tree's Bindings tab, its lock diffs and drift lines, leaves it: a chunk of
+// docs/canon/ui-languages.md "Size": Documents' chrome joins first load (docs/canon/spec-library.md
+// "The screen"), so the Spec tree's Bindings tab, its lock diffs and drift lines, leaves it: a chunk of
 // its own, reached from NodePane by a dynamic import alone, standing in a Suspense whose fallback is
 // the tab's own skeleton. M: a static import of BindingsPanel.
 describe("the Spec tree's lazy Bindings tab (doc-library's first-load move)", () => {

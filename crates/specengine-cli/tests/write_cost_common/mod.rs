@@ -845,6 +845,10 @@ pub fn settle(corpus: &str, section: &str, cases: BTreeMap<String, Value>) {
     let stored_keys: Vec<&String> = stored.keys().collect();
     let keys: Vec<&String> = cases.keys().collect();
     assert_eq!(keys, stored_keys, "{corpus} {section}: the cases");
+    let cases: BTreeMap<String, Value> = cases
+        .into_iter()
+        .map(|(case, value)| (case, without_null_cited(value)))
+        .collect();
     for (case, value) in &cases {
         let want = &stored[case];
         if value != want {
@@ -853,6 +857,43 @@ pub fn settle(corpus: &str, section: &str, cases: BTreeMap<String, Value>) {
                 first_difference(want, value)
             );
         }
+    }
+}
+
+/// docs/features/department-practices.md "Proposals: `cited`": every proposal
+/// document gains `cited` as its last key, `null` but in a review, so an
+/// answer is 0.47.0's but for one `,"cited":null` closing each proposal
+/// document it prints (`--json`, carried as text, right after the document's
+/// `notes` array; in a parsed reply, the key of an object holding
+/// `diagnostics`). Exactly that is taken out before a golden compares;
+/// nothing else is touched, and a `cited` that is not `null` stays (and
+/// differs).
+pub fn without_null_cited(value: Value) -> Value {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim_start();
+            if (trimmed.starts_with('{') || trimmed.starts_with('['))
+                && text.contains("\"diagnostics\":")
+                && serde_json::from_str::<Value>(&text).is_ok()
+            {
+                let closing = "],\"cited\":null}";
+                Value::String(text.replace(closing, "]}"))
+            } else {
+                Value::String(text)
+            }
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(without_null_cited).collect()),
+        Value::Object(mut map) => {
+            if map.contains_key("diagnostics") && map.get("cited") == Some(&Value::Null) {
+                map.remove("cited");
+            }
+            Value::Object(
+                map.into_iter()
+                    .map(|(key, item)| (key, without_null_cited(item)))
+                    .collect(),
+            )
+        }
+        other => other,
     }
 }
 

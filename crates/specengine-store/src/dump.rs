@@ -105,6 +105,13 @@ const TABLES: &[TableDump] = &[
         skip: &["file_id"],
     },
     TableDump {
+        table: "disciplines",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+    TableDump {
         table: "edges",
         owner: "w.project, w.root, f.path",
         joins: FILE_OWNER,

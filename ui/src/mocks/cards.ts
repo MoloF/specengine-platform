@@ -71,7 +71,7 @@ import { HARBOR_FLAGGED, harborUpstream } from "./upstream";
 // departure from a binding brief; C-0001 reads both in its `subtask_items`, by ID.
 
 /** A stored card: the document less what a read adds, its links as the task IDs the row keeps. */
-export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "upstream" | "tasks" | "items" | "subtask_items" | "allowed" | "history" | "context" | "notes"> & { tasks: string[] };
+export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "upstream" | "tasks" | "items" | "subtask_items" | "allowed" | "history" | "context" | "practices" | "cited" | "notes"> & { tasks: string[] };
 
 interface MockEvent extends CardEvent {
   id: string;
@@ -290,7 +290,8 @@ function harborCards(at: number): StoredCard[] {
       column: "edit",
       position: 1,
       title: "Night passage rules, plain words",
-      goal: "The rule as a pilot would say it over the radio.",
+      // Three IDs: two the corpus resolves (the second, defined twice, to its first holder), once in code too, and one it does not (docs/features/department-practices.md "Acceptance criteria", DP21).
+      goal: "The rule as a pilot would say it over the radio, on the times RULE-HARBOR-CLOCK keeps; RULE-FAIRWAY-SPEED as the log writes it, `RULE-FAIRWAY-SPEED`. RULE-PILOT-HOURS is not written yet.",
       discipline: "copy",
       targets: ["MEC-NIGHT-PASSAGE"],
       assignee: "Tomas Oakes",
@@ -811,6 +812,9 @@ export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks, propo
     allowed: allowedOf(board, card),
     history,
     context: null,
+    // Plain `show` reads no index: both null; the route's `?practices=true` fills them (src/mocks/practices.ts).
+    practices: null,
+    cited: null,
     notes: linked.flatMap(({ notes }) => notes),
   });
 }

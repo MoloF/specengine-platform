@@ -179,8 +179,34 @@ fn cases(corpus: &str) -> BTreeMap<String, Value> {
     clock.stop();
     cases
         .into_iter()
-        .map(|(case, value)| (case, clock.normalized(normalized(value, &repo.root, &[]))))
+        .map(|(case, value)| {
+            (
+                case,
+                without_null_cited(clock.normalized(normalized(value, &repo.root, &[]))),
+            )
+        })
         .collect()
+}
+
+/// docs/features/department-practices.md "Proposals: `cited`": every proposal
+/// document gains `cited` as its last key, `null` but in a review (`spec
+/// review`, `get_proposal`, `review_proposal`, the daemon's route), so a
+/// `propose_change` reply is 0.47.0's but for one `cited: null` in its
+/// document: required there and `null`, then taken out before the golden
+/// compares. Nothing else is touched.
+fn without_null_cited(mut reply: Value) -> Value {
+    if let Some(document) = reply
+        .pointer_mut("/result/structuredContent")
+        .and_then(Value::as_object_mut)
+        && document.contains_key("diagnostics")
+    {
+        assert_eq!(
+            document.remove("cited"),
+            Some(Value::Null),
+            "a proposal document holds `cited: null`"
+        );
+    }
+    reply
 }
 
 macro_rules! golden {

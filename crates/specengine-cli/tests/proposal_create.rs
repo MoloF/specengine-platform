@@ -786,12 +786,16 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
         .flat_map(|key| match *key {
             "why" => vec![*key, "similar"],
             "evidence" => vec![*key, "pair"],
+            // docs/features/department-practices.md "Proposals: `cited`":
+            // the JSON gains `cited` last; the text has no line for it.
+            "notes" => vec![*key, "cited"],
             _ => vec![*key],
         })
         .collect();
     // 53 since docs/features/plain-questions.md PQ10; 54 since
-    // docs/features/collision-pairs.md PP8.
-    assert_eq!(json_keys.len(), 54);
+    // docs/features/collision-pairs.md PP8; 55 since department-practices.
+    assert_eq!(json_keys.len(), 55);
+    assert_eq!(value["cited"], serde_json::json!([]), "{json}");
     assert!(value["pair"].is_null(), "{json}");
     assert!(!text.contains("\npair"), "{text}");
     assert!(value["similar"].is_null(), "{json}");

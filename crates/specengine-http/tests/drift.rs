@@ -92,7 +92,8 @@ fn drift_item_is_served_and_cannot_be_staged() {
     // docs/features/intake-similar.md "Acceptance criteria" IS10.
     // 53 since docs/features/plain-questions.md PQ10; 54 since
     // docs/features/collision-pairs.md PP8 (`pair`, `null`).
-    assert_eq!(object.len(), 54, "{review}");
+    // 55 since docs/features/department-practices.md "Proposals: `cited`".
+    assert_eq!(object.len(), 55, "{review}");
     assert_eq!(review["pair"], Value::Null, "{review}");
     assert_eq!(review["similar"], Value::Null, "{review}");
     assert_eq!(review["kind"], json!("drift"));

@@ -480,6 +480,13 @@ export interface Proposal {
   similar: null;
   /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
   notes: string[];
+  /**
+   * The IDs its texts cite (rationale, summary, question or decision text, option labels, answer),
+   * each resolved to its first holder, first-seen order, at most 64: filled on `proposals/:id`, null
+   * elsewhere and when the index could not be read (a note says why). Only these strings become
+   * links (`docs/features/department-practices.md` "Acceptance criteria", DP13, DP21).
+   */
+  cited: Cited[] | null;
 }
 
 /**
@@ -1667,7 +1674,7 @@ export interface BundleItem {
 export type BundleBindingRow = BindingRow & { tokens_est: number };
 
 /**
- * The nine layers in print order, each `[]` when empty; `bindings` (5) and `tests` (9) hold code
+ * The ten layers in print order, each `[]` when empty; `bindings` (5) and `tests` (9) hold code
  * binding rows, not nodes, both empty without `[code]`. Sources: `docs/canon/spec-cli-bundle.md` "Layers", "Output";
  * `docs/features/bundle-bindings.md` "Layers 5 and 9".
  */
@@ -1681,6 +1688,8 @@ export interface BundleLayers {
   neighbours: BundleItem[];
   terms: BundleItem[];
   tests: BundleBindingRow[];
+  /** Layer 10, the rules of the asked disciplines' practices, each a header and its text; `[]` without disciplines (`docs/features/department-practices.md` "Acceptance criteria", DP5). */
+  practices: BundleItem[];
 }
 
 /**
@@ -1885,6 +1894,8 @@ export interface TaskRun {
 export interface TaskBundle {
   node_ids: string[];
   budget: number;
+  /** The disciplines of the cards listing the task, sorted, each once, at most 16; `bundle_hash` is made with them (`docs/features/department-practices.md` "Acceptance criteria", DP12). */
+  disciplines: string[];
   bundle_hash: string | null;
 }
 
@@ -1948,6 +1959,8 @@ export interface TaskPackage {
   claim: TaskClaim | null;
   runs: TaskRun[];
   bundle: TaskBundle | null;
+  /** The practices of the disciplines of every card listing the task, by path, each once, at most 32; `[]` when no card lists it (`docs/features/department-practices.md` "Acceptance criteria", DP12). */
+  practices: CardPractice[];
   roadmap: TaskRoadmap | null;
   author: Author | null;
   created_at: string;
@@ -2698,7 +2711,7 @@ export interface CardSubtaskItem {
   record_title: string | null;
 }
 
-/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`; `items` the questions, discrepancies and decisions naming it, after `tasks`, and `history` their last 64 `proposal.*` events merged with its own by `seq`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule", `docs/features/card-questions.md` "Acceptance criteria" (K1). `context` is always null here: the daemon never asks a card's context (`docs/features/card-context.md` "Acceptance criteria", CC10). `mark` is still null on the card route, `upstream` served there (`docs/features/upstream-signal.md` "Acceptance criteria", US-12). */
+/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`; `items` the questions, discrepancies and decisions naming it, after `tasks`, and `history` their last 64 `proposal.*` events merged with its own by `seq`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule", `docs/features/card-questions.md` "Acceptance criteria" (K1). `context` is always null here: the daemon never asks a card's context (`docs/features/card-context.md` "Acceptance criteria", CC10). `mark` is still null on the card route, `upstream` served there (`docs/features/upstream-signal.md` "Acceptance criteria", US-12). `practices` and `cited` after `context`, 38 keys, served when the UI asks `?practices=true` (`docs/features/department-practices.md` "Acceptance criteria", DP9, DP14, DP14). */
 export interface Card {
   id: string;
   flow: string;
@@ -2737,7 +2750,42 @@ export interface Card {
   allowed: CardAllowed[];
   history: CardEvent[] | null;
   context: null;
+  /**
+   * Its discipline's practices by path, at most 32, as `?practices=true` serves them: `[]` when none
+   * matches or the card has no discipline; null unless asked, and when the index could not be read
+   * (a note `practices: not read: <cause>`). Past 32, a note `practices: <k> more …`
+   * (`docs/features/department-practices.md` "Acceptance criteria", DP9, DP14).
+   */
+  practices: CardPractice[] | null;
+  /** The IDs its title, goal, criteria, items and history notes cite, resolved, first-seen order, at most 64; null as `practices`. Only these strings become links. */
+  cited: Cited[] | null;
   notes: string[];
+}
+
+/**
+ * A practice (ADR-0084): a live document whose `disciplines:` names a card's discipline. `name` the
+ * REF the document view opens, as in the library; `disciplines` its kept entries in written order;
+ * `rules` its direct child ID sections, else 1, the document. Names, titles and disciplines are the
+ * project's own, shown as written. Source: `docs/features/department-practices.md` "Acceptance criteria", DP9, DP14.
+ */
+export interface CardPractice {
+  name: string;
+  title: string | null;
+  path: string;
+  disciplines: string[];
+  rules: number;
+}
+
+/**
+ * An ID a text cites, as the daemon resolved it to its first holder: `written` the occurrence's
+ * bytes, verbatim, the one string the UI turns into a link to `name`. Source:
+ * `docs/features/department-practices.md` "Acceptance criteria", DP9, DP14, DP21.
+ */
+export interface Cited {
+  written: string;
+  name: string;
+  title: string | null;
+  path: string;
 }
 
 /** The parent's mark words an upstream read names: told apart in `src/board/labels.ts` alone. Source: `docs/features/upstream-signal.md` "Acceptance criteria", US-12. */
@@ -3239,7 +3287,7 @@ export interface Delegated {
 /**
  * The four decision groups the core sorts a status into (`decision_group`), as the keys of a record:
  * one of them is also a word of the mocks' spec statuses, which app code never quotes; their words
- * told in `src/documents/library.ts`. Source: `docs/features/doc-library.md` "`spec library`".
+ * told in `src/documents/library.ts`. Source: `docs/canon/spec-library.md` "Decisions".
  */
 interface DecisionGroups {
   accepted: true;
@@ -3248,14 +3296,14 @@ interface DecisionGroups {
   other: true;
 }
 
-/** A decision's group as the core sorts its status. Source: `docs/features/doc-library.md` "`spec library`". */
+/** A decision's group as the core sorts its status. Source: `docs/canon/spec-library.md` "Decisions". */
 export type KnownDecisionGroup = keyof DecisionGroups;
 
 /**
  * `spec library [--archive] --json`, the answer of `GET .../library[?archive=true]`: `archive` as
  * asked; `notes` the read's notes verbatim, sorted, each once; `counts` over the rows; `rows` one per
  * document in path order; `truncated` false and `omitted` null, as the route never cuts.
- * Source: `docs/features/doc-library.md` "`spec library`".
+ * Source: `docs/canon/spec-library.md` "Rows".
  */
 export interface LibraryDocument {
   archive: boolean;
@@ -3266,7 +3314,7 @@ export interface LibraryDocument {
   omitted: number | null;
 }
 
-/** The totals over the rows served: the rows, the Tier 3 ones, the decision entries, the rows `behind: true`, the orphans. Source: `docs/features/doc-library.md` "`spec library`". */
+/** The totals over the rows served: the rows, the Tier 3 ones, the decision entries, the rows `behind: true`, the orphans. Source: `docs/canon/spec-library.md` "Rows". */
 export interface LibraryCounts {
   documents: number;
   archived: number;
@@ -3283,7 +3331,7 @@ export interface LibraryCounts {
  * in config order; `used_by`, `mentioned_by` and `orphan` as the map serves them; `last_change` its
  * file's newest commit on `HEAD`, null when none is read; `decisions` grouped accepted, superseded,
  * rejected, other; `behind` true when an accepted decision was committed after it, null when that
- * cannot be told. Source: `docs/features/doc-library.md` "`spec library`".
+ * cannot be told. Source: `docs/canon/spec-library.md` "Rows".
  */
 export interface LibraryRow {
   name: string;
@@ -3299,6 +3347,8 @@ export interface LibraryRow {
   reviewed: string | null;
   scope: string[] | null;
   tags: string[];
+  /** Its `disciplines:` kept entries in written order, `[]` when none: a practice's (`docs/features/department-practices.md` "Acceptance criteria", DP14). */
+  disciplines: string[];
   rev: number | null;
   parent: string | null;
   modules: string[];
@@ -3314,7 +3364,7 @@ export interface LibraryRow {
  * A decision whose `canon:` lands on the row: `status` as written; `group` the core's, another word
  * kept and shown raw; `date` its `date:` as written; `section` the ID section the link lands on;
  * `last_change` its file's; `newer` true when committed after the row's last change, null when
- * either is not read. Source: `docs/features/doc-library.md` "`spec library`".
+ * either is not read. Source: `docs/canon/spec-library.md` "Decisions".
  */
 export interface LibraryDecision {
   name: string;
@@ -3332,7 +3382,7 @@ export interface LibraryDecision {
 /**
  * A file's last change, the catalog's without `of_file`: `at` the commit's time in UTC; `by` raw, an
  * email in it, never drawn; `by_name` the name alone, the one drawn; `commit` and `proposal` never
- * drawn. Source: `docs/features/doc-library.md` "`spec library`".
+ * drawn. Source: `docs/canon/spec-library.md` "Rows".
  */
 export interface LibraryChange {
   at: string;

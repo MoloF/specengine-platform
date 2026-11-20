@@ -93,8 +93,9 @@ const OPTION_LINES: &str = "options: 2\n  [0] Restart the wait | Short rests do 
 
 /// The review document's keys: RM-0059's 51 with `gist` and `matters`
 /// after `summary`; 54 since docs/features/collision-pairs.md PP8 (`pair`
-/// after `evidence`).
-const REVIEW_KEYS: [&str; 54] = [
+/// after `evidence`); 55 since docs/features/department-practices.md
+/// "Proposals: `cited`" (`cited` last).
+const REVIEW_KEYS: [&str; 55] = [
     "id",
     "project",
     "kind",
@@ -149,6 +150,7 @@ const REVIEW_KEYS: [&str; 54] = [
     "why",
     "similar",
     "notes",
+    "cited",
 ];
 
 /// A round item's keys: `gist` and `matters` after `summary`; 22 since

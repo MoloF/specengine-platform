@@ -2,25 +2,27 @@ import type { KnownDecisionGroup, LibraryDecision, LibraryRow, WorkspaceModule }
 import type { Translate } from "../i18n";
 import { folded } from "../tasks/filter";
 
-// Documents' arrangement of the one answer read (docs/features/doc-library.md "Description and interactions", DL18):
+// Documents' arrangement of the one answer read (docs/features/doc-library.md "Acceptance criteria", DL18):
 // the facets, their counts, the search, the order a header's press gives and a row's decision
 // words. Facets AND, a facet's values OR; each value's count is the rows every other filter keeps.
 // Nothing here counts a use, resolves a link, reads git or judges a decision: the served rows are
 // filtered, ordered and paged, never recomputed (docs/canon/architecture.md#ui). The one word read
 // here is the class the table starts at (A3) and the served decision groups, told through
-// GROUP_WORDS; a class, a kind, a status, a tag, an owner and a scope are data, compared only with
-// what a person chose among the served values.
+// GROUP_WORDS; a class, a kind, a status, a tag, a discipline, an owner and a scope are data,
+// compared only with what a person chose among the served values. The Discipline facet, after Tags,
+// is each department's corner: the practices of a card discipline (docs/features/department-practices.md
+// "Acceptance criteria", DP21).
 
 /** The rows shown before "Show 200 more", and how many more each press shows. */
 export const LIBRARY_SHOWN = 200;
 
 /** The facets a person picks any number of values in, ORed. Module is apart: one choice, the module bar's stored one. */
-export const MULTI_FACETS = ["class", "kind", "status", "tags", "owner", "tier", "scope"] as const;
+export const MULTI_FACETS = ["class", "kind", "status", "tags", "disciplines", "owner", "tier", "scope"] as const;
 
 export type MultiFacet = (typeof MULTI_FACETS)[number];
 
-/** The bar's order: Class, Kind, Status, Tags, Module, Owner, Tier, Scope. */
-export const FACET_ORDER = ["class", "kind", "status", "tags", "module", "owner", "tier", "scope"] as const;
+/** The bar's order: Class, Kind, Status, Tags, Discipline, Module, Owner, Tier, Scope. */
+export const FACET_ORDER = ["class", "kind", "status", "tags", "disciplines", "module", "owner", "tier", "scope"] as const;
 
 export type Facet = (typeof FACET_ORDER)[number];
 
@@ -36,7 +38,7 @@ export interface LibraryFilters {
 }
 
 /** Every facet at All. */
-export const ALL_CHOSEN: Readonly<Record<MultiFacet, readonly FacetValue[]>> = { class: [], kind: [], status: [], tags: [], owner: [], tier: [], scope: [] };
+export const ALL_CHOSEN: Readonly<Record<MultiFacet, readonly FacetValue[]>> = { class: [], kind: [], status: [], tags: [], disciplines: [], owner: [], tier: [], scope: [] };
 
 /** Every facet at All, both toggles off, no search. */
 export const NO_FILTERS: LibraryFilters = { chosen: ALL_CHOSEN, behind: false, orphans: false, search: "" };
@@ -73,6 +75,8 @@ export function valuesOf(row: LibraryRow, facet: MultiFacet): FacetValue[] {
       return one(row.status);
     case "tags":
       return entriesOf(row.tags);
+    case "disciplines":
+      return entriesOf(row.disciplines);
     case "owner":
       return one(row.owner);
     case "tier":

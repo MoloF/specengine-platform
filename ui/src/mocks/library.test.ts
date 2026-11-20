@@ -4,19 +4,20 @@ import { ledgerApi } from "./ledger-api/fixtures";
 import { LARGE_LIBRARY_ROWS, libraryOf } from "./library";
 import { MockClient } from "./MockClient";
 
-// The mock's library (docs/features/doc-library.md "The UI seam"): harbor-sim's documents in path
-// order with the route's 22 keys, tags on some rows, an accepted and a superseded decision on one
+// The mock's library (docs/canon/spec-library.md "Rows"): harbor-sim's documents in path
+// order with the route's 23 keys (`disciplines` after `tags` since docs/features/department-practices.md
+// "Acceptance criteria", DP14), tags on some rows, three practices, an accepted and a superseded decision on one
 // canon page, one row behind its decision, the corpus's orphans, the modules the served `[[module]]`s
 // hold; Tier 3 under archive; ledger-api's with git not read and its note; `empty` none; `large`
 // 5 000 rows, the same on every read.
 
-const ROW_KEYS = "name, id, path, title, class, kind, status, archived, tier, owner, reviewed, scope, tags, rev, parent, modules, used_by, mentioned_by, orphan, last_change, decisions, behind";
+const ROW_KEYS = "name, id, path, title, class, kind, status, archived, tier, owner, reviewed, scope, tags, disciplines, rev, parent, modules, used_by, mentioned_by, orphan, last_change, decisions, behind";
 const DECISION_KEYS = "name, id, title, path, status, group, date, section, last_change, newer";
 
 const harbor = harborSim(0).corpus;
 
 describe("the mock's library", () => {
-  it("serves harbor-sim's live documents in path order, each with the route's 22 keys, the generated one among them", () => {
+  it("serves harbor-sim's live documents in path order, each with the route's 23 keys, the generated one among them", () => {
     const answer = libraryOf(harbor, "harbor-sim", "normal", false);
     expect(Object.keys(answer).join(", ")).toBe("archive, notes, counts, rows, truncated, omitted");
     const paths = answer.rows.map((row) => row.path);
@@ -27,6 +28,18 @@ describe("the mock's library", () => {
     expect(answer.rows.some((row) => row.class === "generated")).toBe(true);
     expect(answer.rows.some((row) => row.archived)).toBe(false);
     expect([answer.notes, answer.truncated, answer.omitted]).toEqual([[], false, null]);
+  });
+
+  it("names disciplines on three live canon pages and a spec page, the harbour's two, and on the Tier 3 old quays under archive alone (docs/features/department-practices.md \"The library\")", () => {
+    const live = libraryOf(harbor, "harbor-sim", "normal", false);
+    expect(live.rows.filter((row) => row.disciplines.length > 0).map((row) => [row.name, row.disciplines])).toEqual([
+      ["MEC-MOORING", ["copy"]],
+      ["MEC-CARGO-CRANES", ["plates"]],
+      ["DOM-HARBOR", ["copy", "plates"]],
+      ["MEC-TIDES", ["copy"]],
+    ]);
+    const archived = libraryOf(harbor, "harbor-sim", "normal", true).rows.filter((row) => row.archived && row.disciplines.length > 0);
+    expect(archived.map((row) => [row.name, row.tier, row.disciplines])).toEqual([["MEC-OLD-QUAYS", 3, ["copy"]]]);
   });
 
   it("holds tags on some rows, in any script, and six canon pages", () => {

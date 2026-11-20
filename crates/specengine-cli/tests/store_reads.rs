@@ -467,6 +467,9 @@ fn without_show_keys(command: &str, bytes: &[u8]) -> Vec<u8> {
         Ok(text) if command == "show" && text.starts_with('{') => {
             without_doc_modal_keys(&without_keys(text, &SHOW_KEYS)).into_bytes()
         }
+        // docs/features/department-practices.md DP6: a bundle's empty
+        // layer 10 out.
+        Ok(text) if command == "bundle" => common::keys::without_empty_layer_ten(text).into_bytes(),
         _ => bytes.to_vec(),
     }
 }

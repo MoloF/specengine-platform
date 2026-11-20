@@ -505,6 +505,54 @@ impl SqliteQueue {
         Ok(list)
     }
 
+    /// Every card of the project whose `tasks` list `task`, cancelled and
+    /// accepted ones too, by ID number, each with its discipline (task spec
+    /// `department-practices`, "The task package": the card's link stays
+    /// the source of a task's disciplines; a task names no card). One
+    /// statement over `cards.tasks`; a `tasks` that does not read as a
+    /// card's decoder reads it is passed over. A queue with no cards' table,
+    /// or below the step that added `tasks`, holds none; a newer build's is
+    /// [`QueueError::SchemaTooNew`]. A read only: nothing gates on it.
+    pub fn cards_listing_task(
+        &self,
+        task: &str,
+    ) -> Result<Vec<(String, Option<String>)>, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let version = super::user_version(&tx)?;
+        if version > super::QUEUE_SCHEMA_VERSION {
+            return Err(QueueError::SchemaTooNew { found: version });
+        }
+        let mut listing: Vec<(String, Option<String>)> = Vec::new();
+        if version >= TASK_LINKS_SCHEMA && schema::has_table(&tx, "cards")? {
+            // The JSON string of the ID, quotes included: a prefilter only,
+            // each list then decoded and matched whole.
+            let quoted = serde_json::to_string(task).unwrap_or_default();
+            let mut statement = tx.prepare(LISTING_TASK).db()?;
+            let mut found = statement
+                .query([self.project.as_str(), quoted.as_str()])
+                .db()?;
+            while let Some(row) = found.next().db()? {
+                let Some(links) = task_links(row.get_ref(2).db()?) else {
+                    continue;
+                };
+                if !links.iter().any(|link| link == task) {
+                    continue;
+                }
+                let id = stored_name(row.get_ref(0).db()?);
+                let discipline = match row.get_ref(1).db()? {
+                    ValueRef::Text(bytes) => Some(String::from_utf8_lossy(bytes).into_owned()),
+                    _ => None,
+                };
+                listing.push((id, discipline));
+            }
+        }
+        tx.commit().db()?;
+        listing.sort_by(|a, b| {
+            (card_number(&a.0), a.0.as_str()).cmp(&(card_number(&b.0), b.0.as_str()))
+        });
+        Ok(listing)
+    }
+
     /// One deferred read transaction over the queue ([`QueueSnapshot`]),
     /// as the index's `SqliteIndex::snapshot` is over the index.
     pub fn snapshot(&self) -> Result<QueueSnapshot<'_>, QueueError> {
@@ -1117,6 +1165,11 @@ const COUNT_ITEMS: &str = "SELECT cards.flow, count(*), min(items.created_at) \
 /// The fourth, with agent tasks counted: the open cards' links as stored.
 const COUNT_LINKS: &str = "SELECT id, flow, tasks FROM main.cards \
      WHERE project = ?1 AND tasks IS NOT NULL AND cancellation IS NULL AND acceptance IS NULL";
+
+/// The cards whose stored `tasks` hold the JSON string `?2`
+/// ([`SqliteQueue::cards_listing_task`]'s prefilter).
+const LISTING_TASK: &str = "SELECT id, discipline, tasks FROM main.cards \
+     WHERE project = ?1 AND tasks IS NOT NULL AND instr(tasks, ?2) > 0";
 
 /// The fifth, beside it: the tasks in review, of any repository of the
 /// slug; `?2` the review status.

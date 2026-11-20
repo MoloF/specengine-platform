@@ -283,7 +283,8 @@ fn te1_golden_inputs_of_spec_a_and_spec_b() {
 // ------------------------------------------------------------------ the base
 
 /// A document carrying every typed front-matter key (the six counted ones
-/// and the 25 never counted), an untyped key, a non-ID subheading, two ID
+/// and the 27 never counted: `disciplines` since
+/// docs/features/department-practices.md DP1), an untyped key, a non-ID subheading, two ID
 /// sections and a nested one: the base of TE-2 and TE-3.
 const BASE: &str = "\
 ---
@@ -314,6 +315,7 @@ priority: should
 estimate: 2-4
 stage: gather
 tags: [light]
+disciplines: [art]
 links:
   derived_from: [R-12, A-101]
   depends_on: [MEC-SPRINT]
@@ -664,6 +666,13 @@ fn never_counted_changes() -> Vec<(&'static str, &'static str, &'static str)> {
         // docs/features/doc-library.md DL6: a tag is a label, never part of
         // the meaning.
         ("tags", "tags: [light]\n", "tags: [light, dark]\n"),
+        // docs/features/department-practices.md DP1: which departments a
+        // practice serves is no part of its rules' meaning.
+        (
+            "disciplines",
+            "disciplines: [art]\n",
+            "disciplines: [art, sound]\n",
+        ),
     ]
 }
 
@@ -715,6 +724,9 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
         "estimate",
         "stage",
         "tags",
+        // Never counted: docs/features/department-practices.md
+        // "Front-matter `disciplines`".
+        "disciplines",
     ]
     .into_iter()
     .collect();

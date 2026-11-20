@@ -559,8 +559,8 @@ He asked for this before ("Owner's vision, 2026-11-11": "Full documentation, wit
 | # | Slice | Item | Fixed now |
 |---|---|---|---|
 | 1 | `doc-library` (`docs/features/doc-library.md`) | RM-0127 | must, first; no ADR; `tags:`, `spec library` and its route, the Documents section; `INDEX_FORMAT` 18; no MCP tool; **shipped 2026-11-19** (`docs/canon/spec-library.md`), plugin 0.47.2 |
-| 2 | `department-practices` | RM-0128 | must, after 1; a new ADR: a document naming disciplines becomes standing context for their cards and tasks, gating nothing; `get_card` and `get_task` change, so the plugin version does; unspecified |
-| 3 | `specengine-guide` | RM-0129 | must, after 1; a new ADR: the guide ships in the build and is served read-only beside a project's corpus, never in it; a hub tool, so `HUB_TOOLS` and the plugin version change; unspecified |
+| 2 | `department-practices` (`docs/features/department-practices.md`) | RM-0128 | must, after 1; ADR-0084: a document naming disciplines is a practice, standing context for their cards and tasks, gating nothing; `INDEX_FORMAT` 19; plugin 0.48.0 (MINOR: `get_card`, `get_task`, `get_context_bundle` return new keys); **shipped 2026-11-20** (`docs/canon/card-practices.md`), tag `v0.48.0` |
+| 3 | `specengine-guide` (`docs/features/specengine-guide.md`) | RM-0129 | must, after 1; ADR-0085: the guide ships in the build and is served read-only beside a project's corpus, never in it; `get_guide` on stdio and the hub (`HUB_TOOLS` 19), plugin 0.49.0 (MINOR); `INDEX_FORMAT` 20; ten topics written by the spec-writer in the slice; specified 2026-11-20 |
 
 **Ten people at once** (his word of 2026-11-15) binds slice 1:
 - its read is trusted on a hub (`run_read`) and shows no trace data, so it never walks the tree there;
@@ -576,6 +576,17 @@ Like every route today, the read still holds the project's turn. Reads outside t
 - The soak, DL14, ran two runs of 300 s: slopes 0.0 and 0.062 MiB/min against 0.5.
 - The UI's first load is 829 030 B, with the Spec tree's Bindings tab made lazy.
 - Open for him: `behind: null` looks the same as `false`.
+
+**His word, 2026-11-20** (in chat, in Russian, translated): "do all the remaining parts and publish each intermediate result to the hub yourself". Slice 1 was committed and tagged `v0.47.2` (690fe65e) and pushed, and the hub's upgrade followed. Slices 2 and 3 follow in turn, each released to the hub when it ships.
+
+**Slice 2 shipped 2026-11-20**, after three iterations: plugin 0.48.0 (MINOR), tag `v0.48.0`, `INDEX_FORMAT` 19. A card's context and a task's package carry their disciplines' practices; rule IDs in cards and proposals link to their documents. At 10k nodes with 20 practices × 30 rules, a card's context costs 31 ms and a hub's `get_card` 76 ms; the soak's slopes were 0.0 and 0.0 MiB/min. The UI's first load is 835 195 B of 845 kB, so the next UI slice plans a lazy chunk.
+
+**Ops findings, 2026-11-20** (the orchestrator's, at the hub's upgrade to 0.47.2; RM-0130 `hub-backups`, must):
+- `backup` restarts in a loop: `restic_env` names no `RESTIC_REPOSITORY`, so no off-host snapshot has ever been taken. Choosing the repository and its credentials is the owner's step.
+- `dump-door` fails every round: the door's passkey export finds no `/config/configuration.yml`, so the door's accounts are not dumped. This is a deployment defect.
+- `dump-queue` works, and a pre-upgrade copy sits in the host's `~/hub-snapshots/20261120-before-0.47.2/`.
+- **His word, 2026-11-20:** off-host backups stay off for now ("not required, don't worry about it, let it stay off"). The host copies taken before each upgrade remain the hub's only backups.
+- RM-0130 ships after 0.48.0, as 0.48.1. It fixes the door's dump, and `backup` waits unconfigured, one line per round, instead of restart-looping. Turning backups on is his, when he wants it.
 
 **His word, 2026-11-20**: "do all the remaining parts and publish each intermediate result to the hub yourself". It authorises the main session to commit, tag, push and upgrade the hub for RM-0127 to RM-0129, each slice's release on its own; RM-0127 goes first, as 0.47.2.
 

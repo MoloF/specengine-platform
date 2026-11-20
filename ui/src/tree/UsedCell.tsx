@@ -9,7 +9,7 @@ export type ServedUsage = Pick<CatalogRow, "used_by" | "mentioned_by" | "orphan"
  * What uses a row, as served (docs/features/usage-orphans.md "Acceptance criteria", UO11): the count;
  * its mentions, beside a 0 at full weight ("0 · 6 mentions", so a record cited only through mentions
  * never reads as unused), else small after a "+"; then a neutral Orphan badge where the core flags
- * one. The catalog's cell, Documents' too (docs/features/doc-library.md "Description and interactions").
+ * one. The catalog's cell, Documents' too (docs/canon/spec-library.md "The screen").
  */
 export function UsedCell({ row }: { row: ServedUsage }) {
   const t = useTranslate();

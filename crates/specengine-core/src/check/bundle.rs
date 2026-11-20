@@ -21,6 +21,13 @@
 //! - Layers 6, 7, 8: [`BUNDLE_LINK_TYPES`].
 //! - Layers 5 and 9 (bindings, tests): no candidate here; the CLI fills
 //!   them with code binding rows by node (task spec `bundle-bindings`).
+//! - Layer 10, practices (task spec `department-practices`, ADR-0084): only
+//!   in [`bundle_layers_with`], given the practice documents of the asked
+//!   disciplines by path (the caller's index query, at most
+//!   [`PRACTICES_MAX`]): each live one's rules ([`practice_rules`]: its
+//!   direct child ID sections by position, else its document), at most
+//!   [`PRACTICE_RULES_MAX`] per practice, the rest counted in
+//!   [`BundleLayers::practices_more`]. By discipline, never by kind.
 //!
 //! A node is a candidate once, in its first layer; within a layer by (path,
 //! position), ancestors nearest first per target.
@@ -30,6 +37,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use specengine_model::{Direction, FOLLOWS, IdScope};
 
 use super::spec_graph::{Endpoint, NodeAt, SpecGraph, Standing};
+use crate::practice::{PRACTICE_RULES_MAX, PRACTICES_MAX, practice_rules};
 
 /// A layer of the bundle, in print order (05 §6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -46,11 +54,14 @@ pub enum BundleLayer {
     /// The `verifies` rows of the targets and criteria (the CLI's; no
     /// candidate here).
     Tests,
+    /// The rules of the asked disciplines' practices (ADR-0084): filled
+    /// only by [`bundle_layers_with`].
+    Practices,
 }
 
 impl BundleLayer {
     /// Every layer, in print order.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Targets,
         Self::OpenQuestions,
         Self::Ancestors,
@@ -60,6 +71,7 @@ impl BundleLayer {
         Self::Neighbours,
         Self::Terms,
         Self::Tests,
+        Self::Practices,
     ];
 }
 
@@ -110,6 +122,9 @@ pub struct BundleLayers {
     /// By layer, then (path, position); ancestors nearest first, target by
     /// target.
     pub candidates: Vec<BundleCandidate>,
+    /// Layer 10's rules past [`PRACTICE_RULES_MAX`] of their practice: no
+    /// candidate, counted in the not-included `more`.
+    pub practices_more: usize,
 }
 
 /// The targets [`bundle_layers`] keeps (each node once, none within another,
@@ -123,14 +138,72 @@ pub fn bundle_linked(graph: &SpecGraph<'_>, targets: &[NodeAt]) -> (Vec<NodeAt>,
     (kept, linked)
 }
 
-/// The layers around `targets` (see the module documentation).
+/// The layers around `targets` (see the module documentation), layer 10
+/// empty.
 pub fn bundle_layers(graph: &SpecGraph<'_>, targets: &[NodeAt]) -> BundleLayers {
+    bundle_layers_with(graph, targets, &[])
+}
+
+/// [`bundle_layers`], and layer 10 from `practices`: the files of the
+/// asked disciplines' practices, by path, each once (the first
+/// [`PRACTICES_MAX`] are read; a file that is not live is skipped). A rule
+/// already a candidate in an earlier layer, a target or within one stays
+/// out of it.
+pub fn bundle_layers_with(
+    graph: &SpecGraph<'_>,
+    targets: &[NodeAt],
+    practices: &[usize],
+) -> BundleLayers {
     let (kept, merged) = kept_targets(graph, targets);
     let inside: BTreeSet<NodeAt> = kept.iter().flat_map(|&at| graph.within(at)).collect();
     let candidate = |at: NodeAt| graph.standing(at.file) == Standing::Live && !inside.contains(&at);
     let edges = graph.edges();
     let linked = linked_to(graph, &kept);
-    layers_of(graph, kept, merged, linked, &candidate, edges)
+    let mut layers = layers_of(graph, kept, merged, linked, &candidate, edges);
+    if !practices.is_empty() {
+        practices_layer(graph, practices, &candidate, &mut layers);
+    }
+    layers
+}
+
+/// Layer 10 onto `layers`: each practice's rules by position, at most
+/// [`PRACTICE_RULES_MAX`] candidates per practice, the rest counted.
+fn practices_layer(
+    graph: &SpecGraph<'_>,
+    practices: &[usize],
+    candidate: &dyn Fn(NodeAt) -> bool,
+    layers: &mut BundleLayers,
+) {
+    let placed: BTreeSet<NodeAt> = layers
+        .candidates
+        .iter()
+        .map(|candidate| candidate.node)
+        .collect();
+    let mut files: Vec<usize> = practices
+        .iter()
+        .copied()
+        .filter(|&file| graph.standing(file) == Standing::Live)
+        .collect();
+    files.sort_unstable_by(|a, b| graph.paths()[*a].cmp(graph.paths()[*b]));
+    files.dedup();
+    for file in files.into_iter().take(PRACTICES_MAX) {
+        for (index, ord) in practice_rules(graph.nodes(file)).into_iter().enumerate() {
+            let node = NodeAt { file, ord };
+            if !candidate(node) || placed.contains(&node) {
+                continue;
+            }
+            if index >= PRACTICE_RULES_MAX {
+                layers.practices_more += 1;
+                continue;
+            }
+            layers.candidates.push(BundleCandidate {
+                node,
+                layer: BundleLayer::Practices,
+                via: Vec::new(),
+                working_answer: None,
+            });
+        }
+    }
 }
 
 /// Every node linked to a kept target that may be a candidate, with the
@@ -331,6 +404,7 @@ fn layers_of(
         targets: kept,
         merged,
         candidates,
+        practices_more: 0,
     }
 }
 

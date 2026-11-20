@@ -2901,16 +2901,18 @@ fn import_s_typed_key_table_is_core_s_and_core_reads_by_it() {
     assert_eq!(import, core, "import's typed keys vs core's, in order");
     // docs/features/roadmap-items.md RD-2: `release`, `priority`, `estimate`;
     // docs/features/trace-views.md "The key `stage:`": `stage`, typed `Text`;
-    // docs/features/doc-library.md "Front-matter `tags`": `tags`, typed
-    // `List`, appended last (32).
-    assert_eq!(core.len(), 32);
+    // docs/features/doc-library.md "Implementation": `tags`, typed `List`
+    // (32); `disciplines`, typed `List`, appended last (33):
+    // docs/features/department-practices.md "Front-matter `disciplines`".
+    assert_eq!(core.len(), 33);
     assert!(
         core.contains(&("stage".to_owned(), "Text".to_owned())),
         "{core:?}"
     );
+    assert_eq!(core[31], ("tags".to_owned(), "List".to_owned()), "{core:?}");
     assert_eq!(
         core.last(),
-        Some(&("tags".to_owned(), "List".to_owned())),
+        Some(&("disciplines".to_owned(), "List".to_owned())),
         "{core:?}"
     );
 

@@ -30,6 +30,12 @@
 
 mod common;
 
+#[path = "../../specengine-cli/tests/common/git.rs"]
+mod git;
+
+#[path = "../../specengine-cli/tests/practices_scene/mod.rs"]
+mod practices_scene;
+
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -420,4 +426,67 @@ async fn rt_a_hub_read_trusts_and_every_other_call_walks() {
     assert!(refused(&unknown), "an unknown tool runs nothing: {unknown}");
     assert_eq!(walks(), before, "an unknown tool runs no turn");
     eprintln!("{}", seen.join("\n"));
+}
+
+/// docs/features/department-practices.md DP17 (the orchestrator's ruling of
+/// iteration 3): over a hub's `/mcp`, `get_card` walks once per call, for
+/// its mark (the read-trust rule), and with `context: true` the context
+/// bundle and the practices read trust the index that walk brought up to
+/// date: one walk per call, never two. Over the practices scene (C-0001 an
+/// `art` card citing a rule). The slow line carries only `walked` or
+/// `trusted`, so the count is pinned here; the soak (`practices_soak.rs`)
+/// judges the lines. M: the context bundle walking again (two walks).
+#[tokio::test]
+async fn dp17_a_hub_get_card_with_context_walks_once() {
+    let scene = practices_scene::Scene::new("hub-walks-once");
+    let env = Env {
+        cwd: scene.root.clone(),
+        home: Some(scene.home.clone().into_os_string()),
+        xdg_data_home: None,
+    };
+    let globals = Globals {
+        root: Some(scene.root.clone()),
+        config: None,
+    };
+    specengine_cli::index(&env, &globals, &IndexRequest { full: false }).expect("spec index");
+    let seam = Arc::new(Walking {
+        env,
+        globals,
+        trust: Arc::new(IndexTrust::new(scene.root.clone())),
+    });
+    let walks = || seam.trust.walks();
+    let first = call(&seam, "get_tree", json!({})).await;
+    assert!(!refused(&first), "{first}");
+    assert_eq!(walks(), 1, "premise: the trust's first read walks");
+    for arguments in [
+        json!({"card_id": "C-0001"}),
+        json!({"card_id": "C-0001", "context": true}),
+        json!({"card_id": "C-0001", "context": true, "budget": 3000}),
+        json!({"card_id": "C-0001", "context": true, "history": true}),
+        json!({"card_id": "C-0003", "context": true}),
+    ] {
+        let before = walks();
+        let response = call(&seam, "get_card", arguments.clone()).await;
+        assert!(!refused(&response), "{arguments}: {response}");
+        assert_eq!(
+            walks() - before,
+            1,
+            "{arguments}: one walk, for the mark (M: the context bundle walking again)"
+        );
+        if arguments["context"] == json!(true) && arguments["card_id"] == json!("C-0001") {
+            let document = &response["result"]["structuredContent"];
+            assert_eq!(
+                document["practices"].as_array().map(Vec::len),
+                Some(2),
+                "the practices read inside the call: {document}"
+            );
+            assert_eq!(document["cited"][0]["name"], json!("PRA-ART-LOD"));
+            assert!(
+                document["context"]["bundle"]["layers"]["practices"]
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty()),
+                "layer 10 in the context: {document}"
+            );
+        }
+    }
 }

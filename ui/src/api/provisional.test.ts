@@ -203,7 +203,8 @@ const KEYS = {
   WorkingAnswer: { name: true, written: true, path: true, line: true, state: true } satisfies Record<keyof WorkingAnswer, true>,
   // Same heading: `tail` entries {name, title, path, line, tokens_est, layer}.
   TailEntry: { name: true, title: true, path: true, line: true, tokens_est: true, layer: true } satisfies Record<keyof TailEntry, true>,
-  // docs/canon/spec-cli-bundle.md "Layers": the nine JSON keys in print order.
+  // docs/canon/spec-cli-bundle.md "Layers": the ten JSON keys in print order, `practices` last since
+  // docs/features/department-practices.md "Acceptance criteria", DP5.
   BundleLayers: {
     targets: true,
     open_questions: true,
@@ -214,6 +215,7 @@ const KEYS = {
     neighbours: true,
     terms: true,
     tests: true,
+    practices: true,
   } satisfies Record<keyof BundleLayers, true>,
   // crates/specengine-cli/README.md "Output and the cap": a shown node, `span_hash` included;
   // docs/features/norm-hash.md "Data": `norm_hash` right before it; docs/canon/code-reads.md
@@ -327,7 +329,7 @@ const CITED: Record<keyof typeof KEYS, string> = {
   BundleVia: "type, direction",
   WorkingAnswer: "name, written, path, line, state",
   TailEntry: "name, title, path, line, tokens_est, layer",
-  BundleLayers: "targets, open_questions, ancestors, criteria, bindings, decisions, neighbours, terms, tests",
+  BundleLayers: "targets, open_questions, ancestors, criteria, bindings, decisions, neighbours, terms, tests, practices",
   // docs/features/norm-hash.md "Data": JSON node {id, ..., sections, norm_hash, span_hash, ...};
   // docs/canon/code-reads.md "spec show --bindings": `bindings` after `links`; RM-0094's `ancestors`
   // after `omitted`; docs/features/node-history.md "Acceptance criteria" (NH12): `history` after `bindings`.
@@ -411,6 +413,7 @@ const TASK_KEYS = {
     claim: true,
     runs: true,
     bundle: true,
+    practices: true,
     roadmap: true,
     author: true,
     created_at: true,
@@ -436,7 +439,7 @@ const TASK_KEYS = {
     summary: true,
     changed_files: true,
   } satisfies Record<keyof TaskRun, true>,
-  TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
+  TaskBundle: { node_ids: true, budget: true, disciplines: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
   TaskRoadmap: {
     item: true,
     group: true,
@@ -454,7 +457,7 @@ const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -466,7 +469,8 @@ const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   SnapshotDiff: "id, path, span_hash, diff, cut",
   TaskClaim: "at, role, worktree, branch",
   TaskRun: "run, role, started_at, ended_at, outcome, summary, changed_files",
-  TaskBundle: "node_ids, budget, bundle_hash",
+  // `disciplines` after `budget` since docs/features/department-practices.md "Acceptance criteria", DP12.
+  TaskBundle: "node_ids, budget, disciplines, bundle_hash",
   TaskRoadmap: "item, group, release, position, of, priority, waits_on",
 };
 
@@ -496,12 +500,13 @@ describe("the task types (AC-02 of ui-tasks, AC-13 of ui-live-tasks)", () => {
     expect(Object.keys(TASK_KEYS[name]).join(", ")).toBe(TASK_CITED[name]);
   });
 
-  it("count 27 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document, 7 roadmap keys", () => {
+  // 28 package keys since department-practices' `practices` (docs/features/department-practices.md "Acceptance criteria", DP12).
+  it("count 28 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document, 7 roadmap keys", () => {
     expect(
       [TASK_KEYS.TaskPackage, TASK_KEYS.TaskListEntry, TASK_KEYS.TaskRun, TASK_KEYS.OwnerNote, TASK_KEYS.TaskNotFound, TASK_KEYS.TaskRoadmap].map(
         (keys) => Object.keys(keys).length,
       ),
-    ).toEqual([27, 6, 7, 2, 2, 7]);
+    ).toEqual([28, 6, 7, 2, 2, 7]);
   });
 
   it.each(Object.keys(TASK_KEYS))("%s cites the canon's heading", (type) => {
@@ -526,8 +531,8 @@ describe("the task types (AC-02 of ui-tasks, AC-13 of ui-live-tasks)", () => {
   });
 
   it("type a bundle hash as the package sends it: null when no bundle can be made", () => {
-    const unmade: TaskBundle = { node_ids: ["MEC-TIDES"], budget: 10000, bundle_hash: null };
-    const made: TaskBundle = { node_ids: ["MEC-TIDES"], budget: 10000, bundle_hash: "b3:0" };
+    const unmade: TaskBundle = { node_ids: ["MEC-TIDES"], budget: 10000, disciplines: [], bundle_hash: null };
+    const made: TaskBundle = { node_ids: ["MEC-TIDES"], budget: 10000, disciplines: [], bundle_hash: "b3:0" };
     expect([unmade.bundle_hash, made.bundle_hash]).toEqual([null, "b3:0"]);
     expect(commentOf("TaskBundle")).toContain("`bundle_hash` null");
   });
@@ -823,6 +828,8 @@ describe("the binding row types (UI-1 of bundle-bindings)", () => {
       "neighbours BundleItem",
       "terms BundleItem",
       "tests BundleBindingRow",
+      // Layer 10 (docs/features/department-practices.md "Acceptance criteria", DP5): nodes.
+      "practices BundleItem",
     ]);
   });
 

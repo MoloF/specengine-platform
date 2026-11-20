@@ -635,3 +635,31 @@ describe("the review's nits (DL18)", () => {
     expect(chips("Owner")).toEqual([" 1", "No owner 1"]);
   });
 });
+
+// docs/features/department-practices.md "Acceptance criteria", DP21 and "The library": the Discipline
+// facet, after Tags, keeps the rows whose `disciplines` hold a chosen one: each department's corner.
+describe("the Discipline facet (DP21 of department-practices)", () => {
+  function practices(): LibraryRow[] {
+    return served().map((row) => ({ ...row, disciplines: row.name === "DOM-HARBOR" ? ["copy", "plates"] : row.name === "MEC-TIDES" ? ["copy"] : [] }));
+  }
+
+  it("stands after Tags, before Module; its values counted as library.ts counts them, a press keeping that discipline's practices", async () => {
+    await open(client(practices()));
+    const heads = within(screen.getByRole("group", { name: "Filters" }))
+      .getAllByRole("button")
+      .map((button) => button.textContent.split(": ")[0]);
+    expect(heads.slice(heads.indexOf("Tags"), heads.indexOf("Tags") + 3)).toEqual(["Tags", "Discipline", "Module"]);
+    fireEvent.click(facet("Discipline"));
+    const start = { ...NO_FILTERS, chosen: { ...ALL_CHOSEN, class: ["canon"] } };
+    expect(chips("Discipline")).toEqual(facetChoices(practices(), start, null, "disciplines", collator).map((choice) => `${choice.value ?? "No discipline"} ${String(choice.count)}`));
+    expect(chips("Discipline")).toEqual(["copy 2", "plates 1", "No discipline 1"]);
+    fireEvent.click(within(screen.getByRole("group", { name: "Discipline" })).getByRole("button", { name: "plates 1" }));
+    expect(shown()).toEqual(["DOM-HARBOR"]);
+    expect(facet("Discipline").textContent).toBe("Discipline: plates");
+    fireEvent.click(screen.getByRole("button", { name: "All disciplines" }));
+    expect(shown()).toEqual(["DOM-HARBOR", "DOM-WATER", "MEC-TIDES"]);
+    // The panel stays open: "No discipline" keeps the rows naming none.
+    fireEvent.click(within(screen.getByRole("group", { name: "Discipline" })).getByRole("button", { name: "No discipline 1" }));
+    expect(shown()).toEqual(["DOM-WATER"]);
+  });
+});

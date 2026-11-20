@@ -181,6 +181,7 @@ impl Place {
                 marks,
                 upstream,
                 context: false,
+                practices: false,
                 budget: None,
                 git: self.git.clone(),
                 tasks_here: true,

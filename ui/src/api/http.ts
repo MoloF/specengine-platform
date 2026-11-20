@@ -537,7 +537,7 @@ export class HttpClient implements SpecEngineClient {
 
   /**
    * `spec library [--archive] --json` as the browser view, never cut
-   * (`docs/features/doc-library.md` "The route"): `archive` sent only as true. Judged, so only a 200
+   * (`docs/canon/spec-library.md` "Daemon, hub"): `archive` sent only as true. Judged, so only a 200
    * resolves: a query's 400, an older daemon's 404 and a 503 reject in the daemon's words. Takes its
    * query's AbortSignal.
    */
@@ -681,11 +681,13 @@ export class HttpClient implements SpecEngineClient {
   }
 
   /**
-   * `spec card show C --history --json`, uncut, no query; the ID a path segment encoded once. A 404
-   * is the exit-1 document `{id, reason}`, resolved as data.
+   * `spec card show C --history --practices --json`, uncut, `practices=true` always sent: its
+   * discipline's practices and the IDs its texts cite, which alone become links
+   * (`docs/features/department-practices.md` "Acceptance criteria", DP9, DP14); the ID a path
+   * segment encoded once. A 404 is the exit-1 document `{id, reason}`, resolved as data.
    */
   async getCard(project: string, id: string, signal?: AbortSignal): Promise<Card | CardNotFound> {
-    return (await request("GET", cardPath(project, id), { signal })) as Card | CardNotFound;
+    return (await request("GET", `${cardPath(project, id)}${queryOf([["practices", true]])}`, { signal })) as Card | CardNotFound;
   }
 
   // The card writes (`docs/features/board-ui.md` "Routes"), each a JSON body and no AbortSignal: a

@@ -15,7 +15,8 @@ import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { Lozenge } from "../ui/Lozenge";
 import { ErrorPanel, Skeleton } from "../ui/states";
-import { shownSlot, shownText } from "../ui/text";
+import { shownSlot } from "../ui/text";
+import { CitedText, type CitedLinks } from "../markdown/CitedText";
 import { formatUtc } from "../ui/time";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -41,9 +42,13 @@ function At({ at }: { at: string }) {
   return <time dateTime={at}>{formatUtc(at, t)}</time>;
 }
 
-/** Agent or person text of several lines: verbatim, wrapped, its controls written `\u{..}`, isolated. */
-function Text({ text }: { text: string }) {
-  return <bdi className="board-text">{shownText(text)}</bdi>;
+/** Agent or person text of several lines: verbatim, wrapped, its controls written `\u{..}`, isolated; with `links`, the strings the daemon cited in it document links. */
+function Text({ text, links = null }: { text: string; links?: CitedLinks | null }) {
+  return (
+    <bdi className="board-text">
+      <CitedText text={text} links={links} />
+    </bdi>
+  );
 }
 
 /**
@@ -54,9 +59,10 @@ function Text({ text }: { text: string }) {
  * it stands: staged when it is; its record, a document link by the record's title, and who decided;
  * else a decision's note, which is a rejected item's answer. An open item takes Answer…, which a hub's
  * `allowed` without `stage` keeps idle with its line, and which opens nothing while a card write of the
- * project is out (`ui/README.md` "Screen rules", Dialogs).
+ * project is out (`ui/README.md` "Screen rules", Dialogs). Its texts link the strings the card's read
+ * cited (`links`; docs/features/department-practices.md "Acceptance criteria", DP21); the Answer dialog's do not.
  */
-export function ItemBlock({ project, item }: { project: string; item: CardItem }) {
+export function ItemBlock({ project, item, links = null }: { project: string; item: CardItem; links?: CitedLinks | null }) {
   const t = useTranslate();
   const headingId = useId();
   const allows = useAllowed(project);
@@ -73,7 +79,7 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
         <>
           <dt>{t("board.items.workingAnswer")}</dt>
           <dd>
-            <Text text={item.working_answer} />
+            <Text text={item.working_answer} links={links} />
           </dd>
         </>
       )}
@@ -81,7 +87,7 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
         <>
           <dt>{t("board.items.why")}</dt>
           <dd>
-            <Text text={item.why} />
+            <Text text={item.why} links={links} />
           </dd>
         </>
       )}
@@ -104,7 +110,7 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
         <>
           <dt>{noteAnswers(item.status) ? t("board.items.answer") : t("inbox.card.decisionNote")}</dt>
           <dd>
-            <Text text={item.decision_note} />
+            <Text text={item.decision_note} links={links} />
           </dd>
         </>
       )}
@@ -133,7 +139,7 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
         <>
           {item.summary !== null && (
             <p className="board-item-summary">
-              <Text text={item.summary} />
+              <Text text={item.summary} links={links} />
             </p>
           )}
           <dl className="pairs board-item-facts">
@@ -143,9 +149,9 @@ export function ItemBlock({ project, item }: { project: string; item: CardItem }
         </>
       ) : (
         <>
-          <ItemLead gist={item.gist} matters={item.matters} />
+          <ItemLead gist={item.gist} matters={item.matters} links={links} />
           <AskedFold>
-            {item.summary !== null && <AskedText text={item.summary} />}
+            {item.summary !== null && <AskedText text={item.summary} links={links} />}
             {(item.working_answer !== null || item.why !== null) && <dl className="pairs board-item-facts">{told}</dl>}
           </AskedFold>
           <dl className="pairs board-item-facts">{decided}</dl>

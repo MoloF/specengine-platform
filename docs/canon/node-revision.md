@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 ---
 
 # Node revision and meaning hash
@@ -64,7 +64,7 @@ It sees spans and links only: no key, kind or prefix literal (a source scan in t
 3. trailing Unicode `White_Space` trimmed per line;
 4. runs of empty lines to one, leading and trailing empty lines dropped, no final LF.
 
-Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (line rules apply inside), the Unicode form (no NFC). A BOM is never text.
+Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (line rules inside), the Unicode form (no NFC). A BOM is never text.
 
 **Links**, a document's only (a section's inline references are part of its text): `ParsedFile.links` with origin `frontmatter`, no `src_span`, `src` equal to node 0's `id` (both absent included): every `links` item of any type (an unknown type as written), `supersedes`, `working_answer`, `canon`, and `refs`, `adrs` as `mentions`. Never the `supersedes` link of `status: superseded-by X` (`src` X, `src_span` set), even when X is the document itself. Each rendered from the parsed value, byte-sorted, duplicates dropped:
 
@@ -75,7 +75,7 @@ Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (lin
 <type> path:<path>[#<anchor>]                                a canon: path target
 ```
 
-**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`, `stage`, `tags`) or untyped (`extra`); a heading line; a revision.
+**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`, `stage`, `tags`, `disciplines`) or untyped (`extra`); a heading; a revision.
 
 **Bytes**, framed as `specengine-hash/v2` (`crates/specengine-code/README.md` "Hash recipe"):
 

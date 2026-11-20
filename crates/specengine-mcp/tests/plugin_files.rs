@@ -778,6 +778,14 @@ const PINS: &[(&str, &str)] = &[
         "0.47.2",
         "3710d1bc27f2a453da994ac2939b7ea98362674c5e1a9ee38a561a9905085d9d",
     ),
+    // department-practices (RM-0128: 0.47.2 -> 0.48.0, MINOR: three tools
+    // return new keys, `get_context_bundle` takes `disciplines`):
+    // plugin.json's version and `read-spec`'s card sentence (practices);
+    // both set back, the tree hashes as 0.47.2's pin.
+    (
+        "0.48.0",
+        "5a954b511846555898c0948715920bb8fb18bf14964ac85ac838511c7599f66e",
+    ),
 ];
 
 /// docs/features/collision-pass.md CP9: `read-spec`'s description, `(0.43.0's,
@@ -1357,6 +1365,16 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.46.0",
         "9aba4ca4440aa9ecdc123adb79d7645bd44e9925ba0704c5bb4c2a0a3b14f0f3",
+    ),
+    // department-practices (RM-0128, "MCP and the plugin"): `practices` and
+    // `cited` in a card (`get_card`'s and its context's), `practices` and
+    // `bundle.disciplines` in the task package (`get_task`), `cited` in
+    // every proposal document, layer 10 (`layers.practices`) in a bundle,
+    // `get_context_bundle`'s input `disciplines` ([`as_of_0_47_2`] takes
+    // them out; 0.47.x changed no schema, so that is 0.46.0's pin).
+    (
+        "0.48.0",
+        "297ed0c970ffbb63701c0809f1914dbdcb2be71e3083b6182bfc0a547643578b",
     ),
 ];
 
@@ -2406,7 +2424,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.47.2")
+        json!("0.48.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2559,10 +2577,43 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // department-practices (RM-0128: 0.47.2 -> 0.48.0, MINOR): plugin.json's
+    // version and `read-spec`'s card sentence; both set back, the tree is
+    // 0.47.2's pinned content, every other skill and role byte-equal. M:
+    // plugin.json left at 0.47.2; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.48.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.48.0"),
+        "plugin.json's version"
+    );
+    let at_0_47_2 = edited(
+        &edited(
+            &tree,
+            PLUGIN_JSON,
+            "\"version\": \"0.48.0\"",
+            "\"version\": \"0.47.2\"",
+        ),
+        READ_SPEC,
+        "`get_card` with `context: true` adds its bundle, its parent's goal, its decisions and \
+         practices;",
+        "`get_card` with `context: true` adds its targets' bundle, its parent's goal and its \
+         decisions;",
+    );
+    assert_eq!(
+        content_hash(&at_0_47_2),
+        PINS[PINS.len() - 2].1,
+        "0.48.0 changes plugin.json's version and read-spec's card sentence only"
+    );
+    let tree = at_0_47_2;
+    let pins_0_47_2 = &PINS[..PINS.len() - 1];
     // doc-library (RM-0127: 0.47.1 -> 0.47.2, PATCH): plugin.json's version
     // alone; set back, the tree is 0.47.1's pinned content, every skill and
     // role byte-equal. M: plugin.json left at 0.47.1; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.47.2"));
+    assert_eq!(
+        pins_0_47_2.last().map(|(version, _)| *version),
+        Some("0.47.2")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.47.2"),
@@ -2576,11 +2627,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_47_1),
-        PINS[PINS.len() - 2].1,
+        pins_0_47_2[pins_0_47_2.len() - 2].1,
         "0.47.2 changes plugin.json's version only"
     );
     let tree = at_0_47_1;
-    let pins_0_47_1 = &PINS[..PINS.len() - 1];
+    let pins_0_47_1 = &pins_0_47_2[..pins_0_47_2.len() - 1];
     // write-cost (RM-0125, WC17: 0.47.0 -> 0.47.1, PATCH): plugin.json's
     // version alone; set back, the tree is 0.47.0's pinned content, every
     // skill and role byte-equal. M: plugin.json left at 0.47.0; another file
@@ -4122,6 +4173,91 @@ fn as_of_0_45_0(schemas: &mut Value) {
     }
 }
 
+/// department-practices (RM-0128): `schemas` as 0.47.2 listed them: no
+/// `practices` or `cited` in a card (one holds `context` and `practices`),
+/// no `practices` in a task package (one holds `bundle` and `practices`),
+/// no `disciplines` in its bundle reference (`node_ids` beside it) nor in
+/// `get_context_bundle`'s input, no `cited` in a proposal document (one
+/// holds `pair` and `cited`), no layer 10 (`practices` beside `targets`), and
+/// `practices` out of any `layer` enum (a tail entry's). Each change is
+/// counted on the tool it belongs to.
+fn as_of_0_47_2(schemas: &mut Value) {
+    fn strip(value: &mut Value, found: &mut Vec<&'static str>) {
+        let has = |value: &Value, keys: &[&str]| {
+            value
+                .get("properties")
+                .and_then(Value::as_object)
+                .is_some_and(|properties| keys.iter().all(|key| properties.contains_key(*key)))
+        };
+        if has(value, &["context", "practices", "cited"]) {
+            assert!(without_property(value, "practices"));
+            assert!(without_property(value, "cited"));
+            found.push("card");
+        }
+        if has(value, &["bundle", "practices", "schema_version"]) {
+            assert!(without_property(value, "practices"));
+            found.push("package");
+        }
+        if has(value, &["node_ids", "budget", "bundle_hash", "disciplines"]) {
+            assert!(without_property(value, "disciplines"));
+            found.push("package bundle");
+        }
+        if has(value, &["pair", "cited"]) {
+            assert!(without_property(value, "cited"));
+            found.push("proposal");
+        }
+        if has(value, &["targets", "tests", "practices"]) {
+            assert!(without_property(value, "practices"));
+            found.push("layers");
+        }
+        if let Some(Value::Array(names)) = value.get_mut("enum")
+            && names.iter().any(|name| name == "practices")
+            && names.iter().any(|name| name == "targets")
+        {
+            names.retain(|name| name != "practices");
+            found.push("layer enum");
+        }
+        match value {
+            Value::Object(object) => {
+                for (_, inner) in object.iter_mut() {
+                    strip(inner, found);
+                }
+            }
+            Value::Array(items) => {
+                for inner in items {
+                    strip(inner, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let tools = schemas.as_object_mut().expect("the schemas by tool");
+    let mut changed: Vec<String> = Vec::new();
+    for (name, schema) in tools.iter_mut() {
+        let mut found = Vec::new();
+        strip(&mut schema["outputSchema"], &mut found);
+        if name == "get_context_bundle" {
+            assert!(
+                without_property(&mut schema["inputSchema"], "disciplines"),
+                "get_context_bundle takes disciplines"
+            );
+            found.push("input");
+        }
+        if !found.is_empty() {
+            changed.push(format!("{name}: {}", found.join(", ")));
+        }
+    }
+    eprintln!("department-practices' schema changes: {changed:#?}");
+    for name in ["get_card", "get_task", "get_context_bundle", "get_proposal"] {
+        assert!(
+            changed
+                .iter()
+                .any(|line| line.starts_with(&format!("{name}: "))),
+            "{name} changed: {changed:?}"
+        );
+    }
+}
+
 /// collision-pairs (RM-0088, PP7): `schemas` as 0.44.0 listed them: no
 /// `pair` in the review document's output (`get_proposal`, and
 /// `review_proposal` and `propose_change` when listed); no other tool's
@@ -5034,7 +5170,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[35].0, "0.44.0", "an entry for 0.44.0");
     assert_eq!(SCHEMA_PINS[36].0, "0.45.0", "an entry for 0.45.0");
     assert_eq!(SCHEMA_PINS[37].0, "0.46.0", "an entry for 0.46.0");
-    assert_eq!(SCHEMA_PINS.len(), 38, "0.46.0 the last entry");
+    assert_eq!(SCHEMA_PINS[38].0, "0.48.0", "an entry for 0.48.0");
+    assert_eq!(SCHEMA_PINS.len(), 39, "0.48.0 the last entry");
+    // department-practices (RM-0128): 0.47.2's schemas (0.46.0's pin) are
+    // today's without the slice's keys. M: `SCHEMA_PINS` not appended.
+    let mut at_0_47_2 = schemas.clone();
+    as_of_0_47_2(&mut at_0_47_2);
+    let at_0_47_2_hash = schema_hash(&at_0_47_2);
+    assert_eq!(
+        at_0_47_2_hash, SCHEMA_PINS[37].1,
+        "0.47.2's schemas are today's without department-practices' keys"
+    );
+    assert_ne!(
+        at_0_47_2_hash, current,
+        "department-practices changed the schemas"
+    );
+    let (schemas, current) = (at_0_47_2, at_0_47_2_hash);
     // usage-orphans (RM-0111, UO6): 0.45.0's schemas are today's without
     // `get_node`'s links' `usage`. M: `SCHEMA_PINS` not appended.
     let mut at_0_45_0 = schemas.clone();

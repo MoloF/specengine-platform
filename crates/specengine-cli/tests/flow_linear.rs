@@ -205,7 +205,8 @@ struct Digests {
 }
 
 impl Digests {
-    /// The digests of a row's two runs.
+    /// The digests of a row's two runs (a bundle's JSON without its empty
+    /// layer 10, [`without_empty_layer_ten`]).
     fn of(text: &Run, json: &Run) -> Self {
         let mut stderr = text.stderr.clone().into_bytes();
         stderr.push(0);
@@ -213,7 +214,7 @@ impl Digests {
         Self {
             code: b3_hash(codes(text.code, json.code).as_bytes()),
             text: b3_hash(text.stdout.as_bytes()),
-            json: b3_hash(json.stdout.as_bytes()),
+            json: b3_hash(without_empty_layer_ten(&json.stdout).as_bytes()),
             stderr: b3_hash(&stderr),
         }
     }
@@ -223,6 +224,23 @@ impl Digests {
     fn codes(&self) -> Option<i32> {
         (0..=2).find(|&code| b3_hash(codes(code, code).as_bytes()) == self.code)
     }
+}
+
+/// docs/features/department-practices.md DP6: a bundle that names no
+/// discipline is the build before's JSON but for `layers.practices: []`,
+/// the one `,"practices":[]` closing `layers` this build adds; taken out
+/// (and required exactly once) before the bytes are compared. Any other
+/// document passes as it is.
+fn without_empty_layer_ten(json: &str) -> String {
+    if !json.contains("\"layers\":{") {
+        return json.to_owned();
+    }
+    assert_eq!(
+        json.matches(",\"practices\":[]}").count(),
+        1,
+        "one empty layer 10 closing `layers`: {json}"
+    );
+    json.replacen(",\"practices\":[]}", "}", 1)
 }
 
 /// The two exit codes as the `code` digest hashes them.
@@ -310,7 +328,7 @@ fn differences(row: &Row, text: &Run, json: &Run, first: &mut Option<String>) ->
     let json_before = if command(row) == "flow" && json.stdout.starts_with('{') {
         without_doc_modal_keys(&without_keys(&json.stdout, &FLOW_KEYS))
     } else {
-        json.stdout.clone()
+        without_empty_layer_ten(&json.stdout)
     };
     if text.code != code || json.code != code {
         parts.push(format!(

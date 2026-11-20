@@ -313,6 +313,7 @@ mod outputs;
 mod package;
 #[cfg(test)]
 mod pair_tests;
+mod practice;
 mod preflight;
 mod project;
 mod proposals;
@@ -493,6 +494,7 @@ pub use lock_rebase::{
 };
 pub use lock_regen::{LockRegenRequest, RegenOutcome, RegenRow, RegenTestedRow, lock_regen};
 pub use map::{MapOutcome, MapRequest, MapRow, map};
+pub use practice::{CardPractice, Cited};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };

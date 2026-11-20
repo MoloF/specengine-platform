@@ -258,6 +258,7 @@ fn ac03_both_fixtures_give_the_same_versioned_package() {
             references: vec!["MEC-STAMINA".to_owned()],
             budget: Some(10_000),
             git: a.git_env(&a.main),
+            disciplines: Vec::new(),
         },
     )
     .expect("bundle")
@@ -692,6 +693,7 @@ fn ac03_a_non_rust_project_gets_no_stack_word() {
             references: vec!["FEE-LATE-RETURN".to_owned()],
             budget: Some(10_000),
             git: pair.git_env(&main),
+            disciplines: Vec::new(),
         },
     )
     .expect("bundle");
@@ -1633,6 +1635,7 @@ fn the_bundle_budget_is_bundle_task() {
             references: vec!["MEC-STAMINA".to_owned(), "MEC-SPRINT".to_owned()],
             budget: Some(2000),
             git: pair.git_env(&main),
+            disciplines: Vec::new(),
         },
     )
     .expect("bundle")

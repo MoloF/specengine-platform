@@ -251,7 +251,7 @@ const T_0107: TaskPackage = aTaskPackage({
   },
   snapshot_diff: [{ id: "MEC-ANCHORAGE", path: "docs/spec/anchorage.md", span_hash: "b3:0", diff: null, cut: false }],
   runs: [aTaskRun({ run: 1, role: "harbour-dev", ended_at: "2026-10-05T12:00:00Z", outcome: "partial", summary: "Half done" })],
-  bundle: { node_ids: ["MEC-ANCHORAGE"], budget: 10000, bundle_hash: null },
+  bundle: { node_ids: ["MEC-ANCHORAGE"], budget: 10000, disciplines: [], bundle_hash: null },
   notes: ["bundle: `MEC-ANCHORAGE` resolves to no ID", "snapshot_diff: no diff of `MEC-ANCHORAGE`: git exited 128"],
 });
 

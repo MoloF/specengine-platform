@@ -343,6 +343,7 @@ fn library_bundle(
             references,
             budget: Some(i64::from(budget)),
             git: GitEnv::new(tree, [("HOME", home.as_os_str())]),
+            disciplines: Vec::new(),
         },
     )
 }

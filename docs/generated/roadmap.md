@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 37 open, 92 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
+roadmap: 37 open, 93 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -31,10 +31,10 @@ roadmap: 37 open, 92 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 une
 
 ## release v5 | 0 open, 23 done | 0 days
 
-## pool | 30 open, 18 done | 7-12 days, 26 unestimated
+## pool | 30 open, 19 done | 7-12 days, 26 unestimated
 
-- [RM-0128](../roadmap/RM-0128.md) | department-practices (Phase 7, pool): each department's standing rules, fed to its cards and tasks | draft | must | -
 - [RM-0129](../roadmap/RM-0129.md) | specengine-guide (Phase 7, pool): SpecEngine's own user guide, served read-only beside a project | draft | must | -
+- [RM-0130](../roadmap/RM-0130.md) | hub-backups (Phase 7, pool): the hub's off-host backups run, and the door's dump stops failing | draft | must | -
 - [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | -
 - [RM-0040](../roadmap/RM-0040.md) | check-parity: what pilot A's own docs check still does beside spec check | draft | should | -
 - [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch | draft | should | -

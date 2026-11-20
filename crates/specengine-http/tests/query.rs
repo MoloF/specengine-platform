@@ -263,7 +263,9 @@ fn a_card_query_outside_its_names_or_values_is_a_400_before_any_call() {
         ),
         (
             format!("{P}/cards/C-0001?history=true"),
-            "`history` is no query name of cards/:id: it takes no query name".to_owned(),
+            // docs/features/department-practices.md DP14: the route takes
+            // `practices`.
+            "`history` is no query name of cards/:id: it takes practices".to_owned(),
         ),
     ];
     for (target, message) in &cases {

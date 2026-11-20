@@ -695,7 +695,12 @@ fn ac13_every_input_schema_is_flat() {
         );
         assert_eq!(properties("get_node"), ["archive", "id", "with"]);
         assert_eq!(properties("search"), ["archive", "kinds", "limit", "query"]);
-        assert_eq!(properties("get_context_bundle"), ["budget", "node_ids"]);
+        // docs/features/department-practices.md "The bundle: layer 10, `--discipline`":
+        // `disciplines`, `--discipline`'s, optional.
+        assert_eq!(
+            properties("get_context_bundle"),
+            ["budget", "disciplines", "node_ids"]
+        );
         // docs/features/show-bindings.md "MCP get_node": the enum in that
         // order; docs/features/node-history.md NH6: `history` third.
         assert_eq!(
@@ -1330,7 +1335,9 @@ fn te8_get_node_norm_hash_parity_and_schema() {
 
 /// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
 /// `BUNDLE_DESCRIPTION`'s list and its paragraph before the errors'.
-const BUNDLE_LIST: &str = "Markdown body: the targets, their open questions, ancestors, criteria, code bindings (each with its sync: the state spec verify --node gives), decisions, neighbours, terms and the tests bound to them or their criteria, in that order; what did not fit is named by ID (a binding by its symbol, else its file) with its cost.";
+/// docs/features/department-practices.md "MCP and the plugin": the list ends
+/// with the practices' rules.
+const BUNDLE_LIST: &str = "Markdown body: the targets, their open questions, ancestors, criteria, code bindings (each with its sync: the state spec verify --node gives), decisions, neighbours, terms, the tests bound to them or their criteria, then the practices' rules, in that order; what did not fit is named by ID (a binding by its symbol, else its file) with its cost.";
 /// docs/features/tested-reads.md "MCP": the paragraph names the tested
 /// lines (1 305 -> 1 433 bytes).
 const BUNDLE_CODE_LINE: &str = "Code bindings, tests and the tested lines under a placed target's or criterion's header (the owner's test evidence, as plain spec verify judges it now) need a [code] table; a code layer that cannot be read gives a note, never an error.\n";
@@ -1358,7 +1365,9 @@ fn get_context_bundle_description_names_the_code() {
             "{era:?}: the code paragraph before the errors': {description}"
         );
         assert!(description.is_ascii());
-        assert_eq!(description.len(), 1433, "{era:?}: the spec's figure");
+        // 1 639 since docs/features/department-practices.md (the list's
+        // practices, `--discipline` and the `disciplines` line).
+        assert_eq!(description.len(), 1639, "{era:?}: the spec's figure");
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }

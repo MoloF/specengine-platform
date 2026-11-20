@@ -56,3 +56,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0081](decisions/ADR-0081.md) A committed [auto] rule, started per pack on a terminal, approves the pack's tasks and lands each finished one · architecture · accepted
 - [ADR-0082](decisions/ADR-0082.md) A hub's code applies a covered update or create its sole owner login raised over /mcp · architecture · accepted
 - [ADR-0083](decisions/ADR-0083.md) A write's findings take the files as the call's walk indexed them · architecture · accepted
+- [ADR-0084](decisions/ADR-0084.md) A document naming disciplines is a practice, standing context for their cards and tasks · architecture · accepted
+- [ADR-0085](decisions/ADR-0085.md) SpecEngine's guide ships in the build and is served read-only beside a project, never inside it · architecture · accepted

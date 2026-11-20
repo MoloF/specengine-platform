@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-20
 ---
 
 # Card tasks: the `T-` tasks a card links
@@ -35,7 +35,7 @@ One edit is one `card.edited {id, fields, as}`, `fields` ending `tasks`, `revisi
 
 `show`, `get_card` and `GET .../cards/C` serve `tasks` after `evidence`: `[{id, status, title, stale}]` in link order, each read at request time as `spec task list` reads a task of the current repository. `status` and `title` come from its row (store `read_task`, which hands back a row that does not decode, named), `stale` from its staleness at its compared place (`tasks.md` "Place"; `package.rs` `staleness`, `Roots` caching a root per call). Nothing is stored or cached. Text: `tasks: <id> | <status or -> | <title or ->[ | stale]` per link, the title through `one_line`; `tasks: -` with none.
 
-A card that links none reads as before: no git, no task read, any root. Git runs only for a linked card, and only where the queue holds the tasks. `list`, its 21-key rows, the tiles and every write's document carry no task: the board's read stays git-free.
+A task's package carries its cards' practices, deciding nothing (`card-practices.md`). A card that links none reads as before: no git, no task read, any root. Git runs only for a linked card, and only where the queue holds the tasks. `list`, its 21-key rows, the tiles and every write's document carry no task: the board's read stays git-free.
 
 `status`, `title` and `stale` are `null` together when the task cannot be read here, `stale` alone when only its staleness cannot be told. Each `null` adds a note starting `<id>: ` (`T-1`'s never matches `T-10`'s), after the card's own notes, in link order:
 

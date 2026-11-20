@@ -24,6 +24,7 @@ import type {
   CardList,
   CardMove,
   CardNotFound,
+  CardPractice,
   CardRow,
   CardSplit,
   CardSplitChild,
@@ -40,6 +41,7 @@ import type {
   CheckCounts,
   CheckFinding,
   CheckReport,
+  Cited,
   ConfirmRead,
   DebtEntry,
   DeliveryCancelled,
@@ -284,7 +286,7 @@ import type {
 // so; once it exists it names all one hundred and fifty-one written so far, in the slices' order,
 // one hundred and fifty-four once scope-rings' Rust test writes its three, and one hundred and
 // sixty once corpus-map's writes its six; and doc-library's five (docs/features/doc-library.md
-// "The route", DL2: the library document, its counts, a row, a decision and a last change, sets 170
+// "Acceptance criteria", DL2: the library document, its counts, a row, a decision and a last change, sets 170
 // to 174), written by its Rust test, a hundred and seventy-four in all.
 
 const KEYS = {
@@ -317,7 +319,8 @@ const KEYS = {
   // docs/features/card-questions.md "Acceptance criteria" (L1) `card_id`, `why` after `interpretation`,
   // docs/features/intake-similar.md "Acceptance criteria" (IS10) `similar` after `why`,
   // docs/features/plain-questions.md "Acceptance criteria" (PQ10) `gist`, `matters` after `summary`,
-  // docs/features/collision-pairs.md "Acceptance criteria" (PP8) `pair` after `evidence`.
+  // docs/features/collision-pairs.md "Acceptance criteria" (PP8) `pair` after `evidence`,
+  // docs/features/department-practices.md "Acceptance criteria" (DP13) `cited` after `notes`, last.
   Proposal: {
     id: true,
     project: true,
@@ -374,6 +377,8 @@ const KEYS = {
     why: true,
     similar: true,
     notes: true,
+    // docs/features/department-practices.md "Acceptance criteria" (DP13): the IDs its texts cite, last, ahead of the file.
+    cited: true,
   } satisfies Record<keyof Proposal, true>,
   // docs/features/kind-interpretation.md "Data": the row's JSON, keys in its order.
   Interpretation: { decision: true, how: true, why: true } satisfies Record<keyof Interpretation, true>,
@@ -512,6 +517,8 @@ const KEYS = {
     claim: true,
     runs: true,
     bundle: true,
+    // docs/features/department-practices.md "Acceptance criteria" (DP12): the 28th key, after `bundle`, ahead of the file.
+    practices: true,
     roadmap: true,
     author: true,
     created_at: true,
@@ -537,7 +544,8 @@ const KEYS = {
     summary: true,
     changed_files: true,
   } satisfies Record<keyof TaskRun, true>,
-  TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
+  // docs/features/department-practices.md "Acceptance criteria" (DP12): the cards' disciplines after `budget`, ahead of the file.
+  TaskBundle: { node_ids: true, budget: true, disciplines: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
   // docs/features/hub-confirm.md "Data" `login`: a departing accept's on a hub alone, skipped when none.
   Author: { type: true, role: true, model: true, run: true, login: true } satisfies Record<keyof Author, true>,
   // docs/canon/round.md "JSON": the sheet, an item's 22 keys (`gist`, `matters` after `summary`:
@@ -943,6 +951,9 @@ const KEYS = {
     history: true,
     // docs/features/card-context.md "Acceptance criteria" (CC10): always null from the daemon, after `history`.
     context: true,
+    // docs/features/department-practices.md "Acceptance criteria" (DP9, DP14): after `context`, ahead of the file.
+    practices: true,
+    cited: true,
     notes: true,
   } satisfies Record<keyof Card, true>,
   CardEvidence: { kind: true, value: true, by: true, at: true } satisfies Record<keyof CardEvidence, true>,
@@ -1234,7 +1245,7 @@ const KEYS = {
   FeedUnlanded: { task: true, status: true, pack: true } satisfies Record<keyof FeedUnlanded, true>,
   // hub-auto's mark on a rule's apply, set 169 (docs/features/hub-auto.md "Acceptance criteria", HA7).
   Delegated: { by: true, rule: true, commit: true } satisfies Record<keyof Delegated, true>,
-  // docs/features/doc-library.md "The route" (DL2): the library document, its counts, a row, a
+  // docs/features/doc-library.md "Acceptance criteria" (DL2): the library document, its counts, a row, a
   // decision and a last change, sets 170 to 174 in "`spec library`"'s order, the fixture's names;
   // `Library` is the document's type.
   Library: { archive: true, notes: true, counts: true, rows: true, truncated: true, omitted: true } satisfies Record<keyof LibraryDocument, true>,
@@ -1253,6 +1264,8 @@ const KEYS = {
     reviewed: true,
     scope: true,
     tags: true,
+    // docs/features/department-practices.md "Acceptance criteria" (DP14): the 23rd key, after `tags`, ahead of the file.
+    disciplines: true,
     rev: true,
     parent: true,
     modules: true,
@@ -1276,6 +1289,10 @@ const KEYS = {
     newer: true,
   } satisfies Record<keyof LibraryDecision, true>,
   LibraryChange: { at: true, by: true, by_name: true, commit: true, proposal: true } satisfies Record<keyof LibraryChange, true>,
+  // docs/features/department-practices.md "Acceptance criteria" (DP14): a card's practice
+  // and a cited ID, sets 175 and 176, the names DP14 gives them; ahead of the file until its Rust test writes them.
+  CardPractice: { name: true, title: true, path: true, disciplines: true, rules: true } satisfies Record<keyof CardPractice, true>,
+  Cited: { written: true, name: true, title: true, path: true } satisfies Record<keyof Cited, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1296,7 +1313,8 @@ const CITED: Record<Named, string> = {
     "interpretation, " +
     "card_id, why, " +
     "similar, " +
-    "notes",
+    "notes, " +
+    "cited",
   Interpretation: "decision, how, why",
   StagedApprove: "decision, option, answer, canon, editorial, note, span_hash",
   StagedReject: "decision, reason",
@@ -1316,7 +1334,7 @@ const CITED: Record<Named, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -1328,7 +1346,7 @@ const CITED: Record<Named, string> = {
   SnapshotDiff: "id, path, span_hash, diff, cut",
   TaskClaim: "at, role, worktree, branch",
   TaskRun: "run, role, started_at, ended_at, outcome, summary, changed_files",
-  TaskBundle: "node_ids, budget, bundle_hash",
+  TaskBundle: "node_ids, budget, disciplines, bundle_hash",
   Author: "type, role, model, run, login?",
   RoundSheet: "project, items, more, minutes, notes",
   RoundItem:
@@ -1387,7 +1405,7 @@ const CITED: Record<Named, string> = {
   CardColumn: "id, title",
   CardMove: "from, to, by",
   CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, mandate, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction, upstream",
-  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, upstream, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, notes",
+  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, upstream, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, practices, cited, notes",
   CardEvidence: "kind, value, by, at",
   CardAcceptance: "by, at, note, verdict, departs, discrepancy",
   CardCancellation: "by, at, reason",
@@ -1468,9 +1486,11 @@ const CITED: Record<Named, string> = {
   Delegated: "by, rule, commit",
   Library: "archive, notes, counts, rows, truncated, omitted",
   LibraryCounts: "documents, archived, decisions, behind, orphans",
-  LibraryRow: "name, id, path, title, class, kind, status, archived, tier, owner, reviewed, scope, tags, rev, parent, modules, used_by, mentioned_by, orphan, last_change, decisions, behind",
+  LibraryRow: "name, id, path, title, class, kind, status, archived, tier, owner, reviewed, scope, tags, disciplines, rev, parent, modules, used_by, mentioned_by, orphan, last_change, decisions, behind",
   LibraryDecision: "name, id, title, path, status, group, date, section, last_change, newer",
   LibraryChange: "at, by, by_name, commit, proposal",
+  CardPractice: "name, title, path, disciplines, rules",
+  Cited: "written, name, title, path",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1852,11 +1872,33 @@ const HUB_AUTO: readonly Named[] = ["Delegated"];
 /** The hundred and sixty-nine types the fixture names before doc-library, hub-auto's last. */
 const BEFORE_DOC_LIBRARY: readonly Named[] = [...BEFORE_AUTO_FEED, ...AUTO_FEED, ...HUB_AUTO];
 
-/** doc-library's five, sets 170 to 174: the library document, its counts, a row, a decision, a last change (docs/features/doc-library.md "The route", DL2). */
+/** doc-library's five, sets 170 to 174: the library document, its counts, a row, a decision, a last change (docs/features/doc-library.md "Acceptance criteria", DL2). */
 const DOC_LIBRARY: readonly Named[] = ["Library", "LibraryCounts", "LibraryRow", "LibraryDecision", "LibraryChange"];
 
+/** The hundred and seventy-four types the fixture names before department-practices, doc-library's five last. */
+const BEFORE_DEPARTMENT_PRACTICES: readonly Named[] = [...BEFORE_DOC_LIBRARY, ...DOC_LIBRARY];
+
+/** department-practices' two, sets 175 and 176: a card's practice and a cited ID (docs/features/department-practices.md "Acceptance criteria", DP14). */
+const DEPARTMENT_PRACTICES: readonly Named[] = ["CardPractice", "Cited"];
+
+/**
+ * department-practices' keys on sets the fixture already names, as pairs
+ * (docs/features/department-practices.md "Acceptance criteria", DP9, DP12, DP13, DP14): a card's
+ * `practices` and `cited` after `context` (36 to 38), the review document's `cited` last (54 to 55
+ * served), the package's `practices` after `bundle` (27 to 28), its bundle's `disciplines` after
+ * `budget` (3 to 4) and a library row's `disciplines` after `tags` (22 to 23).
+ */
+const DEPARTMENT_PRACTICES_KEYS: readonly (readonly [Named, string])[] = [
+  ["Card", "practices"],
+  ["Card", "cited"],
+  ["Proposal", "cited"],
+  ["TaskPackage", "practices"],
+  ["TaskBundle", "disciplines"],
+  ["LibraryRow", "disciplines"],
+];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_DOC_LIBRARY, ...DOC_LIBRARY];
+const ALL: readonly Named[] = [...BEFORE_DEPARTMENT_PRACTICES, ...DEPARTMENT_PRACTICES];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1926,7 +1968,9 @@ function served(name: Named): string[] {
  * (docs/features/scope-rings.md "Acceptance criteria", SR4); and corpus-map's six sets, every key of
  * each, with its two keys on GraphView as pairs, until its Rust test wrote them
  * (docs/features/corpus-map.md "Acceptance criteria", CM3, CM4, CM5); both in one change, then empty
- * again.
+ * again. And department-practices' six keys on five sets the file names, as pairs, and its two sets,
+ * every key of each, until its Rust test wrote them (docs/features/department-practices.md
+ * "Acceptance criteria", DP14), then empty again.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1954,8 +1998,9 @@ describe("the daemon's document types (AC-09)", () => {
     // 13 and 53 since plain-questions' `gist`, and its `matters` on the review (docs/features/plain-questions.md "Acceptance criteria", PQ10);
     // 54 since collision-pairs' `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8); 55 typed
     // since hub-auto's optional `delegated` (HA7), never served on the file's row, so 54 compared.
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 13, 55]);
-    expect(served("Proposal")).toHaveLength(54);
+    // 56 typed and 55 compared since department-practices' `cited`, last (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 13, 56]);
+    expect(served("Proposal")).toHaveLength(55);
   });
 
   it("gives the review document its drift right after revisions, before decided_by, and the DriftEvidence set its 3 keys (UI-1 of drift-queue)", () => {
@@ -1996,7 +2041,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_CORPUS_MAP.at(-1)).toBe("RingSector");
     expect(BEFORE_AUTO_FEED.at(-1)).toBe("MapGhost");
     expect(BEFORE_DOC_LIBRARY.at(-1)).toBe("Delegated");
-    expect(ALL.at(-1)).toBe("LibraryChange");
+    expect(BEFORE_DEPARTMENT_PRACTICES.at(-1)).toBe("LibraryChange");
+    expect(ALL.at(-1)).toBe("Cited");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -2025,8 +2071,9 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    // 174 since doc-library's five (docs/features/doc-library.md "The route", DL2).
-    expect(ALL).toHaveLength(174);
+    // 174 since doc-library's five (docs/features/doc-library.md "Acceptance criteria", DL2); 176 since
+    // department-practices' two (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect(ALL).toHaveLength(176);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -2060,7 +2107,10 @@ describe("the daemon's document types (AC-09)", () => {
     // scope-rings' three sets, every key (docs/features/scope-rings.md "Acceptance criteria", SR4), and corpus-map's six sets, every key,
     // and its two GraphView keys as pairs (docs/features/corpus-map.md "Acceptance criteria", CM3 to CM5), until their Rust tests wrote them; then empty again.
     const mapKey = listed(CORPUS_MAP_KEYS);
-    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => !SCOPE_RINGS.includes(name) && !CORPUS_MAP.includes(name) && !mapKey(name, key))).toEqual([]);
+    const practicesKey = listed(DEPARTMENT_PRACTICES_KEYS);
+    expect(
+      AHEAD_OF_FIXTURE.filter(([name, key]) => !SCOPE_RINGS.includes(name) && !CORPUS_MAP.includes(name) && !mapKey(name, key) && !DEPARTMENT_PRACTICES.includes(name) && !practicesKey(name, key)),
+    ).toEqual([]);
     // None of delivery-analytics' but delivery-timeline's `timeline` on its document, a pair of its own.
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => DELIVERY_ANALYTICS.includes(name) && !timelineKey(name, key))).toHaveLength(0);
     // None of direction-catalog's but usage-orphans' three on its row (UO5).
@@ -2085,6 +2135,9 @@ describe("the daemon's document types (AC-09)", () => {
     // corpus-map's 36 (the document's 7, the counts' 6, a node's 12, an edge's 5, a parent's 2, a ghost's 4) and GraphView's two since its Rust test wrote them.
     expect(AHEAD_OF_FIXTURE.filter(([name]) => CORPUS_MAP.includes(name))).toHaveLength(0);
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => mapKey(name, key)).map(([name, key]) => `${name}.${key}`)).toEqual([]);
+    // department-practices' six keys as pairs and its two sets, every key (6, then the two sets' 5 and 4),
+    // until its Rust test wrote them (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => practicesKey(name, key) || DEPARTMENT_PRACTICES.includes(name))).toEqual([]);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -2115,8 +2168,9 @@ describe("the daemon's document types (AC-09)", () => {
     const card = declaredKeys("Card");
     expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
     expect(card).toEqual(served("Card"));
-    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10), 36 since upstream-signal's `upstream` (US-12).
-    expect(card).toHaveLength(36);
+    // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10), 36 since upstream-signal's `upstream` (US-12),
+    // 38 since department-practices' `practices` and `cited` (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect(card).toHaveLength(38);
     expect(served("CardTask")).toEqual(["id", "status", "title", "stale"]);
     expect(declaredKeys("CardTask")).toEqual(served("CardTask"));
     expect(source).toMatch(/^export interface CardTask \{\n {2}id: string;\n {2}status: TaskStatus \| null;\n {2}title: string \| null;\n {2}stale: boolean \| null;\n\}$/m);
@@ -2158,8 +2212,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^ {2}why: string \| null;\n {2}author: Author;\n {2}created_at: string;$/m);
     expect(source).toMatch(/^export interface IntakeDocument \{\n {2}id: string \| null;\n {2}created: boolean;\n {2}hits: IntakeMatch\[\];\n {2}related: IntakeMatch\[\];\n/m);
     const review = declaredKeys("Proposal");
-    // `similar` after `why` since intake-similar (docs/features/intake-similar.md "Acceptance criteria", IS10).
-    expect(review.slice(-5)).toEqual(["interpretation", "card_id", "why", "similar", "notes"]);
+    // `similar` after `why` since intake-similar (docs/features/intake-similar.md "Acceptance criteria", IS10);
+    // `cited` after `notes` since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(review.slice(-6)).toEqual(["interpretation", "card_id", "why", "similar", "notes", "cited"]);
     expect(source).toMatch(/^ {2}card_id: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}why: string \| null;$/m);
     expect(ALL.slice(BEFORE_CARD_QUESTIONS.length, BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...CARD_QUESTIONS]);
     // The body of the card's raise and the stage's `as`: requests, no set.
@@ -2186,23 +2241,51 @@ describe("the daemon's document types (AC-09)", () => {
 
   it('types card-context\'s key as the spec writes it: a card\'s `context` always null, after `history`, 35 keys, the type citing `docs/features/card-context.md` "Acceptance criteria" (CC10 of card-context)', () => {
     const card = declaredKeys("Card");
-    expect(card.slice(card.indexOf("history"))).toEqual(["history", "context", "notes"]);
-    expect(source).toMatch(/^ {2}history: CardEvent\[\] \| null;\n {2}context: null;\n {2}notes: string\[\];\n\}$/m);
+    // `practices` and `cited` between `context` and `notes` since department-practices (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect(card.slice(card.indexOf("history"))).toEqual(["history", "context", "practices", "cited", "notes"]);
+    expect(source).toMatch(/^ {2}history: CardEvent\[\] \| null;\n {2}context: null;\n(?: {2}\/\*\*(?:[^*]|\*(?!\/))*\*\/\n)? {2}practices: CardPractice\[\] \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}cited: Cited\[\] \| null;\n {2}notes: string\[\];\n\}$/m);
     const at = source.indexOf("export interface Card {");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/card-context.md` "Acceptance criteria", CC10');
-    // 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12).
-    expect(served("Card")).toHaveLength(36);
+    // 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12); 38 since department-practices' two (DP14).
+    expect(served("Card")).toHaveLength(38);
+  });
+
+  it('types department-practices\' keys as the spec writes them: a practice\'s 5 keys and a cited ID\'s 4, sets 175 and 176; a card\'s `practices` and `cited` after `context` (38), the review document\'s `cited` last, a library row\'s `disciplines` after `tags` (23), the package\'s `practices` after `bundle` (28), its bundle\'s `disciplines` after `budget` (4), the bundle\'s ten layers with `practices` last; each citing `docs/features/department-practices.md` (DP9, DP12, DP13, DP14)', () => {
+    expect(DEPARTMENT_PRACTICES.map((name) => served(name))).toEqual([
+      ["name", "title", "path", "disciplines", "rules"],
+      ["written", "name", "title", "path"],
+    ]);
+    for (const name of DEPARTMENT_PRACTICES) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} `);
+      expect([name, source.slice(source.lastIndexOf("/**", at), at).includes("`docs/features/department-practices.md`")]).toEqual([name, true]);
+    }
+    expect(source).toMatch(/^export interface CardPractice \{\n {2}name: string;\n {2}title: string \| null;\n {2}path: string;\n {2}disciplines: string\[\];\n {2}rules: number;\n\}$/m);
+    expect(source).toMatch(/^export interface Cited \{\n {2}written: string;\n {2}name: string;\n {2}title: string \| null;\n {2}path: string;\n\}$/m);
+    const card = declaredKeys("Card");
+    expect(card.slice(card.indexOf("context"))).toEqual(["context", "practices", "cited", "notes"]);
+    expect(declaredKeys("Proposal").at(-1)).toBe("cited");
+    const row = declaredKeys("LibraryRow");
+    expect([row.slice(row.indexOf("tags"), row.indexOf("tags") + 3), row.length]).toEqual([["tags", "disciplines", "rev"], 23]);
+    const pkg = declaredKeys("TaskPackage");
+    expect([pkg.indexOf("practices"), pkg.length]).toEqual([22, 28]);
+    expect(declaredKeys("TaskBundle")).toEqual(["node_ids", "budget", "disciplines", "bundle_hash"]);
+    expect(declaredKeys("BundleLayers")).toEqual(["targets", "open_questions", "ancestors", "criteria", "bindings", "decisions", "neighbours", "terms", "tests", "practices"]);
+    expect(source).toMatch(/^ {2}practices: BundleItem\[\];\n\}$/m);
+    expect(ALL.slice(BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...DEPARTMENT_PRACTICES]);
   });
 
   it('types intake-similar\'s key as the spec writes it: the review document\'s `similar` always null, after `why`, 51 keys then, 53 since plain-questions\' two, 54 since collision-pairs\' `pair`, the key citing `docs/features/intake-similar.md` "Acceptance criteria" (IS10 of intake-similar)', () => {
     const review = declaredKeys("Proposal");
-    expect(review.slice(review.indexOf("why"))).toEqual(["why", "similar", "notes"]);
-    expect(source).toMatch(/^ {2}why: string \| null;\n {2}\/\*\*[^\n]*\*\/\n {2}similar: null;\n {2}\/\*\*[^\n]*\*\/\n {2}notes: string\[\];\n\}$/m);
+    // `cited` after `notes` since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(review.slice(review.indexOf("why"))).toEqual(["why", "similar", "notes", "cited"]);
+    expect(source).toMatch(/^ {2}why: string \| null;\n {2}\/\*\*[^\n]*\*\/\n {2}similar: null;\n {2}\/\*\*[^\n]*\*\/\n {2}notes: string\[\];\n {2}\/\*\*(?:[^*]|\*(?!\/))*\*\/\n {2}cited: Cited\[\] \| null;\n\}$/m);
     const at = source.indexOf("  similar: null;\n");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/intake-similar.md` "Acceptance criteria", IS10');
     // 53 since plain-questions' `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10);
-    // 54 since collision-pairs' `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8).
-    expect(served("Proposal")).toHaveLength(54);
+    // 54 since collision-pairs' `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8);
+    // 55 since department-practices' `cited` (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(served("Proposal")).toHaveLength(55);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("similar");
   });
 
@@ -2210,7 +2293,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^export type Mandate = "binding" \| "open";$/m);
     // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10); a row's 23 and a card's 36 since upstream-signal's `upstream` (US-12).
     // A subtask's item's 19 since plain-questions' two, a card's item's (docs/features/plain-questions.md "Acceptance criteria", PQ10).
-    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([23, 36, 9, 19]);
+    // A card's 38 since department-practices' `practices` and `cited` (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect([served("CardRow").length, served("Card").length, served("CardSplitChild").length, served("CardSubtaskItem").length]).toEqual([23, 38, 9, 19]);
     const row = declaredKeys("CardRow");
     expect(row.slice(row.indexOf("reviewer"), row.indexOf("reviewer") + 3)).toEqual(["reviewer", "mandate", "estimate"]);
     const card = declaredKeys("Card");
@@ -2237,7 +2321,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(row.slice(row.indexOf("correction"))).toEqual(["correction", "upstream"]);
     const card = declaredKeys("Card");
     expect(card.slice(card.indexOf("correction"), card.indexOf("correction") + 3)).toEqual(["correction", "upstream", "snapshot"]);
-    expect([row.length, card.length]).toEqual([23, 36]);
+    // A card's 38 since department-practices' two (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect([row.length, card.length]).toEqual([23, 38]);
     expect(source).toMatch(/^ {2}correction: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}upstream: boolean \| null;\n\}$/m);
     expect(source).toMatch(/^ {2}correction: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}upstream: CardUpstream \| null;\n {2}snapshot: CardFrozen\[\] \| null;$/m);
     expect(declaredKeys("CardUpstream")).toEqual(["parent", "mark", "on", "correction", "changes", "more"]);
@@ -2430,7 +2515,8 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it("gives the review document an interpretation after staged_at, before card-questions' two, intake-similar's one and notes, and its three keys (AC-U1 of kind-interpretation)", () => {
-    expect(Object.keys(KEYS.Proposal).slice(-6)).toEqual(["staged_at", "interpretation", "card_id", "why", "similar", "notes"]);
+    // department-practices' `cited` last (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(Object.keys(KEYS.Proposal).slice(-7)).toEqual(["staged_at", "interpretation", "card_id", "why", "similar", "notes", "cited"]);
     expect(KIND_INTERPRETATION.map((name) => served(name))).toEqual([["decision", "how", "why"]]);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("interpretation");
   });
@@ -2456,7 +2542,8 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 27, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks, UI-1 of roadmap-surfaces, UI of tested-reads)", () => {
-    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 27, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
+    // The package's 28 and its bundle's 4 since department-practices' `practices` and `disciplines` (docs/features/department-practices.md "Acceptance criteria", DP12).
+    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 28, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 4, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
@@ -2495,13 +2582,15 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_CORPUS_MAP).toHaveLength(154);
     expect(BEFORE_AUTO_FEED).toHaveLength(160);
     expect(BEFORE_DOC_LIBRARY).toHaveLength(169);
-    expect(ALL).toHaveLength(174);
-    expect(new Set(ALL).size).toBe(174);
+    expect(BEFORE_DEPARTMENT_PRACTICES).toHaveLength(174);
+    expect(ALL).toHaveLength(176);
+    expect(new Set(ALL).size).toBe(176);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
     const pkg = Object.keys(KEYS.TaskPackage);
-    expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 3)).toEqual(["bundle", "roadmap", "author"]);
+    // department-practices' `practices` between them (docs/features/department-practices.md "Acceptance criteria", DP12).
+    expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 4)).toEqual(["bundle", "practices", "roadmap", "author"]);
     expect(declaredKeys("TaskPackage")).toEqual(pkg);
     expect(source).toMatch(/^  roadmap: TaskRoadmap \| null;$/m);
     // The TaskRoadmap set came with 3a's roadmap document (docs/features/roadmap-screen.md UI-1): the ten names.
@@ -2521,7 +2610,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(ALL.slice(BEFORE_TESTED_READS.length, BEFORE_HEALTH_DRIFT.length)).toEqual([...TESTED_READS]);
     expect(declaredKeys("TestedRow")).toEqual(Object.keys(KEYS.TestedRow));
     const pkg = served("TaskPackage");
-    expect([pkg.indexOf("tested"), pkg.length]).toEqual([16, 27]);
+    // 28 since department-practices' `practices` (docs/features/department-practices.md "Acceptance criteria", DP12).
+    expect([pkg.indexOf("tested"), pkg.length]).toEqual([16, 28]);
     expect(pkg.slice(pkg.indexOf("bindings"), pkg.indexOf("bindings") + 3)).toEqual(["bindings", "tested", "spec_snapshot"]);
     expect(declaredKeys("TaskPackage")).toEqual(pkg);
     expect(source).toMatch(/^ {2}tested: TestedRow\[\] \| null;$/m);
@@ -2856,7 +2946,7 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("task_id");
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("card_id");
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("similar");
-    expect(Object.keys(KEYS.Proposal).slice(-9)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes"]);
+    expect(Object.keys(KEYS.Proposal).slice(-10)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes", "cited"]);
   });
 
   it("gives an inbox entry the stage's time alone, after record_id: the stage itself is the review document's", () => {
@@ -2942,15 +3032,18 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // scope-rings' three since its Rust test wrote them
     // (docs/features/scope-rings.md "Acceptance criteria", SR4) and corpus-map's six since its own did
     // (docs/features/corpus-map.md "Acceptance criteria", CM3): all hundred and sixty.
-    expect(ALL.filter((name) => !expected.includes(name))).toEqual([...SCOPE_RINGS, ...CORPUS_MAP].filter((name) => !Object.hasOwn(sets, name)));
+    expect(ALL.filter((name) => !expected.includes(name))).toEqual([...SCOPE_RINGS, ...CORPUS_MAP, ...DEPARTMENT_PRACTICES].filter((name) => !Object.hasOwn(sets, name)));
     expect(expected.slice(0, BEFORE_SCOPE_RINGS.length)).toEqual(BEFORE_SCOPE_RINGS);
     expect(Object.keys(sets)).toEqual([...expected]);
     expect(Object.keys(sets)).toHaveLength(expected.length);
-    expect(expected).toEqual([...ALL]);
+    // department-practices' two once its Rust test writes them (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect(expected).toEqual(ALL.filter((name) => !DEPARTMENT_PRACTICES.includes(name) || Object.hasOwn(sets, name)));
+    expect(expected.slice(0, BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...BEFORE_DEPARTMENT_PRACTICES]);
     // auto-feed's eight since its Rust test wrote them (docs/features/auto-feed.md "Acceptance criteria", FD3): all hundred and sixty-eight.
     // hub-auto's `Delegated` since its Rust test wrote it (HA7): a hundred and sixty-nine.
-    // doc-library's five since its Rust test wrote them (docs/features/doc-library.md "The route", DL2): a hundred and seventy-four.
-    expect(expected).toHaveLength(174);
+    // doc-library's five since its Rust test wrote them (docs/features/doc-library.md "Acceptance criteria", DL2): a hundred and seventy-four;
+    // a hundred and seventy-six once department-practices' Rust test writes its two (DP14).
+    expect(expected).toHaveLength(DEPARTMENT_PRACTICES.every((name) => Object.hasOwn(sets, name)) ? 176 : 174);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -2977,8 +3070,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
       expect([name, key, file[file.indexOf(after) + 1]]).toEqual([name, key, key]);
     }
     // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10); 23
-    // and 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12).
-    expect([sets.CardRow?.length, sets.Card?.length, sets.CardSplitChild?.at(-1)]).toEqual([23, 36, "mandate"]);
+    // and 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12);
+    // a card's 38 since department-practices' Rust test wrote `practices` and `cited` (DP14).
+    expect([sets.CardRow?.length, sets.Card?.length, sets.CardSplitChild?.at(-1)]).toEqual([23, 38, "mandate"]);
     expect([sets.CardRow, sets.Card]).toEqual([declaredNow("CardRow"), declaredNow("Card")]);
   });
 
@@ -3017,8 +3111,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(card.slice(card.indexOf("evidence"), card.indexOf("evidence") + 5)).toEqual(["evidence", "tasks", "items", "subtask_items", "acceptance"]);
     expect(card).toEqual(declaredNow("Card"));
     // 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10); 36
-    // since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12).
-    expect(card).toHaveLength(36);
+    // since upstream-signal's `upstream` (docs/features/upstream-signal.md "Acceptance criteria", US-12);
+    // 38 since department-practices' `practices` and `cited` (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect(card).toHaveLength(38);
   });
 
   it('names workspaces\' three after HubSync, before card-tasks\' one, sets 111 to 113, each with its keys in the types\' order: 4, 7, 4 (docs/features/workspaces.md "Data"; DP-4 of departments)', () => {
@@ -3055,8 +3150,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     const review = sets.Proposal ?? [];
     expect(review).toEqual(compared("Proposal"));
     // 53 since plain-questions' Rust test wrote its `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10);
-    // 54 since collision-pairs' wrote its `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8).
-    expect(review).toHaveLength(54);
+    // 54 since collision-pairs' wrote its `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8);
+    // 55 since department-practices' wrote `cited`, last (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(review).toHaveLength(55);
     expect(review.slice(review.indexOf("evidence"), review.indexOf("evidence") + 3)).toEqual(["evidence", "pair", "options"]);
     expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
@@ -3068,8 +3164,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names the package's 27 keys in the types' order: roadmap after bundle, before author; tested after bindings (UI-1 of roadmap-surfaces, UI of tested-reads)", () => {
-    expect(sets.TaskPackage).toEqual(served("TaskPackage"));
-    expect(sets.TaskPackage).toHaveLength(27);
+    expect(sets.TaskPackage).toEqual(compared("TaskPackage"));
+    // 28 once department-practices' Rust test writes `practices` after `bundle` (docs/features/department-practices.md "Acceptance criteria", DP12).
+    expect(sets.TaskPackage).toHaveLength(isAhead("TaskPackage", "practices") ? 27 : 28);
   });
 
   it("names health-left's keys in the document's order: the health document's three, then health-code's three, then health-drift's drift, then usage-orphans' orphans once written, an amendment's six (AC-T2; UI-1 of health-code, of health-drift; UO9 of usage-orphans)", () => {
@@ -3145,7 +3242,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     for (const name of ["CardRow", "Card"] as const) {
       const file = sets[name] ?? [];
       expect([name, file[file.indexOf("correction") + 1]]).toEqual([name, "upstream"]);
-      expect([name, file]).toEqual([name, declaredKeys(name)]);
+      // A card's `practices` and `cited` ahead of the file until department-practices' Rust test writes them (DP14).
+      expect([name, file]).toEqual([name, declaredNow(name)]);
     }
   });
 
@@ -3254,13 +3352,34 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.Delegated).toEqual(declaredKeys("Delegated"));
   });
 
+  it("names department-practices' two last, after LibraryChange, sets 175 and 176: a practice's 5 keys and a cited ID's 4; a card's `practices` and `cited` after `context`, the review's `cited` last, a row's `disciplines` after `tags`, the package's `practices` after `bundle`, its bundle's `disciplines` after `budget` (DP14 of department-practices)", () => {
+    expect(Object.keys(sets).slice(BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...DEPARTMENT_PRACTICES]);
+    expect(Object.keys(sets).indexOf("CardPractice")).toBe(174);
+    expect(DEPARTMENT_PRACTICES.map((name) => sets[name])).toEqual(DEPARTMENT_PRACTICES.map((name) => declaredKeys(name)));
+    for (const [name, key, after] of [
+      ["Card", "practices", "context"],
+      ["Card", "cited", "practices"],
+      ["Proposal", "cited", "notes"],
+      ["LibraryRow", "disciplines", "tags"],
+      ["TaskPackage", "practices", "bundle"],
+      ["TaskBundle", "disciplines", "budget"],
+    ] as const) {
+      const file = sets[name] ?? [];
+      expect([name, key, file[file.indexOf(after) + 1]]).toEqual([name, key, key]);
+      // The review's `delegated` never served on the file's row (HA7): the served keys.
+      expect([name, file]).toEqual([name, served(name)]);
+    }
+    expect(sets.Proposal?.at(-1)).toBe("cited");
+  });
+
   it("names doc-library's five last, after Delegated, sets 170 to 174: 6, 5, 22, 10, 5 keys in the types' order, each as provisional.ts declares it (DL2 of doc-library)", () => {
-    expect(Object.keys(sets).slice(BEFORE_DOC_LIBRARY.length)).toEqual([...DOC_LIBRARY]);
+    expect(Object.keys(sets).slice(BEFORE_DOC_LIBRARY.length, BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...DOC_LIBRARY]);
     expect(Object.keys(sets).indexOf("Library")).toBe(169);
     expect(Object.keys(sets).at(BEFORE_DOC_LIBRARY.length - 1)).toBe("Delegated");
-    expect(DOC_LIBRARY.map((name) => sets[name])).toEqual(DOC_LIBRARY.map((name) => served(name)));
-    expect(DOC_LIBRARY.map((name) => sets[name])).toEqual(DOC_LIBRARY.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
-    expect(DOC_LIBRARY.map((name) => sets[name]?.length)).toEqual([6, 5, 22, 10, 5]);
+    expect(DOC_LIBRARY.map((name) => sets[name])).toEqual(DOC_LIBRARY.map((name) => compared(name)));
+    expect(DOC_LIBRARY.map((name) => sets[name])).toEqual(DOC_LIBRARY.map((name) => declaredNow(name)));
+    // A row's 23 once department-practices' Rust test writes `disciplines` after `tags` (docs/features/department-practices.md "Acceptance criteria", DP14).
+    expect(DOC_LIBRARY.map((name) => sets[name]?.length)).toEqual([6, 5, isAhead("LibraryRow", "disciplines") ? 22 : 23, 10, 5]);
     // A row's last change and a decision's are one shape: the catalog's less `of_file`.
     expect(sets.LibraryChange).toEqual((sets.CatalogChange ?? []).filter((key) => key !== "of_file"));
   });
@@ -3332,8 +3451,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // `subtask_items` (M1, M6 of task-mandate).
     // A card's 35 since card-context's `context` (docs/features/card-context.md "Acceptance criteria", CC10);
     // a row's 23 and a card's 36 since upstream-signal's `upstream` (docs/features/upstream-signal.md
-    // "Acceptance criteria", US-12).
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 23, 36, 4, 6, 3, 4, 7, 2]);
+    // "Acceptance criteria", US-12); a card's 38 since department-practices' two (DP14).
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 7, 2, 3, 23, 38, 4, 6, 3, 4, 7, 2]);
     expect(sets.CardFlow?.at(-1)).toBe("return");
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
@@ -3352,7 +3471,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // Then intake-similar's `similar`, once the file names it, before notes (docs/features/intake-similar.md "Acceptance criteria", IS10).
     const review = sets.Proposal ?? [];
     expect(review.slice(review.indexOf("staged_at"), review.indexOf("staged_at") + 4)).toEqual(["staged_at", "interpretation", "card_id", "why"]);
-    expect(review.slice(review.indexOf("why"))).toEqual(isAhead("Proposal", "similar") ? ["why", "notes"] : ["why", "similar", "notes"]);
+    // department-practices' `cited` last since its Rust test wrote it (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(review.slice(review.indexOf("why"))).toEqual(isAhead("Proposal", "similar") ? ["why", "notes", "cited"] : ["why", "similar", "notes", "cited"]);
     expect(sets.Interpretation).toEqual(["decision", "how", "why"]);
   });
 });

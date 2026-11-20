@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 ---
 
 # spec library: every document as a library, with its decisions and tags
@@ -19,9 +19,9 @@ Built by `doc-library` (RM-0127, 2026-11-19), no ADR. It rests on ADR-0022 (the 
 
 ## Rows
 
-JSON `{archive, notes, counts, rows, truncated, omitted}`; `counts {documents, archived, decisions, behind, orphans}` over the rows shown, after the cut. A row's 22 keys `{name, id, path, title, class, kind, status, archived, tier, owner, reviewed, scope, tags, rev, parent, modules, used_by, mentioned_by, orphan, last_change, decisions, behind}`:
+JSON `{archive, notes, counts, rows, truncated, omitted}`; `counts {documents, archived, decisions, behind, orphans}` over the rows shown, after the cut. A row's 23 keys `{name, id, path, title, class, kind, status, archived, tier, owner, reviewed, scope, tags, disciplines, rev, parent, modules, used_by, mentioned_by, orphan, last_change, decisions, behind}`:
 - `name`: `CanonicalNames`, the map's rule for any node (`slug/ID`, the ID, else the path); the modal's REF.
-- `id`, `title`, `class`, `kind`, `status`, `tier`, `owner`, `reviewed` (text as written), `scope`: as indexed, `null` when absent. `tags`: "Tags". `rev`: `spec catalog`'s.
+- `id`, `title`, `class`, `kind`, `status`, `tier`, `owner`, `reviewed` (text as written), `scope`: as indexed, `null` when absent. `tags`: "Tags"; `disciplines`: the kept ones (`card-practices.md`). `rev`: `spec catalog`'s.
 - `parent`: the canonical name of the node the document is listed under (`listed_under`, `ancestors`' first step); `null` with no `parent:`, a dangling or another project's one, or a cycle broken at it.
 - `modules`: the served `[[module]]` names holding the row, config order: a direction whose `kinds` list its `kind`; a rooted module whose root is the row's document or one of its `ancestors` (each chain walked once), the root resolved as `spec show` resolves a REF, first holder by (path, ord).
 - `used_by`, `mentioned_by`, `orphan`: core `usage_of`, as the map's.
@@ -69,7 +69,7 @@ Then, stderr alone, the input's and the parents' warnings in `spec tree`'s words
 
 ## Daemon, hub
 
-`GET …/library[?archive=true]`: `spec library --json` less its final LF, the browser view (never cut), through `run_read` with `App.catalogs`, the one `LastChangeCache`, shared with `…/catalog` (at most `LAST_CHANGE_HEADS`, 4, heads). Another name: 400 `` `<name>` is no query name of library: it takes archive ``; a non-boolean `archive`: a 400 naming it; exit 2: 503. The 404 list names it after `rings`. Key sets `Library` (6), `LibraryCounts` (5), `LibraryRow` (22), `LibraryDecision` (10), `LibraryChange` (5). No MCP tool (`get_node`, `search`, `get_tree`, bundle layer 6 serve them); `HUB_TOOLS`, MCP texts, config keys, queue schema 14, backup format 7 unchanged.
+`GET …/library[?archive=true]`: `spec library --json` less its final LF, the browser view (never cut), through `run_read` with `App.catalogs`, the one `LastChangeCache`, shared with `…/catalog` (at most `LAST_CHANGE_HEADS`, 4, heads). Another name: 400 `` `<name>` is no query name of library: it takes archive ``; a non-boolean `archive`: a 400 naming it; exit 2: 503. The 404 list names it after `rings`. Key sets `Library` (6), `LibraryCounts` (5), `LibraryRow` (23), `LibraryDecision` (10), `LibraryChange` (5). No MCP tool (`get_node`, `search`, `get_tree`, bundle layer 6 serve them); `HUB_TOOLS`, MCP texts, config keys, queue schema 14, backup format 7 unchanged.
 
 On a hub the read trusts (`spec-read-freshness.md` "Routes and tools") and holds the project's turn while it runs, as every spec read. A hand or empty commit in the checkout never makes it walk: a new `HEAD` costs `git=7` once, a warm read `git=3`. It walks when the trust is due (R8, 300 s), after an MCP write (which walks on its own line), or after a `tree` read found changed bytes (R13); until a reconcile it shows the trusted index's fields for a hand-edited file (R8 "The window").
 
@@ -77,7 +77,7 @@ On a hub the read trusts (`spec-read-freshness.md` "Routes and tools") and holds
 
 `#/<p>/documents`, `documents` after `tree` in `SECTIONS` (`workspaces.md`); `DocumentsView`, a lazy chunk; `useLibrary`, key `["library", p, archive]`, in `READS_OF_THE_SPEC`.
 - An `h1`; "N documents" or "K of N documents", "B behind their decision"; a case-folded search over title, name, path, tags.
-- Facets, in order Class, Kind, Status, Tags, Module, Owner, Tier, Scope: ANDed, values ORed, each with the count the other facets keep, by count then `Intl.Collator`, "No <facet>" last. Class starts at `canon` when a row has it, the rest at All. Module is one choice, the module bar's stored `specengine.module.<p>` (`.<login>` on a hub), else the department's `module`; All modules one press. Toggles Behind its decision, Orphans; Include archive, a second read keeping the table; Clear filters, all to All. State per project for the page's life.
+- Facets, in order Class, Kind, Status, Tags, Discipline, Module, Owner, Tier, Scope: ANDed, values ORed, each with the count the other facets keep, by count then `Intl.Collator`, "No <facet>" last. Class starts at `canon` when a row has it, the rest at All. Module is one choice, the module bar's stored `specengine.module.<p>` (`.<login>` on a hub), else the department's `module`; All modules one press. Toggles Behind its decision, Orphans; Include archive, a second read keeping the table; Clear filters, all to All. State per project for the page's life.
 - Columns: Title (`DocLink` by `name`, the name in mono below when it differs), Class, Kind, Status, Version, Owner, Reviewed, Last change ("Not committed"), Used by (`UsedCell`, the catalog's), Decisions ("N accepted · M superseded", a "Behind its decision" `Lozenge`; a button opening a full-width row of groups, each entry a `DocLink`, `date` or "No date", "Committed <time>", its section, "Newer than this document"; an unknown group raw, `lang="en"`), Tags (chips). Sort as the catalog's (Version, Reviewed, Last change, Used by descending first). 200 a page (`LIBRARY_SHOWN`), "Show 200 more".
 - States: a skeleton; an `ErrorPanel` with Retry; with nothing answered, any failure (a pre-slice daemon's 404 too) keeps the lone Include archive checkbox above it; "Showing the last answer, with (without) the archive" when the kept rows' archive differs from the checkbox; an `EmptyState` for none, one with Clear filters for no match. The table scrolls in its own region; at 320 px the page never does. Served values as written, never translated; strings `documents.*`, `app.sections.documents.*`; CSS `.documents-*`.
 

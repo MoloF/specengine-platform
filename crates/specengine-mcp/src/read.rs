@@ -188,17 +188,19 @@ macro_rules! bundle_body {
         concat!(
             "The context of the named nodes within a budget of estimated tokens, as one \
 Markdown body: the targets, their open questions, ancestors, criteria, code bindings \
-(each with its sync: the state spec verify --node gives), decisions, neighbours, terms \
-and the tests bound to them or their criteria, in that order; what did not fit is \
-named by ID (a binding by its symbol, else its file) with its cost. \
+(each with its sync: the state spec verify --node gives), decisions, neighbours, terms, \
+the tests bound to them or their criteria, then the practices' rules, in that order; \
+what did not fit is named by ID (a binding by its symbol, else its file) with its cost. \
 The body is named by its bundle_hash (BLAKE3 of the body): the same state and \
-request give the same hash. The same as `spec bundle REF... [--budget N]`: content \
-is the command's output (its note and warning lines first), structuredContent its \
---json document.
+request give the same hash. The same as `spec bundle REF... [--budget N] \
+[--discipline D]...`: content is the command's output (its note and warning lines \
+first), structuredContent its --json document.
 
 node_ids: one or more REFs, any form get_node takes; bundled together.
 budget: estimated tokens at most. Absent: `[budgets] bundle_node` of the project's \
 config, else 2000. Below the minimum the targets need: an error naming it.
+disciplines: card disciplines, at most 16, each [a-z0-9_-]; the rules of their \
+practices (live documents whose `disciplines:` names one) come last. Absent: none.
 
 Code bindings, tests and the tested lines under a placed target's or criterion's header (the \
 owner's test evidence, as plain spec verify judges it now) need a [code] table; a code layer \
@@ -684,6 +686,9 @@ pub(crate) struct BundleArgs {
     pub node_ids: Vec<String>,
     #[schemars(description = BUDGET_DOC)]
     pub budget: Option<i64>,
+    /// `--discipline D`, each: card disciplines whose practices' rules come
+    /// last, at most 16.
+    pub disciplines: Option<Vec<String>>,
 }
 
 /// `get_roadmap` arguments; `release` with `pool: true` is the CLI's
@@ -842,12 +847,14 @@ impl SpecEngineServer {
         Parameters(args): Parameters<BundleArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let (references, budget) = (args.node_ids, args.budget);
+        let disciplines = args.disciplines.unwrap_or_default();
         Ok(self
             .call(move |env, globals| {
                 let request = BundleRequest {
                     references,
                     budget,
                     git: process_git(env),
+                    disciplines,
                 };
                 specengine_cli::bundle(env, globals, &request).map(Outcome::Bundle)
             })

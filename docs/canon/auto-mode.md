@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, plugin, ui]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-20
 ---
 
 # Auto mode: a committed rule approves, applies and lands
@@ -39,7 +39,7 @@ Read apart, core `auto_toml.rs` `AutoRule::from_toml`, from the bytes of `<root_
 {"format":1,"mode":"both","zones":{"code":["src/**"],"tests":["tests/**"]},"exclude_zones":{"narrative":["docs/narrative/**"]},"exclude_kinds":{"scenario":["SC"]},"branch":"auto","max_tasks":10,"max_applies":20}
 ```
 
-`zones`, `exclude_zones`: each named zone, by name, with the globs `[zones]` gives it; `exclude_kinds`: each kind with the `[ids]` prefixes declaring it. Key order, comments, spacing and list order change nothing; a zone's glob or a kind's prefix changes the hash. Shown whole in `spec auto show`, each event and each trailer.
+`zones`, `exclude_zones`: each named zone, by name, with the globs `[zones]` gives it; `exclude_kinds`: each kind with the `[ids]` prefixes declaring it. A department's practices stay a person's by their zone in `exclude_zones`, as the gamedev preset's comment shows (`card-practices.md`). Key order, comments, spacing and list order change nothing; a zone's glob or a kind's prefix changes the hash. Shown whole in `spec auto show`, each event and each trailer.
 
 ## Switches
 

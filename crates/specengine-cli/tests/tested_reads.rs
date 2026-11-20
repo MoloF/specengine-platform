@@ -1165,6 +1165,13 @@ fn before_record(program: &Path, strip: bool, tag: &str) -> Vec<Value> {
                         &json,
                         &common::keys::SHOW_KEYS,
                     ))
+                } else if case.args.first().map(String::as_str) == Some("bundle") {
+                    // docs/features/department-practices.md DP6: a bundle's
+                    // empty layer 10 out.
+                    common::keys::without_empty_layer_ten(&json)
+                } else if case.args.first().map(String::as_str) == Some("task") {
+                    // A task no card lists: its empty practices out.
+                    common::keys::without_empty_task_practices(&json)
                 } else {
                     json
                 }

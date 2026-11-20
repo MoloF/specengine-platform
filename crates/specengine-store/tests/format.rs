@@ -30,7 +30,7 @@
 //! docs/features/read-trust.md "Data" makes it `INDEX_FORMAT` 17 for the
 //! freshness step's `file_stats` and `walk_notes`, which the dump leaves
 //! out, so the dump differs from 16's only in `index_meta`;
-//! docs/features/doc-library.md "`INDEX_FORMAT` 18" makes it 18 for the
+//! docs/features/doc-library.md "Implementation" makes it 18 for the
 //! typed `tags` (`fields`, no longer `extra` with `unknown-key`): no table
 //! or column changes and no dumped corpus writes `tags`, so the dump differs
 //! from 17's (and 16's) only in `index_meta`; the move is proved on a row a
@@ -473,15 +473,15 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/doc-library.md DL9: the typed `tags` makes `INDEX_FORMAT`
-/// 18, and the history is the seventeen earlier lines, verbatim
-/// (read-trust's `17` among them), followed by exactly one `18 <hash>` line
-/// (no earlier `18`). Replaces read-trust's format-17 pin
-/// (docs/features/read-trust.md AC-9), whose line stays verbatim.
-/// M: `INDEX_FORMAT` kept at 17; an earlier line edited.
+/// docs/features/department-practices.md DP4: the `disciplines` table makes
+/// `INDEX_FORMAT` 19, and the history is the eighteen earlier lines,
+/// verbatim (doc-library's `18` among them), followed by exactly one `19
+/// <hash>` line (no earlier `19`). Replaces doc-library's format-18 pin
+/// (docs/features/doc-library.md DL9), whose line stays verbatim.
+/// M: `INDEX_FORMAT` kept at 18; an earlier line edited.
 #[test]
-fn doc_library_pins_format_18_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 18);
+fn department_practices_pins_format_19_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 19);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -508,11 +508,12 @@ fn doc_library_pins_format_18_with_one_new_history_line() {
         "15 ce09e78513dbcf7ee55173fb3ab2bb78cc6d42b2ea87b04c845d75fe40b6d3b2",
         "16 dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72",
         "17 f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5",
+        "18 dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "read-trust's history plus exactly one new line:\n{history}"
+        "doc-library's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -521,15 +522,15 @@ fn doc_library_pins_format_18_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "18", "the new line is format 18: {last}");
+    assert_eq!(format, "19", "the new line is format 19: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("18 ")).count(),
+        lines.iter().filter(|line| line.starts_with("19 ")).count(),
         1,
-        "no earlier `18` line"
+        "no earlier `19` line"
     );
 }
 
@@ -572,7 +573,7 @@ fn stamped_back(dump: &str, format: &str) -> String {
     blake3_hex(back.as_bytes())
 }
 
-/// docs/features/doc-library.md "`INDEX_FORMAT` 18": no table or column
+/// docs/features/doc-library.md "Implementation": no table or column
 /// changes, and `tags` lives in the stored node JSON only when written,
 /// which no dumped corpus does: the dump differs from format 17's only in
 /// `index_meta`. M: a column or table added; `tags` serialised when absent.
@@ -582,6 +583,20 @@ fn doc_library_the_dump_differs_from_17s_only_in_index_meta() {
         stamped_back(&format_dump(), "17"),
         "f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5",
         "format 17's dump, but for the stamp"
+    );
+}
+
+/// docs/features/department-practices.md "The index: `INDEX_FORMAT` 19": one
+/// table more, written from `disciplines:` alone, which no dumped corpus
+/// writes, so the dump differs from format 18's only in `index_meta`. M:
+/// rows written for a document with no `disciplines:`; another table or
+/// column moved.
+#[test]
+fn department_practices_the_dump_differs_from_18s_only_in_index_meta() {
+    assert_eq!(
+        stamped_back(&format_dump(), "18"),
+        "dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59",
+        "format 18's dump, but for the stamp"
     );
 }
 

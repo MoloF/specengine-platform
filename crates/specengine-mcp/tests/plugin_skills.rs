@@ -1294,8 +1294,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // RM-0119 (a version-only bump); 0.47.0 since auto-mode (RM-0120 to
     // RM-0124, the runner `scripts/autopilot.sh`); 0.47.1 since the patch of
     // RM-0125 (write-cost, a version-only bump); 0.47.2 since the patch of
-    // RM-0127 (doc-library, a version-only bump).
-    assert_eq!(manifest["version"], "0.47.2");
+    // RM-0127 (doc-library, a version-only bump); 0.48.0 since
+    // department-practices (RM-0128: `practices`, `cited`, `disciplines`).
+    assert_eq!(manifest["version"], "0.48.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1417,8 +1418,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // RM-0119 (a version-only bump); 0.47.0 since auto-mode (RM-0120 to
     // RM-0124, the runner `scripts/autopilot.sh`); 0.47.1 since the patch of
     // RM-0125 (write-cost, a version-only bump); 0.47.2 since the patch of
-    // RM-0127 (doc-library, a version-only bump).
-    assert_eq!(manifest["version"], "0.47.2");
+    // RM-0127 (doc-library, a version-only bump); 0.48.0 since
+    // department-practices (RM-0128: `practices`, `cited`, `disciplines`).
+    assert_eq!(manifest["version"], "0.48.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1523,7 +1525,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.47.2",
+        manifest["version"], "0.48.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1543,7 +1545,9 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          collision-pairs (the review document's `pair`): 0.45.0; usage-orphans (`get_node`'s \
          links `usage`): 0.46.0; the patch of RM-0114 to RM-0119 (no key): 0.46.1; \
          auto-mode (the runner `scripts/autopilot.sh`, no key): 0.47.0; the patch of RM-0125 \
-         (write-cost, no key): 0.47.1; the patch of RM-0127 (doc-library, no key): 0.47.2"
+         (write-cost, no key): 0.47.1; the patch of RM-0127 (doc-library, no key): 0.47.2; \
+         department-practices (`practices`, `cited`, `get_context_bundle`'s `disciplines`): \
+         0.48.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2217,7 +2221,7 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        4_272,
+        4_274,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
          154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
          docs/features/card-store.md (the cards bullet), 172 more since \
@@ -2227,7 +2231,8 @@ fn read_spec_names_the_bundles_code_and_tests() {
          fewer since docs/features/department-split.md (`split_card` in, \"beside the tasks\" \
          out), 5 more since docs/features/card-context.md (CC9: two trims and the `context` \
          sentence), 140 fewer since docs/features/collision-pass.md (CP9: the description's \
-         second sentence)"
+         second sentence), 2 more since docs/features/department-practices.md (the card \
+         sentence names practices)"
     );
     let reworded = edited(
         &skills,
@@ -2337,8 +2342,10 @@ fn tested_reads_skills_name_tested() {
         // `split_card` named and "beside the tasks" dropped; card-context
         // (RM-0108, CC9): 5 more, two trims and the `context` sentence;
         // collision-pass (RM-0060, CP9): the file 140 fewer, the
-        // description's second sentence, the body unchanged.
-        (4_091, 4_272),
+        // description's second sentence, the body unchanged;
+        // department-practices (RM-0128): 2 more, the card sentence names
+        // practices.
+        (4_093, 4_274),
         "read-spec's bytes"
     );
     assert_eq!(
@@ -2700,8 +2707,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // collision-pairs (RM-0088, PP7); 0.46.0 since usage-orphans (RM-0111,
     // UO6); 0.46.1 since the patch of RM-0114 to RM-0119; 0.47.0 since
     // auto-mode (RM-0120 to RM-0124); 0.47.1 since the patch of RM-0125;
-    // 0.47.2 since the patch of RM-0127.
-    assert_eq!(manifest["version"], "0.47.2");
+    // 0.47.2 since the patch of RM-0127; 0.48.0 since department-practices
+    // (RM-0128).
+    assert_eq!(manifest["version"], "0.48.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -2729,8 +2737,10 @@ fn departments_dp4_read_spec_gives_the_web_ui_s_words() {
     // docs/features/department-split.md P1: `split_card` named, "beside the
     // tasks" dropped, net -3: 4 086 and 4 407; docs/features/card-context.md
     // CC9: three edits, net +5: 4 091 and 4 412; docs/features/collision-pass.md
-    // CP9: the description 140 fewer: 4 091 and 4 272.
-    assert_eq!((body(read_spec), read_spec.len()), (4_091, 4_272));
+    // CP9: the description 140 fewer: 4 091 and 4 272;
+    // docs/features/department-practices.md: the card sentence names
+    // practices, 2 more: 4 093 and 4 274.
+    assert_eq!((body(read_spec), read_spec.len()), (4_093, 4_274));
     assert!(body(read_spec) <= 4096);
     let last = bullets(read_spec).last().cloned().expect("a bullet");
     assert!(
@@ -2826,8 +2836,10 @@ fn department_split_p1_read_spec_names_split_card() {
 
 /// docs/features/card-context.md CC9: the sentence `read-spec`'s cards
 /// bullet gains after "and no tool accepts a card.", one space before it.
-const READ_SPEC_CONTEXT: &str = " `get_card` with `context: true` adds its targets' bundle, its \
-                                 parent's goal and its decisions; an older server refuses \
+// docs/features/department-practices.md "MCP and the plugin": `read-spec`'s
+// card sentence names practices.
+const READ_SPEC_CONTEXT: &str = " `get_card` with `context: true` adds its bundle, its parent's \
+                                 goal, its decisions and practices; an older server refuses \
                                  `context`: use `get_context_bundle`.";
 
 /// docs/features/card-context.md (RM-0108) "Acceptance criteria", CC9:
@@ -2848,7 +2860,8 @@ fn card_context_cc9_read_spec_names_the_context_key() {
         .splitn(3, "---\n")
         .nth(2)
         .expect("a front-matter and a body");
-    assert_eq!((body.len(), read_spec.len()), (4_091, 4_272));
+    // 4 093 and 4 274 since docs/features/department-practices.md.
+    assert_eq!((body.len(), read_spec.len()), (4_093, 4_274));
     assert!(body.len() <= 4096);
     assert_eq!(read_spec.matches(READ_SPEC_CONTEXT.trim_start()).count(), 1);
     let cards = bullets(read_spec)

@@ -5,6 +5,7 @@ import type { Choice, InboxEntry, Proposal, ProposalOption } from "../api/types"
 import { homeHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { ActOff } from "../board/ActOff";
+import { CitedText, citedLinks } from "../markdown/CitedText";
 import { Prose } from "../markdown/Prose";
 import { DEFAULT_TEXT_MODE, TextModeSwitch, type TextMode } from "../markdown/TextMode";
 import { Badge } from "../ui/Badge";
@@ -183,6 +184,7 @@ function choiceText(choice: Choice, options: readonly ProposalOption[], t: Trans
 /** A review's options, each with its effect and price, the recommended one marked with who made it; never picked here. */
 function OptionsSection({ project, review }: { project: string; review: Proposal }) {
   const t = useTranslate();
+  const links = citedLinks(project, review.cited);
   return (
     <Section title={t("inbox.card.options")}>
       {review.options.length === 0 ? (
@@ -196,7 +198,9 @@ function OptionsSection({ project, review }: { project: string; review: Proposal
                 <p className="option-label">
                   {/* Agent text, as the round sheet writes a slot: controls as `\u{..}`, isolated. */}
                   <span>
-                    <bdi>{shownSlot(choice.label)}</bdi>
+                    <bdi>
+                      <CitedText text={choice.label} links={links} slot />
+                    </bdi>
                   </span>
                   {recommended && <RecommendedMark author={review.author} />}
                 </p>
@@ -221,7 +225,7 @@ function AnswerSections({ project, review }: { project: string; review: Proposal
     <>
       {review.working_answer !== null && (
         <Section title={t("inbox.card.workingAnswer")}>
-          <Prose className="prose" source={review.working_answer} links={null} project={project} baseLevel={3} frontMatter={false} />
+          <Prose className="prose" source={review.working_answer} links={null} project={project} baseLevel={3} frontMatter={false} cited={review.cited} />
           {review.price_of_other !== null && (
             <div className="prose">
               <p className="price-label">{t("inbox.card.priceOfOther")}</p>
@@ -234,7 +238,7 @@ function AnswerSections({ project, review }: { project: string; review: Proposal
       {/* A decision's why, as its author wrote it (docs/features/card-questions.md "Acceptance criteria", U5). */}
       {review.why !== null && (
         <Section title={t("inbox.proposal.why")}>
-          <Prose className="prose" source={review.why} links={null} project={project} baseLevel={3} frontMatter={false} />
+          <Prose className="prose" source={review.why} links={null} project={project} baseLevel={3} frontMatter={false} cited={review.cited} />
         </Section>
       )}
     </>
@@ -252,12 +256,13 @@ function AnswerSections({ project, review }: { project: string; review: Proposal
 function QuestionLead({ project, review }: { project: string; review: Proposal }) {
   // With no option, the working answer leads and the why stays folded: each place drops the other's part.
   const optionless = review.options.length === 0;
+  const links = citedLinks(project, review.cited);
   return (
     <>
-      {review.matters !== null && <LeadMatters matters={review.matters} />}
+      {review.matters !== null && <LeadMatters matters={review.matters} links={links} />}
       {optionless ? <AnswerSections project={project} review={{ ...review, why: null }} /> : <OptionsSection project={project} review={review} />}
       <AskedFold>
-        {review.summary !== null && <AskedText text={review.summary} />}
+        {review.summary !== null && <AskedText text={review.summary} links={links} />}
         {review.pair !== null && <PairSlot pair={review.pair} evidence={review.evidence} />}
         <AnswerSections project={project} review={optionless ? { ...review, working_answer: null } : review} />
       </AskedFold>
@@ -318,7 +323,7 @@ function ReviewBody({
 
       {review.rationale !== null && review.rationale !== review.summary && (
         <Section title={t("inbox.card.rationale")}>
-          <Prose className="prose" source={review.rationale} links={null} project={project} baseLevel={3} frontMatter={false} />
+          <Prose className="prose" source={review.rationale} links={null} project={project} baseLevel={3} frontMatter={false} cited={review.cited} />
         </Section>
       )}
 
@@ -664,7 +669,7 @@ export function ProposalCard({
         title={
           <h2 id="card-title" className="card-title">
             {/* The gist the card is titled by, the agent's words as the lead draws them; else the summary's line as before. */}
-            <ProposalSummary proposal={reviewed ?? entry} />
+            <ProposalSummary proposal={reviewed ?? entry} links={reviewed === undefined ? null : citedLinks(project, reviewed.cited)} />
           </h2>
         }
         meta={<Lozenge {...statusLozenge(reviewed?.status ?? entry.status, t)} />}

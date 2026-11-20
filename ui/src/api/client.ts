@@ -161,7 +161,7 @@ export interface MapOptions {
   archive: boolean;
 }
 
-/** `spec library`: `--archive`, sent only as true, the Documents section's Include archive (`docs/features/doc-library.md` "The route"). */
+/** `spec library`: `--archive`, sent only as true, the Documents section's Include archive (`docs/canon/spec-library.md` "Daemon, hub"). */
 export interface LibraryOptions {
   archive: boolean;
 }
@@ -208,7 +208,7 @@ export interface FeedOptions {
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
  * "Route", the flow's `docs/features/flow-canvas.md` "Data", the cards' `docs/features/board-ui.md`
  * "Routes", the identity's `docs/canon/hub.md` "Routes", the team's `docs/features/hub-team.md` "Data",
- * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog's `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the rings' `docs/features/scope-rings.md` "Acceptance criteria", SR4, the map's `docs/features/corpus-map.md` "Acceptance criteria", CM3, the library's `docs/features/doc-library.md` "The route"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * the confirm's `docs/features/hub-confirm.md` "Data", the sync's `docs/features/hub-git.md` "Data", the workspaces' `docs/features/workspaces.md` "Data", the delivery's `docs/features/delivery-analytics.md` "Acceptance criteria", DA-11, the catalog's `docs/features/direction-catalog.md` "Acceptance criteria", DC-9, the rings' `docs/features/scope-rings.md` "Acceptance criteria", SR4, the map's `docs/features/corpus-map.md` "Acceptance criteria", CM3, the library's `docs/canon/spec-library.md` "Daemon, hub"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
  * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
@@ -298,7 +298,7 @@ export interface SpecEngineClient {
    */
   getMap(project: string, options: MapOptions, signal?: AbortSignal): Promise<MapDocument>;
   /**
-   * GET /api/projects/:p/library[?archive=true] (docs/features/doc-library.md "The route"; = spec
+   * GET /api/projects/:p/library[?archive=true] (docs/canon/spec-library.md "Daemon, hub"; = spec
    * library [--archive] --json, never cut): judged, so only a 200 resolves; a query's 400, an older
    * daemon's 404 and a 503 reject in the daemon's words.
    */
@@ -353,7 +353,7 @@ export interface SpecEngineClient {
    * query's 400, an older daemon's 404 and a bad `[card]`'s 503 reject in the daemon's words.
    */
   getCardCounts(project: string, signal?: AbortSignal): Promise<CardCounts>;
-  /** GET /api/projects/:p/cards/:id (docs/features/board-ui.md "Routes"; = spec card show C --history --json, uncut; 404 the exit-1 document) */
+  /** GET /api/projects/:p/cards/:id?practices=true (docs/features/board-ui.md "Routes"; = spec card show C --history --practices --json, uncut, docs/features/department-practices.md "Acceptance criteria", DP9, DP14; 404 the exit-1 document) */
   getCard(project: string, id: string, signal?: AbortSignal): Promise<Card | CardNotFound>;
   // The card writes (docs/features/board-ui.md "Routes"): no AbortSignal, a write's answer is always taken.
   /** POST /api/projects/:p/cards */

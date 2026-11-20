@@ -141,6 +141,7 @@ impl Place {
                 references: vec![reference.to_owned()],
                 budget,
                 git: self.git.clone(),
+                disciplines: Vec::new(),
             },
         )
         .map(Outcome::Bundle)
@@ -394,6 +395,11 @@ fn without_show_keys(args: &[String], bytes: &[u8]) -> Vec<u8> {
                 &common::keys::SHOW_KEYS,
             ))
             .into_bytes()
+        }
+        // docs/features/department-practices.md DP6: a bundle's empty
+        // layer 10 out.
+        Ok(text) if args.first().map(String::as_str) == Some("bundle") => {
+            common::keys::without_empty_layer_ten(text).into_bytes()
         }
         _ => bytes.to_vec(),
     }

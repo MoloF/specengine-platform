@@ -1240,8 +1240,10 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
             ),
             ("report_discrepancy", 1736, vec!["card_id"], vec![]),
             (
+                // 2 042 since docs/features/department-practices.md (the
+                // practices' sentence).
                 "get_card",
-                2047,
+                2042,
                 vec![
                     "One card: the same as `spec card show C --marks [--history] [--context \
                      [--budget N]]`.",

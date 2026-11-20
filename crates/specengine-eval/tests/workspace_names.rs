@@ -499,3 +499,142 @@ fn ws6b_the_scan_catches_each_form_and_leaves_each_exemption() {
         ]
     );
 }
+
+/// The four practice examples of docs/features/department-practices.md
+/// (RM-0128) "Presets and examples".
+const PRACTICE_EXAMPLES: [&str; 4] = [
+    "scripts/presets/practices/gamedev/art-3d-models.md",
+    "scripts/presets/practices/gamedev/development.md",
+    "scripts/presets/practices/gamedev/sound.md",
+    "scripts/presets/practices/gamedev/production.md",
+];
+
+/// The trade words docs/features/department-practices.md "Presets and examples" names: none
+/// appears in `crates/*/src` or the UI's app code, comments included.
+const TRADE_WORDS: [&str; 2] = ["normal map", "level of detail"];
+
+/// The `disciplines: [..]` entries of an example's front-matter.
+fn example_disciplines(text: &str) -> Vec<String> {
+    let front = text
+        .strip_prefix("---\n")
+        .and_then(|rest| rest.split("\n---\n").next())
+        .unwrap_or_else(|| panic!("front-matter first: {text}"));
+    let list = front
+        .lines()
+        .find_map(|line| line.strip_prefix("disciplines: ["))
+        .and_then(|rest| rest.strip_suffix(']'))
+        .unwrap_or_else(|| panic!("a `disciplines: [..]` line: {front}"));
+    list.split(',')
+        .map(|entry| entry.trim().to_owned())
+        .collect()
+}
+
+/// The kind of the preset's commented `PRA` line (`# [ids] PRA = { kind =
+/// "…", … }`).
+fn preset_practice_kind(root: &Path) -> String {
+    let preset = fs::read_to_string(root.join("scripts/presets/gamedev.toml")).expect("the preset");
+    preset
+        .lines()
+        .filter_map(|line| line.strip_prefix("# [ids]"))
+        .find_map(|rest| rest.split("kind = \"").nth(1))
+        .and_then(|rest| rest.split('"').next())
+        .map(str::to_owned)
+        .expect("the preset's commented `PRA` line names a kind")
+}
+
+/// `path:line: word` for each line of `crates/*/src/**/*.rs` and of the
+/// UI's app code under `root` holding one of [`TRADE_WORDS`], without case.
+fn trade_word_hits(root: &Path) -> (Vec<String>, usize) {
+    let mut files = Vec::new();
+    if let Ok(crates) = fs::read_dir(root.join("crates")) {
+        let mut dirs: Vec<PathBuf> = crates.flatten().map(|entry| entry.path()).collect();
+        dirs.sort();
+        for dir in dirs {
+            sources(root, &dir.join("src"), &["rs"], &mut files);
+        }
+    }
+    sources(root, &root.join("ui/src"), &["ts", "tsx"], &mut files);
+    let mut hits = Vec::new();
+    for (path, text) in &files {
+        if is_mock_or_test(path) {
+            continue;
+        }
+        for (number, line) in text.lines().enumerate() {
+            let lower = line.to_lowercase();
+            for word in TRADE_WORDS {
+                if lower.contains(word) {
+                    hits.push(format!("{path}:{}: {word}", number + 1));
+                }
+            }
+        }
+    }
+    (hits, files.len())
+}
+
+/// docs/features/department-practices.md DP18 and DP20: each example's
+/// discipline is a preset flow's (so WS-6 (b) holds it as a name and no
+/// source compares it); the kind of the preset's commented `PRA` line is no
+/// literal of `crates/*/src` or the UI's app code; no trade word appears
+/// there at all.
+#[test]
+fn dp20_no_practice_discipline_kind_or_trade_word_is_code() {
+    let root = repository_root();
+    let (names, _) = names_under(&root);
+    for example in PRACTICE_EXAMPLES {
+        let text = fs::read_to_string(root.join(example))
+            .unwrap_or_else(|error| panic!("{example}: {error}"));
+        for discipline in example_disciplines(&text) {
+            assert!(
+                names.contains(&discipline),
+                "{example}: `{discipline}` is a preset flow's name: {names:?}"
+            );
+        }
+    }
+    let kind = preset_practice_kind(&root);
+    assert_eq!(kind, "practice");
+    let (hits, scanned) = literal_hits(&root, &BTreeSet::from([kind]));
+    assert!(scanned > 100, "the walk reads the sources: {scanned}");
+    assert!(
+        hits.is_empty(),
+        "the practice kind is a literal:\n{}",
+        hits.join("\n")
+    );
+    let (trade, _) = trade_word_hits(&root);
+    assert!(
+        trade.is_empty(),
+        "a trade word in the code:\n{}",
+        trade.join("\n")
+    );
+}
+
+/// The positive control of the trade-word scan on a scratch tree: a comment
+/// in a crate's source and a component's string are caught; a mock and a
+/// test are not.
+#[test]
+fn dp20_the_trade_word_scan_catches_each_form() {
+    let tree = Scratch::new("trade-words");
+    tree.write(
+        "crates/specengine-x/src/lib.rs",
+        "// Keep the Level of Detail low.\npub fn f() {}\n",
+    );
+    tree.write(
+        "ui/src/board/Card.tsx",
+        "export const hint = 'a normal map';\n",
+    );
+    tree.write(
+        "ui/src/mocks/data.ts",
+        "export const m = 'level of detail';\n",
+    );
+    tree.write(
+        "ui/src/board/Card.test.tsx",
+        "it('normal map', () => {});\n",
+    );
+    let (hits, _) = trade_word_hits(&tree.0);
+    assert_eq!(
+        hits,
+        [
+            "crates/specengine-x/src/lib.rs:1: level of detail",
+            "ui/src/board/Card.tsx:1: normal map",
+        ]
+    );
+}

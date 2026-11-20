@@ -721,6 +721,7 @@ const LAYERS: readonly [keyof BundleLayers, string][] = [
   ["neighbours", "Neighbours"],
   ["terms", "Terms"],
   ["tests", "Tests"],
+  ["practices", "Practices"],
 ];
 
 /**
@@ -900,6 +901,8 @@ export function bundleOf(corpus: MockCorpus, options: BundleOptions): BundleView
     neighbours: [],
     terms: [],
     tests: [],
+    // The daemon's bundle route asks no discipline: layer 10 stays empty (docs/features/department-practices.md "Acceptance criteria", DP5).
+    practices: [],
   };
   let body = title;
   targets.forEach((target, index) => {

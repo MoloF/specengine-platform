@@ -839,6 +839,8 @@ async fn bundle(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
             references,
             budget,
             git: process_git(env),
+            // The route takes no discipline: no practices layer.
+            disciplines: Vec::new(),
         };
         specengine_cli::bundle(env, globals, &request).map(Outcome::Bundle)
     })
@@ -1442,9 +1444,12 @@ async fn counts(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
     .await)
 }
 
-/// `GET …/cards/<id>`: `spec card show C --history --json`, uncut (no query
-/// name), with `upstream` asked and `mark` not; no such card: the CLI's
-/// exit-1 document, a 404. A card's linked
+/// `GET …/cards/<id>`: `spec card show C --history --json`, uncut, with
+/// `upstream` asked and `mark` not; `practices=true` its `--practices` (task
+/// spec `department-practices`: its discipline's practices and the IDs its
+/// texts cite, from the index, in the same trusted read), any other value
+/// a 400, nothing run; no such card: the CLI's exit-1 document, a 404. A
+/// card's linked
 /// tasks are read in the daemon's repository; a hub reads none and serves
 /// their IDs without state (`docs/canon/card-tasks.md` "The rule").
 async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
@@ -1453,7 +1458,11 @@ async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
         .strip_prefix("cards/")
         .ok_or_else(|| unknown_route_of(&uri))?;
     let id = percent_decode(raw).map_err(Refusal::bad_request)?;
-    args("cards/:id", &[], &uri)?;
+    let args = args("cards/:id", &["practices"], &uri)?;
+    let practices = args
+        .boolean("practices")
+        .map_err(Refusal::bad_request)?
+        .unwrap_or(false);
     let tasks_here = app.hub.is_none();
     Ok(run_read(project, move |env, globals| {
         let request = CardShowRequest {
@@ -1470,6 +1479,7 @@ async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
             // The daemon never asks a card's context: `context: null`
             // (task spec `card-context` CC10).
             context: false,
+            practices,
             budget: None,
             git: process_git(env),
             tasks_here,

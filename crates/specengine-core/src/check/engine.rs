@@ -26,6 +26,7 @@ use super::text::{FileText, Written, front_matter_failed, is_calendar_date, is_d
 use super::working_set::worst_w;
 use super::{generated, graph, links, rules};
 use crate::library::judge_tags;
+use crate::practice::{DISCIPLINES_KEY, PRACTICE_DISCIPLINE, judge_disciplines};
 use crate::record::{HUB_ID_START, record_id};
 use crate::{Paths, is_under};
 
@@ -532,6 +533,42 @@ impl FileCheck<'_, '_> {
         self.canon_path(document);
         self.references(document);
         self.tags(document);
+        self.disciplines(document);
+    }
+
+    /// `practice-discipline`, a warning per `disciplines:` problem
+    /// ([`judge_disciplines`]; task spec `department-practices`,
+    /// "Front-matter `disciplines`"), at the key's line, subject
+    /// `disciplines`: an entry left out, or one no declared flow lists
+    /// (judged only with [`CheckConfig::flow_disciplines`]). A mistyped
+    /// `disciplines:` is the parser's `frontmatter-type` alone. Never an
+    /// error: a practice gates nothing (ADR-0012).
+    fn disciplines(&mut self, document: &Node) {
+        let Some(written) = document
+            .fields
+            .as_ref()
+            .and_then(|fields| fields.disciplines.as_deref())
+        else {
+            return;
+        };
+        let problems = judge_disciplines(written, self.config.flow_disciplines.as_ref()).problems;
+        if problems.is_empty() {
+            return;
+        }
+        let line = self.key_line(DISCIPLINES_KEY);
+        for problem in problems {
+            self.findings.push(Finding {
+                code: PRACTICE_DISCIPLINE.to_owned(),
+                severity: Severity::Warning,
+                path: self.file.path.clone(),
+                line,
+                subject: DISCIPLINES_KEY.to_owned(),
+                message: problem.message,
+                fix: None,
+                debt: None,
+                introduced: None,
+            });
+        }
     }
 
     /// `tag-invalid`, a warning per `tags:` entry the library leaves out

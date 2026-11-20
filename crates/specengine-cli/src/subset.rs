@@ -30,9 +30,10 @@ use std::path::Path;
 
 use specengine_core::Paths;
 use specengine_core::check::{
-    CheckFile, CheckInput, GraphRows, LinkState, NodeAt, Resolution, Resolver, SpecGraph,
+    CheckFile, CheckInput, EdgeKey, GraphRows, LinkState, NodeAt, Resolution, Resolver, SpecGraph,
     bundle_linked, nodes_within,
 };
+use specengine_core::practice::PRACTICES_MAX;
 use specengine_model::{IdScheme, Reference};
 use specengine_store::{
     IndexSnapshot, IndexWriter as _, Listing, Probed, Source, SqliteIndex, StatKey, StoreError,
@@ -42,6 +43,7 @@ use specengine_store::{
 use crate::corpus::{locate, row_matches};
 use crate::freshness::{self, step};
 use crate::location::{OpenIndex, open_index};
+use crate::practice::{PracticeFiles, distinct_paths};
 use crate::project::ProjectRoot;
 use crate::show::{Target, pick};
 use crate::{CliError, Env, Message, store_error};
@@ -60,8 +62,15 @@ const ANSWERS: &str = "answers";
 pub(crate) enum Wanted<'r> {
     /// `spec show REF`, `--links` when `links`.
     Show { target: &'r Target, links: bool },
-    /// `spec bundle REF…`: every REF classified, in order.
-    Bundle { asked: &'r [(&'r str, Target)] },
+    /// `spec bundle REF…`: every REF classified, in order, the
+    /// disciplines whose practices it reads (judged, sorted; empty: none)
+    /// and the references a card's texts cite, resolved over the same
+    /// subset (task spec `department-practices`).
+    Bundle {
+        asked: &'r [(&'r str, Target)],
+        disciplines: &'r [String],
+        references: &'r [&'r Reference],
+    },
 }
 
 /// How a subset read ended.
@@ -86,6 +95,9 @@ pub(crate) struct SubsetRead {
     pub reads: BTreeMap<String, io::Result<Vec<u8>>>,
     /// The freshness step's warnings.
     pub warnings: Vec<Message>,
+    /// A bundle's practice files, each listed one in `input` (task spec
+    /// `department-practices`); none for a show or without a discipline.
+    pub practices: PracticeFiles,
 }
 
 /// The read: the freshness step, then at most two attempts.
@@ -193,6 +205,7 @@ fn matched(
         rows: planned.rows,
         reads,
         warnings,
+        practices: planned.practices,
     }
 }
 
@@ -202,6 +215,8 @@ struct Planned {
     input: CheckInput,
     blake3: BTreeMap<String, Option<String>>,
     rows: GraphRows,
+    /// A bundle's practice files.
+    practices: PracticeFiles,
 }
 
 /// One attempt's subset from one snapshot, ended before it returns;
@@ -215,7 +230,14 @@ fn plan(
     let mut gather = Gather::new(&snapshot, &project.config.scheme, &project.config.paths);
     match wanted {
         Wanted::Show { target, links } => gather.show(target, *links)?,
-        Wanted::Bundle { asked } => gather.bundle(asked)?,
+        Wanted::Bundle {
+            asked,
+            disciplines,
+            references,
+        } => {
+            gather.bundle(asked)?;
+            gather.practices(disciplines, references)?;
+        }
     }
     let planned = gather.planned();
     drop(snapshot);
@@ -266,6 +288,8 @@ struct Gather<'s, 'i> {
     tried: BTreeSet<String>,
     edges: BTreeMap<(String, usize), StoredEdge>,
     parents: BTreeMap<String, StoredParent>,
+    /// A bundle's practice files.
+    practices: PracticeFiles,
 }
 
 impl<'s, 'i> Gather<'s, 'i> {
@@ -280,6 +304,7 @@ impl<'s, 'i> Gather<'s, 'i> {
             tried: BTreeSet::new(),
             edges: BTreeMap::new(),
             parents: BTreeMap::new(),
+            practices: PracticeFiles::default(),
         }
     }
 
@@ -509,6 +534,63 @@ impl<'s, 'i> Gather<'s, 'i> {
         Ok(())
     }
 
+    /// The practices of `disciplines` and the closures of `references`
+    /// (task spec `department-practices`): the index's one query in this
+    /// snapshot, its paths decoded in order, a batch at a time, until
+    /// [`PRACTICES_MAX`] hold a document ([`PracticeFiles`]), then the
+    /// holders of those documents' IDs (so a name counts them as the map's
+    /// does), then each reference's closure, as `spec show` resolves a REF.
+    /// None of it without a discipline or a reference.
+    fn practices(
+        &mut self,
+        disciplines: &[String],
+        references: &[&Reference],
+    ) -> Result<(), StoreError> {
+        if !disciplines.is_empty() {
+            let asked: Vec<&str> = disciplines.iter().map(String::as_str).collect();
+            let all = distinct_paths(&self.snapshot.practices_of(&asked)?);
+            let mut cursor = 0;
+            let mut listed: Vec<String> = Vec::new();
+            while listed.len() < PRACTICES_MAX && cursor < all.len() {
+                let take = (PRACTICES_MAX - listed.len()).min(all.len() - cursor);
+                let batch = &all[cursor..cursor + take];
+                self.decode(batch.iter().map(String::as_str))?;
+                for path in batch {
+                    if self.document_id(path).is_some() {
+                        listed.push(path.clone());
+                    }
+                }
+                cursor += take;
+            }
+            let ids: Vec<String> = listed
+                .iter()
+                .filter_map(|path| self.document_id(path).flatten())
+                .collect();
+            for id in ids {
+                let holders = self.snapshot.holders(&EdgeKey::Name(id).text())?;
+                self.decode(holders.iter().map(String::as_str))?;
+            }
+            // The note counts the paths past the last one tried: a path
+            // whose rows hold no document is in neither.
+            self.practices = PracticeFiles {
+                listed,
+                left: all.len() - cursor,
+                first_left: all.get(cursor).cloned(),
+            };
+        }
+        for reference in references {
+            self.closure(reference)?;
+        }
+        Ok(())
+    }
+
+    /// A decoded file's document ID: `None` without a document,
+    /// `Some(None)` a document with no ID.
+    fn document_id(&self, path: &str) -> Option<Option<String>> {
+        let document = self.file(path)?.parsed.as_ref()?.document()?;
+        Some(document.id.clone())
+    }
+
     /// The subset, path order, and its rows.
     fn planned(self) -> Planned {
         let mut input = self.input;
@@ -520,8 +602,26 @@ impl<'s, 'i> Gather<'s, 'i> {
                 edges: self.edges.into_values().collect(),
                 parents: self.parents.into_values().collect(),
             },
+            practices: self.practices,
         }
     }
+}
+
+/// What a practices read with no bundle decodes from one snapshot (task
+/// spec `department-practices`): [`Gather::practices`] alone, in path
+/// order, and the practice files it kept. Nothing is read from the working
+/// tree: the read prints no file's text.
+pub(crate) fn practice_input(
+    snapshot: &IndexSnapshot<'_>,
+    scheme: &IdScheme,
+    paths: &Paths,
+    disciplines: &[String],
+    references: &[&Reference],
+) -> Result<(CheckInput, PracticeFiles), StoreError> {
+    let mut gather = Gather::new(snapshot, scheme, paths);
+    gather.practices(disciplines, references)?;
+    let planned = gather.planned();
+    Ok((planned.input, planned.practices))
 }
 
 /// Graph nodes as (path, position).

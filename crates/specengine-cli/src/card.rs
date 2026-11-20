@@ -86,6 +86,7 @@ use specengine_core::intake::{
     AuthorInput, DECISION_KIND, DecisionInput, GapType, IntakeSeverity, QUESTION_KIND,
     discrepancy_problem,
 };
+use specengine_core::practice::{Citation, discipline_name_problem};
 use specengine_core::proposal::{Author, prefix_clash};
 use specengine_core::task::{
     CRITERIA_MAX, CRITERION_MAX, DEFAULT_TASK_BUDGET, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX,
@@ -106,14 +107,16 @@ use specengine_store::{
 };
 
 use crate::apply::Consent;
-use crate::bundle::{Bundle, BundleOutcome, BundleRequest, budget_of, bundle_within};
+use crate::bundle::{Bundle, BundleOutcome, BundleRequest, budget_of, bundle_with};
 use crate::cap::{OUTPUT_CAP_CHARS, View, lines_within};
 use crate::corpus::{Admission, LeftOut, indexed_in, locate};
+use crate::freshness::trusting;
 use crate::intake::{
     DecisionRequest, IntakeOutcome, IntakeTarget, QuestionRequest, departing_hits,
     departure_intake, prefixed, propose_decision_as, propose_question_as,
 };
 use crate::location::{open_index, prepared_data_dir};
+use crate::practice::{self, CardPractice, Cited, PracticeAsk, PracticeRead};
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::proposals::{checked_now, escaped_error, queue_cannot, require_root_config};
 use crate::propose::resolved_node;
@@ -190,7 +193,8 @@ pub struct CardListRequest {
     pub parent: Option<String>,
 }
 
-/// `spec card show C [--history] [--marks] [--context [--budget N]]`.
+/// `spec card show C [--history] [--marks] [--practices] [--context
+/// [--budget N]]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardShowRequest {
     pub id: String,
@@ -205,6 +209,11 @@ pub struct CardShowRequest {
     /// `--context`: its parent's goal and one bundle of its targets and
     /// its applied records ([`CardContext`]); `false`: none read.
     pub context: bool,
+    /// `--practices` (implied by `--context`; MCP `get_card {context:
+    /// true}`, the daemon's `?practices=true`): its discipline's practices
+    /// and the IDs its texts cite, read from the index (task spec
+    /// `department-practices`); `false`: no index is read for them.
+    pub practices: bool,
     /// `--budget N`: the context's bundle budget, estimated tokens, 1 to
     /// `u32::MAX`; `None`: `[budgets] bundle_task`, else
     /// [`DEFAULT_TASK_BUDGET`]. Needs `context`.
@@ -1269,6 +1278,14 @@ pub struct CardShowOutcome {
     pub subtask_items: Vec<CardSubtaskItem>,
     /// `--context`'s; `None` without it, and when there is no card.
     pub context: Option<CardContext>,
+    /// The practices of its discipline, by path, at most 32 (task spec
+    /// `department-practices`); `None` unasked, or when the index could not
+    /// be read (a note says why).
+    pub practices: Option<Vec<CardPractice>>,
+    /// The resolved IDs its title, goal, criteria, items and, with
+    /// `--history`, history notes cite, first-seen order, at most 64;
+    /// `None` as [`Self::practices`].
+    pub cited: Option<Vec<Cited>>,
     pub notes: Vec<String>,
     /// The card asked for, when there is none.
     pub id: Option<String>,
@@ -1324,7 +1341,8 @@ struct EventJson<'a> {
 
 /// The columns in order, less `project`, the four keys of `--marks` and
 /// `upstream` right after `targets`, so no cut of a long card's text
-/// reaches them, then `allowed`, `history`, `context`, `notes`.
+/// reaches them, then `allowed`, `history`, `context`, `practices`,
+/// `cited`, `notes`.
 #[derive(Serialize)]
 struct CardJson<'a> {
     id: &'a str,
@@ -1362,6 +1380,8 @@ struct CardJson<'a> {
     allowed: &'a [AllowedMove],
     history: Option<Vec<EventJson<'a>>>,
     context: Option<&'a CardContext>,
+    practices: Option<&'a [CardPractice]>,
+    cited: Option<&'a [Cited]>,
     notes: &'a [String],
 }
 
@@ -1421,6 +1441,8 @@ impl Serialize for CardShowOutcome {
                     .collect()
             }),
             context: self.context.as_ref(),
+            practices: self.practices.as_deref(),
+            cited: self.cited.as_deref(),
             notes: &self.notes,
         }
         .serialize(serializer)
@@ -2563,6 +2585,8 @@ fn run_show(
         items: Vec::new(),
         subtask_items: Vec::new(),
         context: None,
+        practices: None,
+        cited: None,
         notes: Vec::new(),
         id,
         reason: Some(reason),
@@ -2628,6 +2652,16 @@ fn run_show(
         records: context_refs(&card.targets, &items),
         budget: context_budget(flag_budget, &context),
     });
+    // Its practices and the IDs its texts cite, only when asked (task spec
+    // `department-practices`): with the context, from its bundle's own
+    // read; else, or when that bundle reads nothing, from their own read.
+    let practices_asked = (request.practices || request.context).then(|| {
+        let texts = card_texts(&card, &items, history.as_deref());
+        (
+            context.project.clone(),
+            practice::citations(&texts, &context.project.config.scheme),
+        )
+    });
     // A card that links no task reads no task and runs no git.
     let tasks = if card.tasks.is_empty() {
         Vec::new()
@@ -2655,15 +2689,107 @@ fn run_show(
         items,
         subtask_items,
         context: None,
+        practices: None,
+        cited: None,
         messages,
         notes,
         id: None,
         reason: None,
     };
-    if let Some(asked) = asked {
-        add_context(env, globals, &mut outcome, asked, &request.git);
-    }
+    let Some((project, citations)) = practices_asked else {
+        return Ok(outcome);
+    };
+    let (from_bundle, citations) = match asked {
+        Some(asked) => add_context(env, globals, &mut outcome, asked, &request.git, citations),
+        None => (None, citations),
+    };
+    let read = match from_bundle {
+        Some(read) => Ok(read),
+        None => {
+            let disciplines: Vec<String> = outcome
+                .card
+                .as_deref()
+                .and_then(card_discipline)
+                .into_iter()
+                .collect();
+            trusting(|| practice::read(env, &project, &disciplines, citations))
+        }
+    };
+    add_practices(&mut outcome, read);
     Ok(outcome)
+}
+
+/// The card's discipline when it is a discipline name: the one its
+/// practices and its context's layer 10 are read for.
+fn card_discipline(card: &Card) -> Option<String> {
+    card.discipline
+        .clone()
+        .filter(|discipline| discipline_name_problem(discipline).is_none())
+}
+
+/// The texts whose IDs a card cites (task spec `department-practices`,
+/// "The card"): its title, goal, criteria, each item's served text and,
+/// with `--history`, each history note, in that order.
+fn card_texts<'c>(
+    card: &'c Card,
+    items: &'c [CardItem],
+    history: Option<&'c [Event]>,
+) -> Vec<&'c str> {
+    let mut texts: Vec<&str> = vec![card.title.as_str()];
+    texts.extend(card.goal.as_deref());
+    texts.extend(card.criteria.iter().map(String::as_str));
+    for item in items {
+        texts.push(item.summary.as_str());
+        texts.extend(
+            [
+                &item.gist,
+                &item.matters,
+                &item.working_answer,
+                &item.why,
+                &item.decision_note,
+            ]
+            .into_iter()
+            .filter_map(|text| text.as_deref()),
+        );
+    }
+    for event in history.into_iter().flatten() {
+        texts.extend(
+            event
+                .payload
+                .get("note")
+                .and_then(serde_json::Value::as_str),
+        );
+    }
+    texts
+}
+
+/// A card's practices and citations onto its read: the read's warnings,
+/// the notes past the practices' and the citations' caps among the card's
+/// notes; a read that fails is one `practices: not read: <cause>` note,
+/// both keys `null`. A card with no discipline gets none, its texts still
+/// read.
+fn add_practices(outcome: &mut CardShowOutcome, read: Result<PracticeRead, CliError>) {
+    match read {
+        Ok(read) => {
+            outcome.messages.extend(read.messages);
+            for note in read.note.into_iter().chain(read.cited_note) {
+                outcome.messages.push(Message::Note(note.clone()));
+                outcome.notes.push(note);
+            }
+            outcome.practices = Some(read.practices);
+            outcome.cited = Some(read.cited);
+        }
+        Err(error) => {
+            let cause = error
+                .message
+                .strip_prefix("spec: ")
+                .unwrap_or(&error.message)
+                .to_owned();
+            let note = one_line(&format!("practices: not read: {cause}"));
+            outcome.messages.push(Message::Note(note.clone()));
+            outcome.notes.push(note);
+        }
+    }
 }
 
 /// `--budget` without `--context` (task spec `card-context` CC4).
@@ -2769,14 +2895,18 @@ fn context_budget(flag: Option<u32>, cards: &OpenCards) -> Result<u32, String> {
 /// The context onto a read card (task spec `card-context` CC1-CC4): its
 /// parent, its notes in order, and one bundle in the room the card's lines
 /// leave, else `None` and a `no bundle:` note. The notes print after the
-/// read's own messages, then the bundle's own messages.
+/// read's own messages, then the bundle's own messages. The card's
+/// practices and `citations` come from the bundle's own read, the room
+/// counting their lines (task spec `department-practices`); `None` and the
+/// citations back when the bundle read nothing.
 fn add_context(
     env: &Env,
     globals: &Globals,
     outcome: &mut CardShowOutcome,
     asked: ContextAsked,
     git: &GitEnv,
-) {
+    citations: Vec<Citation>,
+) -> (Option<PracticeRead>, Vec<Citation>) {
     let ContextAsked {
         parent: (parent, mut notes),
         records: (refs, records_note),
@@ -2788,8 +2918,30 @@ fn add_context(
         bundle: None,
         notes: Vec::new(),
     });
-    let room = context_room(outcome);
-    let (made, bundle_messages) = context_bundle(env, globals, refs, budget, room, git);
+    // The room is the card's lines' once they hold the practices and the
+    // citations the bundle's read gives.
+    let base = outcome.clone();
+    let room = move |read: &PracticeRead| -> Result<usize, String> {
+        let mut probe = base.clone();
+        probe.practices = Some(read.practices.clone());
+        probe.cited = Some(read.cited.clone());
+        context_room(&probe).ok_or_else(|| {
+            format!("the card's lines leave no room under the {OUTPUT_CAP_CHARS}-character ceiling")
+        })
+    };
+    let mut ask = PracticeAsk {
+        citations,
+        room: Some(&room),
+        read: None,
+    };
+    let disciplines: Vec<String> = outcome
+        .card
+        .as_deref()
+        .and_then(card_discipline)
+        .into_iter()
+        .collect();
+    let (made, bundle_messages) =
+        context_bundle(env, globals, refs, budget, git, disciplines, &mut ask);
     let bundle = match made {
         Ok(made) => Some(made),
         Err(why) => {
@@ -2807,6 +2959,7 @@ fn add_context(
         context.bundle = bundle;
         context.notes = notes;
     }
+    (ask.read, ask.citations)
 }
 
 /// The characters left for the context's bundle (task spec `card-context`
@@ -2826,14 +2979,16 @@ fn context_room(outcome: &CardShowOutcome) -> Option<usize> {
 
 /// The context's bundle, or why there is none (its `no bundle:` note's
 /// text), and the bundle's own messages, as `spec bundle 2>&1` prints them
-/// but its exit-1 reason and exit-2 line, which are the note.
+/// but its exit-1 reason and exit-2 line, which are the note. It fits in
+/// the room `ask` gives once its read holds the card's practices.
 fn context_bundle(
     env: &Env,
     globals: &Globals,
     refs: Vec<String>,
     budget: Result<u32, String>,
-    room: Option<usize>,
     git: &GitEnv,
+    disciplines: Vec<String>,
+    ask: &mut PracticeAsk<'_>,
 ) -> (Result<BundleOutcome, String>, Vec<Message>) {
     if refs.is_empty() {
         return (
@@ -2841,26 +2996,23 @@ fn context_bundle(
             Vec::new(),
         );
     }
-    let Some(chars_max) = room else {
-        return (
-            Err(format!(
-                "the card's lines leave no room under the {OUTPUT_CAP_CHARS}-character ceiling"
-            )),
-            Vec::new(),
-        );
-    };
     let budget = match budget {
         Ok(budget) => budget,
         Err(line) => return (Err(line), Vec::new()),
     };
     // As a task's bundle: the budget passed as a flag, so `bundle_node`
-    // stays unread and a minimum's line names `--budget N`.
+    // stays unread and a minimum's line names `--budget N`; with the card's
+    // discipline, its practices last (task spec `department-practices`).
     let request = BundleRequest {
         references: refs,
         budget: Some(i64::from(budget)),
         git: git.clone(),
+        disciplines,
     };
-    match bundle_within(env, globals, &request, chars_max) {
+    // A read: on a hub whose call walks for the card's mark, the context
+    // trusts the index that walk just brought up to date (`trusting`; the
+    // read-trust spec, "CLI API"); elsewhere it changes nothing.
+    match trusting(|| bundle_with(env, globals, &request, None, Some(ask))) {
         Ok(made) => match made.reason.clone() {
             None => {
                 let messages = made.messages.clone();
@@ -4935,6 +5087,35 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
             })
             .collect(),
     );
+    // Its practices and citations, when read (task spec
+    // `department-practices`, "The card").
+    if let Some(practices) = outcome.practices.as_ref() {
+        let names: Vec<String> = practices
+            .iter()
+            .map(|practice| one_line(&practice.name))
+            .collect();
+        lines.push(format!(
+            "practices: {}",
+            if names.is_empty() {
+                ABSENT.to_owned()
+            } else {
+                names.join(", ")
+            }
+        ));
+        match outcome.cited.as_deref() {
+            Some(cited) if !cited.is_empty() => {
+                lines.extend(cited.iter().map(|cited| {
+                    format!(
+                        "cited: {} | {} | {}",
+                        one_line(&cited.name),
+                        cited.title.as_deref().map_or(ABSENT.to_owned(), one_line),
+                        one_line(&cited.path)
+                    )
+                }));
+            }
+            _ => lines.push(format!("cited: {ABSENT}")),
+        }
+    }
     // `context: -`, or its lines, the bundle's line last (task spec
     // `card-context` CC2, CC3).
     match outcome.context.as_ref() {

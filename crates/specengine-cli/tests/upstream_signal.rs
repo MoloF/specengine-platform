@@ -931,7 +931,8 @@ fn us8_the_scenario_prints_as_pinned() {
         .position(|key| key == "correction")
         .expect("correction");
     assert_eq!(ordered.get(at + 1).map(String::as_str), Some("upstream"));
-    assert_eq!(ordered.len(), 36, "the card document's keys: {ordered:?}");
+    // 38 since docs/features/department-practices.md (`practices`, `cited`).
+    assert_eq!(ordered.len(), 38, "the card document's keys: {ordered:?}");
 }
 
 /// The top-level keys of a JSON object text, in order.

@@ -122,7 +122,8 @@ fn pp1_the_daemon_serves_the_pair() {
     reply.status(200);
     let raw = reply.text().to_owned();
     let keys = top_keys(&raw);
-    assert_eq!(keys.len(), 54, "{raw}");
+    // 55 since docs/features/department-practices.md "Proposals: `cited`".
+    assert_eq!(keys.len(), 55, "{raw}");
     let at = keys
         .iter()
         .position(|key| key == "evidence")
@@ -165,7 +166,8 @@ fn pp1_the_daemon_serves_the_pair() {
     );
     assert_eq!(staged.status, 200, "{}", staged.text());
     let staged = staged.json();
-    assert_eq!(staged.as_object().map(serde_json::Map::len), Some(54));
+    // 55 since docs/features/department-practices.md "Proposals: `cited`".
+    assert_eq!(staged.as_object().map(serde_json::Map::len), Some(55));
     assert_eq!(staged["pair"], Value::Null, "{staged}");
     let again = server
         .get(&format!("{P}/proposals/PR-0001"))

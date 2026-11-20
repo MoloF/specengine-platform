@@ -77,6 +77,7 @@ import type {
 } from "../api/types";
 import { optionAndAnswer, optionOnNone } from "./approveLines";
 import { mockCode } from "./bindings";
+import { withCited, withPractices } from "./practices";
 import { fakeHex, inboxEntryOf, noReview, proposal, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { cardCountsOf } from "./cardCounts";
 import { checkReportOf } from "./check";
@@ -307,8 +308,10 @@ export class MockClient implements SpecEngineClient {
   /** The review document; an unknown ID answers the exit-1 document, as data. */
   async getProposal(project: string, id: string): Promise<Proposal> {
     await this.read();
-    const stored = this.project(project).proposals.find(({ review }) => review.id === id);
-    return structuredClone(stored === undefined ? noReview(id) : stored.review);
+    const entry = this.project(project);
+    const stored = entry.proposals.find(({ review }) => review.id === id);
+    // Its texts' cited IDs, read now as the daemon's route does (docs/features/department-practices.md "Acceptance criteria", DP13).
+    return structuredClone(stored === undefined ? noReview(id) : withCited(stored.review, entry.corpus, this.scenario));
   }
 
   async getTree(project: string, options: TreeOptions = {}): Promise<TreeView> {
@@ -435,7 +438,7 @@ export class MockClient implements SpecEngineClient {
 
   /**
    * The project's library for the scenario (src/mocks/library.ts), read only; the daemon serves its
-   * own (docs/features/doc-library.md "The UI seam").
+   * own (docs/canon/spec-library.md "Daemon, hub").
    */
   async getLibrary(project: string, options: LibraryOptions): Promise<LibraryDocument> {
     await this.read();
@@ -732,10 +735,14 @@ export class MockClient implements SpecEngineClient {
     return structuredClone(cardCountsOf(this.board(project), this.taskStore(project), this.project(project).proposals, this.scenario));
   }
 
-  /** One card with its history and its items, read from this mock's queue now; an unknown C answers the exit-1 document, as data. */
+  /**
+   * One card with its history and its items, read from this mock's queue now, its practices and cited
+   * IDs as `?practices=true` asks (src/mocks/practices.ts); an unknown C answers the exit-1 document, as data.
+   */
   async getCard(project: string, id: string): Promise<Card | CardNotFound> {
     await this.read();
-    return cardShowOf(this.board(project), id, this.taskStore(project), this.project(project).proposals);
+    const entry = this.project(project);
+    return withPractices(cardShowOf(this.board(project), id, this.taskStore(project), entry.proposals), entry.corpus, project, this.scenario);
   }
 
   /**

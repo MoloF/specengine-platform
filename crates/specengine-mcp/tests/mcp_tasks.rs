@@ -1592,8 +1592,10 @@ fn get_task_description_names_the_bindings() {
             .as_str()
             .expect("a description")
             .to_owned();
+        // docs/features/department-practices.md "The task package: `practices`": the
+        // brief's Practices section before Bindings.
         assert!(
-            description.contains("(goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, code bindings, bundle)"),
+            description.contains("(goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, practices, code bindings, bundle)"),
             "{era:?}: the brief's list: {description}"
         );
         assert!(
@@ -1601,7 +1603,10 @@ fn get_task_description_names_the_bindings() {
             "{era:?}: the paragraph after the list's: {description}"
         );
         assert!(description.is_ascii());
-        assert_eq!(description.len(), 1909, "{era:?}: the spec's figure");
+        // 2 012 since docs/features/department-practices.md (practices in
+        // the brief's list and the package's `practices`), within 2 048.
+        assert_eq!(description.len(), 2012, "{era:?}: the spec's figure");
+        assert!(description.contains("practices: those of bundle.disciplines"));
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }

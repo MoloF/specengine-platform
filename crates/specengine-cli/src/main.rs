@@ -215,7 +215,7 @@ enum Command {
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         depth: Option<i64>,
     },
-    /// Assemble the context of REF within a budget of estimated tokens: the targets, open questions, ancestors, criteria, decisions, neighbours, terms; the rest named by ID.
+    /// Assemble the context of REF within a budget of estimated tokens: the targets, open questions, ancestors, criteria, decisions, neighbours, terms, and with --discipline the practices' rules; the rest named by ID.
     Bundle {
         /// Any form `show` takes; several are bundled together.
         #[arg(required = true, num_args = 1.., value_name = "REF")]
@@ -223,6 +223,9 @@ enum Command {
         /// Estimated tokens at most (default: `[budgets] bundle_node`, else 2000).
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         budget: Option<i64>,
+        /// A card discipline whose practices' rules come last; repeatable, at most 16.
+        #[arg(long = "discipline", value_name = "D")]
+        disciplines: Vec<String>,
     },
     /// Check the documents against the convention; exit 0 clean or observed, 1 blocked, 2 cannot check.
     Check {
@@ -839,9 +842,12 @@ enum CardCommand {
         /// Its mark over its targets too, and what changed above an open subtask.
         #[arg(long)]
         marks: bool,
-        /// Its context too: its parent's goal and one bundle of its targets and its recorded decisions.
+        /// Its context too: its parent's goal and one bundle of its targets, its recorded decisions and its discipline's practices; implies --practices.
         #[arg(long)]
         context: bool,
+        /// Its discipline's practices and the IDs its texts cite, read from the index.
+        #[arg(long)]
+        practices: bool,
         /// The context's estimated tokens at most (default: `[budgets] bundle_task`, else 10000); needs --context.
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         budget: Option<i64>,
@@ -1479,13 +1485,18 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 git: process_git(env),
             },
         )?)),
-        Command::Bundle { references, budget } => Outcome::Bundle(specengine_cli::bundle(
+        Command::Bundle {
+            references,
+            budget,
+            disciplines,
+        } => Outcome::Bundle(specengine_cli::bundle(
             env,
             globals,
             &BundleRequest {
                 references,
                 budget,
                 git: process_git(env),
+                disciplines,
             },
         )?),
         Command::Check {
@@ -2898,6 +2909,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             history,
             marks,
             context,
+            practices,
             budget,
         } => Ok(Outcome::CardShow(Box::new(specengine_cli::card_show(
             env,
@@ -2910,6 +2922,8 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 // `upstream-signal` US-8).
                 upstream: marks,
                 context,
+                // `--context` implies it (task spec `department-practices`).
+                practices: practices || context,
                 budget,
                 git: process_git(env),
                 tasks_here: true,

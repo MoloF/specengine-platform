@@ -313,7 +313,9 @@ fn pp7_the_schema_holds_a_closed_pair() {
             keys.iter().any(|key| *key == "evidence"),
             "{name}: evidence"
         );
-        assert_eq!(keys.len(), 54, "{name}: 54 keys");
+        // 55 since docs/features/department-practices.md "Proposals: `cited`"
+        // (`cited`).
+        assert_eq!(keys.len(), 55, "{name}: 55 keys");
         assert!(
             schema["required"]
                 .as_array()

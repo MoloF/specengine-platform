@@ -37,9 +37,11 @@
  * UO4; src/mocks/orphans.ts). Every scenario serves harbor-sim's night under auto mode and ledger-api's
  * manual events with auto off (docs/features/auto-feed.md "The UI"; src/mocks/feed.ts); `feed`: as
  * `normal`, and harbor-sim's live tail says its morning, one event every few seconds, so Activity
- * appends each and marks it New.
+ * appends each and marks it New. `practices-unread`: as `normal` but the index under a card's practices
+ * and a review's cited IDs cannot be read: both null, the daemon's note why (docs/features/department-practices.md
+ * "Acceptance criteria", DP9, DP14; src/mocks/practices.ts).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions", "collision-pairs", "orphan-notes", "feed"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes", "aside", "aside40", "hub", "local-only", "plain-questions", "collision-pairs", "orphan-notes", "feed", "practices-unread"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

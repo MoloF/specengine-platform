@@ -126,6 +126,7 @@ mod git;
 mod index;
 mod layer_c;
 mod outputs;
+mod practices;
 mod queue;
 mod read;
 mod roles;
@@ -174,6 +175,7 @@ pub use layer_c::{
     LayerCSnapshot, LayerCStamp,
 };
 pub use outputs::{Committed, CommittedTree, HeadFile, committed_tree};
+pub use practices::PracticeRow;
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, CARD_COLUMNS, CardAccept, CardAccepted, CardChange, CardClear,
     CardCleared, CardClearing, CardDeparture, CardEdit, CardItems, CardList, CardRefresh, Choice,
@@ -304,9 +306,13 @@ pub use worktree::{
 ///
 /// 18: the typed front-matter key `tags` (`fields.tags`), no longer kept
 /// in `extra` with `unknown-key`; no column. An unchanged file is re-parsed
-/// only on a new stamp
-/// (`docs/features/doc-library.md`, "`INDEX_FORMAT` 18").
-pub const INDEX_FORMAT: u32 = 18;
+/// only on a new stamp (`docs/canon/spec-library.md` "Tags").
+///
+/// 19: the typed front-matter key `disciplines` (`fields.disciplines`) and
+/// the table `disciplines`, a document's kept entries, with the index
+/// `disciplines_by_name`
+/// (`docs/features/department-practices.md` "The index: `INDEX_FORMAT` 19").
+pub const INDEX_FORMAT: u32 = 19;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

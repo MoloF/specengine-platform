@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-20
 ---
 
 # Cards: commands, record, store
@@ -27,7 +27,7 @@ spec card accept C --as N (--briefed | --departs REF...) [--note T] [--revision 
 spec card clear (C | --group REF) ... --reason T --as N
 ```
 
-Globals as the queue's. In `edit`, `assign` a value `-` clears, never a mandate; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children"; `--mandate`: `card-mandate.md`. `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `spec card split`, a task and a subtask per department in one act: `card-split.md`; `spec card counts`, per flow and column: `card-counts.md`. `move`, `edit`, `assign` asking nothing: a library `Usage` outcome `{id, reason}`, exit 2 (`or_usage_error`). Library `card_{new,list,show,counts,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest`, `CardEditRequest` also `tasks_here`, no `Default`; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
+Globals as the queue's. In `edit`, `assign` a value `-` clears, never a mandate; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children"; `--mandate`: `card-mandate.md`. `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `spec card split`, a task and a subtask per department in one act: `card-split.md`; `spec card counts`, per flow and column: `card-counts.md`. `move`, `edit`, `assign` asking nothing: exit 2 (`or_usage_error`). Library `card_{new,list,show,counts,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest`, `CardEditRequest` also `tasks_here`, no `Default`; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
 `open_cards`, never `open_context`: no git, any root; only `accept --departs` and `show` with `--context` or a linked task read git.
 
@@ -71,7 +71,7 @@ cards(id PRIMARY KEY, project, flow, col, position INTEGER, title, goal, discipl
   acceptance, cancellation, created_by, created_at, updated_at, revision, tasks, mandate)
 ```
 
-`CARD_COLUMNS` 26, pinned to `PRAGMA table_info`; `col` is the key `column`, an SQL word. JSON columns: `targets`, `criteria`, `tasks` string lists (`tasks` `NULL` none: `card-tasks.md` "Store and backup"); `evidence` `[{kind, value, by, at}]`; `acceptance` `{by, at, note, verdict, departs, discrepancy}`, no `verdict` reading `briefed`; `cancellation` `{by, at, reason}`, `reason` <= `NOTE_MAX`; `snapshot` an array of `CardFrozen` (`spec-trace-record.md`), or `NULL`. A card holds no path: every repository of the slug sees one board.
+`CARD_COLUMNS` 26, pinned to `PRAGMA table_info`; `col` is the key `column` (SQL). JSON columns: `targets`, `criteria`, `tasks` string lists (`tasks` `NULL` none: `card-tasks.md` "Store and backup"); `evidence` `[{kind, value, by, at}]`; `acceptance` `{by, at, note, verdict, departs, discrepancy}`, no `verdict` reading `briefed`; `cancellation` `{by, at, reason}`, `reason` <= `NOTE_MAX`; `snapshot` an array of `CardFrozen` (`spec-trace-record.md`), or `NULL`. A card holds no path: every repository of the slug sees one board.
 
 API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), `card_history`, `change_card(id, seen, change, actor, now)`, `accept_card`, `list_existing_cards`, each write one `Immediate` transaction, one event; refusals `QueueError::CardRefused`.
 
@@ -84,7 +84,7 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 
 ## Documents and events
 
-`show`, `get_card`, every key present, absent `null`; `mark` to `upstream` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, upstream, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, notes}`; `tasks`: `card-tasks.md` "Read"; `items`: `card-questions.md` "Read"; `mandate`, `subtask_items`: `card-mandate.md`; `context`: `card-context.md`; `upstream`: `card-upstream.md`.
+`show`, `get_card`, every key present, absent `null`; `mark` to `upstream` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, upstream, snapshot, criteria, assignee, reviewer, mandate, estimate, due, parent, corrects, evidence, tasks, items, subtask_items, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, context, practices, cited, notes}`; `tasks`: `card-tasks.md` "Read"; `items`: `card-questions.md` "Read"; `mandate`, `subtask_items`: `card-mandate.md`; `context`: `card-context.md`; `practices`, `cited`: `card-practices.md`; `upstream`: `card-upstream.md`.
 
 - `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card: empty. `accept` is never in it.
 - `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`, its items' last 64 `proposal.*` merged by `seq`; an unparsable payload skipped.

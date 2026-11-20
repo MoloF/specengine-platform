@@ -94,6 +94,12 @@ const GET_CONTEXT: &str = "context: true: {parent {id, title, goal} or null, bun
                            cannot be made is null with a note, never an error. budget needs \
                            context. Without context: null.";
 
+/// docs/features/department-practices.md "MCP and the plugin": `get_card`'s
+/// practices sentence, right after the context's.
+const GET_PRACTICES: &str = "With it, practices: its discipline's practices {name, title, path, \
+                             disciplines, rules}, their rules the bundle's last layer; cited: the \
+                             IDs its texts cite {written, name, title, path}; else both null.";
+
 /// CC4: the library's line of `budget` without `context`.
 const NEEDS_CONTEXT: &str = "`--budget` needs `--context`";
 
@@ -399,9 +405,13 @@ fn cc7_get_card_is_the_cli_read_with_context() {
     let body = document["context"]["bundle"]["body"]
         .as_str()
         .expect("a body");
+    // docs/features/department-practices.md "The card: `practices` and `cited`": `--context` implies
+    // the practices; a card with no discipline gets none and this one cites
+    // no ID, so the two lines read `-`, right before `context.parent:`.
     assert!(
         text.contains(&format!(
-            "history: -\ncontext.parent: -\ncontext.parent.goal: -\ncontext.bundle: {hash}\n{body}"
+            "history: -\npractices: -\ncited: -\ncontext.parent: -\ncontext.parent.goal: -\n\
+             context.bundle: {hash}\n{body}"
         )),
         "{text}"
     );
@@ -717,8 +727,10 @@ fn folded(text: &str) -> String {
 
 /// CC9: `get_card`'s description is 1 987 bytes of ASCII (2 041 since
 /// docs/features/upstream-signal.md US-11, 2 047 since
-/// docs/features/plain-questions.md PQ10, the items' `gist` and `matters`),
-/// starts with the spec's head,
+/// docs/features/plain-questions.md PQ10, the items' `gist` and `matters`;
+/// 2 042 since docs/features/department-practices.md, the practices'
+/// sentence after it and "Reads only:" trimmed to "Reads only;"), starts
+/// with the spec's head,
 /// and holds its sentence once, after "in one read." (and, since
 /// upstream-signal, its `upstream` sentence) and before "Reads only:"; the stdio `INSTRUCTIONS` are 3892f03's (2 048
 /// bytes). The two numbers are tied by compile-time asserts in `src/`. M:
@@ -733,7 +745,8 @@ fn cc9_the_description_holds_the_context_sentence() {
         .to_owned();
     drop(session.finish());
     assert!(text.is_ascii());
-    assert_eq!(text.len(), 2047, "{text}");
+    assert_eq!(text.len(), 2042, "{text}");
+    assert!(text.len() <= 2048, "mcp-read.md \"Size\"");
     assert!(folded(&text).starts_with(GET_HEAD), "{text}");
     let folded_text = folded(&text);
     assert_eq!(
@@ -744,7 +757,7 @@ fn cc9_the_description_holds_the_context_sentence() {
     assert!(
         folded_text.contains(&format!(
             "in one read. upstream: what changed above an open subtask, as list_cards names it, \
-             or null. {GET_CONTEXT} Reads only:"
+             or null. {GET_CONTEXT} {GET_PRACTICES} Reads only;"
         )),
         "{text}"
     );

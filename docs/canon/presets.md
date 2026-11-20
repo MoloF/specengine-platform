@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, scripts, fixtures]
 owner: owner
-reviewed: 2026-11-19
+reviewed: 2026-11-20
 ---
 
 # Presets: `spec init` and the packs it installs
@@ -89,6 +89,12 @@ Each is a header comment, `[[card.flow]]` tables, `[[workspace]]` tables, then c
 | `leadership` | inbox, roadmap, board, flow, tree, documents, graph, health, questions | overview | all |
 
 After them, a commented direction `stories` (`kinds = ["story"]`) and a commented `[[card.split]]` row, `epic`, all five disciplines.
+
+**Example practices** (`card-practices.md`).
+- **The files.** `scripts/presets/practices/gamedev/`, four English documents a person copies into a project's `docs/spec/practices/<trade>/`, or proposes there: `art-3d-models.md` (`[art]`), `development.md`, `sound.md` and `production.md`, each `class: canon` with its flow's discipline, and each rule a `PRA` `{#ID}` section. The 3D one covers realism, normal maps, level of detail, polygon and texture budgets, and optimisation.
+- **`gamedev.toml`'s comments** add `# [ids] PRA`, `# [zones] practices = ["docs/spec/practices/**"]` and `# [auto] exclude_zones = ["practices"]`.
+- **Never written by `spec init`**, which writes one file.
+- **Not walked here** (`[paths] exclude`). The guards and LG-8 read them.
 
 ## Fixtures
 

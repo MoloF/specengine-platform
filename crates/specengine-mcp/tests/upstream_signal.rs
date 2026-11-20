@@ -272,7 +272,9 @@ fn us10_the_schemas_hold_the_upstream_keys() {
     drop(session.finish());
     let card = &tool(&list, "get_card")["outputSchema"];
     let card_keys = properties(card);
-    assert_eq!(card_keys.len(), 36, "{card_keys:?}");
+    // 38 since docs/features/department-practices.md "The card: `practices` and `cited`"
+    // (`practices`, `cited`).
+    assert_eq!(card_keys.len(), 38, "{card_keys:?}");
     assert!(card_keys.contains(&"upstream".to_owned()));
     let row = object(&tool(&list, "list_cards")["outputSchema"]["properties"]["cards"]);
     let row_keys = properties(row);
@@ -549,7 +551,9 @@ fn us11_the_descriptions_hold_the_sentences() {
         .expect("a description")
         .to_owned();
     assert!(get.is_ascii());
-    assert_eq!(get.len(), 2047, "{get}");
+    // 2 042 since docs/features/department-practices.md (the practices'
+    // sentence in, words trimmed elsewhere).
+    assert_eq!(get.len(), 2042, "{get}");
     assert!(get.len() <= 2048);
     let flat = folded(&get);
     assert_eq!(flat.matches(GET_SENTENCE).count(), 1, "{get}");

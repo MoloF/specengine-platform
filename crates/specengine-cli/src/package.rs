@@ -39,6 +39,15 @@
 //!   note says why). The brief's Bindings section prints with rows or
 //!   blocks, one `  tested | <state>[ <category>] | <node>` line each
 //!   after the rows.
+//! - **Practices** (task spec `department-practices` and its decision
+//!   record): the disciplines of every card whose `tasks` list the task
+//!   (the queue's one query, cancelled cards too), sorted, each once, at
+//!   most [`DISCIPLINES_MAX`], go into `bundle.disciplines` and the
+//!   bundle's `--discipline`s; `practices` lists their practices at the
+//!   reading root, from the bundle's own read, by path, at most 32. No
+//!   card: both `[]`, no index read. A read that cannot be made is a note.
+//!   The brief prints a Practices section before Bindings when one is
+//!   listed.
 //! - **Roadmap**: the task's place on the plan of the reading root's
 //!   `[roadmap]` items ([`reading_plan`], as the bundle reads that root):
 //!   the open item an open task executes, as `spec roadmap` lists it
@@ -68,6 +77,7 @@ use std::path::Path;
 
 use specengine_core::check::{CheckInput, bundle_task_from_toml};
 use specengine_core::patch::{locate, span_bytes};
+use specengine_core::practice::{DISCIPLINES_MAX, discipline_name_problem};
 use specengine_core::proposal::{Author, AuthorType};
 use specengine_core::task::{
     CRITERION_TEXT_MAX, DEFAULT_TASK_BUDGET, DIFF_MAX, DIFFS_TOTAL_MAX, PACKAGE_BINDINGS_MAX,
@@ -75,9 +85,10 @@ use specengine_core::task::{
 };
 use specengine_core::{GroupKind, Plan, PlanTask, RoadmapConfig, plan, task_item};
 use specengine_model::{
-    BindingRow, IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackageProposal,
-    PackageTarget, SnapshotDiff, SnapshotNode, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION,
-    TaskAuthor, TaskAuthorType, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
+    BindingRow, IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackagePractice,
+    PackageProposal, PackageTarget, SnapshotDiff, SnapshotNode, SpecSnapshot,
+    TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskCriterion, TaskPackage,
+    TaskRoadmap, TaskRun,
 };
 use specengine_store::{
     Decoded, GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
@@ -89,6 +100,7 @@ use crate::bindings::row_binding;
 use crate::bundle::{Beside, BesideRows, BundleRequest, beside_rows, bundle_with};
 use crate::cap::{OUTPUT_CAP_CHARS, row_lines};
 use crate::corpus::{add_bytes, indexed_decoded};
+use crate::practice::{self, PracticeAsk, PracticeRead};
 use crate::preflight::recorded_project;
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{QueueContext, queue_cannot};
@@ -96,9 +108,9 @@ use crate::propose::{is_path_target, resolved_node};
 use crate::tested::tested_line;
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line};
 
-/// The brief's sections, in print order; Bindings only when the package
-/// lists a row.
-pub const SECTIONS: [&str; 11] = [
+/// The brief's sections, in print order; Practices only when the package
+/// lists a practice, Bindings only when it lists a row.
+pub const SECTIONS: [&str; 12] = [
     "Goal",
     "Criteria",
     "Targets",
@@ -108,6 +120,7 @@ pub const SECTIONS: [&str; 11] = [
     "Plan",
     "Spec changes since approval",
     "Runs",
+    "Practices",
     "Bindings",
     "Bundle",
 ];
@@ -722,9 +735,18 @@ pub(crate) fn assemble(
         });
     }
 
-    let (budget, bundle_hash, beside) =
-        bundle_of(env, globals, context, task, git_env, roots, &mut notes)?;
+    let disciplines = task_disciplines(context, task, &mut notes);
+    let read = TaskRead {
+        env,
+        globals,
+        context,
+        task,
+        git_env,
+    };
+    let (budget, bundle_hash, beside, from_bundle) =
+        bundle_of(&read, roots, &disciplines, &mut notes)?;
     notes.extend(beside.note);
+    let practices = task_practices(env, context, &disciplines, from_bundle, &mut notes);
     let tested = beside.tested;
     let mut bindings = beside.rows;
     let past_cap = bindings.split_off(bindings.len().min(PACKAGE_BINDINGS_MAX));
@@ -789,8 +811,10 @@ pub(crate) fn assemble(
         bundle: PackageBundle {
             node_ids: task.targets.clone(),
             budget,
+            disciplines,
             bundle_hash,
         },
+        practices,
         roadmap,
         author: task_author(&task.author),
         created_at: task.created_at.clone(),
@@ -924,16 +948,22 @@ fn task_author(author: &Author) -> TaskAuthor {
 /// and the binding rows of the targets, the affected nodes and their
 /// sections, with the `[[tested]]` blocks of those and of the criteria
 /// refs, from the bundle's code read (its one refresh; read alone when the
-/// bundle stops before it).
+/// bundle stops before it), and the practices of `disciplines` from the
+/// bundle's own read (`None` when it stopped before reading: task spec
+/// `department-practices`).
 fn bundle_of(
-    env: &Env,
-    globals: &Globals,
-    context: &QueueContext,
-    task: &Task,
-    git_env: &GitEnv,
+    read: &TaskRead<'_>,
     roots: &mut Roots,
+    disciplines: &[String],
     notes: &mut Vec<String>,
-) -> Result<(u32, Option<String>, BesideRows), CliError> {
+) -> Result<(u32, Option<String>, BesideRows, Option<PracticeRead>), CliError> {
+    let TaskRead {
+        env,
+        globals,
+        context,
+        task,
+        git_env,
+    } = *read;
     let text = roots.config_text(context).map_err(CliError::spec)?;
     let budget = match bundle_task_from_toml(text) {
         Ok(Some(found)) => found.tokens,
@@ -950,6 +980,7 @@ fn bundle_of(
         references: task.targets.clone(),
         budget: Some(i64::from(budget)),
         git: git_env.clone(),
+        disciplines: disciplines.to_vec(),
     };
     let refs: Vec<String> = task
         .targets
@@ -968,7 +999,13 @@ fn bundle_of(
         tested_refs: &criteria,
         rows: None,
     };
-    let hash = match bundle_with(env, globals, &request, Some(&mut beside)) {
+    let mut ask = PracticeAsk {
+        citations: Vec::new(),
+        room: None,
+        read: None,
+    };
+    let made = bundle_with(env, globals, &request, Some(&mut beside), Some(&mut ask));
+    let hash = match made {
         Ok(outcome) => match outcome.bundle {
             Some(made) => Some(made.bundle_hash),
             None => {
@@ -993,7 +1030,74 @@ fn bundle_of(
         Some(rows) => rows,
         None => beside_rows(env, globals, git_env, &refs, &criteria),
     };
-    Ok((budget, hash, rows))
+    Ok((budget, hash, rows, ask.read))
+}
+
+/// What one package read runs with: the caller's environment, its queue
+/// context, the task and git's environment.
+#[derive(Clone, Copy)]
+struct TaskRead<'a> {
+    env: &'a Env,
+    globals: &'a Globals,
+    context: &'a QueueContext,
+    task: &'a Task,
+    git_env: &'a GitEnv,
+}
+
+/// The disciplines of every card whose `tasks` list `task` (the queue's
+/// one query, cancelled cards too; task spec `department-practices`, "The
+/// task package"): each a discipline name, sorted, each once, at most
+/// [`DISCIPLINES_MAX`]. A queue that cannot be read is a note and none.
+fn task_disciplines(context: &QueueContext, task: &Task, notes: &mut Vec<String>) -> Vec<String> {
+    let cards = match context.queue.cards_listing_task(&task.id) {
+        Ok(cards) => cards,
+        Err(error) => {
+            notes.push(one_line(&format!("practices: cards not read: {error}")));
+            return Vec::new();
+        }
+    };
+    let disciplines: BTreeSet<String> = cards
+        .into_iter()
+        .filter_map(|(_, discipline)| discipline)
+        .filter(|discipline| discipline_name_problem(discipline).is_none())
+        .collect();
+    disciplines.into_iter().take(DISCIPLINES_MAX).collect()
+}
+
+/// The practices of `disciplines` at the reading root, by path, at most
+/// 32, the note past them in `notes`: the bundle's own read's, else (the
+/// bundle stopped before its read) their own read; none without a
+/// discipline, and no index read. A read that cannot be made is a note and
+/// none.
+fn task_practices(
+    env: &Env,
+    context: &QueueContext,
+    disciplines: &[String],
+    from_bundle: Option<PracticeRead>,
+    notes: &mut Vec<String>,
+) -> Vec<PackagePractice> {
+    if disciplines.is_empty() {
+        return Vec::new();
+    }
+    let read = match from_bundle {
+        Some(read) => Ok(read),
+        None => practice::read(env, &context.project, disciplines, Vec::new()),
+    };
+    match read {
+        Ok(read) => {
+            notes.extend(read.note);
+            read.practices
+        }
+        Err(error) => {
+            let cause = error
+                .message
+                .strip_prefix("spec: ")
+                .unwrap_or(&error.message)
+                .to_owned();
+            notes.push(one_line(&format!("practices: not read: {cause}")));
+            Vec::new()
+        }
+    }
 }
 
 /// The `snapshot_diff` entries of `changes`, in snapshot order (see the
@@ -1126,13 +1230,16 @@ pub(crate) fn render_brief(package: &TaskPackage) -> String {
     let header = escape_controls(&header);
     let sections: Vec<(&str, String)> = SECTIONS
         .iter()
-        .filter(|&&name| {
-            name != "Bindings"
-                || !package.bindings.is_empty()
-                || package
-                    .tested
-                    .as_ref()
-                    .is_some_and(|tested| !tested.is_empty())
+        .filter(|&&name| match name {
+            "Practices" => !package.practices.is_empty(),
+            "Bindings" => {
+                !package.bindings.is_empty()
+                    || package
+                        .tested
+                        .as_ref()
+                        .is_some_and(|tested| !tested.is_empty())
+            }
+            _ => true,
         })
         .map(|&name| (name, escape_controls(&section(package, name))))
         .collect();
@@ -1196,6 +1303,17 @@ fn section(package: &TaskPackage, name: &str) -> String {
                     or_dash(target.kind.as_deref()),
                     or_dash(target.title.as_deref()),
                     or_dash(target.path.as_deref())
+                ));
+            }
+        }
+        "Practices" => {
+            out.push_str(&format!(" {}\n", package.practices.len()));
+            for practice in &package.practices {
+                out.push_str(&format!(
+                    "  {} | {} | rules {}\n",
+                    one_line(&practice.name),
+                    or_dash(practice.title.as_deref()),
+                    practice.rules
                 ));
             }
         }

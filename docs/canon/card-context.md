@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-20
 ---
 
 # Card context: a task read with its context in one call
@@ -18,6 +18,7 @@ Built by `card-context` (RM-0108, plugin 0.39.0) on accepted decisions alone: a 
 - **Budget**: `--budget N` (1 to 4294967295, `spec bundle`'s `budget_of`), else the reading root's `[budgets] bundle_task`, read alone as a package's, else `DEFAULT_TASK_BUDGET` 10 000. It goes as `BundleRequest.budget = Some(n)`, so `bundle_node` is never read and a minimum's line names `--budget N`.
 - **Parent**: the direct parent's `{id, title, goal}`, read now from the same queue; none: `null`, no note. Unreadable: `null` and a note. A goal over `GOAL_MAX` (4 096 B, a hand edit) is cut at the last character boundary within it, with a note.
 - **Live text**: the bundle reads the corpus now, never the card's `snapshot`; the card's `mark` says when its brief changed.
+- **Practices** (ADR-0084): the bundle is asked with the card's discipline (layer 10), and `--context` fills `practices` and `cited`, their `practices:` and `cited:` lines counted in `U` (`card-practices.md`).
 
 ## The room
 
@@ -37,7 +38,7 @@ context.bundle: b3:<64 hex digits>
 
 `context.parent:` is `<id> | <title>` or `-`; `context.parent.goal:` the goal through `one_line`, or `-` (no parent, no goal); `context.bundle:` the `bundle_hash` or `-`, the body only when made. Tokens, characters and bytes are in the JSON. The context's notes print as `note: context: <note>` after every message the read printed before, then the bundle's own `note:` and `warning:` lines verbatim, all outside the cut. The whole text, body included, goes through `escape_controls`.
 
-JSON: `context` is the card document's 35th key, between `history` and `notes` (`cards.md` "Documents and events"): `null`, or `{parent: {id, title, goal} | null, bundle, notes}`. `bundle` is `spec bundle --json`'s document exactly, 13 keys (`spec-cli-bundle.md` "Output"), from the bundle's own serializer, equal as a value to `spec bundle <REFs> --budget N --json`; never its exit-1 document. `notes` drop the `context: ` prefix; the document's top-level `notes` hold none of them.
+JSON: `context` is the card document's 35th key, between `history` and `practices` (`cards.md` "Documents and events"): `null`, or `{parent: {id, title, goal} | null, bundle, notes}`. `bundle` is `spec bundle --json`'s document exactly, 13 keys (`spec-cli-bundle.md` "Output"), from the bundle's own serializer, equal as a value to `spec bundle <REFs> --budget N --json`; never its exit-1 document. `notes` drop the `context: ` prefix; the document's top-level `notes` hold none of them.
 
 Library: `CardShowRequest` has `context: bool`, `budget: Option<i64>`, set at every construction; `CardShowOutcome.context: Option<CardContext>`; `CardContext {parent: Option<CardContextParent>, bundle: Option<BundleOutcome>, notes}`, `CardContextParent {id, title, goal}`, both exported. `BundleRequest` and `bundle()` are unchanged.
 
@@ -62,9 +63,9 @@ Writes: the data directory alone (the bundle's index update and code refresh), n
 
 ## MCP, daemon, hub, plugin
 
-- `GetCardArgs` takes `context`, `budget` (`deny_unknown_fields`). The output schema mirrors the document: `CardContextShape {parent, bundle: BundleDocument, notes}`, `CardContextParentShape {id, title, goal}`, both `deny_unknown_fields`. `GET_DESCRIPTION` is 2 041 of 2 048 B since `upstream` (`card-upstream.md`), its "else 10000)" and "the 40000 characters" tied to `DEFAULT_TASK_BUDGET` and `OUTPUT_CAP_CHARS` by `holds_number` asserts. Stdio's `INSTRUCTIONS` is unchanged.
-- The daemon's `GET .../cards/:id` never asks: `context: null`, `Card` 36 keys (`fixtures/daemon-keys.json`, 137 sets). The UI types `Card.context: null` (`provisional.ts`) and renders nothing.
-- A hub's `/mcp/<slug>` `get_card` is stdio's route as it is: it takes the key with no hub code, the bundle reading the hub's checkout inside the project's turn (`hub-mcp.md` "Turn"); its 18 tools and `INSTRUCTIONS` unchanged. A hub gains it with its next upgrade, the owner's.
+- `GetCardArgs` takes `context`, `budget` (`deny_unknown_fields`). The output schema mirrors the document: `CardContextShape {parent, bundle: BundleDocument, notes}`, `CardContextParentShape {id, title, goal}`, both `deny_unknown_fields`. `GET_DESCRIPTION` stays within 2 048 B (2 042 since `department-practices`, its first paragraph shortened), its "else 10000)" and "the 40000 characters" tied to `DEFAULT_TASK_BUDGET` and `OUTPUT_CAP_CHARS` by `holds_number` asserts. Stdio's `INSTRUCTIONS` is unchanged.
+- The daemon's `GET .../cards/:id` never asks: `context: null`, `Card` 38 keys (`fixtures/daemon-keys.json`); `?practices=true` fills `practices`, `cited`. The UI types `Card.context: null` (`provisional.ts`) and renders nothing.
+- A hub's `/mcp/<slug>` `get_card` is stdio's route as it is: it takes the key with no hub code, the bundle reading the hub's checkout inside the project's turn (`hub-mcp.md` "Turn"); the call walks at most once, for the mark, and its bundle and practices trust (`card-practices.md`); its 18 tools and `INSTRUCTIONS` unchanged. A hub gains it with its next upgrade, the owner's.
 - Plugin 0.39.0 (`plugin-files.md` "Changing it"): `read-spec`'s cards bullet names `context: true`, and `get_context_bundle` for an older server.
 
 ## Cost

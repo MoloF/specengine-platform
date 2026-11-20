@@ -171,7 +171,9 @@ describe("the normal scenario", () => {
     const { proposals } = await client.getInbox("harbor-sim");
     const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));
     for (const review of reviews) {
-      expect([review.id, Object.keys(review).slice(-9)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes"]]);
+      // `cited` last since department-practices, filled on this route alone (docs/features/department-practices.md "Acceptance criteria", DP13).
+      expect([review.id, Object.keys(review).slice(-10)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes", "cited"]]);
+      expect([review.id, Array.isArray(review.cited)]).toEqual([review.id, true]);
       expect([review.id, review.similar]).toEqual([review.id, null]);
       expect([review.staged, review.staged_at]).toEqual([null, null]);
     }
@@ -208,7 +210,9 @@ describe("the normal scenario", () => {
       "2026-10-05T12:00:00Z",
       "2026-10-05T12:00:00Z",
     ]);
-    expect(await client.getProposal("harbor-sim", "PR-0041")).toEqual(staged);
+    // The stage's answer is the review without its cited IDs, which only `proposals/:id` reads (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(staged.cited).toBeNull();
+    expect({ ...(await client.getProposal("harbor-sim", "PR-0041")), cited: null }).toEqual(staged);
     const entry = (await client.getInbox("harbor-sim")).proposals.find((proposal) => proposal.id === "PR-0041");
     expect([entry?.status, entry?.staged_at]).toEqual(["open", "2026-10-05T12:00:00Z"]);
   });
@@ -226,7 +230,8 @@ describe("the normal scenario", () => {
   it("unstages: both keys null; nothing staged, the document as it was", async () => {
     const client = new MockClient("normal", { now: clock });
     const before = await client.getProposal("ledger-api", "PR-0007");
-    expect(await client.unstageDecision("ledger-api", "PR-0007")).toEqual(before);
+    // Its cited IDs are the review route's alone: the unstage's answer holds none (docs/features/department-practices.md "Acceptance criteria", DP13).
+    expect(await client.unstageDecision("ledger-api", "PR-0007")).toEqual({ ...before, cited: null });
     await client.stageDecision("ledger-api", "PR-0007", { decision: "reject", reason: "No" }, before.updated_at ?? "");
     const unstaged = await client.unstageDecision("ledger-api", "PR-0007");
     expect([unstaged.staged, unstaged.staged_at, unstaged.status]).toEqual([null, null, "open"]);

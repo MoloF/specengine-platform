@@ -1978,6 +1978,7 @@ export const ru: Catalog = {
       neighbours: "Соседи",
       terms: "Термины",
       tests: "Тесты",
+      practices: "Практики",
     },
     sync: {
       cannot_verify: "Нельзя проверить",
@@ -3004,7 +3005,7 @@ export const ru: Catalog = {
     act: { approve: "одобрение", apply: "применение", land: "слияние", run: "прогон" },
     kind: { update: "Правка спеки", create: "Дополнение", interpretation: "Толкование", amendment: "Поправка", drift: "Расхождение с кодом" },
   },
-  // Documents (src/documents/; docs/features/doc-library.md "Description and interactions").
+  // Documents (src/documents/; docs/canon/spec-library.md "The screen").
   documents: {
     title: "Документы",
     loading: "Читаем документы {{project}}",
@@ -3025,9 +3026,9 @@ export const ru: Catalog = {
     search: "Поиск",
     searchHint: "Название, имя, путь или тег",
     filters: "Фильтры",
-    facet: { class: "Класс", kind: "Вид", status: "Статус", tags: "Теги", module: "Модуль", owner: "Владелец", tier: "Уровень", scope: "Область" },
-    all: { class: "Все классы", kind: "Все виды", status: "Все статусы", tags: "Все теги", module: "Все модули", owner: "Все владельцы", tier: "Все уровни", scope: "Все области" },
-    none: { class: "Без класса", kind: "Без вида", status: "Без статуса", tags: "Без тегов", owner: "Без владельца", tier: "Без уровня", scope: "Без области" },
+    facet: { class: "Класс", kind: "Вид", status: "Статус", tags: "Теги", disciplines: "Специальность", module: "Модуль", owner: "Владелец", tier: "Уровень", scope: "Область" },
+    all: { class: "Все классы", kind: "Все виды", status: "Все статусы", tags: "Все теги", disciplines: "Все специальности", module: "Все модули", owner: "Все владельцы", tier: "Все уровни", scope: "Все области" },
+    none: { class: "Без класса", kind: "Без вида", status: "Без статуса", tags: "Без тегов", disciplines: "Без специальности", owner: "Без владельца", tier: "Без уровня", scope: "Без области" },
     any: "Все",
     facetValue: "{{facet}}: {{value}}",
     chosen_one: "выбран {{count}}",
@@ -3090,5 +3091,17 @@ export const ru: Catalog = {
     lastWith: "Показан последний ответ, с архивом",
     lastWithout: "Показан последний ответ, без архива",
     notes: "Заметки демона",
+  },
+  practices: {
+    title: "Практики",
+    rules_one: "{{count}} правило",
+    rules_few: "{{count}} правила",
+    rules_many: "{{count}} правил",
+    rules_other: "{{count}} правила",
+    none: "Нет практик для специальности {{discipline}}",
+    next: "Дальше: документ, у которого эта специальность указана в поле front-matter disciplines, появится здесь при следующем чтении.",
+    noDiscipline: "У этой задачи нет специальности, поэтому практики к ней не относятся",
+    noDisciplineNext: "Практики подбираются по специальности задачи: задача, созданная со специальностью, покажет здесь свои практики.",
+    failed: "Не удалось прочитать практики",
   },
 };

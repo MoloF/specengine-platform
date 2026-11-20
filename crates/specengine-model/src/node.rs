@@ -173,6 +173,12 @@ pub struct Fields {
     /// judges each entry, the library serves the kept ones; never counted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    /// The card disciplines a practice serves, every string entry as
+    /// written, in written order (task spec `department-practices`,
+    /// "Front-matter `disciplines`"; ADR-0084): the check judges each
+    /// entry, the index keeps the passing ones; never counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disciplines: Option<Vec<String>>,
 }
 
 /// A place a `path#name` link can land on: a heading's GitHub slug, a

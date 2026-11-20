@@ -4,7 +4,7 @@ import { App } from "../app/App";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
-// docs/features/doc-library.md "Description and interactions" over the mock, as `pnpm dev` shows it at
+// docs/canon/spec-library.md "The screen" over the mock, as `pnpm dev` shows it at
 // `#/harbor-sim/documents`: galley's nav lists Documents after Spec tree; the department's module
 // (Berths) and Class canon start the table, each one press from All; the harbour's page behind its
 // decision, its decisions expanded; `large`'s 5 000 rows paged; `empty`'s empty state; `error`'s

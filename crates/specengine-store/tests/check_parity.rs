@@ -227,6 +227,17 @@ const AGENT_FILES: [&str; 5] = [
 /// The skill glob and the agents glob of [`SKIP_FILES`].
 const SKILL_GLOB: &str = "plugin/specengine/skills/*/SKILL.md";
 const AGENT_GLOB: &str = "plugin/specengine/agents/*.md";
+/// docs/features/department-practices.md "Presets and examples": the
+/// example practices, the std walk's rule and the root config's `exclude`
+/// glob, and the four files.
+const PRACTICE_GLOB: &str = "scripts/presets/practices/*/*.md";
+const PRACTICE_EXCLUDE: &str = "scripts/presets/practices/**";
+const PRACTICE_FILES: [&str; 4] = [
+    "scripts/presets/practices/gamedev/art-3d-models.md",
+    "scripts/presets/practices/gamedev/development.md",
+    "scripts/presets/practices/gamedev/production.md",
+    "scripts/presets/practices/gamedev/sound.md",
+];
 
 fn set(paths: &[&str]) -> BTreeSet<String> {
     paths.iter().map(|path| (*path).to_owned()).collect()
@@ -289,11 +300,29 @@ fn the_walk_is_the_std_walk_of_this_repository() {
         listed_roots.iter().any(|root| root == "plugin"),
         "`plugin` in `roots`: {listed_roots:?}"
     );
-    assert_eq!(SKIP_FILES, [SKILL_GLOB, AGENT_GLOB]);
+    assert_eq!(SKIP_FILES, [SKILL_GLOB, AGENT_GLOB, PRACTICE_GLOB]);
     assert_eq!(
         skipped_files(&repository),
-        &set(&SKILL_FILES) | &set(&AGENT_FILES),
+        &(&set(&SKILL_FILES) | &set(&AGENT_FILES)) | &set(&PRACTICE_FILES),
         "the files the frozen rules leave out"
+    );
+    // docs/features/department-practices.md "Presets and examples": the
+    // example practices stay out by `exclude`; dropped, exactly the four
+    // join. M: the exclude left out of the root config.
+    for file in PRACTICE_FILES {
+        assert!(repository.join(file).is_file(), "{file} exists");
+        assert!(glob_matches(PRACTICE_GLOB, file), "{file} matches");
+        assert!(!expected.contains(file), "{file} in the std walk");
+    }
+    let practices_joined: BTreeSet<String> =
+        walked(&repository, &without_exclude(&toml, PRACTICE_EXCLUDE))
+            .difference(&expected)
+            .cloned()
+            .collect();
+    assert_eq!(
+        practices_joined,
+        set(&PRACTICE_FILES),
+        "the practices' exclude dropped"
     );
     for (glob, files) in [
         (SKILL_GLOB, &SKILL_FILES[..]),

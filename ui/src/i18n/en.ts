@@ -1916,6 +1916,7 @@ export const en = {
       neighbours: "Neighbours",
       terms: "Terms",
       tests: "Tests",
+      practices: "Practices",
     },
     sync: {
       cannot_verify: "Cannot verify",
@@ -2839,7 +2840,7 @@ export const en = {
     act: { approve: "approval", apply: "apply", land: "merge", run: "run" },
     kind: { update: "Spec change", create: "Addition", interpretation: "Interpretation", amendment: "Amendment", drift: "Drift" },
   },
-  // Documents (src/documents/; docs/features/doc-library.md "Description and interactions"): every document as a
+  // Documents (src/documents/; docs/canon/spec-library.md "The screen"): every document as a
   // library, filtered by facets over the one answer read. Served values stay as written.
   documents: {
     title: "Documents",
@@ -2855,9 +2856,9 @@ export const en = {
     search: "Search",
     searchHint: "Title, name, path or tag",
     filters: "Filters",
-    facet: { class: "Class", kind: "Kind", status: "Status", tags: "Tags", module: "Module", owner: "Owner", tier: "Tier", scope: "Scope" },
-    all: { class: "All classes", kind: "All kinds", status: "All statuses", tags: "All tags", module: "All modules", owner: "All owners", tier: "All tiers", scope: "All scopes" },
-    none: { class: "No class", kind: "No kind", status: "No status", tags: "No tags", owner: "No owner", tier: "No tier", scope: "No scope" },
+    facet: { class: "Class", kind: "Kind", status: "Status", tags: "Tags", disciplines: "Discipline", module: "Module", owner: "Owner", tier: "Tier", scope: "Scope" },
+    all: { class: "All classes", kind: "All kinds", status: "All statuses", tags: "All tags", disciplines: "All disciplines", module: "All modules", owner: "All owners", tier: "All tiers", scope: "All scopes" },
+    none: { class: "No class", kind: "No kind", status: "No status", tags: "No tags", disciplines: "No discipline", owner: "No owner", tier: "No tier", scope: "No scope" },
     any: "All",
     facetValue: "{{facet}}: {{value}}",
     chosen_one: "{{count}} chosen",
@@ -2909,5 +2910,16 @@ export const en = {
     lastWith: "Showing the last answer, with the archive",
     lastWithout: "Showing the last answer, without the archive",
     notes: "Notes from the daemon",
+  },
+  // A task's Practices part (docs/features/department-practices.md "Acceptance criteria", DP21): the documents naming its discipline.
+  practices: {
+    title: "Practices",
+    rules_one: "{{count}} rule",
+    rules_other: "{{count}} rules",
+    none: "No practices for the discipline {{discipline}}",
+    next: "Next: a document that names this discipline in its front-matter disciplines field shows here on the next read.",
+    noDiscipline: "This task has no discipline, so no practices apply",
+    noDisciplineNext: "Practices are read by a task's discipline: one made with a discipline shows its practices here.",
+    failed: "The practices could not be read",
   },
 } as const;

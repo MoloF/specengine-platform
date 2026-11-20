@@ -36,15 +36,23 @@
 //! `contradicts` discrepancy gets its `pair` (task spec `collision-pairs`
 //! PP1): its targets resolved now in the current root, as `spec round`
 //! resolves them; `null` on every other item, nothing resolved for it.
+//! Every review gets its `cited` (task spec `department-practices`,
+//! "Proposals"), its last key: the IDs its served texts (rationale,
+//! summary, gist, why it matters, working answer, why, option labels, the
+//! answer) cite, resolved over the current root's index as `spec show`
+//! resolves a REF; an index that cannot be read leaves it `null`, a note
+//! saying why.
 
 use serde_json::Value;
 use specengine_core::pair::Pair;
 use specengine_core::raise::RevisionRow;
+use specengine_core::record::Choice;
 use specengine_store::{BY_RULE, GitEnv, KindFamily, Proposal, ProposalStatus, Stage};
 
 use crate::corpus::indexed;
 use crate::create::prepare_file;
 use crate::interpret::{canon_note, recorded_canon_note};
+use crate::practice::{self, Cited};
 use crate::preflight::{RecordedCorpus, StepRead, completing, prepare_spanned, trailer_lookup};
 use crate::proposals::{
     Delegated, Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext,
@@ -136,7 +144,52 @@ fn run_review(
     document.notes.extend(note);
     document.pair = review_pair(env, &context, &proposal, &mut messages, &mut document.notes);
     document.delegated = delegated_of(&context, &proposal, &mut document.notes);
+    let (cited, note) = review_cited(env, &context, &document, &mut messages);
+    document.cited = cited;
+    document.notes.extend(note);
     Ok(ProposalOutcome::done(COMMAND, document, messages))
+}
+
+/// The review's `cited` (see the module documentation): its texts as
+/// served, in key order; `None` and a note when the index cannot be read.
+fn review_cited(
+    env: &Env,
+    context: &QueueContext,
+    document: &ProposalDocument,
+    messages: &mut Vec<Message>,
+) -> (Option<Vec<Cited>>, Option<String>) {
+    let answer = match &document.choice {
+        Some(Choice::Answer(answer)) => Some(answer.as_str()),
+        _ => None,
+    };
+    let texts: Vec<&str> = [
+        document.rationale.as_deref(),
+        document.summary.as_deref(),
+        document.gist.as_deref(),
+        document.matters.as_deref(),
+        document.working_answer.as_deref(),
+        document.why.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .chain(document.options.iter().map(|option| option.label.as_str()))
+    .chain(answer)
+    .collect();
+    let citations = practice::citations(&texts, &context.project.config.scheme);
+    match practice::read(env, &context.project, &[], citations) {
+        Ok(read) => {
+            messages.extend(read.messages);
+            (Some(read.cited), read.cited_note)
+        }
+        Err(error) => {
+            let cause = error
+                .message
+                .strip_prefix("spec: ")
+                .unwrap_or(&error.message)
+                .to_owned();
+            (None, Some(one_line(&format!("cited: not read: {cause}"))))
+        }
+    }
 }
 
 /// The review's `delegated` (task spec `hub-auto`, the review document): an

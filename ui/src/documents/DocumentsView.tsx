@@ -47,7 +47,7 @@ import {
   type SortedColumn,
 } from "./library";
 
-// Documents, `#/<p>/documents` (docs/features/doc-library.md "Description and interactions", DL18, DL19), a chunk of
+// Documents, `#/<p>/documents` (docs/features/doc-library.md "Acceptance criteria", DL18, DL19), a chunk of
 // its own: every document the daemon's library serves, as a table filtered by facets over that one
 // answer. Read only: a title opens the document modal, a Decisions cell opens the decisions whose
 // `canon:` lands on the row; nothing here writes, gates or moves anything (ADR-0004, ADR-0012). The

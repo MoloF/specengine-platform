@@ -182,12 +182,16 @@ describe("the cases the slice names (Data, Mock)", () => {
       "claim",
       "runs",
       "bundle",
+      // The 28th since docs/features/department-practices.md "Acceptance criteria", DP12.
+      "practices",
       "roadmap",
       "author",
       "created_at",
       "updated_at",
       "notes",
     ]);
+    // No card of the mock lists a task's practices: `[]`, and the bundle's disciplines none.
+    expect([pkg.practices, pkg.bundle?.disciplines ?? []]).toEqual([[], []]);
   });
 
   it("serve no code and no evidence, as without [code]: every package's bindings [] and tested null (tested-reads)", () => {

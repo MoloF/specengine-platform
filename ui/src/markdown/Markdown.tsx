@@ -1,7 +1,7 @@
 import { createContext, createElement, memo, use, useEffect, useMemo, useRef, type JSX, type MouseEvent, type ReactElement } from "react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ShownLink } from "../api/types";
+import type { Cited, ShownLink } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { linkStateLook } from "../tree/labels";
@@ -45,6 +45,12 @@ export interface MarkdownProps {
   firstParagraph?: boolean;
   /** Classes of the text's container. */
   className?: string;
+  /**
+   * The IDs the daemon resolved in the holder's texts (a card's, a proposal's: its `cited`): each
+   * served `written` outside code a document link to its `name`, nothing else
+   * (docs/features/department-practices.md "Acceptance criteria", DP21). Null or absent: none.
+   */
+  cited?: readonly Cited[] | null;
 }
 
 interface LinkScope {
@@ -91,6 +97,15 @@ function Anchor({ node, children }: Props<"a">) {
   }
   if (kind === "autolink") {
     return <span className="md-url">{children}</span>;
+  }
+  const citedName = kind === "cited" ? stringProperty(node, "dataName") : null;
+  if (citedName !== null) {
+    // A served citation: the document view at the node the daemon resolved (./plugin, ./cited).
+    return (
+      <DocLink className="md-link" project={scope.project} docRef={citedName}>
+        {children}
+      </DocLink>
+    );
   }
   const entries = kind === "local" ? listed(scope, stringProperty(node, "dataDest"), numberProperty(node, "dataDestLine")) : [];
   const name = resolvedName(entries);
@@ -204,15 +219,16 @@ function specWords(t: Translate): SpecWords {
   };
 }
 
-/** What a parse keeps of a text: all of it, less a title said again, or its first paragraph alone. */
+/** What a parse keeps of a text: all of it, less a title said again, or its first paragraph alone; the served citations it links. */
 interface Cut {
   dropTitle: string | null;
   firstParagraph: boolean;
+  cited: readonly Cited[];
 }
 
 /** The text's elements: react-markdown's sync component called once per text, lines, level, cut and language. */
 function parsed(body: string, lineBase: number, baseLevel: number, cut: Cut, language: string, words: SpecWords): ReactElement {
-  const key = `${language}:${String(lineBase)}:${String(baseLevel)}:${cut.firstParagraph ? "lead" : "all"}:${JSON.stringify(cut.dropTitle)}:${body}`;
+  const key = `${language}:${String(lineBase)}:${String(baseLevel)}:${cut.firstParagraph ? "lead" : "all"}:${JSON.stringify(cut.dropTitle)}:${JSON.stringify(cut.cited.map((entry) => [entry.written, entry.name]))}:${body}`;
   const kept = parses.get(key);
   if (kept !== undefined) {
     parses.delete(key);
@@ -230,13 +246,14 @@ function parsed(body: string, lineBase: number, baseLevel: number, cut: Cut, lan
   return elements;
 }
 
-/** The parse and its elements: again only when the text, its lines, its level, its cut or the language change. */
+/** The parse and its elements: again only when the text, its lines, its level, its cut, its citations or the language change. */
 const Rendered = memo(function Rendered({
   body,
   lineBase,
   baseLevel,
   dropTitle,
   firstParagraph,
+  cited,
   language,
   words,
 }: {
@@ -245,11 +262,15 @@ const Rendered = memo(function Rendered({
   baseLevel: number;
   dropTitle: string | null;
   firstParagraph: boolean;
+  cited: readonly Cited[];
   language: string;
   words: SpecWords;
 }) {
-  return parsed(body, lineBase, baseLevel, { dropTitle, firstParagraph }, language, words);
+  return parsed(body, lineBase, baseLevel, { dropTitle, firstParagraph, cited }, language, words);
 });
+
+/** No served citation. */
+const NONE_CITED: readonly Cited[] = [];
 
 /** Markdown prose as React elements; a document's front-matter verbatim above it, but in a lead. */
 export function Markdown({
@@ -266,6 +287,7 @@ export function Markdown({
   dropTitle = null,
   firstParagraph = false,
   className,
+  cited = null,
 }: MarkdownProps) {
   const t = useTranslate();
   const { language } = useLanguage();
@@ -275,6 +297,8 @@ export function Markdown({
   // A leading BOM with no front-matter: the parser skips it without counting it in its offsets, so
   // it is dropped here (a line of its own it is not) and every offset stays the text's.
   const body = split.block === null && split.body.startsWith("\uFEFF") ? split.body.slice(1) : split.body;
+  // The served citations this text holds: the parse's key names only these, so a list with others leaves its parse alone.
+  const held = useMemo(() => (cited === null ? NONE_CITED : cited.filter((entry) => entry.written !== "" && body.includes(entry.written))), [cited, body]);
   const scope = useMemo<LinkScope>(() => ({ project, links, path, linkTo, onFollow }), [project, links, path, linkTo, onFollow]);
 
   // A jump focuses the last block starting at or before the line: the one holding it.
@@ -311,7 +335,7 @@ export function Markdown({
             {split.block}
           </pre>
         )}
-        <Rendered body={body} lineBase={firstLine + split.lines - 1} baseLevel={baseLevel} dropTitle={dropTitle} firstParagraph={firstParagraph} language={language} words={words} />
+        <Rendered body={body} lineBase={firstLine + split.lines - 1} baseLevel={baseLevel} dropTitle={dropTitle} firstParagraph={firstParagraph} cited={held} language={language} words={words} />
       </div>
     </LinkScopeContext>
   );

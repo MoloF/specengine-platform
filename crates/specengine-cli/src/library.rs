@@ -473,7 +473,7 @@ struct LibraryJson<'a> {
     omitted: Option<usize>,
 }
 
-/// A row's 22 keys, in this order.
+/// A row's 23 keys, in this order.
 #[derive(Serialize)]
 struct RowJson<'a> {
     name: &'a str,
@@ -489,6 +489,7 @@ struct RowJson<'a> {
     reviewed: Option<&'a str>,
     scope: Option<&'a [String]>,
     tags: &'a [String],
+    disciplines: &'a [String],
     rev: Option<u32>,
     parent: Option<&'a str>,
     modules: &'a [String],
@@ -565,6 +566,7 @@ impl Serialize for LibraryOutcome {
                         reviewed: row.reviewed.as_deref(),
                         scope: row.scope.as_deref(),
                         tags: &row.tags,
+                        disciplines: &row.disciplines,
                         rev: row.rev,
                         parent: row.parent.as_deref(),
                         modules: &row.modules,

@@ -38,6 +38,10 @@ pub(crate) struct FileRows {
     /// What the file gives resolution: core's `given_keys` as key text,
     /// sorted and unique (`edge_names`).
     pub names: Vec<String>,
+    /// Its document's kept `disciplines:` entries, in written order (core's
+    /// `practice::kept_disciplines`; task spec `department-practices`): the
+    /// `disciplines` table.
+    pub disciplines: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -181,6 +185,10 @@ impl FileRows {
             anchors,
             diagnostics,
             names: names_of(&parsed.path, Some(parsed)),
+            disciplines: parsed
+                .document()
+                .map(specengine_core::practice::document_disciplines)
+                .unwrap_or_default(),
         })
     }
 
@@ -199,6 +207,7 @@ impl FileRows {
             anchors: Vec::new(),
             diagnostics: Vec::new(),
             names: names_of(path, None),
+            disciplines: Vec::new(),
         }
     }
 }

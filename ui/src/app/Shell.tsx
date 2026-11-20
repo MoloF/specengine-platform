@@ -53,7 +53,7 @@ const GraphView = lazy(() => import("../graph/GraphView").then((module) => ({ de
  */
 const CardPage = lazy(() => import("../board/CardPage").then((module) => ({ default: module.CardPage })));
 const FeedView = lazy(() => import("../feed/FeedView").then((module) => ({ default: module.FeedView })));
-/** Documents, every document as a library, a chunk of its own (docs/features/doc-library.md "Description and interactions", DL19). */
+/** Documents, every document as a library, a chunk of its own (docs/features/doc-library.md "Acceptance criteria", DL19). */
 const DocumentsView = lazy(() => import("../documents/DocumentsView").then((module) => ({ default: module.DocumentsView })));
 
 /**
@@ -297,7 +297,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
     }),
     [],
   );
-  /** Documents' facets, Include archive and order per project for this page's life; its module is the stored choice (docs/features/doc-library.md "Description and interactions"). */
+  /** Documents' facets, Include archive and order per project for this page's life; its module is the stored choice (docs/canon/spec-library.md "The screen"). */
   const documentsStates = useRef(new Map<string, DocumentsState>());
   const documentsMemory = useMemo<DocumentsMemory>(
     () => ({
@@ -703,7 +703,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
       />
     );
   } else if (route.section === "documents") {
-    // The Module facet is the module bar's stored choice, read and written here (docs/features/doc-library.md "Description and interactions").
+    // The Module facet is the module bar's stored choice, read and written here (docs/canon/spec-library.md "The screen").
     view = (
       <Suspense key={route.project} fallback={<Skeleton label={t("app.lazy.documents")} lines={6} />}>
         <DocumentsView

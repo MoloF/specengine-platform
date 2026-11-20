@@ -304,14 +304,15 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
 /// messages (docs/features/flow-authoring.md "Formats"), and of core's
 /// resolved edges (docs/features/edge-table.md "Data"), and of the
 /// freshness step's tables (docs/features/read-trust.md "Data"), and of
-/// the typed `tags` (docs/features/doc-library.md "`INDEX_FORMAT` 18"), and
-/// the store's format history is its eighteen lines: read-trust's
-/// seventeen, verbatim, and one `18 <hash>`. M: the dump changed, the stamp
-/// kept (the store's `format.rs` turns red on the dump; this pins the stamp
-/// and the file).
+/// the typed `tags` (docs/features/doc-library.md "Implementation"), and
+/// of the `disciplines` table, docs/features/department-practices.md
+/// "The index: `INDEX_FORMAT` 19", and the store's format history is its
+/// nineteen lines: doc-library's eighteen, verbatim, and one `19 <hash>`.
+/// M: the dump changed, the stamp kept (the store's `format.rs` turns red
+/// on the dump; this pins the stamp and the file).
 #[test]
-fn ac16_index_format_is_eighteen() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 18);
+fn ac16_index_format_is_nineteen() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 19);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -334,20 +335,21 @@ fn ac16_index_format_is_eighteen() {
 15 ce09e78513dbcf7ee55173fb3ab2bb78cc6d42b2ea87b04c845d75fe40b6d3b2
 16 dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72
 17 f3ac68ca4c4c4c7740f5f38d24f3704ec0559902706e3036925a1a4d17842cb5
+18 dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59
 ";
-    let eighteenth = history
+    let nineteenth = history
         .strip_prefix(earlier)
-        .unwrap_or_else(|| panic!("the seventeen earlier lines stay verbatim:\n{history}"));
-    let (format, hash) = eighteenth
+        .unwrap_or_else(|| panic!("the eighteen earlier lines stay verbatim:\n{history}"));
+    let (format, hash) = nineteenth
         .strip_suffix('\n')
         .and_then(|line| line.split_once(' '))
-        .unwrap_or_else(|| panic!("one more line, `18 <hash>`:\n{history}"));
-    assert_eq!(format, "18", "{history}");
+        .unwrap_or_else(|| panic!("one more line, `19 <hash>`:\n{history}"));
+    assert_eq!(format, "19", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
-        "a BLAKE3 hex: {eighteenth:?}"
+        "a BLAKE3 hex: {nineteenth:?}"
     );
-    assert_eq!(history.lines().count(), 18, "eighteen lines:\n{history}");
+    assert_eq!(history.lines().count(), 19, "nineteen lines:\n{history}");
 }
 
 /// A garden-planning corpus: no programming stack, its own prefixes and
@@ -459,9 +461,11 @@ fn ac18_a_non_rust_corpus_gets_no_stack_word() {
         let json = bundle_json(&home, &root, &["CROP-TOMATO", "--budget", budget]);
         if budget == "10000" {
             for (layer, items) in all_layers(&json) {
+                // docs/features/department-practices.md: layer 10 stays
+                // empty without `--discipline`.
                 assert_eq!(
                     items.is_empty(),
-                    ["bindings", "tests"].contains(&layer),
+                    ["bindings", "tests", "practices"].contains(&layer),
                     "{layer}: {json}"
                 );
             }

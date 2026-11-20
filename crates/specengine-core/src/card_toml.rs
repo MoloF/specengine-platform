@@ -273,6 +273,37 @@ pub(crate) fn title_problem(title: &str) -> Option<String> {
 
 /// [`CardConfig::from_toml`] as a function.
 pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
+    card_read(text).map(|(config, _)| config)
+}
+
+/// Every discipline the flows `[card]` declares list, each once (task spec
+/// `department-practices`, "Front-matter `disciplines`"): `None` when
+/// `[card]` does not read, when a split row errs (both `card-config`), when
+/// it declares no `[[card.flow]]`, so [`PLAIN_FLOW`] stands, or when exactly
+/// one declared flow lists no discipline, which takes any
+/// ([`CardConfig::flow_for`]): a discipline is free in those three.
+pub fn declared_disciplines(text: &str) -> Option<BTreeSet<String>> {
+    let (config, declared) = card_read(text).ok()?;
+    let open = config
+        .flows
+        .iter()
+        .filter(|flow| flow.disciplines.is_empty())
+        .count();
+    if !declared || config.split_problem.is_some() || open == 1 {
+        return None;
+    }
+    Some(
+        config
+            .flows
+            .iter()
+            .flat_map(|flow| flow.disciplines.iter().cloned())
+            .collect(),
+    )
+}
+
+/// [`card_from_toml`], and whether `text` declares a `[[card.flow]]`
+/// (`false`: [`PLAIN_FLOW`]'s).
+fn card_read(text: &str) -> Result<(CardConfig, bool), ProjectError> {
     let root = DeTable::parse(text).map_err(|error| ProjectError {
         line: error.span().map(|span| line_of(text, span.start)),
         message: error.message().trim().to_owned(),
@@ -309,16 +340,22 @@ pub fn card_from_toml(text: &str) -> Result<CardConfig, ProjectError> {
         splits.clear();
     }
     if flows.is_empty() {
-        return Ok(CardConfig {
-            split_problem,
-            ..card_from_toml(PLAIN_FLOW)?
-        });
+        return Ok((
+            CardConfig {
+                split_problem,
+                ..card_from_toml(PLAIN_FLOW)?
+            },
+            false,
+        ));
     }
-    Ok(CardConfig {
-        flows,
-        splits,
-        split_problem,
-    })
+    Ok((
+        CardConfig {
+            flows,
+            splits,
+            split_problem,
+        },
+        true,
+    ))
 }
 
 /// `[card]`'s keys: each flow pushed or its error, then each split row, its

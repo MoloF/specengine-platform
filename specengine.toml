@@ -10,7 +10,9 @@ tier1_name = "README.md"
 index      = "docs/index.md"
 exclude    = ["**/_*.md", "**/fixtures/**", "**/target/**", "**/target.noindex/**", "**/node_modules/**", "**/dist/**",
               # Skill and agent bodies carry Claude Code's own front-matter, not a document class.
-              "plugin/specengine/skills/*/SKILL.md", "plugin/specengine/agents/*.md"]
+              "plugin/specengine/skills/*/SKILL.md", "plugin/specengine/agents/*.md",
+              # Example practices, written against a consumer's [ids] (docs/features/department-practices.md).
+              "scripts/presets/practices/**"]
 
 [ids]
 ADR = { kind = "decision", width = 4 }

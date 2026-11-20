@@ -5,7 +5,7 @@ import type { Scenario } from "./scenario";
 import { workspacesOf } from "./workspaces";
 
 // Every document as the daemon's `GET .../library[?archive=true]` serves it
-// (docs/features/doc-library.md "The UI seam"): one row per spec file holding a document, in path
+// (docs/canon/spec-library.md "Rows"): one row per spec file holding a document, in path
 // order, the uses and the orphan flag as the corpus gives them (src/mocks/corpus.ts `usageAt`), the
 // modules computed over the project's served `[[module]]`s as the core holds them, `behind` and
 // `newer` from the stored last changes as the core judges them. Everything else is stored by hand:
@@ -19,7 +19,10 @@ import { workspacesOf } from "./workspaces";
 // accepted decision committed before it and one of another status; the cranes' page an accepted
 // decision and no commit of its own (behind not known). DEC-0009, DEC-0010 and DEC-0011 are no
 // documents of the corpus: the document modal answers them as naming nothing. The corpus's orphans
-// are orphans here. ledger-api: its documents as the corpus writes them, git not read, with the
+// are orphans here. Three live canon pages are practices (docs/features/department-practices.md
+// "Acceptance criteria", DP14): the harbour's of both desks, the tides' of copy, the cranes' of plates; a spec page,
+// the mooring's, of copy too, one rule as its two ID sections nest; the old quays, Tier 3, names copy
+// and is never one. ledger-api: its documents as the corpus writes them, git not read, with the
 // note. `empty`: no document. `large`: 5 000 rows from a fixed generator, never `Math.random`.
 
 /** What harbor-sim's files do not write, set per document by name. */
@@ -30,6 +33,8 @@ interface Shelf {
   reviewed?: string;
   scope?: string[];
   tags?: string[];
+  /** Its `disciplines:` kept entries: a practice of those card disciplines (docs/features/department-practices.md "Acceptance criteria", DP14). */
+  disciplines?: string[];
   /** Its last change: a stored time and who, or null for a file never committed. Absent: one made up by its place. */
   change?: { at: string; by: number } | null;
 }
@@ -49,13 +54,13 @@ function person(at: number): readonly [string, string] {
 
 /** harbor-sim's shelf: canon pages, owners, review dates, scopes and tags, and the stored times `behind` turns on. */
 const HARBOR_SHELF: Readonly<Record<string, Shelf>> = {
-  "DOM-HARBOR": { class: "canon", tier: 1, owner: "Mira Holt", reviewed: "2026-09-20", tags: ["clock", "simulation"], change: { at: "2026-09-20T08:30:00Z", by: 0 } },
+  "DOM-HARBOR": { class: "canon", tier: 1, owner: "Mira Holt", reviewed: "2026-09-20", tags: ["clock", "simulation"], disciplines: ["copy", "plates"], change: { at: "2026-09-20T08:30:00Z", by: 0 } },
   "DOM-BERTHS": { class: "canon", tier: 2, owner: "Ansel Quay", reviewed: "2026-10-11", tags: ["berths", "\u043f\u0440\u0438\u0447\u0430\u043b"] },
   "DOM-WATER": { class: "canon", tier: 2, owner: "\u041e\u043b\u044f \u041a\u0440\u0430\u0441\u043d\u043e\u0432\u0430", reviewed: "2026-10-20", tags: ["tides", "\u6f6e"], change: { at: "2026-10-20T15:00:00Z", by: 2 } },
   "DOM-PILOTS": { class: "canon", tier: 2, owner: "Tove Brandt", reviewed: "2026-13-40", tags: ["pilots"] },
-  "MEC-TIDES": { class: "canon", tier: 2, owner: "\u041e\u043b\u044f \u041a\u0440\u0430\u0441\u043d\u043e\u0432\u0430", reviewed: "2026-10-01", tags: ["tides", "tuning"] },
-  "MEC-CARGO-CRANES": { class: "canon", tier: 2, owner: "\u5c71\u7530 \u82b1\u5b50", tags: ["cranes", "tuning"], change: null },
-  "MEC-MOORING": { class: "spec", tier: 2, owner: "Ansel Quay", scope: ["berths"], tags: ["berths", "crew"] },
+  "MEC-TIDES": { class: "canon", tier: 2, owner: "\u041e\u043b\u044f \u041a\u0440\u0430\u0441\u043d\u043e\u0432\u0430", reviewed: "2026-10-01", tags: ["tides", "tuning"], disciplines: ["copy"] },
+  "MEC-CARGO-CRANES": { class: "canon", tier: 2, owner: "\u5c71\u7530 \u82b1\u5b50", tags: ["cranes", "tuning"], disciplines: ["plates"], change: null },
+  "MEC-MOORING": { class: "spec", tier: 2, owner: "Ansel Quay", scope: ["berths"], tags: ["berths", "crew"], disciplines: ["copy"] },
   "MEC-FAIRWAY": { class: "spec", tier: 2, tags: ["navigation"] },
   "MEC-NIGHT-PASSAGE": { class: "spec", tier: 2, tags: ["navigation", "night"] },
   "MEC-PILOTAGE": { class: "spec", tier: 2, owner: "Tove Brandt", tags: ["pilots"] },
@@ -66,7 +71,7 @@ const HARBOR_SHELF: Readonly<Record<string, Shelf>> = {
   "DEC-0013": { tier: 2, change: { at: "2026-11-11T10:15:00Z", by: 4 } },
   "DEC-0014": { tier: 2, change: { at: "2026-10-02T12:00:00Z", by: 1 } },
   "docs/features/deep-berth.md": { tier: 3, scope: ["berths"] },
-  "MEC-OLD-QUAYS": { tier: 3, tags: ["berths"] },
+  "MEC-OLD-QUAYS": { tier: 3, tags: ["berths"], disciplines: ["copy"] },
 };
 
 /** A decision on a canon page: a corpus document by name, or an invented one with what its file would hold. */
@@ -239,6 +244,7 @@ function corpusLibrary(corpus: MockCorpus, slug: string, scenario: Scenario, arc
         reviewed: own.reviewed ?? null,
         scope: own.scope ?? null,
         tags: own.tags ?? [],
+        disciplines: own.disciplines ?? [],
         rev: node.rev,
         parent: parents.get(name) ?? null,
         modules: modulesOf(modules, node.kind, chainOf(name, parents)),
@@ -325,6 +331,8 @@ function largeLibrary(slug: string, scenario: Scenario, archive: boolean): Libra
       reviewed: at % 5 === 0 ? null : `2026-${String(1 + (at % 12)).padStart(2, "0")}-${String(1 + (at % 28)).padStart(2, "0")}`,
       scope: at % 11 === 0 ? ["sprint"] : null,
       tags,
+      // Every ninth a practice of one desk, every ninth from the fifth of both, no random draw spent.
+      disciplines: at % 9 === 0 ? ["copy"] : at % 9 === 4 ? ["plates", "copy"] : [],
       rev: 1 + (at % 4),
       parent: at % 10 === 0 ? "DOM-BERTHS" : null,
       modules: modulesOf(modules, kind, at % 10 === 0 ? [name, "DOM-BERTHS"] : [name]),

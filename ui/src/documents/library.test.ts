@@ -62,6 +62,18 @@ describe("the start (DL18)", () => {
 });
 
 describe("the facets (DL18)", () => {
+  it("the Discipline facet's values: each kept entry once, null where none (DP21 of department-practices)", () => {
+    expect(valuesOf(aLibraryRow({ name: "PRA-ART", disciplines: ["art", "development", "art"] }), "disciplines")).toEqual(["art", "development"]);
+    expect(valuesOf(aLibraryRow({ name: "DOC-X" }), "disciplines")).toEqual([null]);
+    const practices = [aLibraryRow({ name: "PRA-ART", disciplines: ["art"] }), aLibraryRow({ name: "PRA-SHARED", disciplines: ["art", "development"] }), aLibraryRow({ name: "DOC-X" })];
+    expect(names(keptRows(practices, chosen({ disciplines: ["development"] }), null))).toEqual(["PRA-SHARED"]);
+    expect(facetChoices(practices, NO_FILTERS, null, "disciplines", collator)).toEqual([
+      { value: "art", count: 2 },
+      { value: "development", count: 1 },
+      { value: null, count: 1 },
+    ]);
+  });
+
   it("a facet's values: one for a field, each entry for a list, null where none", () => {
     const [a, , c, cats] = rows();
     expect(a === undefined || c === undefined || cats === undefined).toBe(false);

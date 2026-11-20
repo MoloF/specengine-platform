@@ -84,7 +84,13 @@
 //! US-10, the size: CC3 (a)'s card is a subtask of CC3 (b)'s parent, whose
 //! goal, targets and criteria are then edited twenty times as a 128-byte
 //! name (`CARD_PERSON_MAX`), so its `upstream` lists 16 changes, `more` 4;
-//! the maximum re-pinned, within 500 000.
+//! the maximum re-pinned, within 500 000. docs/features/department-practices.md
+//! DP11, the size: CC3 (a)'s card takes the discipline `art`, which 32
+//! practices name (`PRACTICES_MAX`), each at its longest (a 63-byte ID, a
+//! 256-byte title, a path of about 200 bytes, 16 kept disciplines of 64
+//! bytes but `art`, two rules), and its criteria cite their 64 rules
+//! (`CITED_MAX`, 63-byte IDs, 256-byte titles): `practices` and `cited`
+//! full, layer 10 in its context; the maximum re-pinned, within 500 000.
 //!
 //! docs/features/node-history.md NH14, the size: `get_node {id: "R-12",
 //! with: ["links", "bindings", "history"]}` on NH10's two nodes (64 apply
@@ -946,7 +952,10 @@ fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
 /// the parent's 4 096-byte goal); 432 982 until
 /// docs/features/plain-questions.md PQ10 gave each of the answer's 64 items
 /// `,"gist":null,"matters":null` (27 characters each, + 1 728).
-const CARD_CONTEXT_MAXIMUM: usize = 434_710;
+// 467 556 since docs/features/department-practices.md DP11: the long
+// watch of `art` with 32 practices and 64 citations at their longest, cut by
+// `PRACTICES_CHARS_MAX` and `CITED_CHARS_MAX` (16 384 each) to 10 and 26.
+const CARD_CONTEXT_MAXIMUM: usize = 467_556;
 
 /// The clock of every write of the card scenes.
 const CARD_CLOCK: &str = "2026-11-12T09:00:00Z";
@@ -1007,11 +1016,114 @@ fn long_criteria(n: usize, bytes: usize) -> Vec<String> {
         .collect()
 }
 
+/// docs/features/department-practices.md DP11: a 63-byte ID of the `PRA`
+/// prefix, `tag` and `n` telling them apart.
+fn long_id(tag: &str, n: usize) -> String {
+    let id = format!("PRA-{tag}{}-{n:02}", "L".repeat(63 - 4 - tag.len() - 3));
+    assert_eq!(id.len(), 63, "{id}");
+    id
+}
+
+/// A 256-byte ASCII title for `n`.
+fn long_title(what: &str, n: usize) -> String {
+    let mut title = format!("{what} {n:02}:");
+    while title.len() < 256 {
+        title.push_str(" steady");
+    }
+    title.truncate(256);
+    title.trim_end().to_owned()
+}
+
+/// docs/features/department-practices.md DP11: 32 practices of `art` under
+/// `root`, each at its longest, two rules each: the 64 rule IDs.
+fn long_practices(root: &Path) -> Vec<String> {
+    let config = root.join("specengine.toml");
+    let text = std::fs::read_to_string(&config).expect("spec-a's config");
+    let anchor = "[ids]\n";
+    assert_eq!(text.matches(anchor).count(), 1);
+    std::fs::write(
+        &config,
+        text.replacen(
+            anchor,
+            "[ids]\nPRA = { kind = \"practice\", shape = \"name\" }\n",
+            1,
+        ),
+    )
+    .expect("the config");
+    let mut disciplines = vec!["art".to_owned()];
+    for n in 1..16 {
+        let mut name = format!("d{n:02}-");
+        while name.len() < 64 {
+            name.push('x');
+        }
+        disciplines.push(name);
+    }
+    let dir = format!("docs/spec/practices/{}", "d".repeat(100));
+    let mut rules = Vec::new();
+    for n in 1..=32 {
+        let mut text = format!(
+            "---\nid: {}\nclass: canon\ntier: 2\nowner: owner\nreviewed: 2026-09-20\n\
+             disciplines: [{}]\n---\n\n# {}\n\nThe agreed rules.\n",
+            long_id("DOC", n),
+            disciplines.join(", "),
+            long_title("Practice", n)
+        );
+        for half in 0..2 {
+            let rule = long_id("R", 2 * (n - 1) + half + 1);
+            text.push_str(&format!(
+                "\n## {} {{#{rule}}}\n\nKeep the wick trimmed, watch {n}.\n",
+                long_title("Rule", 2 * (n - 1) + half + 1)
+            ));
+            rules.push(rule);
+        }
+        write(
+            root,
+            &format!("{dir}/practice-{n:02}-{}.md", "p".repeat(60)),
+            text,
+        );
+    }
+    rules
+}
+
+/// `n` ASCII criteria of exactly `bytes` bytes each, citing `ids` in turn.
+fn citing_criteria(n: usize, bytes: usize, ids: &[String]) -> Vec<String> {
+    let per = ids.len().div_ceil(n);
+    (0..n)
+        .map(|i| {
+            let cited: Vec<&str> = ids
+                .iter()
+                .skip(i * per)
+                .take(per)
+                .map(String::as_str)
+                .collect();
+            let mut line = format!("Criterion {i}: keep {} lit", cited.join(" and "));
+            while line.len() < bytes {
+                line.push_str(" and steady");
+            }
+            line.truncate(bytes);
+            line
+        })
+        .collect()
+}
+
 /// A card through the library at [`CARD_CLOCK`]: its ID.
 fn card_at(
     env: &specengine_cli::Env,
     title: &str,
     goal: &str,
+    targets: &[String],
+    criteria: Vec<String>,
+    parent: Option<&str>,
+) -> String {
+    card_of(env, title, goal, None, targets, criteria, parent)
+}
+
+/// [`card_at`] of `discipline`.
+fn card_of(
+    env: &specengine_cli::Env,
+    title: &str,
+    goal: &str,
+    discipline: Option<&str>,
     targets: &[String],
     criteria: Vec<String>,
     parent: Option<&str>,
@@ -1022,7 +1134,7 @@ fn card_at(
         &specengine_cli::CardNewRequest {
             title: title.to_owned(),
             goal: Some(goal.to_owned()),
-            discipline: None,
+            discipline: discipline.map(str::to_owned),
             targets: targets.to_vec(),
             criteria,
             assignee: None,
@@ -1075,6 +1187,10 @@ fn card_context_stays_under_the_declared_cap() {
         rules.push(format!("RULE-FILL-{n:02}"));
     }
     write(&root, "docs/spec/fill.md", fill);
+    // docs/features/department-practices.md DP11: 32 practices at their
+    // longest and their 64 rules.
+    let practice_rules = long_practices(&root);
+    assert_eq!(practice_rules.len(), 64);
     let sandbox = git::Sandbox::new(scratch.path());
     sandbox.init(&root);
     sandbox.add_all(&root);
@@ -1106,12 +1222,15 @@ fn card_context_stays_under_the_declared_cap() {
         .collect();
     // docs/features/upstream-signal.md US-10: the long watch is a subtask of
     // the lamp room, so what changes above it is listed.
-    let watch = card_at(
+    // docs/features/department-practices.md DP11: of `art`, its criteria
+    // citing the 64 rules.
+    let watch = card_of(
         &env,
         "The long watch",
         "Every keeper reads the three watches.",
+        Some("art"),
         &long,
-        long_criteria(25, 1000),
+        citing_criteria(25, 1000, &practice_rules),
         Some(&parent),
     );
     for n in 0..64 {
@@ -1206,6 +1325,65 @@ fn card_context_stays_under_the_declared_cap() {
         ],
     );
     eprintln!("card-context CC11 get_card maximum: {largest}");
+    // docs/features/department-practices.md DP11: the watch card carries 32
+    // practices and 64 citations.
+    let shown = specengine_cli::card_show(
+        &env,
+        &Globals::default(),
+        &specengine_cli::CardShowRequest {
+            id: watch.clone(),
+            history: true,
+            marks: true,
+            upstream: true,
+            context: true,
+            practices: true,
+            budget: None,
+            git: git.clone(),
+            tasks_here: true,
+        },
+    )
+    .expect("card show");
+    let document: serde_json::Value = serde_json::from_str(&specengine_cli::render_json(
+        &specengine_cli::Outcome::CardShow(Box::new(shown)),
+    ))
+    .expect("JSON");
+    // docs/canon/card-practices.md "Caps": at their longest the
+    // 16 384 characters bind first: 10 practices listed, 22 more; 26
+    // citations, 38 more, each with its note.
+    assert_eq!(
+        document["practices"].as_array().map(Vec::len),
+        Some(10),
+        "{}",
+        document["notes"]
+    );
+    assert_eq!(document["cited"].as_array().map(Vec::len), Some(26));
+    let notes: Vec<&str> = document["notes"]
+        .as_array()
+        .expect("notes")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    let eleventh = format!(
+        "docs/spec/practices/{}/practice-11-{}.md",
+        "d".repeat(100),
+        "p".repeat(60)
+    );
+    assert!(
+        notes.contains(
+            &format!("practices: 22 more practice documents of art, from {eleventh}").as_str()
+        ),
+        "{notes:?}"
+    );
+    assert!(
+        notes.contains(
+            &format!(
+                "cited: 38 more cited IDs past 16384 characters, from {}",
+                practice_rules[26]
+            )
+            .as_str()
+        ),
+        "{notes:?}"
+    );
     assert!(largest as u64 <= MAX_RESULT_CHARS);
     // docs/features/upstream-signal.md US-10: within 500 000, each card's
     // `upstream` the 16 newest of the twenty edits, `more` 4.
@@ -1220,6 +1398,7 @@ fn card_context_stays_under_the_declared_cap() {
                 marks: true,
                 upstream: true,
                 context: false,
+                practices: false,
                 budget: None,
                 git: git.clone(),
                 tasks_here: true,

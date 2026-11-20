@@ -805,6 +805,183 @@ const TOOLS_LIST_USAGE_B3: [(Era, &str); 2] = [
     ),
 ];
 
+/// The same listing since docs/features/department-practices.md (RM-0128,
+/// "MCP and the plugin"): the slice's schema keys and the three
+/// descriptions' edits ([`without_practices`] takes both out).
+const TOOLS_LIST_PRACTICES_B3: [(Era, &str); 2] = [
+    (
+        Era::Legacy,
+        "4e7fe3e75e7cc293b8275b07b0f53075f00c463f8401865abecb5273fe8466e4",
+    ),
+    (
+        Era::Stateless,
+        "e3740325b23cdbec8899d1f1fb4828bc6956849d03b41118f97a8b151a6cf432",
+    ),
+];
+
+/// docs/features/department-practices.md: each description edit of the
+/// slice, `(tool, now, before)`, exactly as written (the descriptions'
+/// lengths and sentences are pinned apart: `card_context.rs` CC9,
+/// `upstream_signal.rs` US-11, `mcp_read.rs`, `mcp_tasks.rs`).
+const PRACTICES_EDITS: [(&str, &str, &str); 8] = [
+    (
+        "get_card",
+        "structuredContent the --json document, every key present, absent null: mark, on, \
+         discrepancy, correction as list_cards gives them; allowed: the moves open now.",
+        "structuredContent the --json document: the card's fields, its mark, on, discrepancy and \
+         correction as list_cards with marks: true does, null on a cancelled card, allowed (the \
+         moves open now, each {to, by}, by empty when anyone may), history and notes, every key \
+         present, absent null.",
+    ),
+    (
+        "get_card",
+        " Without context: null. With it, practices: its discipline's practices {name, title, \
+         path, disciplines, rules}, their rules the bundle's last layer; cited: the IDs its texts \
+         cite {written, name, title, path}; else both null.",
+        " Without context: null.",
+    ),
+    (
+        "get_card",
+        "Reads only; writes nothing under the project root. No such card, a look-alike ID, a \
+         corrupt row or an unreadable index: an error result, never a clean card.",
+        "Reads only: no state changes, nothing under the project root is written. No such card: \
+         an error result with the reason. A look-alike ID, a corrupt row or an index that cannot \
+         be read: an error result with its one line, never a clean card.",
+    ),
+    (
+        "get_context_bundle",
+        "decisions, neighbours, terms, the tests bound to them or their criteria, then the \
+         practices' rules, in that order;",
+        "decisions, neighbours, terms and the tests bound to them or their criteria, in that \
+         order;",
+    ),
+    (
+        "get_context_bundle",
+        "The same as `spec bundle REF... [--budget N] [--discipline D]...`: content",
+        "The same as `spec bundle REF... [--budget N]`: content",
+    ),
+    (
+        "get_context_bundle",
+        "\ndisciplines: card disciplines, at most 16, each [a-z0-9_-]; the rules of their \
+         practices (live documents whose `disciplines:` names one) come last. Absent: none.",
+        "",
+    ),
+    (
+        "get_task",
+        "runs, practices, code bindings, bundle)",
+        "runs, code bindings, bundle)",
+    ),
+    (
+        "get_task",
+        "The bundle comes by reference: get_context_bundle with bundle.node_ids, bundle.budget \
+         and bundle.disciplines gives its text. practices: those of bundle.disciplines (the \
+         cards listing it), by path. roadmap:",
+        "The bundle comes by reference: get_context_bundle with bundle.node_ids and \
+         bundle.budget gives its text. roadmap:",
+    ),
+];
+
+/// `list` as usage-orphans listed it: [`PRACTICES_EDITS`] undone, each
+/// exactly once, and the slice's schema keys out: `practices` and `cited`
+/// of a card, `practices` of a task package and `disciplines` of its bundle
+/// reference, `cited` of a proposal document, layer 10 (`practices` beside
+/// `targets` and `tests`) and its `layer` enum value, `get_context_bundle`'s
+/// input `disciplines`. The tools each change touched, by name.
+fn without_practices(list: &mut Value) -> Vec<String> {
+    fn remove(value: &mut Value, key: &str) -> bool {
+        let removed = value
+            .get_mut("properties")
+            .and_then(Value::as_object_mut)
+            .is_some_and(|properties| properties.remove(key).is_some());
+        if let Some(required) = value.get_mut("required").and_then(Value::as_array_mut) {
+            required.retain(|name| name != key);
+        }
+        removed
+    }
+    fn strip(value: &mut Value) -> usize {
+        let has = |value: &Value, keys: &[&str]| {
+            value
+                .get("properties")
+                .and_then(Value::as_object)
+                .is_some_and(|properties| keys.iter().all(|key| properties.contains_key(*key)))
+        };
+        let mut found = 0;
+        if has(value, &["context", "practices", "cited"]) {
+            assert!(remove(value, "practices") && remove(value, "cited"));
+            found += 1;
+        }
+        if has(value, &["bundle", "practices", "schema_version"]) {
+            assert!(remove(value, "practices"));
+            found += 1;
+        }
+        if has(value, &["node_ids", "budget", "bundle_hash", "disciplines"]) {
+            assert!(remove(value, "disciplines"));
+            found += 1;
+        }
+        if has(value, &["pair", "cited"]) {
+            assert!(remove(value, "cited"));
+            found += 1;
+        }
+        if has(value, &["targets", "tests", "practices"]) {
+            assert!(remove(value, "practices"));
+            found += 1;
+        }
+        if let Some(Value::Array(names)) = value.get_mut("enum")
+            && names.iter().any(|name| name == "practices")
+            && names.iter().any(|name| name == "targets")
+        {
+            names.retain(|name| name != "practices");
+            found += 1;
+        }
+        match value {
+            Value::Object(object) => {
+                for (_, inner) in object.iter_mut() {
+                    found += strip(inner);
+                }
+            }
+            Value::Array(items) => {
+                for inner in items {
+                    found += strip(inner);
+                }
+            }
+            _ => {}
+        }
+        found
+    }
+    let mut touched = Vec::new();
+    for tool in list["tools"].as_array_mut().expect("tools") {
+        let name = tool["name"].as_str().unwrap_or_default().to_owned();
+        let mut found = 0;
+        for (edited, now, before) in PRACTICES_EDITS {
+            if edited == name {
+                let text = tool["description"]
+                    .as_str()
+                    .expect("a description")
+                    .to_owned();
+                assert_eq!(
+                    text.matches(now).count(),
+                    1,
+                    "{name}: {now:?} once in {text}"
+                );
+                tool["description"] = Value::String(text.replacen(now, before, 1));
+                found += 1;
+            }
+        }
+        if let Some(schema) = tool.get_mut("outputSchema") {
+            found += strip(schema);
+        }
+        if name == "get_context_bundle" {
+            assert!(remove(&mut tool["inputSchema"], "disciplines"), "its input");
+            found += 1;
+        }
+        if found > 0 {
+            touched.push(name);
+        }
+    }
+    touched.sort();
+    touched
+}
+
 /// `list` as collision-pairs listed it: no `usage` in any links block of
 /// an output schema (every object schema holding `outgoing`, `incoming` and
 /// `usage`; docs/features/usage-orphans.md UO6 adds it to `get_node`'s);
@@ -894,17 +1071,46 @@ fn cn7_the_tools_list_is_byte_equal_to_collision_pass() {
     assert_eq!(TOOLS_LIST_B3.map(|(era, _)| era), ERAS);
     assert_eq!(TOOLS_LIST_PAIR_B3.map(|(era, _)| era), ERAS);
     assert_eq!(TOOLS_LIST_USAGE_B3.map(|(era, _)| era), ERAS);
-    for (((era, pinned), (_, paired)), (_, used)) in TOOLS_LIST_B3
+    assert_eq!(TOOLS_LIST_PRACTICES_B3.map(|(era, _)| era), ERAS);
+    for ((((era, pinned), (_, paired)), (_, used)), (_, practiced)) in TOOLS_LIST_B3
         .into_iter()
         .zip(TOOLS_LIST_PAIR_B3)
         .zip(TOOLS_LIST_USAGE_B3)
+        .zip(TOOLS_LIST_PRACTICES_B3)
     {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let mut list = session.tools();
         assert_eq!(
             blake3_hex(canonical(&list).as_bytes()),
-            used,
+            practiced,
             "{era:?}: tools/list changed"
+        );
+        // docs/features/department-practices.md: without the slice's edits
+        // and keys, the listing is usage-orphans'.
+        assert_eq!(
+            without_practices(&mut list),
+            [
+                "get_card",
+                "get_context_bundle",
+                "get_proposal",
+                "get_task",
+                "propose_change",
+                "review_proposal"
+            ]
+            .iter()
+            .filter(|name| list["tools"]
+                .as_array()
+                .expect("tools")
+                .iter()
+                .any(|tool| tool["name"] == **name))
+            .map(|name| (*name).to_owned())
+            .collect::<Vec<_>>(),
+            "{era:?}: the tools the slice touched"
+        );
+        assert_eq!(
+            blake3_hex(canonical(&list).as_bytes()),
+            used,
+            "{era:?}: tools/list without department-practices' edits is usage-orphans'"
         );
         let usage = without_usage(&mut list);
         assert_eq!(usage, ["get_node"], "{era:?}: get_node's links alone");

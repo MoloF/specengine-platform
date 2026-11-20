@@ -1,4 +1,6 @@
 import type { ExtraProps, Options } from "react-markdown";
+import type { Cited } from "../api/types";
+import { citedEntries, runsOf, verbatimIn, verbatimPlaces, type CitedEntries } from "./cited";
 import {
   attributeBlock,
   definitionDestination,
@@ -25,6 +27,11 @@ import {
 // - Links carry what the anchor needs to match the daemon's links read: the destination exactly as
 //   written and its line (the core's scan, `./source`), or the URL as text for an external one.
 // - Every block carries `data-line`, its first line in the holder's file.
+// - Given a served `cited` list (docs/features/department-practices.md "Acceptance criteria", DP21), each occurrence of an
+//   entry's `written` in a text node outside a link becomes a link of kind `cited` to its `name`
+//   (./cited); inline and fenced code are other nodes, never scanned. A node's text is decoded, so an
+//   occurrence links only where the source holds it verbatim: `R\-12` and `R&#45;12` stay text when
+//   `R-12` is served; a node with no place in the source links nothing. Nothing else becomes one.
 // Types come through react-markdown's own (no direct mdast or hast package).
 
 type ToHastOptions = NonNullable<Options["remarkRehypeOptions"]>;
@@ -45,8 +52,8 @@ export type HastElement = NonNullable<ExtraProps["node"]>;
 type HastContent = NonNullable<MdData["hChildren"]>[number];
 type HastProperties = HastElement["properties"];
 
-/** How an anchor is to be shown: matched against the links read, as text with its URL, or as text. */
-export type LinkKind = "local" | "external" | "autolink" | "none";
+/** How an anchor is to be shown: matched against the links read, as text with its URL, as text, or a served citation's document link. */
+export type LinkKind = "local" | "external" | "autolink" | "none" | "cited";
 
 /** The words the rewrite writes into the text, in the language shown: an image's label, a footnote's. */
 export interface SpecWords {
@@ -67,6 +74,8 @@ export interface SpecOptions {
   dropTitle?: string | null;
   /** Only the text's first top-level paragraph is kept: a panel's lead (docs/features/doc-modal.md "Acceptance criteria", DM-14). */
   firstParagraph?: boolean;
+  /** The IDs the daemon resolved in this text's holder: only their `written` strings become links. */
+  cited?: readonly Cited[];
 }
 
 /** Block nodes that carry `data-line`. */
@@ -174,6 +183,48 @@ class Rewrite {
     });
     this.shift = shallowest > 6 ? 0 : this.options.baseLevel + 1 - shallowest;
     this.children(root);
+    const cited = this.options.cited ?? [];
+    if (cited.length > 0) {
+      this.cite(root, citedEntries(cited));
+    }
+  }
+
+  /** A parent's text nodes, but inside a link, cut at the served citations: each a link of kind `cited` to its name. */
+  private cite(parent: MdParent, cited: CitedEntries): void {
+    if (parent.type === "link" || parent.type === "linkReference") {
+      return;
+    }
+    const kept: MdNode[] = [];
+    for (const child of parent.children as MdNode[]) {
+      if (child.type !== "text" || child.data?.hName !== undefined) {
+        if (isParent(child)) {
+          this.cite(child, cited);
+        }
+        kept.push(child);
+        continue;
+      }
+      // Linked only where the source holds the string as written: a decoded escape or reference never is.
+      const start = child.position?.start.offset;
+      const end = child.position?.end.offset;
+      const raw = start === undefined || end === undefined ? null : this.options.source.slice(start, end);
+      const accept = raw === child.value ? undefined : verbatimIn(raw === null ? null : verbatimPlaces(raw, child.value));
+      const runs = runsOf(child.value, cited, [], accept);
+      if (runs.every((run) => run.name === null)) {
+        kept.push(child);
+        continue;
+      }
+      for (const run of runs) {
+        if (run.name === null) {
+          kept.push({ type: "text", value: run.text });
+          continue;
+        }
+        const link: MdOf<"link"> = { type: "link", url: "", children: [{ type: "text", value: run.text }] };
+        setProperties(link, { dataKind: "cited", dataName: run.name });
+        kept.push(link);
+      }
+    }
+    // The parent's own child type holds every node kept: a text's parent takes phrasing content, a link among it.
+    (parent as { children: MdNode[] }).children = kept;
   }
 
   private fileLine(line: number): number {

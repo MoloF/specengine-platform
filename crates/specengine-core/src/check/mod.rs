@@ -94,7 +94,8 @@ pub use affected::{Affected, AsIs, Dependents, affected, found_bytes};
 pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use bundle::{
-    BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers, bundle_linked,
+    BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers,
+    bundle_layers_with, bundle_linked,
 };
 pub use config::{
     Budgets, BundleNode, BundleTask, CheckConfig, CheckRule, ClassContract, Classes, ConfigError,
@@ -139,9 +140,11 @@ pub use working_set::worst_w;
 /// and `card-config`, a bad `[card]` (task spec `release-hardening` RH-R4),
 /// each added by every store run from its setup, never a `cannot-check`,
 /// then `tag-invalid`, a warning per `tags:` entry left out (task spec
-/// `doc-library`). A stale baseline entry is no finding: it goes to
-/// [`Report::stale`], labelled `debt-stale` only in the detail lines.
-pub const CHECK_CODES: [&str; 39] = [
+/// `doc-library`), then `practice-discipline`, a warning per `disciplines:`
+/// entry left out or listed by no declared flow (task spec
+/// `department-practices`). A stale baseline entry is no finding: it goes
+/// to [`Report::stale`], labelled `debt-stale` only in the detail lines.
+pub const CHECK_CODES: [&str; 40] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -181,4 +184,5 @@ pub const CHECK_CODES: [&str; 39] = [
     "team-config",
     "card-config",
     "tag-invalid",
+    "practice-discipline",
 ];

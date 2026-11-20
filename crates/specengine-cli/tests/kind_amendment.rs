@@ -1857,8 +1857,11 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     // 51 since docs/features/intake-similar.md "Acceptance criteria" IS6
     // (`similar` after `why`); 53 since docs/features/plain-questions.md
     // PQ10 (`gist`, `matters` after `summary`); 54 since
-    // docs/features/collision-pairs.md PP8 (`pair` after `evidence`).
-    assert_eq!(keys.len(), 54, "{keys:?}");
+    // docs/features/collision-pairs.md PP8 (`pair` after `evidence`); 55
+    // since docs/features/department-practices.md "Proposals: `cited`" (`cited`
+    // last).
+    assert_eq!(keys.len(), 55, "{keys:?}");
+    assert_eq!(keys.last().map(String::as_str), Some("cited"), "{keys:?}");
     let revisions = keys.iter().position(|key| key == "revisions");
     assert_eq!(keys[revisions.expect("revisions") + 1], "drift", "{keys:?}");
     let fixture: Value = serde_json::from_str(&read_text(
@@ -1869,7 +1872,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        174,
+        176,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1891,8 +1894,9 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          `HealthOrphan`), scope-rings' three (docs/features/scope-rings.md, SR4), \
          corpus-map's six (docs/features/corpus-map.md, CM3), auto-feed's eight \
          (docs/features/auto-feed.md, FD3), hub-auto's `Delegated` \
-         (docs/features/hub-auto.md, HA7) and doc-library's five \
-         (docs/features/doc-library.md, DL2)"
+         (docs/features/hub-auto.md, HA7), doc-library's five \
+         (docs/features/doc-library.md, DL2) and department-practices' two \
+         (docs/features/department-practices.md, DP14)"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

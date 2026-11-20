@@ -285,6 +285,7 @@ impl Place {
             references: vec![reference.to_owned()],
             budget,
             git: self.git.clone(),
+            disciplines: Vec::new(),
         }
     }
 }
@@ -1606,6 +1607,7 @@ fn sr1_an_edit_at_every_attempt_gives_two_attempts_then_the_walk() {
                         references: vec![reference.clone()],
                         budget,
                         git: request_place.2.clone(),
+                        disciplines: Vec::new(),
                     },
                 )
                 .map(Outcome::Bundle),

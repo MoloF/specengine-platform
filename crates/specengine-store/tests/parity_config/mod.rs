@@ -123,11 +123,14 @@ pub const SKIP_DIRS: [&str; 5] = [
 /// frozen beside [`SKIP_DIRS`]): the plugin's skill bodies and, since
 /// docs/features/plugin-roles.md, its agent bodies (docs/canon/plugin.md
 /// "Roles"), whose front-matter is Claude Code's (`name`, `description`,
-/// ...), not a document class. The root config's `exclude` holds the same
-/// globs.
-pub const SKIP_FILES: [&str; 2] = [
+/// ...), not a document class; since docs/features/department-practices.md
+/// "Presets and examples", the example practices a project copies, written
+/// against a consumer's `[ids]`, not this repository's documents. The root
+/// config's `exclude` holds the same globs.
+pub const SKIP_FILES: [&str; 3] = [
     "plugin/specengine/skills/*/SKILL.md",
     "plugin/specengine/agents/*.md",
+    "scripts/presets/practices/*/*.md",
 ];
 
 /// Whether the root-relative `/` path `relative` matches one of

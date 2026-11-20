@@ -723,6 +723,7 @@ impl Session {
             references: vec![reference.to_owned()],
             budget: Some(i64::from(budget)),
             git: self.git.clone(),
+            disciplines: Vec::new(),
         }
     }
 

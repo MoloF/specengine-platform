@@ -418,6 +418,15 @@
 //! scene of `specengine-cli`'s `tests/library_scene`: every row and every
 //! decision holds a last change) on a daemon of its own. M: a key only the
 //! route adds.
+//!
+//! docs/features/department-practices.md (RM-0128) "Acceptance criteria",
+//! DP14: `Card` (92) gains `practices` and `cited` after `context` (38),
+//! `LibraryRow` `disciplines` after `tags` (23), and two sets more, 176 in
+//! all, last: `CardPractice` (`name, title, path, disciplines, rules`) from
+//! `GET .../cards/C-0001?practices=true` and `Cited` (`written, name,
+//! title, path`) from it and from `GET .../proposals/PR-0001`, over the
+//! spec's scene (`specengine-cli`'s `tests/practices_scene`) on a daemon of
+//! its own. M: a key left out of the fixture.
 
 mod common;
 mod task_state;
@@ -436,6 +445,9 @@ mod counts_scene;
 
 #[path = "../../specengine-cli/tests/library_scene/mod.rs"]
 mod library_scene;
+
+#[path = "../../specengine-cli/tests/practices_scene/mod.rs"]
+mod practices_scene;
 
 use std::ffi::OsStr;
 use std::fmt;
@@ -1017,6 +1029,29 @@ fn library_document() -> String {
         .to_owned()
 }
 
+/// docs/features/department-practices.md DP14: `GET
+/// .../cards/C-0001?practices=true` and `GET .../proposals/PR-0001` over the
+/// spec's scene on a daemon of its own: the card (two practices, one
+/// citation) and the review document (one citation), raw.
+fn practices_documents() -> (String, String) {
+    let scene = practices_scene::Scene::new("daemon-keys-practices");
+    let proposal = scene.propose_cited();
+    let cwd = scene.dir("cwd");
+    let server = Server::serve(&scene.home, &cwd, &[&scene.root]);
+    let base = format!("/api/projects/{}", practices_scene::SLUG);
+    let card = server
+        .get(&format!("{base}/cards/C-0001?practices=true"))
+        .status(200)
+        .text()
+        .to_owned();
+    let review = server
+        .get(&format!("{base}/proposals/{proposal}"))
+        .status(200)
+        .text()
+        .to_owned();
+    (card, review)
+}
+
 /// docs/features/auto-feed.md FD3: `GET .../feed?since=0&needs_me=1` over a
 /// git copy of `fixtures/auto-mini` with `rules/on.toml` committed, on a
 /// daemon of its own, every `needs_me` list holding a row; its body raw
@@ -1218,6 +1253,16 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         .flat_map(|row| raw_items(row, "decisions"))
         .collect();
     assert_eq!(library_decisions.len(), 3, "{library}");
+    // docs/features/department-practices.md DP14: a card's practices and
+    // citations, and a review document's citations.
+    let (practices_card, practices_review) = practices_documents();
+    let card_practices = raw_items(&practices_card, "practices");
+    assert_eq!(card_practices.len(), 2, "{practices_card}");
+    let mut citations = raw_items(&practices_card, "cited");
+    assert_eq!(citations.len(), 1, "{practices_card}");
+    let review_citations = raw_items(&practices_review, "cited");
+    assert_eq!(review_citations.len(), 1, "{practices_review}");
+    citations.extend(review_citations);
     let library_changes: Vec<String> = library_rows
         .iter()
         .chain(&library_decisions)
@@ -2889,6 +2934,12 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "LibraryChange",
             one_key_set("LibraryChange", &library_changes, keys_of),
         ),
+        // docs/features/department-practices.md DP14, sets 175 and 176.
+        (
+            "CardPractice",
+            one_key_set("CardPractice", &card_practices, keys_of),
+        ),
+        ("Cited", one_key_set("Cited", &citations, keys_of)),
     ]
 }
 
@@ -3203,8 +3254,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // `matters` after `summary`, 53 keys, no set added.
     // docs/features/collision-pairs.md "Acceptance criteria" PP8: `pair`
     // after `evidence`, 54 keys.
+    // docs/features/department-practices.md "Proposals: `cited`": `cited` last, 55
+    // keys.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 54, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 55, "{:?}", sets[2].1);
     let evidence = sets[2].1.iter().position(|key| key == "evidence");
     assert_eq!(
         sets[2].1[evidence.expect("evidence")..evidence.expect("evidence") + 3],
@@ -3237,7 +3290,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "card_id",
             "why",
             "similar",
-            "notes"
+            "notes",
+            "cited"
         ]
     );
     // ui-live's nine: 11, 7, 8, 2; 6, 7, 8, 6, 2 keys; a finding's `fix`
@@ -3245,7 +3299,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        174,
+        176,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -3255,7 +3309,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          node-history: 124; upstream-signal: 126; delivery-analytics: 137; \
          direction-catalog: 140; department-overview: 143; collision-pairs: 145; \
          delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160; \
-         auto-feed: 168; hub-auto: 169; doc-library: 174)"
+         auto-feed: 168; hub-auto: 169; doc-library: 174; department-practices: 176)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -3299,7 +3353,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("TaskList", 2),
             ("TaskListEntry", 6),
             ("TaskNotFound", 2),
-            ("TaskPackage", 27),
+            // docs/features/department-practices.md: `practices` after
+            // `bundle`, 28.
+            ("TaskPackage", 28),
             ("TaskTarget", 4),
             ("TaskCriterion", 2),
             ("TaskAssumption", 2),
@@ -3311,7 +3367,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("SnapshotDiff", 5),
             ("TaskClaim", 4),
             ("TaskRun", 7),
-            ("TaskBundle", 3),
+            // docs/features/department-practices.md: `disciplines`, 4.
+            ("TaskBundle", 4),
             ("Author", 4),
         ]
     );
@@ -3319,8 +3376,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/tested-reads.md "Daemon and UI": `tested` the 17th,
     // after `bindings`.
     assert_eq!(sets[18].1[15..17], ["bindings", "tested"]);
-    assert_eq!(sets[18].1[21..23], ["bundle", "roadmap"]);
-    assert_eq!(sets[18].1[26], "notes");
+    assert_eq!(sets[18].1[21..24], ["bundle", "practices", "roadmap"]);
+    assert_eq!(sets[18].1[27], "notes");
     assert_eq!(
         sets[29].1,
         [
@@ -3840,6 +3897,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 // docs/features/card-context.md CC10: after `history`,
                 // `null` from the daemon, which never asks it.
                 "context",
+                // docs/features/department-practices.md DP14: after
+                // `context`, `null` unless `?practices=true`.
+                "practices",
+                "cited",
                 "notes",
             ],
         ),
@@ -4457,7 +4518,16 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/hub-auto.md HA7: set 169; `Proposal` without it.
     assert_eq!(sets[168].0, "Delegated");
     assert_eq!(sets[168].1, ["by", "rule", "commit"]);
-    // docs/features/doc-library.md DL2: sets 170 to 174, last, each "Data"'s
+    // docs/features/department-practices.md DP14: sets 175 and 176, last.
+    assert_eq!(sets[174].0, "CardPractice");
+    assert_eq!(
+        sets[174].1,
+        ["name", "title", "path", "disciplines", "rules"]
+    );
+    assert_eq!(sets[175].0, "Cited");
+    assert_eq!(sets[175].1, ["written", "name", "title", "path"]);
+    assert_eq!(sets.len(), 176);
+    // docs/features/doc-library.md DL2: sets 170 to 174, each "Data"'s
     // keys in order.
     let library: Vec<(&str, Vec<&str>)> = sets[169..174]
         .iter()
@@ -4490,6 +4560,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                     "reviewed",
                     "scope",
                     "tags",
+                    "disciplines",
                     "rev",
                     "parent",
                     "modules",
@@ -4538,8 +4609,17 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     assert_eq!(sets[91].0, "Card");
     // docs/features/card-context.md CC10: 35, `context` right after
     // `history`; docs/features/upstream-signal.md US-12: 36, `upstream`
-    // right after `correction`. M: `context` out of the fixture.
-    assert_eq!(sets[91].1.len(), 36);
+    // right after `correction`; docs/features/department-practices.md
+    // DP14: 38, `practices` and `cited` right after `context`. M: `context`
+    // out of the fixture.
+    assert_eq!(sets[91].1.len(), 38);
+    let context_at = sets[91].1.iter().position(|key| key == "context");
+    assert_eq!(
+        sets[91].1[context_at.expect("context") + 1..context_at.expect("context") + 3],
+        ["practices", "cited"],
+        "{:?}",
+        sets[91].1
+    );
     let correction = sets[91].1.iter().position(|key| key == "correction");
     assert_eq!(
         sets[91].1[correction.expect("correction") + 1],
@@ -4595,7 +4675,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 174 sets (41 until
+/// unchanged, no new key): the fixture holds 176 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4632,7 +4712,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/corpus-map.md its six, CM3, and
 /// docs/features/auto-feed.md its eight, FD3, and
 /// docs/features/hub-auto.md its `Delegated`, HA7, and
-/// docs/features/doc-library.md its five, DL2); a decision
+/// docs/features/doc-library.md its five, DL2, and
+/// docs/features/department-practices.md its two, DP14); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -4646,8 +4727,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        174,
-        "174 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        176,
+        "176 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4663,7 +4744,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          collision-pairs' two (PP8), delivery-timeline's three (DT6), \
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
-         hub-auto's `Delegated` (HA7) and doc-library's five (DL2)"
+         hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
+         department-practices' two (DP14)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -4676,8 +4758,10 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
     // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
-    // docs/features/plain-questions.md "Acceptance criteria" PQ10.
-    assert_eq!(set("Proposal").len(), 54);
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10; 54 since
+    // collision-pairs PP8, 55 since docs/features/department-practices.md
+    // (`cited`).
+    assert_eq!(set("Proposal").len(), 55);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -4780,7 +4864,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 174 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 176 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -4815,7 +4899,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/corpus-map.md its six, CM3, and
 /// docs/features/auto-feed.md its eight, FD3, and
 /// docs/features/hub-auto.md its `Delegated`, HA7, and
-/// docs/features/doc-library.md its five, DL2); the amendment of
+/// docs/features/doc-library.md its five, DL2, and
+/// docs/features/department-practices.md its two, DP14); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -4832,8 +4917,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        174,
-        "174 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        176,
+        "176 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4849,7 +4934,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          collision-pairs' two (PP8), delivery-timeline's three (DT6), \
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
-         hub-auto's `Delegated` (HA7) and doc-library's five (DL2)"
+         hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
+         department-practices' two (DP14)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -4862,8 +4948,10 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     // 48 since docs/features/drift-queue.md added `drift`; 50 since
     // docs/features/card-questions.md L1 (`card_id`, `why`); 51 since
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
-    // docs/features/plain-questions.md "Acceptance criteria" PQ10.
-    assert_eq!(set("Proposal").len(), 54);
+    // docs/features/plain-questions.md "Acceptance criteria" PQ10; 54 since
+    // collision-pairs PP8, 55 since docs/features/department-practices.md
+    // (`cited`).
+    assert_eq!(set("Proposal").len(), 55);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

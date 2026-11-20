@@ -117,7 +117,7 @@ export const queryKeys = {
   rings: (project: string) => ["rings", project] as const,
   /** The whole corpus as one graph, `spec map [--archive] --json` (`docs/features/corpus-map.md` "Acceptance criteria", CM8): each archive its own entry. */
   map: (project: string, archive: boolean) => ["map", project, archive] as const,
-  /** Every document as a library, `spec library [--archive] --json` (`docs/features/doc-library.md` "The UI seam"): each archive its own entry. */
+  /** Every document as a library, `spec library [--archive] --json` (`docs/canon/spec-library.md` "The screen"): each archive its own entry. */
   library: (project: string, archive: boolean) => ["library", project, archive] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
@@ -432,7 +432,7 @@ function eventId(payload: unknown): string | null {
  * table lists the tree's nodes with their versions, states and last changes;
  * `docs/features/scope-rings.md` "Acceptance criteria", SR7: the rings list the tree's nodes with
  * their states; `docs/features/corpus-map.md` "Acceptance criteria", CM8: the map draws every node
- * and link of the spec; `docs/features/doc-library.md` "The UI seam": the library lists every
+ * and link of the spec; `docs/canon/spec-library.md` "Rows": the library lists every
  * document with its front-matter, decisions and last changes).
  */
 const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace", "cards", "catalog", "rings", "map", "library"] as const;
@@ -1324,7 +1324,7 @@ export function useMap(project: string, archive: boolean) {
 }
 
 /**
- * Every document as a library (docs/features/doc-library.md "The UI seam"): `spec library
+ * Every document as a library (docs/canon/spec-library.md "The screen"): `spec library
  * [--archive] --json`, its query's AbortSignal taken, the last answer kept while Include archive
  * reads again. Read while Documents is on screen; read again on an apply and a gap (useLiveQueue), a
  * read of the spec: it serves no queue or card data. Never on window focus. The rows, uses,
