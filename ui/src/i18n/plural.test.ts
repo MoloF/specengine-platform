@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { enT, ruT } from "../test/text";
-import { en } from "./en";
+import { en as eager } from "./en";
+import { enComments } from "./enComments";
 import { ru } from "./ru";
+
+/** The whole English catalog: first load's and the part the comments' chunks bring (catalog.ts `English`). */
+const en = { ...eager, comments: enComments };
 
 // LG-4 of docs/features/ui-languages.md, counts: `t(key, {count})` takes the form Intl.PluralRules
 // names. A form's expected text is its catalog value filled, so an owner's rewording breaks nothing;

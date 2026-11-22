@@ -202,6 +202,12 @@ pub use queue::{
     AUTO_EVENTS, AutoBind, AutoBound, AutoEvent, AutoHeld, AutoLanded, AutoStarted, BY_RULE,
     ByRule, EVENT_AUTO_BOUND, EVENT_AUTO_HELD, EVENT_AUTO_LANDED, EVENT_AUTO_STARTED, StoredAuto,
 };
+pub use queue::{
+    COMMENT_COLUMNS, COMMENT_VERSION_COLUMNS, Comment, CommentContext, CommentDeleted, CommentEdit,
+    CommentItem, CommentPage, CommentRefusal, EVENT_COMMENT_CREATED, EVENT_COMMENT_DELETED,
+    EVENT_COMMENT_EDITED, NewComment, StoredComment, StoredCommentVersion, StoredComments,
+    unreadable_comment_line,
+};
 pub use queue::{FeedCard, FeedEvent, FeedProposal, FeedRun, FeedSnapshot, FeedTask, FeedWindow};
 pub use read::{Decoded, IndexSnapshot, NodeNorm};
 pub use roles::{RoleCandidate, StoredRole};

@@ -265,12 +265,13 @@ fn ac_r11_propose_change_amends_as_its_twin() {
                 let document = &review["structuredContent"];
                 assert_eq!(
                     document.as_object().map(serde_json::Map::len),
-                    Some(55),
-                    "{label}: the review's 55 keys (docs/features/rev-discipline.md, \
+                    Some(56),
+                    "{label}: the review's 56 keys (docs/features/rev-discipline.md, \
                      docs/features/drift-queue.md, docs/features/card-questions.md L1, \
                      docs/features/intake-similar.md IS6, docs/features/plain-questions.md \
                      PQ10, docs/features/collision-pairs.md PP8, \
-                     docs/features/department-practices.md `cited`)"
+                     docs/features/department-practices.md `cited`, docs/features/comments.md \
+                     `comment_id`)"
                 );
                 assert_eq!(document["similar"], Value::Null, "{label}");
                 assert_eq!(document["kind"], json!(AMENDMENT_KIND));

@@ -22,7 +22,7 @@ import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { actingName, useActing, useAllowed, useConfirmer } from "./acting";
 import { ActOff } from "./ActOff";
-import { ActingNote, questionBodyOf, QuestionFields, raiseAction, raiseFormOf, RaiseNotice, raiseProblem, raiseTextsOf, TargetChoice, TextArea, useRaise, WriteDialog, type RaiseForm } from "./CardDialogs";
+import { ActingNote, questionBodyOf, QuestionFields, raiseAction, raiseFormOf, RaiseNotice, raiseProblem, raiseTextsOf, TargetChoice, TextArea, useRaise, WriteDialog, type RaiseForm, type RaisePost } from "./CardDialogs";
 import { CardLink, type CardLinks } from "./CardLink";
 import { flowTitleOf } from "./filter";
 import { decisionDeparts, decisionNeedsWhy, itemStatusLook, noteAnswers, RAISED_KINDS, subtaskMandateLook, takesAnswer } from "./labels";
@@ -450,6 +450,12 @@ interface RaiseDialogProps {
   onRaised: (said: string) => void;
   /** The daemon's line on the acting name, for the field that holds it. */
   onActingLine?: (line: string) => void;
+  /**
+   * Another door than the card's, and the dialog's title for it: a comment turned into an item
+   * (docs/features/comments.md "UI", Turn into…), `card` then the comment's ID and its targets.
+   */
+  post?: RaisePost<CardRaiseBody>;
+  title?: string;
 }
 
 /**
@@ -460,15 +466,15 @@ interface RaiseDialogProps {
  * starts the question's text: a parent's objection names the decision it is about
  * (docs/features/task-mandate.md "Acceptance criteria", V3).
  */
-export function AskDialog({ project, card, question = "", onClose, onRaised, onActingLine }: RaiseDialogProps & { question?: string }) {
+export function AskDialog({ project, card, question = "", onClose, onRaised, onActingLine, post, title }: RaiseDialogProps & { question?: string }) {
   const t = useTranslate();
   const [acting] = useActing();
   const [form, setForm] = useState<RaiseForm>(() => ({ ...raiseFormOf(card.targets), text: question }));
   const [checked, setChecked] = useState(false);
-  const raise = useRaise(project, card.id, onActingLine);
+  const raise = useRaise(project, card.id, onActingLine, post);
   return (
     <WriteDialog
-      title={t("board.ask.title", { id: card.id })}
+      title={title ?? t("board.ask.title", { id: card.id })}
       action={raiseAction(raise.outcome, t("board.ask.submit"), t("board.ask.anyway"), t("board.ask.again"))}
       sending={t("board.ask.sending")}
       onClose={onClose}
@@ -515,17 +521,17 @@ function decisionBodyOf(form: RaiseForm, targets: readonly string[], as: string 
  * a why the form asks, a blank one stopped before anything is sent. The daemon keeps `why` optional
  * either way.
  */
-export function DecideDialog({ project, card, onClose, onRaised, onActingLine }: Omit<RaiseDialogProps, "card"> & { card: Pick<Card, "id" | "targets" | "mandate"> }) {
+export function DecideDialog({ project, card, question = "", onClose, onRaised, onActingLine, post, title }: Omit<RaiseDialogProps, "card"> & { card: Pick<Card, "id" | "targets" | "mandate">; question?: string }) {
   const t = useTranslate();
   const [acting] = useActing();
-  const [form, setForm] = useState<RaiseForm>(() => raiseFormOf(card.targets));
+  const [form, setForm] = useState<RaiseForm>(() => ({ ...raiseFormOf(card.targets), text: question }));
   const [checked, setChecked] = useState(false);
-  const raise = useRaise(project, card.id, onActingLine);
+  const raise = useRaise(project, card.id, onActingLine, post);
   const departs = decisionDeparts(card.mandate);
   const needsWhy = decisionNeedsWhy(card.mandate);
   return (
     <WriteDialog
-      title={t("board.decide.title", { id: card.id })}
+      title={title ?? t("board.decide.title", { id: card.id })}
       action={raiseAction(raise.outcome, t("board.decide.submit"), t("board.decide.anyway"), t("board.decide.again"))}
       sending={t("board.decide.sending")}
       onClose={onClose}

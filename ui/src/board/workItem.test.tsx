@@ -233,7 +233,8 @@ describe("the work item's order (DF-6)", () => {
     const dialog = await modal(FULL);
     expect(sideLabels(dialog)).toEqual(SIDE_ORDER);
     expect(within(dialog).queryByRole("button", { name: /^More fields/ })).toBeNull();
-    expect(mainSections(dialog)).toEqual(["Against the brief", "Goal", "Criteria", "Source", "Subtasks", "Evidence", "Activity"]);
+    // Comments last, its own chunk under its own name from the start (docs/features/comments.md "UI").
+    expect(mainSections(dialog)).toEqual(["Against the brief", "Goal", "Criteria", "Source", "Subtasks", "Evidence", "Activity", "Comments"]);
     // The status: the column's lozenge, then Move.
     const status = within(dialog).getByRole("region", { name: "Status" });
     expect([status.querySelector(".lozenge")?.getAttribute("data-appearance"), status.querySelector(".lozenge-label")?.textContent]).toEqual(["information", "Check"]);
@@ -242,7 +243,7 @@ describe("the work item's order (DF-6)", () => {
 
   it("puts the latest return reason among the card's blocks, before Goal", async () => {
     const view = await page(RETURNED);
-    expect(mainSections(view)).toEqual(["Against the brief", "Returned", "Goal", "Source", "Subtasks", "Evidence", "Activity"]);
+    expect(mainSections(view)).toEqual(["Against the brief", "Returned", "Goal", "Source", "Subtasks", "Evidence", "Activity", "Comments"]);
     const status = within(view).getByRole("region", { name: "Status" });
     expect(status.querySelector(".lozenge")?.getAttribute("data-appearance")).toBe("warning");
   });

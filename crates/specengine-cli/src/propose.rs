@@ -378,6 +378,30 @@ pub(crate) fn written_reference(
     written: &str,
     scheme: &IdScheme,
 ) -> Result<Result<Option<Reference>, String>, CliError> {
+    Ok(written_form(written, scheme)?.map_err(|refused| refused.reason))
+}
+
+/// Why a target is refused, whether what it names exists under another
+/// form (an alias, a section through its document, a revision, a wiki
+/// link, or an alias a document declares: a rule the writer can follow),
+/// and whether it names several nodes (held by several files, declared
+/// twice): against no node at all.
+pub(crate) struct Unresolved {
+    pub reason: String,
+    pub another_form: bool,
+    pub ambiguous: bool,
+}
+
+/// [`written_reference`] with the form refusals told apart from the rest.
+fn written_form(
+    written: &str,
+    scheme: &IdScheme,
+) -> Result<Result<Option<Reference>, Unresolved>, CliError> {
+    let none = |reason: String| Unresolved {
+        reason,
+        another_form: false,
+        ambiguous: false,
+    };
     if is_path_target(written) {
         if !is_clean_relative(written) {
             return Err(unclean_path(written));
@@ -385,7 +409,7 @@ pub(crate) fn written_reference(
         return Ok(Ok(None));
     }
     let Some(found) = grammar::parse_reference(written, 0, scheme) else {
-        return Ok(Err(no_reference(written, scheme)));
+        return Ok(Err(none(no_reference(written, scheme))));
     };
     if !found.homoglyphs.is_empty() || found.reference.script == IdScript::Mixed {
         return Err(CliError::spec(latin_fix(written, &found.homoglyphs)));
@@ -411,7 +435,11 @@ pub(crate) fn written_reference(
         )),
     };
     Ok(match reason {
-        Some(reason) => Err(reason),
+        Some(reason) => Err(Unresolved {
+            reason,
+            another_form: true,
+            ambiguous: false,
+        }),
         None => Ok(Some(found.reference)),
     })
 }
@@ -480,49 +508,64 @@ pub(crate) fn named(
     })
 }
 
+/// The end of a refusal whose target names more than one node: a proposal's
+/// wording, which a comment's refusal words as its own
+/// (`crate::comment`).
+pub(crate) const NAMES_ONE_NODE: &str = "a proposal names one node";
+
 /// Step 1 over the index: the one holder of `reference`, as `spec show`
 /// resolves it; for an ID a path's document declares (`at`), that path.
+/// The refusal tells whether the target names several nodes (`true`).
 fn holder_path(
     resolver: &Resolver<'_>,
     written: &str,
     reference: &Reference,
     at: Option<&str>,
-) -> Result<Result<String, String>, CliError> {
+) -> Result<Result<String, (String, bool)>, CliError> {
     match one_holder(resolver, reference, written) {
         Ok(file) => {
             let holder = resolver.paths()[file];
             Ok(match at {
-                Some(at) if at != holder => Err(format!(
-                    "`{at}` declares `{written}`, which resolves to `{holder}`; a proposal \
-                     names one node"
+                Some(at) if at != holder => Err((
+                    format!(
+                        "`{at}` declares `{written}`, which resolves to `{holder}`; \
+                         {NAMES_ONE_NODE}"
+                    ),
+                    true,
                 )),
                 _ => Ok(holder.to_owned()),
             })
         }
-        Err(HolderError::Dangling(reason)) => Ok(Err(format!("`{written}` {reason}"))),
-        Err(HolderError::Several(paths)) => Ok(Err(format!(
-            "`{written}` is held by {} files: {}; a proposal names one node",
-            paths.len(),
-            paths.join(", ")
+        Err(HolderError::Dangling(reason)) => Ok(Err((format!("`{written}` {reason}"), false))),
+        Err(HolderError::Several(paths)) => Ok(Err((
+            format!(
+                "`{written}` is held by {} files: {}; {NAMES_ONE_NODE}",
+                paths.len(),
+                paths.join(", ")
+            ),
+            true,
         ))),
         Err(HolderError::Project) => Err(project_qualified(written)),
     }
 }
 
 /// Why a written target names no node over the index ([`placed`]): the
-/// refusal's line, and whether the target is an alias its holder's
-/// document declares (the node it names exists, under its canonical ID).
+/// refusal's line, whether the target is an alias its holder's document
+/// declares (the node it names exists, under its canonical ID), and whether
+/// it names several nodes.
 struct Unplaced {
     reason: String,
     alias: bool,
+    ambiguous: bool,
 }
 
 impl Unplaced {
-    /// A refusal of anything but a document's alias.
+    /// A refusal of anything but a document's alias or several nodes.
     fn other(reason: String) -> Self {
         Self {
             reason,
             alias: false,
+            ambiguous: false,
         }
     }
 }
@@ -540,9 +583,12 @@ fn node_position(
 ) -> Result<usize, Unplaced> {
     match locate(parsed, &reference.id) {
         Ok(ord) => Ok(ord),
-        Err(LocateError::Repeated(count)) => Err(Unplaced::other(format!(
-            "`{written}` is declared {count} times in `{path}`; a proposal names one node"
-        ))),
+        Err(LocateError::Repeated(count)) => Err(Unplaced {
+            ambiguous: true,
+            ..Unplaced::other(format!(
+                "`{written}` is declared {count} times in `{path}`; {NAMES_ONE_NODE}"
+            ))
+        }),
         Err(LocateError::Absent) => {
             let document = parsed.document();
             let aliased = document
@@ -560,6 +606,7 @@ fn node_position(
                         canonical_id(resolver, scheme, path, id, None)
                     ),
                     alias: true,
+                    ambiguous: false,
                 },
                 _ => Unplaced::other(format!(
                     "`{written}` is not in `{path}` as read now; run it again"
@@ -590,14 +637,31 @@ pub(crate) fn resolved_at(
     input: &CheckInput,
     written: &str,
 ) -> Result<Result<(String, String, usize), String>, CliError> {
+    Ok(resolved_why(project, input, written)?.map_err(|unresolved| unresolved.reason))
+}
+
+/// [`resolved_at`], its refusal telling a node written in another form (an
+/// alias, a section through its document, a revision, a wiki link) from no
+/// node at all (task spec `comments`, "HTTP": a 409 against a 404).
+pub(crate) fn resolved_why(
+    project: &ProjectRoot,
+    input: &CheckInput,
+    written: &str,
+) -> Result<Result<(String, String, usize), Unresolved>, CliError> {
     let written = written.trim();
     let scheme = &project.config.scheme;
-    let reference = match written_reference(written, scheme)? {
+    let reference = match written_form(written, scheme)? {
         Ok(reference) => reference,
-        Err(reason) => return Ok(Err(reason)),
+        Err(unresolved) => return Ok(Err(unresolved)),
     };
     let resolver = Resolver::new(input, scheme, &project.config.paths);
-    Ok(placed(project, input, &resolver, written, reference)?.map_err(|unplaced| unplaced.reason))
+    Ok(
+        placed(project, input, &resolver, written, reference)?.map_err(|unplaced| Unresolved {
+            reason: unplaced.reason,
+            another_form: unplaced.alias,
+            ambiguous: unplaced.ambiguous,
+        }),
+    )
 }
 
 /// [`resolved_at`] past [`written_reference`], over `resolver`: the
@@ -622,7 +686,12 @@ fn placed(
     let written = written.as_str();
     let path = match holder_path(resolver, written, &reference, at.as_deref())? {
         Ok(path) => path,
-        Err(reason) => return Ok(Err(Unplaced::other(reason))),
+        Err((reason, ambiguous)) => {
+            return Ok(Err(Unplaced {
+                ambiguous,
+                ..Unplaced::other(reason)
+            }));
+        }
     };
     let Some(parsed) = input
         .files
@@ -806,7 +875,7 @@ pub(crate) fn located(
             at,
         }) => match holder_path(&resolver, &written, &reference, at.as_deref())? {
             Ok(path) => (path, Some((written, reference))),
-            Err(reason) => return Ok(Err(reason)),
+            Err((reason, _)) => return Ok(Err(reason)),
         },
         Err(reason) => return Ok(Err(reason)),
     };

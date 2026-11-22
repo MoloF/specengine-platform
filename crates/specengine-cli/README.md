@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-11-19
+reviewed: 2026-11-22
 ---
 
 # specengine-cli -- the spec binary
@@ -33,7 +33,7 @@ The CLI: the agent read loop (search, read by ID) over an index refreshed every 
 
 ## Rules
 
-- Writes: `index`, `resolve`, the reads (`search`, `show`, `tree`, `graph`, `impact`, `bundle`, `refs`, `symbols`, `unmapped`, `verify`, `health`, `roadmap`, `flow`, `trace`, `catalog`, `map`, `rings`, `library`, `lock diff`, `feed`, `auto show|next`) and the queue (`import-state`, `task`, `card`, `stage`, `gate`, `collisions`, `auto approve|hold|stop|resume`) only the data directory, `auto start` its branch too, `auto land` the claim's commits, applies and the rule's branch, `approve`, `round answer`, a hub's confirm also its target or a new file (`--editorial`: `spec.lock` too; a drift item: `spec.lock` alone) and the index's changed outputs (`outputs.rs`, `proposal-outputs.md`) and commit in the proposal's worktree, `lock accept`, `lock rebase`, `verify --tests` `spec.lock` and a commit, `regen` the file; `init` only its file; `export index` only the index, its shards and its roadmap view; `export state` only its dump, outside the repository; `check`, `bump`, `delivery`, `card counts`, `verify --staged`, `serve` nothing; nothing else under the root (`architecture.md#storage`) but what the project's command `verify --tests` runs writes.
+- Writes: `index`, `resolve`, the reads (`search`, `show`, `tree`, `graph`, `impact`, `bundle`, `refs`, `symbols`, `unmapped`, `verify`, `health`, `roadmap`, `flow`, `trace`, `catalog`, `map`, `rings`, `library`, `lock diff`, `feed`, `auto show|next`) and the queue (`import-state`, `task`, `card`, `comment`, `stage`, `gate`, `collisions`, `auto approve|hold|stop|resume`) only the data directory, `auto start` its branch too, `auto land` the claim's commits, applies and the rule's branch, `approve`, `round answer`, a hub's confirm also its target or a new file (`--editorial`: `spec.lock` too; a drift item: `spec.lock` alone) and the index's changed outputs (`outputs.rs`, `proposal-outputs.md`) and commit in the proposal's worktree, `lock accept`, `lock rebase`, `verify --tests` `spec.lock` and a commit, `regen` the file; `init` only its file; `export index` only the index, its shards and its roadmap view; `export state` only its dump, outside the repository; `check`, `bump`, `delivery`, `card counts`, `verify --staged`, `serve` nothing; nothing else under the root (`architecture.md#storage`) but what the project's command `verify --tests` runs writes.
 - Freshness: reads run `freshness.rs`' step first, the stat-keyed `update` or a hub's trusted index (`spec-read-freshness.md`), never changing the exit: broken or unreadable files indexed with diagnostics; a missing root -> a `warning:` if `[paths]` is written, else none. `index`, `refs`, `symbols`, `unmapped`, `health`, `resolve` (with `[code]`: `show --bindings`, `bundle`, `task show`, `impact`) then refresh the code index (a walk gap: `symbol-reads.md`, `health-code.md`).
 - Subset: `show`, `--links`, `bundle` read their REFs' rows and files, BLAKE3-checked, or walk: `spec-read-subset.md`.
 - Tier 3: `search` drops it in the query, before the limit, unless `--archive`; `show` marks it ` | archived`.

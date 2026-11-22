@@ -1,6 +1,14 @@
 import { cleanup } from "@testing-library/react";
-import { afterEach, beforeEach, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { recordConsole, takeConsoleCalls } from "./console";
+
+// The comments' chunks (docs/features/comments.md "UI"): the nav's Mentions badge stands on every
+// screen, the Comments part under every task, document and proposal. Loaded once per file ahead of its
+// tests, so no screen's first render waits on their first import, as no later one does.
+beforeAll(async () => {
+  await import("../comments/MentionsBadge");
+  await import("../comments/CommentsPart");
+});
 
 beforeEach(async () => {
   // The viewer's choices kept in storage (the tree's Show drift, docs/features/ui-tree-drift.md) start each test cleared.

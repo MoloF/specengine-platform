@@ -7,6 +7,9 @@
 //! against these. The helpers they call (`columns_of`, `index_only`,
 //! `corrupt`, the column decoders) are the store's own. The copies are
 //! byte for byte; [`list`] and [`matches`], at the end, are their entry points.
+//! One addition since: queue schema 15's last column, `comment_id` (task spec
+//! `comments`, "Queue schema 15"), taken and judged as `card_id` is, so the
+//! copy still builds a [`Proposal`] and reads the rows the store reads.
 
 use super::super::*;
 
@@ -221,9 +224,31 @@ impl RawRow {
         let drift_columns = [take(), take()];
         let card_id = take();
         let why = take();
-        // Step 13's, last in the table: intake columns of a question.
+        // Step 13's: intake columns of a question.
         columns.gist = take();
         columns.matters = take();
+        // Step 15's, last in the table (task spec `comments`): the comment
+        // an item was raised from, a deciding kind's alone.
+        let comment_id = take();
+        if let Some(comment) = &comment_id {
+            if kind.family() != KindFamily::Decides {
+                return Err(corrupt(
+                    &id,
+                    "comment_id",
+                    format!(
+                        "it is set on {}, which names no comment",
+                        kind.with_article()
+                    ),
+                ));
+            }
+            if specengine_core::comment::comment_number(comment).is_none() {
+                return Err(corrupt(
+                    &id,
+                    "comment_id",
+                    format!("`{comment}` is no comment ID"),
+                ));
+            }
+        }
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
@@ -317,6 +342,7 @@ impl RawRow {
             new_ids,
             task_id,
             card_id,
+            comment_id,
             staged,
             interpretation,
             drift,

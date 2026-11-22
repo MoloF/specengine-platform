@@ -482,7 +482,9 @@ fn m7_the_texts_hold_the_mandate() {
     }
     drop(session.finish());
     // 2 039 since docs/features/collision-pass.md CP8 (65 bytes in, 74 out).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
+    // 2 043 since docs/features/comments.md CM15 (the comments line in, 54
+    // bytes; 57 cut).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2043);
     assert!(!specengine_mcp::INSTRUCTIONS.contains("mandate"));
     assert!(!specengine_mcp::HUB_INSTRUCTIONS.contains("mandate"));
 }

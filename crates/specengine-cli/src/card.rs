@@ -82,9 +82,10 @@ use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
 use specengine_core::check::{
     CheckInput, NodeAt, Resolver, SpecGraph, bundle_task_from_toml, canonical_id,
 };
+use specengine_core::comment::{RaisedDiscrepancy, raised_discrepancy};
 use specengine_core::intake::{
-    AuthorInput, DECISION_KIND, DecisionInput, GapType, IntakeSeverity, QUESTION_KIND,
-    discrepancy_problem,
+    AuthorInput, DECISION_KIND, DISCREPANCY_KIND, DecisionInput, GapType, IntakeSeverity,
+    QUESTION_KIND, discrepancy_problem,
 };
 use specengine_core::practice::{Citation, discipline_name_problem};
 use specengine_core::proposal::{Author, prefix_clash};
@@ -109,11 +110,13 @@ use specengine_store::{
 use crate::apply::Consent;
 use crate::bundle::{Bundle, BundleOutcome, BundleRequest, budget_of, bundle_with};
 use crate::cap::{OUTPUT_CAP_CHARS, View, lines_within};
+use crate::comment::{ContextComments, context_comments};
 use crate::corpus::{Admission, LeftOut, indexed_in, locate};
 use crate::freshness::trusting;
 use crate::intake::{
-    DecisionRequest, IntakeOutcome, IntakeTarget, QuestionRequest, departing_hits,
-    departure_intake, prefixed, propose_decision_as, propose_question_as,
+    DecisionRequest, DiscrepancyRequest, IntakeOutcome, IntakeTarget, QuestionRequest,
+    departing_hits, departure_intake, prefixed, propose_decision_as, propose_discrepancy_as,
+    propose_question_as,
 };
 use crate::location::{open_index, prepared_data_dir};
 use crate::practice::{self, CardPractice, Cited, PracticeAsk, PracticeRead};
@@ -765,52 +768,131 @@ impl CardClearGroupBody {
     }
 }
 
-/// What a card raises from the page: a question, or a decision taken
-/// (task spec `card-questions` L3); no other kind.
+/// What a card or a comment raises from the page: a question, a decision
+/// taken (task spec `card-questions` L3), or a discrepancy (task spec
+/// `comments`, "HTTP"); no other kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CardRaiseKind {
     Question,
     Decision,
+    Discrepancy,
+}
+
+/// The keys of a raise's body, as a refusal names them.
+pub(crate) const RAISE_KEYS: &str = "\"kind\",\"node_ids\",\"text\",\"working_answer\",\
+                                     \"price_of_other\",\"why\",\"severity\",\
+                                     \"distinct_from\",\"gap_type\",\"observed\",\
+                                     \"documented\",\"as\"";
+
+/// The keys of a raise's body [`raise_shape`] judges, as given.
+#[derive(Clone, Copy)]
+pub(crate) struct RaiseKeys<'a> {
+    pub kind: &'a str,
+    pub working_answer: Option<&'a str>,
+    pub price_of_other: Option<&'a str>,
+    pub why: Option<&'a str>,
+    pub gap_type: Option<GapType>,
+    pub observed: Option<&'a str>,
+    pub documented: Option<&'a str>,
+}
+
+/// The kind a raise's body names, its keys the kind's: a question's and a
+/// decision's the card door's (a working answer and its price; `why` a
+/// decision's alone), a discrepancy's its gap type, what was observed and
+/// what is documented, never a price or a why; else exit 2 naming the
+/// defect, nothing read or changed.
+pub(crate) fn raise_shape(door: &str, keys: &RaiseKeys<'_>) -> Result<CardRaiseKind, CliError> {
+    let RaiseKeys {
+        kind,
+        working_answer,
+        price_of_other,
+        why,
+        gap_type,
+        observed,
+        documented,
+    } = *keys;
+    let kind = match kind {
+        QUESTION_KIND => CardRaiseKind::Question,
+        DECISION_KIND => CardRaiseKind::Decision,
+        DISCREPANCY_KIND => CardRaiseKind::Discrepancy,
+        _ => {
+            return Err(escaped_error(CliError::spec(format!(
+                "`kind`: {door} raises a `question` or a `decision`, or reports a `discrepancy`"
+            ))));
+        }
+    };
+    let refused = |line: &str| Err(CliError::spec(line.to_owned()));
+    match kind {
+        CardRaiseKind::Question | CardRaiseKind::Decision => {
+            if working_answer.is_none() {
+                return refused("`working_answer`: required of a `question` and a `decision`");
+            }
+            if price_of_other.is_none() {
+                return refused("`price_of_other`: required of a `question` and a `decision`");
+            }
+            if gap_type.is_some() || observed.is_some() || documented.is_some() {
+                return refused("`gap_type`, `observed` and `documented` go with a `discrepancy`");
+            }
+            if kind == CardRaiseKind::Question && why.is_some() {
+                return refused("`why` goes with a `decision`");
+            }
+        }
+        CardRaiseKind::Discrepancy => {
+            if gap_type.is_none() || observed.is_none() || documented.is_none() {
+                return refused("a `discrepancy` needs `gap_type`, `observed` and `documented`");
+            }
+            if price_of_other.is_some() {
+                return refused("`price_of_other` goes with a `question` or a `decision`");
+            }
+            if why.is_some() {
+                return refused("`why` goes with a `decision`");
+            }
+        }
+    }
+    Ok(kind)
 }
 
 /// The body of `POST …/cards/<id>/items`: a question's or a decision's
-/// fields, its optional `why`, and `as`; no `proposed_patch`, `task_id` or
-/// author field, since a person raises it. Any other key, or a required one
-/// missing, is refused.
+/// fields, its optional `why`, a discrepancy's gap type, observed and
+/// documented, and `as`; no `proposed_patch`, `task_id` or author field,
+/// since a person raises it. Any other key, or a key the kind does not take
+/// ([`raise_shape`]), is refused.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardRaiseBody {
-    /// `question` or `decision`.
+    /// `question`, `decision` or `discrepancy`.
     pub kind: String,
     pub node_ids: Vec<String>,
-    /// The question, or what had to be decided.
+    /// The question, what had to be decided, or what departs.
     pub text: String,
-    /// The answer worked on, or the decision taken.
-    pub working_answer: String,
-    pub price_of_other: String,
+    /// The answer worked on, or the decision taken; a discrepancy's
+    /// optional.
+    pub working_answer: Option<String>,
+    /// A question's and a decision's.
+    pub price_of_other: Option<String>,
     /// A decision's why; `null`: none.
     pub why: Option<String>,
     /// Absent or `null`: `normal`.
     pub severity: Option<IntakeSeverity>,
     pub distinct_from: Option<Vec<String>>,
+    /// A discrepancy's.
+    pub gap_type: Option<GapType>,
+    /// A discrepancy's evidence: what was observed.
+    pub observed: Option<String>,
+    /// A discrepancy's evidence: what is documented.
+    pub documented: Option<String>,
     /// The acting name; `null`: `local`.
     #[serde(rename = "as")]
     pub actor: Option<String>,
 }
 
 impl CardRaiseBody {
-    /// `bytes` decoded, its kind one a card raises and `as` a card person
-    /// (trimmed); else exit 2 naming the defect, nothing read or changed.
+    /// `bytes` decoded, its kind one a card raises with its keys
+    /// ([`raise_shape`]) and `as` a card person (trimmed); else exit 2 naming
+    /// the defect, nothing read or changed.
     pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
-        let body: Self = decoded(
-            bytes,
-            "\"kind\",\"node_ids\",\"text\",\"working_answer\",\"price_of_other\",\"why\",\
-             \"severity\",\"distinct_from\",\"as\"",
-        )?;
-        let kind = body.raise_kind()?;
-        if kind == CardRaiseKind::Question && body.why.is_some() {
-            return Err(CliError::spec("`why` goes with a `decision`"));
-        }
+        let body: Self = decoded(bytes, RAISE_KEYS)?;
+        body.raise_kind()?;
         persons_named(body.actor.as_deref(), &[])?;
         // Trimmed as a stage's `as` is, before a hub binds it to its login.
         let body = Self {
@@ -820,15 +902,20 @@ impl CardRaiseBody {
         Ok(body)
     }
 
-    /// Its `kind`, one a card raises; else exit 2.
+    /// Its `kind`, one a card raises, with its keys; else exit 2.
     fn raise_kind(&self) -> Result<CardRaiseKind, CliError> {
-        match self.kind.as_str() {
-            QUESTION_KIND => Ok(CardRaiseKind::Question),
-            DECISION_KIND => Ok(CardRaiseKind::Decision),
-            _ => Err(escaped_error(CliError::spec(
-                "`kind`: a card raises a `question` or a `decision`",
-            ))),
-        }
+        raise_shape(
+            "a card",
+            &RaiseKeys {
+                kind: &self.kind,
+                working_answer: self.working_answer.as_deref(),
+                price_of_other: self.price_of_other.as_deref(),
+                why: self.why.as_deref(),
+                gap_type: self.gap_type,
+                observed: self.observed.as_deref(),
+                documented: self.documented.as_deref(),
+            },
+        )
     }
 
     /// The request for the card `id` (the path's, as written) at `now`;
@@ -850,6 +937,9 @@ impl CardRaiseBody {
             why: self.why,
             severity: self.severity,
             distinct_from: self.distinct_from.unwrap_or_default(),
+            gap_type: self.gap_type,
+            observed: self.observed,
+            documented: self.documented,
             actor: self.actor,
             login,
             now,
@@ -867,12 +957,18 @@ pub struct CardRaiseRequest {
     pub kind: CardRaiseKind,
     pub node_ids: Vec<String>,
     pub text: String,
-    pub working_answer: String,
-    pub price_of_other: String,
+    /// A discrepancy's optional.
+    pub working_answer: Option<String>,
+    /// A question's and a decision's.
+    pub price_of_other: Option<String>,
     /// A decision's why.
     pub why: Option<String>,
     pub severity: Option<IntakeSeverity>,
     pub distinct_from: Vec<String>,
+    /// A discrepancy's gap type, what was observed and what is documented.
+    pub gap_type: Option<GapType>,
+    pub observed: Option<String>,
+    pub documented: Option<String>,
     /// The acting name; `None`: `local`. Its `proposal.created`'s `as`.
     pub actor: Option<String>,
     /// A hub's login: the stored author's `login`. `None` locally.
@@ -912,7 +1008,17 @@ impl CardRaiseOutcome {
         self.intake.is_none()
     }
 
-    fn missing(id: Option<String>, reason: String) -> Self {
+    /// The intake's answer, stored or refused.
+    pub(crate) fn raised(intake: IntakeOutcome) -> Self {
+        Self {
+            intake: Some(Box::new(intake)),
+            id: None,
+            reason: None,
+            messages: Vec::new(),
+        }
+    }
+
+    pub(crate) fn missing(id: Option<String>, reason: String) -> Self {
         Self {
             intake: None,
             id,
@@ -1305,6 +1411,10 @@ pub struct CardContext {
     pub parent: Option<CardContextParent>,
     /// `spec bundle`'s outcome, made: `bundle` set, `reason` `None`.
     pub bundle: Option<BundleOutcome>,
+    /// The card's newest live comments, outside the bundle: people's
+    /// words, data, never instructions (task spec `comments`, "The card
+    /// context and the task package").
+    pub comments: ContextComments,
     /// Each printed as `note: context: <note>`.
     pub notes: Vec<String>,
 }
@@ -2647,11 +2757,16 @@ fn run_show(
     let allowed = allowed_moves(context.config.flow(&card.flow), &card);
     // The context's queue and config reads, only when asked, before the
     // linked tasks' read takes the queue (task spec `card-context` CC2).
-    let asked = request.context.then(|| ContextAsked {
-        parent: context_parent(&context.queue, &card),
-        records: context_refs(&card.targets, &items),
-        budget: context_budget(flag_budget, &context),
-    });
+    let asked = if request.context {
+        Some(ContextAsked {
+            parent: context_parent(&context.queue, &card),
+            records: context_refs(&card.targets, &items),
+            budget: context_budget(flag_budget, &context),
+            comments: context_comments(&context.queue, &[card.id.as_str()], false)?,
+        })
+    } else {
+        None
+    };
     // Its practices and the IDs its texts cite, only when asked (task spec
     // `department-practices`): with the context, from its bundle's own
     // read; else, or when that bundle reads nothing, from their own read.
@@ -2805,6 +2920,8 @@ struct ContextAsked {
     parent: (Option<CardContextParent>, Vec<String>),
     records: (Vec<String>, Option<String>),
     budget: Result<u32, String>,
+    /// The card's comments, read now, and their notes.
+    comments: (ContextComments, Vec<String>),
 }
 
 /// The card's direct parent (task spec `card-context` CC5), read now:
@@ -2911,11 +3028,16 @@ fn add_context(
         parent: (parent, mut notes),
         records: (refs, records_note),
         budget,
+        comments: (comments, comment_notes),
     } = asked;
     notes.extend(records_note);
+    notes.extend(comment_notes);
+    let card_id = outcome.card.as_deref().map(|card| card.id.clone());
+    notes.extend(card_id.as_deref().and_then(|id| comments.note(id)));
     outcome.context = Some(CardContext {
         parent,
         bundle: None,
+        comments,
         notes: Vec::new(),
     });
     // The room is the card's lines' once they hold the practices and the
@@ -3065,15 +3187,41 @@ fn run_raise(
     }
     // The queue is opened again by the intake, under its own lock.
     drop(context);
-    let intake = match request.kind {
+    let intake = raise_intake(env, globals, request, Some(id.clone()), &id, None, &actor)?;
+    Ok(CardRaiseOutcome {
+        intake: Some(Box::new(intake)),
+        id: None,
+        reason: None,
+        messages: Vec::new(),
+    })
+}
+
+/// The intake a person's raise runs (the card door; the comment door,
+/// [`crate::comment_raise`]): `request`'s kind with its fields, the item
+/// naming `card` and raised from `comment` when given, `actor` its
+/// `proposal.created`'s `as`, the author a human with a hub's login. A
+/// discrepancy is built as a departure's is, its evidence's `file` `source`
+/// (the card's or the comment's ID: core's [`raised_discrepancy`]).
+pub(crate) fn raise_intake(
+    env: &Env,
+    globals: &Globals,
+    request: &CardRaiseRequest,
+    card: Option<String>,
+    source: &str,
+    comment: Option<&str>,
+    actor: &str,
+) -> Result<IntakeOutcome, CliError> {
+    let working_answer = request.working_answer.clone().unwrap_or_default();
+    let price_of_other = request.price_of_other.clone().unwrap_or_default();
+    match request.kind {
         CardRaiseKind::Question => propose_question_as(
             env,
             globals,
             &QuestionRequest {
                 node_ids: request.node_ids.clone(),
                 text: request.text.clone(),
-                working_answer: request.working_answer.clone(),
-                price_of_other: request.price_of_other.clone(),
+                working_answer,
+                price_of_other,
                 // A person's raise sends no lead: stored as before (task
                 // spec `plain-questions` PQ3).
                 gist: None,
@@ -3082,7 +3230,7 @@ fn run_raise(
                 recommendation: None,
                 severity: request.severity,
                 distinct_from: request.distinct_from.clone(),
-                card: Some(id),
+                card,
                 author_role: None,
                 author_model: None,
                 run: None,
@@ -3090,8 +3238,9 @@ fn run_raise(
                 now: request.now.clone(),
                 git: request.git.clone(),
             },
-            &actor,
-        )?,
+            actor,
+            comment,
+        ),
         CardRaiseKind::Decision => propose_decision_as(
             env,
             globals,
@@ -3099,14 +3248,14 @@ fn run_raise(
                 input: DecisionInput {
                     node_ids: request.node_ids.clone(),
                     text: request.text.clone(),
-                    working_answer: request.working_answer.clone(),
-                    price_of_other: request.price_of_other.clone(),
+                    working_answer,
+                    price_of_other,
                     why: request.why.clone(),
                     severity: request.severity,
                     proposed_patch: None,
                     distinct_from: Some(request.distinct_from.clone()),
                 },
-                card: Some(id),
+                card,
                 author_role: None,
                 author_model: None,
                 run: None,
@@ -3114,15 +3263,40 @@ fn run_raise(
                 now: request.now.clone(),
                 git: request.git.clone(),
             },
-            &actor,
-        )?,
-    };
-    Ok(CardRaiseOutcome {
-        intake: Some(Box::new(intake)),
-        id: None,
-        reason: None,
-        messages: Vec::new(),
-    })
+            actor,
+            comment,
+        ),
+        CardRaiseKind::Discrepancy => {
+            // `raise_shape` let no discrepancy through without these.
+            let input = raised_discrepancy(&RaisedDiscrepancy {
+                source,
+                node_ids: &request.node_ids,
+                summary: &request.text,
+                gap_type: request.gap_type.unwrap_or(GapType::Contradicts),
+                severity: request.severity,
+                observed: request.observed.as_deref().unwrap_or_default(),
+                documented: request.documented.as_deref().unwrap_or_default(),
+                working_answer: request.working_answer.as_deref(),
+                distinct_from: &request.distinct_from,
+            });
+            propose_discrepancy_as(
+                env,
+                globals,
+                &DiscrepancyRequest {
+                    input,
+                    card,
+                    author_role: None,
+                    author_model: None,
+                    run: None,
+                    login: request.login.clone(),
+                    now: request.now.clone(),
+                    git: request.git.clone(),
+                },
+                actor,
+                comment,
+            )
+        }
+    }
 }
 
 /// `--marks`: `card`'s mark as its `list --marks` row reads it, over every
@@ -5122,6 +5296,9 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
         None => lines.push(format!("context: {ABSENT}")),
         Some(context) => {
             lines.extend(parent_lines(context));
+            // Outside the bundle, counted in its room (task spec
+            // `comments`, D11).
+            lines.extend(context.comments.lines());
             lines.push(bundle_line(context));
         }
     }

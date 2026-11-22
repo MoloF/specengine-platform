@@ -17,10 +17,12 @@ describe("Activity's routes (auto-feed)", () => {
     expect(parseHash("#/alpha/feed/needs-me/page")).toEqual({ type: "not_found" });
     expect([feedHash("alpha"), feedHash("alpha", "needs-me"), feedHash("a b")]).toEqual(["#/alpha/feed", "#/alpha/feed/needs-me", "#/a%20b/feed"]);
     expect(ALL_SECTIONS).not.toContain("feed");
-    expect(navOf("alpha", [...ALL_SECTIONS, "feed"], enT).map((entry) => entry.key)).toEqual(["overview", "feed", ...ALL_SECTIONS]);
+    expect(navOf("alpha", [...ALL_SECTIONS, "feed"], enT).map((entry) => entry.key)).toEqual(["overview", "feed", "mentions", ...ALL_SECTIONS]);
     expect(navOf("alpha", [], enT).map(({ key, label, hash }) => [key, label, hash])).toEqual([
       ["overview", "Overview", "#/alpha"],
       ["feed", "Activity", "#/alpha/feed"],
+      // Mentions after it, in every department too (docs/features/comments.md "UI").
+      ["mentions", "Mentions", "#/alpha/mentions"],
     ]);
   });
 });

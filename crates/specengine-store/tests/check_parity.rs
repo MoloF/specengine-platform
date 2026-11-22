@@ -1578,6 +1578,9 @@ fn worst_w_is_the_in_test_oracle_s_on_this_repository() {
     }
     let oracle = oracle_w(&repository, &documents, &live);
     assert!(oracle > 50_000, "W {oracle}");
+    // The repository's own W: the seeded copy's is judged against it, not
+    // against a fixed number this repository's documents outgrow.
+    let repository_w = oracle;
     // The index term is the root plus the largest live shard, a non-empty one.
     let largest_live = live
         .iter()
@@ -1693,9 +1696,15 @@ fn worst_w_is_the_in_test_oracle_s_on_this_repository() {
         oracle_w(&root, &seeded, &[]),
         "the seeded copy, no shard"
     );
+    // One big live file counts (its 200 000 bytes, less the smallest of the
+    // pool's three it displaces): the shipped, superseded and generated
+    // ones count nothing, so the copy's W stays within one big file of the
+    // repository's (a fixed 400 000 held until docs/features/comments.md
+    // grew the repository's own documents past it; worst W has no cap, its
+    // paragraph under docs/canon/spec-check.md "Findings, debt, verdict").
     assert!(
-        oracle > 200_000 && oracle < 400_000,
-        "one big live file: {oracle}"
+        oracle > repository_w + 100_000 && oracle < repository_w + 300_000,
+        "one big live file: {oracle} against the repository's {repository_w}"
     );
 }
 

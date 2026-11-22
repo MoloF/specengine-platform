@@ -27,7 +27,7 @@ async function navIs(labels: readonly string[]) {
   });
 }
 
-const NINE = ["Overview", "Activity", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"];
+const NINE = ["Overview", "Activity", "Mentions", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"];
 
 describe("the edge cases of the screen", () => {
   it("one workspace configured: no switcher, its sections and its landing apply", async () => {
@@ -37,7 +37,7 @@ describe("the edge cases of the screen", () => {
     await waitFor(() => {
       expect(window.location.hash).toBe("#/alpha/graph");
     });
-    await navIs(["Overview", "Activity", "Graph", "Inbox"]);
+    await navIs(["Overview", "Activity", "Mentions", "Graph", "Inbox"]);
     expect(screen.queryByRole("combobox", { name: en.workspace.workspaceLabel })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Config notes/ })).toBeNull();
   });
@@ -47,7 +47,7 @@ describe("the edge cases of the screen", () => {
     const note = "specengine.toml:7: workspace `w-bare`: `stage` is no section (inbox, tasks, board, roadmap, flow, tree, graph, health, questions): left out";
     client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "w-bare", sections: [] })], [], { notes: [note] }));
     renderApp(client, "#/alpha/inbox");
-    await navIs(["Overview", "Activity"]);
+    await navIs(["Overview", "Activity", "Mentions"]);
     fireEvent.click(await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) }));
     expect(screen.getByRole("list", { name: en.workspace.notesTitle }).textContent).toBe(note);
     // The section still renders at its hash.
@@ -78,13 +78,13 @@ describe("the edge cases of the screen", () => {
       Promise.resolve(project === "beta" ? aWorkspaces([aWorkspace({ name: "w-beta", sections: ["health"] })]) : anImplicitWorkspaces()),
     );
     renderApp(client, "#/alpha/inbox");
-    await navIs(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
+    await navIs(["Overview", "Activity", "Mentions", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
     const select = screen.getByLabelText("Project");
     await waitFor(() => {
       expect((select as HTMLSelectElement).disabled).toBe(false);
     });
     fireEvent.change(select, { target: { value: "beta" } });
-    await navIs(["Overview", "Activity", "Health"]);
+    await navIs(["Overview", "Activity", "Mentions", "Health"]);
     expect(client.getWorkspaces.mock.calls.map((call) => call[0])).toEqual(["alpha", "beta"]);
   });
 
@@ -97,7 +97,7 @@ describe("the edge cases of the screen", () => {
     const retry = screen.getByRole("button", { name: "Retry" });
     retry.focus();
     fireEvent.click(retry);
-    await navIs(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
+    await navIs(["Overview", "Activity", "Mentions", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
     expect(screen.queryByRole("button", { name: /^Config notes/ })).toBeNull();
     await waitFor(() => {
       expect(document.activeElement).toBe(within(nav()).getByRole("link", { name: "Overview" }));
@@ -109,13 +109,13 @@ describe("the edge cases of the screen", () => {
     const message = "specengine.toml:2: `[project] slug`: `Alpha` is not a slug";
     client.getWorkspaces.mockResolvedValueOnce(aWorkspaces([aWorkspace({ name: "w-solo", sections: ["graph", "inbox"] })])).mockRejectedValue(new ClientError({ status: 503, message }));
     renderApp(client, "#/alpha/inbox");
-    await navIs(["Overview", "Activity", "Graph", "Inbox"]);
+    await navIs(["Overview", "Activity", "Mentions", "Graph", "Inbox"]);
     await act(async () => {
       window.dispatchEvent(new Event("focus"));
       await Promise.resolve();
     });
     const button = await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) });
-    await navIs(["Overview", "Activity", "Graph", "Inbox"]);
+    await navIs(["Overview", "Activity", "Mentions", "Graph", "Inbox"]);
     fireEvent.click(button);
     const panel = document.getElementById(button.getAttribute("aria-controls") ?? "") as HTMLElement;
     expect(within(panel).getByText(en.workspace.readFailedKept)).toBeTruthy();
@@ -126,7 +126,7 @@ describe("the edge cases of the screen", () => {
   it("reads the workspaces again on window focus, nothing else for it", async () => {
     const client = stubClient();
     renderApp(client, "#/alpha/inbox");
-    await navIs(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
+    await navIs(["Overview", "Activity", "Mentions", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
     expect(client.getWorkspaces).toHaveBeenCalledTimes(1);
     await act(async () => {
       window.dispatchEvent(new Event("focus"));
@@ -169,7 +169,7 @@ describe("over the daemon (HttpClient)", () => {
   it("asks the route once, no query, and draws the served workspace", async () => {
     const fetchStub = daemon(() => jsonAnswer(200, anImplicitWorkspaces()));
     renderApp(new HttpClient(), "#/alpha/inbox");
-    await navIs(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
+    await navIs(["Overview", "Activity", "Mentions", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
     expect(urlsOf(fetchStub).filter((url) => url.includes("/workspaces"))).toEqual(["/api/projects/alpha/workspaces"]);
   });
 

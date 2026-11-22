@@ -256,6 +256,7 @@ describe("the dialog and its combobox (AC-11)", () => {
     expect(options.map((option) => option.textContent)).toEqual([
       "Overview",
       "Activity",
+      "Mentions",
       "Inbox",
       "Agent tasks",
       "Board",
@@ -277,9 +278,9 @@ describe("the dialog and its combobox (AC-11)", () => {
     key("ArrowUp");
     expect(activeOption()).toBe(options[1]);
     key("End");
-    expect(activeOption()).toBe(options[13]);
+    expect(activeOption()).toBe(options[14]);
     key("ArrowDown");
-    expect(activeOption()).toBe(options[13]);
+    expect(activeOption()).toBe(options[14]);
     key("Home");
     expect(activeOption()).toBe(options[0]);
     key("ArrowUp");
@@ -725,7 +726,7 @@ describe("failures in their group (AC-14)", () => {
     await screen.findByRole("listbox", { name: "Proposals by severity, then age" });
     await openPalette();
     expect(groups()).toEqual([
-      ["Sections", ["Overview", "Activity", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]],
+      ["Sections", ["Overview", "Activity", "Mentions", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]],
       ["Projects, loading", []],
     ]);
     expect(within(palette() ?? document.body).queryByText("No project yet.")).toBeNull();
@@ -746,7 +747,7 @@ describe("failures in their group (AC-14)", () => {
     await screen.findByText("Projects could not be loaded:");
     await openPalette();
     expect(within(palette() ?? document.body).getByRole("alert").textContent).toBe("Projects could not be read: p");
-    expect(groups()).toEqual([["Sections", ["Overview", "Activity", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]]]);
+    expect(groups()).toEqual([["Sections", ["Overview", "Activity", "Mentions", "Inbox", "Agent tasks", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]]]);
     fireEvent.click(within(listbox()).getByRole("option", { name: "Agent tasks" }));
     await hashIs("#/alpha/tasks");
     await openPalette();

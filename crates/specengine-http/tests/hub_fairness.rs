@@ -779,7 +779,8 @@ fn tf9_the_default_build_has_no_probe_hold() {
     let hub = fair_hub("fair-default");
     let mut client = Stateless::new(hub.server.port, SLUG, "mira");
     let names = tool_names(&client.tools());
-    assert_eq!(names.len(), 19, "{names:?}");
+    // 21 since docs/features/comments.md CM15.
+    assert_eq!(names.len(), 21, "{names:?}");
     assert!(
         names.iter().all(|name| !name.starts_with("probe_")),
         "{names:?}"

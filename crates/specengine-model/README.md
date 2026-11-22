@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-model]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # specengine-model — the corpus model and the reference grammar
@@ -18,7 +18,7 @@ Types and pure functions, `serde` only: no I/O, no parser library, no other Spec
 | `script` | the look-alike table (fullwidth ASCII, Cyrillic and Greek letters identical to a Latin one); `IdScript` `latin` / `mixed` / `non-latin` (ADR-0009) |
 | `scheme` | `IdScheme::new(vec![PrefixSpec::number(..), PrefixSpec::name(..).with_aliases(..)])`, `Shape`, `IdScope`, `SchemeProblem` / `SchemeError` |
 | `grammar` | `scan` (text), `parse_reference` (one front-matter scalar), `parse_definition` (`id:`, `{#…}`), `parse_canon`, `split_superseded_by`, `is_slug` (the `slug` rule: qualifiers, feature-document stems) |
-| `task` | `TaskStatus` (ten states), `RunOutcome`, `TaskPackage` (27 keys, `TASK_PACKAGE_SCHEMA_VERSION` 1) and its parts, types only: `docs/canon/task-package.md`; `BindingRow` (`BindingAnchor`, `BindingPlace`), a read's code binding: `docs/canon/code-reads.md`; `TestedRow`, a read's and plain verify's `tested` entry: `docs/canon/spec-lock-tested.md` "Reads" |
+| `task` | `TaskStatus` (ten states), `RunOutcome`, `TaskPackage` (29 keys, `TASK_PACKAGE_SCHEMA_VERSION` 1) and its parts, types only: `docs/canon/task-package.md`; `BindingRow` (`BindingAnchor`, `BindingPlace`), a read's code binding: `docs/canon/code-reads.md`; `TestedRow`, a read's and plain verify's `tested` entry: `docs/canon/spec-lock-tested.md` "Reads" |
 | `card` | `Card`, `CardEvidence`, `EvidenceKind`, `CardAcceptance`, `CardVerdict`, `CardFrozen`, `CardCancellation`, types only: `docs/canon/cards.md`, `docs/canon/spec-trace.md` |
 | `reference`, `link`, `node`, `value`, `diagnostic`, `parsed` | what a parsed file is made of; `Fields`, the typed keys' values (the plan's `release`, `priority`, `estimate` too: `docs/canon/spec-roadmap.md`; `stage`: `docs/canon/spec-flow.md`); `Anchor`, `AnchorOrigin`, `LINK_TYPES`, `MENTIONS`, `DiagnosticCode::ALL` (13 codes); `EdgeKind`, `EdgeLabel`, `Reference.edge`: a labelled `follows` item (`docs/canon/flow-links.md`) |
 

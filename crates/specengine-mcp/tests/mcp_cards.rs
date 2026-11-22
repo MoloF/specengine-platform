@@ -202,20 +202,24 @@ fn ac10_the_card_tools_and_their_schemas() {
     // docs/features/department-split.md "Acceptance criteria", S8: thirty.
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
-    assert_eq!(TOOLS.len(), 33);
+    // 35 since docs/features/comments.md CM15 (`list_comments`, `add_comment`).
+    assert_eq!(TOOLS.len(), 35);
     for name in CARD_TOOLS {
         assert!(TOOLS.contains(&name), "{name}");
     }
     assert_eq!(CARDS_LINE.len(), 130);
     let instructions = specengine_mcp::INSTRUCTIONS;
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(instructions.len(), 2046);
+    // 2 043 since docs/features/comments.md CM15 (the comments line in, 54
+    // bytes; 57 cut).
+    assert_eq!(instructions.len(), 2043);
     assert_eq!(instructions.matches(CARDS_LINE).count(), 1);
     assert!(
         instructions.contains(&format!(
-            "show|claim|plan|report|complete.\n{CARDS_LINE}\nREF:"
+            "show|claim|plan|report|complete.\n{CARDS_LINE}- list_comments, add_comment = spec \
+             comment list|add.\n\nREF:"
         )),
-        "after the tasks line"
+        "after the tasks line, the comments line after it (docs/features/comments.md)"
     );
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
@@ -1152,7 +1156,9 @@ fn board_handoff_the_descriptions_name_the_new_keys() {
         }
     }
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
+    // 2 043 since docs/features/comments.md CM15 (the comments line in, 54
+    // bytes; 57 cut).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2043);
     drop(session.finish());
 }
 
@@ -1163,11 +1169,12 @@ const EDIT_TASK_SENTENCE: &str = "task: the T- tasks it links, each an existing 
                                   queue, listed once, at most 32; it replaces the list, - clears \
                                   it. The link decides nothing: no move, accept or gate reads it.";
 
-/// The sentence `GET_DESCRIPTION` adds, shared by stdio and a hub.
+/// The sentence `GET_DESCRIPTION` adds, shared by stdio and a hub (its "a
+/// corrupt row, another repository, a hub" dropped by docs/features/comments.md
+/// to keep 2 048 bytes).
 const GET_TASKS_SENTENCE: &str = "tasks: each linked task {id, status, title, stale}, read now as \
                                   spec task list reads it; status null, with a note that starts \
-                                  with its ID, for a task this server cannot read: a corrupt row, \
-                                  another repository, a hub.";
+                                  with its ID, for a task this server cannot read.";
 
 /// `spec task new --nodes node --title title` through the library on the
 /// queue of `home` at [`CLOCK`]: its ID.
@@ -1359,7 +1366,8 @@ fn card_tasks_edit_card_links_and_get_card_reads_each_task() {
 fn card_tasks_the_stdio_descriptions_name_task() {
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
-    assert_eq!(TOOLS.len(), 33);
+    // 35 since docs/features/comments.md CM15 (`list_comments`, `add_comment`).
+    assert_eq!(TOOLS.len(), 35);
     let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
     let list = session.tools();
     for (name, word, sentence) in [

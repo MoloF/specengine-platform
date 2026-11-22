@@ -1009,8 +1009,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     // docs/features/plain-questions.md PQ10 (two after `summary`); 54 since
     // docs/features/collision-pairs.md PP8 (`pair` after `evidence`); 55
     // since docs/features/department-practices.md "Proposals: `cited`" (`cited`
-    // last).
-    assert_eq!(keys.len(), 55, "{keys:?}");
+    // last); 56 since docs/features/comments.md (`comment_id` after `why`).
+    assert_eq!(keys.len(), 56, "{keys:?}");
     assert_eq!(
         keys[47..],
         [
@@ -1019,6 +1019,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
             "interpretation",
             "card_id",
             "why",
+            // docs/features/comments.md: after `why`.
+            "comment_id",
             "similar",
             "notes",
             "cited"
@@ -1028,7 +1030,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert!(
         raw.contains(&format!(
             "\"staged_at\":null,\"interpretation\":{{\"decision\":\"DEC-0023\",\"how\":\"{HOW}\",\
-             \"why\":\"{WHY}\"}},\"card_id\":null,\"why\":null,\"similar\":null,\"notes\":"
+             \"why\":\"{WHY}\"}},\"card_id\":null,\"why\":null,\"comment_id\":null,\"similar\":null,\
+             \"notes\":"
         )),
         "{raw}"
     );
@@ -1044,7 +1047,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert_eq!(json_of(&update_raw)["interpretation"], Value::Null);
     let (update_text, _) = printed(&pair.review_ok(&pair.main, &update));
     assert!(
-        update_text.contains("\ninterpretation: -\ncard_id: -\nwhy: -\nnotes:"),
+        update_text.contains("\ninterpretation: -\ncard_id: -\nwhy: -\ncomment_id: -\nnotes:"),
         "{update_text}"
     );
 
@@ -1053,7 +1056,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert!(
         text.contains(&format!(
             "\nstaged_at: -\ninterpretation:\n  decision: DEC-0023\n  how the decision was \
-             applied:\n    {HOW}\n  why interpretation was needed:\n    {WHY}\ncard_id: -\nwhy: -\nnotes:"
+             applied:\n    {HOW}\n  why interpretation was needed:\n    {WHY}\ncard_id: -\nwhy: -\n\
+             comment_id: -\nnotes:"
         )),
         "{text}"
     );
@@ -1077,7 +1081,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     // docs/features/plain-questions.md PQ10; 54 since
     // docs/features/collision-pairs.md PP8; 55 since
     // docs/features/department-practices.md "Proposals: `cited`" (`cited`).
-    assert_eq!(task_common::keys(&brief_json).len(), 55);
+    // 56 since docs/features/comments.md (`comment_id`).
+    assert_eq!(task_common::keys(&brief_json).len(), 56);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);
@@ -1558,7 +1563,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1567,7 +1572,8 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let row = row["proposals"].as_object().expect("a proposals row");
     // 48 since docs/features/card-questions.md S1.
     // 50 since docs/features/plain-questions.md PQ8.
-    assert_eq!(row.len(), 50);
+    // 51 since docs/features/comments.md (`comment_id`).
+    assert_eq!(row.len(), 51);
     assert_eq!(row["kind"], json!("interpretation"));
     assert_eq!(
         row["interpretation"],
@@ -1595,11 +1601,11 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":7,\"queue_schema\":14,",
+            "\"format\":8,\"queue_schema\":15,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )
-        .replacen("\"cards\":0,", "", 1);
+        .replacen("\"cards\":0,\"comments\":0,\"comment_versions\":0,", "", 1);
     let file = dumps.join("v5-with-44.jsonl");
     std::fs::write(&file, format!("{}\n", v5.join("\n"))).unwrap();
     let home = pair.scratch.home("v5");

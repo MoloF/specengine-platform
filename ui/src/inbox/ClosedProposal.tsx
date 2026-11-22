@@ -3,6 +3,7 @@ import { useProjectName } from "../api/queries";
 import type { Proposal } from "../api/types";
 import { homeHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
+import { Comments } from "../comments/lazy";
 import { CitedText, citedLinks } from "../markdown/CitedText";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -156,11 +157,15 @@ export function ClosedProposal({ project, proposal }: { project: string; proposa
         }
         side={<PropertyList label={t("inbox.card.details")} items={rows.filter((row) => row !== null)} />}
         main={
-          proposal.decision_note === null ? null : (
-            <Section title={t("inbox.closed.note")}>
-              <p className="board-text">{shownText(proposal.decision_note)}</p>
-            </Section>
-          )
+          <>
+            {proposal.decision_note !== null && (
+              <Section title={t("inbox.closed.note")}>
+                <p className="board-text">{shownText(proposal.decision_note)}</p>
+              </Section>
+            )}
+            {/* Talk under it stays open after a decision (docs/features/comments.md "UI"): its own chunk. */}
+            <Comments project={project} on={id} targets={proposal.target_ids} level={3} />
+          </>
         }
       />
     </article>

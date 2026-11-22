@@ -50,8 +50,11 @@ use specengine_mcp::{
 
 /// The hub's tools, sorted (docs/features/hub-mcp.md "Data"): seventeen,
 /// eighteen since docs/features/department-split.md "Acceptance criteria",
-/// S8 (`split_card`).
-const EIGHTEEN: [&str; 19] = [
+/// S8 (`split_card`); twenty-one since docs/features/comments.md CM15
+/// (`list_comments`, `add_comment`).
+const EIGHTEEN: [&str; 21] = [
+    // docs/features/comments.md CM15.
+    "add_comment",
     "ask_question",
     "create_card",
     "edit_card",
@@ -66,6 +69,8 @@ const EIGHTEEN: [&str; 19] = [
     "get_trace",
     "get_tree",
     "list_cards",
+    // docs/features/comments.md CM15.
+    "list_comments",
     "move_card",
     "propose_change",
     "report_decision",
@@ -458,19 +463,21 @@ const HUB_EDIT_TASK_SENTENCE: &str = "task: T- IDs as a terminal writes them, li
                                       32; it replaces the list, - clears it. This hub holds no \
                                       task: it checks none and get_card shows them without state.";
 
-/// The sentence `GET_DESCRIPTION` adds, shared by stdio and a hub.
+/// The sentence `GET_DESCRIPTION` adds, shared by stdio and a hub (its "a
+/// corrupt row, another repository, a hub" dropped by docs/features/comments.md
+/// to keep 2 048 bytes).
 const GET_TASKS_SENTENCE: &str = "tasks: each linked task {id, status, title, stale}, read now as \
                                   spec task list reads it; status null, with a note that starts \
-                                  with its ID, for a task this server cannot read: a corrupt row, \
-                                  another repository, a hub.";
+                                  with its ID, for a task this server cannot read.";
 
 /// CT-7, the crate's half: the hub's `edit_card` names `task`, takes it, and
 /// says the hub checks none; its `get_card` holds the shared `tasks`
 /// sentence; each ASCII within 2 048 bytes, still among the seventeen.
 #[test]
 fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
-    // department-split S8: eighteen with `split_card`.
-    assert_eq!(HUB_TOOLS.len(), 19);
+    // department-split S8: eighteen with `split_card`; 21 since
+    // docs/features/comments.md CM15.
+    assert_eq!(HUB_TOOLS.len(), 21);
     let server = hub();
     for (name, word, sentence) in [
         ("edit_card", "task", HUB_EDIT_TASK_SENTENCE),
@@ -516,9 +523,13 @@ fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
 fn card_questions_the_hub_raises_take_card_id_and_their_texts_hold() {
     let server = hub();
     for (name, bytes) in [
-        ("ask_question", 2044),
-        ("report_decision", 1758),
-        ("report_discrepancy", 1714),
+        // 2 022 since docs/features/comments.md (`comment_id` in, four
+        // phrases out).
+        ("ask_question", 2022),
+        // 1 787 since docs/features/comments.md (`comment_id`).
+        ("report_decision", 1787),
+        // 1 743 since docs/features/comments.md (`comment_id`).
+        ("report_discrepancy", 1743),
     ] {
         let tool = server
             .get_tool(name)

@@ -1801,20 +1801,21 @@ fn marked(label: &str) -> (Scene, String, String) {
     (scene, e, s)
 }
 
-/// CP6: a queue holding a mark exports format 7 at schema 14 with no ledger
-/// line (no line names a norm or the table); the dump imports into a fresh
-/// data directory with an empty ledger at 14; the same dump at schema 13
-/// imports; at 15 it is refused (`upgrade SpecEngine`), nothing written. M:
-/// the ledger dumped.
+/// CP6: a queue holding a mark exports format 8 at schema 15 (7 at 14 until
+/// docs/features/comments.md) with no ledger line (no line names a norm or
+/// the table); the dump imports into a fresh data directory with an empty
+/// ledger at 15; the same dump as format 7 at schema 13 imports; at 16 it is
+/// refused (`upgrade SpecEngine`), nothing written. M: the ledger dumped.
 #[test]
 fn cp6_the_ledger_is_never_dumped() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
-    assert_eq!(STATE_FORMAT, 7);
+    // 15 and format 8 since docs/features/comments.md CM1, CM13.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    assert_eq!(STATE_FORMAT, 8);
     let (scene, e, s) = marked("cp6-dump");
     let dumps = scene.pair.scratch.dir("dumps");
     let lines = export(&scene, &scene.pair.home, &dumps.join("q.jsonl"));
     assert!(
-        lines[0].starts_with("{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -1825,14 +1826,22 @@ fn cp6_the_ledger_is_never_dumped() {
         );
     }
     let header: Value = serde_json::from_str(&lines[0]).expect("the header");
-    let counted: u64 = ["proposals", "tasks", "runs", "cards", "events"]
-        .iter()
-        .map(|key| {
-            header[key]
-                .as_u64()
-                .unwrap_or_else(|| panic!("{key}: {header}"))
-        })
-        .sum();
+    let counted: u64 = [
+        "proposals",
+        "tasks",
+        "runs",
+        "cards",
+        "comments",
+        "comment_versions",
+        "events",
+    ]
+    .iter()
+    .map(|key| {
+        header[key]
+            .as_u64()
+            .unwrap_or_else(|| panic!("{key}: {header}"))
+    })
+    .sum();
     assert_eq!(
         lines.len() as u64,
         counted + 1,
@@ -1842,7 +1851,7 @@ fn cp6_the_ledger_is_never_dumped() {
     let fresh = scene.pair.scratch.home("fresh");
     assert_eq!(import(&scene, &fresh, &dumps.join("q.jsonl")), Ok(()));
     let db = data_dir(&fresh).join("lantern-keep.db");
-    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "14");
+    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "15");
     assert_eq!(sql_at(&db, "SELECT count(*) FROM collision_marks;"), "0");
     assert_eq!(
         export(&scene, &fresh, &dumps.join("again.jsonl")),
@@ -1850,23 +1859,34 @@ fn cp6_the_ledger_is_never_dumped() {
         "the round trip byte-equal"
     );
 
-    // Format 7 at schema 13 imports; at 15 it is refused.
-    let mut thirteen = lines.clone();
-    thirteen[0] = thirteen[0].replacen("\"queue_schema\":14,", "\"queue_schema\":13,", 1);
+    // Format 7 at schema 13 imports (format 8's comment counts and each
+    // proposal's `comment_id` taken out: docs/features/comments.md CM13);
+    // at 16 it is refused.
+    let mut thirteen: Vec<String> = lines
+        .iter()
+        .map(|line| line.replace(",\"comment_id\":null}}", "}}"))
+        .collect();
+    thirteen[0] = thirteen[0]
+        .replacen(
+            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":7,\"queue_schema\":13,",
+            1,
+        )
+        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
     let file = dumps.join("thirteen.jsonl");
     fs::write(&file, format!("{}\n", thirteen.join("\n"))).unwrap();
     let older = scene.pair.scratch.home("older");
     assert_eq!(import(&scene, &older, &file), Ok(()));
     let db = data_dir(&older).join("lantern-keep.db");
-    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "14");
+    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "15");
     assert_eq!(sql_at(&db, "SELECT count(*) FROM collision_marks;"), "0");
 
-    let mut fifteen = lines.clone();
-    fifteen[0] = fifteen[0].replacen("\"queue_schema\":14,", "\"queue_schema\":15,", 1);
-    let file = dumps.join("fifteen.jsonl");
-    fs::write(&file, format!("{}\n", fifteen.join("\n"))).unwrap();
+    let mut sixteen = lines.clone();
+    sixteen[0] = sixteen[0].replacen("\"queue_schema\":15,", "\"queue_schema\":16,", 1);
+    let file = dumps.join("sixteen.jsonl");
+    fs::write(&file, format!("{}\n", sixteen.join("\n"))).unwrap();
     let newer = scene.pair.scratch.home("newer");
-    let message = import(&scene, &newer, &file).expect_err("schema 15");
+    let message = import(&scene, &newer, &file).expect_err("schema 16");
     assert!(
         message.starts_with(&format!("{}:1: ", file.display())),
         "{message}"
@@ -1875,8 +1895,8 @@ fn cp6_the_ledger_is_never_dumped() {
     assert!(!data_dir(&newer).exists(), "nothing written");
 }
 
-/// CP6: a queue a newer build stepped (15) is refused by `spec collisions`
-/// and its mark, left at 15; a schema 13 queue (the table gone) reads no
+/// CP6: a queue a newer build stepped (16) is refused by `spec collisions`
+/// and its mark, left at 16; a schema 13 queue (the table gone) reads no
 /// marks: the hidden pair is listed, `marked` null.
 #[test]
 fn cp6_a_newer_queue_is_refused_and_a_13_queue_reads_no_marks() {
@@ -1898,7 +1918,7 @@ fn cp6_a_newer_queue_is_refused_and_a_13_queue_reads_no_marks() {
         .is_none(),
         "premise: the mark hides the pair"
     );
-    scene.pair.sql("PRAGMA user_version = 15;");
+    scene.pair.sql("PRAGMA user_version = 16;");
     for args in [
         vec!["collisions", "--kind", "mechanic"],
         vec!["collisions", "mark", "--input", "-"],
@@ -1907,20 +1927,20 @@ fn cp6_a_newer_queue_is_refused_and_a_13_queue_reads_no_marks() {
         assert_eq!(run.code, 2, "{args:?}: {}", run.show());
         assert!(
             run.stderr
-                .contains("schema version 15, this build knows 14"),
+                .contains("schema version 16, this build knows 15"),
             "{args:?}: {}",
             run.show()
         );
     }
     assert_eq!(
         scene.pair.sql("PRAGMA user_version;").trim(),
-        "15",
+        "16",
         "left alone"
     );
 
     scene
         .pair
-        .sql("DROP TABLE collision_marks; PRAGMA user_version = 13;");
+        .sql("DROP TABLE collision_marks; DROP TABLE comment_versions; DROP TABLE comments; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 13;");
     let document = scene.collisions(&["--kind", "mechanic"]);
     let pair = find(&document, "MEC-ENDURANCE", "MEC-STAMINA")
         .unwrap_or_else(|| panic!("a 13 queue reads no marks: {document}"));

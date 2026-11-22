@@ -1,7 +1,8 @@
 //! The queue as stored, for its backup and restore
 //! (`docs/canon/queue-backup.md` "Store"; `docs/canon/tasks.md` "Backup";
 //! task spec `card-store`, "Backup"):
-//! every row of `proposals`, `tasks`, `runs`, `cards` and `events`, every project's,
+//! every row of `proposals`, `tasks`, `runs`, `cards`, `comments`,
+//! `comment_versions` (task spec `comments`, "Backup") and `events`, every project's,
 //! read raw in one snapshot and never decoded (a row `get` refuses is kept
 //! as it is, never skipped as `list_readable` skips it), and inserted as
 //! given into an empty queue in one `Immediate` transaction that logs no
@@ -16,9 +17,11 @@ use rusqlite::types::ValueRef;
 use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
 use specengine_core::intake::{DRIFT_KIND, INTERPRETATION_KIND};
 
+use super::comments::{self, StoredComments};
 use super::{
-    CARD_ITEMS_SCHEMA, ID_ORDER, MANDATE_SCHEMA, PLAIN_QUESTIONS_SCHEMA, QUEUE_SCHEMA_VERSION,
-    QueueError, SqliteQueue, cards, corrupt, migrate, stage, tasks, user_version,
+    CARD_ITEMS_SCHEMA, COMMENTS_SCHEMA, ID_ORDER, MANDATE_SCHEMA, PLAIN_QUESTIONS_SCHEMA,
+    QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, cards, corrupt, migrate, stage, tasks,
+    user_version,
 };
 
 use crate::error::{Db, StoreError};
@@ -36,8 +39,9 @@ use crate::schema;
 /// `drift-queue`), then a deciding kind's card and a decision's `why` step
 /// 11 appends (`docs/canon/card-questions.md` "The rule"), then a
 /// question's `gist` and `matters` step 13 appends
-/// (`docs/features/plain-questions.md` "Acceptance criteria", PQ8).
-pub const PROPOSAL_COLUMNS: [&str; 50] = [
+/// (`docs/features/plain-questions.md` "Acceptance criteria", PQ8), then the
+/// comment an item is raised from step 15 appends (task spec `comments`).
+pub const PROPOSAL_COLUMNS: [&str; 51] = [
     "id",
     "project",
     "kind",
@@ -89,6 +93,7 @@ pub const PROPOSAL_COLUMNS: [&str; 50] = [
     "why",
     "gist",
     "matters",
+    "comment_id",
 ];
 
 /// The first queue schema with `tasks` and `runs` (step 3 → 4).
@@ -129,8 +134,12 @@ const SCHEMA_8_COLUMNS: usize = 46;
 /// proposal column): the first of [`PROPOSAL_COLUMNS`].
 const SCHEMA_11_COLUMNS: usize = 48;
 
+/// The columns of queue schemas 13 and 14's `proposals` (step 14 adds no
+/// proposal column): the first of [`PROPOSAL_COLUMNS`].
+const SCHEMA_13_COLUMNS: usize = 50;
+
 /// The `proposals` columns of queue schema `schema`, in table order: 1 to
-/// 14 (this build's; step 14 adds no proposal column) are known, a dump of
+/// 15 (this build's; step 14 adds no proposal column) are known, a dump of
 /// any restores; `None` for any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
@@ -142,7 +151,8 @@ pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
         6 | 7 => Some(&PROPOSAL_COLUMNS[..SCHEMA_6_COLUMNS]),
         DRIFT_SCHEMA..CARD_ITEMS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_8_COLUMNS]),
         CARD_ITEMS_SCHEMA..PLAIN_QUESTIONS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_11_COLUMNS]),
-        PLAIN_QUESTIONS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
+        PLAIN_QUESTIONS_SCHEMA..COMMENTS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_13_COLUMNS]),
+        COMMENTS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
 }
@@ -455,8 +465,18 @@ impl SqliteQueue {
     /// (a schema-9 card's `tasks` and a schema 9-11 card's `mandate`
     /// `None`).
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {
+        Ok(self.stored_rows_with_comments()?.0)
+    }
+
+    /// [`Self::stored_rows`] and every row of `comments` and
+    /// `comment_versions`, every project's, in the same one read transaction
+    /// (task spec `comments`, "Backup"): `comments` by ID number,
+    /// `comment_versions` by comment ID number and `version`. A queue below
+    /// step 15 (no step runs here) holds none.
+    pub fn stored_rows_with_comments(&self) -> Result<(StoredQueue, StoredComments), QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();
+        let mut talk = StoredComments::default();
         if has_queue_tables(&tx)? {
             let version = user_version(&tx)?;
             let columns = match proposal_columns(version) {
@@ -526,6 +546,9 @@ impl SqliteQueue {
                 drop(rows);
                 drop(statement);
             }
+            if version >= COMMENTS_SCHEMA {
+                talk = comments::stored_in(&tx)?;
+            }
             let mut statement = tx
                 .prepare(&format!(
                     "SELECT {} FROM main.events ORDER BY seq",
@@ -538,7 +561,7 @@ impl SqliteQueue {
             }
         }
         tx.commit().db()?;
-        Ok(state)
+        Ok((state, talk))
     }
 
     /// The row counts of every table, every project's, in one snapshot.
@@ -558,7 +581,21 @@ impl SqliteQueue {
     /// row of another project than the handle's, or a run of no task of
     /// `state`, is [`QueueError::Invalid`], nothing written.
     pub fn restore(&mut self, state: &StoredQueue) -> Result<Restore, QueueError> {
+        self.restore_with_comments(state, &StoredComments::default())
+    }
+
+    /// [`Self::restore`] with the comments and their versions of `talk`
+    /// inserted as given in the same transaction (task spec `comments`,
+    /// "Backup"), a table holding a row of either making the queue
+    /// occupied. A comment or version of another project than the handle's
+    /// is [`QueueError::Invalid`], nothing written.
+    pub fn restore_with_comments(
+        &mut self,
+        state: &StoredQueue,
+        talk: &StoredComments,
+    ) -> Result<Restore, QueueError> {
         let project = self.project.clone();
+        talk.check_project(&project)?;
         if let Some(row) = state
             .proposals
             .iter()
@@ -614,7 +651,7 @@ impl SqliteQueue {
         migrate(&mut self.conn)?;
         let tx = self.write()?;
         let counts = counts_in(&tx)?;
-        if !counts.is_empty() {
+        if !counts.is_empty() || comments::any_in(&tx)? {
             return Ok(Restore::Occupied(counts));
         }
         // No dump holds the collision ledger: a restore starts it empty
@@ -700,6 +737,7 @@ impl SqliteQueue {
                     .execute(rusqlite::params![row.seq, project, event_type, payload, at])
                     .db()?;
             }
+            comments::insert_stored(&tx, talk)?;
         }
         // A dump of queue schema 6 holds its open approve stages in that
         // schema's shape: rewritten as step 6 → 7 rewrites them.

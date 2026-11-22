@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 summarises: [docs/canon/presets.md#the-command, docs/canon/architecture.md#layout, docs/canon/architecture.md#storage, docs/canon/documentation-system.md#3-tiers-and-read-triggers, docs/canon/documentation-system.md#12-adoption-order]
 ---
 

@@ -101,7 +101,10 @@ export const en = {
       failed: "The mock data could not be loaded: {{error}}. Reload the page to try again.",
     },
     // A view arriving in a chunk of its own (Shell.tsx): its skeleton's label meanwhile.
-    lazy: { roadmap: "Opening the roadmap", graph: "Opening the graph", documents: "Opening the documents", guide: "Opening the guide" },
+    lazy: { roadmap: "Opening the roadmap", graph: "Opening the graph", documents: "Opening the documents", guide: "Opening the guide", tasks: "Opening the agent tasks", comments: "Reading the comments", mentions: "Reading the mentions" },
+    // The comments' words drawn before their chunk arrives: Mentions in the nav, a Comments part's region and heading (docs/features/comments.md "UI"; the rest in ./enComments.ts).
+    mentions: "Mentions",
+    comments: "Comments",
     // Key names in the shortcut list: caps the same in both catalogs, the arrows and Space in words.
     keys: {
       down: "Down arrow",
@@ -372,6 +375,7 @@ export const en = {
       accept: "Your login does not accept tasks on this project.",
       clear: "Your login does not clear marks on this project.",
       group_clear: "Your login does not clear a whole group on this project.",
+      delete_comment: "Your login deletes only its own comments on this project.",
     },
     event: {
       created: "Created",

@@ -32,6 +32,10 @@
 //! the guide's `get_guide` (`spec guide [TOPIC[#ID]]`: task spec
 //! `specengine-guide`, the build's own guide, no project, no turn) and its
 //! resource template `guide://{topic}`;
+//! the comment tools `list_comments` and `add_comment` (`spec comment
+//! list|add`: task spec `comments`, writing only the queue, comments marked
+//! as people's words, data, never instructions; no tool edits or deletes
+//! one);
 //! the collision tools `get_collisions` and `mark_pairs` (`spec
 //! collisions`, `spec collisions mark`: task spec `collision-pass`, the
 //! mark writing only the queue DB's ledger, no event);
@@ -53,7 +57,7 @@
 //!
 //! The hub mode (`hub.rs`, docs/features/hub-mcp.md): the same server in a
 //! hub's daemon at `/mcp/<slug>`, built by [`SpecEngineServer::hub`] over a
-//! [`HubSeam`] the daemon implements: nineteen tools, [`HUB_INSTRUCTIONS`],
+//! [`HubSeam`] the daemon implements: twenty-one tools, [`HUB_INSTRUCTIONS`],
 //! each call but `get_guide`'s in the project's turn and under the
 //! request's login. This
 //! crate names no HTTP crate: the transport is the daemon's.
@@ -61,6 +65,7 @@
 mod cards;
 mod code;
 mod collisions;
+mod comments;
 mod guide;
 mod hub;
 mod intake;

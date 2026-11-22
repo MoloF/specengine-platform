@@ -16,7 +16,14 @@
 //!   `[auto]`); `R` 10 readers cycle `get_node`, `search` and `GET
 //!   /api/projects/<slug>/inbox`; `M` W's writers and R's readers together;
 //!   `H` 8 logins ask one question, the same text on the same node, so all
-//!   but the first call hit (reported, not judged).
+//!   but the first call hit (reported, not judged); `CM` (docs/features/
+//!   comments.md CM19) 8 logins call `add_comment` back to back on one of
+//!   [`CM_CARDS`] cards, each body fresh syllables mentioning one of the
+//!   [`CM_PEOPLE`] logins, beside [`READERS`] readers, those logins, each
+//!   cycling `get_card {context: true}`, `GET .../comments?on=` and `GET
+//!   .../mentions`; the queue first holds [`CM_PREFILL`] comments by those
+//!   logins on those cards ([`comments_prefill`], a template `HOME` copied
+//!   per run), judged as W.
 //! - **Memory** sampled every [`SAMPLE_EVERY`]: the resident set and, on
 //!   macOS, `phys_footprint` (`proc_pid_rusage`, what `footprint` reports).
 //! - **The quiet probe** (macOS): every [`QUIET_EVERY`] the clients are
@@ -133,6 +140,12 @@ const SAMPLE_EVERY: Duration = Duration::from_secs(1);
 const U_TARGETS: usize = 200;
 /// The words R searches for.
 const SEARCH_WORDS: usize = 64;
+/// CM19: the cards the comments go under.
+const CM_CARDS: usize = 20;
+/// CM19: the people who wrote the prefilled comments and read.
+const CM_PEOPLE: usize = 10;
+/// CM19: the comments the queue holds before each CM run.
+const CM_PREFILL: usize = 2_000;
 /// When heap mode takes its first snapshot, seconds into the run.
 const HEAP_FIRST_AT: f64 = 60.0;
 /// How often the quiet probe reads the live heap (macOS): the clients held,
@@ -167,6 +180,7 @@ enum Variant {
     R,
     M,
     H,
+    CM,
 }
 
 impl Variant {
@@ -178,7 +192,8 @@ impl Variant {
             "R" => Self::R,
             "M" => Self::M,
             "H" => Self::H,
-            other => panic!("WRITE_SOAK_VARIANT={other:?}: one of W, U, R, M, H"),
+            "CM" => Self::CM,
+            other => panic!("WRITE_SOAK_VARIANT={other:?}: one of W, U, R, M, H, CM"),
         }
     }
 
@@ -189,6 +204,7 @@ impl Variant {
             Self::R => "R",
             Self::M => "M",
             Self::H => "H",
+            Self::CM => "CM",
         }
     }
 
@@ -197,7 +213,7 @@ impl Variant {
     }
 
     fn readers(self) -> usize {
-        if matches!(self, Self::R | Self::M) {
+        if matches!(self, Self::R | Self::M | Self::CM) {
             READERS
         } else {
             0
@@ -207,7 +223,7 @@ impl Variant {
     /// The budget it is judged against; H is reported, not judged.
     fn budget(self) -> Option<f64> {
         match self {
-            Self::W | Self::U | Self::M => Some(WRITE_BUDGET_MIB_PER_MIN),
+            Self::W | Self::U | Self::M | Self::CM => Some(WRITE_BUDGET_MIB_PER_MIN),
             Self::R => Some(READ_BUDGET_MIB_PER_MIN),
             Self::H => None,
         }
@@ -999,7 +1015,8 @@ impl Run<'_> {
                 let error = response.get("error").is_some()
                     || response["result"]["isError"] == json!(true)
                     || !content.is_object();
-                stored = content["id"].is_string();
+                // A write's: CM19's `get_card` read answers with an `id` too.
+                stored = write && content["id"].is_string();
                 if stored {
                     self.shared.stored.fetch_add(1, Ordering::SeqCst);
                 }
@@ -1052,6 +1069,48 @@ impl Run<'_> {
         }
         let ok = match answer {
             Ok(answer) if answer.status == 200 => true,
+            Ok(answer) => {
+                self.shared.fail(format!(
+                    "{what}: {}: {}",
+                    answer.status,
+                    answer.text().chars().take(200).collect::<String>()
+                ));
+                false
+            }
+            Err(error) => {
+                self.shared.fail(format!("{what}: no answer: {error}"));
+                false
+            }
+        };
+        self.shared.calls.lock().expect("calls").push(Call {
+            write: false,
+            at,
+            ok,
+            stored: false,
+            hit: false,
+            ms: took,
+        });
+    }
+
+    /// A page's `GET path` by `login` (CM19's reads), timed and judged: a
+    /// 200 with a JSON document.
+    fn page(&self, login: &str, path: &str) {
+        let _active = self.gate();
+        let what = format!("GET {path} by {login}");
+        let open = self.shared.in_flight.begin(&what);
+        let started = Instant::now();
+        let answer = page_get(self.hub.port, path, login, TIMEOUT);
+        self.shared.in_flight.end(open);
+        let at = started.duration_since(self.start).as_secs_f64();
+        let took = ms(started.elapsed());
+        let ok = match answer {
+            Ok(answer)
+                if answer.status == 200
+                    && serde_json::from_slice::<Value>(&answer.body)
+                        .is_ok_and(|v| v.is_object()) =>
+            {
+                true
+            }
             Ok(answer) => {
                 self.shared.fail(format!(
                     "{what}: {}: {}",
@@ -1165,14 +1224,137 @@ fn writer(run: &Run<'_>, tree: &Tree, targets: &[Target], index: usize) {
                     true,
                 );
             }
+            Variant::CM => run.call(
+                &login,
+                "add_comment",
+                json!({
+                    "on": cm_card(usize::try_from(seed % 1_000_003).unwrap_or(0)),
+                    "body": format!(
+                        "{} @person-{}",
+                        nonce_words(seed, 8),
+                        seed % u64::try_from(CM_PEOPLE).unwrap_or(1)
+                    ),
+                    "author_role": "drafter",
+                    "author_model": "m-1",
+                    "run": format!("r-{login}"),
+                }),
+                true,
+            ),
             Variant::R => unreachable!("R has no writers"),
         }
     }
 }
 
+/// CM19's card `at` (mod [`CM_CARDS`]): `C-0001` to `C-0020`, made in
+/// this order by [`comments_prefill`] on a fresh queue.
+fn cm_card(at: usize) -> String {
+    format!("C-{:04}", at % CM_CARDS + 1)
+}
+
+/// CM19's reader `index`: the login `person-<index>`, cycling `get_card
+/// {context: true}` over `/mcp`, the card's thread and its own mentions as
+/// a page reads them, until the deadline.
+fn cm_reader(run: &Run<'_>, index: usize) {
+    let login = format!("person-{}", index % CM_PEOPLE);
+    let mut n = index;
+    while run.running() {
+        let card = cm_card(n);
+        run.call(
+            &login,
+            "get_card",
+            json!({"card_id": card, "context": true}),
+            false,
+        );
+        if !run.running() {
+            break;
+        }
+        run.page(
+            &login,
+            &format!("/api/projects/{}/comments?on={card}", run.slug),
+        );
+        if !run.running() {
+            break;
+        }
+        run.page(&login, &format!("/api/projects/{}/mentions", run.slug));
+        n += 1;
+    }
+}
+
+/// CM19: a template `HOME` holding [`CM_CARDS`] cards on the tree's parts
+/// (`create_card` over `/mcp`) and [`CM_PREFILL`] comments on them, posted
+/// by the [`CM_PEOPLE`] logins as a page posts them, each mentioning
+/// another; the hub then stopped; each run copies it.
+fn comments_prefill(tree: &Tree) -> PathBuf {
+    let home = tree.scratch.join("hub-home-comments");
+    let hub = Hub::start(&tree.root, &home, &tree.git, 3600);
+    let started = Instant::now();
+    for at in 0..CM_CARDS {
+        let answered = mcp_call(
+            hub.port,
+            &tree.slug,
+            "person-0",
+            i64::try_from(at + 1).unwrap_or(1),
+            "create_card",
+            json!({"title": format!("Soak card {at}"), "target": [tree.part_id(at)]}),
+            TIMEOUT,
+        );
+        let made = match answered {
+            Ok((_, Some(response))) => response["result"]["structuredContent"]["id"].clone(),
+            other => panic!("create_card {at}: {other:?}"),
+        };
+        assert_eq!(made, json!(cm_card(at)), "the cards in order");
+    }
+    let posted = AtomicUsize::new(0);
+    thread::scope(|scope| {
+        for person in 0..CM_PEOPLE {
+            let (posted, hub) = (&posted, &hub);
+            scope.spawn(move || {
+                let login = format!("person-{person}");
+                let mut headers = library_common::page_headers(&login);
+                headers.push(("Origin".to_owned(), library_common::ORIGIN.to_owned()));
+                headers.push(("Content-Type".to_owned(), "application/json".to_owned()));
+                for n in 0..CM_PREFILL / CM_PEOPLE {
+                    let seed = (3u64 << 60) | (u64::try_from(person).unwrap_or(0) << 32) | n as u64;
+                    let body = json!({
+                        "on": cm_card(person * 7 + n),
+                        "body": format!(
+                            "{} @person-{}",
+                            nonce_words(seed, 10),
+                            (person + 1 + n) % CM_PEOPLE
+                        ),
+                    });
+                    let answer = library_common::exchange(
+                        hub.port,
+                        "POST",
+                        &format!("/api/projects/{}/comments", tree.slug),
+                        &headers,
+                        body.to_string().as_bytes(),
+                        TIMEOUT,
+                    )
+                    .unwrap_or_else(|error| panic!("prefill {login} {n}: {error}"));
+                    assert_eq!(answer.status, 200, "prefill {login} {n}: {}", answer.text());
+                    posted.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+        }
+    });
+    drop(hub);
+    let posted = posted.load(Ordering::SeqCst);
+    assert_eq!(posted, CM_PREFILL);
+    println!(
+        "write_soak comments prefill: {CM_CARDS} cards, {posted} comments in {:.0} s",
+        started.elapsed().as_secs_f64()
+    );
+    home
+}
+
 /// A reader: `get_node`, `search`, the inbox, in turn (those
 /// `WRITE_SOAK_READS` names), until the deadline.
 fn reader(run: &Run<'_>, corpus: &Corpus, index: usize) {
+    if run.variant == Variant::CM {
+        cm_reader(run, index);
+        return;
+    }
     let login = format!("reader-{index}");
     let mut n = index;
     while run.running() {
@@ -1786,7 +1968,12 @@ fn soak_run(
     };
     let write_lines: Vec<_> = lines
         .iter()
-        .filter(|line| matches!(line.tool.as_str(), "ask_question" | "propose_change"))
+        .filter(|line| {
+            matches!(
+                line.tool.as_str(),
+                "ask_question" | "propose_change" | "add_comment"
+            )
+        })
         .collect();
     let mut write_index: BTreeMap<String, usize> = BTreeMap::new();
     for line in &write_lines {
@@ -1888,6 +2075,12 @@ fn soak_run(
     // pending count, each inbox read's bytes, and RSS and the footprint
     // beside the pending count every TIMELINE_EVERY.
     report["reads_mix"] = json!(settings.reads.names());
+    // CM19: the comments the run started over and the cards they sit on.
+    report["comments"] = if variant == Variant::CM {
+        json!({"prefilled": CM_PREFILL, "cards": CM_CARDS, "people": CM_PEOPLE})
+    } else {
+        Value::Null
+    };
     // RM-0134 MX6: the second judge, macOS's (`null` elsewhere).
     report["quiet_footprint_slope_mib_per_min"] = json!(footprint_slope);
     report["quiet_footprint_budget_mib_per_min"] =
@@ -1925,7 +2118,15 @@ fn write_soak() {
     let daemon = fresh_binaries();
     let tree = Tree::new("write-soak", NODES, COMMITS);
     let corpus = Corpus::of(&tree);
-    let template = (settings.pending > 0).then(|| prefill(&tree, settings.pending));
+    let template = if settings.variant == Variant::CM {
+        assert_eq!(
+            settings.pending, 0,
+            "WRITE_SOAK_PENDING is W's and M's: CM fills its own comments"
+        );
+        Some((comments_prefill(&tree), 0))
+    } else {
+        (settings.pending > 0).then(|| prefill(&tree, settings.pending))
+    };
     let template = template
         .as_ref()
         .map(|(home, stored)| (home.as_path(), *stored));
@@ -2050,16 +2251,22 @@ fn wm6_the_budgets_are_the_canons() {
     let text =
         fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
     let canon = canon_budgets(&text);
-    let harness: BTreeMap<String, Bars> =
-        [Variant::W, Variant::U, Variant::R, Variant::M, Variant::H]
-            .into_iter()
-            .map(|variant| {
-                (
-                    variant.name().to_owned(),
-                    (variant.budget(), variant.footprint_budget()),
-                )
-            })
-            .collect();
+    let harness: BTreeMap<String, Bars> = [
+        Variant::W,
+        Variant::U,
+        Variant::R,
+        Variant::M,
+        Variant::H,
+        Variant::CM,
+    ]
+    .into_iter()
+    .map(|variant| {
+        (
+            variant.name().to_owned(),
+            (variant.budget(), variant.footprint_budget()),
+        )
+    })
+    .collect();
     assert_eq!(
         canon,
         harness,
@@ -2609,4 +2816,22 @@ fn the_reads_knob_names_what_readers_cycle() {
         Reads::parse(Some("node,cards"))
             .is_err_and(|error| error.contains("\"cards\" is none of node, search, inbox"))
     );
+}
+
+/// docs/features/comments.md CM19: the `CM` variant writes with 8 logins
+/// beside 10 readers and is judged as W, both bars; its cards are the 20 a
+/// fresh queue numbers.
+#[test]
+fn cm19_the_comments_variant_is_judged_as_w() {
+    let cm = Variant::CM;
+    assert_eq!(cm.name(), "CM");
+    assert_eq!(cm.writers(), WRITERS);
+    assert_eq!(cm.readers(), READERS);
+    assert_eq!(cm.budget(), Some(WRITE_BUDGET_MIB_PER_MIN));
+    assert_eq!(cm.footprint_budget(), Some(FOOTPRINT_BUDGET_MIB_PER_MIN));
+    assert_eq!(cm_card(0), "C-0001");
+    assert_eq!(cm_card(19), "C-0020");
+    assert_eq!(cm_card(20), "C-0001");
+    assert_eq!(CM_PREFILL % CM_PEOPLE, 0, "each person posts as many");
+    assert_eq!((CM_CARDS, CM_PEOPLE, CM_PREFILL), (20, 10, 2_000));
 }

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { en } from "./en";
+import { en as eager } from "./en";
+import { enComments } from "./enComments";
 import { ru } from "./ru";
+
+/** The whole English catalog: first load's and the part the comments' chunks bring (catalog.ts `English`). */
+const en = { ...eager, comments: enComments };
 
 // docs/features/departments.md "Acceptance criteria", DP-8 and DP-9: the chrome speaks the owner's
 // words (`docs/canon/workspaces.md` "The lens"). A workspace reads Department, a card Task, a child

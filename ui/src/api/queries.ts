@@ -1,4 +1,4 @@
-import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient, type InvalidateQueryFilters, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient, type InfiniteData, type InvalidateQueryFilters, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   apiErrorOf,
@@ -29,6 +29,7 @@ import type {
   CardMoveBody,
   CardRaiseBody,
   CardWrite,
+  CommentList,
   ConfirmBody,
   FlowView,
   Inbox,
@@ -195,6 +196,16 @@ export function deliveryOf(project: string) {
 /** Every catalog read of a project, whatever its kinds. */
 export function catalogsOf(project: string) {
   return ["catalog", project] as const;
+}
+
+/** Every comment thread of a project, whatever its target or pages: ./commentQueries.ts keys each under it (docs/features/comments.md "UI"). */
+export function commentsOf(project: string) {
+  return ["comments", project] as const;
+}
+
+/** Every mentions read of a project, whatever its login: the nav's badge and the Mentions view share one. */
+export function mentionsOf(project: string) {
+  return ["mentions", project] as const;
 }
 
 /** Every feed read of a project, whatever its filters: `src/feed/` keys each under it (docs/features/auto-feed.md "The UI"). */
@@ -497,6 +508,17 @@ const TASK_EVENT = "task.";
 /** A card's queue events (`docs/canon/cards.md` "Documents and events"). */
 const CARD_EVENT = "card.";
 
+/** A comment's queue events, no body in any (`docs/features/comments.md` "HTTP"). */
+const COMMENT_EVENT = "comment.";
+
+/** A new item: raised from a comment or not, no event says which, so every thread of the project is read again. */
+const CREATED = "proposal.created";
+
+/** Whether a cached thread (./commentQueries.ts, its pages) lists the item `id` among a comment's items: its state moved. */
+function holdsItem(data: unknown, id: string): boolean {
+  return ((data as InfiniteData<CommentList> | undefined)?.pages ?? []).some((page) => page.comments.some((comment) => comment.items.some((item) => item.id === id)));
+}
+
 /**
  * The project's live tail while `project` is set (`docs/features/daemon-read.md` "Data"): a
  * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
@@ -539,9 +561,12 @@ const CARD_EVENT = "card.";
  * event too (docs/features/department-overview.md "Acceptance criteria",
  * DO10: a count of open items and of agent tasks in review). Every event, of any type, and a gap
  * read the project's feeds again, each appended past what it holds (docs/features/auto-feed.md
- * "The UI", Live; src/api/feedQueries.ts). No other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
+ * "The UI", Live; src/api/feedQueries.ts). A `comment.*` event reads that project's comment threads,
+ * mentions and task packages (which carry their cards' comments) again, nothing else; `proposal.created`
+ * every thread too, and any other `proposal.*` event but a stage the threads listing that item among a
+ * comment's items, with its state (docs/features/comments.md "UI", Live). No other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
- * reads, the round sheets and the cards of the project again. Only the reads on screen are fetched, once each
+ * reads, the round sheets, the cards, the comment threads and the mentions of the project again. Only the reads on screen are fetched, once each
  * but the health read's one more after a walk (the check and the health read only while Health
  * shows them: `docs/features/health-left.md` "Description and interactions"; the health read also
  * while the Spec tree shows its drift: `docs/features/ui-tree-drift.md`); the rest are marked
@@ -661,6 +686,15 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         // (docs/features/auto-feed.md "The UI", Live).
         readAgain({ queryKey: feedsOf(project) });
         const id = eventId(event.payload);
+        // A comment's event names no body: the threads on screen and the mentions are read again
+        // (docs/features/comments.md "UI", Live); a comment is no write of what it is under.
+        if (event.type.startsWith(COMMENT_EVENT)) {
+          readAgain({ queryKey: commentsOf(project) });
+          readAgain({ queryKey: mentionsOf(project) });
+          // A task's package carries the comments of the cards listing it (its Package tab).
+          readAgain({ queryKey: ["task", project] });
+          return;
+        }
         if (event.type.startsWith(CARD_EVENT)) {
           if (id === null) {
             readAgain({ queryKey: cardsOf(project) });
@@ -709,6 +743,9 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
           }
           return;
         }
+        // A thread lists each comment's items with their state; a stage changes no state. A new item may be
+        // any comment's: every thread is read; a decided one, the threads listing it alone.
+        readAgain(event.type === CREATED || id === null ? { queryKey: commentsOf(project) } : { queryKey: commentsOf(project), predicate: (query) => holdsItem(query.state.data, id) });
         readDeliveryAgain();
         readTasksAgain();
         if (event.type === APPLIED) {
@@ -741,6 +778,8 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         readRoundAgain();
         readAgain({ queryKey: cardsOf(project) });
         readDeliveryAgain();
+        readAgain({ queryKey: commentsOf(project) });
+        readAgain({ queryKey: mentionsOf(project) });
       },
     );
     return () => {

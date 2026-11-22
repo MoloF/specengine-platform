@@ -94,7 +94,7 @@ const QUESTION_DESCRIPTION: &str = concat!(
     "Asks the owner a question about nodes: the same as `spec propose question ID... --text T \
 --working-answer W --price-of-other P [--severity S] [--gist G] [--matters M] [--options F] \
 [--recommendation N] [--distinct-from X]... [--card C] --author-role ROLE`. Checked first \
-against what is decided and asked; stored (open) only when nothing answers it. content is the \
+against what is decided and asked; stored only when nothing answers it. content is the \
 command's output, structuredContent its --json document {id, created, hits, related, linked, \
 diagnostics, notes}.
 
@@ -109,15 +109,16 @@ price_of_other: what another answer would cost, at most 2048 bytes.
 severity: high, normal (absent) or low.
 distinct_from: at most 64 hits (an id, else a path) it is declared distinct from.
 card_id: the card (C-0001) it is asked for, in any state.
+comment_id: the comment (CM-0001) it is from.
 author_role (required), author_model, run: who asks.
 task_id: as propose_change.
 
 A hit: an accepted decision linked to a node (its id, path, title as the answer), or a \
 question or decision queued on a shared node with the same text, whitespace and case aside (a \
-rejected one's reason is the owner's answer). With a hit nothing is stored: id null, created \
-false; read the answer, or name every hit in distinct_from to store it anyway. Past 10 hits, a \
+rejected one's reason is its answer). With a hit nothing is stored: id null, created \
+false; read the answer, or name every hit in distinct_from to store it. Past 10 hits, a \
 note names the rest; over 64 it cannot be stored. The owner decides with `spec approve PR` or \
-answers with `spec reject PR --reason <answer>`. A refusal names the field. ",
+`spec reject PR --reason <answer>`. A refusal names the field. ",
     queue_tail!()
 );
 
@@ -140,6 +141,7 @@ proposed_patch: {target, base, text, rationale} as propose_change takes them, th
 of node_ids: stored as a linked update (linked, its findings in diagnostics), decided on its \
 own.
 distinct_from, card_id, author_role (required), author_model, run: as ask_question.
+comment_id: as ask_question.
 task_id: as propose_change takes it; the linked update takes it too.
 
 The owner decides it with `spec approve PR --option N` (a decision record) or settles it \
@@ -165,6 +167,7 @@ proposed_patch: {target, base, text, rationale} as propose_change takes them, th
 of node_ids: the rule's new text, stored as a linked update (linked, its findings in \
 diagnostics), approved on its own.
 distinct_from, card_id, author_role (required), author_model, run: as ask_question.
+comment_id: as ask_question.
 why: why you decided so, at most 2048 bytes; null: none.
 task_id: as propose_change takes it; the linked update takes it too.
 
@@ -201,7 +204,7 @@ const PROPOSAL_DESCRIPTION: &str = concat!(
 content is the command's output (key: value lines), structuredContent its --json document: \
 kind, status, targets, place, author, rationale, the findings an update introduces (at most \
 20, the rest counted in a note), a question's, discrepancy's or decision's fields (its \
-card_id; a decision's why), the owner's decision and note (a rejected one's reason is its answer; one decided by `spec \
+card_id and comment_id; a decision's why), the owner's decision and note (a rejected one's reason is its answer; one decided by `spec \
 approve` names its record: record_id, record_path, record_title, choice), and for an open \
 update what approving it now would do. The texts, diff and conflict are left out (`spec review PR` prints them); the \
 text is cut at 40000 characters.
@@ -583,6 +586,9 @@ pub(crate) struct QuestionArgs {
     /// The card (`C-0001`) it is raised for, one of this queue's in any
     /// state.
     pub card_id: Option<String>,
+    /// The comment (`CM-0001`) it is raised from, one of this queue's, not
+    /// deleted.
+    pub comment_id: Option<String>,
     /// The asking agent's role.
     pub author_role: String,
     /// The asking agent's model.
@@ -623,6 +629,9 @@ pub(crate) struct DiscrepancyArgs {
     /// The card (`C-0001`) it is raised for, one of this queue's in any
     /// state.
     pub card_id: Option<String>,
+    /// The comment (`CM-0001`) it is raised from, one of this queue's, not
+    /// deleted.
+    pub comment_id: Option<String>,
     /// The reporting agent's role.
     pub author_role: String,
     /// The reporting agent's model.
@@ -662,6 +671,9 @@ pub(crate) struct DecisionArgs {
     /// The card (`C-0001`) it is raised for, one of this queue's in any
     /// state.
     pub card_id: Option<String>,
+    /// The comment (`CM-0001`) it is raised from, one of this queue's, not
+    /// deleted.
+    pub comment_id: Option<String>,
     /// The deciding agent's role.
     pub author_role: String,
     /// The deciding agent's model.
@@ -795,6 +807,9 @@ pub(crate) struct HubQuestionArgs {
     /// The card (`C-0001`) it is raised for, one of this queue's in any
     /// state.
     pub card_id: Option<String>,
+    /// The comment (`CM-0001`) it is raised from, one of this queue's, not
+    /// deleted.
+    pub comment_id: Option<String>,
     /// The asking agent's role.
     pub author_role: String,
     /// The asking agent's model.
@@ -817,6 +832,7 @@ impl From<HubQuestionArgs> for QuestionArgs {
             severity: args.severity,
             distinct_from: args.distinct_from,
             card_id: args.card_id,
+            comment_id: args.comment_id,
             author_role: args.author_role,
             author_model: args.author_model,
             run: args.run,
@@ -856,6 +872,9 @@ pub(crate) struct HubDiscrepancyArgs {
     /// The card (`C-0001`) it is raised for, one of this queue's in any
     /// state.
     pub card_id: Option<String>,
+    /// The comment (`CM-0001`) it is raised from, one of this queue's, not
+    /// deleted.
+    pub comment_id: Option<String>,
     /// The reporting agent's role.
     pub author_role: String,
     /// The reporting agent's model.
@@ -878,6 +897,7 @@ impl From<HubDiscrepancyArgs> for DiscrepancyArgs {
             proposed_patch: args.proposed_patch,
             distinct_from: args.distinct_from,
             card_id: args.card_id,
+            comment_id: args.comment_id,
             author_role: args.author_role,
             author_model: args.author_model,
             run: args.run,
@@ -913,6 +933,9 @@ pub(crate) struct HubDecisionArgs {
     /// The card (`C-0001`) it is raised for, one of this queue's in any
     /// state.
     pub card_id: Option<String>,
+    /// The comment (`CM-0001`) it is raised from, one of this queue's, not
+    /// deleted.
+    pub comment_id: Option<String>,
     /// The deciding agent's role.
     pub author_role: String,
     /// The deciding agent's model.
@@ -933,6 +956,7 @@ impl From<HubDecisionArgs> for DecisionArgs {
             proposed_patch: args.proposed_patch,
             distinct_from: args.distinct_from,
             card_id: args.card_id,
+            comment_id: args.comment_id,
             author_role: args.author_role,
             author_model: args.author_model,
             run: args.run,
@@ -1323,11 +1347,12 @@ impl SpecEngineServer {
                 now: utc_now(),
                 git: process_git(env),
             };
-            specengine_cli::propose_question_with_task(
+            specengine_cli::propose_question_from(
                 env,
                 globals,
                 &request,
                 args.task_id.as_deref(),
+                args.comment_id.as_deref(),
             )
             .map(|outcome| Outcome::Intake(Box::new(outcome)))
         })
@@ -1363,11 +1388,12 @@ impl SpecEngineServer {
                 now: utc_now(),
                 git: process_git(env),
             };
-            specengine_cli::propose_discrepancy_with_task(
+            specengine_cli::propose_discrepancy_from(
                 env,
                 globals,
                 &request,
                 args.task_id.as_deref(),
+                args.comment_id.as_deref(),
             )
             .map(|outcome| Outcome::Intake(Box::new(outcome)))
         })
@@ -1401,11 +1427,12 @@ impl SpecEngineServer {
                 now: utc_now(),
                 git: process_git(env),
             };
-            specengine_cli::propose_decision_with_task(
+            specengine_cli::propose_decision_from(
                 env,
                 globals,
                 &request,
                 args.task_id.as_deref(),
+                args.comment_id.as_deref(),
             )
             .map(|outcome| Outcome::Intake(Box::new(outcome)))
         })

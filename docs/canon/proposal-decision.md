@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, ui]
 owner: owner
-reviewed: 2026-11-14
+reviewed: 2026-11-22
 ---
 
 # Proposal kind: decision
@@ -50,7 +50,7 @@ Review document: `"kind": "decision"`, a question's keys, none added (46). Inbox
 - **Task** (`task-package.md` "Package"): `--task`, `task_id` bind it; `open_proposals` lists it, `assumptions` its `working_answer` (by the item's fields).
 - **Kind lists** from `family()` `Decides` (`deciding_kinds()`): `create` of the record prefix: `` `DEC-0024`: these records are made by `spec approve` of a `question`, `discrepancy` or `decision` (`spec propose decision` raises one); nothing stored ``; a decision flag on an applying kind: `` `--option` decides a `question`, `discrepancy` or `decision`; `PR-0002` is an update: `spec approve PR-0002` applies it as proposed; nothing changed ``.
 - **Backup** (`queue-backup.md`): rows as stored; a decision, its update and record round-trip byte-identical. An older build reads a `decision` row as corrupt by its kind, named (ADR-0058): `spec`, the daemon and `specengine-mcp` from one build.
-- **MCP texts** (`mcp-read.md` "Texts"): `INSTRUCTIONS`' queue line `- ask_question, report_discrepancy, report_decision = spec propose question|discrepancy|decision: hits are what is decided or asked; stored only if distinct_from names each; work on your working answer.`; `ask_question`'s description (2 041 B) counts a queued decision among hits and related.
+- **MCP texts** (`mcp-read.md` "Texts"): `INSTRUCTIONS`' queue line `- ask_question, report_discrepancy, report_decision = spec propose question|discrepancy|decision: hits are what is decided or asked; stored only if distinct_from names each.` ("; work on your working answer" dropped in 0.50.0: each raising tool's text says it); `ask_question`'s description (2 042 B) counts a queued decision among hits and related.
 - **Plugin** 0.5.0 (`plugin.md`): `ask-owner`'s third record, "A decision, `report_decision`", told apart from an accepted decision hit; `spec-author` sends a decision taken in the work with the rule's new text as its patch.
 - **UI**: no product change. Kinds are strings (ADR-0031); the card, the decision dialog and the Questions screen branch on `options`. Mock: harbor-sim `PR-0050`, its update `PR-0051`; the inbox dialog stages the working answer or an own answer, as the Questions screen does (`plain-questions.md` "UI").
 

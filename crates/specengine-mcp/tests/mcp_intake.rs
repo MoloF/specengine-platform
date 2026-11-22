@@ -1215,8 +1215,11 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
             (
                 // 2 031 since docs/features/plain-questions.md "MCP" (its
                 // six edits; "queued items with other text." dropped).
+                // 2 042 since docs/features/comments.md (its `comment_id`
+                // line in; "(open)", "the owner's", "anyway" and "answers
+                // with" out).
                 "ask_question",
-                2031,
+                2042,
                 vec![
                     "card_id: the card (C-0001) it is asked for, in any state.",
                     "severity: high, normal (absent) or low.",
@@ -1230,20 +1233,28 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
                 ],
             ),
             (
+                // 1 839 since docs/features/comments.md (`comment_id`).
                 "report_decision",
-                1810,
+                1839,
                 vec![
                     "distinct_from, card_id, author_role (required)",
                     "why: why you decided so, at most 2048 bytes; null: none.",
                 ],
                 vec![],
             ),
-            ("report_discrepancy", 1736, vec!["card_id"], vec![]),
+            // 1 765 since docs/features/comments.md (`comment_id`).
+            (
+                "report_discrepancy",
+                1765,
+                vec!["card_id", "comment_id"],
+                vec![],
+            ),
             (
                 // 2 042 since docs/features/department-practices.md (the
-                // practices' sentence).
+                // practices' sentence); 2 031 since docs/features/comments.md
+                // (`comments` in, people's words; three phrases out).
                 "get_card",
-                2042,
+                2031,
                 vec![
                     "One card: the same as `spec card show C --marks [--history] [--context \
                      [--budget N]]`.",
@@ -1259,9 +1270,10 @@ fn card_questions_l2_the_raises_take_card_id_and_the_texts_are_datas() {
                 vec!["`spec card show C --marks [--history]`."],
             ),
             (
+                // 1 165 since docs/features/comments.md (`comment_id`).
                 "get_proposal",
-                1150,
-                vec!["fields (its card_id; a decision's why),"],
+                1165,
+                vec!["fields (its card_id and comment_id; a decision's why),"],
                 vec![],
             ),
         ] {

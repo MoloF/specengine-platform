@@ -955,7 +955,9 @@ fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
 // 467 556 since docs/features/department-practices.md DP11: the long
 // watch of `art` with 32 practices and 64 citations at their longest, cut by
 // `PRACTICES_CHARS_MAX` and `CITED_CHARS_MAX` (16 384 each) to 10 and 26.
-const CARD_CONTEXT_MAXIMUM: usize = 467_556;
+// 467 591 since docs/features/comments.md CM10: the context's
+// `"comments":{"total":0,"listed":[]}` (35 characters) on a card with none.
+const CARD_CONTEXT_MAXIMUM: usize = 467_591;
 
 /// The clock of every write of the card scenes.
 const CARD_CLOCK: &str = "2026-11-12T09:00:00Z";

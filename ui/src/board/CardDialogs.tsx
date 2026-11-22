@@ -1254,17 +1254,19 @@ export function questionBodyOf(form: RaiseForm, targets: readonly string[], as: 
 /** What one raise came to: stored, with its ID; not stored, its hits listed; refused or unanswered, the daemon's words. */
 export type Raised = { stored: string } | { kept: true } | { refusal: string };
 
+/** Where a raise goes: the card's door, or another's (a comment's, docs/features/comments.md "UI"), the body as built. */
+export type RaisePost<B> = (body: B) => Promise<IntakeDocument>;
+
 /**
- * The raise of one card and its last outcome. `send` posts the body, naming the hits the outcome
- * says, and keeps what came back; a refusal naming `--as` goes to the acting name's field too.
+ * One raise and its last outcome, sent through `post`. `send` posts the body, naming the hits the
+ * outcome says, and keeps what came back; a refusal naming `--as` goes to the acting name's field too.
  */
-export function useRaise(project: string, id: string, onActingLine?: (line: string) => void): { outcome: RaiseOutcome; send: (body: CardRaiseBody) => Promise<Raised> } {
-  const raise = useCardRaise(project);
+export function useRaiseWith<B extends { distinct_from?: string[] | null }>(post: RaisePost<B>, onActingLine?: (line: string) => void): { outcome: RaiseOutcome; send: (body: B) => Promise<Raised> } {
   const [outcome, setOutcome] = useState<RaiseOutcome>(NOTHING_RAISED);
-  async function send(body: CardRaiseBody): Promise<Raised> {
+  async function send(body: B): Promise<Raised> {
     const named = nextNamed(outcome);
     try {
-      const answer = await raise.mutateAsync({ id, body: named.length === 0 ? body : { ...body, distinct_from: named } });
+      const answer = await post(named.length === 0 ? body : { ...body, distinct_from: named });
       if (answer.created && answer.id !== null) {
         return { stored: answer.id };
       }
@@ -1280,6 +1282,12 @@ export function useRaise(project: string, id: string, onActingLine?: (line: stri
     }
   }
   return { outcome, send };
+}
+
+/** The raise of one card, through its door unless `post` names another. */
+export function useRaise(project: string, id: string, onActingLine?: (line: string) => void, post?: RaisePost<CardRaiseBody>): { outcome: RaiseOutcome; send: (body: CardRaiseBody) => Promise<Raised> } {
+  const raise = useCardRaise(project);
+  return useRaiseWith(post ?? ((body) => raise.mutateAsync({ id, body })), onActingLine);
 }
 
 /** Why a form cannot be sent: a text left blank, or no target chosen; null when it can. */

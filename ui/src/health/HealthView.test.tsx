@@ -153,7 +153,10 @@ describe("what the route reads (AC-01; its counting stub adds getHealth, AC-U5 a
     const client = await openHealth();
     await settle();
     // The shell's one identity read: a local page's `{login: null}`, so no sync read follows (docs/features/hub-git.md "Status and the screen").
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCheck: 1, getInbox: 1, getHealth: 1 });
+    // The nav's Mentions badge reads the mentions once, in its own chunk (docs/features/comments.md "UI").
+    await waitFor(() => {
+      expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCheck: 1, getInbox: 1, getHealth: 1, getMentions: 1 });
+    });
     expect(client.getCheck).toHaveBeenCalledWith("alpha");
     expect(argsOf(client.getInbox)).toContainEqual(["alpha"]);
     // A walk, as the check: no AbortSignal is handed over.

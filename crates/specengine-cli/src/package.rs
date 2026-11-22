@@ -76,6 +76,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use specengine_core::check::{CheckInput, bundle_task_from_toml};
+use specengine_core::comment::PEOPLES_WORDS;
 use specengine_core::patch::{locate, span_bytes};
 use specengine_core::practice::{DISCIPLINES_MAX, discipline_name_problem};
 use specengine_core::proposal::{Author, AuthorType};
@@ -85,10 +86,10 @@ use specengine_core::task::{
 };
 use specengine_core::{GroupKind, Plan, PlanTask, RoadmapConfig, plan, task_item};
 use specengine_model::{
-    BindingRow, IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackagePractice,
-    PackageProposal, PackageTarget, SnapshotDiff, SnapshotNode, SpecSnapshot,
-    TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskCriterion, TaskPackage,
-    TaskRoadmap, TaskRun,
+    BindingRow, IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackageComment,
+    PackageCommentAuthor, PackageComments, PackagePractice, PackageProposal, PackageTarget,
+    SnapshotDiff, SnapshotNode, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor,
+    TaskAuthorType, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
 };
 use specengine_store::{
     Decoded, GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
@@ -110,7 +111,7 @@ use crate::{CliError, Env, Globals, Message, escape_controls, one_line};
 
 /// The brief's sections, in print order; Practices only when the package
 /// lists a practice, Bindings only when it lists a row.
-pub const SECTIONS: [&str; 12] = [
+pub const SECTIONS: [&str; 13] = [
     "Goal",
     "Criteria",
     "Targets",
@@ -121,6 +122,7 @@ pub const SECTIONS: [&str; 12] = [
     "Spec changes since approval",
     "Runs",
     "Practices",
+    "Comments",
     "Bindings",
     "Bundle",
 ];
@@ -735,7 +737,9 @@ pub(crate) fn assemble(
         });
     }
 
-    let disciplines = task_disciplines(context, task, &mut notes);
+    let cards = listing_cards(context, task, &mut notes);
+    let disciplines = task_disciplines(&cards);
+    let comments = task_comments(context, &cards, &mut notes);
     let read = TaskRead {
         env,
         globals,
@@ -815,6 +819,7 @@ pub(crate) fn assemble(
             bundle_hash,
         },
         practices,
+        comments,
         roadmap,
         author: task_author(&task.author),
         created_at: task.created_at.clone(),
@@ -1044,24 +1049,85 @@ struct TaskRead<'a> {
     git_env: &'a GitEnv,
 }
 
-/// The disciplines of every card whose `tasks` list `task` (the queue's
+/// Every card whose `tasks` list `task`, with its discipline (the queue's
 /// one query, cancelled cards too; task spec `department-practices`, "The
-/// task package"): each a discipline name, sorted, each once, at most
-/// [`DISCIPLINES_MAX`]. A queue that cannot be read is a note and none.
-fn task_disciplines(context: &QueueContext, task: &Task, notes: &mut Vec<String>) -> Vec<String> {
-    let cards = match context.queue.cards_listing_task(&task.id) {
+/// task package"). A queue that cannot be read is a note and none.
+fn listing_cards(
+    context: &QueueContext,
+    task: &Task,
+    notes: &mut Vec<String>,
+) -> Vec<(String, Option<String>)> {
+    match context.queue.cards_listing_task(&task.id) {
         Ok(cards) => cards,
         Err(error) => {
             notes.push(one_line(&format!("practices: cards not read: {error}")));
-            return Vec::new();
+            Vec::new()
         }
-    };
+    }
+}
+
+/// The disciplines of `cards`: each a discipline name, sorted, each once,
+/// at most [`DISCIPLINES_MAX`].
+fn task_disciplines(cards: &[(String, Option<String>)]) -> Vec<String> {
     let disciplines: BTreeSet<String> = cards
-        .into_iter()
-        .filter_map(|(_, discipline)| discipline)
+        .iter()
+        .filter_map(|(_, discipline)| discipline.clone())
         .filter(|discipline| discipline_name_problem(discipline).is_none())
         .collect();
     disciplines.into_iter().take(DISCIPLINES_MAX).collect()
+}
+
+/// The newest live comments of `cards` under a card context's bounds, each
+/// naming its card (task spec `comments`, "The card context and the task
+/// package"); a queue that cannot be read is a note and none.
+fn task_comments(
+    context: &QueueContext,
+    cards: &[(String, Option<String>)],
+    notes: &mut Vec<String>,
+) -> PackageComments {
+    let ids: Vec<&str> = cards.iter().map(|(id, _)| id.as_str()).collect();
+    match crate::comment::context_comments(&context.queue, &ids, true) {
+        Ok((read, unread)) => {
+            notes.extend(unread);
+            PackageComments {
+                total: read.total,
+                listed: read
+                    .listed
+                    .into_iter()
+                    .map(|comment| PackageComment {
+                        id: comment.id,
+                        on: comment.on.unwrap_or_default(),
+                        reply_to: comment.reply_to,
+                        actor: comment.actor,
+                        author: PackageCommentAuthor {
+                            author_type: match comment.author.author_type {
+                                AuthorType::Human => TaskAuthorType::Human,
+                                AuthorType::Agent => TaskAuthorType::Agent,
+                            },
+                            role: comment.author.role,
+                            model: comment.author.model,
+                            run: comment.author.run,
+                            login: comment.author.login,
+                        },
+                        created_at: comment.created_at,
+                        updated_at: comment.updated_at,
+                        version: comment.version,
+                        body: comment.body,
+                        cut: comment.cut,
+                    })
+                    .collect(),
+            }
+        }
+        Err(error) => {
+            let cause = error
+                .message
+                .strip_prefix("spec: ")
+                .unwrap_or(&error.message)
+                .to_owned();
+            notes.push(one_line(&format!("comments: not read: {cause}")));
+            PackageComments::default()
+        }
+    }
 }
 
 /// The practices of `disciplines` at the reading root, by path, at most
@@ -1232,6 +1298,7 @@ pub(crate) fn render_brief(package: &TaskPackage) -> String {
         .iter()
         .filter(|&&name| match name {
             "Practices" => !package.practices.is_empty(),
+            "Comments" => package.comments.total > 0,
             "Bindings" => {
                 !package.bindings.is_empty()
                     || package
@@ -1314,6 +1381,37 @@ fn section(package: &TaskPackage, name: &str) -> String {
                     one_line(&practice.name),
                     or_dash(practice.title.as_deref()),
                     practice.rules
+                ));
+            }
+        }
+        "Comments" => {
+            let comments = &package.comments;
+            out.push_str(&format!(
+                " {} of {}, the newest; {PEOPLES_WORDS}\n",
+                comments.listed.len(),
+                comments.total
+            ));
+            for comment in &comments.listed {
+                let who = if comment.author.author_type == TaskAuthorType::Agent {
+                    let role = comment.author.role.as_deref().unwrap_or("-");
+                    match &comment.author.login {
+                        Some(login) => format!("agent {role} for {login}"),
+                        None => format!("agent {role}"),
+                    }
+                } else {
+                    comment.actor.clone()
+                };
+                out.push_str(&format!(
+                    "  {} | {} | {} | on {} | {} | {}\n",
+                    comment.id,
+                    one_line(&who),
+                    comment.created_at,
+                    one_line(&comment.on),
+                    comment
+                        .reply_to
+                        .as_deref()
+                        .map_or_else(|| "-".to_owned(), |reply| format!("re {reply}")),
+                    comment.body
                 ));
             }
         }

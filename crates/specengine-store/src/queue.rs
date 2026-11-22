@@ -1,7 +1,7 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11; a
+//! user_version` (0 → 1 → … → 15; a
 //! higher version is a newer build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
@@ -129,12 +129,18 @@
 //!   local cache outside the dump ([`SqliteQueue::collision_marks`],
 //!   [`SqliteQueue::mark_collisions`]). A mark logs no event; nothing but
 //!   the pass reads it.
+//! - **Comments** (task spec `comments`, `queue/comments.rs`; ADR-0087):
+//!   step 15 adds `comments`, `comment_versions` and a proposal's
+//!   `comment_id`, set when a question, discrepancy or decision is raised
+//!   from a live comment ([`SqliteQueue::create_intake_raised`]) and never
+//!   written again. No card, proposal, gate or decision reads a comment.
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
 mod auto;
 mod cards;
 mod collisions;
+mod comments;
 // docs/features/department-overview.md DO11: the statement-count seam.
 #[cfg(test)]
 mod card_counts_seam;
@@ -191,6 +197,12 @@ pub use cards::{
     NewSplitChild, QueueSnapshot, SplitCards, SplitParent, UnreadableCard,
 };
 pub use collisions::{CollisionMark, CollisionMarks, MarkResult, NewCollisionMark};
+pub use comments::{
+    COMMENT_COLUMNS, COMMENT_VERSION_COLUMNS, Comment, CommentContext, CommentDeleted, CommentEdit,
+    CommentItem, CommentPage, CommentRefusal, EVENT_COMMENT_CREATED, EVENT_COMMENT_DELETED,
+    EVENT_COMMENT_EDITED, NewComment, StoredComment, StoredCommentVersion, StoredComments,
+    unreadable_line as unreadable_comment_line,
+};
 pub use feed::{FeedCard, FeedEvent, FeedProposal, FeedRun, FeedSnapshot, FeedTask, FeedWindow};
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
@@ -208,7 +220,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 14;
+pub const QUEUE_SCHEMA_VERSION: i64 = 15;
 
 /// The first queue schema whose `proposals` holds `card_id` and `why`
 /// (step 10 → 11).
@@ -220,6 +232,10 @@ pub(crate) const MANDATE_SCHEMA: i64 = 12;
 /// The first queue schema whose `proposals` holds `gist` and `matters`
 /// (step 12 → 13).
 pub(crate) const PLAIN_QUESTIONS_SCHEMA: i64 = 13;
+
+/// The first queue schema with `comments`, `comment_versions` and a
+/// proposal's `comment_id` (step 14 → 15; task spec `comments`).
+pub(crate) const COMMENTS_SCHEMA: i64 = 15;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -365,6 +381,41 @@ CREATE TABLE collision_marks (
 ) STRICT;
 ";
 
+/// Step 14 → 15: the comments, their replaced versions and the comment a
+/// question, discrepancy or decision is raised from (task spec `comments`,
+/// "Queue schema 15"), `comment_id` `NULL` on every row stepped, and the index
+/// a comment's items are read by.
+const STEP_15: &str = "
+CREATE TABLE comments (
+  id         TEXT PRIMARY KEY,
+  project    TEXT NOT NULL,
+  on_kind    TEXT NOT NULL,
+  on_id      TEXT NOT NULL,
+  on_rev     INTEGER,
+  reply_to   TEXT,
+  actor      TEXT NOT NULL,
+  author     TEXT NOT NULL,
+  version    INTEGER NOT NULL,
+  body       TEXT,
+  mentions   TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_by TEXT,
+  deleted_at TEXT
+) STRICT;
+CREATE INDEX comments_on ON comments (project, on_kind, on_id);
+CREATE TABLE comment_versions (
+  comment_id TEXT NOT NULL,
+  project    TEXT NOT NULL,
+  version    INTEGER NOT NULL,
+  body       TEXT,
+  written_at TEXT NOT NULL,
+  PRIMARY KEY (comment_id, version)
+) STRICT;
+ALTER TABLE proposals ADD COLUMN comment_id TEXT;
+CREATE INDEX proposals_comment ON proposals (project, comment_id);
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -388,16 +439,25 @@ macro_rules! step_10_columns {
 }
 
 /// Every column of `proposals`, in table order.
-const COLUMNS: &str = concat!(step_10_columns!(), ", card_id, why, gist, matters");
+const COLUMNS: &str = concat!(
+    step_10_columns!(),
+    ", card_id, why, gist, matters, comment_id"
+);
 
 /// [`COLUMNS`] over a queue still at schema 8, 9 or 10, no step run (a
-/// handle of [`SqliteQueue::open_existing`]): `card_id`, `why`, `gist` and
-/// `matters` read `NULL`, as on a row steps 11 and 13 stepped.
-const COLUMNS_10: &str = concat!(step_10_columns!(), ", NULL, NULL, NULL, NULL");
+/// handle of [`SqliteQueue::open_existing`]): `card_id`, `why`, `gist`,
+/// `matters` and `comment_id` read `NULL`, as on a row steps 11, 13 and 15
+/// stepped.
+const COLUMNS_10: &str = concat!(step_10_columns!(), ", NULL, NULL, NULL, NULL, NULL");
 
-/// [`COLUMNS`] over a queue still at schema 11 or 12, no step run: `gist`
-/// and `matters` read `NULL`, as on a row step 13 stepped.
-const COLUMNS_12: &str = concat!(step_10_columns!(), ", card_id, why, NULL, NULL");
+/// [`COLUMNS`] over a queue still at schema 11 or 12, no step run: `gist`,
+/// `matters` and `comment_id` read `NULL`, as on a row steps 13 and 15
+/// stepped.
+const COLUMNS_12: &str = concat!(step_10_columns!(), ", card_id, why, NULL, NULL, NULL");
+
+/// [`COLUMNS`] over a queue still at schema 13 or 14, no step run:
+/// `comment_id` reads `NULL`, as on a row step 15 stepped.
+const COLUMNS_14: &str = concat!(step_10_columns!(), ", card_id, why, gist, matters, NULL");
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -1048,6 +1108,9 @@ pub struct Proposal {
     /// The card it was raised for (`C-NNNN`), a deciding kind's only;
     /// never changes. A decision's `why` is its [`Intake::why`].
     pub card_id: Option<String>,
+    /// The comment it was raised from (`CM-NNNN`), a deciding kind's only;
+    /// set when stored, never changed (task spec `comments`).
+    pub comment_id: Option<String>,
     /// The owner's staged choice, on an `open` proposal only
     /// (`docs/canon/decision-staging.md`).
     pub staged: Option<StagedChoice>,
@@ -1281,6 +1344,17 @@ pub enum QueueError {
     /// closed card; or an item raised for a card no row holds
     /// ([`NewIntake::card_id`]). `reason` is one line; nothing written.
     CardRefused { id: String, reason: String },
+    /// A comment change refused (task spec `comments`, "CLI" exits): no such
+    /// comment or target ([`CommentRefusal::Unknown`]), a rule
+    /// ([`CommentRefusal::Refused`]: a stale version, a reply rule, a deleted
+    /// comment), or a person who may not make it
+    /// ([`CommentRefusal::Forbidden`]: not the author). `reason` is one
+    /// line; nothing written.
+    CommentRefused {
+        id: String,
+        reason: String,
+        cause: CommentRefusal,
+    },
 }
 
 impl From<StoreError> for QueueError {
@@ -1322,9 +1396,9 @@ impl fmt::Display for QueueError {
             Self::Reserved { id, by, kind } => {
                 write!(f, "`{id}` is reserved by `{by}`, a live {}", kind.as_str())
             }
-            Self::TaskRefused { reason, .. } | Self::CardRefused { reason, .. } => {
-                f.write_str(reason)
-            }
+            Self::TaskRefused { reason, .. }
+            | Self::CardRefused { reason, .. }
+            | Self::CommentRefused { reason, .. } => f.write_str(reason),
         }
     }
 }
@@ -1775,7 +1849,8 @@ impl SqliteQueue {
     /// The canonical dump of the queue's tables, every project's: one line
     /// per row, `<table>\t<JSON array of every column>`, `proposals` by ID
     /// number, `tasks` by ID number, `runs` by task and number, `cards` by ID
-    /// number, then `events` by `seq` (a table a DB does not hold yet left
+    /// number, `comments` by ID number, `comment_versions` by comment and
+    /// version, then `events` by `seq` (a table a DB does not hold yet left
     /// out). Equal dumps: the same queue.
     pub fn dump(&self) -> Result<String, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
@@ -1785,6 +1860,8 @@ impl SqliteQueue {
             ("tasks", ID_ORDER),
             ("runs", tasks::RUN_ORDER),
             ("cards", ID_ORDER),
+            ("comments", ID_ORDER),
+            ("comment_versions", comments::VERSION_ORDER),
             ("events", "ORDER BY seq"),
         ] {
             if !schema::has_table(&tx, table)? {
@@ -2376,11 +2453,13 @@ enum Hold<'a> {
 /// `mandate` (`docs/canon/card-mandate.md` "The rule"), 12 → 13 a
 /// question's `gist` and `matters` (`docs/features/plain-questions.md`
 /// "Acceptance criteria", PQ8), 13 → 14 the collision ledger (task spec
-/// `collision-pass` CP6; 0 → 14
-/// runs all fourteen, every due step in this one transaction; a schema-5
-/// DB opens as 14, every `interpretation`, `drift`, `drift_hash`,
-/// `card_id`, `why`, `gist`, `matters` `NULL`, no card, an empty ledger; a
-/// schema-9 card reads no task, a schema-11 one no mandate);
+/// `collision-pass` CP6), 14 → 15 the comments, their versions and a
+/// proposal's `comment_id` (task spec `comments`; 0 → 15
+/// runs all fifteen, every due step in this one transaction; a schema-5
+/// DB opens as 15, every `interpretation`, `drift`, `drift_hash`,
+/// `card_id`, `why`, `gist`, `matters`, `comment_id` `NULL`, no card, an
+/// empty ledger, no comment; a schema-9 card reads no task, a schema-11 one
+/// no mandate);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -2454,6 +2533,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 13 {
         tx.execute_batch(STEP_14).db()?;
         version = 14;
+    }
+    if version == 14 {
+        tx.execute_batch(STEP_15).db()?;
+        version = 15;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -2768,9 +2851,11 @@ impl RawRow {
         let drift_columns = [take(), take()];
         let card_id = take();
         let why = take();
-        // Step 13's, last in the table: intake columns of a question.
+        // Step 13's: intake columns of a question.
         columns.gist = take();
         columns.matters = take();
+        // Step 15's, last in the table: the comment an item was raised from.
+        let comment_id = take();
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
@@ -2788,6 +2873,27 @@ impl RawRow {
             }
             if card_number(card).is_none() {
                 return Err(corrupt(&id, "card_id", format!("`{card}` is no card ID")));
+            }
+        }
+        // A comment's items: a deciding kind alone names one (task spec
+        // `comments`, "Queue schema 15").
+        if let Some(comment) = &comment_id {
+            if kind.family() != KindFamily::Decides {
+                return Err(corrupt(
+                    &id,
+                    "comment_id",
+                    format!(
+                        "it is set on {}, which names no comment",
+                        kind.with_article()
+                    ),
+                ));
+            }
+            if specengine_core::comment::comment_number(comment).is_none() {
+                return Err(corrupt(
+                    &id,
+                    "comment_id",
+                    format!("`{comment}` is no comment ID"),
+                ));
             }
         }
         if why.is_some() && !kind.holds_why() {
@@ -2864,6 +2970,7 @@ impl RawRow {
             new_ids,
             task_id,
             card_id,
+            comment_id,
             staged,
             interpretation,
             drift,
@@ -3570,14 +3677,17 @@ fn recommendation_of(id: &str, text: &str, options: usize) -> Result<u64, Unread
 }
 
 /// The select list of `proposals` at `conn`'s queue schema: [`COLUMNS`],
-/// [`COLUMNS_10`] below step 11, or [`COLUMNS_12`] below step 13 (a
-/// handle of [`SqliteQueue::open_existing`], no step run).
+/// [`COLUMNS_10`] below step 11, [`COLUMNS_12`] below step 13, or
+/// [`COLUMNS_14`] below step 15 (a handle of
+/// [`SqliteQueue::open_existing`], no step run).
 pub(crate) fn columns_of(conn: &Connection) -> Result<&'static str, QueueError> {
     let version = user_version(conn)?;
     Ok(if version < CARD_ITEMS_SCHEMA {
         COLUMNS_10
     } else if version < PLAIN_QUESTIONS_SCHEMA {
         COLUMNS_12
+    } else if version < COMMENTS_SCHEMA {
+        COLUMNS_14
     } else {
         COLUMNS
     })
@@ -3713,7 +3823,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL, NULL, NULL, NULL, NULL)"
+             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL, NULL, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -3997,7 +4107,7 @@ fn live_reservations(conn: &Connection, project: &str) -> Result<Vec<Reservation
 /// Inserts a kind that decides as `open` under the next ID (a decision
 /// writes a question's columns but its lead, and its `why`, as given; a
 /// question its `gist`, `matters`, options and recommendation when given;
-/// `card_id` as given): the
+/// `card_id` and `comment_id` as given): the
 /// update's five text columns NULL, `diagnostics` `[]`, JSON lists as
 /// given (an evidence item's absent keys `null`); its ID.
 fn insert_intake(
@@ -4005,6 +4115,7 @@ fn insert_intake(
     project: &str,
     new: &NewIntake,
     task: Option<&str>,
+    comment: Option<&str>,
     floor: u64,
     now: &str,
 ) -> Result<String, QueueError> {
@@ -4027,7 +4138,7 @@ fn insert_intake(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
-             ?25, NULL, NULL, NULL, NULL, NULL, ?26, ?27, ?28, ?29)"
+             ?25, NULL, NULL, NULL, NULL, NULL, ?26, ?27, ?28, ?29, ?30)"
         ),
         rusqlite::params![
             id,
@@ -4059,6 +4170,7 @@ fn insert_intake(
             intake.why,
             intake.gist,
             intake.matters,
+            comment,
         ],
     )
     .db()?;
@@ -4192,7 +4304,7 @@ fn insert_drift(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, NULL, ?17, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20, NULL, NULL, NULL, NULL)"
+             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20, NULL, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -4338,6 +4450,129 @@ impl MatchRow {
     }
 }
 
+impl SqliteQueue {
+    /// [`ProposalQueue::create_intake_with_task`] raised from the comment
+    /// `comment` (`CM-NNNN`) when given (task spec `comments`, "CLI",
+    /// `--comment`): after the task and the card, before the dedup, the
+    /// comment is read under the inserting lock; no such comment of the
+    /// project, or a deleted one, is [`QueueError::CommentRefused`], nothing
+    /// written, no ID taken. The item stores it as `comment_id`, never
+    /// changed after; the linked update names none.
+    pub fn create_intake_raised(
+        &mut self,
+        intake: &NewIntake,
+        corpus_hits: &[String],
+        patch: Option<&NewProposal>,
+        task: Option<&str>,
+        comment: Option<&str>,
+        now: &str,
+    ) -> Result<IntakeResult, QueueError> {
+        check_time(now)?;
+        if let Some(comment) = comment
+            && specengine_core::comment::comment_number(comment).is_none()
+        {
+            return Err(QueueError::Invalid(format!("`{comment}` is no comment ID")));
+        }
+        if intake.kind.family() != KindFamily::Decides {
+            let deciding: Vec<&str> = ProposalKind::ALL
+                .into_iter()
+                .filter(|kind| kind.family() == KindFamily::Decides)
+                .map(ProposalKind::as_str)
+                .collect();
+            return Err(QueueError::Invalid(format!(
+                "an intake stores a kind that decides ({}), not {}",
+                deciding.join(", "),
+                intake.kind.with_article()
+            )));
+        }
+        if intake.intake.target_ids.is_empty() {
+            return Err(QueueError::Invalid("an intake names no target".to_owned()));
+        }
+        // A row its decode would refuse is never written.
+        if let Some(problem) = intake
+            .kind
+            .intake_shape()
+            .and_then(|shape| shape.problem(intake.kind, &intake.intake))
+            .or_else(|| link_problem(intake))
+        {
+            return Err(QueueError::Invalid(problem));
+        }
+        if patch.is_some_and(|patch| {
+            patch.kind != ProposalKind::Update || new_proposal_problem(patch).is_some()
+        }) {
+            return Err(QueueError::Invalid(
+                "a linked proposal is an update".to_owned(),
+            ));
+        }
+        let project = self.project.clone();
+        let dir = self.dir.clone();
+        let tx = self.write()?;
+        if let Some(task) = task {
+            tasks::check_binding(&tx, &project, task, &intake.place)?;
+        }
+        // The card, in any state, read under the lock it is stored under:
+        // none, nothing written and no ID taken.
+        if let Some(card) = &intake.card_id {
+            cards::check_card(&tx, &project, card)?;
+        }
+        // The comment, live, read under the same lock: none or deleted,
+        // nothing written and no ID taken.
+        if let Some(comment) = comment {
+            comments::check_live(&tx, &project, comment)?;
+        }
+        // The dedup reads under the write lock it inserts under: a parallel
+        // intake of the same item waits, then finds this one.
+        let (hits, related) = queue_matches(&tx, &project, intake)?;
+        let named = |name: &str| {
+            intake
+                .intake
+                .distinct_from
+                .iter()
+                .any(|entry| entry == name)
+        };
+        let all_named =
+            corpus_hits.iter().all(|name| named(name)) && hits.iter().all(|hit| named(&hit.id));
+        if !all_named {
+            drop(tx);
+            return Ok(IntakeResult {
+                hits,
+                related,
+                created: None,
+                linked: None,
+            });
+        }
+        let floor = read_floor(&dir)?;
+        let id = insert_intake(&tx, &project, intake, task, comment, floor, now)?;
+        log_text(
+            &tx,
+            &project,
+            EVENT_CREATED,
+            &created_payload(&id, intake),
+            now,
+        )?;
+        let mut linked = None;
+        if let Some(patch) = patch {
+            // The linked update takes the item's task, in this transaction.
+            let update = insert_update(&tx, &project, patch, Some(&id), task, floor, now)?;
+            tx.execute(
+                "UPDATE main.proposals SET linked = ?1 WHERE id = ?2 AND project = ?3",
+                [update.as_str(), id.as_str(), project.as_str()],
+            )
+            .db()?;
+            log(&tx, &project, EVENT_CREATED, &json!({ "id": update }), now)?;
+            linked = Some(existing(&tx, &project, &update)?);
+        }
+        let created = existing(&tx, &project, &id)?;
+        tx.commit().db()?;
+        Ok(IntakeResult {
+            hits,
+            related,
+            created: Some(created),
+            linked,
+        })
+    }
+}
+
 impl ProposalQueue for SqliteQueue {
     fn create(&mut self, proposal: &NewProposal, now: &str) -> Result<Proposal, QueueError> {
         self.create_with_task(proposal, None, now)
@@ -4399,99 +4634,7 @@ impl ProposalQueue for SqliteQueue {
         task: Option<&str>,
         now: &str,
     ) -> Result<IntakeResult, QueueError> {
-        check_time(now)?;
-        if intake.kind.family() != KindFamily::Decides {
-            let deciding: Vec<&str> = ProposalKind::ALL
-                .into_iter()
-                .filter(|kind| kind.family() == KindFamily::Decides)
-                .map(ProposalKind::as_str)
-                .collect();
-            return Err(QueueError::Invalid(format!(
-                "an intake stores a kind that decides ({}), not {}",
-                deciding.join(", "),
-                intake.kind.with_article()
-            )));
-        }
-        if intake.intake.target_ids.is_empty() {
-            return Err(QueueError::Invalid("an intake names no target".to_owned()));
-        }
-        // A row its decode would refuse is never written.
-        if let Some(problem) = intake
-            .kind
-            .intake_shape()
-            .and_then(|shape| shape.problem(intake.kind, &intake.intake))
-            .or_else(|| link_problem(intake))
-        {
-            return Err(QueueError::Invalid(problem));
-        }
-        if patch.is_some_and(|patch| {
-            patch.kind != ProposalKind::Update || new_proposal_problem(patch).is_some()
-        }) {
-            return Err(QueueError::Invalid(
-                "a linked proposal is an update".to_owned(),
-            ));
-        }
-        let project = self.project.clone();
-        let dir = self.dir.clone();
-        let tx = self.write()?;
-        if let Some(task) = task {
-            tasks::check_binding(&tx, &project, task, &intake.place)?;
-        }
-        // The card, in any state, read under the lock it is stored under:
-        // none, nothing written and no ID taken.
-        if let Some(card) = &intake.card_id {
-            cards::check_card(&tx, &project, card)?;
-        }
-        // The dedup reads under the write lock it inserts under: a parallel
-        // intake of the same item waits, then finds this one.
-        let (hits, related) = queue_matches(&tx, &project, intake)?;
-        let named = |name: &str| {
-            intake
-                .intake
-                .distinct_from
-                .iter()
-                .any(|entry| entry == name)
-        };
-        let all_named =
-            corpus_hits.iter().all(|name| named(name)) && hits.iter().all(|hit| named(&hit.id));
-        if !all_named {
-            drop(tx);
-            return Ok(IntakeResult {
-                hits,
-                related,
-                created: None,
-                linked: None,
-            });
-        }
-        let floor = read_floor(&dir)?;
-        let id = insert_intake(&tx, &project, intake, task, floor, now)?;
-        log_text(
-            &tx,
-            &project,
-            EVENT_CREATED,
-            &created_payload(&id, intake),
-            now,
-        )?;
-        let mut linked = None;
-        if let Some(patch) = patch {
-            // The linked update takes the item's task, in this transaction.
-            let update = insert_update(&tx, &project, patch, Some(&id), task, floor, now)?;
-            tx.execute(
-                "UPDATE main.proposals SET linked = ?1 WHERE id = ?2 AND project = ?3",
-                [update.as_str(), id.as_str(), project.as_str()],
-            )
-            .db()?;
-            log(&tx, &project, EVENT_CREATED, &json!({ "id": update }), now)?;
-            linked = Some(existing(&tx, &project, &update)?);
-        }
-        let created = existing(&tx, &project, &id)?;
-        tx.commit().db()?;
-        Ok(IntakeResult {
-            hits,
-            related,
-            created: Some(created),
-            linked,
-        })
+        self.create_intake_raised(intake, corpus_hits, patch, task, None, now)
     }
 
     fn create_drift(

@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # Cards: commands, record, store
 
-ADR-0056, built by `card-store`: a card is the lighter record of any trade's work, a queue row, never a file or a commit. `T-` stays the code-work task; `spec task approve` takes no `C-`. The project's `[card]` gives each discipline its columns, moves and who makes them, and a hand-off is a child card (`card-flows.md`); no code reads a column's name. Marks, clearing, verdicts: `spec-trace.md`. Code: model, core, CLI `card.rs`; core `card_toml.rs`; store `queue/cards.rs`; MCP `cards.rs`.
+ADR-0056: a card is the lighter record of any trade's work, a queue row, never a file or a commit. `T-` stays the code-work task; `spec task approve` takes no `C-`. The project's `[card]` gives each discipline its columns, moves and who makes them, and a hand-off is a child card (`card-flows.md`); no code reads a column's name. Marks, clearing, verdicts: `spec-trace.md`. Code: model, core, CLI `card.rs`; core `card_toml.rs`; store `queue/cards.rs`; MCP `cards.rs`.
 
 ## Commands
 
@@ -27,7 +27,7 @@ spec card accept C --as N (--briefed | --departs REF...) [--note T] [--revision 
 spec card clear (C | --group REF) ... --reason T --as N
 ```
 
-Globals as the queue's. In `edit`, `assign` a value `-` clears, never a mandate; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children"; `--mandate`: `card-mandate.md`. `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `spec card split`, a task and a subtask per department in one act: `card-split.md`; `spec card counts`, per flow and column: `card-counts.md`. `move`, `edit`, `assign` asking nothing: exit 2 (`or_usage_error`). Library `card_{new,list,show,counts,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest`, `CardEditRequest` also `tasks_here`, no `Default`; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
+Globals as the queue's. In `edit`, `assign` a value `-` clears, never a mandate; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. `--reviewer`, `--note` (a return's reason), `--parent`: `card-flows.md` "Hand-off", "Return", "Children"; `--mandate`: `card-mandate.md`. `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `spec card split`, a task and a subtask per department in one act: `card-split.md`; `spec card counts`, per flow and column: `card-counts.md`. `move`, `edit`, `assign` asking nothing: exit 2 (`or_usage_error`). Library `card_{new,list,show,counts,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest`, `CardEditRequest` also `tasks_here`, no `Default`; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
 `open_cards`, never `open_context`: no git, any root; only `accept --departs` and `show` with `--context` or a linked task read git.
 
@@ -95,7 +95,7 @@ Events, the `as` the acting name: `card.created {id, flow, column, position, ass
 
 ## Backup
 
-Format 6 (3-5 import): `queue-backup.md`, `tasks.md` "Backup".
+Format 8 (3-7 import): `queue-backup.md`, `tasks.md` "Backup".
 
 ## Rules
 
@@ -109,4 +109,4 @@ Each exit 1, nothing changed; core's, pure, asked twice.
 - **Accept**: the card in `accept.from`; `--as` its `reviewer` (none set: naming `spec card assign`), never its `assignee`.
 - **Dropped from config**: a column no longer listed is served last in its flow with a note, `allowed` the flow's first column, anyone's. A flow no longer listed: a note, `allowed` empty, `edit` and `assign` still work.
 
-No rule reads a lock, a task or an item, linked ones included (ADR-0075, ADR-0077), and a proposal only for a departure's state, so a rejected brief stops no card (ADR-0012).
+No rule reads a lock, a task, an item or a comment, linked ones included (ADR-0075, ADR-0077, ADR-0087), and a proposal only for a departure's state, so a rejected brief stops no card (ADR-0012).

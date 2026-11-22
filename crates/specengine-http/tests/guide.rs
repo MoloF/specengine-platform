@@ -241,7 +241,8 @@ fn cli_pair(home: &Path, cwd: &Path, form: &Form) -> (String, Value) {
 }
 
 /// GU5 on a hub over `/mcp/<slug>`: every form is the CLI's text and JSON;
-/// `rule` alone is `isError`; `tools/list` holds 19 tools with `get_guide`;
+/// `rule` alone is `isError`; `tools/list` holds 19 tools with `get_guide`
+/// (21 since docs/features/comments.md);
 /// each call's slow line names `get_guide` with `wait_ms=-`, and no turn
 /// line names the tool. M (named): the hub tool taking the turn.
 #[test]
@@ -258,7 +259,8 @@ fn gu5_a_hub_over_mcp_is_the_cli_and_takes_no_turn() {
     let mut agent = Stateless::new(server.port, SLUG, "mira");
     let list = agent.tools();
     let names = tool_names(&list);
-    assert_eq!(names.len(), 19, "{names:?}");
+    // 21 since docs/features/comments.md CM15.
+    assert_eq!(names.len(), 21, "{names:?}");
     assert!(names.iter().any(|name| name == "get_guide"), "{names:?}");
     let all = forms(&pages);
     let picked: Vec<&Form> = all

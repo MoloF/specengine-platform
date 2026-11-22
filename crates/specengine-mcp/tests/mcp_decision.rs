@@ -396,14 +396,17 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 938 and 2 046 since docs/features/specengine-guide.md (`get_guide`
     // in the reads, 34 bytes; two `, archive?` and `queues ` out, 27); the
     // values `mcp_code.rs`' `GUIDE_BLAKE3`.
-    assert_eq!(before.len(), 1938);
+    // 1 935 and 2 043 since docs/features/comments.md CM15 (the comments
+    // line in, 54 bytes; 57 cut: `get_impact`'s and `find_symbols`' last
+    // hints, the create's ` (base null)`, the intake line's last clause).
+    assert_eq!(before.len(), 1935);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "aeb0e7dcced593d133bacc1f02be68f4f016070653a3a70916a383ac195e16f1"
+        "bfff8eb22425ed85d5b06038857f86630b12b13f8e77add9cef49b16328657ff"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2043);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9"
+        "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb"
     );
 }

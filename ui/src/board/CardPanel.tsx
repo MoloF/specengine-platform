@@ -53,6 +53,7 @@ import {
 import { returnReasonOf } from "./rollup";
 import { CitedText, citedLinks, type CitedLinks } from "../markdown/CitedText";
 import { CardLink, type CardLinks } from "./CardLink";
+import { Comments } from "../comments/lazy";
 import { isPracticesNote, PracticesPart } from "../practices/PracticesPart";
 import { CardProgress } from "./CardProgress";
 import { CardTasks, ownNotes } from "./CardTasks";
@@ -682,6 +683,8 @@ function MainParts({
         )}
       </Part>
       <Activity project={project} card={card} flow={flow} />
+      {/* Talk under the task, never a write of it (docs/features/comments.md "UI"): its own chunk. */}
+      <Comments project={project} on={card.id} targets={card.targets} level={3} mandate={card.mandate} />
     </>
   );
 }

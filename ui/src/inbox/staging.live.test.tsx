@@ -91,6 +91,11 @@ async function openInbox(queue: Queue, write: (method: string, body: unknown) =>
   await waitFor(() => {
     expect(FakeEventSource.instances.map((source) => source.url)).toEqual(["/api/projects/alpha/events"]);
   });
+  // The proposal's Comments part and the nav's Mentions badge, each its own chunk, have asked their
+  // reads (docs/features/comments.md "UI"): what follows counts from there.
+  await waitFor(() => {
+    expect(requests(fetchStub)).toEqual(expect.arrayContaining(["GET /api/projects/alpha/comments?on=PR-0004", "GET /api/projects/alpha/mentions"]));
+  });
   act(() => {
     stream().open();
   });

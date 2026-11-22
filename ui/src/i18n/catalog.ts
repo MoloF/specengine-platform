@@ -3,6 +3,7 @@
 // resolved here, and no Russian value is imported: ru.ts is a chunk of its own, reached only through
 // index.ts's `import("./ru")`.
 import type { en } from "./en";
+import type { enComments } from "./enComments";
 
 /** The chrome's languages: a third one is a new decision (ADR-0072). */
 export type Language = "en" | "ru";
@@ -21,8 +22,17 @@ type Shaped<T> = {
   readonly [K in keyof T | RussianForms<keyof T>]: K extends keyof T ? (T[K] extends string ? string : Shaped<T[K]>) : string;
 };
 
+/**
+ * The whole English catalog: `en`, in first load, and the parts that load with their views' chunks
+ * (the comments', ./enComments.ts). It types `t` and Russian alike.
+ */
+export type English = typeof en & { readonly comments: typeof enComments };
+
+/** A part of English that loads with its view's chunk, merged into the instance by `addEnglishPart`. */
+export type EnglishPart = Pick<English, "comments">;
+
 /** A catalog of the chrome: what `ru.ts` is typed as. */
-export type Catalog = Shaped<typeof en>;
+export type Catalog = Shaped<English>;
 
 /** Any catalog as plain nested text, English's included: what the parity test reads. */
 export interface Messages {

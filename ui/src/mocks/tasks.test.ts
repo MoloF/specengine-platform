@@ -184,6 +184,8 @@ describe("the cases the slice names (Data, Mock)", () => {
       "bundle",
       // The 28th since docs/features/department-practices.md "Acceptance criteria", DP12.
       "practices",
+      // The talk of the cards listing it (docs/features/comments.md "The card context and the task package").
+      "comments",
       "roadmap",
       "author",
       "created_at",

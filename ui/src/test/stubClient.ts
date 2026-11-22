@@ -4,12 +4,14 @@ import {
   type BundleOptions,
   type CardsOptions,
   type CatalogOptions,
+  type CommentsOptions,
   type DeliveryOptions,
   type FeedOptions,
   type FlowOptions,
   type GraphOptions,
   type LibraryOptions,
   type MapOptions,
+  type MentionsOptions,
   type NodeOptions,
   type RoadmapOptions,
   type RoundOptions,
@@ -38,6 +40,11 @@ import type {
   CardSplitBody,
   CardWrite,
   CheckReport,
+  CommentAddBody,
+  CommentDocument,
+  CommentEditBody,
+  CommentList,
+  CommentRaiseBody,
   ConfirmBody,
   ConfirmRead,
   CatalogDocument,
@@ -55,6 +62,7 @@ import type {
   LockDiffView,
   LibraryDocument,
   MapDocument,
+  MentionList,
   NodeView,
   Project,
   Proposal,
@@ -79,6 +87,7 @@ import {
   aCardCounts,
   aCardList,
   aCheckReport,
+  aComment,
   aCardWrite,
   aCatalog,
   aLibrary,
@@ -139,7 +148,15 @@ function storedOf(stage: RoundAnswerBody["stage"]): Stage {
  * mockImplementation.
  */
 export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
-  const state: { proposals: Proposal[]; notes: string[]; round: RoundSheet } = { proposals: [...proposals], notes, round: aRoundSheet([]) };
+  const state: { proposals: Proposal[]; notes: string[]; round: RoundSheet; comments: CommentDocument[] } = { proposals: [...proposals], notes, round: aRoundSheet([]), comments: [] };
+  /** The stub's comment by ID, or the daemon's 404. */
+  const commentOf = (id: string): CommentDocument => {
+    const found = state.comments.find((comment) => comment.id === id);
+    if (found === undefined) {
+      throw new ClientError({ status: 404, message: `no comment ${id}` });
+    }
+    return found;
+  };
   const client = {
     dataSource: "mock" as const,
     state,
@@ -294,6 +311,43 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       Promise.resolve({ dry_run: body.dry_run, parent: null, children: [], reviewer: body.reviewer, notes: [] }),
     ),
     clearCardGroup: vi.fn<(project: string, body: CardClearGroupBody) => Promise<CardClearGroupWrite>>((_project, body) => Promise.resolve({ group: body.group, cleared: [], notes: [] })),
+    // Comments (docs/features/comments.md "HTTP") over `state.comments`: a list is every comment on
+    // the target, oldest first, one page; mentions the login's (every one's without a login), newest
+    // first. A write stores as the daemon does: the next CM-, a version compare-and-set (409), a
+    // tombstone; an item raised is PR-0102. A test overriding what any answers.
+    getComments: vi.fn<(project: string, options: CommentsOptions, signal?: AbortSignal) => Promise<CommentList>>((_project, options) => {
+      const listed = state.comments.filter((comment) => comment.on.id === options.on);
+      return Promise.resolve(structuredClone({ on: listed[0]?.on ?? { kind: "card", id: options.on }, total: listed.length, comments: listed, next_before: null, notes: [] }));
+    }),
+    getMentions: vi.fn<(project: string, options: MentionsOptions, signal?: AbortSignal) => Promise<MentionList>>((_project, options) => {
+      const login = options.login ?? null;
+      const listed = state.comments.filter((comment) => (login === null ? comment.mentions.length > 0 : comment.mentions.includes(login))).reverse();
+      return Promise.resolve(structuredClone({ login, comments: listed, next_before: null, notes: [] }));
+    }),
+    addComment: vi.fn<(project: string, body: CommentAddBody) => Promise<CommentDocument>>((_project, body) => {
+      const id = `CM-${String(state.comments.length + 12).padStart(4, "0")}`;
+      const actor = body.as ?? "local";
+      const made = aComment({ id, on: { kind: "card", id: body.on }, reply_to: body.reply_to, actor, author: { type: "human", role: null, model: null, run: null }, body: body.body, created_at: STAGED_AT, updated_at: STAGED_AT });
+      state.comments.push(made);
+      return Promise.resolve(structuredClone(made));
+    }),
+    editComment: vi.fn<(project: string, id: string, body: CommentEditBody) => Promise<CommentDocument>>((_project, id, body) => {
+      const stored = commentOf(id);
+      if (stored.version !== body.version) {
+        return Promise.reject(new ClientError({ status: 409, message: `${id} is at version ${String(stored.version)}, not ${String(body.version)}: nothing changed` }));
+      }
+      Object.assign(stored, { body: body.body, version: stored.version + 1, updated_at: STAGED_AT });
+      return Promise.resolve(structuredClone(stored));
+    }),
+    deleteComment: vi.fn<(project: string, id: string) => Promise<CommentDocument>>((_project, id) => {
+      const stored = commentOf(id);
+      Object.assign(stored, { body: null, mentions: [], deleted: { by: "local", at: STAGED_AT } });
+      return Promise.resolve(structuredClone(stored));
+    }),
+    raiseFromComment: vi.fn<(project: string, id: string, body: CommentRaiseBody) => Promise<IntakeDocument>>((_project, id, body) => {
+      commentOf(id).items.push({ id: "PR-0102", kind: body.kind, status: "open" });
+      return Promise.resolve({ id: "PR-0102", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] });
+    }),
     // Marks and rollups (docs/features/card-trace.md): none.
     getTrace: vi.fn<(project: string, options?: TraceOptions, signal?: AbortSignal) => Promise<TraceDocument>>(() => Promise.resolve(aTrace([]))),
     /** No live tail; a plain function (`callsOf` never counts it) a test may replace to emit events. */

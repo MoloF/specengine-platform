@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-22
 ---
 
 # `spec feed`: what happened, newest change first, and what needs the owner
@@ -30,7 +30,7 @@ needs me: unlanded
   <task> | <status> | pack <pack>
 ```
 
-No head line; `needs me:` sections only under `--needs-me` (an empty one `needs me: <list>: none`), then `note:` lines on stderr; `-` for an absent value, controls escaped. **Subject**: a `proposal.*` event's proposal; else the task, else the proposal, else the card, else a line `<pack>/<n>`, else `-`. The title and status follow it: the task's title now (else the proposal's `target_id`), the card's title, the task's or proposal's state now. **Words**: `task.run_reported` `<outcome>: <the summary's first line, 160 characters>`; `task.approved` `by rule` or `-`; `proposal.applied` `as <sha12>`, ` by rule` when so; `proposal.rejected` the reason's first line; `proposal.apply_failed` `step <n>: <reason>`; `auto.started` `<n> task(s), <m> line(s) on <branch>`; `auto.bound` `line <pack>/<n>`; `auto.held` `<reason>: <detail>`; `auto.landed` `on <branch> as <sha12>`; `gate.observed` `<path> (<zone>)`, a config `(config)`; others `-`.
+No head line; `needs me:` sections only under `--needs-me` (an empty one `needs me: <list>: none`), then `note:` lines on stderr; `-` for an absent value, controls escaped. **Subject**: a `proposal.*` event's proposal; a `comment.*` event's comment; else the task, else the proposal, else the card, else a line `<pack>/<n>`, else `-`. The title and status follow it: the task's title now (else the proposal's `target_id`), the card's title, the task's or proposal's state now. **Words**: `task.run_reported` `<outcome>: <the summary's first line, 160 characters>`; `task.approved` `by rule` or `-`; `proposal.applied` `as <sha12>`, ` by rule` when so; `proposal.rejected` the reason's first line; `proposal.apply_failed` `step <n>: <reason>`; `auto.started` `<n> task(s), <m> line(s) on <branch>`; `auto.bound` `line <pack>/<n>`; `auto.held` `<reason>: <detail>`; `auto.landed` `on <branch> as <sha12>`; `gate.observed` `<path> (<zone>)`, a config `(config)`; `comment.created` `on <target> by <as>`, `comment.edited` `v<n> by <as>`, `comment.deleted` `by <as>` (no body: `comments.md`); others `-`.
 
 ## JSON
 
@@ -65,7 +65,7 @@ Every key present, `null` where none. `task`: a `task.*` payload's `id`, an `aut
 
 ## UI
 
-- **Activity** (`#/<p>/feed`, `#/<p>/feed/needs-me`, a lazy chunk): the nav's second entry after Overview in every department, never one of the nine sections; the palette's Sections group (eleven entries). A head line from `auto`: `Auto: on, rule b3:<12 hex>` or `Auto is off: <why>`. Tabs **All** (entries newest first) and **Needs me** (the five lists, newest first, each empty one saying so); a Department select when the project has workspaces. An entry: the local time, the type's label, a link (`words.ts` `subjectOf`: its task's Tasks detail, else its proposal's view, else its card's modal; a proposal event bound to a task links the task), the title, the words, `By rule` when `by` is `rule`. Hold reasons (all 29), acts and proposal kinds read as plain labels, the code in `title`; an unknown code raw. A gap of two hours or more between entries reads "Nothing happened for H h M min": a usage-limit pause has no event.
+- **Activity** (`#/<p>/feed`, `#/<p>/feed/needs-me`, a lazy chunk): the nav's second entry after Overview in every department, never one of the ten sections; the palette's Sections group (thirteen entries, Mentions third: `comments-surfaces.md`). A head line from `auto`: `Auto: on, rule b3:<12 hex>` or `Auto is off: <why>`. Tabs **All** (entries newest first) and **Needs me** (the five lists, newest first, each empty one saying so); a Department select when the project has workspaces. An entry: the local time, the type's label, a link (`words.ts` `subjectOf`: its task's Tasks detail, else its proposal's view, else its card's modal; a proposal event bound to a task links the task), the title, the words, `By rule` when `by` is `rule`. Hold reasons (all 29), acts and proposal kinds read as plain labels, the code in `title`; an unknown code raw. A gap of two hours or more between entries reads "Nothing happened for H h M min": a usage-limit pause has no event.
 - **New since your last visit**: per viewer, `specengine.feed.seen.<p>`, on a hub `.<login>` appended (`ui-client.md` "Stored choices"), read when the view opens; entries above it, and those arriving while open, are `New`; with none kept every entry is. Written with the highest `seq` shown when the view closes (`pagehide` too) and on **Mark all seen**, which never lowers it and is announced. The chip's count shows `100+` at the read's cap.
 - **Live**: every event of the project's tail, and a gap, re-read the feed through `readAgainKept` (`ui-client.md` "Live re-reads"), never aborting a read in flight: `since` the highest `seq` held, the answer appended; a gap re-reads it whole.
 - **Tasks, Sort**: `By state` (the groups, the default) or `Last changed` (one list by `updated_at`, newest first, ties by ID number, highest first), `specengine.tasks.sort.<p>`.

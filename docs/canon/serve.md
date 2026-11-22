@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-22
 ---
 
 # Daemon: spec serve
 
-`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens; as built by `spec-serve`; it serves the web UI compiled into it (`docs/canon/serve-ui.md`). The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`, `unpublished_daemon`, `daemon_text`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL`, `DAEMON_PUBLISH_WAIT`), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
+`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens and serves the web UI compiled into it (`serve-ui.md`). The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`, `unpublished_daemon`, `daemon_text`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL`, `DAEMON_PUBLISH_WAIT`), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
 
 ## Launcher
 
@@ -92,16 +92,16 @@ Requests of one project run one at a time on the blocking pool (a read refreshes
 
 ## Live tail
 
-`GET .../events`, the stream: `crates/specengine-http/README.md` "Live tail". Types: all stored (`proposal-queue.md` "States and events"); the UI re-reads Activity's feed on each and on a gap (`spec-feed.md` "UI"); a row with a NULL type or payload or CR, LF in its type skipped. Polls at most 250 ms apart, at once after a full page (`EVENTS_PAGE_MAX`, 512 rows read, skipped ones counted), each reads the config (a changed slug ends the stream), then one short read transaction on the stream's own connection (CLI `EventsTail`), kept between polls, reopened when the file is replaced, dropped when gone; no database created. A poll that cannot run ends the stream; a client gone ends it and the connection. On a hub a stream ends 300 s after it opens (`STREAM_LIFE`, `hub.rs`), between two events, sending nothing more; the browser reconnects with `Last-Event-ID` through the door, which judges the person again, and loses no event. A local daemon's never ends.
+`GET .../events`, the stream: `crates/specengine-http/README.md` "Live tail". Types: all stored (`proposal-queue.md` "States and events"); the UI re-reads Activity's feed on each and on a gap (`spec-feed.md` "UI"), comment threads and mentions on `comment.*` (`comments-surfaces.md`); a row with a NULL type or payload or CR, LF in its type skipped. Polls at most 250 ms apart, at once after a full page (`EVENTS_PAGE_MAX`, 512 rows read, skipped ones counted), each reads the config (a changed slug ends the stream), then one short read transaction on the stream's own connection (CLI `EventsTail`), kept between polls, reopened when the file is replaced, dropped when gone; no database created. A poll that cannot run ends the stream; a client gone ends it and the connection. On a hub a stream ends 300 s after it opens (`STREAM_LIFE`, `hub.rs`), between two events, sending nothing more; the browser reconnects with `Last-Event-ID` through the door, which judges the person again, and loses no event. A local daemon's never ends.
 
 ## Known limits
 
-- Between a winner's lock and its publish, an earlier daemon's stale `daemon.json` reads as published: a probe answers `already running: pid <dead pid>`, exit 0. A fix conflicts with "never removed" and "no pid check".
+- Between a winner's lock and its publish, an earlier daemon's stale `daemon.json` reads as published: a probe answers `already running: pid <dead pid>`, exit 0. A fix would break "never removed" and "no pid check".
 - A root holding a control character is named escaped in the restart command: not runnable as printed.
 - `execvp` runs a found non-binary through `/bin/sh` (ENOEXEC; 127 when it fails).
 - Deleting the data directory under a live daemon lets a second start lock a new file.
 - Version skew: crates 0.1.0, no build id; an old daemon after `cargo install` answers `SchemaTooNew` 503s: restart it.
-- `daemon.json.tmp` is one fixed name, safe because the lock serialises starts.
+- `daemon.json.tmp` is one fixed name: the lock serialises starts.
 - **The local half by units alone.** No test waits 300 s and no paused clock is in the graph, so `answered` capping `None` at `STREAM_LIFE` survives SL3 (`stream-life` spec).
 - **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. It fails closed, `daemon.json` keeping its five keys (the guide, `scripts/deploy/README.md`).
 

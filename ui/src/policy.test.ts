@@ -561,6 +561,39 @@ describe("source policy", () => {
     expect(offending(new RegExp(`\\b(${sinks.join("|")})\\b`), (path) => path.endsWith(".css"))).toEqual([]);
   });
 
+  // CM18 of docs/features/comments.md "Acceptance criteria": a comment's body, people's words, is
+  // rendered only through src/markdown/ (its Prose), never as HTML; the sink rule above covers
+  // src/comments/ from its start, and its views draw a body through CommentView's Prose alone.
+  it("renders a comment's body only through src/markdown/: src/comments/ holds no sink and draws bodies through Prose (CM18 of comments)", () => {
+    const comments = Object.keys(sources).filter((path) => path.startsWith("/src/comments/") && /\.tsx$/.test(path) && !isTestPath(path));
+    expect(comments).toEqual(expect.arrayContaining(["/src/comments/CommentsPart.tsx", "/src/comments/CommentView.tsx", "/src/comments/Composer.tsx", "/src/comments/MentionsView.tsx"]));
+    const sink = new RegExp(["dangerously" + "SetInnerHTML", "inner" + "HTML", "outer" + "HTML", "insertAdjacent" + "HTML"].join("|"));
+    expect(comments.filter((path) => sink.test(sources[path] ?? ""))).toEqual([]);
+    // A body is drawn by CommentView's CommentText and the composer's preview, each through Prose.
+    for (const path of ["/src/comments/CommentView.tsx", "/src/comments/Composer.tsx"]) {
+      expect([path, importsOf(sources[path] ?? "")]).toEqual([path, expect.arrayContaining(["../markdown/Prose"])]);
+    }
+    expect(comments.filter((path) => importsOf(sources[path] ?? "").some((specifier) => /react-markdown|remark-gfm|markdown\/Markdown/.test(specifier)))).toEqual([]);
+  });
+
+  // docs/features/comments.md "UI", Strings: what a comment is under, where its link goes, what it turns
+  // into and who wrote it are told apart in src/comments/labels.ts alone (an author's type through
+  // src/inbox/labels.ts's byAgent); no other module of src/comments/ reads a place's word, spells a
+  // place's or an item kind's word, or compares an event type.
+  it("tells a comment's place, its link and what it turns into apart in src/comments/labels.ts alone, an event type nowhere in src/comments/ (comments)", () => {
+    const outside = Object.keys(sources).filter((path) => path.startsWith("/src/comments/") && path !== "/src/comments/labels.ts" && !isTestPath(path));
+    expect(outside.length).toBeGreaterThan(5);
+    const reads = /\bon\.kind\b|["'`]comment\.(created|edited|deleted)["'`]|["'`](card|proposal|node|question|decision|discrepancy)["'`]/;
+    expect(outside.filter((path) => reads.test(sources[path] ?? ""))).toEqual([]);
+    const labels = sources["/src/comments/labels.ts"] ?? "";
+    expect([/\bon\.kind\b/.test(labels), /export function placeLink\(/.test(labels), /export const TURNS = \{ question: "question", decision: "decision", discrepancy: "discrepancy" \} as const;/.test(labels)]).toEqual([true, true, true]);
+    // The detector itself: a place's link spelled in a view, a turn compared by its word, an event type.
+    for (const line of ['case "card":', 'if (turn === "discrepancy") {', 'type === "comment.created"', "const kind = on.kind;"]) {
+      expect([line, reads.test(line)]).toEqual([line, true]);
+    }
+    expect(reads.test("if (turn === TURNS.discrepancy) {")).toBe(false);
+  });
+
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
     const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/", "/src/doc/", "/src/guide/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);

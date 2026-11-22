@@ -42,6 +42,11 @@ import type {
   CheckFinding,
   CheckReport,
   Cited,
+  CommentDeleted,
+  CommentDocument,
+  CommentItem,
+  CommentList,
+  CommentOn,
   ConfirmRead,
   DebtEntry,
   DeliveryCancelled,
@@ -117,6 +122,7 @@ import type {
   MapEdge,
   MapGhost,
   MapNode,
+  MentionList,
   MapParent,
   NodeView,
   OwnerNote,
@@ -380,6 +386,8 @@ const KEYS = {
     interpretation: true,
     card_id: true,
     why: true,
+    // docs/features/comments.md "Data" (Queue schema 15, HTTP): the comment an item was raised from, after `why`, ahead of the file.
+    comment_id: true,
     similar: true,
     notes: true,
     // docs/features/department-practices.md "Acceptance criteria" (DP13): the IDs its texts cite, last, ahead of the file.
@@ -524,6 +532,8 @@ const KEYS = {
     bundle: true,
     // docs/features/department-practices.md "Acceptance criteria" (DP12): the 28th key, after `bundle`, ahead of the file.
     practices: true,
+    // docs/features/comments.md "The card context and the task package": the 29th, after `practices`.
+    comments: true,
     roadmap: true,
     author: true,
     created_at: true,
@@ -1305,6 +1315,28 @@ const KEYS = {
   GuidePage: { topic: true, title: true, summary: true, summarises: true, reviewed: true, rules: true, text: true } satisfies Record<keyof GuidePage, true>,
   GuideRule: { id: true, title: true, line: true } satisfies Record<keyof GuideRule, true>,
   GuideRuleRead: { topic: true, rule: true, text: true } satisfies Record<keyof GuideRuleRead, true>,
+  // docs/features/comments.md "The comment document", "HTTP": a list, a comment, what it is under, its
+  // tombstone, an item raised from it, the mentions, the names "HTTP" gives them, ahead of the file.
+  CommentList: { on: true, total: true, comments: true, next_before: true, notes: true } satisfies Record<keyof CommentList, true>,
+  Comment: {
+    id: true,
+    on: true,
+    on_rev: true,
+    reply_to: true,
+    actor: true,
+    author: true,
+    version: true,
+    body: true,
+    mentions: true,
+    created_at: true,
+    updated_at: true,
+    deleted: true,
+    items: true,
+  } satisfies Record<keyof CommentDocument, true>,
+  CommentOn: { kind: true, id: true } satisfies Record<keyof CommentOn, true>,
+  CommentDeleted: { by: true, at: true } satisfies Record<keyof CommentDeleted, true>,
+  CommentItem: { id: true, kind: true, status: true } satisfies Record<keyof CommentItem, true>,
+  MentionList: { login: true, comments: true, next_before: true, notes: true } satisfies Record<keyof MentionList, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1324,6 +1356,7 @@ const CITED: Record<Named, string> = {
     "staged, staged_at, " +
     "interpretation, " +
     "card_id, why, " +
+    "comment_id, " +
     "similar, " +
     "notes, " +
     "cited",
@@ -1346,7 +1379,7 @@ const CITED: Record<Named, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, roadmap, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, comments, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -1508,6 +1541,12 @@ const CITED: Record<Named, string> = {
   GuidePage: "topic, title, summary, summarises, reviewed, rules, text",
   GuideRule: "id, title, line",
   GuideRuleRead: "topic, rule, text",
+  CommentList: "on, total, comments, next_before, notes",
+  Comment: "id, on, on_rev, reply_to, actor, author, version, body, mentions, created_at, updated_at, deleted, items",
+  CommentOn: "kind, id",
+  CommentDeleted: "by, at",
+  CommentItem: "id, kind, status",
+  MentionList: "login, comments, next_before, notes",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1875,7 +1914,16 @@ const CORPUS_MAP_KEYS: readonly (readonly [Named, string])[] = [
 ];
 
 /** The types each set names in `provisional.ts`, where the fixture's name is not the type's own. */
-const DECLARED_AS: Partial<Record<Named, string>> = { Delivery: "DeliveryDocument", DeliveryTotal: "DeliveryCounts", Catalog: "CatalogDocument", Rings: "RingsDocument", Feed: "FeedDocument", Library: "LibraryDocument" };
+const DECLARED_AS: Partial<Record<Named, string>> = {
+  Delivery: "DeliveryDocument",
+  DeliveryTotal: "DeliveryCounts",
+  Catalog: "CatalogDocument",
+  Rings: "RingsDocument",
+  Feed: "FeedDocument",
+  Library: "LibraryDocument",
+  // The DOM's own `Comment` stays the DOM's.
+  Comment: "CommentDocument",
+};
 
 /** The hundred and sixty types the fixture names before auto-feed, corpus-map's six among them. */
 const BEFORE_AUTO_FEED: readonly Named[] = [...BEFORE_CORPUS_MAP, ...CORPUS_MAP];
@@ -1920,8 +1968,17 @@ const BEFORE_SPECENGINE_GUIDE: readonly Named[] = [...BEFORE_DEPARTMENT_PRACTICE
 /** specengine-guide's five, sets 177 to 181: the index, a topic, a page, a rule, one rule's read (docs/features/specengine-guide.md "Data", GU6). */
 const SPECENGINE_GUIDE: readonly Named[] = ["GuideIndex", "GuideTopic", "GuidePage", "GuideRule", "GuideRuleRead"];
 
+/** The hundred and eighty-one types the fixture names before comments, specengine-guide's five last. */
+const BEFORE_COMMENTS: readonly Named[] = [...BEFORE_SPECENGINE_GUIDE, ...SPECENGINE_GUIDE];
+
+/** comments' six, sets 182 to 187 in "HTTP"'s order: a list, a comment, what it is under, its tombstone, an item, the mentions (docs/features/comments.md "HTTP", RM-0136). */
+const COMMENTS: readonly Named[] = ["CommentList", "Comment", "CommentOn", "CommentDeleted", "CommentItem", "MentionList"];
+
+/** comments' one key on a set the fixture names, as a pair: the review document's `comment_id` after `why` (56 served). */
+const COMMENTS_KEYS: readonly (readonly [Named, string])[] = [["Proposal", "comment_id"]];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_SPECENGINE_GUIDE, ...SPECENGINE_GUIDE];
+const ALL: readonly Named[] = [...BEFORE_COMMENTS, ...COMMENTS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1994,6 +2051,8 @@ function served(name: Named): string[] {
  * again. And department-practices' six keys on five sets the file names, as pairs, and its two sets,
  * every key of each, until its Rust test wrote them (docs/features/department-practices.md
  * "Acceptance criteria", DP14), then empty again.
+ * And comments' review key, as a pair, and its six sets, every key of each, until its Rust test
+ * wrote them (docs/features/comments.md "HTTP", RM-0136), then empty again.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -2022,8 +2081,9 @@ describe("the daemon's document types (AC-09)", () => {
     // 54 since collision-pairs' `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8); 55 typed
     // since hub-auto's optional `delegated` (HA7), never served on the file's row, so 54 compared.
     // 56 typed and 55 compared since department-practices' `cited`, last (docs/features/department-practices.md "Acceptance criteria", DP13).
-    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 13, 56]);
-    expect(served("Proposal")).toHaveLength(55);
+    // 57 typed and 56 compared since comments' `comment_id` after `why` (docs/features/comments.md "HTTP").
+    expect([KEYS.Project, KEYS.InboxEntry, KEYS.Proposal].map((keys) => Object.keys(keys).length)).toEqual([4, 13, 57]);
+    expect(served("Proposal")).toHaveLength(56);
   });
 
   it("gives the review document its drift right after revisions, before decided_by, and the DriftEvidence set its 3 keys (UI-1 of drift-queue)", () => {
@@ -2066,7 +2126,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DOC_LIBRARY.at(-1)).toBe("Delegated");
     expect(BEFORE_DEPARTMENT_PRACTICES.at(-1)).toBe("LibraryChange");
     expect(BEFORE_SPECENGINE_GUIDE.at(-1)).toBe("Cited");
-    expect(ALL.at(-1)).toBe("GuideRuleRead");
+    expect(BEFORE_COMMENTS.at(-1)).toBe("GuideRuleRead");
+    expect(ALL.at(-1)).toBe("MentionList");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -2097,8 +2158,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
     // 174 since doc-library's five (docs/features/doc-library.md "Acceptance criteria", DL2); 176 since
     // department-practices' two (docs/features/department-practices.md "Acceptance criteria", DP14);
-    // 181 since specengine-guide's five (docs/features/specengine-guide.md "Data", GU6).
-    expect(ALL).toHaveLength(181);
+    // 181 since specengine-guide's five (docs/features/specengine-guide.md "Data", GU6); 187 since comments' six (docs/features/comments.md "HTTP").
+    expect(ALL).toHaveLength(187);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -2133,8 +2194,11 @@ describe("the daemon's document types (AC-09)", () => {
     // and its two GraphView keys as pairs (docs/features/corpus-map.md "Acceptance criteria", CM3 to CM5), until their Rust tests wrote them; then empty again.
     const mapKey = listed(CORPUS_MAP_KEYS);
     const practicesKey = listed(DEPARTMENT_PRACTICES_KEYS);
+    const commentKey = listed(COMMENTS_KEYS);
     expect(
-      AHEAD_OF_FIXTURE.filter(([name, key]) => !SCOPE_RINGS.includes(name) && !CORPUS_MAP.includes(name) && !mapKey(name, key) && !DEPARTMENT_PRACTICES.includes(name) && !practicesKey(name, key)),
+      AHEAD_OF_FIXTURE.filter(
+        ([name, key]) => !SCOPE_RINGS.includes(name) && !CORPUS_MAP.includes(name) && !mapKey(name, key) && !DEPARTMENT_PRACTICES.includes(name) && !practicesKey(name, key) && !COMMENTS.includes(name) && !commentKey(name, key),
+      ),
     ).toEqual([]);
     // None of delivery-analytics' but delivery-timeline's `timeline` on its document, a pair of its own.
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => DELIVERY_ANALYTICS.includes(name) && !timelineKey(name, key))).toHaveLength(0);
@@ -2163,6 +2227,9 @@ describe("the daemon's document types (AC-09)", () => {
     // department-practices' six keys as pairs and its two sets, every key (6, then the two sets' 5 and 4),
     // until its Rust test wrote them (docs/features/department-practices.md "Acceptance criteria", DP14).
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => practicesKey(name, key) || DEPARTMENT_PRACTICES.includes(name))).toEqual([]);
+    // comments' review key and its six sets, every key (1, then 5, 13, 2, 2, 3, 4), until its Rust test
+    // wrote them (docs/features/comments.md "HTTP"), then empty again.
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => COMMENTS.includes(name) || commentKey(name, key))).toEqual([]);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -2239,7 +2306,8 @@ describe("the daemon's document types (AC-09)", () => {
     const review = declaredKeys("Proposal");
     // `similar` after `why` since intake-similar (docs/features/intake-similar.md "Acceptance criteria", IS10);
     // `cited` after `notes` since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13).
-    expect(review.slice(-6)).toEqual(["interpretation", "card_id", "why", "similar", "notes", "cited"]);
+    // `comment_id` after `why` since comments (docs/features/comments.md "HTTP").
+    expect(review.slice(-7)).toEqual(["interpretation", "card_id", "why", "comment_id", "similar", "notes", "cited"]);
     expect(source).toMatch(/^ {2}card_id: string \| null;\n(?: {2}\/\*\*[^\n]*\*\/\n)? {2}why: string \| null;$/m);
     expect(ALL.slice(BEFORE_CARD_QUESTIONS.length, BEFORE_DEPARTMENT_SPLIT.length)).toEqual([...CARD_QUESTIONS]);
     // The body of the card's raise and the stage's `as`: requests, no set.
@@ -2293,7 +2361,8 @@ describe("the daemon's document types (AC-09)", () => {
     const row = declaredKeys("LibraryRow");
     expect([row.slice(row.indexOf("tags"), row.indexOf("tags") + 3), row.length]).toEqual([["tags", "disciplines", "rev"], 23]);
     const pkg = declaredKeys("TaskPackage");
-    expect([pkg.indexOf("practices"), pkg.length]).toEqual([22, 28]);
+    // 29 since comments' `comments` after `practices` (docs/features/comments.md "The card context and the task package").
+    expect([pkg.indexOf("practices"), pkg.length]).toEqual([22, 29]);
     expect(declaredKeys("TaskBundle")).toEqual(["node_ids", "budget", "disciplines", "bundle_hash"]);
     expect(declaredKeys("BundleLayers")).toEqual(["targets", "open_questions", "ancestors", "criteria", "bindings", "decisions", "neighbours", "terms", "tests", "practices"]);
     expect(source).toMatch(/^ {2}practices: BundleItem\[\];\n\}$/m);
@@ -2320,20 +2389,51 @@ describe("the daemon's document types (AC-09)", () => {
     );
     expect(source).toMatch(/^export interface GuideRule \{\n {2}id: string;\n {2}title: string;\n {2}line: number;\n\}$/m);
     expect(source).toMatch(/^export interface GuideRuleRead \{\n {2}topic: string;\n {2}rule: GuideRule;\n {2}text: string;\n\}$/m);
-    expect(ALL.slice(BEFORE_SPECENGINE_GUIDE.length)).toEqual([...SPECENGINE_GUIDE]);
+    expect(ALL.slice(BEFORE_SPECENGINE_GUIDE.length, BEFORE_COMMENTS.length)).toEqual([...SPECENGINE_GUIDE]);
+  });
+
+  it('types comments\' six as the spec writes them: 5, 13, 2, 2, 3, 4 keys in "The comment document"\'s order, every one present, `on_rev`, `reply_to`, `body`, `deleted` and a list\'s `next_before` and the mentions\' `login` nullable; the review document\'s `comment_id` after `why`; each citing `docs/features/comments.md`; all ahead of the file until its Rust test writes them (RM-0136)', () => {
+    expect(COMMENTS.map((name) => served(name))).toEqual([
+      ["on", "total", "comments", "next_before", "notes"],
+      ["id", "on", "on_rev", "reply_to", "actor", "author", "version", "body", "mentions", "created_at", "updated_at", "deleted", "items"],
+      ["kind", "id"],
+      ["by", "at"],
+      ["id", "kind", "status"],
+      ["login", "comments", "next_before", "notes"],
+    ]);
+    for (const name of COMMENTS) {
+      const type = DECLARED_AS[name] ?? name;
+      expect([name, declaredKeys(type)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${type} `);
+      expect([type, source.slice(source.lastIndexOf("/**", at), at).includes("`docs/features/comments.md`")]).toEqual([type, true]);
+    }
+    expect(source).toMatch(/^export interface CommentOn \{\n {2}kind: string;\n {2}id: string;\n\}$/m);
+    expect(source).toMatch(/^export interface CommentDeleted \{\n {2}by: string;\n {2}at: string;\n\}$/m);
+    expect(source).toMatch(/^export interface CommentItem \{\n {2}id: string;\n {2}kind: string;\n {2}status: ProposalStatus;\n\}$/m);
+    expect(source).toMatch(/^ {2}on_rev: number \| null;\n {2}reply_to: string \| null;\n {2}actor: string;\n {2}author: Author;\n {2}version: number;\n {2}body: string \| null;\n {2}mentions: string\[\];\n/m);
+    expect(source).toMatch(/^ {2}deleted: CommentDeleted \| null;\n {2}items: CommentItem\[\];\n\}$/m);
+    expect(source).toMatch(/^export interface MentionList \{\n {2}login: string \| null;\n {2}comments: CommentDocument\[\];\n {2}next_before: string \| null;\n {2}notes: string\[\];\n\}$/m);
+    expect(served("Proposal").slice(served("Proposal").indexOf("why"), served("Proposal").indexOf("why") + 2)).toEqual(["why", "comment_id"]);
+    expect(ALL.slice(BEFORE_COMMENTS.length)).toEqual([...COMMENTS]);
+    // Ahead of the file until its Rust test wrote the six sets and the review's `comment_id`: no key now.
+    expect([...COMMENTS.flatMap((name) => served(name).filter((key) => isAhead(name, key))), isAhead("Proposal", "comment_id")]).toEqual([false]);
   });
 
   it('types intake-similar\'s key as the spec writes it: the review document\'s `similar` always null, after `why`, 51 keys then, 53 since plain-questions\' two, 54 since collision-pairs\' `pair`, the key citing `docs/features/intake-similar.md` "Acceptance criteria" (IS10 of intake-similar)', () => {
     const review = declaredKeys("Proposal");
     // `cited` after `notes` since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13).
-    expect(review.slice(review.indexOf("why"))).toEqual(["why", "similar", "notes", "cited"]);
-    expect(source).toMatch(/^ {2}why: string \| null;\n {2}\/\*\*[^\n]*\*\/\n {2}similar: null;\n {2}\/\*\*[^\n]*\*\/\n {2}notes: string\[\];\n {2}\/\*\*(?:[^*]|\*(?!\/))*\*\/\n {2}cited: Cited\[\] \| null;\n\}$/m);
+    // comments' `comment_id` between `why` and `similar` (docs/features/comments.md "HTTP").
+    expect(review.slice(review.indexOf("why"))).toEqual(["why", "comment_id", "similar", "notes", "cited"]);
+    expect(source).toMatch(
+      /^ {2}why: string \| null;\n {2}\/\*\*[^\n]*\*\/\n {2}comment_id: string \| null;\n {2}\/\*\*[^\n]*\*\/\n {2}similar: null;\n {2}\/\*\*[^\n]*\*\/\n {2}notes: string\[\];\n {2}\/\*\*(?:[^*]|\*(?!\/))*\*\/\n {2}cited: Cited\[\] \| null;\n\}$/m,
+    );
     const at = source.indexOf("  similar: null;\n");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/intake-similar.md` "Acceptance criteria", IS10');
     // 53 since plain-questions' `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10);
     // 54 since collision-pairs' `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8);
-    // 55 since department-practices' `cited` (docs/features/department-practices.md "Acceptance criteria", DP13).
-    expect(served("Proposal")).toHaveLength(55);
+    // 55 since department-practices' `cited` (docs/features/department-practices.md "Acceptance criteria", DP13);
+    // 56 since comments' `comment_id` (docs/features/comments.md "HTTP").
+    expect(served("Proposal")).toHaveLength(56);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("similar");
   });
 
@@ -2564,7 +2664,8 @@ describe("the daemon's document types (AC-09)", () => {
 
   it("gives the review document an interpretation after staged_at, before card-questions' two, intake-similar's one and notes, and its three keys (AC-U1 of kind-interpretation)", () => {
     // department-practices' `cited` last (docs/features/department-practices.md "Acceptance criteria", DP13).
-    expect(Object.keys(KEYS.Proposal).slice(-7)).toEqual(["staged_at", "interpretation", "card_id", "why", "similar", "notes", "cited"]);
+    // comments' `comment_id` after `why` (docs/features/comments.md "HTTP").
+    expect(Object.keys(KEYS.Proposal).slice(-8)).toEqual(["staged_at", "interpretation", "card_id", "why", "comment_id", "similar", "notes", "cited"]);
     expect(KIND_INTERPRETATION.map((name) => served(name))).toEqual([["decision", "how", "why"]]);
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("interpretation");
   });
@@ -2590,8 +2691,9 @@ describe("the daemon's document types (AC-09)", () => {
   });
 
   it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 27, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks, UI-1 of roadmap-surfaces, UI of tested-reads)", () => {
-    // The package's 28 and its bundle's 4 since department-practices' `practices` and `disciplines` (docs/features/department-practices.md "Acceptance criteria", DP12).
-    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 28, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 4, 4]);
+    // The package's 28 and its bundle's 4 since department-practices' `practices` and `disciplines` (docs/features/department-practices.md "Acceptance criteria", DP12);
+    // the package's 29 since comments' `comments` (docs/features/comments.md "The card context and the task package").
+    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 29, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 4, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
@@ -2632,14 +2734,16 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DOC_LIBRARY).toHaveLength(169);
     expect(BEFORE_DEPARTMENT_PRACTICES).toHaveLength(174);
     expect(BEFORE_SPECENGINE_GUIDE).toHaveLength(176);
-    expect(ALL).toHaveLength(181);
-    expect(new Set(ALL).size).toBe(181);
+    expect(BEFORE_COMMENTS).toHaveLength(181);
+    expect(ALL).toHaveLength(187);
+    expect(new Set(ALL).size).toBe(187);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
     const pkg = Object.keys(KEYS.TaskPackage);
     // department-practices' `practices` between them (docs/features/department-practices.md "Acceptance criteria", DP12).
-    expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 4)).toEqual(["bundle", "practices", "roadmap", "author"]);
+    // comments' `comments` after it (docs/features/comments.md "The card context and the task package").
+    expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 5)).toEqual(["bundle", "practices", "comments", "roadmap", "author"]);
     expect(declaredKeys("TaskPackage")).toEqual(pkg);
     expect(source).toMatch(/^  roadmap: TaskRoadmap \| null;$/m);
     // The TaskRoadmap set came with 3a's roadmap document (docs/features/roadmap-screen.md UI-1): the ten names.
@@ -2659,8 +2763,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(ALL.slice(BEFORE_TESTED_READS.length, BEFORE_HEALTH_DRIFT.length)).toEqual([...TESTED_READS]);
     expect(declaredKeys("TestedRow")).toEqual(Object.keys(KEYS.TestedRow));
     const pkg = served("TaskPackage");
-    // 28 since department-practices' `practices` (docs/features/department-practices.md "Acceptance criteria", DP12).
-    expect([pkg.indexOf("tested"), pkg.length]).toEqual([16, 28]);
+    // 28 since department-practices' `practices` (docs/features/department-practices.md "Acceptance criteria", DP12);
+    // 29 since comments' `comments` (docs/features/comments.md "The card context and the task package").
+    expect([pkg.indexOf("tested"), pkg.length]).toEqual([16, 29]);
     expect(pkg.slice(pkg.indexOf("bindings"), pkg.indexOf("bindings") + 3)).toEqual(["bindings", "tested", "spec_snapshot"]);
     expect(declaredKeys("TaskPackage")).toEqual(pkg);
     expect(source).toMatch(/^ {2}tested: TestedRow\[\] \| null;$/m);
@@ -2995,7 +3100,7 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("task_id");
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("card_id");
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("similar");
-    expect(Object.keys(KEYS.Proposal).slice(-10)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "similar", "notes", "cited"]);
+    expect(Object.keys(KEYS.Proposal).slice(-11)).toEqual(["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "comment_id", "similar", "notes", "cited"]);
   });
 
   it("gives an inbox entry the stage's time alone, after record_id: the stage itself is the review document's", () => {
@@ -3081,19 +3186,20 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // scope-rings' three since its Rust test wrote them
     // (docs/features/scope-rings.md "Acceptance criteria", SR4) and corpus-map's six since its own did
     // (docs/features/corpus-map.md "Acceptance criteria", CM3): all hundred and sixty.
-    expect(ALL.filter((name) => !expected.includes(name))).toEqual([...SCOPE_RINGS, ...CORPUS_MAP, ...DEPARTMENT_PRACTICES].filter((name) => !Object.hasOwn(sets, name)));
+    expect(ALL.filter((name) => !expected.includes(name))).toEqual([...SCOPE_RINGS, ...CORPUS_MAP, ...DEPARTMENT_PRACTICES, ...COMMENTS].filter((name) => !Object.hasOwn(sets, name)));
     expect(expected.slice(0, BEFORE_SCOPE_RINGS.length)).toEqual(BEFORE_SCOPE_RINGS);
     expect(Object.keys(sets)).toEqual([...expected]);
     expect(Object.keys(sets)).toHaveLength(expected.length);
     // department-practices' two once its Rust test writes them (docs/features/department-practices.md "Acceptance criteria", DP14).
-    expect(expected).toEqual(ALL.filter((name) => !DEPARTMENT_PRACTICES.includes(name) || Object.hasOwn(sets, name)));
+    expect(expected).toEqual(ALL.filter((name) => !(DEPARTMENT_PRACTICES.includes(name) || COMMENTS.includes(name)) || Object.hasOwn(sets, name)));
     expect(expected.slice(0, BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...BEFORE_DEPARTMENT_PRACTICES]);
     // auto-feed's eight since its Rust test wrote them (docs/features/auto-feed.md "Acceptance criteria", FD3): all hundred and sixty-eight.
     // hub-auto's `Delegated` since its Rust test wrote it (HA7): a hundred and sixty-nine.
     // doc-library's five since its Rust test wrote them (docs/features/doc-library.md "Acceptance criteria", DL2): a hundred and seventy-four;
     // a hundred and seventy-six once department-practices' Rust test writes its two (DP14);
     // a hundred and eighty-one since specengine-guide's Rust test wrote its five (docs/features/specengine-guide.md "Data", GU6).
-    expect(expected).toHaveLength(181);
+    // A hundred and eighty-seven once comments' Rust test writes its six (docs/features/comments.md "HTTP").
+    expect(expected).toHaveLength(COMMENTS.every((name) => Object.hasOwn(sets, name)) ? 187 : 181);
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -3201,8 +3307,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(review).toEqual(compared("Proposal"));
     // 53 since plain-questions' Rust test wrote its `gist` and `matters` (docs/features/plain-questions.md "Acceptance criteria", PQ10);
     // 54 since collision-pairs' wrote its `pair` (docs/features/collision-pairs.md "Acceptance criteria", PP8);
-    // 55 since department-practices' wrote `cited`, last (docs/features/department-practices.md "Acceptance criteria", DP13).
-    expect(review).toHaveLength(55);
+    // 55 since department-practices' wrote `cited`, last (docs/features/department-practices.md "Acceptance criteria", DP13);
+    // 56 since comments' wrote `comment_id` after `why` (docs/features/comments.md "HTTP").
+    expect(review).toHaveLength(56);
     expect(review.slice(review.indexOf("evidence"), review.indexOf("evidence") + 3)).toEqual(["evidence", "pair", "options"]);
     expect(review.slice(review.indexOf("revisions"), review.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(sets.DriftEvidence).toEqual(["hash", "rows", "more"]);
@@ -3215,8 +3322,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
 
   it("names the package's 27 keys in the types' order: roadmap after bundle, before author; tested after bindings (UI-1 of roadmap-surfaces, UI of tested-reads)", () => {
     expect(sets.TaskPackage).toEqual(compared("TaskPackage"));
-    // 28 once department-practices' Rust test writes `practices` after `bundle` (docs/features/department-practices.md "Acceptance criteria", DP12).
-    expect(sets.TaskPackage).toHaveLength(isAhead("TaskPackage", "practices") ? 27 : 28);
+    // 28 once department-practices' Rust test writes `practices` after `bundle` (docs/features/department-practices.md "Acceptance criteria", DP12);
+    // 29 since comments' Rust test wrote `comments` after `practices` (docs/features/comments.md "The card context and the task package").
+    expect(sets.TaskPackage).toHaveLength(29);
   });
 
   it("names health-left's keys in the document's order: the health document's three, then health-code's three, then health-drift's drift, then usage-orphans' orphans once written, an amendment's six (AC-T2; UI-1 of health-code, of health-drift; UO9 of usage-orphans)", () => {
@@ -3412,22 +3520,33 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
       ["Proposal", "cited", "notes"],
       ["LibraryRow", "disciplines", "tags"],
       ["TaskPackage", "practices", "bundle"],
+      ["TaskPackage", "comments", "practices"],
       ["TaskBundle", "disciplines", "budget"],
     ] as const) {
       const file = sets[name] ?? [];
       expect([name, key, file[file.indexOf(after) + 1]]).toEqual([name, key, key]);
-      // The review's `delegated` never served on the file's row (HA7): the served keys.
-      expect([name, file]).toEqual([name, served(name)]);
+      // The review's `delegated` never served on the file's row (HA7): the served keys, comments' `comment_id` once the file names it.
+      expect([name, file]).toEqual([name, compared(name)]);
     }
     expect(sets.Proposal?.at(-1)).toBe("cited");
   });
 
-  it("names specengine-guide's five last, after Cited, sets 177 to 181: 1, 4, 7, 3, 3 keys, each as provisional.ts declares it (GU6 of specengine-guide)", () => {
-    expect(Object.keys(sets).slice(BEFORE_SPECENGINE_GUIDE.length)).toEqual([...SPECENGINE_GUIDE]);
+  it("names specengine-guide's five after Cited, sets 177 to 181: 1, 4, 7, 3, 3 keys, each as provisional.ts declares it (GU6 of specengine-guide)", () => {
+    expect(Object.keys(sets).slice(BEFORE_SPECENGINE_GUIDE.length, BEFORE_COMMENTS.length)).toEqual([...SPECENGINE_GUIDE]);
     expect(Object.keys(sets).indexOf("GuideIndex")).toBe(176);
     expect(Object.keys(sets).at(BEFORE_SPECENGINE_GUIDE.length - 1)).toBe("Cited");
     expect(SPECENGINE_GUIDE.map((name) => sets[name])).toEqual(SPECENGINE_GUIDE.map((name) => declaredKeys(name)));
     expect(SPECENGINE_GUIDE.map((name) => sets[name]?.length)).toEqual([1, 4, 7, 3, 3]);
+  });
+
+  it("names comments' six last, after GuideRuleRead, sets 182 to 187: 5, 13, 2, 2, 3, 4 keys, each as provisional.ts declares it; the review's `comment_id` after `why` (RM-0136, docs/features/comments.md \"HTTP\")", () => {
+    expect(Object.keys(sets).slice(BEFORE_COMMENTS.length)).toEqual([...COMMENTS]);
+    expect(Object.keys(sets).indexOf("CommentList")).toBe(181);
+    expect(Object.keys(sets).at(BEFORE_COMMENTS.length - 1)).toBe("GuideRuleRead");
+    expect(COMMENTS.map((name) => sets[name])).toEqual(COMMENTS.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
+    expect(COMMENTS.map((name) => sets[name]?.length)).toEqual([5, 13, 2, 2, 3, 4]);
+    const review = sets.Proposal ?? [];
+    expect(review.slice(review.indexOf("why"), review.indexOf("why") + 2)).toEqual(["why", "comment_id"]);
   });
 
   it("names doc-library's five last, after Delegated, sets 170 to 174: 6, 5, 22, 10, 5 keys in the types' order, each as provisional.ts declares it (DL2 of doc-library)", () => {
@@ -3530,7 +3649,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     const review = sets.Proposal ?? [];
     expect(review.slice(review.indexOf("staged_at"), review.indexOf("staged_at") + 4)).toEqual(["staged_at", "interpretation", "card_id", "why"]);
     // department-practices' `cited` last since its Rust test wrote it (docs/features/department-practices.md "Acceptance criteria", DP13).
-    expect(review.slice(review.indexOf("why"))).toEqual(isAhead("Proposal", "similar") ? ["why", "notes", "cited"] : ["why", "similar", "notes", "cited"]);
+    // comments' `comment_id` after `why` once its Rust test writes it (docs/features/comments.md "HTTP").
+    expect(review.slice(review.indexOf("why"))).toEqual(review.includes("comment_id") ? ["why", "comment_id", "similar", "notes", "cited"] : ["why", "similar", "notes", "cited"]);
     expect(sets.Interpretation).toEqual(["decision", "how", "why"]);
   });
 });

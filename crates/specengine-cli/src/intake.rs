@@ -68,6 +68,9 @@ use specengine_core::card::{
     CardIdError, card_look_alike_message, card_prefix_clash, parse_card_id,
 };
 use specengine_core::check::{DocClass, Endpoint, NodeAt, SpecGraph, Standing};
+use specengine_core::comment::{
+    CommentIdError, comment_look_alike_message, comment_prefix_clash, parse_comment_id,
+};
 use specengine_core::intake::{
     AuthorInput, DISTINCT_MAX, DecisionInput, DiscrepancyInput, Evidence, FieldProblem, GapType,
     IntakeOption, IntakeSeverity, ProposedPatch, QuestionInput, author_problem, decision_problem,
@@ -76,8 +79,8 @@ use specengine_core::intake::{
 use specengine_core::proposal::Author;
 use specengine_model::{Direction, is_weak_link};
 use specengine_store::{
-    GitEnv, Intake, NewIntake, NewProposal, Place, ProposalFinding, ProposalKind,
-    ProposalQueue as _, ProposalStatus, QueueError, QueueMatch,
+    GitEnv, Intake, NewIntake, NewProposal, Place, ProposalFinding, ProposalKind, ProposalStatus,
+    QueueError, QueueMatch,
 };
 
 use crate::cap::SHOW_TAIL_NAMES;
@@ -338,18 +341,35 @@ pub fn propose_question_with_task(
     request: &QuestionRequest,
     task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    run_question(env, globals, request, task, None).map_err(escaped_error)
+    propose_question_from(env, globals, request, task, None)
 }
 
-/// [`propose_question`] raised on a card by a person (the card door,
-/// [`crate::card_raise`]): `actor` trails its `proposal.created` as `as`.
+/// [`propose_question_with_task`] raised from the comment `comment` as
+/// written, when given (`--comment CM`, MCP `comment_id`: task spec
+/// `comments`, "CLI"): judged after the card, the grammar at step 2, the
+/// comment existing and live at step 7, under the inserting lock; the item
+/// stores it as `comment_id`.
+pub fn propose_question_from(
+    env: &Env,
+    globals: &Globals,
+    request: &QuestionRequest,
+    task: Option<&str>,
+    comment: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    run_question(env, globals, request, task, None, comment).map_err(escaped_error)
+}
+
+/// [`propose_question`] raised on a card or from a comment by a person (the
+/// card door, [`crate::card_raise`]; the comment door,
+/// [`crate::comment_raise`]): `actor` trails its `proposal.created` as `as`.
 pub(crate) fn propose_question_as(
     env: &Env,
     globals: &Globals,
     request: &QuestionRequest,
     actor: &str,
+    comment: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    run_question(env, globals, request, None, Some(actor)).map_err(escaped_error)
+    run_question(env, globals, request, None, Some(actor), comment).map_err(escaped_error)
 }
 
 /// `spec propose discrepancy`: one discrepancy (and its proposed patch as a
@@ -371,7 +391,31 @@ pub fn propose_discrepancy_with_task(
     request: &DiscrepancyRequest,
     task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    run_discrepancy(env, globals, request, task).map_err(escaped_error)
+    propose_discrepancy_from(env, globals, request, task, None)
+}
+
+/// [`propose_discrepancy_with_task`] raised from a comment, as
+/// [`propose_question_from`].
+pub fn propose_discrepancy_from(
+    env: &Env,
+    globals: &Globals,
+    request: &DiscrepancyRequest,
+    task: Option<&str>,
+    comment: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    run_discrepancy(env, globals, request, task, None, comment).map_err(escaped_error)
+}
+
+/// [`propose_discrepancy`] raised on a card or from a comment by a person,
+/// as [`propose_question_as`].
+pub(crate) fn propose_discrepancy_as(
+    env: &Env,
+    globals: &Globals,
+    request: &DiscrepancyRequest,
+    actor: &str,
+    comment: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    run_discrepancy(env, globals, request, None, Some(actor), comment).map_err(escaped_error)
 }
 
 /// `spec propose decision`: one decision taken during work (and its
@@ -393,18 +437,31 @@ pub fn propose_decision_with_task(
     request: &DecisionRequest,
     task: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    run_decision(env, globals, request, task, None).map_err(escaped_error)
+    propose_decision_from(env, globals, request, task, None)
 }
 
-/// [`propose_decision`] raised on a card by a person, as
+/// [`propose_decision_with_task`] raised from a comment, as
+/// [`propose_question_from`].
+pub fn propose_decision_from(
+    env: &Env,
+    globals: &Globals,
+    request: &DecisionRequest,
+    task: Option<&str>,
+    comment: Option<&str>,
+) -> Result<IntakeOutcome, CliError> {
+    run_decision(env, globals, request, task, None, comment).map_err(escaped_error)
+}
+
+/// [`propose_decision`] raised on a card or from a comment by a person, as
 /// [`propose_question_as`].
 pub(crate) fn propose_decision_as(
     env: &Env,
     globals: &Globals,
     request: &DecisionRequest,
     actor: &str,
+    comment: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
-    run_decision(env, globals, request, None, Some(actor)).map_err(escaped_error)
+    run_decision(env, globals, request, None, Some(actor), comment).map_err(escaped_error)
 }
 
 /// `--input F|-`: UTF-8 JSON of a discrepancy's arguments (the author's
@@ -519,6 +576,7 @@ fn run_question(
     request: &QuestionRequest,
     task: Option<&str>,
     actor: Option<&str>,
+    comment: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
     let problem = question_problem(
         &QuestionInput {
@@ -554,6 +612,7 @@ fn run_question(
             gist: request.gist.as_deref(),
             matters: request.matters.as_deref(),
             card: request.card.as_deref(),
+            comment,
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
             actor,
@@ -570,6 +629,8 @@ fn run_discrepancy(
     globals: &Globals,
     request: &DiscrepancyRequest,
     task: Option<&str>,
+    actor: Option<&str>,
+    comment: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
     let input = &request.input;
     let problem = discrepancy_problem(input, NO_AUTHOR);
@@ -593,9 +654,10 @@ fn run_discrepancy(
             gist: None,
             matters: None,
             card: request.card.as_deref(),
+            comment,
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
-            actor: None,
+            actor,
             now: &request.now,
             git: &request.git,
             task,
@@ -612,6 +674,7 @@ fn run_decision(
     request: &DecisionRequest,
     task: Option<&str>,
     actor: Option<&str>,
+    comment: Option<&str>,
 ) -> Result<IntakeOutcome, CliError> {
     let input = &request.input;
     let problem = decision_problem(input, NO_AUTHOR);
@@ -635,6 +698,7 @@ fn run_decision(
             gist: None,
             matters: None,
             card: request.card.as_deref(),
+            comment,
             author: (&request.author_role, &request.author_model, &request.run),
             login: &request.login,
             actor,
@@ -667,6 +731,8 @@ struct Item<'a> {
     matters: Option<&'a str>,
     /// `--card C` as written.
     card: Option<&'a str>,
+    /// `--comment CM` as written (task spec `comments`).
+    comment: Option<&'a str>,
     /// Role, model, run.
     author: (&'a Option<String>, &'a Option<String>, &'a Option<String>),
     /// A hub's login: `Author.login`, the linked update's too.
@@ -761,6 +827,30 @@ fn run_intake(
             ));
         }
     };
+    // The comment as written, after the card (task spec `comments`,
+    // "CLI": rule 2, the grammar).
+    let comment = match item
+        .comment
+        .map(|written| (written, parse_comment_id(written)))
+    {
+        None => None,
+        Some((_, Ok(id))) => Some(id),
+        Some((written, Err(CommentIdError::LookAlike { fix }))) => {
+            return Err(CliError::spec(format!(
+                "comment_id: {}",
+                comment_look_alike_message(written.trim(), &fix)
+            )));
+        }
+        Some((written, Err(CommentIdError::NotAnId))) => {
+            return Ok(IntakeOutcome::refused(
+                &format!(
+                    "comment_id: no comment `{}`: a comment ID is `CM-` and 4 or more digits",
+                    written.trim()
+                ),
+                Vec::new(),
+            ));
+        }
+    };
     let (role, model, run) = item.author;
     let written_author = AuthorInput {
         role: role.as_deref(),
@@ -777,6 +867,15 @@ fn run_intake(
     // 3. With a card, the project's `[ids]` takes no `C`.
     if card.is_some()
         && let Some(clash) = card_prefix_clash(&context.project.config.scheme)
+    {
+        return Err(CliError::spec(format!(
+            "{}: {clash}",
+            context.project.config_label
+        )));
+    }
+    // With a comment, the project's `[ids]` takes no `CM`.
+    if comment.is_some()
+        && let Some(clash) = comment_prefix_clash(&context.project.config.scheme)
     {
         return Err(CliError::spec(format!(
             "{}: {clash}",
@@ -949,11 +1048,12 @@ fn run_intake(
         .iter()
         .map(|hit| hit.name().to_owned())
         .collect();
-    let result = match context.queue.create_intake_with_task(
+    let result = match context.queue.create_intake_raised(
         &new_intake,
         &corpus_names,
         patch.as_ref(),
         task.as_deref(),
+        comment.as_deref(),
         now,
     ) {
         Ok(result) => result,
@@ -967,6 +1067,14 @@ fn run_intake(
         Err(QueueError::CardRefused { reason, .. }) => {
             return Ok(IntakeOutcome::refused(
                 &format!("card_id: {reason}"),
+                messages,
+            ));
+        }
+        // The comment read under the insert's lock: none or deleted,
+        // nothing stored.
+        Err(QueueError::CommentRefused { reason, .. }) => {
+            return Ok(IntakeOutcome::refused(
+                &format!("comment_id: {reason}"),
                 messages,
             ));
         }

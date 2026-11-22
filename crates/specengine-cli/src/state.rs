@@ -41,7 +41,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use specengine_store::{
-    GitEnv, GitError, QueueCounts, Restore, SqliteQueue, StoredQueue, WorktreeGit,
+    GitEnv, GitError, QueueCounts, Restore, SqliteQueue, StoredComments, StoredQueue, WorktreeGit,
 };
 
 use crate::apply::Consent;
@@ -172,12 +172,13 @@ fn run_export(
         )));
     }
     let db = data_dir.join(format!("{slug}.db"));
-    let state = match SqliteQueue::open_existing(&db, &slug).map_err(queue_cannot)? {
-        Some(queue) => queue.stored_rows().map_err(queue_cannot)?,
-        None => StoredQueue::default(),
+    let (state, talk) = match SqliteQueue::open_existing(&db, &slug).map_err(queue_cannot)? {
+        Some(queue) => queue.stored_rows_with_comments().map_err(queue_cannot)?,
+        None => (StoredQueue::default(), StoredComments::default()),
     };
     foreign_row(&state, &slug, &db)?;
-    let dump = render(&slug, &state).map_err(|error| {
+    foreign_comment(&talk, &slug, &db)?;
+    let dump = render(&slug, &state, &talk).map_err(|error| {
         CliError::spec(format!("cannot render the dump: {error}; nothing written"))
     })?;
     let made = if request.out.is_none() {
@@ -403,6 +404,40 @@ fn foreign_row(state: &StoredQueue, slug: &str, db: &Path) -> Result<(), CliErro
     }
 }
 
+/// [`foreign_row`] of the comment tables (task spec `comments`, "Backup").
+fn foreign_comment(talk: &StoredComments, slug: &str, db: &Path) -> Result<(), CliError> {
+    let foreign = talk
+        .comments
+        .iter()
+        .find(|row| row.project() != Some(slug))
+        .map(|row| {
+            format!(
+                "comment `{}` in {} is not",
+                row.id().unwrap_or("NULL"),
+                db.display()
+            )
+        })
+        .or_else(|| {
+            talk.versions
+                .iter()
+                .find(|row| row.project() != Some(slug))
+                .map(|row| {
+                    format!(
+                        "version {} of comment `{}` in {} is not",
+                        row.version,
+                        row.comment_id().unwrap_or("NULL"),
+                        db.display()
+                    )
+                })
+        });
+    match foreign {
+        Some(row) => Err(CliError::spec(format!(
+            "{row} `{slug}`'s: the dump holds one project's queue; nothing written"
+        ))),
+        None => Ok(()),
+    }
+}
+
 /// The default destination's `backups/` (0700) and, where absent, the
 /// data directory above it (as `create_dir_all` makes it); the directories
 /// this run made, outermost first. On failure, nothing made is left.
@@ -563,7 +598,7 @@ fn run_import(
     // Step 2: the whole file.
     let label = request.file.display().to_string();
     let bytes = read_regular(&env.cwd.join(&request.file), &label)?;
-    let state = parse(&label, &bytes, &slug)?;
+    let (state, talk) = parse(&label, &bytes, &slug)?;
     let counts = state.counts();
     // Step 3: an empty queue; nothing created yet.
     let data_dir = checked_data_dir(env, &project)?;
@@ -601,7 +636,10 @@ fn run_import(
     // Step 5: one transaction, the emptiness checked again under its lock.
     prepared_data_dir(env, &project)?;
     let mut queue = SqliteQueue::open(&db, &slug).map_err(queue_cannot)?;
-    match queue.restore(&state).map_err(queue_cannot)? {
+    match queue
+        .restore_with_comments(&state, &talk)
+        .map_err(queue_cannot)?
+    {
         Restore::Restored => Ok(ImportStateOutcome {
             db: db.display().to_string(),
             proposals: counts.proposals,

@@ -108,8 +108,10 @@ const ZERKALO: &str = "zerkalo";
 /// The hub's tools, sorted (docs/features/hub-mcp.md "Data"): seventeen,
 /// eighteen since docs/features/department-split.md "Acceptance criteria", S8
 /// (`split_card`), nineteen since docs/features/specengine-guide.md GU5
-/// (`get_guide`).
-const HUB_TOOLS: [&str; 19] = [
+/// (`get_guide`), twenty-one since docs/features/comments.md CM15
+/// (`list_comments`, `add_comment`).
+const HUB_TOOLS: [&str; 21] = [
+    "add_comment",
     "ask_question",
     "create_card",
     "edit_card",
@@ -123,6 +125,7 @@ const HUB_TOOLS: [&str; 19] = [
     "get_trace",
     "get_tree",
     "list_cards",
+    "list_comments",
     "move_card",
     "propose_change",
     "report_decision",
@@ -166,7 +169,9 @@ const LEFT_OUT: [&str; 14] = [
 
 /// The nine tools whose schemas are the stdio twin's, and whose description
 /// is too but for [`HUB_READ_TEXTED`]'s read tail.
-const SHARED: [&str; 10] = [
+/// docs/features/comments.md CM15: `list_comments` too, stdio's text and
+/// schemas as they are.
+const SHARED: [&str; 11] = [
     "get_card",
     "get_context_bundle",
     "get_flow",
@@ -177,6 +182,7 @@ const SHARED: [&str; 10] = [
     "get_trace",
     "get_tree",
     "list_cards",
+    "list_comments",
     "search",
 ];
 
@@ -197,8 +203,10 @@ const HUB_READ_TAIL: &str = "Reads the hub's index, which each confirm and merge
 
 /// The eight whose descriptions are the hub's variants (docs/features/hub-mcp.md
 /// "Data", iteration 2): `get_roadmap`, the four queue writes and the three card
-/// writes; department-split S8: `split_card`, a fourth card write.
-const VARIANTS: [&str; 9] = [
+/// writes; department-split S8: `split_card`, a fourth card write;
+/// docs/features/comments.md CM15: `add_comment`, its author the login.
+const VARIANTS: [&str; 10] = [
+    "add_comment",
     "ask_question",
     "create_card",
     "edit_card",
@@ -1430,6 +1438,22 @@ fn every_tool(client: &mut Client, world: &World, label: &str) -> BTreeSet<Strin
         "get_card",
         json!({"card_id": card}),
     );
+    // docs/features/comments.md CM15: a comment written into the queue (no
+    // file under the root), then the card's thread read.
+    both(
+        client,
+        &mut called,
+        label,
+        "add_comment",
+        json!({"on": card, "body": "Does the card hold?", "author_role": "writer"}),
+    );
+    both(
+        client,
+        &mut called,
+        label,
+        "list_comments",
+        json!({"on": card}),
+    );
     both(
         client,
         &mut called,
@@ -1565,10 +1589,11 @@ fn h9_nothing_on_a_hub_decides() {
     }
     // department-split S8: thirty with `split_card`, on both servers;
     // thirty-two on stdio since collision-pass CP8, the hub's 18 unchanged.
-    assert_eq!(stdio_names.len(), 33, "{stdio_names:?}");
+    // 35 on stdio and 21 on a hub since docs/features/comments.md CM15.
+    assert_eq!(stdio_names.len(), 35, "{stdio_names:?}");
     let mut union: Vec<&str> = HUB_TOOLS.iter().chain(LEFT_OUT.iter()).copied().collect();
     union.sort_unstable();
-    assert_eq!(stdio_names, union, "the 19 and the 14 are stdio's 33");
+    assert_eq!(stdio_names, union, "the 21 and the 14 are stdio's 35");
 }
 
 // ---------------------------------------------------------------------- H10
@@ -1861,7 +1886,8 @@ fn h11_the_hub_texts_hold_their_budget_and_their_words() {
     shared_and_variants.sort_unstable();
     assert_eq!(
         shared_and_variants, HUB_TOOLS,
-        "ten shared (nine until specengine-guide) and nine variants"
+        "eleven shared (ten until comments, nine until specengine-guide) and ten variants (nine \
+         until comments)"
     );
     for name in VARIANTS {
         let description = tool(&hub, name)["description"].as_str().expect("text");
@@ -2717,8 +2743,8 @@ fn board_handoff_the_hub_card_texts_name_the_new_keys() {
         .map(|tool| tool["name"].as_str().expect("a name"))
         .collect();
     // department-split S8: eighteen; nineteen since specengine-guide
-    // (`get_guide`).
-    assert_eq!(names.len(), 19, "{names:?}");
+    // (`get_guide`); 21 since comments (`list_comments`, `add_comment`).
+    assert_eq!(names.len(), 21, "{names:?}");
     for (name, key) in [
         ("create_card", "reviewer"),
         ("move_card", "note"),
@@ -2856,8 +2882,8 @@ fn card_tasks_ct7_the_hub_tools_keep_the_ids_and_read_no_task() {
     let mut session = world.session(KEEP, "mira");
     let hub = session.tools();
     // department-split S8: eighteen; nineteen since specengine-guide
-    // (`get_guide`).
-    assert_eq!(tool_names(&hub).len(), 19);
+    // (`get_guide`); 21 since comments (`list_comments`, `add_comment`).
+    assert_eq!(tool_names(&hub).len(), 21);
     let description = tool(&hub, "edit_card")["description"]
         .as_str()
         .expect("a description");

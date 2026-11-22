@@ -439,7 +439,10 @@ fn with_own_gd(root: &Path) {
     write(
         root,
         "specengine.toml",
-        common::with_ids_line(&config, "GD   = { kind = \"lamp-guard\", shape = \"name\" }\n"),
+        common::with_ids_line(
+            &config,
+            "GD   = { kind = \"lamp-guard\", shape = \"name\" }\n",
+        ),
     );
 }
 
@@ -469,7 +472,10 @@ fn gu4_a_project_with_its_own_gd_prefix_skips_the_guides_citations() {
         write(&root, path, own_gd_document(line));
         root
     };
-    let plain = twin("plain", "Where a document goes: see the rule on one file a place.");
+    let plain = twin(
+        "plain",
+        "Where a document goes: see the rule on one file a place.",
+    );
     let citing = twin(
         "citing",
         "Where a document goes: `guide:records#GD-RECORDS-ONE-FILE`, \
@@ -499,7 +505,9 @@ fn gu4_a_project_with_its_own_gd_prefix_skips_the_guides_citations() {
     assert_eq!(citing_text, plain_text, "the same text report");
     let links = citation_links(&scratch.home("h4"), &citing, path);
     assert!(
-        links.iter().all(|link| !link.to_string().contains("GD-LAMP-GUARD")),
+        links
+            .iter()
+            .all(|link| !link.to_string().contains("GD-LAMP-GUARD")),
         "the project's own node is no citation: {links:?}"
     );
     assert_citations_skipped(&links);

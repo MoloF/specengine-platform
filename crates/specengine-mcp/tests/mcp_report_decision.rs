@@ -45,10 +45,12 @@ use specengine_cli::{
 };
 
 const DETERMINISM: &str = "Deterministic: one state, one result; no LLM inside.";
-/// "Data"'s `INSTRUCTIONS` queue line, its LF aside.
+/// "Data"'s `INSTRUCTIONS` queue line, its LF aside; without `; work on
+/// your working answer` since docs/features/comments.md CM15 (every raising
+/// tool's description says it).
 const QUEUE_LINE: &str = "- ask_question, report_discrepancy, report_decision = spec propose \
                           question|discrepancy|decision: hits are what is decided or asked; \
-                          stored only if distinct_from names each; work on your working answer.";
+                          stored only if distinct_from names each.";
 const TEXT: &str = "Does regeneration wait for rest?";
 const WORKING: &str = "Yes: it starts 1.5 s after the last stamina use.";
 const PRICE: &str = "Without the wait R-28 is rebalanced.";
@@ -210,7 +212,7 @@ fn keys(value: &Value) -> Vec<String> {
 /// `readOnlyHint` true; a `decision` field.
 #[test]
 fn ac_r10_report_decision_is_listed_as_data_says() {
-    assert_eq!(QUEUE_LINE.len(), 202);
+    assert_eq!(QUEUE_LINE.len(), 173);
     let instructions = specengine_mcp::INSTRUCTIONS;
     assert_eq!(
         instructions.matches(&format!("{QUEUE_LINE}\n")).count(),
@@ -251,6 +253,8 @@ fn ac_r10_report_decision_is_listed_as_data_says() {
                 "author_model",
                 "author_role",
                 "card_id",
+                // docs/features/comments.md CM15.
+                "comment_id",
                 "distinct_from",
                 "node_ids",
                 "price_of_other",
@@ -572,9 +576,10 @@ fn ac_r10_a_patch_outside_node_ids_is_an_error_result() {
 fn iteration2_ask_question_names_decisions_among_hits_and_related() {
     // docs/features/plain-questions.md "MCP" edit 4: "decision document" and
     // "path and title" shortened.
+    // "the owner's answer" read "its answer" since docs/features/comments.md.
     let hit = "A hit: an accepted decision linked to a node (its id, path, title as the answer), \
                or a question or decision queued on a shared node with the same text, whitespace \
-               and case aside (a rejected one's reason is the owner's answer).";
+               and case aside (a rejected one's reason is its answer).";
     // docs/features/card-questions.md L2: "queued questions or
     // decisions with other text." trimmed to "queued items with other text."
     let related = "Related: decision documents only mentioning a node, queued items with other \

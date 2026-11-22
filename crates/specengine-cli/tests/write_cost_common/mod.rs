@@ -847,7 +847,7 @@ pub fn settle(corpus: &str, section: &str, cases: BTreeMap<String, Value>) {
     assert_eq!(keys, stored_keys, "{corpus} {section}: the cases");
     let cases: BTreeMap<String, Value> = cases
         .into_iter()
-        .map(|(case, value)| (case, without_null_cited(value)))
+        .map(|(case, value)| (case, without_null_comment_id(without_null_cited(value))))
         .collect();
     for (case, value) in &cases {
         let want = &stored[case];
@@ -890,6 +890,48 @@ pub fn without_null_cited(value: Value) -> Value {
             Value::Object(
                 map.into_iter()
                     .map(|(key, item)| (key, without_null_cited(item)))
+                    .collect(),
+            )
+        }
+        other => other,
+    }
+}
+
+/// docs/features/comments.md "Data" (queue schema 15, `proposals.comment_id`):
+/// every proposal document gains `comment_id` after `why`, `null` but on an
+/// item raised from a comment, so an answer is 0.47.0's but for one
+/// `"comment_id":null,` in each proposal document it prints (`--json`,
+/// carried as text; in a parsed reply, the key of an object holding
+/// `diagnostics`), and a review's text its one `comment_id: -` line.
+/// Exactly that is taken out before a golden compares;
+/// nothing else is touched, and a `comment_id` that is not `null` stays (and
+/// differs).
+pub fn without_null_comment_id(value: Value) -> Value {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim_start();
+            if (trimmed.starts_with('{') || trimmed.starts_with('['))
+                && text.contains("\"diagnostics\":")
+                && serde_json::from_str::<Value>(&text).is_ok()
+            {
+                Value::String(text.replace(",\"comment_id\":null,", ","))
+            } else if text.contains("\nwhy: ") {
+                // A review's text: its `comment_id: -` line after `why:`.
+                Value::String(text.replace("\ncomment_id: -\n", "\n"))
+            } else {
+                Value::String(text)
+            }
+        }
+        Value::Array(items) => {
+            Value::Array(items.into_iter().map(without_null_comment_id).collect())
+        }
+        Value::Object(mut map) => {
+            if map.contains_key("diagnostics") && map.get("comment_id") == Some(&Value::Null) {
+                map.remove("comment_id");
+            }
+            Value::Object(
+                map.into_iter()
+                    .map(|(key, item)| (key, without_null_comment_id(item)))
                     .collect(),
             )
         }

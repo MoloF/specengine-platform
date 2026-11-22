@@ -1,19 +1,25 @@
-//! The queue's dump, format 7
-//! (canon `queue-backup`, "Format", "Import";
+//! The queue's dump, format 8
+//! (canon `queue-backup`, "Format", "Import"; comments: task spec
+//! `comments`, "Backup";
 //! cards: canon `cards`, "Backup"; tasks: canon `tasks`, "Backup"; a
 //! proposal's card and why: canon `card-questions`, "The rule"; a card's
 //! mandate: canon `card-mandate`, "The rule"; a question's gist and
 //! matters: task spec `plain-questions` PQ8): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":7,"queue_schema":14,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
+//! `{"format":8,"queue_schema":15,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `cards` row by ID number, every
-//! `events` row by `seq`, each `{"<table>":{…}}` with every column in table
-//! order: `TEXT` a string, `NULL` `null`, `run`, `position` and `seq`
-//! numbers; JSON columns stay the strings stored. No export time and no host
-//! inside: equal queues give equal bytes. Format 7 holds queue schema 13 or
-//! 14, its proposals' 50 columns, `gist` and `matters` last; step 14 adds
+//! `comments` row by ID number, every `comment_versions` row by comment ID
+//! number and `version`, every `events` row by `seq`, each
+//! `{"<table>":{…}}` with every column in table order: `TEXT` a string,
+//! `NULL` `null`, `run`, `position`, `on_rev`, `version` and `seq` numbers;
+//! JSON columns stay the strings stored. No export time and no host inside:
+//! equal queues give equal bytes. Format 8 holds queue schema 15, its
+//! proposals' 51 columns, `comment_id` last. A format-7 dump holds queue
+//! schema 13 or
+//! 14 and still restores, no comment, its proposals' 50 columns, `gist` and
+//! `matters` last, `comment_id` restored `NULL`; step 14 adds
 //! only a local cache no dump holds (task spec `collision-pass` CP6), so a
 //! schema 14 dump has a schema 13 one's tables and either restores into an
 //! empty cache. A format-6 dump
@@ -48,18 +54,20 @@ use std::io::{self, Write as _};
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use specengine_core::card::card_number;
+use specengine_core::comment::comment_number;
 use specengine_core::proposal::proposal_number;
 use specengine_core::task::task_number;
 use specengine_store::{
-    CARD_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, RUN_COLUMNS, StoredCard,
-    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, card_columns,
-    proposal_columns,
+    CARD_COLUMNS, COMMENT_COLUMNS, COMMENT_VERSION_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS,
+    QUEUE_SCHEMA_VERSION, RUN_COLUMNS, StoredCard, StoredComment, StoredCommentVersion,
+    StoredComments, StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
+    card_columns, proposal_columns,
 };
 
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 7;
+pub const STATE_FORMAT: u64 = 8;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
@@ -80,6 +88,9 @@ const NO_MANDATE_FORMAT: u64 = 5;
 /// alone.
 const NO_PLAIN_QUESTIONS_FORMAT: u64 = 6;
 
+/// The format without comments: queue schemas 13 and 14.
+const NO_COMMENTS_FORMAT: u64 = 7;
+
 /// The first queue schema with tasks and runs: format 1 holds the schemas
 /// before it, format 2 it and those after, to [`CARDS_SCHEMA`].
 const TASKS_SCHEMA: i64 = 4;
@@ -99,12 +110,29 @@ const CARD_ITEMS_SCHEMA: i64 = 11;
 const MANDATE_SCHEMA: i64 = 12;
 
 /// The first queue schema whose proposals hold `gist` and `matters`:
-/// format 7 holds it, to this build's (14: step 14 changes no dumped
-/// table).
+/// format 7 holds it and 14 (step 14 changes no dumped table).
 const PLAIN_QUESTIONS_SCHEMA: i64 = 13;
 
+/// The first queue schema with comments: format 8 holds it, to this
+/// build's.
+const COMMENTS_SCHEMA: i64 = 15;
+
 /// The header's keys, in the order written.
-const HEADER_KEYS: [&str; 8] = [
+const HEADER_KEYS: [&str; 10] = [
+    "format",
+    "queue_schema",
+    "project",
+    "proposals",
+    "tasks",
+    "runs",
+    "cards",
+    "comments",
+    "comment_versions",
+    "events",
+];
+
+/// A format-3 to format-7 header's keys.
+const HEADER_KEYS_7: [&str; 8] = [
     "format",
     "queue_schema",
     "project",
@@ -132,10 +160,20 @@ const HEADER_KEYS_1: [&str; 5] = ["format", "queue_schema", "project", "proposal
 /// The one `cards` column that is no `TEXT`.
 const POSITION: &str = "position";
 
+/// The `comments` columns that are no `TEXT`.
+const ON_REV: &str = "on_rev";
+
+/// The `comments` and `comment_versions` column that is no `TEXT`.
+const VERSION: &str = "version";
+
 /// The dump of `state`, the queue of `slug` (see the module documentation):
 /// every string escaped by `serde_json` straight into the buffer, no text
 /// copied first.
-pub(crate) fn render(slug: &str, state: &StoredQueue) -> io::Result<Vec<u8>> {
+pub(crate) fn render(
+    slug: &str,
+    state: &StoredQueue,
+    talk: &StoredComments,
+) -> io::Result<Vec<u8>> {
     let counts = state.counts();
     let mut out = Vec::new();
     write!(
@@ -145,8 +183,15 @@ pub(crate) fn render(slug: &str, state: &StoredQueue) -> io::Result<Vec<u8>> {
     serde_json::to_writer(&mut out, slug)?;
     writeln!(
         out,
-        ",\"proposals\":{},\"tasks\":{},\"runs\":{},\"cards\":{},\"events\":{}}}",
-        counts.proposals, counts.tasks, counts.runs, counts.cards, counts.events
+        ",\"proposals\":{},\"tasks\":{},\"runs\":{},\"cards\":{},\"comments\":{},\
+         \"comment_versions\":{},\"events\":{}}}",
+        counts.proposals,
+        counts.tasks,
+        counts.runs,
+        counts.cards,
+        talk.comments.len(),
+        talk.versions.len(),
+        counts.events
     )?;
     for row in &state.proposals {
         out.extend_from_slice(b"{\"proposals\":{");
@@ -196,6 +241,39 @@ pub(crate) fn render(slug: &str, state: &StoredQueue) -> io::Result<Vec<u8>> {
         }
         out.extend_from_slice(b"}}\n");
     }
+    for row in &talk.comments {
+        out.extend_from_slice(b"{\"comments\":{");
+        let mut texts = row.columns.iter();
+        for (index, column) in COMMENT_COLUMNS.iter().enumerate() {
+            if index > 0 {
+                out.push(b',');
+            }
+            match *column {
+                ON_REV => {
+                    write!(out, "\"{ON_REV}\":")?;
+                    serde_json::to_writer(&mut out, &row.on_rev)?;
+                }
+                VERSION => write!(out, "\"{VERSION}\":{}", row.version)?,
+                _ => push_column(&mut out, column, texts.next().and_then(Option::as_deref))?,
+            }
+        }
+        out.extend_from_slice(b"}}\n");
+    }
+    for row in &talk.versions {
+        out.extend_from_slice(b"{\"comment_versions\":{");
+        let mut texts = row.columns.iter();
+        for (index, column) in COMMENT_VERSION_COLUMNS.iter().enumerate() {
+            if index > 0 {
+                out.push(b',');
+            }
+            if *column == VERSION {
+                write!(out, "\"{VERSION}\":{}", row.version)?;
+            } else {
+                push_column(&mut out, column, texts.next().and_then(Option::as_deref))?;
+            }
+        }
+        out.extend_from_slice(b"}}\n");
+    }
     for row in &state.events {
         write!(out, "{{\"events\":{{\"seq\":{}", row.seq)?;
         for (column, value) in EVENT_COLUMNS[1..].iter().zip(&row.columns) {
@@ -219,7 +297,11 @@ fn push_column(out: &mut Vec<u8>, column: &str, value: Option<&str>) -> io::Resu
 /// against this build and the root's `slug` (canon `queue-backup`,
 /// "Import", step 2): `Err` is exit 2 naming the file and, but for the
 /// counts, the line.
-pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue, CliError> {
+pub(crate) fn parse(
+    label: &str,
+    bytes: &[u8],
+    slug: &str,
+) -> Result<(StoredQueue, StoredComments), CliError> {
     let at = |line: usize, defect: &str| CliError::cannot(format!("{label}:{line}: {defect}"));
     if bytes.is_empty() {
         return Err(at(
@@ -236,6 +318,9 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
     };
     let mut header: Option<Header> = None;
     let mut state = StoredQueue::default();
+    let mut talk = StoredComments::default();
+    let mut comment_ids: HashMap<String, usize> = HashMap::new();
+    let mut version_keys: HashMap<(String, i64), usize> = HashMap::new();
     let mut ids: HashMap<String, usize> = HashMap::new();
     let mut task_ids: HashMap<String, usize> = HashMap::new();
     let mut card_ids: HashMap<String, usize> = HashMap::new();
@@ -292,6 +377,29 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
                 }
                 state.cards.push(*row);
             }
+            Row::Comment(row) => {
+                let id = row.id().unwrap_or_default().to_owned();
+                if let Some(first) = comment_ids.insert(id, number) {
+                    return Err(at(
+                        number,
+                        &format!("`id` repeats the `comments` row of line {first}"),
+                    ));
+                }
+                talk.comments.push(*row);
+            }
+            Row::CommentVersion(row) => {
+                let key = (row.comment_id().unwrap_or_default().to_owned(), row.version);
+                if let Some(first) = version_keys.insert(key, number) {
+                    return Err(at(
+                        number,
+                        &format!(
+                            "`comment_id` and `version` repeat the `comment_versions` row of \
+                             line {first}"
+                        ),
+                    ));
+                }
+                talk.versions.push(*row);
+            }
             Row::Event(row) => {
                 if let Some(first) = seqs.insert(row.seq, number) {
                     return Err(at(
@@ -317,11 +425,34 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
         }
     }
     let found = state.counts();
+    let found_comments = talk.comments.len() as u64;
+    let found_versions = talk.versions.len() as u64;
     let counts_differ = found.proposals != header.proposals
         || found.tasks != header.tasks
         || found.runs != header.runs
         || found.cards != header.cards
-        || found.events != header.events;
+        || found.events != header.events
+        || found_comments != header.comments
+        || found_versions != header.comment_versions;
+    if counts_differ && header.format > NO_COMMENTS_FORMAT {
+        return Err(CliError::cannot(format!(
+            "{label}: header counts {}, {}, {}, {}, {}, {}, {}; found {}, {}, {}, {}, {}, {}, {}",
+            header.proposals,
+            header.tasks,
+            header.runs,
+            header.cards,
+            header.comments,
+            header.comment_versions,
+            header.events,
+            found.proposals,
+            found.tasks,
+            found.runs,
+            found.cards,
+            found_comments,
+            found_versions,
+            found.events
+        )));
+    }
     if counts_differ {
         return Err(CliError::cannot(match header.format {
             PROPOSALS_ONLY_FORMAT => format!(
@@ -354,7 +485,7 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
             ),
         }));
     }
-    Ok(state)
+    Ok((state, talk))
 }
 
 /// The header's values that the rows are checked against.
@@ -369,6 +500,9 @@ struct Header {
     tasks: u64,
     runs: u64,
     cards: u64,
+    /// Format 8's; none before.
+    comments: u64,
+    comment_versions: u64,
     events: u64,
 }
 
@@ -378,6 +512,8 @@ enum Row {
     Task(Box<StoredTask>),
     Run(Box<StoredRun>),
     Card(Box<StoredCard>),
+    Comment(Box<StoredComment>),
+    CommentVersion(Box<StoredCommentVersion>),
     Event(StoredEvent),
 }
 
@@ -397,9 +533,9 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 
 /// The header line: `format` first (a newer build's header may differ in
 /// all else), then exactly the format's keys (format 1: five; 2: seven; 3
-/// to 7: eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9; 4: 10;
-/// 5: 11; 6: 12; 7: 13 to this build's), `project` the root's slug, the
-/// counts.
+/// to 7: eight; 8: ten), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9;
+/// 4: 10; 5: 11; 6: 12; 7: 13 and 14; 8: 15 to this build's), `project` the
+/// root's slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
         entries
@@ -432,6 +568,7 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     let header_keys: &[&str] = match format {
         PROPOSALS_ONLY_FORMAT => &HEADER_KEYS_1,
         NO_CARDS_FORMAT => &HEADER_KEYS_2,
+        NO_TASK_LINKS_FORMAT..=NO_COMMENTS_FORMAT => &HEADER_KEYS_7,
         _ => &HEADER_KEYS,
     };
     let mut keys: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).collect();
@@ -461,7 +598,8 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     // Format 1 holds the schemas before the tasks, format 2 those to the
     // cards, format 3 the one before a card's tasks, format 4 the one before
     // a proposal's card, format 5 the one before a card's mandate, format 6
-    // the one before a question's gist, format 7 the rest.
+    // the one before a question's gist, format 7 those before the comments,
+    // format 8 the rest.
     let held = match format {
         PROPOSALS_ONLY_FORMAT => 1..TASKS_SCHEMA,
         NO_CARDS_FORMAT => TASKS_SCHEMA..CARDS_SCHEMA,
@@ -469,7 +607,8 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         NO_CARD_ITEMS_FORMAT => TASK_LINKS_SCHEMA..CARD_ITEMS_SCHEMA,
         NO_MANDATE_FORMAT => CARD_ITEMS_SCHEMA..MANDATE_SCHEMA,
         NO_PLAIN_QUESTIONS_FORMAT => MANDATE_SCHEMA..PLAIN_QUESTIONS_SCHEMA,
-        _ => PLAIN_QUESTIONS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
+        NO_COMMENTS_FORMAT => PLAIN_QUESTIONS_SCHEMA..COMMENTS_SCHEMA,
+        _ => COMMENTS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
     };
     let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {
@@ -508,6 +647,11 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     } else {
         0
     };
+    let (comments, comment_versions) = if format > NO_COMMENTS_FORMAT {
+        (count("comments")?, count("comment_versions")?)
+    } else {
+        (0, 0)
+    };
     Ok(Header {
         format,
         project: project.clone(),
@@ -517,6 +661,8 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         tasks,
         runs,
         cards,
+        comments,
+        comment_versions,
         events: count("events")?,
     })
 }
@@ -532,6 +678,7 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
     let project = header.project.as_str();
     let with_tasks = header.format != PROPOSALS_ONLY_FORMAT;
     let with_cards = header.format > NO_CARDS_FORMAT;
+    let with_comments = header.format > NO_COMMENTS_FORMAT;
     if entries.len() != 1 {
         return Err(SHAPE.to_owned());
     }
@@ -541,7 +688,16 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
         "tasks" if with_tasks => &TASK_COLUMNS,
         "runs" if with_tasks => &RUN_COLUMNS,
         "cards" if with_cards => header.card_columns,
+        "comments" if with_comments => &COMMENT_COLUMNS,
+        "comment_versions" if with_comments => &COMMENT_VERSION_COLUMNS,
         "events" => &EVENT_COLUMNS,
+        _ if with_comments => {
+            return Err(
+                "a row of an unknown table (a dump holds `proposals`, `tasks`, `runs`, `cards`, \
+                 `comments`, `comment_versions` and `events` rows)"
+                    .to_owned(),
+            );
+        }
         _ if with_cards => {
             return Err(
                 "a row of an unknown table (a dump holds `proposals`, `tasks`, `runs`, `cards` \
@@ -671,6 +827,12 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
         }
         return Ok(Row::Card(Box::new(row)));
     }
+    if table == "comments" {
+        return comment_row(taken, project).map(|row| Row::Comment(Box::new(row)));
+    }
+    if table == "comment_versions" {
+        return version_row(taken, project).map(|row| Row::CommentVersion(Box::new(row)));
+    }
     if table == "events" {
         let mut taken = taken.into_iter();
         let seq = match taken.next() {
@@ -709,6 +871,95 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
         return Err(format!("`project` is not the header's (`{project}`)"));
     }
     Ok(Row::Proposal(Box::new(row)))
+}
+
+/// A `comments` row's columns, read: `on_rev` an integer or `null`,
+/// `version` an integer ≥ 1, `id` a comment ID as the queue writes it,
+/// `project` the header's.
+fn comment_row(taken: Vec<(&str, Json)>, project: &str) -> Result<StoredComment, String> {
+    let mut columns: [Option<String>; COMMENT_COLUMNS.len() - 2] = Default::default();
+    let (mut on_rev, mut version) = (None, None);
+    let mut slot = 0;
+    for (column, value) in taken {
+        match column {
+            ON_REV => {
+                on_rev = match value {
+                    Json::Null => None,
+                    Json::Count(number) => Some(
+                        i64::try_from(number)
+                            .map_err(|_| "`on_rev` is not an integer or null".to_owned())?,
+                    ),
+                    Json::Negative(number) => Some(number),
+                    _ => return Err("`on_rev` is not an integer or null".to_owned()),
+                };
+            }
+            VERSION => version = Some(version_value(value)?),
+            _ => {
+                columns[slot] = text(column, value)?;
+                slot += 1;
+            }
+        }
+    }
+    let version = version.ok_or_else(|| "the `comments` row has no `version`".to_owned())?;
+    let row = StoredComment {
+        on_rev,
+        version,
+        columns,
+    };
+    if !row
+        .id()
+        .and_then(comment_number)
+        .is_some_and(|number| number >= 1)
+    {
+        return Err(format!(
+            "`id` is not a comment ID as the queue writes it (`CM-` and 4 or more digits, \
+             numbered from 1 to {})",
+            u64::MAX
+        ));
+    }
+    if row.project() != Some(project) {
+        return Err(format!("`project` is not the header's (`{project}`)"));
+    }
+    Ok(row)
+}
+
+/// A `comment_versions` row's columns, read as [`comment_row`]'s.
+fn version_row(taken: Vec<(&str, Json)>, project: &str) -> Result<StoredCommentVersion, String> {
+    let mut columns: [Option<String>; COMMENT_VERSION_COLUMNS.len() - 1] = Default::default();
+    let mut version = None;
+    let mut slot = 0;
+    for (column, value) in taken {
+        if column == VERSION {
+            version = Some(version_value(value)?);
+        } else {
+            columns[slot] = text(column, value)?;
+            slot += 1;
+        }
+    }
+    let version =
+        version.ok_or_else(|| "the `comment_versions` row has no `version`".to_owned())?;
+    let row = StoredCommentVersion { version, columns };
+    if !row
+        .comment_id()
+        .and_then(comment_number)
+        .is_some_and(|number| number >= 1)
+    {
+        return Err("`comment_id` is not a comment ID as the queue writes it".to_owned());
+    }
+    if row.project() != Some(project) {
+        return Err(format!("`project` is not the header's (`{project}`)"));
+    }
+    Ok(row)
+}
+
+/// A `version`: an integer ≥ 1.
+fn version_value(value: Json) -> Result<i64, String> {
+    match value {
+        Json::Count(number) if number >= 1 => {
+            i64::try_from(number).map_err(|_| "`version` is not an integer ≥ 1".to_owned())
+        }
+        _ => Err("`version` is not an integer ≥ 1".to_owned()),
+    }
 }
 
 /// A `position` that is neither `null` nor a 64-bit integer.

@@ -3,12 +3,14 @@ import {
   type BundleOptions,
   type CardsOptions,
   type CatalogOptions,
+  type CommentsOptions,
   type DeliveryOptions,
   type FeedOptions,
   type FlowOptions,
   type GraphOptions,
   type LibraryOptions,
   type MapOptions,
+  type MentionsOptions,
   type NodeOptions,
   type RoadmapOptions,
   type RoundOptions,
@@ -38,6 +40,11 @@ import type {
   CardSplitBody,
   CardWrite,
   CheckReport,
+  CommentAddBody,
+  CommentDocument,
+  CommentEditBody,
+  CommentList,
+  CommentRaiseBody,
   ConfirmBody,
   ConfirmRead,
   CatalogDocument,
@@ -55,6 +62,7 @@ import type {
   LibraryDocument,
   LockDiffView,
   MapDocument,
+  MentionList,
   NodeView,
   Project,
   Proposal,
@@ -107,7 +115,8 @@ const API = "/api";
  * `docs/canon/decision-staging.md` "Queue"), the tasks' nine (`docs/canon/tasks.md` "Store"), then
  * the cards' nine (`docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md`
  * "Data"), then auto mode's four and the gate's one, which only the feed reads again
- * (`docs/features/auto-feed.md` "The UI"). An EventSource hands a named event only to a listener of
+ * (`docs/features/auto-feed.md` "The UI"), then the comments' three, no body in any
+ * (`docs/features/comments.md` "HTTP"). An EventSource hands a named event only to a listener of
  * that name: a type missing here is never seen.
  */
 export const QUEUE_EVENT_TYPES = [
@@ -141,6 +150,9 @@ export const QUEUE_EVENT_TYPES = [
   "auto.held",
   "auto.landed",
   "gate.observed",
+  "comment.created",
+  "comment.edited",
+  "comment.deleted",
 ] as const;
 
 /** The first wait before a stream the browser gave up on is opened again; doubled per failure. */
@@ -155,12 +167,12 @@ const CLOSED = 2;
 type QueryValue = string | number | boolean | readonly string[] | undefined;
 
 /** One path segment: percent-encoded once, `#` and `/` included. */
-function segment(value: string): string {
+export function segment(value: string): string {
   return encodeURIComponent(value);
 }
 
 /** `?name=value&…` in the given order: an array repeats its name, `undefined` is left out. */
-function queryOf(pairs: readonly (readonly [string, QueryValue])[]): string {
+export function queryOf(pairs: readonly (readonly [string, QueryValue])[]): string {
   const parts: string[] = [];
   for (const [name, value] of pairs) {
     if (value === undefined) {
@@ -175,7 +187,7 @@ function queryOf(pairs: readonly (readonly [string, QueryValue])[]): string {
 }
 
 /** The project's paths. */
-function projectPath(project: string): string {
+export function projectPath(project: string): string {
   return `/projects/${segment(project)}`;
 }
 
@@ -207,6 +219,11 @@ function cardPath(project: string, id: string): string {
 /** A project's trace; the group clear's POST is under it. */
 function tracePath(project: string): string {
   return `${projectPath(project)}/trace`;
+}
+
+/** The comments' requests, a chunk of their own (`docs/features/comments.md` "HTTP"). */
+function commentsHttp() {
+  return import("./commentsHttp");
 }
 
 const NOT_JSON = Symbol("not JSON");
@@ -279,7 +296,7 @@ type Method = "GET" | "POST" | "DELETE";
  * superseded): the abort error as `fetch` gave it, never a ClientError, since the daemon was not
  * at fault. A `judged` read's refusal goes as a write's: nothing of it resolves as data.
  */
-async function request(method: Method, path: string, { body, signal, judged = false }: Sent = {}): Promise<unknown> {
+export async function request(method: Method, path: string, { body, signal, judged = false }: Sent = {}): Promise<unknown> {
   const url = `${API}${path}`;
   const asked = `${method} ${url}`;
   let response: Response;
@@ -765,6 +782,33 @@ export class HttpClient implements SpecEngineClient {
   /** Every suspect card of a node and what it holds, one transaction; a refusal (a 409 or 404 with `{group, cleared, notes}`) its last note. */
   async clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite> {
     return (await request("POST", `${tracePath(project)}/clear`, { body: JSON.stringify(body) })) as CardClearGroupWrite;
+  }
+
+  // Comments (`docs/features/comments.md` "HTTP"): their requests in a chunk of their own
+  // (./commentsHttp.ts), loaded with the first comment's call, so first load carries these calls alone.
+
+  async getComments(project: string, options: CommentsOptions, signal?: AbortSignal): Promise<CommentList> {
+    return (await commentsHttp()).getComments(project, options, signal);
+  }
+
+  async getMentions(project: string, options: MentionsOptions, signal?: AbortSignal): Promise<MentionList> {
+    return (await commentsHttp()).getMentions(project, options, signal);
+  }
+
+  async addComment(project: string, body: CommentAddBody): Promise<CommentDocument> {
+    return (await commentsHttp()).addComment(project, body);
+  }
+
+  async editComment(project: string, id: string, body: CommentEditBody): Promise<CommentDocument> {
+    return (await commentsHttp()).editComment(project, id, body);
+  }
+
+  async deleteComment(project: string, id: string): Promise<CommentDocument> {
+    return (await commentsHttp()).deleteComment(project, id);
+  }
+
+  async raiseFromComment(project: string, id: string, body: CommentRaiseBody): Promise<IntakeDocument> {
+    return (await commentsHttp()).raiseFromComment(project, id, body);
   }
 
   /**

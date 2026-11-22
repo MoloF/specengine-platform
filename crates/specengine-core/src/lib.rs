@@ -158,6 +158,7 @@ pub mod catalog;
 pub mod check;
 pub mod code_toml;
 pub mod collisions;
+pub mod comment;
 pub mod create;
 pub mod delivery;
 pub mod drift;

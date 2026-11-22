@@ -39,6 +39,8 @@ describe("hash routes", () => {
       ["Overview", "#/a%20b"],
       // Activity second, no section (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
       ["Activity", "#/a%20b/feed"],
+      // Mentions third, no section (docs/features/comments.md "UI", Mentions).
+      ["Mentions", "#/a%20b/mentions"],
       ["Inbox", "#/a%20b/inbox"],
       ["Agent tasks", "#/a%20b/tasks"],
       ["Board", "#/a%20b/board"],
@@ -55,10 +57,11 @@ describe("hash routes", () => {
 
   // WS-1 of docs/features/workspaces.md: the implicit workspace's nav, Tasks off it (M2: the nav drawn from SECTIONS).
   it("lists Overview, then a workspace's sections in its order: the implicit nine leave Tasks out", () => {
-    expect(navOf("ledger-api", IMPLICIT_SECTIONS, enT).map(({ label }) => label)).toEqual(["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
+    expect(navOf("ledger-api", IMPLICIT_SECTIONS, enT).map(({ label }) => label)).toEqual(["Overview", "Activity", "Mentions", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"]);
     expect(navOf("p", ["health", "board", "tree"], enT).map(({ key, hash }) => [key, hash])).toEqual([
       ["overview", "#/p"],
       ["feed", "#/p/feed"],
+      ["mentions", "#/p/mentions"],
       ["health", "#/p/health"],
       ["board", "#/p/board"],
       ["tree", "#/p/tree"],
@@ -66,9 +69,9 @@ describe("hash routes", () => {
   });
 
   it("draws a served ID only if it is one of the ten, and once; a list of none is Overview alone (A4 and the edge cases of workspaces)", () => {
-    expect(navOf("p", ["board", "stage", "board", "overview", "Tree", "tasks", "feed"], enT).map(({ key }) => key)).toEqual(["overview", "feed", "board", "tasks"]);
-    expect(navOf("p", [], enT).map(({ key }) => key)).toEqual(["overview", "feed"]);
-    expect(navOf("p", ["stage"], enT).map(({ key }) => key)).toEqual(["overview", "feed"]);
+    expect(navOf("p", ["board", "stage", "board", "overview", "Tree", "tasks", "feed", "mentions"], enT).map(({ key }) => key)).toEqual(["overview", "feed", "mentions", "board", "tasks"]);
+    expect(navOf("p", [], enT).map(({ key }) => key)).toEqual(["overview", "feed", "mentions"]);
+    expect(navOf("p", ["stage"], enT).map(({ key }) => key)).toEqual(["overview", "feed", "mentions"]);
   });
 
   // DL17 of docs/features/doc-library.md: Documents is a section of its own, routed whatever the nav lists.
@@ -132,7 +135,7 @@ describe("the sections in Russian (LG-3)", () => {
     for (const { id } of SECTIONS) {
       expect([id, sectionLabel(id, ruT), aboutOf(id, ruT)]).toEqual([id, ru.app.sections[id].label, ru.app.sections[id].about]);
     }
-    expect(navOf("p", ["inbox"], ruT).map(({ label }) => label)).toEqual([ru.app.overview, ru.feed.title, ru.app.sections.inbox.label]);
+    expect(navOf("p", ["inbox"], ruT).map(({ label }) => label)).toEqual([ru.app.overview, ru.feed.title, ru.app.mentions, ru.app.sections.inbox.label]);
   });
 });
 

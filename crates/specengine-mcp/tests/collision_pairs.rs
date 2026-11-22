@@ -158,8 +158,8 @@ fn pp1_get_proposal_serves_the_pair() {
     let list = session.tools();
     assert_eq!(
         tool_names(&list).len(),
-        33,
-        "stdio keeps 33 tools (32 until specengine-guide)"
+        35,
+        "stdio keeps 35 tools (33 until comments, 32 until specengine-guide)"
     );
     let schemas = output_schemas(&list);
     let id = stored(&session.call(
@@ -295,13 +295,13 @@ fn pp7_the_schema_holds_a_closed_pair() {
     let list = session.tools();
     assert_eq!(
         tool_names(&list).len(),
-        33,
-        "stdio keeps 33 tools (32 until specengine-guide)"
+        35,
+        "stdio keeps 35 tools (33 until comments, 32 until specengine-guide)"
     );
     assert_eq!(
         HUB_TOOLS.len(),
-        19,
-        "a hub keeps 19 tools (18 until specengine-guide)"
+        21,
+        "a hub keeps 21 tools (19 until comments, 18 until specengine-guide)"
     );
     let schemas = output_schemas(&list);
     let mut seen = 0;
@@ -326,8 +326,8 @@ fn pp7_the_schema_holds_a_closed_pair() {
             "{name}: evidence"
         );
         // 55 since docs/features/department-practices.md "Proposals: `cited`"
-        // (`cited`).
-        assert_eq!(keys.len(), 55, "{name}: 55 keys");
+        // (`cited`); 56 since docs/features/comments.md (`comment_id`).
+        assert_eq!(keys.len(), 56, "{name}: 56 keys");
         assert!(
             schema["required"]
                 .as_array()

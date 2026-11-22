@@ -60,9 +60,11 @@ use specengine_mcp::{
 // Re-pinned by docs/features/collision-pass.md "Acceptance criteria", CP8
 // (the collisions line in, the resources sentence out; `mcp_code.rs`' RD-5
 // steps back to the value this slice pinned, `7de2fdaa…`).
-const INSTRUCTIONS_B3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
+// Re-pinned by docs/features/comments.md CM15: the comments line in both
+// texts; stdio's hints sentence and the hub's resources sentence out.
+const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
 const HUB_INSTRUCTIONS_B3: &str =
-    "81c580c0e384a3e9257bc1d51d176e04e9cc995e44dda809a980f65ee1f8ec8d";
+    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
 
 /// NH11: the description's new head and its sentence, as the spec gives
 /// them (NH11).
@@ -621,8 +623,9 @@ async fn nh6_a_hub_answers_alike_and_nh11_its_texts() {
     drop(session.finish());
     let hub = hub_answers(&repo, &calls).await;
     let listed = tool_names(&hub[0]);
-    assert_eq!(listed.len(), 19, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 19);
+    // 21 since docs/features/comments.md CM15.
+    assert_eq!(listed.len(), 21, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 21);
     for (n, (args, local)) in calls.iter().zip(&stdio).enumerate() {
         let remote = &hub[n + 1];
         assert_ne!(remote["isError"], json!(true), "{args}: {remote}");
@@ -683,6 +686,8 @@ fn nh11_the_description_holds_the_history_sentence() {
     );
     assert!(NODE_SENTENCE.contains(&format!("at most {HISTORY_MAX},")));
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(INSTRUCTIONS.len(), 2046);
+    // 2 043 since docs/features/comments.md CM15 (the comments line in, 54
+    // bytes; 57 cut).
+    assert_eq!(INSTRUCTIONS.len(), 2043);
     assert_eq!(blake3_hex(INSTRUCTIONS.as_bytes()), INSTRUCTIONS_B3);
 }

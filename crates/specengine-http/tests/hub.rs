@@ -1474,7 +1474,13 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// own guide as the build embedded it, the same bytes in every project and
 /// with none; no project file, no index, no queue, never `[team]`, so a
 /// login learns nothing of any project from it.
-const GET_ROUTES: [&str; 37] = [
+///
+/// docs/features/comments.md (RM-0136, "HTTP"; ADR-0087) judged
+/// `/api/projects/{p}/comments` and `/api/projects/{p}/mentions`, the 38th
+/// and 39th: mounted for every login, trusted reads of the project's queue a
+/// login already reads through `cards`, `inbox` and `events` (the comments,
+/// people's words, and who they mention), never `[team]`, no corpus.
+const GET_ROUTES: [&str; 39] = [
     "/",
     "/api/guide",
     "/api/guide/{topic}",
@@ -1486,6 +1492,7 @@ const GET_ROUTES: [&str; 37] = [
     "/api/projects/{p}/cards/{id}",
     "/api/projects/{p}/catalog",
     "/api/projects/{p}/check",
+    "/api/projects/{p}/comments",
     "/api/projects/{p}/delivery",
     "/api/projects/{p}/events",
     "/api/projects/{p}/feed",
@@ -1496,6 +1503,7 @@ const GET_ROUTES: [&str; 37] = [
     "/api/projects/{p}/library",
     "/api/projects/{p}/lock-diff",
     "/api/projects/{p}/map",
+    "/api/projects/{p}/mentions",
     "/api/projects/{p}/nodes/{*ref}",
     "/api/projects/{p}/proposals/{id}",
     "/api/projects/{p}/proposals/{id}/confirm",
@@ -2301,8 +2309,9 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
     // docs/features/scope-rings.md SR4 (`rings`); 34 since
     // docs/features/auto-feed.md FD3 (`feed`); 35 since
     // docs/features/doc-library.md DL2 (`library`); 37 since
-    // docs/features/specengine-guide.md GU6 (`guide`, `guide/{topic}`).
-    assert_eq!(GET_ROUTES.len(), 37);
+    // docs/features/specengine-guide.md GU6 (`guide`, `guide/{topic}`); 39
+    // since docs/features/comments.md CM14 (`comments`, `mentions`).
+    assert_eq!(GET_ROUTES.len(), 39);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

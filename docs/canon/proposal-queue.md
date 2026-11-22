@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # Proposal queue: commands, states, store
 
-An agent or the owner proposes a change, touching no file; the owner decides on a terminal. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`, `drift`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`; revisions: `proposal-revisions.md`; inbox, review document, preview: `proposal-review.md`; completion, reject: `proposal-completion.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds terminal check, prompt, clock. `--task`: `tasks.md`. Code: core `patch` (`locate`, `span_bytes`, `splice`, `check_structure`, `update{,_refusal}`, `PatchCheck::introduced`), `proposal` (`PR-NNNN`, look-alikes, `prefix_clash`, `Author`, `commit_message{,_interpreting,_raising}`, trailers, `TEXT_MAX_BYTES`); store `introduced_findings`.
+An agent or the owner proposes a change, touching no file; the owner decides. Kind `update` replaces one node's span (a section with its subsections, or a file), applied as one commit where it was raised (ADR-0032, `proposal-apply.md`); `create`: `proposal-kinds.md`; `interpretation`, `decision`, `amendment`, `drift`: `proposal-<kind>.md`; `question`, `discrepancy`, `--brief`, MCP's queue tools: `agent-intake.md`; records: `decision-record.md`; revisions: `proposal-revisions.md`; inbox, review document, preview: `proposal-review.md`; completion, reject: `proposal-completion.md`. Library: `&Env, &Globals, &<Command>Request` (`git: GitEnv`, writers `now`, approve and reject a `Consent`); `main.rs` adds the terminal, prompt and clock. `--task`: `tasks.md`. Code: core `patch` (`locate`, `span_bytes`, `splice`, `check_structure`, `update{,_refusal}`, `PatchCheck::introduced`), `proposal` (`PR-NNNN`, look-alikes, `prefix_clash`, `Author`, `commit_message{,_interpreting,_raising}`, trailers, `TEXT_MAX_BYTES`); store `introduced_findings`.
 
 ## Commands
 
@@ -17,13 +17,13 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 - `spec propose update ID --base HASH --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID]` -> `PR-0001`, `introduced: <n>`, one `<severity>  <path>:<line>: <code>: <message>` per finding. `HASH`: `spec show`'s `span_hash`. Role, model, run: `author_problem`'s grammar, else exit 2; any given -> author `agent`, none -> `human`. Text: UTF-8, <= 1 MiB (`TEXT_MAX_BYTES`), `-` = stdin; `--rationale` <= 4 096 B.
 - `spec propose drift [REF…]`: `proposal-drift.md` "Raise".
 - `spec inbox [--all]`, `spec review PR`, the **review document** (JSON of propose, review, approve, reject; MCP `get_proposal`): `proposal-review.md`.
-- `spec approve PR [--note T]|--open` -> `applied PR-0001 as <sha> on <branch>`; `spec reject PR --reason T [--follow-up code|spec]` (empty -> exit 2; `--follow-up`: a drift item's draft task, `proposal-completion.md` "Reject") -> `rejected PR-0001`. Refused: stdout holds only a conflict's text; the reason is the `spec:` line and the last of `notes`.
+- `spec approve PR [--note T]|--open` -> `applied PR-0001 as <sha> on <branch>`; `spec reject PR --reason T [--follow-up code|spec]` (empty -> exit 2; `--follow-up`: a drift item's draft task, `proposal-completion.md` "Reject") -> `rejected PR-0001`. Refused: stdout holds only a conflict's text; the reason is the `spec:` line, the last note.
 
 ## Creation
 
 `spec propose` stores nothing and takes no ID unless:
 
-1. The target resolves as in `spec show` (`spec-cli-read.md` "Resolution"): an ID or `slug/ID` to one holder; a `.md` path to its file's document, the whole file (no node -> exit 1, unlike `show`). Not `class: generated`, its prefix (a section's: also its document's) without `immutable_text`. An alias, a legacy ID, `#SECTION`, `@rev`, `[[…]]` -> exit 1 naming the canonical ID when known; a look-alike, mixed script, `project:` -> exit 2. Stored **canonical**: a bare feature-scoped ID as `slug/ID`; a path as its document's `id:` as if written (refused, or held elsewhere: exit 1 `` `<p>` declares `<ID>`… ``), else as itself (an `id:` since -> exit 1).
+1. The target resolves as in `spec show` (`spec-cli-read.md` "Resolution"): an ID or `slug/ID` to one holder; a `.md` path to its file's document, the whole file (no node: exit 1, unlike `show`). Not `class: generated`, its prefix (a section's: also its document's) without `immutable_text`. An alias, a legacy ID, `#SECTION`, `@rev`, `[[…]]` -> exit 1 naming the canonical ID when known; a look-alike, mixed script, `project:` -> exit 2. Stored **canonical**: a bare feature-scoped ID as `slug/ID`; a path as its document's `id:` as if written (refused, or held elsewhere: exit 1 `` `<p>` declares `<ID>`… ``), else as itself (an `id:` since -> exit 1).
 2. `--base` is the span's hash now; stale -> exit 1 printing the current one.
 3. The text verbatim (no line-ending normalisation), a section's trailing whitespace (space, tab, CR, LF) dropped; spliced into exactly the span and parsed afresh, the file keeps its ordered (ID, heading level) list, the target spans exactly the text, and the file changes (else exit 1 `no change: …`). Refused: an `{#ID}` or `id:` dropped or added (`create`: `proposal-kinds.md`), a level changed, a heading of the same or higher level added, a revision changed.
 4. Validation: the walked rows, as is and with the file swapped (`spec-check-write.md`), judged against `HEAD` (`spec-check-git.md`): introduced findings in `diagnostics` (held IDs, `--dry-run`: `proposal-kinds.md`), never refusing (ADR-0012); a parser panic on the patched bytes gives none.
@@ -39,7 +39,7 @@ An agent or the owner proposes a change, touching no file; the owner decides on 
 
 ## States and events
 
-`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both; a rule's `by`, `rule`, `pack`), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `card.*` (`cards.md`), `auto.*` (`auto-mode.md` "Events"), `gate.observed` (`gate.md`), `verify.tests` (`spec-verify-tests.md`); `specengine-http` streams it.
+`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both; a rule's `by`, `rule`, `pack`), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `card.*` (`cards.md`), `comment.*` (`comments.md`), `auto.*` (`auto-mode.md` "Events"), `gate.observed` (`gate.md`), `verify.tests` (`spec-verify-tests.md`); `specengine-http` streams it.
 
 ## Store
 
@@ -54,7 +54,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, never below a hub's floor (`queue-backup.md`), in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON (core `Author`); `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 14; higher: `SchemaTooNew`, exit 2), all due in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 50). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 15; higher: `SchemaTooNew`, exit 2), all due in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 51). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -69,6 +69,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 11, 12 | `card_id`, `why`; `cards.mandate` | 48 | `card-{questions,mandate}.md` |
 | 13 | `gist`, `matters` | 50 | `plain-questions.md` "Shapes" |
 | 14 | `collision_marks`, never dumped | 50 | `collision-pass.md` "Ledger" |
+| 15 | `comments`, `comment_versions`; `comment_id` | 51 | `comments.md` |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly. Not derived: backup `queue-backup.md` (ADR-0003).
 
@@ -87,11 +88,11 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | `reject_from(id, seen, decision, now)`, `reject_orphan` | `open`/`approved` -> `rejected`, `.rejected`, compare-and-set as above |
 | `reject_with_task(id, seen, decision, task, now)` | a drift item's `reject_from` and a `draft` task, one transaction (`proposal-completion.md` "Reject") |
 
-Also `events()`, `dump()`, `reserved()`; unconditional ops for tests. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.
+Also `events()`, `dump()`, `reserved()`; tests' unconditional ops. Step 10's recording and a completion (`applied_with`, `applied`) are no compare-and-set: the commit is in history whichever run holds the state. Any op on `applied` or `rejected` -> `Status`, nothing logged.
 
 **Checked when read**: a `base_commit` no object ID, a `branch` git refuses as a branch name or starting with `-`, an author field off its grammar: a corrupt row, never handed to git (`get`, `list` fail naming row and column, review, approve, reject exit 2; `inbox` skips it, a note).
 
 ## Terminal and git safety
 
 - **Escaping** (agent-written text in the queue commands' output, prompts, stderr): every C0 control but LF, TAB and a CRLF's CR, DEL, every C1 and the bidi controls (U+061C, U+200E, U+200F, U+202A-U+202E, U+2066-U+2069) print as `\u{1b}`; JSON escapes by itself, values raw. `inbox`'s rationale turns a lone CR into a space.
-- **Git** (store `WorktreeGit`): `git -C <dir>`, stdin null, `GIT_TERMINAL_PROMPT=0`, without every variable `git rev-parse --local-env-vars` lists (a probe reading no repository, once per process and `PATH`); every other command but `commit` with `GIT_OPTIONAL_LOCKS=0`. Paths as `:(literal)` pathspecs (`commit_only_paths`: several); every revision after `--end-of-options`, checked by `rev-parse --verify`; `blob_at`, `has_path` refuse an empty, `./` or `../` path unread. `merge-file` with `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` (the repository's config still read). `diff_hunks` (review's `diff`, the package's `snapshot_diff`, `spec lock diff`): `git -C <data dir> -c core.attributesFile=/dev/null diff --no-index --no-color --no-ext-diff --no-textconv --diff-algorithm=myers -U3` with those two, `GIT_ATTR_NOSYSTEM=1`, `GIT_CEILING_DIRECTORIES` the data directory's parent, no `GIT_DIFF_OPTS`: no repository's config or attributes; a pair git deems binary (a NUL byte) has no hunk, so review and the package read it as equal (`spec lock diff`: `null`). Scratch files (merge and diff sides, the message): new, in the data directory, removed after.
+- **Git** (store `WorktreeGit`): `git -C <dir>`, stdin null, `GIT_TERMINAL_PROMPT=0`, without every variable `git rev-parse --local-env-vars` lists (a probe reading no repository, once per process and `PATH`); every other command but `commit` with `GIT_OPTIONAL_LOCKS=0`. Paths as `:(literal)` pathspecs (`commit_only_paths`: several); every revision after `--end-of-options`, checked by `rev-parse --verify`; `blob_at`, `has_path` refuse an empty, `./` or `../` path unread. `merge-file` with `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` (the repository's config still read). `diff_hunks`: `proposal-review.md` "Review document". Scratch files (merge and diff sides, the message): new, in the data directory, then removed.

@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # Hub MCP: `/mcp/<slug>` under each request's login
 
-ADR-0065, built by `hub-mcp` (RM-0053, step 11). Working answers of the orchestrator, 2026-11-03, the owner's review open. A hub (`hub.md`) serves `specengine-mcp`'s server over rmcp's Streamable HTTP, inside each project's turn. Its tool set reads, raises proposals and writes cards under the request's `Remote-User`, and decides nothing. A local daemon serves no `/mcp`. Code: http `mcp.rs`, `hub.rs` `class`, `app.rs`; mcp `hub.rs`; UI `src/inbox/ProposalCard.tsx`.
+ADR-0065 (RM-0053, step 11; the owner's review at gate 11b-3). A hub (`hub.md`) serves `specengine-mcp`'s server over rmcp's Streamable HTTP, inside each project's turn. Its tool set reads, raises proposals and writes cards and comments under the request's `Remote-User`, and decides nothing. Code: http `mcp.rs`, `hub.rs` `class`, `app.rs`; mcp `hub.rs`; UI `src/inbox/ProposalCard.tsx`.
 
 ## Route
 
@@ -53,16 +53,17 @@ The transport stays in `specengine-http`: `App::new` builds one service per proj
 
 ## Tools
 
-Nineteen tools and the resources, each its stdio twin's CLI call:
+Twenty-one tools and the resources, each its stdio twin's CLI call:
 - **reads:** `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_roadmap`, `get_flow`, `get_trace`, `get_proposal`; `get_guide` (`spec-guide.md`);
 - **queue**, without `task_id`: `propose_change` (four kinds, `dry_run`, a create's `distinct_from`, `keywords`: `proposal-similar.md`), `ask_question`, `report_discrepancy`, `report_decision`;
-- **cards:** `list_cards`, `get_card`, `create_card`, `split_card`, `edit_card`, `move_card`.
+- **cards:** `list_cards`, `get_card`, `create_card`, `split_card`, `edit_card`, `move_card`;
+- **comments:** `list_comments`, `add_comment` (`comments-surfaces.md`).
 
-None decides: a person confirms (`hub-confirm.md`), on the hub or a terminal, or the hub's code after the call (`hub-auto.md`). Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 19 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
+None decides: a person confirms (`hub-confirm.md`), on the hub or a terminal, or the hub's code after the call (`hub-auto.md`). Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 21 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
 
 Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub); `get_collisions`, `mark_pairs` (local: `collision-pass.md`).
 
-**Texts.** `HUB_INSTRUCTIONS`, and thirteen hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the four card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other six are stdio's; ten are stdio's routes as they are (`SHARED`). Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
+**Texts.** `HUB_INSTRUCTIONS` (2 047 B, no resources line), and fourteen hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools, `add_comment` and the four card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other seven are stdio's; eleven are stdio's routes as they are (`SHARED`). Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
 
 ## Identity
 
@@ -111,9 +112,9 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 ## Client check
 
 By hand at the gate; findings to `hub-deploy.md` "Gate" with the client's version and date.
-1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http`. Expected: the session holds, the GET stream reopens at 300 s, 19 tools, `login` on a proposal and a card, a second login's own sessions.
+1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http`. Expected: the session holds, the GET stream reopens at 300 s, 21 tools, `login` on a proposal and a card, a second login's own sessions.
 2. **claude.ai and Claude Desktop, at the gate, step 11b-3,** on the public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
 
 ## Tests
 
-http `tests/hub_mcp.rs` (`docs/features/hub-mcp.md`), its client `tests/common/mcp_http.rs`; `tests/hub.rs`; `tests/hub_fairness.rs` (`probes`: `probe_hold`); `tests/door.rs`; units in `src/hub.rs` (item 6's rule) and `src/mcp.rs`. mcp `tests/mcp_hub.rs` (the 19, the texts' budget), `mcp_hub_trust.rs`, `mcp_genre.rs`; http `tests/hub_trust.rs`; eval `build_graph.rs`. UI `src/inbox/ProposalCard.test.tsx`.
+http `tests/hub_mcp.rs`, its client `tests/common/mcp_http.rs`; `tests/hub.rs`; `tests/hub_fairness.rs` (`probes`: `probe_hold`); `tests/door.rs`; units in `src/hub.rs` (item 6's rule) and `src/mcp.rs`. mcp `tests/mcp_hub.rs` (the 21, the texts' budget), `mcp_hub_trust.rs`, `mcp_genre.rs`; http `tests/hub_trust.rs`; eval `build_graph.rs`. UI `src/inbox/ProposalCard.test.tsx`.

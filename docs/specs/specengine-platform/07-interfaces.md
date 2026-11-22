@@ -110,6 +110,10 @@ spec auto next [--busy ITEM]... [--skip-lane D]... [--slots N]  # the runner's n
 spec auto approve T | land T | hold ITEM --reason R [--note TEXT] [--json]
 spec feed [--since SEQ|TIME] [--needs-me] [--task T] [--department D] [--json]
 
+# comments: shipped 0.50.0, docs/canon/comments.md (ADR-0087), docs/canon/comments-surfaces.md
+spec comment add --on REF|C-…|PR-… [--reply-to CM] --body-file F|- | list --on X | edit CM --version V | delete CM | mentions [--login L]
+spec propose question|discrepancy|decision … --comment CM
+
 # code and drift
 spec symbols QUERY | --node REF | --file F | --at F:L   # shipped: docs/canon/symbol-reads.md; layer C: docs/canon/layer-c-reads.md; unbound nodes: spec health
 spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md
@@ -146,6 +150,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 - `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|flow|check|health|roadmap|lock-diff|inbox|proposals/:id|tasks|tasks/:id|round` (built); `/api/identity`, the login or `null`; `/api/projects/:p/team`, a hub's alone, the asker's row of `[team]`; `.../proposals/:id/confirm`, a hub's alone, the question a confirm answers; `symbols` to come; `.../workspaces`, a project's workspaces and modules, no turn (built: `docs/canon/workspaces.md`)
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035); `POST .../proposals/:id/confirm`, a hub's alone, confirms one stage (ADR-0061)
 - `GET .../cards` (`?parent=` a card's children), `.../cards/:id`, `.../trace`; `POST .../cards`, `.../cards/:id/move|edit|assign|cancel|accept|clear`, `.../trace/clear`: the card routes, writing the queue alone (built: `docs/canon/board-ui.md`, `docs/canon/card-flows.md`)
+- `GET .../comments?on=X`, `.../mentions`; `POST .../comments`, `.../comments/:id/edit|items`; `DELETE .../comments/:id`: comments, the queue alone (built: `docs/canon/comments-surfaces.md` "HTTP")
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `GET /api/projects/:p/feed` -- `spec feed --json`, local and hub; on a hub its code applies the sole owner's covered `/mcp` proposals (planned 0.47.0: `docs/features/auto-feed.md`, `docs/canon/hub-auto.md`)
 - `/mcp/<slug>` — MCP Streamable HTTP (rmcp Tower service in axum), a hub's alone, both eras, GET/SSE (built: `docs/canon/hub-mcp.md`)
@@ -168,6 +173,7 @@ Chrome in **English or Russian**, each viewer's choice, Russian from step 1b (AD
 | **Flow** | the flow in three panes: places by module, scope and stage; one scope's canvas, groups entered, typed edges, arcs against the walk, rollup badges; a panel always shown, the scope's gap rows or the selected box or arrow; the List as its text twin; the place in the hash; the spec is read only here, cards, a gap's too, are written from the panel (`docs/canon/spec-flow-screen.md`, `docs/canon/spec-flow-place.md`) |
 | **Health** | "what is left" (rows 4-5 from `spec health`: `docs/canon/health-code.md`; drawn by `health-code-ui`), drift (row 6 from `spec health`: `docs/canon/health-drift.md`; drawn by `health-drift-ui`), budgets, W metrics |
 | **Questions** | the round's sheet and its answers, staged at once, each confirmed on a terminal (`docs/canon/round-ui.md`); print, paste later |
+| **Mentions** | the comments naming the viewer, newest first, its nav badge counting the unseen; every task, document and proposal carries a Comments part with Turn into… (`docs/canon/comments-surfaces.md` "Screen") |
 
 ## 4. Claude Code hooks (shipped by the plugin)
 

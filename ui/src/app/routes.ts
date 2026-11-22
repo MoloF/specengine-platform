@@ -29,6 +29,13 @@ export type Route =
     }
   /** Activity, `#/<p>/feed[/needs-me]`: the nav's second entry, never an eleventh section (docs/features/auto-feed.md "The UI"). */
   | { type: "feed"; project: string; tab: FeedTab }
+  /** Mentions, `#/<p>/mentions`: the nav's third entry, never an eleventh section (docs/features/comments.md "UI"); a mention's node opens in the document modal over it. */
+  | {
+      type: "mentions";
+      project: string;
+      /** The document modal's REF, decoded; absent with none. */
+      doc?: string;
+    }
   | { type: "not_found" };
 
 /** Activity's two tabs: every entry, or what needs the owner. */
@@ -37,6 +44,9 @@ export type FeedTab = "all" | "needs-me";
 /** Activity's segment and its Needs me tab's. */
 const FEED = "feed";
 const NEEDS_ME = "needs-me";
+
+/** Mentions' segment. */
+const MENTIONS = "mentions";
 
 /** The fourth segment of a page: a card's or a document's. */
 const PAGE = "page";
@@ -89,7 +99,7 @@ export function parseHash(hash: string): Route {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const mark = raw.indexOf("?");
   const route = parsePath(mark < 0 ? raw : raw.slice(0, mark));
-  if (mark < 0 || (route.type !== "project" && route.type !== "section")) {
+  if (mark < 0 || (route.type !== "project" && route.type !== "section" && route.type !== "mentions")) {
     return route;
   }
   const { doc, rest } = splitDoc(raw.slice(mark + 1));
@@ -117,6 +127,10 @@ function parsePath(path: string): Route {
     // `#/<p>/feed` and `#/<p>/feed/needs-me`; any other segment names nothing.
     return rest.length > 0 || (id !== undefined && id !== "" && id !== NEEDS_ME) ? { type: "not_found" } : { type: "feed", project, tab: id === NEEDS_ME ? NEEDS_ME : "all" };
   }
+  if (section === MENTIONS) {
+    // `#/<p>/mentions` alone; any segment after it names nothing.
+    return id === undefined || (id === "" && rest.length === 0) ? { type: "mentions", project } : { type: "not_found" };
+  }
   if (section === null || !isSectionId(section) || id === null) {
     return { type: "not_found" };
   }
@@ -140,6 +154,11 @@ export function sectionHash(project: string, section: SectionId, id: string | nu
 /** Activity's hash, `#/<p>/feed` or its Needs me tab's `#/<p>/feed/needs-me`. */
 export function feedHash(project: string, tab: FeedTab = "all"): string {
   return `${homeHash(project)}/${FEED}${tab === NEEDS_ME ? `/${NEEDS_ME}` : ""}`;
+}
+
+/** Mentions' hash, `#/<p>/mentions` (docs/features/comments.md "UI"). */
+export function mentionsHash(project: string): string {
+  return `${homeHash(project)}/${MENTIONS}`;
 }
 
 /** A card's page, `#/<p>/board/<C>/page`: the card alone, its modal's body and actions, no columns. */
@@ -208,7 +227,7 @@ export function withoutDoc(hash: string): string {
 /** The document a hash opens in the modal: `parseHash`'s `doc`, else null. */
 export function docOf(hash: string): string | null {
   const route = parseHash(hash);
-  return route.type === "project" || route.type === "section" ? (route.doc ?? null) : null;
+  return route.type === "project" || route.type === "section" || route.type === "mentions" ? (route.doc ?? null) : null;
 }
 
 /** An arrow of a flow read by its served key: no fourth part, `kind` null. */
@@ -317,9 +336,9 @@ export function isBareFlow(route: { id: string | null; query?: string }): boolea
   return route.id === null && route.query === undefined;
 }
 
-/** One entry of the nav: the home, Activity, then a section. */
+/** One entry of the nav: the home, Activity, Mentions, then a section. */
 export interface NavEntry {
-  key: "overview" | "feed" | SectionId;
+  key: "overview" | "feed" | "mentions" | SectionId;
   label: string;
   hash: string;
 }
@@ -329,9 +348,10 @@ export const ALL_SECTIONS: readonly SectionId[] = SECTIONS.map((section) => sect
 
 /**
  * The nav in order: Overview first, Activity second (the feed, in every department: the owner's
- * word of 2026-11-15, over docs/features/auto-feed.md's off-nav), then `sections` in their order
- * (07 §3 "Web UI — screens"), each drawn only if it is one of the ten and only once: a workspace's
- * served list (`docs/features/workspaces.md` "The UI"), or ALL_SECTIONS. Activity stays no section.
+ * word of 2026-11-15, over docs/features/auto-feed.md's off-nav), Mentions third (in every
+ * department: docs/features/comments.md "UI"), then `sections` in their order (07 §3 "Web UI —
+ * screens"), each drawn only if it is one of the ten and only once: a workspace's served list
+ * (`docs/features/workspaces.md` "The UI"), or ALL_SECTIONS. Activity and Mentions stay no section.
  */
 export function navOf(project: string, sections: readonly string[], t: Translate): NavEntry[] {
   const shown: SectionId[] = [];
@@ -343,6 +363,7 @@ export function navOf(project: string, sections: readonly string[], t: Translate
   return [
     { key: "overview", label: t("app.overview"), hash: homeHash(project) },
     { key: "feed", label: t("feed.title"), hash: feedHash(project) },
+    { key: "mentions", label: t("app.mentions"), hash: mentionsHash(project) },
     ...shown.map((id) => ({ key: id, label: sectionLabel(id, t), hash: sectionHash(project, id) })),
   ];
 }

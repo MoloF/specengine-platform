@@ -436,6 +436,15 @@
 //! `GET /api/guide/<topic>%23<ID>` for every rule of `proposals`), on a
 //! daemon of its own over a git copy of spec-a. M: a key the route adds or
 //! drops.
+//!
+//! docs/features/comments.md (RM-0136) "HTTP", its routes and keys: the
+//! review document holds `comment_id` after `why` (56 keys); six sets more,
+//! 187 in all, last, in that list's order: `CommentList` (5, `GET
+//! .../comments?on=`), `Comment` (13, its comments: a live one with an
+//! item, a reply, a tombstone), `CommentOn` (2), `CommentDeleted` (2, the
+//! tombstone's), `CommentItem` (3) and `MentionList` (4, `GET
+//! .../mentions?login=`), from a local daemon of their own over a git copy
+//! of spec-a. M: `comment_id` missing from the review document.
 
 mod common;
 mod task_state;
@@ -1111,6 +1120,64 @@ fn guide_documents() -> (String, Vec<String>, Vec<String>) {
     (index, pages, rules)
 }
 
+/// docs/features/comments.md "HTTP": a local daemon over a git copy of
+/// spec-a: card `C-0001`, `CM-0001` mentioning `lev` and raised into a
+/// question, `CM-0002` its reply, `CM-0003` deleted, a node comment
+/// mentioning `lev`; `GET .../comments?on=C-0001` and `GET
+/// .../mentions?login=lev`, raw: (the list, the mentions).
+fn comment_documents() -> (String, String) {
+    let scratch = Scratch::new("daemon-keys-comments");
+    let root = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let project = "/api/projects/lantern-keep";
+    let post = |path: &str, body: serde_json::Value| {
+        let reply = server.stage(&format!("{project}/{path}"), &body.to_string());
+        assert_eq!(reply.status, 200, "{path}: {}", reply.text());
+    };
+    post(
+        "cards",
+        serde_json::json!({"title": "Write the sprint foreword", "target": ["MEC-SPRINT"]}),
+    );
+    post(
+        "comments",
+        serde_json::json!({"on": "C-0001", "body": "Keep the rail at 1.2 m? @lev knows."}),
+    );
+    post(
+        "comments",
+        serde_json::json!({"on": "C-0001", "body": "MEC-SPRINT says 1.1 m.",
+            "reply_to": "CM-0001"}),
+    );
+    post(
+        "comments",
+        serde_json::json!({"on": "C-0001", "body": "Deleted soon."}),
+    );
+    let removed = server.unstage(&format!("{project}/comments/CM-0003"));
+    assert_eq!(removed.status, 200, "{}", removed.text());
+    post(
+        "comments",
+        serde_json::json!({"on": "RULE-SPRINT-COST", "body": "@lev: is twelve slow?"}),
+    );
+    post(
+        "comments/CM-0001/items",
+        serde_json::json!({"kind": "question", "node_ids": ["MEC-SPRINT"],
+            "text": "Is the rail 1.2 m?", "working_answer": "Yes: as built.",
+            "price_of_other": "Every ledge is moved."}),
+    );
+    let list = server
+        .get(&format!("{project}/comments?on=C-0001"))
+        .status(200)
+        .text()
+        .to_owned();
+    let mentions = server
+        .get(&format!("{project}/mentions?login=lev"))
+        .status(200)
+        .text()
+        .to_owned();
+    (list, mentions)
+}
+
 /// docs/features/auto-feed.md FD3: `GET .../feed?since=0&needs_me=1` over a
 /// git copy of `fixtures/auto-mini` with `rules/on.toml` committed, on a
 /// daemon of its own, every `needs_me` list holding a row; its body raw
@@ -1324,6 +1391,23 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     citations.extend(review_citations);
     // docs/features/specengine-guide.md GU6: the index, its ten topics,
     // the ten pages, every page's rules and every rule read's `rule`.
+    // docs/features/comments.md "HTTP": the thread, its comments (a
+    // tombstone among them), their targets and items, and the mentions.
+    let (comment_list, mention_list) = comment_documents();
+    let thread = raw_items(&comment_list, "comments");
+    assert_eq!(thread.len(), 3, "{comment_list}");
+    let comment_on: Vec<String> = thread.iter().map(|item| raw_object(item, "on")).collect();
+    let comment_deleted: Vec<String> = thread
+        .iter()
+        .filter(|item| !item.contains("\"deleted\":null"))
+        .map(|item| raw_object(item, "deleted"))
+        .collect();
+    assert_eq!(comment_deleted.len(), 1, "{comment_list}");
+    let comment_items: Vec<String> = thread
+        .iter()
+        .flat_map(|item| raw_items(item, "items"))
+        .collect();
+    assert_eq!(comment_items.len(), 1, "{comment_list}");
     let (guide_index, guide_pages, guide_rule_reads) = guide_documents();
     let guide_topics = raw_items(&guide_index, "topics");
     assert_eq!(guide_topics.len(), 10, "{guide_index}");
@@ -3025,6 +3109,25 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "GuideRuleRead",
             one_key_set("GuideRuleRead", &guide_rule_reads, keys_of),
         ),
+        // docs/features/comments.md "HTTP", sets 182 to 187.
+        (
+            "CommentList",
+            one_key_set("CommentList", std::slice::from_ref(&comment_list), keys_of),
+        ),
+        ("Comment", one_key_set("Comment", &thread, keys_of)),
+        ("CommentOn", one_key_set("CommentOn", &comment_on, keys_of)),
+        (
+            "CommentDeleted",
+            one_key_set("CommentDeleted", &comment_deleted, keys_of),
+        ),
+        (
+            "CommentItem",
+            one_key_set("CommentItem", &comment_items, keys_of),
+        ),
+        (
+            "MentionList",
+            one_key_set("MentionList", std::slice::from_ref(&mention_list), keys_of),
+        ),
     ]
 }
 
@@ -3340,9 +3443,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/collision-pairs.md "Acceptance criteria" PP8: `pair`
     // after `evidence`, 54 keys.
     // docs/features/department-practices.md "Proposals: `cited`": `cited` last, 55
-    // keys.
+    // keys. docs/features/comments.md "HTTP": `comment_id` after
+    // `why`, 56 keys.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 55, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 56, "{:?}", sets[2].1);
     let evidence = sets[2].1.iter().position(|key| key == "evidence");
     assert_eq!(
         sets[2].1[evidence.expect("evidence")..evidence.expect("evidence") + 3],
@@ -3374,6 +3478,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "interpretation",
             "card_id",
             "why",
+            "comment_id",
             "similar",
             "notes",
             "cited"
@@ -3384,7 +3489,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        181,
+        187,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -3395,7 +3500,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          direction-catalog: 140; department-overview: 143; collision-pairs: 145; \
          delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160; \
          auto-feed: 168; hub-auto: 169; doc-library: 174; department-practices: 176; \
-         specengine-guide: 181)"
+         specengine-guide: 181; comments: 187)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -3428,7 +3533,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // "Key sets"), in that order, with their counts; the package's 26 keys in
     // the canon's order (`roadmap` after `bundle` since
     // docs/features/roadmap-surfaces.md, Q-D, Q-H: no set of its own until
-    // 3a), its `runs` items the seven of a run.
+    // 3a), its `runs` items the seven of a run; 29 since
+    // docs/features/comments.md (`comments` after `practices`).
     let counts: Vec<(&str, usize)> = sets[15..32]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
@@ -3441,7 +3547,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("TaskNotFound", 2),
             // docs/features/department-practices.md: `practices` after
             // `bundle`, 28.
-            ("TaskPackage", 28),
+            ("TaskPackage", 29),
             ("TaskTarget", 4),
             ("TaskCriterion", 2),
             ("TaskAssumption", 2),
@@ -3462,8 +3568,12 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // docs/features/tested-reads.md "Daemon and UI": `tested` the 17th,
     // after `bindings`.
     assert_eq!(sets[18].1[15..17], ["bindings", "tested"]);
-    assert_eq!(sets[18].1[21..24], ["bundle", "practices", "roadmap"]);
-    assert_eq!(sets[18].1[27], "notes");
+    // `comments` after `practices` since docs/features/comments.md.
+    assert_eq!(
+        sets[18].1[21..25],
+        ["bundle", "practices", "comments", "roadmap"]
+    );
+    assert_eq!(sets[18].1[28], "notes");
     assert_eq!(
         sets[29].1,
         [
@@ -4639,7 +4749,47 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("GuideRuleRead", vec!["topic", "rule", "text"]),
         ]
     );
-    assert_eq!(sets.len(), 181);
+    // docs/features/comments.md "HTTP": sets 182 to 187, last,
+    // each "Data"'s keys in order.
+    let comments: Vec<(&str, Vec<&str>)> = sets[181..187]
+        .iter()
+        .map(|(name, keys)| (*name, keys.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        comments,
+        [
+            (
+                "CommentList",
+                vec!["on", "total", "comments", "next_before", "notes"]
+            ),
+            (
+                "Comment",
+                vec![
+                    "id",
+                    "on",
+                    "on_rev",
+                    "reply_to",
+                    "actor",
+                    "author",
+                    "version",
+                    "body",
+                    "mentions",
+                    "created_at",
+                    "updated_at",
+                    "deleted",
+                    "items"
+                ]
+            ),
+            ("CommentOn", vec!["kind", "id"]),
+            ("CommentDeleted", vec!["by", "at"]),
+            ("CommentItem", vec!["id", "kind", "status"]),
+            (
+                "MentionList",
+                vec!["login", "comments", "next_before", "notes"]
+            ),
+        ]
+    );
+    assert_eq!(sets.len(), 187);
     // docs/features/doc-library.md DL2: sets 170 to 174, each "Data"'s
     // keys in order.
     let library: Vec<(&str, Vec<&str>)> = sets[169..174]
@@ -4841,8 +4991,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        181,
-        "181 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        187,
+        "187 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -4859,7 +5009,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
          hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
-         department-practices' two (DP14) and specengine-guide's five (GU6)"
+         department-practices' two (DP14) and specengine-guide's five (GU6) and \
+         comments' six (docs/features/comments.md, HTTP)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -4874,8 +5025,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
     // docs/features/plain-questions.md "Acceptance criteria" PQ10; 54 since
     // collision-pairs PP8, 55 since docs/features/department-practices.md
-    // (`cited`).
-    assert_eq!(set("Proposal").len(), 55);
+    // (`cited`), 56 since docs/features/comments.md (`comment_id`).
+    assert_eq!(set("Proposal").len(), 56);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -5032,8 +5183,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        181,
-        "181 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        187,
+        "187 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -5050,7 +5201,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          usage-orphans' three (UO9), scope-rings' three (SR4), corpus-map's six (CM3) and \
          auto-feed's eight (FD3) and \
          hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
-         department-practices' two (DP14) and specengine-guide's five (GU6)"
+         department-practices' two (DP14) and specengine-guide's five (GU6) and \
+         comments' six (docs/features/comments.md, HTTP)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -5065,8 +5217,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
     // docs/features/plain-questions.md "Acceptance criteria" PQ10; 54 since
     // collision-pairs PP8, 55 since docs/features/department-practices.md
-    // (`cited`).
-    assert_eq!(set("Proposal").len(), 55);
+    // (`cited`), 56 since docs/features/comments.md (`comment_id`).
+    assert_eq!(set("Proposal").len(), 56);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

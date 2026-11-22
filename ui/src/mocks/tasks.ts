@@ -99,6 +99,8 @@ export function task(fields: Pick<StoredTask, "id" | "project" | "status" | "cre
     runs: fields.runs ?? [],
     bundle: fields.bundle ?? null,
     practices: fields.practices ?? [],
+    // No mock card carries a task's talk to its package (docs/features/comments.md "The card context and the task package").
+    comments: fields.comments ?? { total: 0, listed: [] },
     roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at,
@@ -718,6 +720,7 @@ export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]
     bundle: stored.bundle,
     // No card lists a mock task's practices: the daemon's per read, never stored (docs/features/department-practices.md "Acceptance criteria", DP12).
     practices: stored.practices,
+    comments: stored.comments,
     roadmap,
     author: stored.author,
     created_at: stored.created_at,

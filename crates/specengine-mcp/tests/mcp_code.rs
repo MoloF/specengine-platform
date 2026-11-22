@@ -2210,6 +2210,45 @@ fn as_of_specengine_guide(instructions: &str) -> String {
 /// the same value).
 const GUIDE_BLAKE3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
 
+/// The server's `INSTRUCTIONS` since docs/features/comments.md (CM15): its
+/// BLAKE3.
+const COMMENTS_BLAKE3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+
+/// docs/features/comments.md: the comments line after the cards line, its
+/// line end with it (54 bytes).
+const COMMENTS_LINE: &str = "- list_comments, add_comment = spec comment list|add.\n";
+
+/// docs/features/comments.md: what the text gave up for it, `(now, before)`:
+/// `get_impact`'s `, depth?` and `find_symbols`' `, limit?` (still in their
+/// schemas), the create's ` (base null)` and the intake line's `; work on
+/// your working answer` (every raising tool's text says it): 57 bytes.
+const COMMENTS_CUTS: [(&str, &str); 4] = [
+    (
+        "get_impact(id|symbol|since) = impact;",
+        "get_impact(id|symbol|since, depth?) = impact;",
+    ),
+    (
+        "find_symbols(query|node|file|at) = symbols;",
+        "find_symbols(query|node|file|at, limit?) = symbols;",
+    ),
+    ("or a new file.\n", "or a new file (base null).\n"),
+    (
+        "distinct_from names each.\n",
+        "distinct_from names each; work on your working answer.\n",
+    ),
+];
+
+/// specengine-guide's text ([`GUIDE_BLAKE3`]) out of comments': no
+/// comments line, [`COMMENTS_CUTS`] undone.
+fn as_of_comments(instructions: &str) -> String {
+    let mut text = instructions.replacen(COMMENTS_LINE, "", 1);
+    for (now, before) in COMMENTS_CUTS {
+        assert_eq!(text.matches(now).count(), 1, "{now:?} once");
+        text = text.replacen(now, before, 1);
+    }
+    text
+}
+
 /// The `probes` build's paragraph until docs/features/impact.md (Q-B: it
 /// goes; both builds send `INSTRUCTIONS` alone, `mcp_create.rs`).
 const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output, probe_sleep.";
@@ -2347,7 +2386,26 @@ fn rd5_instructions_are_the_planned_text() {
     // docs/features/specengine-guide.md: 2 039 + 34 - 20 - 7 = 2 046; the
     // text before it is collision-pass' byte for byte (every assertion
     // below runs on that text).
-    let current = specengine_mcp::INSTRUCTIONS;
+    // docs/features/comments.md CM15: 2 046 + 54 - 57 = 2 043; without the
+    // comments line and with its cuts undone, specengine-guide's text byte
+    // for byte (every assertion below runs on that text).
+    let now = specengine_mcp::INSTRUCTIONS;
+    assert_eq!(COMMENTS_LINE.len(), 54);
+    assert_eq!(
+        COMMENTS_CUTS
+            .iter()
+            .map(|(now, before)| before.len() - now.len())
+            .sum::<usize>(),
+        57
+    );
+    assert_eq!(now.len(), 2043, "2 046 + 54 - 57");
+    assert_eq!(blake3_hex(now.as_bytes()), COMMENTS_BLAKE3);
+    assert_eq!(now.matches(COMMENTS_LINE).count(), 1);
+    for name in TOOLS {
+        assert!(has_word(now, name), "{name} unnamed");
+    }
+    let guide = as_of_comments(now);
+    let current = guide.as_str();
     assert_eq!(GUIDE_READ.len(), 34);
     assert_eq!(2 * ARCHIVE_INPUT.len() + QUEUES_WORD.len(), 27);
     assert_eq!(current.len(), 2046, "2 039 + 34 - 27");
@@ -2359,9 +2417,6 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(current.matches(GUIDE_READ).count(), 1);
     assert_eq!(current.matches(ARCHIVE_INPUT).count(), 0, "both cut");
     assert!(current.contains("- report_drift = spec propose drift: HEAD's lock drift.\n"));
-    for name in TOOLS {
-        assert!(has_word(current, name), "{name} unnamed");
-    }
     let collision_pass = as_of_specengine_guide(current);
     let instructions = collision_pass.as_str();
     // docs/features/collision-pass.md CP8: 2 048 - 74 + 65.
@@ -2493,7 +2548,10 @@ fn rd5_instructions_are_the_planned_text() {
         "docs/features/card-trace.md cuts the clause"
     );
     // `get_guide` is specengine-guide's, checked on the current text above.
-    for name in TOOLS.iter().filter(|name| **name != "get_guide") {
+    for name in TOOLS
+        .iter()
+        .filter(|name| !["get_guide", "list_comments", "add_comment"].contains(*name))
+    {
         assert!(has_word(instructions, name), "{name} unnamed");
     }
     for name in CODE_TOOLS {

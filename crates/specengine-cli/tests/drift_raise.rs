@@ -1505,16 +1505,16 @@ fn raise_exits_2_change_nothing() {
     repo.git(&["checkout", "-q", "main"]);
 
     // A queue of a newer schema.
-    // This build's queue schema is 14 (docs/features/collision-pass.md D6;
+    // This build's queue schema is 15 (docs/features/comments.md CM1;
     // task-mandate R1: 12 over 11 recorded at 8a43e5d).
-    sql(&repo, SLUG, "PRAGMA user_version = 15;");
+    sql(&repo, SLUG, "PRAGMA user_version = 16;");
     let message = raise(&repo, &[]).cannot("a newer queue");
     assert!(
-        message.contains("15") && message.contains("14"),
+        message.contains("16") && message.contains("15"),
         "{message}"
     );
-    assert_eq!(sql(&repo, SLUG, "PRAGMA user_version;"), "15", "left alone");
-    sql(&repo, SLUG, "PRAGMA user_version = 14;");
+    assert_eq!(sql(&repo, SLUG, "PRAGMA user_version;"), "16", "left alone");
+    sql(&repo, SLUG, "PRAGMA user_version = 15;");
     assert_unchanged(&repo, &before, "a newer queue");
 
     // An unborn HEAD; a root outside git.

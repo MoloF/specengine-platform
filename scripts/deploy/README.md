@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [scripts/deploy]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # scripts/deploy -- a hub on one host
@@ -19,7 +19,7 @@ The operator's guide: from a clean Linux VPS with Docker to a running hub. Why t
 ## Install
 
 ```sh
-git clone --branch v0.49.3 https://github.com/MoloF/specengine-platform
+git clone --branch v0.50.0 https://github.com/MoloF/specengine-platform
 cd specengine-platform/scripts/deploy
 cp .env.example .env            # set the three names and ACME_EMAIL; keep the staging CA
 install -d -m 700 secrets authelia/users traefik/mcp-users admin-log

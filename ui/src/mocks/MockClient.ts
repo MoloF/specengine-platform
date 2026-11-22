@@ -5,12 +5,14 @@ import {
   type BundleOptions,
   type CardsOptions,
   type CatalogOptions,
+  type CommentsOptions,
   type DeliveryOptions,
   type FeedOptions,
   type FlowOptions,
   type GraphOptions,
   type LibraryOptions,
   type MapOptions,
+  type MentionsOptions,
   type NodeOptions,
   type RoadmapOptions,
   type RoundOptions,
@@ -39,6 +41,11 @@ import type {
   CardSplitBody,
   CardWrite,
   CheckReport,
+  CommentAddBody,
+  CommentDocument,
+  CommentEditBody,
+  CommentList,
+  CommentRaiseBody,
   ConfirmBody,
   ConfirmRead,
   CatalogDocument,
@@ -57,6 +64,7 @@ import type {
   GuidePage,
   LibraryDocument,
   MapDocument,
+  MentionList,
   NodeView,
   Project,
   Proposal,
@@ -119,6 +127,7 @@ import { lockDiffOf } from "./lockDiff";
 import { deliveryOf } from "./delivery";
 import { delegatedProposals, feedOf, MORNING, payloadOf, type NightEvent } from "./feed";
 import { catalogOf } from "./catalog";
+import { addIn, deleteIn, editIn, listIn, LOCAL, mentionsIn, mockComments, raiseIn, type MockComments } from "./comments";
 import { plainQuestionsScenario } from "./plainQuestions";
 import { collisionPairsScenario } from "./collisionPairs";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
@@ -156,7 +165,7 @@ const NO_CONFIRM_ROUTE = "no route /api/projects/<slug>/proposals/<id>/confirm: 
 const NO_SYNC_ROUTE = "no route /api/projects/<slug>/sync: the routes are /api/projects and the web UI (mock)";
 
 /** The `hub` scenario's login and its `[team]` row: every act and Confirm (`docs/canon/hub-confirm.md` "Routes"). */
-const HUB_TEAM: Team = { login: "mira", name: "Mira Holt", allowed: ["stage", "accept", "clear", "group_clear", "confirm"] };
+const HUB_TEAM: Team = { login: "mira", name: "Mira Holt", allowed: ["stage", "accept", "clear", "group_clear", "confirm", "delete_comment"] };
 
 /** Who a hub's confirm records, its login and `[team]` email (`docs/canon/hub-confirm.md` "Rules", Identity). */
 const HUB_DECIDER = "mira <mira@harbor.example.invalid>";
@@ -216,6 +225,8 @@ export class MockClient implements SpecEngineClient {
   private readonly raiseConflicted = new Set<string>();
   /** `conflict`: the projects whose first split written has met a config changed meanwhile. */
   private readonly splitConflicted = new Set<string>();
+  /** Each project's comments by slug (src/mocks/comments.ts): the daemon's writes on them, until a reload. */
+  private readonly comments = new Map<string, MockComments>();
   /** `feed`: harbor-sim's morning events the live tail has said so far (src/mocks/feed.ts). */
   private readonly morning: NightEvent[] = [];
 
@@ -229,6 +240,7 @@ export class MockClient implements SpecEngineClient {
     for (const project of this.projects) {
       this.tasks.set(project.project.slug, mockTasks(project.project.slug));
       this.boards.set(project.project.slug, mockBoard(project.project.slug, scenario, at));
+      this.comments.set(project.project.slug, mockComments(scenario === "empty" ? "" : project.project.slug, at));
     }
     // The night's applies by rule (src/mocks/feed.ts): decided rows, so the Inbox lists neither.
     this.project("harbor-sim").proposals.push(...delegatedProposals("harbor-sim", at));
@@ -943,6 +955,69 @@ export class MockClient implements SpecEngineClient {
       throw new ClientError({ status: 404, message: `no project ${project}` });
     }
     return board;
+  }
+
+  // Comments (docs/features/comments.md "HTTP"; src/mocks/comments.ts): who writes is the `hub`
+  // scenario's login, else the name sent or `local`; the `hub` login deletes another's as its
+  // `[team]` row allows, a local page anyone's.
+
+  /** What `on` names: a card of the board (else its 404), a proposal by its ID's form, else a node. */
+  private placeOf(project: string, on: string): string {
+    if (/^C-\d+$/.test(on)) {
+      if (!this.board(project).cards.some((card) => card.id === on)) {
+        throw new ClientError({ status: 404, message: `on: no card ${on}` });
+      }
+      return "card";
+    }
+    return /^PR-\d+$/.test(on) ? "proposal" : "node";
+  }
+
+  private commentsOf(project: string): MockComments {
+    this.project(project);
+    let store = this.comments.get(project);
+    if (store === undefined) {
+      store = { rows: [] };
+      this.comments.set(project, store);
+    }
+    return store;
+  }
+
+  /** The writer: a hub's login, else the name sent, else `local`. */
+  private commenter(as: string | null): { actor: string; login: string | null } {
+    return this.scenario === "hub" ? { actor: HUB_TEAM.login, login: HUB_TEAM.login } : { actor: as ?? LOCAL, login: null };
+  }
+
+  async getComments(project: string, options: CommentsOptions): Promise<CommentList> {
+    await this.read();
+    return listIn(this.commentsOf(project), options, this.placeOf(project, options.on));
+  }
+
+  async getMentions(project: string, options: MentionsOptions): Promise<MentionList> {
+    await this.read();
+    const login = this.scenario === "hub" ? HUB_TEAM.login : options.login;
+    return mentionsIn(this.commentsOf(project), login === undefined ? { ...options } : { ...options, login });
+  }
+
+  async addComment(project: string, body: CommentAddBody): Promise<CommentDocument> {
+    await this.wait();
+    const { actor, login } = this.commenter(body.as);
+    return addIn(this.commentsOf(project), body, this.placeOf(project, body.on), actor, login, this.stamp());
+  }
+
+  async editComment(project: string, id: string, body: CommentEditBody): Promise<CommentDocument> {
+    await this.wait();
+    return editIn(this.commentsOf(project), id, body, this.commenter(body.as).actor, this.stamp());
+  }
+
+  async deleteComment(project: string, id: string): Promise<CommentDocument> {
+    await this.wait();
+    const hub = this.scenario === "hub";
+    return deleteIn(this.commentsOf(project), id, hub ? HUB_TEAM.login : LOCAL, !hub || HUB_TEAM.allowed.includes("delete_comment"), this.stamp());
+  }
+
+  async raiseFromComment(project: string, id: string, body: CommentRaiseBody): Promise<IntakeDocument> {
+    await this.wait();
+    return raiseIn(this.commentsOf(project), this.project(project).proposals, project, id, body, this.stamp());
   }
 
   /**

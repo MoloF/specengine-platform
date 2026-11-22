@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture, crates/specengine-eval, crates/specengine-http, scripts/deploy]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # Soak runs: crashes, hangs and leaks against written budgets
@@ -53,6 +53,7 @@ The owner's stability policy (ADR-0086), how a soak measures it in this reposito
 | write-memory M over 2 000 pending | `write_soak.rs`, `WRITE_SOAK_PENDING=2000` | M's, the queue filled first | 0.25, live heap (Linux RSS); 5, footprint at the quiet moments (macOS) | as W | 0.0, 0.0; −1.22, −2.13 (25.0 and 12.5 before); RSS 79 → 79 MiB (216 → 443 before) |
 | write-memory R | `write_soak.rs` | 10 readers of `get_node`, `search`, `GET …/inbox` | 0.5, live heap (Linux RSS); 5, footprint at the quiet moments (macOS) | as W | 0.0, 0.0; 0.0, 0.016 (2026-11-20) |
 | write-memory H | `write_soak.rs` | 8 writers repeating one question, a hit each | reported only | as W | RSS 0.215, one run (2026-11-20) |
+| write-memory CM over 2 000 comments | `write_soak.rs`, `WRITE_SOAK_VARIANT=CM` | 10 logins over 2 000 comments on 20 cards: 8 `add_comment` writers over `/mcp` beside readers of `get_card {context}`, `GET …/comments`, `GET …/mentions` | 0.25, live heap (Linux RSS); 5, footprint at the quiet moments (macOS) | as W | live heap, then quiet footprint (2026-11-22, comments CM19): 0.0, 0.0; −1.42, −2.96; RSS 5.2 → 81.1 and 80.2 MiB; 22 295 and 22 031 calls, all answered, 0 hangs. A planted 2 KiB per `add_comment`: live heap 4.40, red; the quiet footprint alone read 1.86, under 5: the live heap is the judge that catches a steady leak |
 
 Why 0.25 for writes: at about 500 writes a minute it allows at most 0.5 KiB kept per write. On the live heap the readers and a clean writer read 0.0 and a 2 KiB-per-write leak 2.16, so the bar sits above the clean runs and below a real leak. Why 5 for the quiet footprint: clean runs read at most 0, and M over 2 000 pending read 25.0 and 12.5 before its fix, so the bar sits 2.5 times under the lowest red run: noisy, so read the thirds too. `write_soak.rs`'s `WRITE_BUDGET_MIB_PER_MIN`, `READ_BUDGET_MIB_PER_MIN` and `FOOTPRINT_BUDGET_MIB_PER_MIN` hold the write-memory rows' numbers, and a test compares them (write-memory WM6, mixed-load-memory MX6).
 

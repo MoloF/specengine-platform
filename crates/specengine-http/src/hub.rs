@@ -73,6 +73,10 @@ const WRITES: [&str; 5] = ["move", "edit", "assign", "cancel", "items"];
 /// The last segment of a card's confirm routes: each takes a `Consent`.
 const CONFIRMS: [&str; 2] = ["accept", "clear"];
 
+/// The last segment of a comment's plain writes (task spec `comments`,
+/// "HTTP"): `edit` its author's new body, `items` an item raised from it.
+const COMMENT_WRITES: [&str; 2] = ["edit", "items"];
+
 /// How a write is judged on a hub (task spec `hub-team`, "Classes"). The
 /// confirm class is the acts a person confirms, each behind the proxy's
 /// step-up; a stage is none.
@@ -310,7 +314,10 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
 /// serve. Exact raw segments, so an encoded or trailing form of a route is
 /// not listed. Plain: POST on `.../cards`, `.../cards/split`
 /// (`docs/features/department-split.md` "Acceptance criteria", S7) or
-/// `.../cards/:id/{move,edit,assign,cancel,items}`. Team: POST, DELETE on
+/// `.../cards/:id/{move,edit,assign,cancel,items}`; POST on `.../comments`
+/// and `.../comments/:id/{edit,items}`, DELETE on `.../comments/:id`, whose
+/// handler judges the author or an `owner` (task spec `comments`). Team:
+/// POST, DELETE on
 /// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
 /// `.../cards/:id/{accept,clear}`, `.../trace/clear` and
 /// `.../proposals/:id/confirm`. Mcp: POST, DELETE on `/mcp/<slug>`.
@@ -346,6 +353,11 @@ fn class(method: &Method, path: &str) -> Option<Class> {
                 && path.ends_with("/decision") =>
         {
             Some(Class::Team)
+        }
+        ["comments"] if post => Some(Class::Plain),
+        ["comments", id] if method == Method::DELETE && !id.is_empty() => Some(Class::Plain),
+        ["comments", id, verb] if post && !id.is_empty() && COMMENT_WRITES.contains(verb) => {
+            Some(Class::Plain)
         }
         ["proposals", id, "confirm"] if post && !id.is_empty() => Some(Class::Confirm),
         ["round", _] if post && path.ends_with("/round/answers") => Some(Class::Team),

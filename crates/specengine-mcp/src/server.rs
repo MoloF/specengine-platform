@@ -42,6 +42,13 @@ list|show|new|split|edit|move; no tool accepts."
     };
 }
 
+/// The `instructions` line of the comment tools (task spec `comments`).
+macro_rules! comments_line {
+    () => {
+        "- list_comments, add_comment = spec comment list|add."
+    };
+}
+
 /// The `instructions` line of the collision tools (task spec
 /// `collision-pass` CP8).
 macro_rules! collisions_line {
@@ -88,7 +95,12 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// task spec `specengine-guide` adds `get_guide(topic?, rule?) = guide` to
 /// the reads (34 bytes) and drops `get_tree`'s and `get_node`'s `,
 /// archive?` (20 bytes, still in their schemas) and report_drift's
-/// `queues ` (7 bytes): 2 046 bytes.
+/// `queues ` (7 bytes): 2 046 bytes; task spec `comments` adds the comments
+/// line after the cards line (54 bytes, its line end with it) and drops
+/// `get_impact`'s and `find_symbols`' `, depth?` and `, limit?` (16 bytes,
+/// still in their schemas), the create's ` (base null)` (12) and `; work on
+/// your working answer` (29; every raising tool's text says it): 2 043
+/// bytes.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
@@ -98,16 +110,16 @@ Reads:
 - get_tree(root?, depth?, kinds?) = tree; get_node(id, with?) = show; \
 search(query, kinds?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
-get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?, trace?) = flow; \
+get_impact(id|symbol|since) = impact; get_flow(root?, depth?, trace?) = flow; \
 get_trace(ref?) = trace; get_guide(topic?, rule?) = guide.
-- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
+- Code: find_symbols(query|node|file|at) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):
 - propose_change = spec propose update|create|interpretation|amendment: a node's new text \
-against its span_hash; create: new ID sections in it, or a new file (base null).
+against its span_hash; create: new ID sections in it, or a new file.
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
-distinct_from names each; work on your working answer.
+distinct_from names each.
 - report_drift = spec propose drift: HEAD's lock drift.
 - review_proposal = review --brief after the owner's form; only when the owner asks.
 ",
@@ -118,6 +130,9 @@ distinct_from names each; work on your working answer.
     "
 ",
     cards_line!(),
+    "
+",
+    comments_line!(),
     "
 
 REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: --kind \
@@ -144,6 +159,7 @@ const _: () = assert!(tasks_line!().len() < TASKS_LINE_LIMIT);
 const _: () = assert!(holds(INSTRUCTIONS, tasks_line!()));
 const _: () = assert!(holds(INSTRUCTIONS, cards_line!()));
 const _: () = assert!(holds(INSTRUCTIONS, collisions_line!()));
+const _: () = assert!(holds(INSTRUCTIONS, comments_line!()));
 // The guide's tool is named with its twin (task spec `specengine-guide`).
 const _: () = assert!(holds(INSTRUCTIONS, "get_guide(topic?, rule?) = guide"));
 // The owner's form is named with its twin, and when it may be called
@@ -215,6 +231,7 @@ impl SpecEngineServer {
             + Self::review_tools()
             + Self::task_tools()
             + Self::card_tools()
+            + Self::comment_tools()
             + Self::collision_tools()
             + Self::guide_tools();
         #[cfg(feature = "probes")]

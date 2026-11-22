@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin, ui]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # Card context: a task read with its context in one call
@@ -12,12 +12,13 @@ Built by `card-context` (RM-0108, plugin 0.39.0) on accepted decisions alone: a 
 
 ## The rule
 
-`spec card show C [--history] [--marks] [--context [--budget N]]`; MCP `get_card {card_id, history?, context?, budget?}`, its content byte-equal to `show --marks … 2>&1` (`mcp-read.md` "Tools", **Parity**). Opt-in: unasked, `context` is `null`, the text's last line `context: -`, and the read reads no parent, no config for a budget and no bundle, so plain `show` stays a queue read. Asked, on any card (cancelled, accepted, stranded too), `context` is `{parent, bundle, notes}`, every part present. No new tool, `[budgets]` key, schema step, backup format or route. The context decides nothing: no move, accept, gate or rollup reads it.
+`spec card show C [--history] [--marks] [--context [--budget N]]`; MCP `get_card {card_id, history?, context?, budget?}`, its content byte-equal to `show --marks … 2>&1` (`mcp-read.md` "Tools", **Parity**). Opt-in: unasked, `context` is `null`, the text's last line `context: -`, and the read reads no parent, no config for a budget and no bundle, so plain `show` stays a queue read, reading no comment either. Asked, on any card (cancelled, accepted, stranded too), `context` is `{parent, bundle, comments, notes}`, every part present. No new tool, `[budgets]` key, schema step, backup format or route. The context decides nothing: no move, accept, gate or rollup reads it.
 
 - **REFs**: the card's `targets` as stored (canonical, at most 64), then the `record_id` of each of its own items `applied` with one, of any kind, in `items` order, at most 64 (`NODES_MAX`), past them a note. One fitting, one `bundle_hash`. A subtask's records stay out of its parent's bundle: their IDs are in `subtask_items`. Passed as they are, never de-duplicated: the bundle counts REFs naming one node once.
 - **Budget**: `--budget N` (1 to 4294967295, `spec bundle`'s `budget_of`), else the reading root's `[budgets] bundle_task`, read alone as a package's, else `DEFAULT_TASK_BUDGET` 10 000. It goes as `BundleRequest.budget = Some(n)`, so `bundle_node` is never read and a minimum's line names `--budget N`.
 - **Parent**: the direct parent's `{id, title, goal}`, read now from the same queue; none: `null`, no note. Unreadable: `null` and a note. A goal over `GOAL_MAX` (4 096 B, a hand edit) is cut at the last character boundary within it, with a note.
 - **Live text**: the bundle reads the corpus now, never the card's `snapshot`; the card's `mark` says when its brief changed.
+- **Comments** (ADR-0087): the card's newest live comments, at most 20 within 8 192 characters, as `context.comments:` and `context.comment:` lines after `context.parent.goal:`, before `context.bundle:`, counted in `U`, never in the bundle, so `bundle_hash` ignores them (`comments.md` "Agents' context").
 - **Practices** (ADR-0084): the bundle is asked with the card's discipline (layer 10), and `--context` fills `practices` and `cited`, their `practices:` and `cited:` lines counted in `U` (`card-practices.md`).
 
 ## The room
@@ -38,9 +39,9 @@ context.bundle: b3:<64 hex digits>
 
 `context.parent:` is `<id> | <title>` or `-`; `context.parent.goal:` the goal through `one_line`, or `-` (no parent, no goal); `context.bundle:` the `bundle_hash` or `-`, the body only when made. Tokens, characters and bytes are in the JSON. The context's notes print as `note: context: <note>` after every message the read printed before, then the bundle's own `note:` and `warning:` lines verbatim, all outside the cut. The whole text, body included, goes through `escape_controls`.
 
-JSON: `context` is the card document's 35th key, between `history` and `practices` (`cards.md` "Documents and events"): `null`, or `{parent: {id, title, goal} | null, bundle, notes}`. `bundle` is `spec bundle --json`'s document exactly, 13 keys (`spec-cli-bundle.md` "Output"), from the bundle's own serializer, equal as a value to `spec bundle <REFs> --budget N --json`; never its exit-1 document. `notes` drop the `context: ` prefix; the document's top-level `notes` hold none of them.
+JSON: `context` is the card document's 35th key, between `history` and `practices` (`cards.md` "Documents and events"): `null`, or `{parent: {id, title, goal} | null, bundle, comments: {total, listed}, notes}`. `bundle` is `spec bundle --json`'s document exactly, 13 keys (`spec-cli-bundle.md` "Output"), from the bundle's own serializer, equal as a value to `spec bundle <REFs> --budget N --json`; never its exit-1 document. `notes` drop the `context: ` prefix; the document's top-level `notes` hold none of them.
 
-Library: `CardShowRequest` has `context: bool`, `budget: Option<i64>`, set at every construction; `CardShowOutcome.context: Option<CardContext>`; `CardContext {parent: Option<CardContextParent>, bundle: Option<BundleOutcome>, notes}`, `CardContextParent {id, title, goal}`, both exported. `BundleRequest` and `bundle()` are unchanged.
+Library: `CardShowRequest` has `context: bool`, `budget: Option<i64>`, set at every construction; `CardShowOutcome.context: Option<CardContext>`; `CardContext {parent: Option<CardContextParent>, bundle: Option<BundleOutcome>, comments: ContextComments, notes}`, `CardContextParent {id, title, goal}`, both exported. `BundleRequest` and `bundle()` are unchanged.
 
 ## Notes and exits
 

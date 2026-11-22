@@ -71,7 +71,8 @@ use specengine_core::proposal::is_utc_timestamp;
 use specengine_core::{WorkspaceConfig, WorkspaceSource};
 use specengine_model::{RunOutcome, TaskStatus};
 use specengine_store::{
-    EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_GATE_OBSERVED, EVENT_REJECTED, EVENT_TASK_APPROVED,
+    EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_COMMENT_CREATED, EVENT_COMMENT_DELETED,
+    EVENT_COMMENT_EDITED, EVENT_GATE_OBSERVED, EVENT_REJECTED, EVENT_TASK_APPROVED,
     EVENT_TASK_RUN_REPORTED, FeedEvent, FeedProposal, FeedRun, FeedTask, FeedWindow, GitEnv,
     ProposalStatus, SqliteQueue, Task, same_repository,
 };
@@ -612,6 +613,13 @@ impl Rows<'_> {
             Subject::Line(line) => entry.subject.clone_from(line),
             Subject::None => {}
         }
+        // A comment's event names the comment; its payload holds no body
+        // (task spec `comments`, "Events").
+        if family == "comment"
+            && let Some(id) = text(payload, "id")
+        {
+            entry.subject = id;
+        }
         entry.lane = match &entry.task {
             Some(task) if self.tasks.contains_key(task) => self.lanes.lane(task),
             Some(_) => None,
@@ -672,6 +680,17 @@ fn words(kind: &str, payload: &Value, entry: &FeedEntry) -> String {
             word(payload, "branch"),
             entry.commit.as_deref().map_or(ABSENT, short)
         )),
+        EVENT_COMMENT_CREATED => Some(format!(
+            "on {} by {}",
+            word(payload, "on"),
+            word(payload, "as")
+        )),
+        EVENT_COMMENT_EDITED => Some(format!(
+            "v{} by {}",
+            word(payload, "version"),
+            word(payload, "as")
+        )),
+        EVENT_COMMENT_DELETED => Some(format!("by {}", word(payload, "as"))),
         EVENT_GATE_OBSERVED => Some(match text(payload, "zone") {
             Some(zone) => format!("{} ({zone})", entry.path.as_deref().unwrap_or(ABSENT)),
             None => format!("{} (config)", entry.path.as_deref().unwrap_or(ABSENT)),

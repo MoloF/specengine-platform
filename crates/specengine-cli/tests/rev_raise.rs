@@ -680,8 +680,9 @@ fn review_document_every_key_present() {
     // docs/features/intake-similar.md "Acceptance criteria" IS6 (`similar`);
     // 53 since docs/features/plain-questions.md PQ10; 54 since
     // docs/features/collision-pairs.md PP8 (`pair`); 55 since
-    // docs/features/department-practices.md "Proposals: `cited`".
-    assert_eq!(keys.len(), 55, "{keys:?}");
+    // docs/features/department-practices.md "Proposals: `cited`"; 56 since
+    // docs/features/comments.md (`comment_id`).
+    assert_eq!(keys.len(), 56, "{keys:?}");
     assert_eq!(value["drift"], Value::Null);
     let json_text = serde_json::to_string(&value).unwrap();
     let printed = rev_common::printed(
@@ -731,8 +732,9 @@ fn review_document_every_key_present() {
     assert_eq!(lines[at - 1], "conflict", "{text}");
     assert_eq!(lines[at + 1], "drift", "{text}");
     // 50 since docs/features/card-questions.md D14; 52 since
-    // docs/features/plain-questions.md PQ1 (`gist:`, `matters:`).
-    assert_eq!(lines.len(), 52, "{text}");
+    // docs/features/plain-questions.md PQ1 (`gist:`, `matters:`); 53 since
+    // docs/features/comments.md (`comment_id:`).
+    assert_eq!(lines.len(), 53, "{text}");
     assert!(!json_text.is_empty());
 }
 

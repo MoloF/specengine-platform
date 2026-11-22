@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 summarises: [docs/canon/architecture.md#apply, docs/canon/architecture.md#control, docs/canon/proposal-apply.md#consent, docs/canon/proposal-queue.md#commands, docs/canon/agent-intake.md#tools, docs/canon/decision-staging.md#rule, docs/canon/hub-confirm.md#rules]
 ---
 

@@ -687,7 +687,7 @@ fn uo4_healths_orphans_row() {
     // stderr, exit 0.
     sql_at(&copy.db(), "PRAGMA user_version = 999;");
     let newer = "orphans: tasks not read: the proposal queue's tables are of a newer SpecEngine \
-                 (schema version 999, this build knows 14): upgrade SpecEngine (nothing changed)";
+                 (schema version 999, this build knows 15): upgrade SpecEngine (nothing changed)";
     let run = copy.run(&["health", "--json"]);
     run.code(0);
     let document = run.json();
@@ -947,14 +947,15 @@ fn uo7_nothing_is_stored() {
     // docs/features/department-practices.md (the `disciplines` table), 20
     // since docs/features/specengine-guide.md (the typed `summarises`), 21
     // since docs/features/release-tail.md (rule (7)'s citation tail);
-    // usage-orphans itself moved no format.
+    // usage-orphans itself moved no format; docs/features/comments.md moved
+    // the queue's (15) and the backup's (8), not the index's.
     assert_eq!(specengine_store::INDEX_FORMAT, 21, "the index format");
     assert_eq!(
         specengine_store::QUEUE_SCHEMA_VERSION,
-        14,
+        15,
         "the queue schema"
     );
-    assert_eq!(specengine_cli::STATE_FORMAT, 7, "the backup format");
+    assert_eq!(specengine_cli::STATE_FORMAT, 8, "the backup format");
     let words: Vec<&&str> = CHECK_CODES
         .iter()
         .filter(|code| code.contains("orphan") || code.contains("usage") || code.contains("used"))

@@ -1170,7 +1170,7 @@ pub fn package_spec_part(package: &Value) -> Value {
 /// `tested` after `bindings` since docs/features/tested-reads.md
 /// "Per read"; `practices` after `bundle` since
 /// docs/features/department-practices.md "The task package: `practices`").
-pub const PACKAGE_KEY_ORDER: [&str; 28] = [
+pub const PACKAGE_KEY_ORDER: [&str; 29] = [
     "schema_version",
     "id",
     "project",
@@ -1194,6 +1194,8 @@ pub const PACKAGE_KEY_ORDER: [&str; 28] = [
     "runs",
     "bundle",
     "practices",
+    // docs/features/comments.md "The card context and the task package".
+    "comments",
     "roadmap",
     "author",
     "created_at",

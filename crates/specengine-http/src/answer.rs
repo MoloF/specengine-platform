@@ -38,13 +38,15 @@
 //! The read routes, the one list (`crate::app`): `tree`, `nodes`, `search`,
 //! `bundle`, `graph`, `map`, `flow` without `trace`, `check`, `health`,
 //! `lock-diff`, `roadmap`, `delivery`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`,
-//! `cards` (GET) without `marks`, `cards/<id>` (no marks) and
-//! `cards/counts` (no index read). Not on it,
+//! `cards` (GET) without `marks`, `cards/<id>` (no marks),
+//! `cards/counts` (no index read), `comments` (GET) and `mentions` (task
+//! spec `comments`: they read the queue, a node resolved from the trusted
+//! index). Not on it,
 //! so walking: trace data wherever it is shown (`trace`, `flow?trace=true`,
 //! `cards?marks=true`, `catalog`, `rings`: the rollups and marks a person accepts a card on,
 //! judged on the files as they are now); the round's sheet (it writes a
 //! round), the stage, the round's answers, every card write, the trace's
-//! clear and a confirm's read and write.
+//! clear, every comment write and a confirm's read and write.
 
 use std::sync::Arc;
 
@@ -53,8 +55,8 @@ use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use specengine_cli::{
-    CardCause, CliError, ConfirmCause, Env, Exit, Globals, IndexTrust, Outcome, ProjectRoot,
-    StageCause, check_memo, cost, discover, render_json, trusted, walking,
+    CardCause, CliError, CommentCause, ConfirmCause, Env, Exit, Globals, IndexTrust, Outcome,
+    ProjectRoot, StageCause, check_memo, cost, discover, render_json, trusted, walking,
 };
 
 use crate::start::Project;
@@ -187,6 +189,24 @@ fn answered(outcome: &Outcome) -> Answered {
             return caused(outcome, Some(status));
         }
         Outcome::CardGroup(group) => return caused(outcome, write_status(group.cause)),
+        // A comment's write (task spec `comments`, "HTTP"): done 200 the
+        // comment, a body cap 400, no such comment or target 404 `{id,
+        // reason}`, a rule 409 `{id, reason}`, not the person to make it 403
+        // with `refused: <line>`.
+        Outcome::Comment(comment) => {
+            return match comment.cause() {
+                Some(CommentCause::Forbidden) => Answered::Refused {
+                    status: StatusCode::FORBIDDEN,
+                    message: comment
+                        .refused
+                        .as_ref()
+                        .map(|refused| format!("refused: {}", refused.reason))
+                        .unwrap_or_default(),
+                },
+                cause => caused(outcome, comment_status(cause)),
+            };
+        }
+        Outcome::CommentList(list) => return caused(outcome, comment_status(list.cause())),
         // A split: 200 written or planned, 400 a usage rule, 409 refused
         // with the document; never a 404, the path naming no card
         // (`docs/features/department-split.md`
@@ -213,6 +233,18 @@ fn answered(outcome: &Outcome) -> Answered {
     Answered::Document {
         status,
         body: document(outcome),
+    }
+}
+
+/// A comment command's status by its cause; `None` a body the caps refuse
+/// (a 400 with its line).
+fn comment_status(cause: Option<CommentCause>) -> Option<StatusCode> {
+    match cause {
+        None => Some(StatusCode::OK),
+        Some(CommentCause::Body) => None,
+        Some(CommentCause::Unknown) => Some(StatusCode::NOT_FOUND),
+        Some(CommentCause::Refused) => Some(StatusCode::CONFLICT),
+        Some(CommentCause::Forbidden) => Some(StatusCode::FORBIDDEN),
     }
 }
 

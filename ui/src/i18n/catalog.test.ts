@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { enT } from "../test/text";
 import { isLanguage, LANGUAGES, type Messages } from "./catalog";
-import { en } from "./en";
+import { en as eager } from "./en";
+import { enComments } from "./enComments";
 import { ru } from "./ru";
+
+/** The whole English catalog: first load's and the part the comments' chunks bring (catalog.ts `English`). */
+const en = { ...eager, comments: enComments };
 
 // LG-1 and LG-9 of docs/features/ui-languages.md: the two catalogs hold the same keys, plural
 // groups in each language's forms, the same placeholders, `{{count}}` in plural forms alone, plain
@@ -16,7 +20,7 @@ const SEGMENT = /^[a-z][A-Za-z0-9_]*$/;
 // "map" since docs/features/corpus-map.md "Acceptance criteria", CM13: the Graph's Map;
 // "documents" since docs/features/doc-library.md "Acceptance criteria", DL19: the Documents section;
 // "practices" since docs/features/department-practices.md "Acceptance criteria", DP21: a task's Practices part (src/practices/).
-const FIRST_SEGMENTS = ["app", "palette", "home", "ui", "workspace", "board", "flow", "health", "inbox", "tasks", "tree", "roadmap", "round", "graph", "trace", "markdown", "language", "doc", "rings", "map", "feed", "documents", "practices", "guide"];
+const FIRST_SEGMENTS = ["app", "palette", "home", "ui", "workspace", "board", "flow", "health", "inbox", "tasks", "tree", "roadmap", "round", "graph", "trace", "markdown", "language", "doc", "rings", "map", "feed", "documents", "practices", "guide", "comments"];
 
 /** Every leaf by its dotted path. */
 function flat(messages: Messages, prefix = ""): Map<string, string> {
@@ -136,6 +140,15 @@ function changed(messages: Messages, path: string, edit: (holder: Record<string,
 describe("the catalogs (LG-1)", () => {
   it("hold the same keys, forms and placeholders, as plain text", () => {
     expect(problemsOf(en, ru)).toEqual([]);
+  });
+
+  // docs/features/comments.md "UI" (first load): the comments' English is a part of its own, loaded
+  // with their chunks; first load's catalog holds only the four words drawn before them, under `app`.
+  it("keep the comments' English out of first load's catalog: `en` holds no `comments`, the part holds them all, `app` the four drawn before", () => {
+    expect(Object.keys(eager)).not.toContain("comments");
+    expect(Object.keys(en.comments)).toEqual(Object.keys(enComments));
+    expect([eager.app.mentions, eager.app.comments, eager.app.lazy.comments, eager.app.lazy.mentions]).toEqual(["Mentions", "Comments", "Reading the comments", "Reading the mentions"]);
+    expect(problemsOf({ comments: enComments }, { comments: ru.comments })).toEqual([]);
   });
 
   it("are the two languages the select offers", () => {

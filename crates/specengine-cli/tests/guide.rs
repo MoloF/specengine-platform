@@ -690,8 +690,10 @@ fn gu3_guide_is_the_source_field_by_field() {
         false,
     );
     assert!(
-        index.stdout.contains("auto | The `[auto]` mode | Auto mode is a committed rule in \
-                               `specengine.toml`"),
+        index.stdout.contains(
+            "auto | The `[auto]` mode | Auto mode is a committed rule in \
+                               `specengine.toml`"
+        ),
         "the index line as written: {}",
         index.stdout
     );
@@ -870,7 +872,11 @@ fn run_build_script(root: &Path) -> Built {
 
 /// One refused case of `build.rs`: its name, how it breaks the copy of
 /// `docs/guide`, and the files the build error may name.
-type BrokenGuide = (&'static str, Box<dyn FnOnce(&Path)>, &'static [&'static str]);
+type BrokenGuide = (
+    &'static str,
+    Box<dyn FnOnce(&Path)>,
+    &'static [&'static str],
+);
 
 /// A scratch tree holding a copy of `docs/guide`, edited by `change`.
 fn tree_with(scratch: &Scratch, name: &str, change: impl FnOnce(&Path)) -> PathBuf {

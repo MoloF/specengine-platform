@@ -50,9 +50,11 @@ use specengine_cli::{
     Outcome, ProposedText, ShowRequest, UPDATE_KIND, inbox, show,
 };
 
-/// "Data"'s `propose_change` line of the instructions, with its LF.
+/// "Data"'s `propose_change` line of the instructions, with its LF; without
+/// ` (base null)` since docs/features/comments.md CM15 (the schema still
+/// says it).
 const CHANGE_LINE: &str = "- propose_change = spec propose update|create|interpretation|amendment: a \
-node's new text against its span_hash; create: new ID sections in it, or a new file (base null).\n";
+node's new text against its span_hash; create: new ID sections in it, or a new file.\n";
 
 /// "Data"'s new file.
 const R13: &str = "docs/records/R/R-13.md";
@@ -418,10 +420,13 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // the change line untouched); 2 048 since docs/features/trace-views.md
     // (`get_flow`'s `, trace?`; the change line untouched); 2 039 since
     // docs/features/collision-pass.md (the collisions line in, the
-    // resources sentence out; the change line untouched).
-    assert_eq!(CHANGE_LINE.len(), 171);
+    // resources sentence out; the change line untouched); the line 159
+    // since docs/features/comments.md CM15 (` (base null)` cut, 12 bytes).
+    assert_eq!(CHANGE_LINE.len(), 159);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
+    // 2 043 since docs/features/comments.md CM15 (the comments line in, 54
+    // bytes; 57 cut).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2043);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(

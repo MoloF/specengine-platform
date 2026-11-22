@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-22
 ---
 
 # Card questions: the items a card names, and its Activity
@@ -15,13 +15,13 @@ ADR-0077: a card asks, and the answer is a recorded decision. The card: `cards.m
 
 A question, a discrepancy or a decision may name one card, its `card_id`, set when it is raised and never changed. The card is one of the same queue, in any state; no other kind names one, and an item names at most one. A decision may also say why it was taken. Its record names no card: the card reads its items back, each with its state and, once approved, its record.
 
-The page raises a question or a decision on a card through the card door: one write under the acting name, the typed one locally (ADR-0057), the login on a hub, where it is a plain write any login makes. A return that asks is two writes, the move first. An answer is a stage on the item, confirmed as any stage is: on a terminal, or on a hub by a Confirm its `[team]` allows (ADR-0035, ADR-0061).
+The page raises a question, a decision or a discrepancy on a card through the card door: one write under the acting name, the typed one locally (ADR-0057), the login on a hub, where it is a plain write any login makes. A return that asks is two writes, the move first. An answer is a stage on the item, confirmed as any stage is: on a terminal, or on a hub by a Confirm its `[team]` allows (ADR-0035, ADR-0061).
 
 The link decides nothing. No card move, accept, assign, cancel or clear, no `allowed`, rollup or gate reads a card's items, and no stage, approve, reject or confirm reads an item's card. A card with an open question moves and is accepted as any other; an answered question moves no card (ADR-0012). ADR-0077.
 
 ## Store
 
-Queue schema 11 (`STEP_11`) adds TEXT `card_id`, then `why`: `PROPOSAL_COLUMNS` 48, `proposal_columns(8..=10)` 46; all due steps in `migrate`'s one transaction, no index. Both `NULL` but where set:
+Queue schema 11 (`STEP_11`) adds TEXT `card_id`, then `why`: 48 columns, 46 at 8-10 (`proposal_columns`); all due steps in `migrate`'s one transaction, no index. Both `NULL` but where set:
 - `card_id`: a question, discrepancy or decision raised with a card (a departing accept's discrepancy names its card); never changed by approve, reject, stage, unstage, reopen, a completion or an import. A linked update holds none.
 - `why`: a decision's alone (`ProposalKind::holds_why`, `Intake.why`), at most 2 048 bytes (`ANSWER_MAX`), not blank when given, stored as given.
 
@@ -40,18 +40,18 @@ Queue schema 11 (`STEP_11`) adds TEXT `card_id`, then `why`: `PROPOSAL_COLUMNS` 
 
 A decision's `why`, in `DecisionInput` after `price_of_other`, is judged after it: `why: blank: give a value`, `why: 2049 bytes; at most 2048`.
 
-**MCP**, stdio and a hub's `/mcp` alike: `ask_question`, `report_discrepancy`, `report_decision` take `card_id` (`["string","null"]`) after `distinct_from`, `report_decision` `why` after `price_of_other`; a hub's still take no `task_id`. `get_proposal` returns the two keys, `get_card` `items` (`CardItemShape`). Plugin 0.36.0; `ask-owner` names both keys (`plugin.md` "Skills").
+**MCP**, stdio and a hub's `/mcp` alike: `ask_question`, `report_discrepancy`, `report_decision` take `card_id` (`["string","null"]`) after `distinct_from`, `report_decision` `why` after `price_of_other`; a hub's still take no `task_id`. `get_proposal` returns the two keys, `get_card` `items` (`CardItemShape`); `ask-owner` names both keys (`plugin.md` "Skills").
 
 <a id="the-card-door"></a>
 ## The card door
 
-`POST /api/projects/:p/cards/:id/items`, `CardRaiseBody {kind, node_ids, text, working_answer, price_of_other, why, severity, distinct_from, as}`, `deny_unknown_fields`:
+`POST /api/projects/:p/cards/:id/items`, `CardRaiseBody {kind, node_ids, text, working_answer, price_of_other, why, severity, distinct_from, gap_type, observed, documented, as}`, `deny_unknown_fields`, the keys judged per kind (`raise_shape`, 400 naming the key):
 
-- `kind` `question` or `decision`, else 400 `` `kind`: a card raises a `question` or a `decision` ``; a `why` on a question, 400 `` `why` goes with a `decision` ``.
-- `node_ids`, `text`, `working_answer`, `price_of_other` required, by the intake's rules; `severity`, `distinct_from`, `why` optional. No `proposed_patch`, `task_id` or author field: a person raises from the page.
+- `kind` `question`, `decision` or `discrepancy`, else 400 `` `kind`: a card raises a `question` or a `decision`, or reports a `discrepancy` ``.
+- `node_ids`, `text` required; `severity`, `distinct_from` optional. A question and a decision require `working_answer`, `price_of_other`, `why` a decision's alone. A discrepancy requires `gap_type`, `observed`, `documented`, takes an optional `working_answer`, no price or why, built as a departure's, its evidence's `file` the card's ID (`comments.md` "Turning into an item"). No `proposed_patch`, `task_id` or author field: a person raises from the page.
 - `as`, trimmed, judged by `persons_named`; `null` reads `local`.
 
-The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh of `CARD_CALLS`; handler `raise_on_card`) in the project's turn, the card read first, the place the served root's. 200: the intake document `{id, created, hits, related, linked, diagnostics, notes}`, stored or not; 400: a body or a person refused; 404: `{id, reason}`, `no card C-0099`, before any intake rule; 409: an intake rule's refusal, the document, its reason the last note; 503: cannot run (the CLI's exit 2: a look-alike, `[ids]` claiming `C` or `PR`, a corrupt row, a newer schema); another method: 405, `Allow: POST`. The row's author is `human`, no role, model or run, on a hub with its `login`; the event `proposal.created {"id":"PR-0012","as":"dev"}`, every other raise's staying `{"id":…}`. On a hub it is the sixth plain write: `hub.rs` `WRITES` holds `items`, `hub::acting` binds `as` to the login, `[team]` is not read.
+The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh of `CARD_CALLS`; handler `raise_on_card`) in the project's turn, the card read first, the place the served root's. 200: the intake document, stored or not; 400: a body or a person refused; 404: `{id, reason}`, `no card C-0099`, before any intake rule; 409: an intake rule's refusal, the document, its reason the last note; 503: cannot run (the CLI's exit 2: a look-alike, `[ids]` claiming `C` or `PR`, a corrupt row, a newer schema); another method: 405, `Allow: POST`. The row's author is `human`, no role, model or run, on a hub with its `login`; the event `proposal.created {"id":"PR-0012","as":"dev"}`, a comment's raise too, every other's staying `{"id":…}`. On a hub it is a plain write: `hub.rs` `WRITES` holds `items`, `hub::acting` binds `as` to the login, `[team]` is not read.
 
 ## Stage
 
@@ -65,7 +65,7 @@ The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh
 
 ## Record
 
-`{{why}}` (`decision-record-template.md` "Template"), body only: a decision's `why` when the record takes its working answer; empty under `--answer` (the choice is then the owner's), for a question, a discrepancy, a decision without one. A record names no card (Q11).
+`{{why}}`, body only, filled as `decision-record-template.md` "Template" says (empty under `--answer`: the choice is then the owner's). A record names no card (Q11).
 
 ## Screen
 
@@ -78,8 +78,8 @@ The door is `board-ui.md` "The door"'s, then one `card_raise` call (the eleventh
 
 ## Known limits
 
-- **Rollout.** Older binaries refuse a newer queue (`SchemaTooNew`; the hook's gate gives no verdict, so `selective` refuses controlled writes until reinstall) and a newer dump; an older `spec approve` refuses a `{{why}}` template. Every terminal, plugin and hub upgrades from one commit (`card-tasks.md` "Known limits"' steps), the old build and its last dump the way back; a hub dumps first (`card-mandate.md` "Known limits").
-- **Who asked.** A local Activity names whoever "Acting as" holds; empty goes out as `local`. Follow-up: default to the hub login, or ask once locally.
+- **Rollout.** Older binaries refuse a newer queue (`SchemaTooNew`; the hook's gate gives no verdict, so `selective` refuses controlled writes until reinstall) and dump, an older `spec approve` a `{{why}}` template: every terminal, plugin and hub upgrades from one tag, a hub dumping first, the old build and its last dump the way back (`hub-ops.md` "Upgrade").
+- **Who asked.** A local Activity names whoever "Acting as" holds; empty goes out as `local`.
 - **Two stores.** A card ID names a card of one queue: a terminal's `--card` never reaches a hub's card. A hub filled from a terminal's dump holds its cards and items as stored.
 - **Dedup.** A card's target linked to an accepted decision makes every question on it a hit: Ask anyway is the way through; over 64 hits nothing is stored (`agent-intake.md` "Dedup").
 - The Questions screen links no card: `RoundItem` holds no `card_id`, a core key.

@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-22
 ---
 
 # Queue backup and restore
 
-The queue (`proposals`, `tasks`, `runs`, `cards`, `events` in `<slug>.db`, `proposal-queue.md` "Store"; not the collision ledger, a cache: `collision-pass.md`) is the one state git cannot rebuild. `spec export state` dumps it to a JSONL file outside the repository; `spec import-state` restores a dump into an empty queue (ADR-0003; one write door: ADR-0004, ADR-0005; single user: ADR-0012; no re-targeting: ADR-0032). No automatic backup or retention (the daemon's), no `specengine.toml` key. Code: CLI `state.rs` (commands), `state_file.rs` (format), `main.rs` (terminal); store `queue/state.rs`, `WorktreeGit::{top_if_repository, worktrees}`.
+The queue (`proposals`, `tasks`, `runs`, `cards`, `comments`, `comment_versions`, `events` in `<slug>.db`, `proposal-queue.md` "Store"; not the collision ledger, a cache: `collision-pass.md`) is the one state git cannot rebuild. `spec export state` dumps it to a JSONL file outside the repository; `spec import-state` restores a dump into an empty queue (ADR-0003; one write door: ADR-0004, ADR-0005; single user: ADR-0012; no re-targeting: ADR-0032). No automatic backup or retention (the daemon's), no `specengine.toml` key. Code: CLI `state.rs` (commands), `state_file.rs` (format), `main.rs` (terminal); store `queue/state.rs`, `WorktreeGit::{top_if_repository, worktrees}`.
 
 ## Commands
 
@@ -19,15 +19,26 @@ The queue (`proposals`, `tasks`, `runs`, `cards`, `events` in `<slug>.db`, `prop
 
 ## Format
 
-`STATE_FORMAT` = 7 (CLI; tasks: `tasks.md` "Backup"; cards: `cards.md` "Backup"): UTF-8 compact JSON, one object per LF-ended line.
+`STATE_FORMAT` = 8 (CLI; tasks: `tasks.md` "Backup"; cards: `cards.md` "Backup"; comments: `comments.md` "Store and backup"): UTF-8 compact JSON, one object per LF-ended line.
 
-1. The header `{"format":7,"queue_schema":14,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
-2. Every `proposals` row by ID number (`ORDER BY length(id), id`), the `tasks`, `runs`, `cards` rows, then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 50, `gist` and `matters` last: `plain-questions.md` "Shapes"; `CARD_COLUMNS`, 26; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `run`, `position`, `seq` numbers; JSON columns stay the strings stored.
+1. The header `{"format":8,"queue_schema":15,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
+2. Every `proposals` row by ID number (`ORDER BY length(id), id`), the `tasks`, `runs`, `cards` rows, every `comments` row by ID number, every `comment_versions` row by comment ID number and `version`, then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 51, `comment_id` last; `CARD_COLUMNS`, 26; `COMMENT_COLUMNS`, 15; `COMMENT_VERSION_COLUMNS`, 5; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `run`, `position`, `on_rev`, `version`, `seq` numbers; JSON columns stay the strings stored.
 
-No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. An older dump restores with its schema's columns, the later NULL (`proposal-queue.md` "Store"): format 1 (five header keys, schema 1-3), 2 (4-8; a schema-6 one's open approve stages gain `"editorial":null`), 3 (9: cards' 24, `tasks`), 4 (10: proposals' 46, `card_id`, `why`), 5 (11: `mandate`), 6 (12: `gist`, `matters`). A schema 1-13 DB exports as format 7, schema 14, unmigrated. A drift row round-trips byte-identical (`drift` as stored).
+No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. An older dump restores with its schema's columns, the later NULL (`proposal-queue.md` "Store"); a schema-6 dump's open approve stages gain `"editorial":null`. A schema 1-14 DB exports as format 8, schema 15, unmigrated, its comment counts 0. A drift row round-trips byte-identical (`drift` as stored).
+
+| Format | Queue schemas | Header keys; counts | Adds |
+|---|---|---|---|
+| 1 | 1-3 | 5; 2 | `proposals`, `events` |
+| 2 | 4-8 | 7; 4 | `tasks`, `runs` |
+| 3 | 9 | 8; 5 | `cards`, 24 columns |
+| 4 | 10 | 8; 5 | a card's `tasks` (`tasks.md` "Backup") |
+| 5 | 11 | 8; 5 | a proposal's `card_id`, `why` |
+| 6 | 12 | 8; 5 | a card's `mandate` |
+| 7 | 13-14 | 8; 5 | `gist`, `matters` |
+| 8 | 15 | 10; 7 | `comment_id`, `comments`, `comment_versions` |
 
 ```
-{"format":7,"queue_schema":14,"project":"lantern-keep","proposals":1,"tasks":0,"runs":0,"cards":0,"events":1}
+{"format":8,"queue_schema":15,"project":"lantern-keep","proposals":1,"tasks":0,"runs":0,"cards":0,"comments":0,"comment_versions":0,"events":1}
 {"proposals":{"id":"PR-0001","project":"lantern-keep","kind":"update",…,"updated_at":"2026-10-05T12:00:00Z"}}
 {"events":{"seq":1,"project":"lantern-keep","type":"proposal.created","payload":"{\"id\":\"PR-0001\"}","at":"2026-10-05T12:00:00Z"}}
 ```
@@ -38,15 +49,7 @@ Steps 1-5 (the bounds, inside one, an existing `<D>`, the read, the placement; t
 
 ## Import
 
-In order; nothing is written before step 5.
-
-1. `main`: stdin not a terminal -> exit 2 before `FILE` is opened, approve's message naming `spec import-state` (`proposal-apply.md` "Consent"). No `--yes`.
-2. `FILE` (current-directory relative, symlinks followed) a regular file, checked before the open and on the opened handle, else ``cannot read <FILE>: not a regular file (a dump is one file)``, unread. Read whole and checked; the first defect -> ``<FILE>:<line>: <defect>``, never quoting the line or an unknown name: not UTF-8, not JSON, not a JSON object, an empty line or file, no final LF; no header, a header without exactly its format's keys (1: five; 2: seven; 3-7: eight) or with a value of the wrong type; `format` or `queue_schema` above the build's (`… upgrade SpecEngine`), `format` 0, `queue_schema` not 1-3 (format 1), 4-8 (2), 9 (3), 10 (4), 11 (5), 12 (6) or 13-14 (7) (``... (it holds queue schemas 4 to 8)``); `project` not the root's slug (both named); a row of another table (format 2 adds `tasks`, `runs`, 3 `cards`, 4 their `tasks`: `tasks.md` "Backup"; 5 a proposal's `card_id`, `why`, 6 a card's `mandate`, 7 `gist`, `matters`); a column missing, extra or repeated (any repeated key); TEXT not a string or `null`; `seq` not an integer ≥ 1 (`12.0` too); `id` not `PR-` (`T-`, `C-`) and 4 or more digits as the queue writes it, numbered 1 to 2⁶⁴−1; `project` not the header's; an `id` or `seq` repeating an earlier line's (named). Then rows read ≠ header counts -> ``<FILE>: header counts <p>, <e>; found <p'>, <e'>`` (format 2: four each; 3-7: five). Rows in any order, inserted in file order; CRLF and whitespace inside a line accepted.
-3. The data directory checked, not created; any table holding a row (any project) -> ``the queue of `<slug>` in <db> holds <counts>: import-state restores only into an empty queue (a fresh data directory, or <db> moved aside); nothing changed``, no question.
-4. stderr ``restore <p> proposal(s), <t> task(s), <r> run(s), <c> card(s) and <e> event(s) of <slug> from <FILE> into <db>? [y/N]``, one line read, only `y` or `yes`; else exit 1, ``spec: not restored: the answer was not `y`; nothing changed``, stdout empty (`--json` counts 0).
-5. The data directory and DB made when absent (schema steps), then `restore`: one `Immediate` transaction, step 3 again under the write lock (filled meanwhile: refused, nothing inserted), the project's collision ledger emptied, every row inserted as given, commit. No event of its own: the next ID and `seq` are the highest restored + 1, the ID never below a stored floor ("ID floor").
-
-**As stored**: no path rewritten. A proposal whose recorded common dir is gone is an orphan (`proposal-queue.md` "Place, IDs, repositories"), taken only by reject; same machine: move the repository back, `git worktree repair`.
+Steps 1-5 (the terminal, the file and its checks, an empty queue, the question, the restore; nothing written before step 5) and what is restored as stored: `queue-export.md` "Import".
 
 <a id="id-floor"></a>
 ## ID floor
@@ -70,11 +73,11 @@ Neither command writes a spec file, commits, runs apply or completion, or runs g
 |---|---|
 | `SqliteQueue::open_existing(db, project)` | `None` without the file; creates nothing, runs no schema step; `user_version` above the build's -> `SchemaTooNew`; no queue tables: reads empty, and at `user_version` 0 (an index-only DB, as a read's refresh leaves it) `get` -> `None`, `list`, `list_readable` none too (Health's row 4, `health-code.md`); a schema-run DB that lost `proposals`: they error |
 | `schema_version() -> i64` | the DB's `user_version`, read only: never steps or writes (0 an index-only DB, 1-13 not yet upgraded) |
-| `stored_rows() -> StoredQueue` | every row of the five tables, every project's, raw, one read transaction, in dump order (a schema 1-12 DB: the later columns `None`, 1-3 no tasks, 1-8 no cards, 9 a card's 24, 10-11 25; tables at another `user_version` -> `Invalid`); a TEXT value that is no UTF-8 text (or a number, a BLOB) fails naming row and column |
+| `stored_rows() -> StoredQueue`, `stored_rows_with_comments()` (and `StoredComments`) | every row of the five tables (seven), every project's, raw, one read transaction, in dump order (a schema 1-12 DB: the later columns `None`, 1-3 no tasks, 1-8 no cards, 9 a card's 24, 10-11 25; tables at another `user_version` -> `Invalid`); a TEXT value that is no UTF-8 text (or a number, a BLOB) fails naming row and column |
 | `counts() -> QueueCounts {<C>}` | every table, every project's, one snapshot (`is_empty()`) |
-| `restore(&StoredQueue) -> Restore {Restored, Occupied(QueueCounts)}` | schema steps, then one `Immediate` transaction: all empty or `Occupied`, plain `INSERT`s, commit; a row of another project than the handle's -> `Invalid`, nothing written |
+| `restore(&StoredQueue) -> Restore {Restored, Occupied(QueueCounts)}`, `restore_with_comments` | schema steps, then one `Immediate` transaction: all empty or `Occupied`, plain `INSERT`s, commit; a row of another project than the handle's -> `Invalid`, nothing written |
 
-`StoredQueue {proposals, tasks, runs, cards, events}` (`counts()`); `StoredProposal {columns: [Option<String>; 50]}` (`id()`, `project()`), `StoredTask`, `StoredRun`, `StoredCard` (`tasks.md`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (50; `proposal_columns(schema)`: `proposal-queue.md` "Store"), `CARD_COLUMNS` (26; `card_columns(schema)`, 24 at 9, 25 at 10-11), `TASK_COLUMNS` (17), `RUN_COLUMNS` (11), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
+`StoredQueue {proposals, tasks, runs, cards, events}` (`counts()`); `StoredProposal {columns: [Option<String>; 51]}` (`id()`, `project()`), `StoredTask`, `StoredRun`, `StoredCard` (`tasks.md`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (51; `proposal_columns(schema)`: `proposal-queue.md` "Store"), `CARD_COLUMNS` (26; `card_columns(schema)`, 24 at 9, 25 at 10-11), `TASK_COLUMNS` (17), `RUN_COLUMNS` (11), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
 
 ## Known limits
 

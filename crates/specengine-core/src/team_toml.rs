@@ -66,12 +66,27 @@ impl TeamRole {
         Self::ALL.into_iter().find(|role| role.as_str() == text)
     }
 
-    /// The acts the role opens, as `GET .../team`'s `allowed` names them.
+    /// The acts the role opens, as `GET .../team`'s `allowed` names them; an
+    /// `owner` deletes any comment too (`docs/canon/comments.md` "Delete").
     pub const fn allowed(self) -> &'static [&'static str] {
         match self {
             Self::Member => &["stage", "accept", "clear"],
-            Self::Lead | Self::Owner => &["stage", "accept", "clear", "group_clear", "confirm"],
+            Self::Lead => &["stage", "accept", "clear", "group_clear", "confirm"],
+            Self::Owner => &[
+                "stage",
+                "accept",
+                "clear",
+                "group_clear",
+                "confirm",
+                "delete_comment",
+            ],
         }
+    }
+
+    /// Any comment is open to the role's delete on a hub, not only its own
+    /// (task spec `comments` D7): an `owner` alone.
+    pub const fn deletes_comments(self) -> bool {
+        matches!(self, Self::Owner)
     }
 
     /// A group clear is open to the role, inside whatever it covers.

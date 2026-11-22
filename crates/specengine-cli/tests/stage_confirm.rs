@@ -1033,18 +1033,19 @@ fn ac02_a_queue_of_a_newer_schema_exits_2_naming_both() {
     // D6): 15 is newer (13 since docs/features/plain-questions.md PQ8). M1's record at a62c81c: 11 over 10; task-mandate
     // R1's at 8a43e5d: 12 over 11; plain-questions' with 4d52ec3c's build: 13
     // over 12.
-    pair.sql("PRAGMA user_version = 15;");
+    // 16 over this build's 15 since docs/features/comments.md CM1.
+    pair.sql("PRAGMA user_version = 16;");
     for args in [vec!["inbox"], vec!["review", "PR-0001"]] {
         let run = pair.spec_piped(&pair.main, &args, b"");
         run.code(2);
         assert!(
             run.stderr
-                .contains("schema version 15, this build knows 14"),
+                .contains("schema version 16, this build knows 15"),
             "{args:?}: {}",
             run.show()
         );
     }
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "15", "left alone");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "16", "left alone");
 }
 
 // ------------------------------------------------------------------ AC-12
@@ -1137,8 +1138,8 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
     assert!(
         json.contains(&format!(
             "\"staged\":{{\"decision\":\"reject\",\"reason\":\"asked before\"}},\"staged_at\":\
-             \"{STAGED}\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"similar\":null,\
-             \"notes\":"
+             \"{STAGED}\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"comment_id\":null,\
+             \"similar\":null,\"notes\":"
         )),
         "{json}"
     );
@@ -1162,7 +1163,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
     let bytes = export(&pair, &pair.home, &dumps.join("q.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":7,\"queue_schema\":14,"),
+        rows[0].starts_with("{\"format\":8,\"queue_schema\":15,"),
         "{}",
         rows[0]
     );
@@ -1171,7 +1172,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
         .filter(|row| {
             row.contains(&format!(
                 "\"staged_at\":\"{STAGED}\",\"interpretation\":null,\"drift\":null,\
-                 \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null}}}}"
+                 \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}}}"
             ))
         })
         .count();
@@ -1210,11 +1211,11 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let v6 = lines(&current);
     assert_eq!(
         v6[0],
-        "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":1,\
-         \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":1}"
+        "{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":1,\
+         \"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"events\":1}"
     );
     let tail = ",\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"drift\":null,\
-                \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null}}";
+                \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
     assert!(v6[1].ends_with(tail), "{}", v6[1]);
     let write = |name: &str, rows: &[String]| {
         let file = dumps.join(name);
@@ -1226,16 +1227,17 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // restore, `drift` and `drift_hash` NULL, and re-export as the current
     // dump.
     // docs/features/card-questions.md: `card_id`, `why` after them.
-    let drift = ",\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null}}";
+    // docs/features/comments.md: `comment_id` last.
+    let drift = ",\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
     for schema in [6, 7] {
         let mut older = v6.clone();
         older[0] = older[0]
             .replacen(
-                "\"format\":7,\"queue_schema\":14,",
+                "\"format\":8,\"queue_schema\":15,",
                 &format!("\"format\":2,\"queue_schema\":{schema},"),
                 1,
             )
-            .replacen("\"cards\":0,", "", 1);
+            .replacen("\"cards\":0,\"comments\":0,\"comment_versions\":0,", "", 1);
         older[1] = format!("{}}}}}", &older[1][..older[1].len() - drift.len()]);
         let file = write(&format!("v{schema}-44.jsonl"), &older);
         let home = pair.scratch.home(&format!("v{schema}-44"));
@@ -1254,14 +1256,15 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // Format 2, schema 5 (docs/features/kind-interpretation.md "Data"): its
     // 43 columns; restores, `interpretation` NULL, and re-exports as the
     // current dump.
-    let interpretation = ",\"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null}}";
+    let interpretation = ",\"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
     let mut v5 = v6.clone();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":7,\"queue_schema\":14,",
+            "\"format\":8,\"queue_schema\":15,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )
+        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1)
         .replacen("\"cards\":0,", "", 1);
     v5[1] = format!("{}}}}}", &v5[1][..v5[1].len() - interpretation.len()]);
     let file = write("v5.jsonl", &v5);
@@ -1274,10 +1277,11 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let mut v4 = v6.clone();
     v4[0] = v4[0]
         .replacen(
-            "\"format\":7,\"queue_schema\":14,",
+            "\"format\":8,\"queue_schema\":15,",
             "\"format\":2,\"queue_schema\":4,",
             1,
         )
+        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1)
         .replacen("\"cards\":0,", "", 1);
     v4[1] = format!("{}}}}}", &v4[1][..v4[1].len() - tail.len()]);
     let file = write("v4.jsonl", &v4);
@@ -1340,7 +1344,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let bytes = export(&pair, &pair.home, &dumps.join("from-4.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
+        rows[0].starts_with("{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
         "{}",
         rows[0]
     );

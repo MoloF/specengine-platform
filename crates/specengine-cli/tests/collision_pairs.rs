@@ -66,7 +66,7 @@ const STAMINA: &str = "docs/spec/movement/stamina.md";
 /// The review document's 55 keys: plain-questions' 53 with `pair` after
 /// `evidence`, and `cited` last: docs/features/department-practices.md
 /// "Proposals: `cited`".
-const REVIEW_KEYS: [&str; 55] = [
+const REVIEW_KEYS: [&str; 56] = [
     "id",
     "project",
     "kind",
@@ -119,6 +119,8 @@ const REVIEW_KEYS: [&str; 55] = [
     "interpretation",
     "card_id",
     "why",
+    // docs/features/comments.md: after `why`.
+    "comment_id",
     "similar",
     "notes",
     "cited",
@@ -679,8 +681,9 @@ fn pp3_a_gone_first_target_keeps_its_stored_path() {
 /// taken from the row stored at intake.
 #[test]
 fn pp4_a_retitle_shows_on_the_next_read_and_writes_nothing() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 14, "collision-pass's schema");
-    assert_eq!(STATE_FORMAT, 7, "collision-pass's state format");
+    // 15 and 8 since docs/features/comments.md CM1, CM13.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 15, "comments' schema");
+    assert_eq!(STATE_FORMAT, 8, "comments' state format");
     let repo = Repo::new("cpair-pp4", "spec-a");
     let id = example(&repo);
     assert_eq!(review(&repo, &id)["pair"], data_pair());

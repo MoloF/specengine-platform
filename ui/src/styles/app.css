@@ -9798,3 +9798,174 @@ mark {
 .feed-code {
   font-weight: var(--font-weight-medium);
 }
+
+/* Comments (src/comments/; docs/features/comments.md "UI"): talk under a task, a document or a
+   proposal, a thread of sunken entries in the part's flow, each reply indented under its comment; the
+   bodies wrap whatever their script, rendered through src/markdown/ at body size; nothing in it is cut.
+   Mentions, its view and the nav's badge, take the same entries. Every value a token. */
+.comments {
+  display: grid;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
+.comments-about {
+  margin: 0;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.comments-thread,
+.comments-replies,
+.mentions-list {
+  display: grid;
+  gap: var(--space-100);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comments-replies {
+  margin-top: var(--space-100);
+  padding-left: var(--space-300);
+  border-left: 2px solid var(--border-subtle);
+}
+
+.comment {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+  padding: var(--space-100) var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.comments-replies .comment {
+  background: var(--surface-panel);
+}
+
+.comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  margin: 0;
+}
+
+.comment-who {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.comment-id {
+  margin-left: auto;
+}
+
+.comment-text,
+.comment-preview {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.comment-text .markdown,
+.comment-preview .markdown {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.comment-deleted {
+  margin: 0;
+  font-style: italic;
+}
+
+.comment-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050) var(--space-150);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comment-items li {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050);
+}
+
+.comment-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050);
+}
+
+.comment-composer {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+}
+
+.comment-composer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-100);
+}
+
+.comment-field {
+  width: 100%;
+  min-height: var(--space-600);
+  resize: vertical;
+}
+
+.comment-preview {
+  padding: var(--space-100) var(--space-150);
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-s);
+}
+
+/* The version a stale edit would overwrite, to read above the kept draft (CommentsPart.tsx). */
+.comment-stored {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+  padding: var(--space-100) var(--space-150);
+  border-left: 2px solid var(--border-control);
+  background: var(--surface-panel);
+}
+
+.comment-stored-title {
+  margin: 0;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.comment-as {
+  margin: 0;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.mention-on {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* The nav's Mentions badge: a count beside the label, accent-bordered as a count tag, never colour alone. */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 0 var(--space-075);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  font-weight: var(--font-weight-semibold);
+}

@@ -1859,8 +1859,8 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     // PQ10 (`gist`, `matters` after `summary`); 54 since
     // docs/features/collision-pairs.md PP8 (`pair` after `evidence`); 55
     // since docs/features/department-practices.md "Proposals: `cited`" (`cited`
-    // last).
-    assert_eq!(keys.len(), 55, "{keys:?}");
+    // last); 56 since docs/features/comments.md (`comment_id` after `why`).
+    assert_eq!(keys.len(), 56, "{keys:?}");
     assert_eq!(keys.last().map(String::as_str), Some("cited"), "{keys:?}");
     let revisions = keys.iter().position(|key| key == "revisions");
     assert_eq!(keys[revisions.expect("revisions") + 1], "drift", "{keys:?}");
@@ -1872,7 +1872,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        181,
+        187,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
@@ -1897,7 +1897,8 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
          (docs/features/hub-auto.md, HA7), doc-library's five \
          (docs/features/doc-library.md, DL2) and department-practices' two \
          (docs/features/department-practices.md, DP14) and specengine-guide's five \
-         (docs/features/specengine-guide.md, GU6)"
+         (docs/features/specengine-guide.md, GU6) and comments' six \
+         (docs/features/comments.md, HTTP)"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").
@@ -2017,7 +2018,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -2030,7 +2031,8 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
         let row = row["proposals"].as_object().expect("a proposals row");
         // 48 since docs/features/card-questions.md S1.
         // 50 since docs/features/plain-questions.md PQ8.
-        assert_eq!(row.len(), 50);
+        // 51 since docs/features/comments.md (`comment_id`).
+        assert_eq!(row.len(), 51);
         assert_eq!(row["id"], json!(id));
         assert_eq!(row["kind"], json!(AMENDMENT_KIND));
         assert_eq!(row["status"], json!(status));

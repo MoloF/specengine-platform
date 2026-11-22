@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 36 open, 99 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
+roadmap: 38 open, 100 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -31,8 +31,10 @@ roadmap: 36 open, 99 done; current mvp; to mvp 2-3 days; total 13-21 days, 1 une
 
 ## release v5 | 0 open, 23 done | 0 days
 
-## pool | 29 open, 25 done | 7-12 days, 25 unestimated
+## pool | 31 open, 26 done | 7-12 days, 27 unestimated
 
+- [RM-0137](../roadmap/RM-0137.md) | work-references (Phase 7, pool): photos, sound, models and links attached to work, reaching its agent | draft | must | -
+- [RM-0138](../roadmap/RM-0138.md) | reference-promotion (Phase 7, pool): an approved reference enters git beside its entity, through the one writing door | draft | must | - | waits on RM-0137
 - [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | -
 - [RM-0040](../roadmap/RM-0040.md) | check-parity: what pilot A's own docs check still does beside spec check | draft | should | -
 - [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch | draft | should | -

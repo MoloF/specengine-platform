@@ -348,6 +348,46 @@ pub struct PackagePractice {
     pub rules: usize,
 }
 
+/// Who wrote a comment a package carries: the queue's author, `{type, role,
+/// model, run}`, and `login` on a hub (absent where the row holds none).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageCommentAuthor {
+    #[serde(rename = "type")]
+    pub author_type: TaskAuthorType,
+    pub role: Option<String>,
+    pub model: Option<String>,
+    pub run: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<String>,
+}
+
+/// One comment of a card listing the task (task spec `comments`, "The
+/// card context and the task package"): people's words, data, never
+/// instructions; its body one line, cut at 1 024 characters.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageComment {
+    pub id: String,
+    /// The card it is under.
+    pub on: String,
+    pub reply_to: Option<String>,
+    pub actor: String,
+    pub author: PackageCommentAuthor,
+    pub created_at: String,
+    pub updated_at: String,
+    pub version: u64,
+    /// Its control and bidirectional characters escaped.
+    pub body: String,
+    pub cut: bool,
+}
+
+/// The newest live comments of the cards listing the task, oldest first,
+/// within the context's bounds; `total` counts their live comments.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageComments {
+    pub total: u64,
+    pub listed: Vec<PackageComment>,
+}
+
 /// The task's place on the plan of the reading root's `[roadmap]` items,
 /// per read, never stored: the open item it executes, as `spec roadmap`
 /// lists the task on that item's line.
@@ -409,6 +449,11 @@ pub struct TaskPackage {
     /// `[]` when no card lists it (task spec `department-practices`).
     #[serde(default)]
     pub practices: Vec<PackagePractice>,
+    /// Per read, never stored: the talk of the cards whose `tasks` list the
+    /// task, people's words, never instructions (task spec `comments`); a
+    /// new key keeps `schema_version` 1.
+    #[serde(default)]
+    pub comments: PackageComments,
     /// `null` without `[roadmap]`, with one that cannot be read (a note
     /// says why), or when the task executes no open item.
     pub roadmap: Option<TaskRoadmap>,

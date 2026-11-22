@@ -110,8 +110,11 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// docs/features/card-trace.md (`get_trace`), thirty since
 /// docs/features/department-split.md (`split_card`), thirty-two since
 /// docs/features/collision-pass.md (`get_collisions`, `mark_pairs`),
-/// thirty-three since docs/features/specengine-guide.md (`get_guide`).
-pub const TOOLS: [&str; 33] = [
+/// thirty-three since docs/features/specengine-guide.md (`get_guide`),
+/// thirty-five since docs/features/comments.md (`list_comments`,
+/// `add_comment`).
+pub const TOOLS: [&str; 35] = [
+    "add_comment",
     "ask_question",
     "check_binding",
     "claim_task",
@@ -132,6 +135,7 @@ pub const TOOLS: [&str; 33] = [
     "get_trace",
     "get_tree",
     "list_cards",
+    "list_comments",
     "mark_pairs",
     "move_card",
     "propose_change",
@@ -1051,6 +1055,36 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             },
         )
         .map(|outcome| Outcome::Collisions(Box::new(outcome))),
+        // docs/features/comments.md "MCP": `spec comment list --on X
+        // [--before CM] [--limit N]` and `spec comment add --body-file -`,
+        // the author always an agent.
+        "list_comments" => specengine_cli::comment_list(
+            env,
+            globals,
+            &specengine_cli::CommentListRequest {
+                on: text("on").unwrap_or_default(),
+                before: text("before"),
+                limit: args["limit"].as_u64(),
+            },
+        )
+        .map(|outcome| Outcome::CommentList(Box::new(outcome))),
+        "add_comment" => specengine_cli::comment_add(
+            env,
+            globals,
+            &specengine_cli::CommentAddRequest {
+                on: text("on").unwrap_or_default(),
+                reply_to: text("reply_to"),
+                body: text("body").unwrap_or_default(),
+                actor: None,
+                author_role: text("author_role"),
+                author_model: text("author_model"),
+                run: text("run"),
+                agent: true,
+                login: None,
+                now: specengine_cli::utc_now(),
+            },
+        )
+        .map(|outcome| Outcome::Comment(Box::new(outcome))),
         // CP8: `spec collisions mark --input - --author-role R …`, the
         // pairs as given (`proposal` absent read as `null`).
         "mark_pairs" => specengine_cli::mark_pairs(

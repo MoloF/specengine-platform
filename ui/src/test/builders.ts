@@ -26,6 +26,8 @@ import type {
   CatalogDocument,
   CatalogRow,
   Cited,
+  CommentDocument,
+  CommentList,
   DeliveryCounts,
   DeliveryDocument,
   DeliveryLate,
@@ -145,6 +147,7 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     interpretation: null,
     card_id: null,
     why: null,
+    comment_id: null,
     similar: null,
     notes: [],
     cited: null,
@@ -227,6 +230,7 @@ export function noReview(id: string): Proposal {
     interpretation: null,
     card_id: null,
     why: null,
+    comment_id: null,
     similar: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
     cited: null,
@@ -624,6 +628,7 @@ export function aTaskPackage(fields: Partial<TaskPackage> & Pick<TaskPackage, "i
     runs: fields.runs ?? [],
     bundle: fields.bundle ?? null,
     practices: fields.practices ?? [],
+    comments: fields.comments ?? { total: 0, listed: [] },
     roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at ?? "2026-10-01T09:00:00Z",
@@ -1409,4 +1414,28 @@ export function aGuidePage(topic: string, rules: GuideRule[] = [aGuideRule(`GD-$
   const sections = rules.map((rule) => `### ${rule.title} {#${rule.id}}\n\nWhy ${rule.id} holds.\n`).join("\n");
   const text = `\n# ${title}\n\n${summary} More words.\n\n## What it solves\n\nA need.\n\n## When to use it\n\nOften.\n\n## How\n\n### CLI\n\n\`spec guide ${topic}\`\n\n## Where it lives\n\nIn git.\n\n## What not to do\n\n${sections}`;
   return { topic, title, summary, summarises: [`docs/canon/${topic}.md`], reviewed: "2026-11-20", rules, text, ...fields };
+}
+
+/** A comment as `spec comment list --json` gives one (docs/features/comments.md "The comment document"): mira's on C-0007, version 1, live, no item. */
+export function aComment(fields: Partial<CommentDocument> & { id: string }): CommentDocument {
+  return {
+    on: { kind: "card", id: "C-0007" },
+    on_rev: null,
+    reply_to: null,
+    actor: "mira",
+    author: { type: "human", role: null, model: null, run: null, login: "mira" },
+    version: 1,
+    body: `Body of ${fields.id}`,
+    mentions: [],
+    created_at: "2026-11-22T10:00:00Z",
+    updated_at: "2026-11-22T10:00:00Z",
+    deleted: null,
+    items: [],
+    ...fields,
+  };
+}
+
+/** A page of a target's comments: every one given, oldest first, none older. */
+export function aCommentList(comments: CommentDocument[], fields: Partial<CommentList> = {}): CommentList {
+  return { on: comments[0]?.on ?? { kind: "card", id: "C-0007" }, total: comments.length, comments, next_before: null, notes: [], ...fields };
 }

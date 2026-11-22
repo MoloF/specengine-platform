@@ -1598,7 +1598,8 @@ describe("a routed proposal the inbox does not list (inbox-closed-link)", () => 
     const replaced = vi.spyOn(window.history, "replaceState");
     const pane = await closedPane();
     expect(pane.querySelector(".issue-view-meta .lozenge-label")?.textContent).toBe("Applied");
-    expect(within(pane).getByRole("status").textContent).toBe("This proposal is no longer in the inbox. It is shown to read; nothing here decides it.");
+    // The head's notice; the Comments part's own state is no notice (docs/features/comments.md "UI").
+    expect(pane.querySelector(".issue-view-actions [role='status']")?.textContent).toBe("This proposal is no longer in the inbox. It is shown to read; nothing here decides it.");
     const trail = within(pane).getByRole("navigation", { name: "Breadcrumbs" });
     expect(within(trail).getAllByRole("listitem").map((item) => item.textContent.replace("/", ""))).toEqual(["Alpha", "Inbox", "PR-0009"]);
     expect(trail.querySelector('[aria-current="page"]')?.textContent).toBe("PR-0009");

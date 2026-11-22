@@ -61,7 +61,14 @@ function nav(): HTMLElement {
 function navTexts(): string[] {
   return within(nav())
     .queryAllByRole("link")
-    .map((link) => link.textContent);
+    .map(labelOf);
+}
+
+/** A nav entry's label, the Mentions badge's count left out: the mock lights it (docs/features/comments.md "UI", Mentions). */
+function labelOf(link: HTMLElement): string {
+  const copy = link.cloneNode(true) as HTMLElement;
+  copy.querySelector(".nav-badge")?.remove();
+  return copy.textContent;
 }
 
 async function navIs(labels: readonly string[]) {
@@ -74,7 +81,7 @@ function current(): string[] {
   return within(nav())
     .queryAllByRole("link")
     .filter((link) => link.getAttribute("aria-current") === "page")
-    .map((link) => link.textContent);
+    .map(labelOf);
 }
 
 function switcher(): HTMLSelectElement {
@@ -122,10 +129,10 @@ async function go(hash: string) {
 }
 
 // Activity second in every department's nav (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
-const GALLEY_NAV = ["Overview", "Activity", "Board", "Flow", "Spec tree", "Documents", "Inbox"];
-const FOUNDRY_NAV = ["Overview", "Activity", "Board", "Health", "Graph", "Spec tree"];
-const IMPLICIT_NAV = ["Overview", "Activity", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"];
-const EVERY_NAV = ["Overview", "Activity", ...SECTIONS.map((section) => sectionLabel(section.id, enT))];
+const GALLEY_NAV = ["Overview", "Activity", "Mentions", "Board", "Flow", "Spec tree", "Documents", "Inbox"];
+const FOUNDRY_NAV = ["Overview", "Activity", "Mentions", "Board", "Health", "Graph", "Spec tree"];
+const IMPLICIT_NAV = ["Overview", "Activity", "Mentions", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Documents", "Graph", "Health", "Questions"];
+const EVERY_NAV = ["Overview", "Activity", "Mentions", ...SECTIONS.map((section) => sectionLabel(section.id, enT))];
 
 describe("the implicit workspace on the screen (WS-1)", () => {
   it("ledger-api: Overview, then every section but Tasks; no Workspace control, no module bar on Tree or Flow", async () => {

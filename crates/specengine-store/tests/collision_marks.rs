@@ -137,12 +137,17 @@ fn mark(
     }
 }
 
-/// Every table's rows but the ledger's, in a stable order.
+/// Every table's rows but the ledger's, in a stable order: the proposals by
+/// schema 13's 50 columns (step 15 appends `comment_id`, NULL on each:
+/// docs/features/comments.md CM1).
 fn rows_but_the_ledger(db: &Path) -> String {
     sqlite3(
         db,
-        "SELECT * FROM proposals ORDER BY id; SELECT * FROM cards ORDER BY id; SELECT * FROM \
-         tasks; SELECT * FROM runs; SELECT * FROM events ORDER BY seq;",
+        &format!(
+            "SELECT {} FROM proposals ORDER BY id; SELECT * FROM cards ORDER BY id; SELECT * \
+             FROM tasks; SELECT * FROM runs; SELECT * FROM events ORDER BY seq;",
+            PROPOSAL_COLUMNS[..50].join(", ")
+        ),
     )
 }
 
@@ -156,11 +161,11 @@ fn event_count(db: &Path) -> String {
 /// type, notnull, pk), STRICT; `proposals` still the 50 columns.
 #[test]
 fn cp6_a_new_queue_stands_at_14_with_the_ledger_pinned() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
     let scratch = Scratch::new("cm-cp6-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "14");
+    assert_eq!(user_version(&db), "15");
     assert_eq!(
         sqlite3(
             &db,
@@ -178,10 +183,15 @@ fn cp6_a_new_queue_stands_at_14_with_the_ledger_pinned() {
         "1",
         "STRICT"
     );
-    assert_eq!(PROPOSAL_COLUMNS.len(), 50, "the proposals are unchanged");
+    // 51 since comments (RM-0136): step 15 appends `comment_id`.
+    assert_eq!(
+        PROPOSAL_COLUMNS.len(),
+        51,
+        "the proposals as step 15 leaves them"
+    );
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "50"
+        "51"
     );
 }
 
@@ -192,7 +202,10 @@ fn schema_13(db: &Path) {
     question(&mut queue, "Is the wick trimmed before dusk?");
     question(&mut queue, "Does the hood close in rain?");
     drop(queue);
-    sqlite3(db, "DROP TABLE collision_marks; PRAGMA user_version = 13;");
+    sqlite3(
+        db,
+        "DROP TABLE collision_marks; DROP TABLE comment_versions; DROP TABLE comments; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 13;",
+    );
 }
 
 /// CP6: a schema 13 queue with rows steps to 14 at its first open: every
@@ -208,13 +221,13 @@ fn cp6_a_schema_13_queue_steps_keeping_every_row() {
     assert_ne!(event_count(&db), "0", "premise: events");
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(user_version(&db), "14");
+    assert_eq!(user_version(&db), "15");
     assert_eq!(rows_but_the_ledger(&db), before, "every row as it was");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM collision_marks;"), "0");
     assert_eq!(queue.collision_marks().expect("read").marks, Vec::new());
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "14", "stepped once");
+    assert_eq!(user_version(&db), "15", "stepped once");
     assert_eq!(rows_but_the_ledger(&db), before);
 }
 
@@ -266,7 +279,7 @@ fn cp6_a_newer_schema_is_refused() {
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     let newer = QUEUE_SCHEMA_VERSION + 1;
-    assert_eq!(newer, 15);
+    assert_eq!(newer, 16);
     sqlite3(&db, &format!("PRAGMA user_version = {newer};"));
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
@@ -277,7 +290,7 @@ fn cp6_a_newer_schema_is_refused() {
             other => panic!("expected SchemaTooNew {newer}, got {other:?}"),
         }
     }
-    assert_eq!(user_version(&db), "15", "left alone");
+    assert_eq!(user_version(&db), "16", "left alone");
 }
 
 /// CP6: marks change neither `dump()`, `stored_rows()` nor `counts()`; the

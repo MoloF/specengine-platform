@@ -116,6 +116,10 @@ fn valid_args(tool: &str) -> Value {
             "b": "MEC-STAMINA", "b_norm": format!("b3:{}", "1".repeat(64)),
             "verdict": "distinct"}], "author_role": "writer"})
         }
+        // docs/features/comments.md "MCP": each reaches the CLI (no project:
+        // its `spec init` line, no document).
+        "list_comments" => json!({"on": "MEC-STAMINA"}),
+        "add_comment" => json!({"on": "MEC-STAMINA", "body": "A word."}),
         other => panic!("no arguments for {other}"),
     }
 }

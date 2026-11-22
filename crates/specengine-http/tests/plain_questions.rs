@@ -145,7 +145,8 @@ fn pq10_the_daemon_serves_gist_and_matters() {
     let keys = top_keys(&raw);
     // 54 since docs/features/collision-pairs.md PP8 (`pair`).
     // 55 since docs/features/department-practices.md "Proposals: `cited`".
-    assert_eq!(keys.len(), 55, "{raw}");
+    // 56 since docs/features/comments.md (`comment_id` after `why`).
+    assert_eq!(keys.len(), 56, "{raw}");
     let summary = keys
         .iter()
         .position(|key| key == "summary")

@@ -105,7 +105,10 @@ fn rl12_each_auto_event_round_trips_in_the_canons_key_order() {
         AUTO_EVENTS,
         ["auto.started", "auto.bound", "auto.held", "auto.landed"]
     );
-    assert_eq!(QUEUE_SCHEMA_VERSION, 14, "no schema step this release");
+    assert_eq!(
+        QUEUE_SCHEMA_VERSION, 15,
+        "comments (RM-0136) added step 15; auto-mode added none"
+    );
     let scratch = Scratch::new("auto-events");
     let db = scratch.db("q");
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
@@ -238,8 +241,8 @@ fn rl12_each_auto_event_round_trips_in_the_canons_key_order() {
         queue.auto_events(COMMON).unwrap()
     );
     for path in [&db, &fresh] {
-        assert_eq!(sqlite3(path, "PRAGMA user_version"), "14");
-        assert_eq!(queue.schema_version().unwrap(), 14);
+        assert_eq!(sqlite3(path, "PRAGMA user_version"), "15");
+        assert_eq!(queue.schema_version().unwrap(), 15);
     }
 }
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-22
 ---
 
 # MCP read tools and resources
@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow` (`spec-flow.md`), `get_trace` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"; `list_cards` `marks?`), the owner's form (`review-form.md`), the collision tools (`collision-pass.md`) and the resources, 33 tools; feature `probes` (never default) adds `probe_output`, `probe_sleep`. A hub serves 19 of these at `/mcp/<slug>` (`hub-mcp.md`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md`), `get_flow` (`spec-flow.md`), `get_trace` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md`), the card tools (`cards.md`; `list_cards` `marks?`), the comment tools (`comments-surfaces.md`), the owner's form (`review-form.md`), the collision tools (`collision-pass.md`) and the resources, 35 tools; feature `probes` (never default) adds `probe_output`, `probe_sleep`. A hub serves 21 of these at `/mcp/<slug>` (`hub-mcp.md`).
 
 ## Tools
 
@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings", "history"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts there, deferring tools to tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, the collision tools, tasks, cards, REF, the cut, rules (`server.rs`; no resources line), 2 046 B (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): `search`'s `limit?`, `archive?` (0.37.0), `get_tree`'s and `get_node`'s `archive?` (0.49.0), `get_trace`'s `stage?`, `summary?` and `get_flow`'s `stage?`, `in_flow?` stay in their schemas, `FLOW_DESCRIPTION` at 2 048 with no room for `[--in-flow]`. Each description <= 2 048 (`get_node` 1 909), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts there, deferring tools to tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, the collision tools, tasks, cards, comments, REF, the cut, rules (`server.rs`; no resources line), 2 043 B (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): `search`'s `limit?`, `archive?` (0.37.0), `get_tree`'s and `get_node`'s `archive?` (0.49.0), `get_impact`'s `depth?`, `find_symbols`' `limit?` (0.50.0), `get_trace`'s `stage?`, `summary?` and `get_flow`'s `stage?`, `in_flow?` stay in their schemas, `FLOW_DESCRIPTION` at 2 048 with no room for `[--in-flow]`. Each description <= 2 048 (`get_node` 1 909), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
@@ -44,7 +44,7 @@ Text only, for `@`-mentions; one inserts content with no tool call, so no hook f
 
 The server starts in both eras with or without a project. **No project** = CLI `locate` fails: an unusable current directory or `--root`, no `specengine.toml` by the walk or in `--root`. Then each tool but `get_guide` returns the CLI's exit-2 line (naming `spec init`, or the `--root`), `resources/list` `[]`, a read -32603; an unusable `HOME` likewise (`[]`). Any failure once a project is found -> `resources/list` -32603 with the CLI's line: the config unreadable, not UTF-8 or invalid, no slug, the database busy, corrupt or not writable. The CLI's order holds, config -> slug -> `HOME`: a broken config or a missing slug with `HOME` unset is -32603. By the CLI's split, `--root nope` -> `[]`, `--config nope.toml` -> -32603 (`locate` reads no `--config`).
 
-Each request finds the project anew from the process's current directory and the globals (`Env::from_process`), runs on the blocking pool (`spawn_blocking`) and keeps nothing: an edit, a deleted DB, a changed `bundle_node` apply on the next call. A cancelled call runs to its end (its only write: the index), its answer dropped; others are answered meanwhile. Writes: where the CLI's reads write (the queue tools: the queue), the data directory (`docs/canon/architecture.md#storage`); nothing under the root; no tool exposes `init`, `index`, `check`, `export index` (08 AC-3, the single door). stdout: JSON-RPC only (README "Binary").
+Each request finds the project anew from the process's current directory and the globals (`Env::from_process`), runs on the blocking pool (`spawn_blocking`) and keeps nothing: an edit, a deleted DB, a changed `bundle_node` apply on the next call. A cancelled call runs to its end, its answer dropped; others are answered meanwhile. Writes: where the CLI's reads write (the queue tools: the queue), the data directory (`docs/canon/architecture.md#storage`); nothing under the root; no tool exposes `init`, `index`, `check`, `export index` (08 AC-3, the single door). stdout: JSON-RPC only (README "Binary").
 
 ## Size
 
@@ -69,11 +69,11 @@ AC-16, by hand; re-run on a Claude Code upgrade, noting the version. **Recorded 
 
 ## Tests
 
-`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default`, `mcp_read`, `mcp_flow`, `mcp_trace`, `mcp_resources`, `mcp_session`, `mcp_door` (the single door), `mcp_intake`, `mcp_review_form`, `mcp_stage`, `mcp_tasks`, `mcp_cards`, `mcp_determinism`, `mcp_genre`, `mcp_guide`, `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
+`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default`, `mcp_read`, `mcp_flow`, `mcp_trace`, `mcp_resources`, `mcp_session`, `mcp_door` (the single door), `mcp_intake`, `mcp_review_form`, `mcp_stage`, `mcp_tasks`, `mcp_cards`, `mcp_determinism`, `mcp_genre`, `mcp_guide`, `mcp_index`, `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
 
 ## Open
 
-- AC-16's "not verified" items (Owner's check); 500 000 stays the working answer (A12).
+- 500 000 stays the working answer (A12).
 - Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` -> `null`), untriggered, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
 - `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a CLI/core fix.
 - A panic outside `spawn_blocking` gets no response.

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-22
 ---
 
 # Board: card routes, door and fence
@@ -58,6 +58,10 @@ The local fence does not change: the `127.0.0.1` bind, `Host` and `Origin` namin
 ## Screen
 
 The Board's screen, the card modal and page, lanes, the hand-off and return dialogs and the rollup: `board-screen.md`.
+
+## Acts off
+
+On a hub a control whose act `GET .../team`'s `allowed` omits is off (`hub-team.md` "Screen"): Accept in `board/CardPanel`, Clear there and in `trace/CardsBlock`, Clear all there, Stage, Unstage and the decisions that stage in `inbox/ProposalCard` and `round/RoundScreen`. The inbox's keys announce the same line (`inbox/InboxView`). A round's item stays to read, its choices off, no answer written (`round/RoundItemCard`). The two decisions that send nothing stay on. The Move menu drops its Accept line: a menu has no line to keep. Delete on another's comment where `allowed` lacks `delete_comment`, in every Comments part (`comments-surfaces.md` "Screen").
 
 ## Types
 

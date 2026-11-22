@@ -258,7 +258,9 @@ fn ac14_the_task_tools_and_their_schemas() {
     // the evidence clause out); 2 048 since docs/features/trace-views.md
     // (`get_flow`'s `, trace?`); 2 039 since docs/features/collision-pass.md
     // CP8 (the collisions line in, the resources sentence out).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2046);
+    // 2 043 since docs/features/comments.md CM15 (the comments line in, 54
+    // bytes; 57 cut).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2043);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
@@ -1594,8 +1596,10 @@ fn get_task_description_names_the_bindings() {
             .to_owned();
         // docs/features/department-practices.md "The task package: `practices`": the
         // brief's Practices section before Bindings.
+        // docs/features/comments.md: the brief's Comments section after
+        // Practices.
         assert!(
-            description.contains("(goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, practices, code bindings, bundle)"),
+            description.contains("(goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, practices, comments, code bindings, bundle)"),
             "{era:?}: the brief's list: {description}"
         );
         assert!(
@@ -1604,8 +1608,10 @@ fn get_task_description_names_the_bindings() {
         );
         assert!(description.is_ascii());
         // 2 012 since docs/features/department-practices.md (practices in
-        // the brief's list and the package's `practices`), within 2 048.
-        assert_eq!(description.len(), 2012, "{era:?}: the spec's figure");
+        // the brief's list and the package's `practices`), within 2 048;
+        // 2 041 since docs/features/comments.md (`comments` in the list and
+        // the package, people's words; two phrases out).
+        assert_eq!(description.len(), 2041, "{era:?}: the spec's figure");
         assert!(description.contains("practices: those of bundle.disciplines"));
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);

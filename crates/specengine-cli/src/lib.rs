@@ -203,6 +203,12 @@
 //!   the daemon decodes its routes' bodies as [`CardNewBody`] and its kin,
 //!   and reads the list uncut by [`CardListOutcome::in_view`] (task spec
 //!   `board-ui`);
+//! - [`comment_add`], [`comment_list`], [`comment_edit`],
+//!   [`comment_delete`], [`comment_mentions`]: `spec comment …` (task spec
+//!   `comments`), talk under a card, a proposal or a node, a queue
+//!   row and never truth; [`comment_raise`] the daemon's door that turns one
+//!   into a question, a decision or a discrepancy; `--comment CM` on the three
+//!   intake commands ([`propose_question_from`] and its kin);
 //! - [`card_counts()`]: `spec card counts` (task spec `department-overview`
 //!   DO9), the cards counted per (flow, column) and per flow by the store's
 //!   grouped statements, never from the cut list; `[card]` and the queue
@@ -270,6 +276,7 @@ mod code_delta;
 mod code_index;
 mod code_walk;
 mod collisions;
+mod comment;
 mod confirm;
 mod corpus;
 mod create;
@@ -472,9 +479,10 @@ pub use init::{InitOutcome, InitRequest, PACK_MAX_BYTES, derive_slug, init};
 pub use intake::{
     DecisionRequest, DiscrepancyRequest, INTAKE_INPUT_MAX_BYTES, INTAKE_MATCHES_MAX,
     IntakeDocument, IntakeMatch, IntakeOutcome, IntakeSource, MatchSource, QuestionRequest,
-    propose_decision, propose_decision_with_task, propose_discrepancy,
-    propose_discrepancy_with_task, propose_question, propose_question_with_task,
-    read_decision_input, read_discrepancy_input, read_question_options,
+    propose_decision, propose_decision_from, propose_decision_with_task, propose_discrepancy,
+    propose_discrepancy_from, propose_discrepancy_with_task, propose_question,
+    propose_question_from, propose_question_with_task, read_decision_input, read_discrepancy_input,
+    read_question_options,
 };
 pub use interpret::{InterpretRequest, propose_interpretation, propose_interpretation_brief};
 pub use layer_c::{
@@ -561,11 +569,22 @@ pub use specengine_core::upstream::{UPSTREAM_MAX, Upstream, UpstreamChange, Upst
 /// `spec card split`'s plan-only flag, without its dashes: one spelling for
 /// the parser and the usage line that names it.
 pub const SPLIT_DRY_RUN_FLAG: &str = "dry-run";
+pub use comment::{
+    CommentAddBody, CommentAddRequest, CommentCause, CommentDeleteRequest, CommentDocument,
+    CommentEditBody, CommentEditRequest, CommentListOutcome, CommentListRequest,
+    CommentMentionsRequest, CommentOutcome, CommentRaiseBody, CommentRaiseRequest, CommentRefused,
+    ContextComment, ContextComments, MentionsOutcome, comment_add, comment_delete, comment_edit,
+    comment_list, comment_mentions, comment_query_problem, comment_raise,
+};
 /// The collision pass's caps, verdicts and input (core's, task spec
 /// `collision-pass`), for the bridges.
 pub use specengine_core::collisions::{
     COLLISION_MARKS_MAX, COLLISIONS_LIMIT_DEFAULT, COLLISIONS_LIMIT_MAX, CollisionVerdict,
     PairJudgement, PairJudgements,
+};
+pub use specengine_core::comment::{
+    COMMENT_BODY_MAX, COMMENT_CONTEXT_BODY_CHARS, COMMENT_CONTEXT_CHARS, COMMENT_CONTEXT_MAX,
+    COMMENT_MENTIONS_MAX, COMMENT_PAGE_MAX,
 };
 /// The intake's input types, enums and caps (core's), for the bridges;
 /// the names of the kinds `propose_change` takes and of a decision, and a
@@ -893,6 +912,12 @@ pub enum Outcome {
     Workspace(Box<WorkspaceOutcome>),
     /// `guide`: SpecEngine's own guide, its index, a page or a rule.
     Guide(GuideOutcome),
+    /// `comment add|edit|delete`: the comment, or why not.
+    Comment(Box<CommentOutcome>),
+    /// `comment list`: one page of a target's comments.
+    CommentList(Box<CommentListOutcome>),
+    /// `comment mentions`: one page of a login's mentions.
+    Mentions(Box<MentionsOutcome>),
 }
 
 impl Outcome {
@@ -937,6 +962,8 @@ impl Outcome {
             Self::Round(run) => run.exit(),
             Self::RoundAnswers(answers) => answers.exit(),
             Self::PairsMarked(marked) => marked.exit(),
+            Self::Comment(comment) => comment.exit(),
+            Self::CommentList(list) => list.exit(),
             _ => Exit::Answered,
         }
     }
@@ -1028,6 +1055,32 @@ impl Outcome {
             Self::Workspace(outcome) => return outcome.stderr_lines(),
             // Static pages: nothing to note.
             Self::Guide(_) => return Vec::new(),
+            // People's words, escaped: the notes, then the refusal.
+            Self::Comment(outcome) => {
+                let mut lines: Vec<String> = outcome
+                    .messages
+                    .iter()
+                    .map(|message| escape_controls(&message.line()))
+                    .collect();
+                lines.extend(comment::refusal_lines(outcome.refused.as_ref()));
+                return lines;
+            }
+            Self::CommentList(outcome) => {
+                let mut lines: Vec<String> = outcome
+                    .messages
+                    .iter()
+                    .map(|message| escape_controls(&message.line()))
+                    .collect();
+                lines.extend(comment::refusal_lines(outcome.refused.as_ref()));
+                return lines;
+            }
+            Self::Mentions(outcome) => {
+                return outcome
+                    .messages
+                    .iter()
+                    .map(|message| escape_controls(&message.line()))
+                    .collect();
+            }
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -1170,6 +1223,9 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Team(outcome) => team::render_text(outcome),
         Outcome::Workspace(outcome) => workspace::render_text(outcome),
         Outcome::Guide(outcome) => guide::render_text(outcome),
+        Outcome::Comment(outcome) => comment::render_write(outcome),
+        Outcome::CommentList(outcome) => comment::render_list(outcome),
+        Outcome::Mentions(outcome) => comment::render_mentions(outcome),
     }
 }
 
@@ -1237,6 +1293,9 @@ impl serde::Serialize for Outcome {
             Self::Team(outcome) => outcome.serialize(serializer),
             Self::Workspace(outcome) => outcome.serialize(serializer),
             Self::Guide(outcome) => outcome.serialize(serializer),
+            Self::Comment(outcome) => outcome.serialize(serializer),
+            Self::CommentList(outcome) => outcome.serialize(serializer),
+            Self::Mentions(outcome) => outcome.serialize(serializer),
         }
     }
 }

@@ -249,6 +249,9 @@ pub struct ProposalDocument {
     pub card_id: Option<String>,
     /// A decision's why, as stored; `null` on any other kind.
     pub why: Option<String>,
+    /// The comment a question, discrepancy or decision was raised from;
+    /// `null` on any other (task spec `comments`, "MCP").
+    pub comment_id: Option<String>,
     /// What a create may repeat (task spec `intake-similar`, IS1, IS10):
     /// a list on a create's propose answer (stored, not stored or
     /// rehearsed), `[]` when nothing is found; `null` on every other kind,
@@ -346,6 +349,7 @@ impl ProposalDocument {
             interpretation: proposal.interpretation.clone(),
             card_id: proposal.card_id.clone(),
             why: intake.and_then(|intake| intake.why.clone()),
+            comment_id: proposal.comment_id.clone(),
             similar: None,
             notes: Vec::new(),
             cited: None,
@@ -486,6 +490,7 @@ pub(crate) fn rehearsed(
         new_ids: new.new_ids.clone(),
         task_id: task.map(str::to_owned),
         card_id: None,
+        comment_id: None,
         staged: None,
         interpretation: None,
         drift: None,
@@ -1062,6 +1067,7 @@ fn review_text(document: &ProposalDocument) -> String {
     interpretation_text(&mut out, document.interpretation.as_ref());
     line(&mut out, "card_id", document.card_id.as_deref());
     line(&mut out, "why", document.why.as_deref());
+    line(&mut out, "comment_id", document.comment_id.as_deref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
 }

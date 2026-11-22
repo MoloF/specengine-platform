@@ -48,7 +48,7 @@ const NULL_TAIL: &str = ",\"target_ids\":null,\"severity\":null,\"gap_type\":nul
 \"options\":null,\"recommendation\":null,\"distinct_from\":null,\"linked\":null,\
 \"record_id\":null,\"record_path\":null,\"record_title\":null,\"record_text\":null,\
 \"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\
-\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null}}";
+\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
 
 fn env_at(home: &Path, cwd: &Path) -> Env {
     Env {
@@ -258,13 +258,13 @@ fn ac10_every_kind_round_trips_at_schema_4() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":7,\"queue_schema\":14,\"project\":\"lantern-keep\",\"proposals\":5,\
-         \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":6}"
+        "{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":5,\
+         \"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"events\":6}"
     );
     // 46 since docs/features/drift-queue.md "Queue schema 8", 48 since
     // docs/features/card-questions.md S1.
     // 50 since docs/features/plain-questions.md PQ8.
-    assert_eq!(PROPOSAL_COLUMNS.len(), 50);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 51);
     for row in &rows[1..6] {
         assert_columns(row, &PROPOSAL_COLUMNS);
         let value: Value = serde_json::from_str(row).unwrap();
@@ -344,7 +344,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let v3_lines = lines(&v3);
     assert!(
-        v3_lines[0].starts_with("{\"format\":7,\"queue_schema\":14,")
+        v3_lines[0].starts_with("{\"format\":8,\"queue_schema\":15,")
             && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,\"cards\":0,"),
         "{}",
         v3_lines[0]
@@ -352,10 +352,11 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let mut v1_lines = v3_lines.clone();
     v1_lines[0] = v1_lines[0]
         .replacen(
-            "\"format\":7,\"queue_schema\":14,",
+            "\"format\":8,\"queue_schema\":15,",
             "\"format\":1,\"queue_schema\":1,",
             1,
         )
+        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1)
         .replacen("\"tasks\":0,\"runs\":0,\"cards\":0,", "", 1);
     for line in &mut v1_lines[1..3] {
         assert!(line.ends_with(NULL_TAIL), "{line}");
@@ -419,7 +420,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     sql(
         &db,
         &format!(
-            "{} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; PRAGMA user_version = 1;",
+            "DROP INDEX IF EXISTS proposals_comment; {} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = 1;",
             drops.join(" ")
         ),
     );
@@ -444,7 +445,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
     // 12 since docs/features/task-mandate.md M5 (`proposals` unchanged); 13
     // since docs/features/plain-questions.md PQ8 (`gist`, `matters` last).
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "14");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "15");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),

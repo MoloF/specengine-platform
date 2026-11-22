@@ -123,7 +123,8 @@ fn pp1_the_daemon_serves_the_pair() {
     let raw = reply.text().to_owned();
     let keys = top_keys(&raw);
     // 55 since docs/features/department-practices.md "Proposals: `cited`".
-    assert_eq!(keys.len(), 55, "{raw}");
+    // 56 since docs/features/comments.md (`comment_id` after `why`).
+    assert_eq!(keys.len(), 56, "{raw}");
     let at = keys
         .iter()
         .position(|key| key == "evidence")
@@ -167,7 +168,8 @@ fn pp1_the_daemon_serves_the_pair() {
     assert_eq!(staged.status, 200, "{}", staged.text());
     let staged = staged.json();
     // 55 since docs/features/department-practices.md "Proposals: `cited`".
-    assert_eq!(staged.as_object().map(serde_json::Map::len), Some(55));
+    // 56 since docs/features/comments.md (`comment_id` after `why`).
+    assert_eq!(staged.as_object().map(serde_json::Map::len), Some(56));
     assert_eq!(staged["pair"], Value::Null, "{staged}");
     let again = server
         .get(&format!("{P}/proposals/PR-0001"))

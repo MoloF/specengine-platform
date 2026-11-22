@@ -457,7 +457,8 @@ fn a_corrupt_record_row_names_its_column() {
             "card_id",
             "why",
             "gist",
-            "matters"
+            "matters",
+            "comment_id"
         ]
     );
     let cases: Vec<CorruptCase<'_>> = vec![

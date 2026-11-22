@@ -17,7 +17,6 @@ import { Palette } from "../palette/Palette";
 import { createRoundMemory } from "../round/memory";
 import type { RoadmapMemory, RoadmapTab } from "../roadmap/RoadmapView";
 import { QuestionsView } from "../round/QuestionsView";
-import { TasksView } from "../tasks/TasksView";
 import { useTranslate } from "../i18n";
 import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
@@ -36,7 +35,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { closeDoc, forgetDoc, openDocFrom, pushHash, replaceHash, useHash } from "./location";
-import { ALL_SECTIONS, feedHash, guideRefOf, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
+import { ALL_SECTIONS, feedHash, guideRefOf, homeHash, mentionsHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { SyncLine } from "./SyncLine";
 import { NotFound, ViewFailure } from "./views";
@@ -53,10 +52,18 @@ const GraphView = lazy(() => import("../graph/GraphView").then((module) => ({ de
  */
 const CardPage = lazy(() => import("../board/CardPage").then((module) => ({ default: module.CardPage })));
 const FeedView = lazy(() => import("../feed/FeedView").then((module) => ({ default: module.FeedView })));
+/**
+ * Agent tasks, a chunk of its own, as the Roadmap's: a section off the implicit department's nav, so
+ * first load keeps room for the comments' glue (docs/features/comments.md "UI"; docs/canon/ui-languages.md "Size").
+ */
+const TasksView = lazy(() => import("../tasks/TasksView").then((module) => ({ default: module.TasksView })));
 /** Documents, every document as a library, a chunk of its own (docs/features/doc-library.md "Acceptance criteria", DL19). */
 const DocumentsView = lazy(() => import("../documents/DocumentsView").then((module) => ({ default: module.DocumentsView })));
 /** A topic of SpecEngine's guide, a chunk of its own, reached by its link alone (docs/features/specengine-guide.md "The UI"). */
 const GuideTopicView = lazy(() => import("../guide/GuideTopicView").then((module) => ({ default: module.GuideTopicView })));
+/** Mentions and the nav's badge, chunks of their own, the badge read once the nav stands (docs/features/comments.md "UI"). */
+const MentionsView = lazy(() => import("../comments/MentionsView").then((module) => ({ default: module.MentionsView })));
+const MentionsBadge = lazy(() => import("../comments/MentionsBadge").then((module) => ({ default: module.MentionsBadge })));
 
 /**
  * Calls `onLanded` once committed beside a lazy view: a Suspense boundary resolves without the
@@ -86,17 +93,20 @@ function viewKeyOf(route: Route): string {
     // Its two tabs are one view: a tab's switch keeps the focus where it is.
     return `${route.project}/feed`;
   }
+  if (route.type === "mentions") {
+    return `${route.project}/mentions`;
+  }
   return route.type === "project" ? `project:${route.project}` : route.type;
 }
 
 /** The project a route names, if any. */
 function projectOf(route: Route): string | null {
-  return route.type === "section" || route.type === "project" || route.type === "feed" ? route.project : null;
+  return route.type === "section" || route.type === "project" || route.type === "feed" || route.type === "mentions" ? route.project : null;
 }
 
 /** The document a route opens in the modal, if any. */
 function docRefOf(route: Route): string | null {
-  return route.type === "section" || route.type === "project" ? (route.doc ?? null) : null;
+  return route.type === "section" || route.type === "project" || route.type === "mentions" ? (route.doc ?? null) : null;
 }
 
 /**
@@ -209,7 +219,7 @@ function ProjectSwitcher({
         onChange={(event) => {
           // A section keeps its section; the home and any other route land on the other project's home.
           const other = event.target.value;
-          pushHash(route.type === "section" ? sectionHash(other, route.section) : route.type === "feed" ? feedHash(other, route.tab) : homeHash(other));
+          pushHash(route.type === "section" ? sectionHash(other, route.section) : route.type === "feed" ? feedHash(other, route.tab) : route.type === "mentions" ? mentionsHash(other) : homeHash(other));
         }}
       >
         {!listed && (
@@ -651,10 +661,22 @@ export function Shell({ scenario }: { scenario: string | null }) {
         <Landed onLanded={onLanded} />
       </Suspense>
     );
+  } else if (route.type === "mentions") {
+    view = (
+      <Suspense key={route.project} fallback={<Skeleton label={t("app.lazy.mentions")} lines={6} />}>
+        <MentionsView project={route.project} />
+        <Landed onLanded={onLanded} />
+      </Suspense>
+    );
   } else if (route.section === "inbox") {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {
-    view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
+    view = (
+      <Suspense key={route.project} fallback={<Skeleton label={t("app.lazy.tasks")} lines={6} />}>
+        <TasksView project={route.project} taskId={route.id} />
+        <Landed onLanded={onLanded} />
+      </Suspense>
+    );
   } else if (route.section === "tree" && route.view !== undefined && route.id !== null) {
     view = <DocPage key={`${route.project}/${route.id}`} project={route.project} docRef={route.id} insideOpen={insideOpen} onInside={setInsideOpen} historyOpen={historyOpen} onHistory={setHistoryOpen} />;
   } else if (route.section === "board" && route.view !== undefined && route.id !== null) {
@@ -813,11 +835,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
               <ul>
                 {navOf(navProject ?? "", navSections, t).map((entry) => {
                   // A section the nav does not list still renders at its hash; then no item is current.
-                  const active = entry.key === "overview" ? route.type === "project" : entry.key === "feed" ? route.type === "feed" : route.type === "section" && route.section === entry.key;
+                  const active =
+                    entry.key === "overview" ? route.type === "project" : entry.key === "feed" || entry.key === "mentions" ? route.type === entry.key : route.type === "section" && route.section === entry.key;
                   return (
                     <li key={entry.key}>
                       <a href={navProject === null ? "#/" : entry.hash} aria-current={active ? "page" : undefined}>
                         {entry.label}
+                        {entry.key === "mentions" && navProject !== null && (
+                          <Suspense fallback={null}>
+                            <MentionsBadge project={navProject} />
+                          </Suspense>
+                        )}
                       </a>
                     </li>
                   );

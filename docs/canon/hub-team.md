@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-13
+reviewed: 2026-11-22
 ---
 
 # Hub team: who acts past the plain writes
@@ -40,15 +40,16 @@ Read per request, no cache in `App`, through `answer::read`, before the turn, fr
 
 | Act | Route on a hub | Who | Class |
 |---|---|---|---|
-| Seven plain writes | POST `.../cards`, `.../cards/split`, `.../cards/:id/{move,edit,assign,cancel,items}` | any login | plain |
+| Ten plain writes | POST `.../cards`, `.../cards/split`, `.../cards/:id/{move,edit,assign,cancel,items}`, `.../comments`, `.../comments/:id/{edit,items}` | any login (an edit: the author's) | plain |
 | Stage, unstage | POST, DELETE `.../proposals/:id/decision` | any `[team]` login | team |
 | Round answers | POST `.../round/answers` | any `[team]` login | team |
 | Accept | POST `.../cards/:id/accept` | a `[team]` login, the card's reviewer, never its assignee | confirm |
 | Clear | POST `.../cards/:id/clear` | any `[team]` login | confirm |
 | Group clear | POST `.../trace/clear` | a `lead` whose zones cover every node it re-freezes; `owner` | confirm |
 | Confirm a stage | GET, POST `.../proposals/:id/confirm` | a `lead` whose zones cover every target; `owner` | confirm |
+| Delete a comment | DELETE `.../comments/:id` | its author's login; `owner` | plain; judged in the library call (`comments.md#delete`) |
 
-`member`: all above but group clear and confirm. `lead`: those two inside its zones. `owner`: all, a path in no zone too.
+`member`: all above but group clear, confirm and deleting another's comment. `lead`: the first two inside its zones. `owner`: all, a path in no zone too.
 
 **Only a group clear and a confirm judge a cover.** A path in no zone is `owner` only there, a confirm's gone target too (`hub-confirm.md` "Rules"). A group clear cannot reach a gone target, which stands on no node of the group, while a single clear by any `[team]` login can re-freeze one (`spec-trace.md` "Clearing"), whatever its zones: a zone bounds no single card.
 
@@ -74,7 +75,7 @@ The confirm class is the acts a person confirms; a stage is none. RM-0064 adds t
 {"login":"mira","name":"Mira K","allowed":["stage","accept","clear","group_clear","confirm"]}
 ```
 
-`member` the first three, `lead` and `owner` all five. Outside `[team]` or no `[team]`: 200, `name` null, `allowed` empty.
+`member` the first three, `lead` all five, `owner` those and `delete_comment`. Outside `[team]` or no `[team]`: 200, `name` null, `allowed` empty.
 
 | When | Answer, nothing stored |
 |---|---|
@@ -83,6 +84,7 @@ The confirm class is the acts a person confirms; a stage is none. RM-0064 adds t
 | Outside `[team]` | 403 ``refused: <login> is not in this project's `[team]`: reads and plain writes`` |
 | A `member`'s group clear or confirm | 403 ``refused: <login> is a `member`: this act needs a `lead` `` |
 | Outside a zone | 403 ``refused: <login> leads <zones>; <path> lies outside them`` |
+| Another's comment, not an `owner` | 403 ``refused: CM-0012 is <author>'s: only its author or an `owner` deletes it`` |
 | A confirm's gone target | 403 ``refused: <login> leads <zones>; <why>: this act needs an `owner` `` |
 | Confirm class: a query, no `Origin` | 403 ``refused: this route takes no query``, ``refused: this route needs the Origin header`` |
 | Null `revision` or `count` | 400 ``a hub needs `revision` ``, `count` alike |
@@ -121,7 +123,7 @@ The login replaces the typed name in "Accepting as" and "Clearing as": read-only
 
 Controls follow `GET .../team`, the route's 403 staying the truth: `useTeam` in `queries.ts`, `useTeamRow`, `useAllowed` in `acting.ts`. It is asked only once a login is known, so a local daemon never is; window focus reads it again, since `[team]` changes by a commit, which raises no event. Unknown reads as on and the route answers: no login, the read still out, a failed read.
 
-"Off" means the button stays, focusable, `aria-disabled`, doing nothing, with one line beside it (`ActOff`, `labels.ts` `ACT_OFF`): Accept in `board/CardPanel`, Clear there and in `trace/CardsBlock`, Clear all there, Stage, Unstage and the decisions that stage in `inbox/ProposalCard` and `round/RoundScreen`. The inbox's keys announce the same line (`inbox/InboxView`). A round's item stays to read, its choices off, no answer written (`round/RoundItemCard`). The two decisions that send nothing stay on. The Move menu drops its Accept line: a menu has no line to keep.
+"Off" means the button stays, focusable, `aria-disabled`, doing nothing, with one line beside it (`ActOff`, `labels.ts` `ACT_OFF`); which buttons: `board-ui.md` "Acts off".
 
 ## Known limits
 

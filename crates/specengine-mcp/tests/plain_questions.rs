@@ -66,9 +66,11 @@ use specengine_mcp::{
 // Re-pinned by docs/features/collision-pass.md "Acceptance criteria", CP8
 // (the collisions line in, the resources sentence out; `mcp_code.rs`' RD-5
 // steps back to the value this slice pinned, `7de2fdaa…`).
-const INSTRUCTIONS_B3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
+// Re-pinned by docs/features/comments.md CM15: the comments line in both
+// texts; stdio's hints sentence and the hub's resources sentence out.
+const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
 const HUB_INSTRUCTIONS_B3: &str =
-    "81c580c0e384a3e9257bc1d51d176e04e9cc995e44dda809a980f65ee1f8ec8d";
+    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
 
 /// The "Data" example's fields.
 const TEXT: &str =
@@ -268,8 +270,8 @@ fn pq1_pq9_ask_question_answers_as_its_twin_and_get_proposal_returns_the_fields(
     // 32 since docs/features/collision-pass.md CP8.
     assert_eq!(
         tool_names(&list).len(),
-        33,
-        "stdio keeps 33 tools (32 until specengine-guide)"
+        35,
+        "stdio keeps 35 tools (33 until comments, 32 until specengine-guide)"
     );
     let schemas = output_schemas(&list);
 
@@ -571,14 +573,15 @@ fn pq9_the_description_takes_the_edits_and_the_instructions_stay() {
             .contains(" (a decision record: a queue hit's record, path, title as the answer)"),
         "{description}"
     );
+    // "answers with" dropped by docs/features/comments.md to keep 2 048 bytes.
     assert!(
         description.contains(
-            "The owner decides with `spec approve PR` or answers with `spec reject PR --reason \
-             <answer>`."
+            "The owner decides with `spec approve PR` or `spec reject PR --reason <answer>`."
         ),
         "{description}"
     );
-    assert_eq!(description.len(), 2031, "{description}");
+    // 2 042 since docs/features/comments.md (`comment_id`).
+    assert_eq!(description.len(), 2042, "{description}");
     assert_eq!(blake3_hex(INSTRUCTIONS.as_bytes()), INSTRUCTIONS_B3);
     assert_eq!(blake3_hex(HUB_INSTRUCTIONS.as_bytes()), HUB_INSTRUCTIONS_B3);
     drop(session.finish());
@@ -732,8 +735,9 @@ async fn pq9_a_hub_stores_the_fields() {
     ];
     let hub = hub_answers(&remote.main, &remote.home, &calls).await;
     let listed = tool_names(&hub[0]);
-    assert_eq!(listed.len(), 19, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 19);
+    // 21 since docs/features/comments.md CM15.
+    assert_eq!(listed.len(), 21, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 21);
     let asked = &hub[1];
     assert_ne!(asked["isError"], json!(true), "{asked}");
     assert_eq!(
@@ -764,15 +768,17 @@ async fn pq9_a_hub_stores_the_fields() {
         !description.contains(" (a queue hit's record, path, title as the answer)"),
         "{description}"
     );
+    // docs/features/comments.md: "with Confirm, on the hub or a terminal.",
+    // the outcomes' clause dropped to keep 2 048 bytes.
     assert!(
-        description.contains("with Confirm on the hub"),
+        description.contains("with Confirm, on the hub or a terminal."),
         "{description}"
     );
     assert!(
         !description.contains("with a Confirm on the hub"),
         "{description}"
     );
-    assert_eq!(description.len(), 2044, "{description}");
+    assert_eq!(description.len(), 2022, "{description}");
     assert_eq!(blake3_hex(HUB_INSTRUCTIONS.as_bytes()), HUB_INSTRUCTIONS_B3);
 }
 

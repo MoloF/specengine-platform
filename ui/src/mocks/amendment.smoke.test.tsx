@@ -134,8 +134,9 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     // A new file's review document: the 54 keys of any review, the card and why since card-questions (L1), similar since intake-similar (IS10),
     // the gist and why it matters since plain-questions (docs/features/plain-questions.md "Acceptance criteria", PQ10),
     // the pair since collision-pairs (docs/features/collision-pairs.md "Acceptance criteria", PP8), the cited IDs
-    // last since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13): 55.
-    expect(Object.keys(review)).toHaveLength(55);
+    // last since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13): 55; the comment
+    // it was raised from since comments (docs/features/comments.md "HTTP"): 56.
+    expect(Object.keys(review)).toHaveLength(56);
     expect(review).toMatchObject({
       id: AMENDMENT,
       project: SLUG,
@@ -272,13 +273,17 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
     expect(fact(card, "Agent task")).toBe("No agent task");
     // The status is the head's lozenge, no fact (DS5 of docs/features/design-sweep.md "Acceptance criteria").
     expect(card.querySelector(".issue-view-meta .lozenge")?.textContent).toBe("Open");
-    expect(Array.from(card.querySelectorAll(".card-body h3"), (heading) => heading.textContent)).toEqual([
-      "Targets",
-      "Options",
-      "Rationale",
-      "Provenance",
-      "Section diff",
-    ]);
+    // Talk under the proposal last, its count once its thread is read (docs/features/comments.md "UI").
+    await waitFor(() => {
+      expect(Array.from(card.querySelectorAll(".card-body h3"), (heading) => heading.textContent)).toEqual([
+        "Targets",
+        "Options",
+        "Rationale",
+        "Provenance",
+        "Section diff",
+        "Comments \u00b7 0",
+      ]);
+    });
     // Both targets are the file to come: the corpus answers neither yet.
     expect(Array.from(card.querySelectorAll(".target"), (target) => [target.querySelector(".target-head")?.textContent, target.querySelector("p.muted")?.textContent])).toEqual([
       [SURGE_FILE, `\`${SURGE_FILE}\` is no indexed document: not under the \`[paths]\` roots, excluded, or missing`],

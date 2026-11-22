@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-19
+reviewed: 2026-11-22
 ---
 
 # Read freshness: the stat key, and a hub's trusted index
 
-ADR-0069, built by `read-trust` (`docs/features/read-trust.md`, RM-0054, step 12e). How a read's first step chooses what to read, and when a hub's read skips it. Files stay the truth, the index a rebuildable projection (ADR-0001, ADR-0003); nothing here blocks (ADR-0012). The subset read, T3 (one snapshot per read), T5 (every printed byte matches its row's BLAKE3): `spec-read-subset.md`. Code: store `write.rs`; CLI `freshness.rs`; http `answer.rs`; mcp `hub.rs`.
+ADR-0069 (`docs/features/read-trust.md`, RM-0054, step 12e). How a read's first step chooses what to read, and when a hub's read skips it. Files stay the truth, the index a rebuildable projection (ADR-0001, ADR-0003); nothing here blocks (ADR-0012). The subset read, T3 (one snapshot per read), T5 (every printed byte matches its row's BLAKE3): `spec-read-subset.md`. Code: store `write.rs`; CLI `freshness.rs`; http `answer.rs`; mcp `hub.rs`.
 
 ## The freshness step
 
@@ -27,7 +27,7 @@ The CLI, stdio MCP, a local daemon and eval's walking reads always walk: an edit
 - **R4.** No key (a failed `stat`, a source with none): read, no `file_stats` row.
 - **R7.** `spec index --full` reads every file and stores every key: it repairs a lying key.
 
-`UpdateReport.hashed` counts the files read. Printed files are still BLAKE3-checked (T5, Q7): not the size heuristic `spec-cli-graph` dropped. A wrong "moved" costs one read, a wrong "unchanged" misses an edit. Read once: a new inode (`cp -p`, `ditto`, an APFS clone, an atomic save, Docker's copy-up), the files `git checkout` or `restore` wrote, `touch` (`parsed` 0), a same-size edit with mtime restored (`touch -r`, `rsync --inplace`: ctime moves), a remount's device or renumbered inodes (FUSE, SMB). A write within one coarse tick (HFS+ 1 s, FAT 2 s) is racy; so is a clock set back or a file dated ahead, read every update. A clock set forward misses a same-tick write on a coarse file system.
+`UpdateReport.hashed` counts the files read. Printed files are still BLAKE3-checked (T5, Q7). A wrong "moved" costs one read, a wrong "unchanged" misses an edit. Read once: a new inode (`cp -p`, `ditto`, an APFS clone, an atomic save, Docker's copy-up), the files `git checkout` or `restore` wrote, `touch` (`parsed` 0), a same-size edit with mtime restored (`touch -r`, `rsync --inplace`: ctime moves), a remount's device or renumbered inodes (FUSE, SMB). A write within one coarse tick (HFS+ 1 s, FAT 2 s) is racy; so is a clock set back or a file dated ahead, read every update. A clock set forward misses a same-tick write on a coarse file system.
 
 The code index keys on content, never a stat (`symbol-index.md` "Cache key and cross-file pass").
 
@@ -55,8 +55,8 @@ The code index keys on content, never a stat (`symbol-index.md` "Cache key and c
 ## Routes and tools
 
 **Only reads trust.** A route or tool that writes or authorizes a write walks, so nothing is judged from an index that missed a hand edit; so does one not classified, and trace data wherever shown (the rollups and marks a card is accepted on).
-- **http** (`answer.rs`). `run_read` trusts: `tree`, `nodes`, `search`, `bundle`, `graph`, `map`, `library`, `flow` without `trace`, `check`, `health`, `lock-diff`, `roadmap`, `delivery`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`, `cards` (GET) without `marks`, `cards/<id>` (its `upstream` mark line may lag a host's hand edit up to 300 s, as the walking `cards?marks=true` row flags: `card-upstream.md`); `run_as` lets `flow`, `cards` decide by the request. `run` walks the rest: `trace`, `catalog`, `rings`, the round's sheet and answers, the stage, card writes, the trace's clear, a confirm's read and write.
-- **MCP** (`hub.rs`). A call runs in the turn's `walking` scope; `reads_trust(name, arguments)` opts into `trusting` for `HUB_READ_TOOLS` (7): `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_proposal`, `list_cards` without `marks`, `get_roadmap`; resource lists and reads trust. `get_flow`, `get_trace`, `get_card`, queue and card writes, probes walk: `get_flow` even without `trace`: its stdio text (2 045 of 2 048 B) has no room for a hub's tail.
+- **http** (`answer.rs`). `run_read` trusts: `tree`, `nodes`, `search`, `bundle`, `graph`, `map`, `library`, `flow` without `trace`, `check`, `health`, `lock-diff`, `roadmap`, `delivery`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`, `cards` (GET) without `marks`, `cards/<id>` (its `upstream` mark line may lag a host's hand edit up to 300 s, as the walking `cards?marks=true` row flags: `card-upstream.md`), `comments`, `mentions`; `run_as` lets `flow`, `cards` decide by the request. `run` walks the rest: `trace`, `catalog`, `rings`, the round's sheet and answers, the stage, card and comment writes, the trace's clear, a confirm's read and write.
+- **MCP** (`hub.rs`). A call runs in the turn's `walking` scope; `reads_trust(name, arguments)` opts into `trusting` for `HUB_READ_TOOLS` (8): `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_proposal`, `list_cards` without `marks`, `get_roadmap`, `list_comments`; resource lists and reads trust. `get_flow`, `get_trace`, `get_card`, queue, card and comment writes, probes walk: `get_flow` even without `trace`: its stdio text (2 045 of 2 048 B) has no room for a hub's tail.
 - **Texts**: `HUB_INSTRUCTIONS` and five trusting reads' tails say what a hub's read trusts (`hub-mcp.md` "Tools"); stdio's keep "refresh".
 
 ## Invariants and the window

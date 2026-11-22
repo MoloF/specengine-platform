@@ -45,7 +45,7 @@ use task_state::{A, B, Case, repo_in_s};
 /// docs/features/roadmap-surfaces.md (Q-D); `tested` after `bindings` since
 /// docs/features/tested-reads.md "Per read".
 // 28 since docs/features/department-practices.md "The task package: `practices`".
-const PACKAGE_KEYS: [&str; 28] = [
+const PACKAGE_KEYS: [&str; 29] = [
     "schema_version",
     "id",
     "project",
@@ -70,6 +70,8 @@ const PACKAGE_KEYS: [&str; 28] = [
     "runs",
     "bundle",
     "practices",
+    // docs/features/comments.md "The card context and the task package".
+    "comments",
     "roadmap",
     "author",
     "created_at",
@@ -338,7 +340,7 @@ fn ac01_to_ac05_the_task_routes_are_the_clis_documents_and_change_nothing() {
                 second.body, first.body,
                 "{path}: two reads are byte-identical"
             );
-            assert_eq!(keys_of(first.text()), PACKAGE_KEYS, "{path}: the 28 keys");
+            assert_eq!(keys_of(first.text()), PACKAGE_KEYS, "{path}: the 29 keys");
             let package = first.json();
             assert_eq!(package["id"], json!(id), "{path}");
             assert_eq!(package["project"], json!(case.slug), "{path}");

@@ -193,7 +193,8 @@ fn cases(corpus: &str) -> BTreeMap<String, Value> {
 /// review`, `get_proposal`, `review_proposal`, the daemon's route), so a
 /// `propose_change` reply is 0.47.0's but for one `cited: null` in its
 /// document: required there and `null`, then taken out before the golden
-/// compares. Nothing else is touched.
+/// compares. Nothing else is touched. Since docs/features/comments.md the
+/// same for `comment_id`.
 fn without_null_cited(mut reply: Value) -> Value {
     if let Some(document) = reply
         .pointer_mut("/result/structuredContent")
@@ -204,6 +205,13 @@ fn without_null_cited(mut reply: Value) -> Value {
             document.remove("cited"),
             Some(Value::Null),
             "a proposal document holds `cited: null`"
+        );
+        // docs/features/comments.md (queue schema 15): `comment_id` after
+        // `why`, `null` on an item raised from no comment.
+        assert_eq!(
+            document.remove("comment_id"),
+            Some(Value::Null),
+            "a proposal document holds `comment_id: null`"
         );
     }
     reply

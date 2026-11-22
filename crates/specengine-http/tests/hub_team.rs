@@ -324,6 +324,16 @@ fn no_row(login: &str) -> String {
 
 const MEMBER_ACTS: [&str; 3] = ["stage", "accept", "clear"];
 const LEAD_ACTS: [&str; 5] = ["stage", "accept", "clear", "group_clear", "confirm"];
+/// An `owner`'s: a lead's and, since docs/features/comments.md (RM-0136,
+/// D7), `delete_comment`, last.
+const OWNER_ACTS: [&str; 6] = [
+    "stage",
+    "accept",
+    "clear",
+    "group_clear",
+    "confirm",
+    "delete_comment",
+];
 
 // --------------------------------------------------------------- the six acts
 
@@ -855,13 +865,14 @@ fn a3_a_login_outside_team_keeps_the_five_writes_and_every_read() {
 }
 
 /// "Data": `GET .../team` is the asker's own row, keys in order, exact bytes:
-/// the first three acts for a `member`, four for a `lead` and an `owner`, and a
-/// repeat of the same bytes. M: an absent entry read as `member`.
+/// the first three acts for a `member`, five for a `lead`, six for an `owner`
+/// (`delete_comment` since docs/features/comments.md D7), and a repeat of the
+/// same bytes. M: an absent entry read as `member`.
 #[test]
 fn a3_team_answers_the_askers_own_row() {
     let hub = teamed("team-row", "card-press").start();
     let cases = [
-        ("olga", team_row("olga", "Olga R", &LEAD_ACTS)),
+        ("olga", team_row("olga", "Olga R", &OWNER_ACTS)),
         ("lena", team_row("lena", "Lena V", &LEAD_ACTS)),
         ("mira", team_row("mira", "Mira K", &LEAD_ACTS)),
         ("tomas", team_row("tomas", "Tomas B", &MEMBER_ACTS)),
@@ -1637,7 +1648,7 @@ fn a4_each_root_reads_its_own_team_on_every_request() {
     assert_eq!(row("mira", P), team_row("mira", "Mira K", &LEAD_ACTS));
     assert_eq!(
         row("mira", KEEP),
-        team_row("mira", "Mira of the Keep", &LEAD_ACTS)
+        team_row("mira", "Mira of the Keep", &OWNER_ACTS)
     );
 
     let id = ready(&hub, "Back page", &["SHT-BACK"]);

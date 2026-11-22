@@ -20,6 +20,11 @@ import type {
   CardWrite,
   CatalogDocument,
   CheckReport,
+  CommentAddBody,
+  CommentDocument,
+  CommentEditBody,
+  CommentList,
+  CommentRaiseBody,
   ConfirmBody,
   ConfirmRead,
   DeliveryDocument,
@@ -36,6 +41,7 @@ import type {
   LockDiffView,
   LibraryDocument,
   MapDocument,
+  MentionList,
   NodeView,
   Project,
   Proposal,
@@ -201,6 +207,28 @@ export interface FeedOptions {
   needs_me?: boolean;
   task?: string;
   department?: string;
+}
+
+/**
+ * `spec comment list --on X [--before CM] [--limit N]` (`docs/features/comments.md` "HTTP"): `on` a
+ * card's or a proposal's ID or a node's REF; `before` the page's cursor, a list's `next_before`;
+ * `limit` 1 to 100, absent the daemon's 100. The thread sends no limit.
+ */
+export interface CommentsOptions {
+  on: string;
+  before?: string;
+  limit?: number;
+}
+
+/**
+ * `spec comment mentions [--login L] [--before CM] [--limit N]` (`docs/features/comments.md` "HTTP"):
+ * `login` absent on a hub, whose login the daemon takes, and locally when no acting name fits the
+ * login grammar, every mention then; `before` a page's cursor.
+ */
+export interface MentionsOptions {
+  login?: string;
+  before?: string;
+  limit?: number;
 }
 
 /**
@@ -402,6 +430,23 @@ export interface SpecEngineClient {
   splitCard(project: string, body: CardSplitBody): Promise<CardSplit>;
   /** POST /api/projects/:p/trace/clear (docs/features/card-trace.md "Clearing"; no effect only, one event per card) */
   clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite>;
+  // Comments (docs/features/comments.md "HTTP"; ADR-0087): queue data under a card, a proposal or a
+  // node, none of them a write of what it is under. The reads are judged: only a 200 resolves, a
+  // `{id, reason}` 404 and an older daemon's unknown route reject in the daemon's words. The writes
+  // take no AbortSignal: 200 the comment document (a raise, the intake document); a refusal, an error
+  // body or a document with notes, rejects with its message or its last note, verbatim.
+  /** GET /api/projects/:p/comments?on=X[&before=CM][&limit=N] (= spec comment list --json) */
+  getComments(project: string, options: CommentsOptions, signal?: AbortSignal): Promise<CommentList>;
+  /** GET /api/projects/:p/mentions[?login=L][&before=CM][&limit=N] (= spec comment mentions --json) */
+  getMentions(project: string, options: MentionsOptions, signal?: AbortSignal): Promise<MentionList>;
+  /** POST /api/projects/:p/comments (= spec comment add) */
+  addComment(project: string, body: CommentAddBody): Promise<CommentDocument>;
+  /** POST /api/projects/:p/comments/:id/edit (= spec comment edit; a stale `version` 409) */
+  editComment(project: string, id: string, body: CommentEditBody): Promise<CommentDocument>;
+  /** DELETE /api/projects/:p/comments/:id, no body (= spec comment delete; its consent the page's dialog) */
+  deleteComment(project: string, id: string): Promise<CommentDocument>;
+  /** POST /api/projects/:p/comments/:id/items (= spec propose question|decision|discrepancy --comment CM): 200 the intake document, stored or not */
+  raiseFromComment(project: string, id: string, body: CommentRaiseBody): Promise<IntakeDocument>;
   /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] [--stage S] [--summary] --json, the browser view; 404 the exit-1 document) */
   getTrace(project: string, options?: TraceOptions, signal?: AbortSignal): Promise<TraceDocument>;
   /**

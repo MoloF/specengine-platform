@@ -525,7 +525,12 @@ fn cc1_the_bundle_is_spec_bundles_over_targets_then_records() {
         &cwd,
         &["card", "show", "C-0001", "--context", "--budget", "3000"],
     );
-    assert_eq!(keys_at(&raw, "context"), ["parent", "bundle", "notes"]);
+    // docs/features/comments.md "The card context and the task package":
+    // `comments` before `notes`.
+    assert_eq!(
+        keys_at(&raw, "context"),
+        ["parent", "bundle", "comments", "notes"]
+    );
 
     // The text: the card's lines, `history: -`, the practices' two lines
     // (docs/features/department-practices.md "The card: `practices` and `cited`": `--context`
@@ -536,7 +541,7 @@ fn cc1_the_bundle_is_spec_bundles_over_targets_then_records() {
     assert_eq!(bundle["body"], json!(body), "the body is the text's");
     let tail = format!(
         "history: -\npractices: -\ncited: -\ncontext.parent: -\ncontext.parent.goal: -\n\
-         context.bundle: {hash}\n{body}"
+         context.comments: -\ncontext.bundle: {hash}\n{body}"
     );
     assert!(
         text.stdout.ends_with(&tail),
@@ -878,9 +883,10 @@ fn cc2_a_plain_read_reads_no_corpus_and_no_git() {
         asked.stdout
     );
     assert!(
-        asked
-            .stdout
-            .ends_with("context.parent: -\ncontext.parent.goal: -\ncontext.bundle: -\n"),
+        asked.stdout.ends_with(
+            "context.parent: -\ncontext.parent.goal: -\ncontext.comments: -\n\
+                 context.bundle: -\n"
+        ),
         "{}",
         asked.stdout
     );
@@ -1217,7 +1223,8 @@ fn cc4_a_manual_card_has_nothing_to_bundle() {
     assert_eq!(context_notes(&text), [NOTHING], "{}", text.stderr);
     assert_eq!(
         document["context"],
-        json!({"parent": null, "bundle": null, "notes": [NOTHING]})
+        json!({"parent": null, "bundle": null, "comments": {"total": 0, "listed": []},
+            "notes": [NOTHING]})
     );
     assert!(
         text.stdout.ends_with("context.bundle: -\n"),

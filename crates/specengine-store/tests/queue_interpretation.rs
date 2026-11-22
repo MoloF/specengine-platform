@@ -350,8 +350,8 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     // since docs/features/drift-queue.md "Queue schema 8":
     // `drift`, `drift_hash` after `interpretation`. Schema 12 since
     // docs/features/task-mandate.md M5, `proposals` unchanged.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 14);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 50);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 51);
     assert_eq!(PROPOSAL_COLUMNS[43], INTERPRETATION_KIND);
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
@@ -369,9 +369,11 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     // at 13 (docs/features/plain-questions.md PQ8: `gist`, `matters`).
     assert_eq!(proposal_columns(11), Some(&PROPOSAL_COLUMNS[..48]));
     assert_eq!(proposal_columns(12), Some(&PROPOSAL_COLUMNS[..48]));
-    assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(15), None);
+    assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..50]));
+    assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..50]));
+    // 51 at 15 (docs/features/comments.md CM1: `comment_id`).
+    assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(16), None);
 
     let scratch = Scratch::new("qi-t5");
     let db = scratch.db("q");
@@ -383,7 +385,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     let made = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15");
     assert_eq!(
         sqlite3(
             &db,
@@ -396,10 +398,10 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     // 8's two columns and step 11's two dropped too).
     sqlite3(
         &db,
-        "ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
+        "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
          ALTER TABLE proposals DROP COLUMN drift_hash; \
          ALTER TABLE proposals DROP COLUMN drift; \
-         ALTER TABLE proposals DROP COLUMN interpretation; DROP TABLE cards; DROP TABLE IF EXISTS collision_marks; PRAGMA user_version \
+         ALTER TABLE proposals DROP COLUMN interpretation; DROP TABLE cards; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version \
          = 5;",
     );
     assert_eq!(
@@ -425,10 +427,10 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     );
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping 5 -> 13");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "50"
+        "51"
     );
     assert_eq!(
         sqlite3(
@@ -443,7 +445,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "14", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15", "stepped once");
     // An interpretation goes into the stepped queue.
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
     assert_eq!(
@@ -455,24 +457,24 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     );
     drop(queue);
 
-    // Schema 15 (this build's is 14, docs/features/collision-pass.md D6;
+    // Schema 16 (this build's is 15, docs/features/comments.md CM1;
     // task-mandate R1: 12 over 11 green at 8a43e5d): refused by an open and
     // a read, left alone.
-    sqlite3(&db, "PRAGMA user_version = 15;");
+    sqlite3(&db, "PRAGMA user_version = 16;");
     let rows = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(error @ QueueError::SchemaTooNew { found: 15 }) => {
+            Err(error @ QueueError::SchemaTooNew { found: 16 }) => {
                 let text = error.to_string();
-                assert!(text.contains("15") && text.contains("14"), "{text}");
+                assert!(text.contains("16") && text.contains("15"), "{text}");
             }
-            other => panic!("expected SchemaTooNew 15, got {other:?}"),
+            other => panic!("expected SchemaTooNew 16, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15", "left alone");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "16", "left alone");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), rows);
 }
 
@@ -493,10 +495,11 @@ fn ac_r13_rows_with_an_interpretation_restore_byte_identical() {
         .expect("a proposals line");
     // The column before step 8's two (`drift`, `drift_hash`) and step 11's
     // two (`card_id`, `why`), all null on an interpretation, its JSON text a
-    // string of the dump's array.
+    // string of the dump's array; step 13's two and step 15's `comment_id`
+    // (docs/features/comments.md CM1) null too.
     let column = serde_json::to_string(&example()).expect("JSON");
     let tail = format!(
-        ",{},null,null,null,null,null,null]",
+        ",{},null,null,null,null,null,null,null]",
         serde_json::Value::String(column)
     );
     assert!(first.ends_with(&tail), "{first} ends with {tail}");

@@ -44,6 +44,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/collision-names.md](features/collision-names.md) shipped
 - [docs/features/collision-pairs.md](features/collision-pairs.md) shipped
 - [docs/features/collision-pass.md](features/collision-pass.md) shipped
+- [docs/features/comments.md](features/comments.md) shipped
 - [docs/features/constant-census.md](features/constant-census.md) shipped
 - [docs/features/corpus-map.md](features/corpus-map.md) shipped
 - [docs/features/daemon-read.md](features/daemon-read.md) shipped
@@ -316,4 +317,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0132.md](roadmap/RM-0132.md) shipped
 - [docs/roadmap/RM-0133.md](roadmap/RM-0133.md) shipped
 - [docs/roadmap/RM-0134.md](roadmap/RM-0134.md) shipped
+- [docs/roadmap/RM-0136.md](roadmap/RM-0136.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

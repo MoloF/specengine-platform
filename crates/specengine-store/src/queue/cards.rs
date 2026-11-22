@@ -806,7 +806,7 @@ impl SqliteQueue {
                 .map(str::to_owned)
                 .collect();
             let floor = read_floor(&dir)?;
-            let made = insert_intake(row.tx, row.project, &item, None, floor, now)?;
+            let made = insert_intake(row.tx, row.project, &item, None, None, floor, now)?;
             log_text(
                 row.tx,
                 row.project,

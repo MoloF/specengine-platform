@@ -79,14 +79,17 @@ const G1: &str = "Readers learn stamina before they sprint.";
 // Re-pinned by docs/features/collision-pass.md "Acceptance criteria", CP8
 // (the collisions line in, the resources sentence out; `mcp_code.rs`' RD-5
 // steps back to the value this slice pinned, `7de2fdaa…`).
-const INSTRUCTIONS_B3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d79ede5e644e9";
+// Re-pinned by docs/features/comments.md CM15: the comments line in both
+// texts; stdio's hints sentence and the hub's resources sentence out.
+const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
 const HUB_INSTRUCTIONS_B3: &str =
-    "81c580c0e384a3e9257bc1d51d176e04e9cc995e44dda809a980f65ee1f8ec8d";
+    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
 
 /// CC9: the description's head and its sentence, as the spec gives them.
 const GET_HEAD: &str = "One card: the same as `spec card show C --marks [--history] [--context \
                         [--budget N]]`.";
-const GET_CONTEXT: &str = "context: true: {parent {id, title, goal} or null, bundle, notes}: \
+// `comments` since docs/features/comments.md CM10.
+const GET_CONTEXT: &str = "context: true: {parent {id, title, goal} or null, bundle, comments, notes}: \
                            bundle is get_context_bundle's document over its targets, then the \
                            records of its applied items, at budget (else the project's \
                            bundle_task, else 10000), fitted into the room its lines leave of \
@@ -411,7 +414,7 @@ fn cc7_get_card_is_the_cli_read_with_context() {
     assert!(
         text.contains(&format!(
             "history: -\npractices: -\ncited: -\ncontext.parent: -\ncontext.parent.goal: -\n\
-             context.bundle: {hash}\n{body}"
+             context.comments: -\ncontext.bundle: {hash}\n{body}"
         )),
         "{text}"
     );
@@ -455,7 +458,12 @@ fn cc7_the_schemas_hold_the_context_keys() {
     let context = &output["properties"]["context"];
     let mut keys = properties(context);
     keys.sort();
-    assert_eq!(keys, ["bundle", "notes", "parent"], "M: notes dropped");
+    // `comments` since docs/features/comments.md CM10.
+    assert_eq!(
+        keys,
+        ["bundle", "comments", "notes", "parent"],
+        "M: notes dropped"
+    );
     let shape = object(context);
     let mut parent = properties(&shape["properties"]["parent"]);
     parent.sort();
@@ -698,8 +706,9 @@ async fn cc7_a_hub_answers_alike_and_keeps_its_texts() {
     drop(session.finish());
     let hub = hub_answers(&repo, &calls).await;
     let listed = tool_names(&hub[0]);
-    assert_eq!(listed.len(), 19, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 19);
+    // 21 since docs/features/comments.md CM15.
+    assert_eq!(listed.len(), 21, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 21);
     for (n, (args, local)) in calls.iter().zip(&stdio).enumerate() {
         let remote = &hub[n + 1];
         assert_ne!(remote["isError"], json!(true), "{args}: {remote}");
@@ -745,7 +754,9 @@ fn cc9_the_description_holds_the_context_sentence() {
         .to_owned();
     drop(session.finish());
     assert!(text.is_ascii());
-    assert_eq!(text.len(), 2042, "{text}");
+    // 2 031 since docs/features/comments.md (`comments` in, people's words;
+    // "; else null", "a corrupt row, another repository, a hub" out).
+    assert_eq!(text.len(), 2031, "{text}");
     assert!(text.len() <= 2048, "mcp-read.md \"Size\"");
     assert!(folded(&text).starts_with(GET_HEAD), "{text}");
     let folded_text = folded(&text);
@@ -762,7 +773,9 @@ fn cc9_the_description_holds_the_context_sentence() {
         "{text}"
     );
     // 2 039 since docs/features/collision-pass.md CP8.
-    assert_eq!(INSTRUCTIONS.len(), 2046);
+    // 2 043 since docs/features/comments.md CM15 (the comments line in, 54
+    // bytes; 57 cut).
+    assert_eq!(INSTRUCTIONS.len(), 2043);
     assert_eq!(blake3_hex(INSTRUCTIONS.as_bytes()), INSTRUCTIONS_B3);
     assert!(!INSTRUCTIONS.contains("context: true"));
 }

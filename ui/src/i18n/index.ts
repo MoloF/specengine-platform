@@ -2,12 +2,12 @@
 // "Choice", "Switcher"). Only src/i18n/ imports i18next or react-i18next: the rest of the UI reads
 // `t` from useTranslate() or takes a Translate argument, so no string is resolved at module load and
 // a switch re-renders what shows text, remounting nothing. English is in the main chunk and loads
-// with it; Russian is a chunk of its own, reached through the one `import("./ru")` below and loaded
+// with it, but for the parts a view's chunk brings with it (`addEnglishPart`: the comments'); Russian is a chunk of its own, reached through the one `import("./ru")` below and loaded
 // when a page starts in it or the viewer first chooses it.
 import i18next, { type TFunction } from "i18next";
 import { useSyncExternalStore } from "react";
 import { initReactI18next, useTranslation } from "react-i18next";
-import { isLanguage, type Language } from "./catalog";
+import { isLanguage, type EnglishPart, type Language } from "./catalog";
 import { en } from "./en";
 
 export { isLanguage, LANGUAGES, type Language } from "./catalog";
@@ -52,7 +52,8 @@ instance.on("languageChanged", (language: string) => {
 // by `addResourceBundle` when its chunk lands; until then a Russian key reads English. React
 // escapes, and a placeholder's value is never read again for `{{` or `$t(`.
 void instance.use(initReactI18next).init({
-  resources: { en: { translation: en } },
+  // A copy: a part merged later (`addEnglishPart`) joins it, never the module's own `en`.
+  resources: { en: { translation: { ...en } } },
   lng: "en",
   fallbackLng: "en",
   supportedLngs: ["en", "ru"],
@@ -67,6 +68,15 @@ void instance.use(initReactI18next).init({
   debug: false,
   saveMissing: false,
 });
+
+/**
+ * Merges a part of English that loads with its view's chunk (./enComments.ts) into the instance, deep,
+ * a word already there kept: called once by the part's module as its chunk lands, before any view of
+ * it renders. Russian holds every part already, in its one chunk.
+ */
+export function addEnglishPart(part: EnglishPart): void {
+  instance.addResourceBundle("en", "translation", part, true, false);
+}
 
 /** Russian's load in flight or done; cleared by a failure, so the next call imports again. */
 let russian: Promise<boolean> | null = null;

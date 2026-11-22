@@ -642,6 +642,50 @@ Open:
 - (iv), the answer's buffers, was not needed. M with no prefill still shows 1.4 MiB/min of RSS on macOS, reported only: his Linux gate reads it.
 - Open: WM10 and MX10, the full run (the spec's "Release"), and RM-0135 in the pool.
 
+#### Owner's word, 2026-11-21/22: discussion and references
+
+**His request**, 2026-11-21, in chat, in Russian; this is a translation: attach assets, references and sources to a task (a writer attaches a photo reference of a location or a model, a sound, …) and use them later; and comments and notes under tasks, "like Jira", so that SpecEngine becomes a full platform for running and discussing tasks.
+
+**The proposal he accepted:**
+- comments are queue data, not truth, with "turn into a question or a decision", so decisions do not drown in chatter;
+- working references live on the hub, in a content-addressed store with previews;
+- approved references are promoted into git (LFS) beside the entity document, through the one writing door;
+- images reach the executing agent's context; audio and 3D need a required "what matters here" text;
+- no sprints, time tracking, custom fields or e-mail notifications.
+
+**His decisions, 2026-11-22:**
+1. Off-host backup is "not needed at all for now". Uploads may live on the hub with no off-host copy; the loss risk with the VPS is his accepted choice, recorded, and restic is not pushed.
+2. Comments go under cards, spec nodes and proposals ("just in case").
+3. A comment is deleted only by its author and the root admin.
+
+Then, the same day: "you can start executing, to the end". The main session runs the pipeline through every slice, releases each and upgrades the hub, as on his word of 2026-11-20. On it, every working answer of the analyst's breakdown is decided:
+- the root admin is a `[team]` `owner` login plus the host's terminal;
+- a delete erases every version's text, and a "deleted by" line stays;
+- nobody edits another person's comment;
+- mentions get their own view, not the Inbox;
+- uploads are capped at 256 MiB a file and 10 GiB a project, and refused under 5 GiB free;
+- images reach agents up to a 1 568 px long edge, larger ones as a copy the browser makes;
+- `.blend` files are download-only, with a warning;
+- slice 3 ships git-lfs in the image, skips the smudge and verifies the push at the gate;
+- the entity link is a typed, uncounted `references:` key, each entry `<path> | <what matters>`.
+
+**Three releases**, in order, each its own:
+
+| # | Slice | Item | Fixed now |
+|---|---|---|---|
+| 1 | `comments` (`docs/features/comments.md`) | RM-0136 | must; ADR-0087: a comment is queue data, never truth; queue schema 15, dump format 8; `list_comments`, `add_comment` (`HUB_TOOLS` 21); plugin 0.50.0 (MINOR), tag `v0.50.0`; **shipped 2026-11-22** (`docs/canon/comments.md`, `comments-surfaces.md`); open: CM19's soak, the full run, CM21 on the live hub |
+| 2 | `work-references` | RM-0137 | must, after 1; its ADR (number 0088) to come: a BLAKE3-named store in the data directory, its own volume on a hub, never in a repository, a dump or an off-host copy; schema 16; plugin 0.51.0 |
+| 3 | `reference-promotion` | RM-0138 | must, after 2; its ADR (number 0089) to come: a `reference` proposal applied to a `[references]` home, LFS by `.gitattributes`, git-lfs in the image; `INDEX_FORMAT` 22; plugin 0.52.0 |
+
+**Ten people at once** (his word of 2026-11-15) binds every slice:
+- each write is one `Immediate` transaction in the project's turn;
+- `/mcp` calls wait in their login's line;
+- an edit is a compare-and-set;
+- reads step their rows and page at 100;
+- slice 2 streams an upload outside the turn.
+
+Each slice adds a soak row (ADR-0086).
+
 ## 3. Product acceptance criteria
 
 | # | Criterion | How it is checked |

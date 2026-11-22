@@ -134,7 +134,8 @@ describe("Activity (U1 of card-questions)", () => {
     const parts = within(main as HTMLElement)
       .getAllByRole("region")
       .map((region) => region.getAttribute("aria-label"));
-    expect(parts.at(-1)).toBe("Activity");
+    // Activity the last part of the task's own; Comments after it, talk under the task (docs/features/comments.md "UI").
+    expect(parts.slice(-2)).toEqual(["Activity", "Comments"]);
     expect(parts).not.toContain("History");
   });
 

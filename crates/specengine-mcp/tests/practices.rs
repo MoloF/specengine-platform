@@ -284,7 +284,8 @@ fn dp14_the_schemas_and_descriptions() {
 
     let package = &tool(&list, "get_task")["outputSchema"];
     let package_keys = properties(package);
-    assert_eq!(package_keys.len(), 28, "{package_keys:?}");
+    // 29 since docs/features/comments.md (`comments`).
+    assert_eq!(package_keys.len(), 29, "{package_keys:?}");
     assert_eq!(
         properties(&items(&package["properties"]["practices"])),
         sorted(&["name", "title", "path", "disciplines", "rules"])
@@ -351,6 +352,8 @@ fn dp14_the_schemas_and_descriptions() {
             "get_proposal",
             "list_cards",
             "get_card",
+            // docs/features/comments.md CM15: the comments' read.
+            "list_comments",
             // docs/features/specengine-guide.md GU5: the guide's tool, the
             // last shared with stdio.
             "get_guide",
@@ -359,12 +362,15 @@ fn dp14_the_schemas_and_descriptions() {
             "ask_question",
             "report_discrepancy",
             "report_decision",
+            // docs/features/comments.md CM15: the comments' write.
+            "add_comment",
             "create_card",
             "split_card",
             "edit_card",
             "move_card",
         ],
-        "HUB_TOOLS unchanged by department-practices (get_guide since specengine-guide)"
+        "HUB_TOOLS unchanged by department-practices (get_guide since specengine-guide, \
+         list_comments and add_comment since comments)"
     );
     drop(session.finish());
 }

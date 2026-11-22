@@ -777,6 +777,32 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"bogus": true}),
             ],
         ),
+        // docs/features/comments.md "MCP": a read of a node's comments and a
+        // comment written into the queue (none under the root); a missing
+        // `on`, a person's `as` and an unknown key refused by the schema.
+        "list_comments" => (
+            vec![
+                json!({"on": "RULE-STAM-REGEN"}),
+                json!({"on": "C-0099", "limit": 5}),
+            ],
+            vec![
+                json!({}),
+                json!({"on": "RULE-STAM-REGEN", "limit": "five"}),
+                json!({"on": "RULE-STAM-REGEN", "bogus": true}),
+            ],
+        ),
+        "add_comment" => (
+            vec![
+                json!({"on": "RULE-STAM-REGEN", "body": "Does rest start at once?",
+                    "author_role": "writer"}),
+                json!({"on": "C-0099", "body": "Nobody's card."}),
+            ],
+            vec![
+                json!({"body": "No target."}),
+                json!({"on": "RULE-STAM-REGEN", "body": "As mira.", "as": "mira"}),
+                json!({"on": "RULE-STAM-REGEN", "body": 5}),
+            ],
+        ),
         "mark_pairs" => {
             let pair = |a: &str, b: &str, verdict: &str| {
                 json!({"a": a, "a_norm": format!("b3:{}", "0".repeat(64)), "b": b,

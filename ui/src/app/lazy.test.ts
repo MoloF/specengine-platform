@@ -28,6 +28,8 @@ describe("the lazy views", () => {
     ["../graph/GraphView", "GraphView"],
     // DL19 of docs/features/doc-library.md: Documents, a chunk of its own; M: a static import of DocumentsView.
     ["../documents/DocumentsView", "DocumentsView"],
+    // docs/features/comments.md "UI" (first load): Agent tasks, a chunk of its own, room for the comments' glue; M: a static import of TasksView.
+    ["../tasks/TasksView", "TasksView"],
   ])("reaches %s by lazy(() => import(...)) only, never by a value import", (path, name) => {
     const fromIt = importLines(shellSource).filter((line) => line.endsWith(`"${path}";`));
     // Any static import of the module is a type import alone.
@@ -248,5 +250,43 @@ describe("the guide's lazy views (GU14 of specengine-guide)", () => {
     expect(importLines(citedTextSource).filter((line) => line.includes("GuideCitedText") || line.endsWith('"./guide";'))).toEqual(['import type { Shown } from "./GuideCitedText";']);
     expect(citedTextSource).toContain('const GuideCitedText = lazy(() => import("./GuideCitedText").then((module) => ({ default: module.GuideCitedText })));');
     expect(citedTextSource).toMatch(/<Suspense fallback=\{shown\(text\)\}>\s*<GuideCitedText text=\{text\} links=\{links\} shown=\{shown\} \/>/);
+  });
+});
+
+// docs/features/comments.md "UI" and CM18 ("the first load stays under the bar"); docs/canon/ui-languages.md
+// "Size": the comments stay out of first load. The part arrives in a chunk of its own through
+// src/comments/lazy.tsx, the one module the work item, the document view and the proposal pane import
+// of src/comments/; Mentions and the nav's badge are the Shell's lazy imports. No module outside
+// src/comments/ imports any other of it statically. M: a static import of CommentsPart or MentionsView.
+const appSources = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}", "!/src/comments/**"], { query: "?raw", import: "default", eager: true });
+const commentsLazySource = Object.values(import.meta.glob<string>("/src/comments/lazy.tsx", { query: "?raw", import: "default", eager: true }))[0] ?? "";
+
+describe("the comments' lazy chunks (CM18 of comments)", () => {
+  it("reaches the Comments part by lazy(() => import(...)) alone, in src/comments/lazy.tsx", () => {
+    expect(commentsLazySource).toContain('const CommentsPart = lazy(() => import("./CommentsPart").then((module) => ({ default: module.CommentsPart })));');
+    expect(importLines(commentsLazySource).filter((line) => line.includes("CommentsPart"))).toEqual([]);
+  });
+
+  it("imports nothing of src/comments/ statically outside it but lazy.tsx; the Shell reaches Mentions and its badge lazily", () => {
+    const statics = Object.entries(appSources).flatMap(([path, text]) =>
+      importLines(text)
+        .filter((line) => !line.startsWith("import type ") && /\/comments\/(?!lazy";)/.test(line))
+        .map((line) => `${path}: ${line}`),
+    );
+    expect(statics).toEqual([]);
+    expect(Object.keys(appSources).filter((path) => (appSources[path] ?? "").includes('from "../comments/lazy";')).sort()).toEqual([
+      "/src/board/CardPanel.tsx",
+      "/src/doc/DocBody.tsx",
+      "/src/inbox/ClosedProposal.tsx",
+      "/src/inbox/ProposalCard.tsx",
+    ]);
+    expect(shellSource).toContain('const MentionsView = lazy(() => import("../comments/MentionsView").then((module) => ({ default: module.MentionsView })));');
+    expect(shellSource).toContain('const MentionsBadge = lazy(() => import("../comments/MentionsBadge").then((module) => ({ default: module.MentionsBadge })));');
+  });
+
+  it("brings the comments' English with their chunks alone: src/i18n/enComments is imported by the three chunk entries, nothing of first load (M: an import of it in the Shell)", () => {
+    const every = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
+    const importers = Object.keys(every).filter((path) => importLines(every[path] ?? "").some((line) => !line.startsWith("import type ") && (/i18n\/enComments";$/.test(line) || line.endsWith('from "./enComments";'))));
+    expect(importers.sort()).toEqual(["/src/comments/CommentsPart.tsx", "/src/comments/MentionsBadge.tsx", "/src/comments/MentionsView.tsx"]);
   });
 });

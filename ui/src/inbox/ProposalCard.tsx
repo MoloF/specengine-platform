@@ -29,6 +29,7 @@ import { PairSlot } from "./PairSlot";
 import { gapLabel, previewLabel, severityLook, statusLook, statusLozenge } from "./labels";
 import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
+import { Comments } from "../comments/lazy";
 import { ProposalSummary } from "./ProposalSummary";
 import { targetsOf } from "./targets";
 import { useTranslate, type Translate } from "../i18n";
@@ -738,6 +739,8 @@ export function ProposalCard({
               )}
             </Section>
             {content}
+            {/* Talk under the proposal, open or not, never a decision (docs/features/comments.md "UI"): its own chunk. */}
+            <Comments project={project} on={id} targets={reviewed?.target_ids ?? entry.target_ids} level={3} />
           </div>
         }
       />

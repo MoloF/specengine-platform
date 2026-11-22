@@ -136,5 +136,10 @@ const AGENT: Author["type"] = "agent";
  * item with none, the asker's, with no login looked up. The one place an author's type is compared.
  */
 export function recommendedBy(author: Pick<Author, "type"> | null, t: Translate): string {
-  return author !== null && author.type === AGENT ? t("inbox.lead.recommendedByAgent") : t("inbox.lead.recommendedByAsker");
+  return byAgent(author) ? t("inbox.lead.recommendedByAgent") : t("inbox.lead.recommendedByAsker");
+}
+
+/** Whether an agent wrote it: an item's recommendation, a comment that is never edited (docs/features/comments.md "UI"). */
+export function byAgent(author: Pick<Author, "type"> | null): boolean {
+  return author !== null && author.type === AGENT;
 }

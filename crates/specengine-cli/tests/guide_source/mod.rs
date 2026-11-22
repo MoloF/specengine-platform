@@ -74,10 +74,12 @@ pub const PAGE_CAP: usize = 12_288;
 pub const OUTPUT_CAP_CHARS: usize = 40_000;
 
 /// The stdio server's tools once `get_guide` joins them (the MCP tests'
-/// `TOOLS`, thirty-three, "all thirty-three named"), sorted. The eval crate
-/// reads no MCP crate: MCP `mcp_guide.rs` holds this list equal to the
-/// server's `tools/list`.
-pub const KNOWN_TOOLS: [&str; 33] = [
+/// `TOOLS`, thirty-three, "all thirty-three named"; thirty-five since
+/// docs/features/comments.md, `list_comments` and `add_comment`), sorted.
+/// The eval crate reads no MCP crate: MCP `mcp_guide.rs` holds this list
+/// equal to the server's `tools/list`.
+pub const KNOWN_TOOLS: [&str; 35] = [
+    "add_comment",
     "ask_question",
     "check_binding",
     "claim_task",
@@ -98,6 +100,7 @@ pub const KNOWN_TOOLS: [&str; 33] = [
     "get_trace",
     "get_tree",
     "list_cards",
+    "list_comments",
     "mark_pairs",
     "move_card",
     "propose_change",

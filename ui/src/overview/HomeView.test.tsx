@@ -132,8 +132,11 @@ describe("what the Overview reads (DO3)", () => {
   it("with the implicit department: the counts and Flow's top read once each, never the inbox, the agent tasks or health", async () => {
     const client = await openHome(stubClient());
     await settle();
-    // The shell's one identity read: a local page's `{login: null}`, so no sync read follows (docs/features/hub-git.md "Status and the screen").
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 1, getFlow: 1 });
+    // The shell's one identity read: a local page's `{login: null}`, so no sync read follows (docs/features/hub-git.md "Status and the screen");
+    // the nav's Mentions badge reads the mentions once, in its own chunk (docs/features/comments.md "UI").
+    await waitFor(() => {
+      expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 1, getFlow: 1, getMentions: 1 });
+    });
     expect(argsOf(client.getCardCounts)).toEqual([["alpha"]]);
     expect(argsOf(client.getFlow)).toEqual([["alpha", { depth: 0, in_flow: true, trace: true }]]);
   });
@@ -143,7 +146,9 @@ describe("what the Overview reads (DO3)", () => {
     await settle();
     expect(client.getHealth).toHaveBeenCalledTimes(0);
     expect(client.getFlow).toHaveBeenCalledTimes(0);
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 1 });
+    await waitFor(() => {
+      expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 1, getMentions: 1 });
+    });
   });
 
   it("words, whose sections list Flow: one flow read, at its rooted module's root", async () => {
@@ -404,7 +409,9 @@ describe("the Overview's states (DO12)", () => {
     retry.focus();
     fireEvent.click(retry);
     await screen.findByRole("table", { name: "Tasks by status, per flow" });
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 2 });
+    await waitFor(() => {
+      expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getCardCounts: 2, getMentions: 1 });
+    });
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "Work" }));
     });
@@ -469,12 +476,14 @@ describe("nav, switcher and keys (AC-08 of ui-home)", () => {
   it("lists the entries, Overview first to the home, current only there; Tasks off the nav (docs/features/workspaces.md WS-1), Documents after Spec tree (DL17 of doc-library)", async () => {
     await openHome(stubClient());
     await waitFor(() => {
-      expect(navLinks()).toHaveLength(11);
+      expect(navLinks()).toHaveLength(12);
     });
     expect(navLinks().map((link) => [link.textContent, link.getAttribute("href"), link.getAttribute("aria-current")])).toEqual([
       ["Overview", "#/alpha", "page"],
       // Activity second (the owner's word of 2026-11-15; docs/features/auto-feed.md "The UI").
       ["Activity", "#/alpha/feed", null],
+      // Mentions third (docs/features/comments.md "UI", Mentions).
+      ["Mentions", "#/alpha/mentions", null],
       ["Inbox", "#/alpha/inbox", null],
       ["Board", "#/alpha/board", null],
       ["Roadmap", "#/alpha/roadmap", null],

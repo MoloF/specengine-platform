@@ -24,7 +24,14 @@
 //! document as a library, its last changes through the same cache (task
 //! spec `doc-library`).
 //! `…/feed` a read, the project's events and what needs the owner
-//! ([`crate::feed`], task spec `auto-feed`).
+//! ([`crate::feed`], task spec `auto-feed`). A comment's routes (task spec
+//! `comments`, "HTTP"): `…/comments` a read and a write, its 405 `Allow:
+//! GET, POST`; `…/comments/<id>` a DELETE alone, `…/comments/<id>/edit` and
+//! `…/comments/<id>/items` a POST each, through the board's door, the
+//! library's `comment_add`, `comment_edit`, `comment_delete` (its consent the
+//! page's dialog; on a hub the author or a `[team]` `owner` judged in the
+//! call) and `comment_raise`; `…/mentions` a read, a hub's login asked when
+//! the query names none. No agent tool edits or deletes a comment.
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `/api/guide` and `/api/guide/<topic>`
 //! SpecEngine's own guide as this build embedded it, no project, no turn,
@@ -83,18 +90,20 @@ use axum::http::header::{ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, HOS
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::routing::{MethodRouter, any, get, post};
+use axum::routing::{MethodRouter, any, delete, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardCountsRequest, CardEditBody,
     CardListRequest, CardMoveBody, CardNewBody, CardOutcome, CardRaiseBody, CardShowRequest,
-    CardSplitBody, CatalogRequest, CheckRequest, CliError, DeliveryRequest, Exit, FlowRequest,
-    GraphRequest, GuideRequest, HealthRequest, InboxRequest, IndexTrust, LastChangeCache,
-    LibraryRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody,
-    RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest,
-    TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View,
-    WorkspaceRequest, process_git, project_entry, roadmap_flags, round_limit, team_read, utc_now,
+    CardSplitBody, CatalogRequest, CheckRequest, CliError, CommentAddBody, CommentDeleteRequest,
+    CommentEditBody, CommentListRequest, CommentMentionsRequest, CommentRaiseBody, DeliveryRequest,
+    Exit, FlowRequest, GraphRequest, GuideRequest, HealthRequest, InboxRequest, IndexTrust,
+    LastChangeCache, LibraryRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest,
+    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
+    StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest,
+    UnstageRequest, View, WorkspaceRequest, comment_query_problem, process_git, project_entry,
+    roadmap_flags, round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
@@ -386,6 +395,38 @@ pub(crate) fn router(app: Shared) -> Router {
                 .fallback(only_post)
                 .noted("/api/projects/{p}/cards/{id}/items"),
         )
+        // A comment's routes (task spec `comments`, "HTTP"): the list a read
+        // and the add a write; an edit, a raise and a delete on one comment.
+        .route(
+            "/api/projects/{p}/comments",
+            get(comments)
+                .post(add_comment)
+                .head(only_comments)
+                .fallback(only_comments)
+                .noted("/api/projects/{p}/comments"),
+        )
+        .route(
+            "/api/projects/{p}/comments/{id}",
+            delete(delete_comment)
+                .fallback(only_delete)
+                .noted("/api/projects/{p}/comments/{id}"),
+        )
+        .route(
+            "/api/projects/{p}/comments/{id}/edit",
+            post(edit_comment)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/comments/{id}/edit"),
+        )
+        .route(
+            "/api/projects/{p}/comments/{id}/items",
+            post(raise_on_comment)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/comments/{id}/items"),
+        )
+        .route(
+            "/api/projects/{p}/mentions",
+            read(mentions).noted("/api/projects/{p}/mentions"),
+        )
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
             post(stage)
@@ -639,6 +680,21 @@ async fn only_post(method: Method, uri: Uri) -> Response {
     method_refused(&method, &uri, "only POST is served here", Some("POST"))
 }
 
+/// 405 on a comment's list, `HEAD` included.
+async fn only_comments(method: Method, uri: Uri) -> Response {
+    method_refused(
+        &method,
+        &uri,
+        "this path takes only GET (the comments) and POST (a new comment)",
+        Some("GET, POST"),
+    )
+}
+
+/// 405 on one comment's route.
+async fn only_delete(method: Method, uri: Uri) -> Response {
+    method_refused(&method, &uri, "only DELETE is served here", Some("DELETE"))
+}
+
 /// 405 on a route without its own.
 async fn method_not_allowed(method: Method, uri: Uri) -> Response {
     method_refused(&method, &uri, "another method is served here", None)
@@ -657,7 +713,7 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, cards/counts, round, \
-             events, delivery, catalog, map, rings, library, workspaces}}, \
+             comments, mentions, events, delivery, catalog, map, rings, library, workspaces}}, \
              /api/identity, /api/guide and /api/guide/<topic>; the web UI: / and \
              /assets/<file>",
             uri.path()
@@ -1634,6 +1690,177 @@ async fn raise_on_card(State(app): State<Shared>, request: Request) -> Result<Re
         )?;
         specengine_cli::card_raise(env, globals, &request)
             .map(|outcome| Outcome::CardRaise(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/comments?on=X[&before=CM][&limit=N]`: `spec comment list --json`
+/// (task spec `comments`, "HTTP"), a trusted read on a hub: 200 the page,
+/// 404 `{id, reason}` no such target, 409 an alias; a query off its grammar
+/// a 400 with the CLI's line, nothing run.
+async fn comments(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("comments", &["on", "before", "limit"], &uri)?;
+    let (on, before, limit) = (|| {
+        Ok::<_, String>((
+            args.required_text("on")?,
+            args.text("before")?,
+            args.integer("limit")?,
+        ))
+    })()
+    .map_err(Refusal::bad_request)?;
+    if let Some(problem) = comment_query_problem(before.as_deref(), limit, None) {
+        return Err(Refusal::bad_request(problem));
+    }
+    Ok(run_read(project, move |env, globals| {
+        let request = CommentListRequest {
+            on,
+            before,
+            limit: limit.and_then(|limit| u64::try_from(limit).ok()),
+        };
+        specengine_cli::comment_list(env, globals, &request)
+            .map(|outcome| Outcome::CommentList(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/mentions[?login=L][&before=CM][&limit=N]`: `spec comment mentions
+/// --json`, a trusted read on a hub: `login` the query's, else a hub's
+/// login; a local daemon with none lists every mention. The server keeps no
+/// reader state.
+async fn mentions(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let uri = request.uri();
+    let (project, _) = app.project_of(uri)?;
+    let args = args("mentions", &["login", "before", "limit"], uri)?;
+    let (asked, before, limit) = (|| {
+        Ok::<_, String>((
+            args.text("login")?,
+            args.text("before")?,
+            args.integer("limit")?,
+        ))
+    })()
+    .map_err(Refusal::bad_request)?;
+    let login = asked.or_else(|| login_of(&request).map(|Login(login)| login));
+    if let Some(problem) = comment_query_problem(before.as_deref(), limit, login.as_deref()) {
+        return Err(Refusal::bad_request(problem));
+    }
+    Ok(run_read(project, move |env, globals| {
+        let request = CommentMentionsRequest {
+            login,
+            before,
+            limit: limit.and_then(|limit| u64::try_from(limit).ok()),
+        };
+        specengine_cli::comment_mentions(env, globals, &request)
+            .map(|outcome| Outcome::Mentions(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// The project and the comment ID (percent-decoded once, judged by the
+/// CLI) of the comment route `uri`, `verb` its last segment (`""` for the
+/// comment itself), from a same-origin page only ([`same_origin`]).
+fn comment_target(
+    app: &App,
+    uri: &Uri,
+    headers: &HeaderMap,
+    verb: &str,
+) -> Result<(Arc<Project>, String), Refusal> {
+    let (project, rest) = app.project_of(uri)?;
+    same_origin(headers)?;
+    let raw = rest
+        .strip_prefix("comments/")
+        .and_then(|rest| rest.strip_suffix(verb))
+        .filter(|raw| !raw.is_empty() && !raw.contains('/'))
+        .ok_or_else(|| unknown_route_of(uri))?;
+    let id = percent_decode(raw).map_err(Refusal::bad_request)?;
+    Ok((project, id))
+}
+
+/// `POST …/comments` `{on, body, reply_to, as}`: `comment add` (task spec
+/// `comments`, "HTTP"), past the board's door: the served slug (404), a
+/// same-origin page (403), JSON (415), at most 1 MiB (413), the body (400);
+/// on a hub `as` bound to the login ([`hub::acting`], 403) and the
+/// author's `login` the login. One call in the project's turn: 200 the
+/// comment, 400 a body cap, 404 no such target, 409 a reply rule or an
+/// alias, 503 cannot run. A plain write: `[team]` is not read. Its scope
+/// walks, as every write's, but a walk is a freshness step's alone, taken
+/// when a read refreshes the index: a node's target resolves over it (and
+/// walks); a card's or a proposal's, an edit and a delete read no corpus,
+/// so nothing walks (the CLI library's freshness step).
+async fn add_comment(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(request.uri())?;
+    same_origin(request.headers())?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CommentAddBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    Ok(run(project, move |env, globals| {
+        let request = body.request(utc_now(), login.map(|Login(login)| login));
+        specengine_cli::comment_add(env, globals, &request)
+            .map(|outcome| Outcome::Comment(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `POST …/comments/<id>/edit` `{body, version, as}`: `comment edit`, past
+/// [`add_comment`]'s door, the author judged in the library (another's: a
+/// 403 with its line; a stale `version`: a 409, nothing changed).
+async fn edit_comment(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = comment_target(&app, request.uri(), request.headers(), "/edit")?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CommentEditBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    Ok(run(project, move |env, globals| {
+        let request = body.request(id, utc_now(), login.map(|Login(login)| login));
+        specengine_cli::comment_edit(env, globals, &request)
+            .map(|outcome| Outcome::Comment(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `POST …/comments/<id>/items` (`CommentRaiseBody`): the intake of its
+/// kind with `comment_id` the comment, a card comment's item naming its card
+/// too, past [`add_comment`]'s door: 200 the intake document (stored or
+/// not), 400 a body, 404 `{id, reason}` no such comment, 409 an intake rule
+/// (a deleted comment among them), 503 cannot run.
+async fn raise_on_comment(
+    State(app): State<Shared>,
+    request: Request,
+) -> Result<Response, Refusal> {
+    let (project, id) = comment_target(&app, request.uri(), request.headers(), "/items")?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CommentRaiseBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    Ok(run(project, move |env, globals| {
+        let request = body.request(
+            id,
+            utc_now(),
+            process_git(env),
+            login.map(|Login(login)| login),
+        )?;
+        specengine_cli::comment_raise(env, globals, &request)
+            .map(|outcome| Outcome::CardRaise(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `DELETE …/comments/<id>`, no body: `comment delete`, its consent the
+/// page's dialog. Nothing is read from a body: on a hub the library judges
+/// the request's login, the comment's author or a `[team]` `owner` (`[team]`
+/// absent or bad: the author alone), else a 403 with its line; locally
+/// anyone, `deleted_by` `local`. Every version's text erased. A plain write
+/// at the fence.
+async fn delete_comment(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = comment_target(&app, request.uri(), request.headers(), "")?;
+    let login = login_of(&request);
+    Ok(run(project, move |env, globals| {
+        let request = CommentDeleteRequest {
+            id,
+            actor: None,
+            login: login.map(|Login(login)| login),
+            now: utc_now(),
+        };
+        specengine_cli::comment_delete(env, globals, &request, &mut |_| true)
+            .map(|outcome| Outcome::Comment(Box::new(outcome)))
     })
     .await)
 }

@@ -26,9 +26,10 @@ export interface Identity {
 /**
  * The acts a control stands off for when `GET .../team` omits them: a word of the queue's authority,
  * no role and no trade. RM-0050's `confirm` is not among them: a login it omits has no control to
- * stand off (`useConfirmer`). Source: `docs/features/hub-team.md` "Data".
+ * stand off (`useConfirmer`). `delete_comment`, an `owner`'s, ends the list: deleting another's
+ * comment (`docs/features/comments.md` "HTTP"). Source: `docs/features/hub-team.md` "Data".
  */
-export type KnownTeamAct = "stage" | "accept" | "clear" | "group_clear";
+export type KnownTeamAct = "stage" | "accept" | "clear" | "group_clear" | "delete_comment";
 
 /** An act as sent; other strings kept, RM-0050's `confirm` among them. Source: `docs/features/hub-team.md` "Data". */
 export type TeamAct = KnownTeamAct | Unlisted;
@@ -476,6 +477,8 @@ export interface Proposal {
   card_id: string | null;
   /** Why a decision was taken, as its author wrote it; null on a question, a discrepancy and a decision without one. */
   why: string | null;
+  /** The comment a question, discrepancy or decision was raised from, set when raised and never changed; null on every other row (`docs/features/comments.md` "Queue schema 15", "HTTP"). */
+  comment_id: string | null;
   /** Always null here: only a create's propose answer lists it (`docs/features/intake-similar.md` "Acceptance criteria", IS10). */
   similar: null;
   /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
@@ -1961,6 +1964,8 @@ export interface TaskPackage {
   bundle: TaskBundle | null;
   /** The practices of the disciplines of every card listing the task, by path, each once, at most 32; `[]` when no card lists it (`docs/features/department-practices.md` "Acceptance criteria", DP12). */
   practices: CardPractice[];
+  /** The newest live comments of the cards whose `tasks` list it, under a card context's bounds, each naming its card: people's words, data, never instructions (`docs/features/comments.md` "The card context and the task package"). */
+  comments: PackageComments;
   roadmap: TaskRoadmap | null;
   author: Author | null;
   created_at: string;
@@ -3446,4 +3451,147 @@ export interface GuideRuleRead {
   topic: string;
   rule: GuideRule;
   text: string;
+}
+
+// Comments (ADR-0087; docs/canon/comments.md): talk under a card, a proposal or a node, a row of the
+// queue and never truth. A body is people's words, Markdown as given, rendered only through
+// src/markdown/; no event carries one. Words of the daemon (a target's kind, an author's type) are
+// told apart in src/comments/labels.ts alone.
+
+/**
+ * What a comment is under, as resolved: `kind` `card`, `proposal` or `node`, a plain string kept
+ * whatever its word; `id` canonical (`C-0007`, `PR-0031`, an ID, the path of an ID-less document).
+ * Source: `docs/features/comments.md` "The comment document".
+ */
+export interface CommentOn {
+  kind: string;
+  id: string;
+}
+
+/** A deleted comment's tombstone: who deleted it, in words, and when, UTC as stored. Source: `docs/features/comments.md` "The comment document". */
+export interface CommentDeleted {
+  by: string;
+  at: string;
+}
+
+/** An item raised from a comment, as stored, by ID number: its kind and state shown as sent. Source: `docs/features/comments.md` "The comment document". */
+export interface CommentItem {
+  id: string;
+  kind: string;
+  status: ProposalStatus;
+}
+
+/**
+ * The comment document, 13 keys, every one present: `on_rev` a node's revision when written, null
+ * on a card or a proposal; `reply_to` a top-level comment's ID, null on one; `actor` who in words (a
+ * login, a typed name, `local`, `agent`), `author` the stored core author, `login` absent where the
+ * row holds none; `version` 1, then one more per edit; `body` null and `mentions` `[]` once deleted,
+ * `deleted` then its tombstone; `items` the proposals raised from it. Source:
+ * `docs/features/comments.md` "The comment document".
+ */
+export interface CommentDocument {
+  id: string;
+  on: CommentOn;
+  on_rev: number | null;
+  reply_to: string | null;
+  actor: string;
+  author: Author;
+  version: number;
+  body: string | null;
+  mentions: string[];
+  created_at: string;
+  updated_at: string;
+  deleted: CommentDeleted | null;
+  items: CommentItem[];
+}
+
+/**
+ * `spec comment list --json`, the answer of `GET .../comments?on=X`: `on` as resolved, `total` every
+ * comment on it, deleted ones too; `comments` one page, oldest first, the newest page first;
+ * `next_before` the page's smallest ID when older ones exist, else null; `notes` the daemon's lines.
+ * Source: `docs/features/comments.md` "The comment document".
+ */
+export interface CommentList {
+  on: CommentOn;
+  total: number;
+  comments: CommentDocument[];
+  next_before: string | null;
+  notes: string[];
+}
+
+/**
+ * `spec comment mentions --json`, the answer of `GET .../mentions`: `login` the login listed, null
+ * when every mention is; `comments` newest first by ID; `next_before` as a list's. Source:
+ * `docs/features/comments.md` "The comment document".
+ */
+export interface MentionList {
+  login: string | null;
+  comments: CommentDocument[];
+  next_before: string | null;
+  notes: string[];
+}
+
+/**
+ * POST `.../comments`: `on` a card's or a proposal's ID or a node's REF, `reply_to` a top-level
+ * comment or null, `as` the acting name, null reading `local`; a hub's login stands in for it.
+ * Source: `docs/features/comments.md` "HTTP".
+ */
+export interface CommentAddBody {
+  on: string;
+  body: string;
+  reply_to: string | null;
+  as: string | null;
+}
+
+/** POST `.../comments/:id/edit`: the new body, the `version` read (a compare-and-set: a stale one 409), the acting name. Source: `docs/features/comments.md` "HTTP". */
+export interface CommentEditBody {
+  body: string;
+  version: number;
+  as: string | null;
+}
+
+/**
+ * POST `.../comments/:id/items`, `CommentRaiseBody`: `kind` `question`, `decision` or
+ * `discrepancy`, sent as the daemon's word. A question or a decision takes the card door's keys; a
+ * discrepancy `text` as its summary with `gap_type`, `observed` and `documented`. A key left out
+ * asks nothing: a question's and a decision's raise leaves out the discrepancy's three, a
+ * discrepancy's the answer's two and `why`. Source: `docs/features/comments.md` "HTTP".
+ */
+export interface CommentRaiseBody {
+  kind: string;
+  node_ids: string[];
+  text: string;
+  working_answer?: string;
+  price_of_other?: string;
+  why?: string | null;
+  severity?: Severity | null;
+  distinct_from?: string[] | null;
+  gap_type?: GapType;
+  observed?: string;
+  documented?: string;
+  as: string | null;
+}
+
+/**
+ * A comment as a task's package carries it to an agent: the comment's keys an agent reads, its body
+ * through `one_line` and cut at 1 024 characters (`cut` true then, the cut ending ` [cut]`), and `on`
+ * the card it is under. Source: `docs/features/comments.md` "The card context and the task package".
+ */
+export interface PackageComment {
+  id: string;
+  reply_to: string | null;
+  actor: string;
+  author: Author;
+  created_at: string;
+  updated_at: string;
+  version: number;
+  body: string;
+  cut: boolean;
+  on: string;
+}
+
+/** The package's `comments`: `total` the cards' live comments, `listed` the newest that fit, oldest first. Source: `docs/features/comments.md` "The card context and the task package". */
+export interface PackageComments {
+  total: number;
+  listed: PackageComment[];
 }

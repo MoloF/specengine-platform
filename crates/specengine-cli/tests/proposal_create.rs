@@ -589,7 +589,7 @@ fn ac04_only_findings_the_edit_introduces_are_stored() {
 /// The Data keys of `review` in order (docs/canon/decision-record.md
 /// "Queue and documents", Review document: the five of a decision record
 /// after `linked`).
-const REVIEW_KEYS: [&str; 52] = [
+const REVIEW_KEYS: [&str; 53] = [
     "id",
     "project",
     "kind",
@@ -653,6 +653,8 @@ const REVIEW_KEYS: [&str; 52] = [
     // docs/features/card-questions.md D14: after `interpretation`, 50 keys.
     "card_id",
     "why",
+    // docs/features/comments.md: `comment_id` after `why`.
+    "comment_id",
     "notes",
 ];
 
@@ -784,7 +786,9 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
     let json_keys: Vec<&str> = REVIEW_KEYS
         .iter()
         .flat_map(|key| match *key {
-            "why" => vec![*key, "similar"],
+            // docs/features/comments.md: `comment_id` after `why` in both;
+            // `similar` after it in the JSON.
+            "comment_id" => vec![*key, "similar"],
             "evidence" => vec![*key, "pair"],
             // docs/features/department-practices.md "Proposals: `cited`":
             // the JSON gains `cited` last; the text has no line for it.
@@ -793,8 +797,9 @@ fn ac05_inbox_order_review_keys_and_byte_identical_reruns() {
         })
         .collect();
     // 53 since docs/features/plain-questions.md PQ10; 54 since
-    // docs/features/collision-pairs.md PP8; 55 since department-practices.
-    assert_eq!(json_keys.len(), 55);
+    // docs/features/collision-pairs.md PP8; 55 since department-practices;
+    // 56 since docs/features/comments.md.
+    assert_eq!(json_keys.len(), 56);
     assert_eq!(value["cited"], serde_json::json!([]), "{json}");
     assert!(value["pair"].is_null(), "{json}");
     assert!(!text.contains("\npair"), "{text}");

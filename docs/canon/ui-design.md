@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-22
 ---
 
 # UI design: themes, the scale, primitives, the work item
 
-Built by `design-foundation` (RM-0093), no ADR, on the owner's answers of 2026-11-10: two themes, Inter, a mature tracker's look. The numbers follow the Atlassian Design System's public tokens (Apache-2.0); no Atlassian name, logo, font or illustration, the accent SpecEngine's own. Code: `ui/src/styles/`, `src/ui/`, `src/app/theme.ts`, `src/board/category.ts`.
+`design-foundation` (RM-0093; no ADR) on the owner's answers of 2026-11-10: two themes, Inter, a mature tracker's look. The numbers follow the Atlassian Design System's public tokens (Apache-2.0); no Atlassian name, logo, font or illustration, the accent SpecEngine's own. Code: `ui/src/styles/`, `src/ui/`, `src/app/theme.ts`, `src/board/category.ts`.
 
 ## The rule
 
@@ -59,7 +59,7 @@ In `src/ui/`, each with its test:
 
 `CardModal` (`view: (frame: {heading, tools}) => ReactNode`, by `Dialog`'s `frame`) and `CardPage` render one `CardView` (`CardPanel.tsx`) in an `IssueView`; a document's, `DocFrame` (`doc-view.md`). Routes, history, focus and writes: `board-screen.md` "The card modal and page".
 - **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Ask a question…, Record a decision…, Edit, Assign, Cancel task (subtle, last), a mandate moving some after Accept (`card-mandate.md`).
-- **Main.** Mark and Clear, Changed above, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (`card-progress.md`), Decisions from subtasks; Evidence; Activity (`card-questions.md`).
+- **Main.** Mark and Clear, Changed above, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Subtasks (`card-progress.md`), Decisions from subtasks; Evidence; Activity (`card-questions.md`), then Comments.
 - **Side**, at most 360 px. Status: the lozenge, then Move, compact, none on a closed card. Details: Assignee, Reviewer, Mandate, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Agent tasks, collapsed: `card-tasks.md` "Screen".
 - **Width.** One column, main first, under 44.5rem of its own width (`@container issue-view`); DOM order main, side. The modal: 1200 px or the viewport less 2rem, its head still; at two columns Main and the side scroll apart (`overscroll-behavior: contain`, each padded for focus rings), at one the body; under 36rem the screen, scrolling as one. The page, 1200 px at most, scrolls the window. A pane (`layout="pane"`: Inbox's proposal, the Spec tree's node, an Agent task): DOM order side, main; one column until 60rem, then main left; an `:empty` side hidden, the pane one column by `:has()`.
 
@@ -79,7 +79,7 @@ Inter 4.001 from `@fontsource-variable/inter` 5.3.0, committed in `ui/fonts/inte
 
 - `field-sizing: content` is Chrome's; elsewhere a header select is as wide as its widest option. Past 13rem a value is cut while closed.
 - Every asset is served `no-store`, so fonts load once per page load; the blank page before the entry module shows the system scheme.
-- Safari scrolls a modal's column by keyboard only with focus in it.
+- Safari scrolls a modal's column by keys only with focus in it.
 - Sizes, the one-row header and the two scrollers are a look in Chrome (`design-foundation.md` DF-10, DF-14): jsdom lays nothing out.
 
 ## Tests
