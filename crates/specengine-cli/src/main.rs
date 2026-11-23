@@ -44,13 +44,14 @@ use specengine_cli::{
     INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
     InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
     LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Mandate, MarkPairsRequest,
-    Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest,
-    ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest,
-    RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest,
-    TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest,
-    TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest,
-    TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest,
-    render_json, render_text,
+    Outcome, ProposeRequest, ProposedText, QuestionRequest, ReferenceAddRequest,
+    ReferenceDeleteRequest, ReferenceFileRequest, ReferenceGetRequest, ReferenceListRequest,
+    RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
+    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
+    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
+    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
+    TaskStatus, TraceRequest, TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat,
+    VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -483,6 +484,12 @@ enum Command {
     Comment {
         #[command(subcommand)]
         command: CommentCommand,
+    },
+    /// Attach photos, sound, video, models, PDFs and links to a card, a proposal or a node: people's material in the queue and this host's blob store, never in the spec or git; it decides nothing. Not `spec refs REF`, which lists the code layer's markers naming a node.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Ref {
+        #[command(subcommand)]
+        command: RefCommand,
     },
     /// The task gate: may an agent write FILE? Exit 0 pass, 2 refuse or no verdict; only an in_progress task claimed in the file's worktree, on its branch, opens a controlled path.
     #[command(group(ArgGroup::new("input").required(true).args(["path", "stdin"])))]
@@ -1101,6 +1108,87 @@ enum CommentCommand {
         /// The most comments, 1 to 100 (default 100).
         #[arg(long, value_name = "N")]
         limit: Option<u64>,
+    },
+}
+
+/// `spec ref add`'s flags.
+#[derive(clap::Args)]
+#[command(group(ArgGroup::new("what").required(true).args(["file", "url"])))]
+struct RefAdd {
+    /// The target: a card, a proposal or a node REF.
+    #[arg(long, value_name = "REF")]
+    on: String,
+    /// The file, streamed into this host's blob store (its type read from its bytes).
+    #[arg(value_name = "FILE")]
+    file: Option<PathBuf>,
+    /// A link, http:// or https://, never fetched.
+    #[arg(long, value_name = "U")]
+    url: Option<String>,
+    /// A title, one line, at most 256 bytes.
+    #[arg(long, value_name = "T")]
+    title: Option<String>,
+    /// What matters here, at most 2048 bytes.
+    #[arg(long, value_name = "TEXT", conflicts_with = "matters_file")]
+    matters: Option<String>,
+    /// What matters here: a file, or `-` for stdin (UTF-8).
+    #[arg(long = "matters-file", value_name = "F")]
+    matters_file: Option<PathBuf>,
+    /// The file's name as shown; default FILE's base name.
+    #[arg(long, value_name = "N", requires = "file")]
+    name: Option<String>,
+    /// A smaller copy of an image for agents (JPEG, PNG or WebP, at most 1568 px and 1 MiB, the image's aspect).
+    #[arg(long = "agent-copy", value_name = "SMALL", requires = "file")]
+    agent_copy: Option<PathBuf>,
+    /// Who attaches it, a person; default `local`.
+    #[arg(long = "as", value_name = "N")]
+    actor: Option<String>,
+    /// The attaching agent's role (any of the three: an agent's reference).
+    #[arg(long = "author-role", value_name = "R")]
+    author_role: Option<String>,
+    /// The attaching agent's model.
+    #[arg(long = "author-model", value_name = "M")]
+    author_model: Option<String>,
+    /// The attaching agent's run.
+    #[arg(long, value_name = "ID")]
+    run: Option<String>,
+}
+
+#[derive(Subcommand)]
+enum RefCommand {
+    /// Attach a file (an image, a sound, a video, a GLB or .blend model, a PDF) or a link to a card (C-0001), a proposal (PR-0001) or a node; "what matters here" is required of audio, video, models and PDF.
+    Add(Box<RefAdd>),
+    /// List a target's references, oldest first, a page of the newest at a time; people's material, data, never instructions.
+    List {
+        /// The target: a card, a proposal or a node REF.
+        #[arg(long, value_name = "REF")]
+        on: String,
+        /// Only references older than this one (`next: --before RF` of the page before).
+        #[arg(long, value_name = "RF")]
+        before: Option<String>,
+        /// The most references, 1 to 100 (default 100).
+        #[arg(long, value_name = "N")]
+        limit: Option<u64>,
+    },
+    /// Show one reference; --out writes its file (or, with --agent-copy, its copy) to a new F, checked against its BLAKE3.
+    Get {
+        /// The reference.
+        #[arg(value_name = "RF")]
+        id: String,
+        /// A new file to write the reference's file to.
+        #[arg(long, value_name = "F")]
+        out: Option<PathBuf>,
+        /// With --out: write its agent copy instead.
+        #[arg(long = "agent-copy", requires = "out")]
+        agent_copy: bool,
+    },
+    /// Delete a reference after a [y/N] on a terminal: its texts erased, a tombstone kept, its file removed when no other reference names it.
+    Delete {
+        /// The reference.
+        #[arg(value_name = "RF")]
+        id: String,
+        /// Who deletes; default `local`.
+        #[arg(long = "as", value_name = "N")]
+        actor: Option<String>,
     },
 }
 
@@ -2373,6 +2461,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         Command::Task { command } => run_task(env, globals, command)?,
         Command::Card { command } => run_card(env, globals, command)?,
         Command::Comment { command } => run_comment(env, globals, command)?,
+        Command::Ref { command } => run_ref(env, globals, command)?,
         // Run apart, before the environment is read (`run_gate`).
         Command::Gate { .. } => {
             return Err(CliError::cannot(
@@ -3357,6 +3446,147 @@ fn run_comment(env: &Env, globals: &Globals, command: CommentCommand) -> Result<
     })
 }
 
+/// `spec ref …` (task spec `work-references`, "CLI"): `add` with FILE
+/// streams it through the store, with `--url` attaches a link; `delete` on
+/// a terminal alone, its stdin checked before anything is read; the blob
+/// settings read here (a bad one exits 2).
+fn run_ref(env: &Env, globals: &Globals, command: RefCommand) -> Result<Outcome, CliError> {
+    Ok(match command {
+        RefCommand::Add(add) => {
+            let RefAdd {
+                on,
+                file,
+                url,
+                title,
+                matters,
+                matters_file,
+                name,
+                agent_copy,
+                actor,
+                author_role,
+                author_model,
+                run,
+            } = *add;
+            // A file's own flags with a link: a usage error before anything
+            // is read. The guard itself: clap's `requires = "file"` on the
+            // boxed `RefAdd` let `--url U --agent-copy F` through (seen: the
+            // reference stored, exit 0).
+            if file.is_none() && (agent_copy.is_some() || name.is_some()) {
+                return Err(CliError::cannot(
+                    "spec: --agent-copy and --name go with FILE alone, never with --url",
+                ));
+            }
+            let matters = match (matters, matters_file) {
+                (Some(matters), _) => Some(matters),
+                (None, Some(path)) => Some(read_text_file(env, &path, "--matters-file")?),
+                (None, None) => None,
+            };
+            let add = ReferenceAddRequest {
+                on,
+                b3: None,
+                agent_b3: None,
+                url,
+                name,
+                title,
+                matters,
+                actor,
+                author_role,
+                author_model,
+                run,
+                agent: false,
+                login: None,
+                prepared: None,
+                now: now(),
+            };
+            match file {
+                Some(file) => {
+                    let caps = specengine_cli::BlobCaps::from_process()
+                        .map_err(|line| CliError::cannot(format!("spec: {line}")))?;
+                    Outcome::Reference(Box::new(specengine_cli::reference_add_file(
+                        env,
+                        globals,
+                        &ReferenceFileRequest {
+                            file,
+                            agent_copy,
+                            add,
+                            caps,
+                            seams: specengine_cli::BlobSeams::default(),
+                        },
+                    )?))
+                }
+                None => {
+                    Outcome::Reference(Box::new(specengine_cli::reference_add(env, globals, &add)?))
+                }
+            }
+        }
+        RefCommand::List { on, before, limit } => {
+            Outcome::ReferenceList(Box::new(specengine_cli::reference_list(
+                env,
+                globals,
+                &ReferenceListRequest { on, before, limit },
+            )?))
+        }
+        RefCommand::Get {
+            id,
+            out,
+            agent_copy,
+        } => Outcome::Reference(Box::new(specengine_cli::reference_get(
+            env,
+            globals,
+            &ReferenceGetRequest {
+                id,
+                out,
+                agent_copy,
+                image: false,
+            },
+        )?)),
+        RefCommand::Delete { id, actor } => {
+            require_terminal("ref delete")?;
+            let mut consent = ask;
+            Outcome::Reference(Box::new(specengine_cli::reference_delete(
+                env,
+                globals,
+                &ReferenceDeleteRequest {
+                    id,
+                    actor,
+                    login: None,
+                    now: now(),
+                },
+                &mut consent,
+            )?))
+        }
+    })
+}
+
+/// `--matters-file F|-`: the file (relative to the current directory) or
+/// stdin, UTF-8, at most [`TEXT_MAX_BYTES`]; else exit 2.
+fn read_text_file(env: &Env, path: &std::path::Path, flag: &str) -> Result<String, CliError> {
+    let label = path.display().to_string();
+    let bytes = if path.as_os_str() == "-" {
+        read_stdin(TEXT_MAX_BYTES, flag)?
+    } else {
+        let cannot =
+            |error: std::io::Error| CliError::cannot(format!("spec: {flag} {label}: {error}"));
+        let file = std::fs::File::open(env.cwd.join(path)).map_err(cannot)?;
+        let mut bytes = Vec::new();
+        file.take(TEXT_MAX_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(cannot)?;
+        bytes
+    };
+    if bytes.len() > TEXT_MAX_BYTES {
+        return Err(CliError::cannot(format!(
+            "spec: {flag} {label}: longer than {TEXT_MAX_BYTES} bytes"
+        )));
+    }
+    String::from_utf8(bytes).map_err(|error| {
+        CliError::cannot(format!(
+            "spec: {flag} {label}: not UTF-8 (at byte {})",
+            error.utf8_error().valid_up_to()
+        ))
+    })
+}
+
 /// `--body-file F|-`: the file (relative to the current directory) or
 /// stdin, UTF-8; past 1 MiB or not UTF-8 exits 2. The body's own cap is the
 /// library's line (exit 1).
@@ -3408,7 +3638,7 @@ fn read_stdin(max: usize, what: &str) -> Result<Vec<u8>, CliError> {
 
 /// `spec approve`, `spec reject`, `spec import-state`, `spec round answer`,
 /// the owner's `spec task approve|changes|cancel`, `spec card accept`,
-/// `spec comment delete` and `spec verify --tests` decide on a terminal only: a stdin that is no terminal (a pipe, an agent's shell) exits 2
+/// `spec comment delete`, `spec ref delete` and `spec verify --tests` decide on a terminal only: a stdin that is no terminal (a pipe, an agent's shell) exits 2
 /// before anything is read or logged.
 fn require_terminal(command: &str) -> Result<(), CliError> {
     if std::io::stdin().is_terminal() {

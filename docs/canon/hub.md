@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # Hub mode: a public origin and one trusted login
@@ -12,7 +12,7 @@ ADR-0058, ADR-0059, (RM-0049, `hub-identity`). `specengine-http --public-origin`
 
 ## Entry
 
-`--public-origin https://host[:port]` is the whole switch. Present: a hub. Absent: a local daemon, `App.hub` `None`, the local fence byte for byte, `Remote-User` never read. No `[hub]` table: `specengine.toml` reaches every developer through git, and the mode belongs to the process, which serves several `--root`. `spec serve` has no such flag and passes only `--root` and `--port` (`serve.md` "Launcher"), so a launched daemon is never a hub.
+`--public-origin https://host[:port]` is the whole switch. Present: a hub. Absent: a local daemon, `App.hub` `None`, the local fence byte for byte, `Remote-User` never read. No `[hub]` table: the mode is the process's, serving several `--root`, not a file's. `spec serve` has no such flag and passes only `--root` and `--port` (`serve.md` "Launcher"), so a launched daemon is never a hub.
 
 The bind does not change: `127.0.0.1`, `--host` and `--bind` exit 2, `--port` as ever. The proxy reaches loopback through a shared network namespace (`hub-deploy.md`). `daemon.json` keeps its five keys and loopback `url`.
 
@@ -50,13 +50,13 @@ Judged on every request, `/` and assets too. None or a bad one: 403, never a 401
 
 The login door's duty, not judged here: Latin look-alikes, NFC against NFD, and invisible marks outside Cf (U+034F, variation selectors, U+3164). `hub-admin` refuses them at account creation by an ASCII grammar (`hub-deploy.md#accounts`).
 
-The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the plain writes and the confirm class set the `actor` of their `Card*Body` or `Comment*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). A confirm's `Decided-by` and a departing accept's `Author` take the login: `hub-confirm.md`.
+The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the plain writes and the confirm class set the `actor` of their `Card*Body`, `Comment*Body` or `ReferenceAddBody` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). A confirm's `Decided-by` and a departing accept's `Author` take the login: `hub-confirm.md`.
 
 ## Routes
 
 A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode. `GET .../team`, a hub's alone: `hub-team.md`; `.../sync`: `hub-git.md`. A hub's streams, the events tail and `/mcp`'s GET, end 300 s after they open (`serve.md` "Live tail", `hub-mcp.md` "Sessions"), so one outlives a disable or an expired door session by at most that.
 
-Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the plain, team and confirm classes of `hub-team.md` "Acts". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
+Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the plain, team and confirm classes of `hub-team.md` "Acts". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`; `PUT .../blobs` its binary sibling. Every answer is `no-store` but a served file's (`work-references.md` "Serving").
 
 `.../proposals/:id/confirm`, a hub's alone, is the one approve route: `hub-confirm.md`. A move cannot reach `accept.to` (`cards.md` "Config"), so accept has no back door. ADR-0057 stands locally.
 
@@ -96,7 +96,7 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
 
 ## Screen
 
-With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-screen.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. `useHubLogin` beside `useActing` (`acting.ts`) gives the box its `readOnly`. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen". A login's landing department: `hub-department.md`.
+With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-screen.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen". A login's landing department: `hub-department.md`.
 
 ## Known limits
 
@@ -105,10 +105,10 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (`hub-ops.md`).
 - **Scale.** Reads trust the index (`spec-read-freshness.md`); a team still waits in a project's turn.
 - **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy encodes it, `%23` (`hub-deploy.md`).
-- **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`, 39), so a new one fails until decided.
+- **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`, 41), so a new one fails until decided.
 - **Before the login resolves.** While the identity loads or after a failed read the box is as locally, so a typed name can reach the key, and a stored name sent then gets the daemon's 403.
 - **One login per page.** The login is kept for the page, so changing login in another tab gives the `as` 403 until a reload.
-- **The mock.** A `?scenario=` query on the landing opens the mock on the hub's origin, with its banner; past the page nothing reaches the daemon.
+- **The mock.** `?scenario=` on the landing opens the mock on the hub's origin, with its banner; nothing past the page reaches the daemon.
 - **Headers.** `nosniff`, HSTS and COOP are set at the proxy (`hub-deploy.md`).
 
 ## Tests

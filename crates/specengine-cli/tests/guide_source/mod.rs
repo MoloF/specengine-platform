@@ -75,11 +75,14 @@ pub const OUTPUT_CAP_CHARS: usize = 40_000;
 
 /// The stdio server's tools once `get_guide` joins them (the MCP tests'
 /// `TOOLS`, thirty-three, "all thirty-three named"; thirty-five since
-/// docs/features/comments.md, `list_comments` and `add_comment`), sorted.
+/// docs/features/comments.md, `list_comments` and `add_comment`;
+/// thirty-eight since docs/features/work-references.md, `list_references`,
+/// `get_reference` and `add_reference`), sorted.
 /// The eval crate reads no MCP crate: MCP `mcp_guide.rs` holds this list
 /// equal to the server's `tools/list`.
-pub const KNOWN_TOOLS: [&str; 35] = [
+pub const KNOWN_TOOLS: [&str; 38] = [
     "add_comment",
+    "add_reference",
     "ask_question",
     "check_binding",
     "claim_task",
@@ -95,12 +98,14 @@ pub const KNOWN_TOOLS: [&str; 35] = [
     "get_impact",
     "get_node",
     "get_proposal",
+    "get_reference",
     "get_roadmap",
     "get_task",
     "get_trace",
     "get_tree",
     "list_cards",
     "list_comments",
+    "list_references",
     "mark_pairs",
     "move_card",
     "propose_change",

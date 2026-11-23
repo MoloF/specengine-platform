@@ -158,8 +158,8 @@ fn pp1_get_proposal_serves_the_pair() {
     let list = session.tools();
     assert_eq!(
         tool_names(&list).len(),
-        35,
-        "stdio keeps 35 tools (33 until comments, 32 until specengine-guide)"
+        38,
+        "stdio keeps 38 tools (35 until work-references, 33 until comments, 32 until specengine-guide)"
     );
     let schemas = output_schemas(&list);
     let id = stored(&session.call(
@@ -295,13 +295,13 @@ fn pp7_the_schema_holds_a_closed_pair() {
     let list = session.tools();
     assert_eq!(
         tool_names(&list).len(),
-        35,
-        "stdio keeps 35 tools (33 until comments, 32 until specengine-guide)"
+        38,
+        "stdio keeps 38 tools (35 until work-references, 33 until comments, 32 until specengine-guide)"
     );
     assert_eq!(
         HUB_TOOLS.len(),
-        21,
-        "a hub keeps 21 tools (19 until comments, 18 until specengine-guide)"
+        24,
+        "a hub keeps 24 tools (21 until work-references, 19 until comments, 18 until specengine-guide)"
     );
     let schemas = output_schemas(&list);
     let mut seen = 0;

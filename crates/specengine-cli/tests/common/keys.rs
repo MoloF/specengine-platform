@@ -240,7 +240,9 @@ pub fn without_empty_layer_ten(text: &str) -> String {
 /// task no card lists is the build before's package but for its empty
 /// `bundle.disciplines` and `practices` (`"disciplines":[],` after the
 /// bundle's `budget`, `,"practices":[]` after the bundle) and, since
-/// docs/features/comments.md, its empty `comments` after them: all taken
+/// docs/features/comments.md, its empty `comments` after them, and since
+/// docs/features/work-references.md its empty `references` after those
+/// (docs/canon/task-package.md "Package"): all taken
 /// out, each required exactly once, before a golden of the build before is
 /// compared. A stream holding no package passes as it is.
 pub fn without_empty_task_practices(text: &str) -> String {
@@ -259,12 +261,14 @@ pub fn without_empty_task_practices(text: &str) -> String {
     );
     // docs/features/comments.md "The card context and the task package":
     // the empty `comments` after `practices` of a task no card lists, taken
-    // out with it.
-    let empty = "},\"practices\":[],\"comments\":{\"total\":0,\"listed\":[]},\"roadmap\":";
+    // out with it; docs/features/work-references.md (RF15): its empty
+    // `references` after `comments`, likewise.
+    let empty = "},\"practices\":[],\"comments\":{\"total\":0,\"listed\":[]},\
+                 \"references\":{\"total\":0,\"listed\":[]},\"roadmap\":";
     assert_eq!(
         without.matches(empty).count(),
         1,
-        "one empty `practices` and `comments` after the bundle: {text}"
+        "one empty `practices`, `comments` and `references` after the bundle: {text}"
     );
     without.replacen(empty, "},\"roadmap\":", 1)
 }

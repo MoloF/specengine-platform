@@ -186,6 +186,8 @@ describe("the cases the slice names (Data, Mock)", () => {
       "practices",
       // The talk of the cards listing it (docs/features/comments.md "The card context and the task package").
       "comments",
+      // Their material (docs/features/work-references.md "A card's context and the task package").
+      "references",
       "roadmap",
       "author",
       "created_at",

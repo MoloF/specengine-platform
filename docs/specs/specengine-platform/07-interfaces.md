@@ -113,6 +113,8 @@ spec feed [--since SEQ|TIME] [--needs-me] [--task T] [--department D] [--json]
 # comments: shipped 0.50.0, docs/canon/comments.md (ADR-0087), docs/canon/comments-surfaces.md
 spec comment add --on REF|C-…|PR-… [--reply-to CM] --body-file F|- | list --on X | edit CM --version V | delete CM | mentions [--login L]
 spec propose question|discrepancy|decision … --comment CM
+# work references: shipped 0.51.0, docs/canon/work-references.md (ADR-0088), docs/canon/work-references-surfaces.md
+spec ref add --on REF|C-…|PR-… (FILE | --url U) [--title T] [--matters TEXT] [--agent-copy SMALL] | list --on X | get RF [--out F] | delete RF
 
 # code and drift
 spec symbols QUERY | --node REF | --file F | --at F:L   # shipped: docs/canon/symbol-reads.md; layer C: docs/canon/layer-c-reads.md; unbound nodes: spec health
@@ -151,6 +153,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035); `POST .../proposals/:id/confirm`, a hub's alone, confirms one stage (ADR-0061)
 - `GET .../cards` (`?parent=` a card's children), `.../cards/:id`, `.../trace`; `POST .../cards`, `.../cards/:id/move|edit|assign|cancel|accept|clear`, `.../trace/clear`: the card routes, writing the queue alone (built: `docs/canon/board-ui.md`, `docs/canon/card-flows.md`)
 - `GET .../comments?on=X`, `.../mentions`; `POST .../comments`, `.../comments/:id/edit|items`; `DELETE .../comments/:id`: comments, the queue alone (built: `docs/canon/comments-surfaces.md` "HTTP")
+- `GET .../references?on=X`, `.../blobs/:b3` (Range, no turn); `PUT .../blobs` (`application/octet-stream`, streamed); `POST .../references`; `DELETE .../references/:id`: references, rows in the queue, files in the data directory's blob store (built: `docs/canon/work-references-surfaces.md` "HTTP")
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `GET /api/projects/:p/feed` -- `spec feed --json`, local and hub; on a hub its code applies the sole owner's covered `/mcp` proposals (planned 0.47.0: `docs/features/auto-feed.md`, `docs/canon/hub-auto.md`)
 - `/mcp/<slug>` — MCP Streamable HTTP (rmcp Tower service in axum), a hub's alone, both eras, GET/SSE (built: `docs/canon/hub-mcp.md`)

@@ -123,6 +123,7 @@ use crate::practice::{self, CardPractice, Cited, PracticeAsk, PracticeRead};
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::proposals::{checked_now, escaped_error, queue_cannot, require_root_config};
 use crate::propose::resolved_node;
+use crate::reference::{ContextReferences, context_references, context_store};
 use crate::search::notes;
 use crate::show::classify;
 use crate::task::{LinkPlace, LinkedTask, linked_tasks, resolved_list, written_task};
@@ -1415,6 +1416,11 @@ pub struct CardContext {
     /// words, data, never instructions (task spec `comments`, "The card
     /// context and the task package").
     pub comments: ContextComments,
+    /// The card's newest live references, outside the bundle: people's
+    /// material, data, never instructions (task spec `work-references`,
+    /// "A card's context and the task package"); `images` the IDs whose
+    /// images `get_card` attaches.
+    pub references: ContextReferences,
     /// Each printed as `note: context: <note>`.
     pub notes: Vec<String>,
 }
@@ -2763,6 +2769,12 @@ fn run_show(
             records: context_refs(&card.targets, &items),
             budget: context_budget(flag_budget, &context),
             comments: context_comments(&context.queue, &[card.id.as_str()], false)?,
+            references: context_references(
+                &context.queue,
+                &context_store(&context.data_dir, &context.slug),
+                &[card.id.as_str()],
+                false,
+            )?,
         })
     } else {
         None
@@ -2922,6 +2934,8 @@ struct ContextAsked {
     budget: Result<u32, String>,
     /// The card's comments, read now, and their notes.
     comments: (ContextComments, Vec<String>),
+    /// The card's references, read now, and their notes.
+    references: (ContextReferences, Vec<String>),
 }
 
 /// The card's direct parent (task spec `card-context` CC5), read now:
@@ -3029,15 +3043,19 @@ fn add_context(
         records: (refs, records_note),
         budget,
         comments: (comments, comment_notes),
+        references: (references, reference_notes),
     } = asked;
     notes.extend(records_note);
     notes.extend(comment_notes);
+    notes.extend(reference_notes);
     let card_id = outcome.card.as_deref().map(|card| card.id.clone());
     notes.extend(card_id.as_deref().and_then(|id| comments.note(id)));
+    notes.extend(card_id.as_deref().and_then(|id| references.note(id)));
     outcome.context = Some(CardContext {
         parent,
         bundle: None,
         comments,
+        references,
         notes: Vec::new(),
     });
     // The room is the card's lines' once they hold the practices and the
@@ -5299,6 +5317,8 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
             // Outside the bundle, counted in its room (task spec
             // `comments`, D11).
             lines.extend(context.comments.lines());
+            // So are its references (task spec `work-references`, D17).
+            lines.extend(context.references.lines());
             lines.push(bundle_line(context));
         }
     }

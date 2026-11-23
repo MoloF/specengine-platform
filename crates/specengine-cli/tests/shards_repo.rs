@@ -12,7 +12,9 @@
 //! seven since docs/features/hub-ops.md "Canon at ship"
 //! (`docs/index-canon-hub.md`, the `hub*` hub canons, third), eight since
 //! card-tasks (RM-0092: `docs/index-canon-card.md`, the `card*` card canons,
-//! fourth), the spec's AC-12 and AC-13 holding for that config).
+//! fourth), twelve since docs/features/work-references.md
+//! (`docs/index-canon-work.md`, the `comments*` and `work-*` canons, sixth),
+//! the spec's AC-12 and AC-13 holding for that config).
 //! `spec export index` never runs in this repository; every run gets a
 //! scratch `HOME`; `git status` is the same before and after.
 //!
@@ -60,11 +62,12 @@ use specengine_store::{WorkingTree, check_input};
 
 const SHARD: &str = "docs/index-archive.md";
 const ARCHIVE_HEADING: &str = "## Archive \u{2014} Tier 3, by id only";
-const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`\n- [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`\n- [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`\n- [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`\n- [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-guide.md](index-guide.md) `docs/guide/*.md`\n- [docs/index-decisions-0.md](index-decisions-0.md) `docs/decisions/ADR-000*.md`, `docs/decisions/ADR-001*.md`, `docs/decisions/ADR-002*.md`, `docs/decisions/ADR-003*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n- [docs/index-roadmap.md](index-roadmap.md) `docs/roadmap/*.md`\n";
+const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.md) Archive \u{2014} Tier 3, by id only\n- [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`\n- [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`\n- [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`\n- [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`\n- [docs/index-canon-code.md](index-canon-code.md) `docs/canon/code-*.md`\n- [docs/index-canon-work.md](index-canon-work.md) `docs/canon/comments*.md`, `docs/canon/work-*.md`\n- [docs/index-canon.md](index-canon.md) `docs/canon/*.md`\n- [docs/index-guide.md](index-guide.md) `docs/guide/*.md`\n- [docs/index-decisions-0.md](index-decisions-0.md) `docs/decisions/ADR-000*.md`, `docs/decisions/ADR-001*.md`, `docs/decisions/ADR-002*.md`, `docs/decisions/ADR-003*.md`\n- [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`\n- [docs/index-crates.md](index-crates.md) `crates/*/README.md`\n- [docs/index-roadmap.md](index-roadmap.md) `docs/roadmap/*.md`\n";
 
 /// The root config's index entry, verbatim: the spec's shipping entry
-/// (the archive shard) with the eleven live shards after it (the `code-*`
-/// one since docs/features/collision-pass.md, the decisions in two since
+/// (the archive shard) with the twelve live shards after it (the `code-*`
+/// one since docs/features/collision-pass.md, the `comments*`, `work-*`
+/// one after it since docs/features/work-references.md, the decisions in two since
 /// auto-mode, the guide's `docs/index-guide.md` after the canon's since
 /// docs/features/specengine-guide.md), the `spec-*`
 /// canon's first (the first matching claim wins), the plan items' last;
@@ -73,18 +76,19 @@ const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.m
 const SHIPPING: &str = "\
 [[generators]]
 command = \"cargo run -q -p specengine-cli -- export index\"
-writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon-spec.md\", \"docs/index-canon-proposal.md\", \"docs/index-canon-hub.md\", \"docs/index-canon-card.md\", \"docs/index-canon-code.md\", \"docs/index-canon.md\", \"docs/index-guide.md\",
-           \"docs/index-decisions-0.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\", \"docs/index-roadmap.md\", \"docs/generated/roadmap.md\"]
+writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon-spec.md\", \"docs/index-canon-proposal.md\", \"docs/index-canon-hub.md\", \"docs/index-canon-card.md\", \"docs/index-canon-code.md\", \"docs/index-canon-work.md\", \"docs/index-canon.md\",
+           \"docs/index-guide.md\", \"docs/index-decisions-0.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\", \"docs/index-roadmap.md\", \"docs/generated/roadmap.md\"]
 index   = true
 roadmap = \"docs/generated/roadmap.md\"
 gate    = \"cargo run -q -p specengine-cli -- check\"
-# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons, the `proposal-*` queue canons, the `hub*` hub canons, the `card*` card canons and the `code-*` code-layer canons first, the first matching claim wins), SpecEngine's guide (`docs/guide/`, ADR-0085), decisions (read by id; ADR-0001 to ADR-0039 first, then the rest), crate READMEs (by path) and plan items: docs/README.md \"Generated\".
+# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons, the `proposal-*` queue canons, the `hub*` hub canons, the `card*` card canons, the `code-*` code-layer canons and the `comments*`, `work-*` talk and reference canons first, the first matching claim wins), SpecEngine's guide (`docs/guide/`, ADR-0085), decisions (read by id; ADR-0001 to ADR-0039 first, then the rest), crate READMEs (by path) and plan items: docs/README.md \"Generated\".
 shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
            { path = \"docs/index-canon-spec.md\", claims = [\"docs/canon/spec-*.md\"] },
            { path = \"docs/index-canon-proposal.md\", claims = [\"docs/canon/proposal-*.md\"] },
            { path = \"docs/index-canon-hub.md\", claims = [\"docs/canon/hub*.md\"] },
            { path = \"docs/index-canon-card.md\", claims = [\"docs/canon/card*.md\"] },
            { path = \"docs/index-canon-code.md\", claims = [\"docs/canon/code-*.md\"] },
+           { path = \"docs/index-canon-work.md\", claims = [\"docs/canon/comments*.md\", \"docs/canon/work-*.md\"] },
            { path = \"docs/index-canon.md\", claims = [\"docs/canon/*.md\"] },
            { path = \"docs/index-guide.md\", claims = [\"docs/guide/*.md\"] },
            { path = \"docs/index-decisions-0.md\", claims = [\"docs/decisions/ADR-000*.md\", \"docs/decisions/ADR-001*.md\", \"docs/decisions/ADR-002*.md\", \"docs/decisions/ADR-003*.md\"] },
@@ -357,6 +361,23 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
                     "docs/canon/card-tasks.md",
                     "docs/canon/card-upstream.md",
                     "docs/canon/cards.md"
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>(),
+                "{claim}"
+            );
+        } else if claims == ["docs/canon/comments*.md", "docs/canon/work-*.md"] {
+            // The talk and reference canons (docs/features/work-references.md
+            // "Pins that move"): comments' two pages and the references' two
+            // (its surfaces split off under the Tier 2 cap, as comments' were).
+            assert_eq!(
+                claimed_live,
+                [
+                    "docs/canon/comments-surfaces.md",
+                    "docs/canon/comments.md",
+                    "docs/canon/work-references-surfaces.md",
+                    "docs/canon/work-references.md"
                 ]
                 .into_iter()
                 .map(str::to_owned)

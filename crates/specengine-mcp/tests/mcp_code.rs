@@ -2402,6 +2402,13 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(blake3_hex(now.as_bytes()), COMMENTS_BLAKE3);
     assert_eq!(now.matches(COMMENTS_LINE).count(), 1);
     for name in TOOLS {
+        // docs/features/work-references.md "Implementation", deviation 11:
+        // stdio's `INSTRUCTIONS` stay 2 043 B and do not name the three
+        // reference tools (no room); every other tool is named.
+        if matches!(name, "list_references" | "get_reference" | "add_reference") {
+            assert!(!has_word(now, name), "{name} named, against deviation 11");
+            continue;
+        }
         assert!(has_word(now, name), "{name} unnamed");
     }
     let guide = as_of_comments(now);
@@ -2547,11 +2554,19 @@ fn rd5_instructions_are_the_planned_text() {
         !instructions.contains(EVIDENCE_CLAUSE),
         "docs/features/card-trace.md cuts the clause"
     );
-    // `get_guide` is specengine-guide's, checked on the current text above.
-    for name in TOOLS
-        .iter()
-        .filter(|name| !["get_guide", "list_comments", "add_comment"].contains(*name))
-    {
+    // `get_guide` is specengine-guide's, checked on the current text above;
+    // the three reference tools are named nowhere (deviation 11 above).
+    for name in TOOLS.iter().filter(|name| {
+        ![
+            "get_guide",
+            "list_comments",
+            "add_comment",
+            "list_references",
+            "get_reference",
+            "add_reference",
+        ]
+        .contains(*name)
+    }) {
         assert!(has_word(instructions, name), "{name} unnamed");
     }
     for name in CODE_TOOLS {

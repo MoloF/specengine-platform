@@ -1157,9 +1157,12 @@ describe("the live tail (AC-09)", () => {
       "comment.created",
       "comment.edited",
       "comment.deleted",
+      // docs/features/work-references.md "Events and feed": the references' two, no title, URL, name, hash or "what matters" in either.
+      "reference.created",
+      "reference.deleted",
     ]);
     expect([...QUEUE_EVENT_TYPES]).toEqual(source.types());
-    expect(QUEUE_EVENT_TYPES).toHaveLength(33);
+    expect(QUEUE_EVENT_TYPES).toHaveLength(35);
     source.open();
     source.emit("proposal.created", '{"id":"PR-0005"}', "12");
     source.emit("proposal.rejected", '{"id":"PR-0002","reason":"no"}', "13");

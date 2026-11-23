@@ -120,6 +120,11 @@ fn valid_args(tool: &str) -> Value {
         // its `spec init` line, no document).
         "list_comments" => json!({"on": "MEC-STAMINA"}),
         "add_comment" => json!({"on": "MEC-STAMINA", "body": "A word."}),
+        // docs/canon/work-references-surfaces.md "MCP" (RF20): each reaches
+        // the CLI (no project: its `spec init` line, no document).
+        "list_references" => json!({"on": "MEC-STAMINA"}),
+        "get_reference" => json!({"reference_id": "RF-0001"}),
+        "add_reference" => json!({"on": "MEC-STAMINA", "url": "https://example.org/board"}),
         other => panic!("no arguments for {other}"),
     }
 }

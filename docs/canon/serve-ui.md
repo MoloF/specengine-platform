@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-23
 ---
 
 # Daemon: the web UI it serves
@@ -31,7 +31,7 @@ One clone, one commit: `pnpm --dir ui install --frozen-lockfile` (after a lockfi
 
 The 503 `message`: `this specengine-http holds no web UI (ui/dist had no index.html when it was compiled): run pnpm --dir ui install --frozen-lockfile && pnpm --dir ui build, then cargo install --locked --force --path <clone>/crates/specengine-http, then restart spec serve`.
 
-A UI 200 carries `Cache-Control: no-store` (as every response, assets too) and `X-Content-Type-Options: nosniff`; `/` also exactly `Content-Security-Policy: default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`; no `ETag`, `Last-Modified`, `max-age`, compression, ranges. Types (`type_of`) by the extension after the last `.`, as written: `html` `text/html; charset=utf-8`; `js`, `mjs` `text/javascript; charset=utf-8`; `css` `text/css; charset=utf-8`; `svg` `image/svg+xml`; `png` `image/png`; `ico` `image/x-icon`; `woff2` `font/woff2`; `json`, `map` `application/json`; `txt` `text/plain; charset=utf-8`; else `application/octet-stream` (no `mime-guess`).
+A UI 200 carries `Cache-Control: no-store` (as every response but a served reference file's, `work-references.md` "Serving"; assets too) and `X-Content-Type-Options: nosniff`; `/` also exactly `Content-Security-Policy: default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`; no `ETag`, `Last-Modified`, `max-age`, compression, ranges. Types (`type_of`) by the extension after the last `.`, as written: `html` `text/html; charset=utf-8`; `js`, `mjs` `text/javascript; charset=utf-8`; `css` `text/css; charset=utf-8`; `svg` `image/svg+xml`; `png` `image/png`; `ico` `image/x-icon`; `woff2` `font/woff2`; `json`, `map` `application/json`; `txt` `text/plain; charset=utf-8`; else `application/octet-stream` (no `mime-guess`).
 
 ## Rules
 

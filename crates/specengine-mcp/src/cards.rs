@@ -493,7 +493,11 @@ impl SpecEngineServer {
         // A hub's queue holds no `T-` task: its linked IDs are served
         // without state (`docs/canon/card-tasks.md` "The rule").
         let tasks_here = self.seam().is_none();
-        Ok(without_no_card(
+        // The context's images, read in the same call and attached after
+        // the text (task spec `work-references`, "MCP").
+        let slot = crate::references::ImageSlot::default();
+        let sink = std::sync::Arc::clone(&slot);
+        let result = without_no_card(
             self.call(move |env, globals| {
                 let request = CardShowRequest {
                     id: args.card_id,
@@ -513,11 +517,29 @@ impl SpecEngineServer {
                     git: process_git(env),
                     tasks_here,
                 };
-                specengine_cli::card_show(env, globals, &request)
-                    .map(|outcome| Outcome::CardShow(Box::new(outcome)))
+                let outcome = specengine_cli::card_show(env, globals, &request)?;
+                let ids: Vec<String> = outcome
+                    .context
+                    .as_ref()
+                    .map(|context| context.references.images.clone())
+                    .unwrap_or_default();
+                if !ids.is_empty() {
+                    // An image that cannot be read now is left out: the text
+                    // stands whole.
+                    let images =
+                        specengine_cli::reference_images(env, globals, &ids).unwrap_or_default();
+                    *sink
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) = images;
+                }
+                Ok(Outcome::CardShow(Box::new(outcome)))
             })
             .await
             .into_tool_result("get_card"),
+        );
+        Ok(crate::references::with_images(
+            result,
+            crate::references::taken(&slot),
         ))
     }
 

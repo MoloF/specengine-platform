@@ -64,8 +64,9 @@ mod default_build {
         // `mark_pairs` has the queue writers' annotations.
         let marks = name == "mark_pairs";
         // docs/features/comments.md "MCP": `add_comment` has the intake
-        // writers' annotations.
-        let comments = name == "add_comment";
+        // writers' annotations; docs/canon/work-references-surfaces.md
+        // "MCP" (RF20): `add_reference` too, its two reads the reads'.
+        let comments = matches!(name, "add_comment" | "add_reference");
         let annotations = if WRITE_TOOLS.contains(&name)
             || moves_a_task
             || moves_a_card
@@ -140,6 +141,12 @@ mod default_build {
             instructions.len()
         );
         for name in TOOLS {
+            // docs/features/work-references.md "Implementation", deviation
+            // 11: stdio's `INSTRUCTIONS` do not name the three reference
+            // tools (no room in 2 048 B).
+            if matches!(name, "list_references" | "get_reference" | "add_reference") {
+                continue;
+            }
             assert!(
                 instructions.contains(name),
                 "{context}: instructions do not name {name}"

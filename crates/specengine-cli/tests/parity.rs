@@ -270,6 +270,8 @@ fn export_index_recreates_this_repository_s_index() {
         "## Canon",
         // docs/features/collision-pass.md: the `code-*` code-layer canons.
         "## Canon",
+        // docs/features/work-references.md: the `comments*`, `work-*` canons.
+        "## Canon",
         "## Canon",
         // docs/features/specengine-guide.md: SpecEngine's guide, canon.
         "## Canon",

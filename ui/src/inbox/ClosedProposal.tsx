@@ -4,6 +4,7 @@ import type { Proposal } from "../api/types";
 import { homeHash, sectionHash } from "../app/routes";
 import { DocLink } from "../doc/DocLink";
 import { Comments } from "../comments/lazy";
+import { References } from "../references/lazy";
 import { CitedText, citedLinks } from "../markdown/CitedText";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -163,6 +164,8 @@ export function ClosedProposal({ project, proposal }: { project: string; proposa
                 <p className="board-text">{shownText(proposal.decision_note)}</p>
               </Section>
             )}
+            {/* Its references stay after a decision (docs/features/work-references.md "UI"): their own chunk. */}
+            <References project={project} on={id} level={3} />
             {/* Talk under it stays open after a decision (docs/features/comments.md "UI"): its own chunk. */}
             <Comments project={project} on={id} targets={proposal.target_ids} level={3} />
           </>

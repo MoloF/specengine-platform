@@ -134,6 +134,10 @@
 //!   `comment_id`, set when a question, discrepancy or decision is raised
 //!   from a live comment ([`SqliteQueue::create_intake_raised`]) and never
 //!   written again. No card, proposal, gate or decision reads a comment.
+//! - **References** (task spec `work-references`, `queue/refs.rs`;
+//!   ADR-0088): step 16 adds `refs`, a file's or a link's row under a card,
+//!   a proposal or a node; its file's bytes are the CLI's blob store's,
+//!   never the queue's. No card, proposal, gate or decision reads one.
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
@@ -149,6 +153,7 @@ mod gate;
 // docs/features/mixed-load-memory.md MX2, MX5: HEAD's reads kept as oracles.
 #[cfg(test)]
 mod mixed_load_oracle;
+mod refs;
 mod stage;
 mod state;
 mod tasks;
@@ -205,6 +210,11 @@ pub use comments::{
 };
 pub use feed::{FeedCard, FeedEvent, FeedProposal, FeedRun, FeedSnapshot, FeedTask, FeedWindow};
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
+pub use refs::{
+    BlobReader, BlobServed, EVENT_REFERENCE_CREATED, EVENT_REFERENCE_DELETED, NewReference,
+    REF_COLUMNS, Reference, ReferenceContext, ReferenceDelete, ReferenceDeleted, ReferencePage,
+    StoredRef, unreadable_line as unreadable_reference_line,
+};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
 pub use state::{
     CARD_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, RUN_COLUMNS, Restore, StoredCard,
@@ -220,7 +230,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 15;
+pub const QUEUE_SCHEMA_VERSION: i64 = 16;
 
 /// The first queue schema whose `proposals` holds `card_id` and `why`
 /// (step 10 → 11).
@@ -236,6 +246,10 @@ pub(crate) const PLAIN_QUESTIONS_SCHEMA: i64 = 13;
 /// The first queue schema with `comments`, `comment_versions` and a
 /// proposal's `comment_id` (step 14 → 15; task spec `comments`).
 pub(crate) const COMMENTS_SCHEMA: i64 = 15;
+
+/// The first queue schema with `refs` (step 15 → 16; task spec
+/// `work-references`).
+pub(crate) const REFS_SCHEMA: i64 = 16;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -414,6 +428,37 @@ CREATE TABLE comment_versions (
 ) STRICT;
 ALTER TABLE proposals ADD COLUMN comment_id TEXT;
 CREATE INDEX proposals_comment ON proposals (project, comment_id);
+";
+
+/// Step 15 → 16: the references, files and links attached to work (task
+/// spec `work-references`, "Queue schema 16"), keyed as `comments` is, and
+/// the three indexes a target's list and a file's lookups read.
+const STEP_16: &str = "
+CREATE TABLE refs (
+  id         TEXT NOT NULL PRIMARY KEY,
+  project    TEXT NOT NULL,
+  on_kind    TEXT NOT NULL,
+  on_id      TEXT NOT NULL,
+  on_rev     INTEGER,
+  actor      TEXT NOT NULL,
+  author     TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  title      TEXT,
+  matters    TEXT,
+  url        TEXT,
+  name       TEXT,
+  b3         TEXT,
+  agent_b3   TEXT,
+  size       INTEGER,
+  media      TEXT,
+  meta       TEXT,
+  created_at TEXT NOT NULL,
+  deleted_by TEXT,
+  deleted_at TEXT
+) STRICT;
+CREATE INDEX refs_on       ON refs (project, on_kind, on_id);
+CREATE INDEX refs_b3       ON refs (project, b3);
+CREATE INDEX refs_agent_b3 ON refs (project, agent_b3);
 ";
 
 /// The record columns, in table order.
@@ -1355,6 +1400,15 @@ pub enum QueueError {
         reason: String,
         cause: CommentRefusal,
     },
+    /// A reference change refused (task spec `work-references`, "CLI"
+    /// exits): no such reference or target ([`CommentRefusal::Unknown`]), a
+    /// rule ([`CommentRefusal::Refused`]: a deleted reference). `reason` is
+    /// one line; nothing written.
+    ReferenceRefused {
+        id: String,
+        reason: String,
+        cause: CommentRefusal,
+    },
 }
 
 impl From<StoreError> for QueueError {
@@ -1398,7 +1452,8 @@ impl fmt::Display for QueueError {
             }
             Self::TaskRefused { reason, .. }
             | Self::CardRefused { reason, .. }
-            | Self::CommentRefused { reason, .. } => f.write_str(reason),
+            | Self::CommentRefused { reason, .. }
+            | Self::ReferenceRefused { reason, .. } => f.write_str(reason),
         }
     }
 }
@@ -1850,7 +1905,7 @@ impl SqliteQueue {
     /// per row, `<table>\t<JSON array of every column>`, `proposals` by ID
     /// number, `tasks` by ID number, `runs` by task and number, `cards` by ID
     /// number, `comments` by ID number, `comment_versions` by comment and
-    /// version, then `events` by `seq` (a table a DB does not hold yet left
+    /// version, `refs` by ID number, then `events` by `seq` (a table a DB does not hold yet left
     /// out). Equal dumps: the same queue.
     pub fn dump(&self) -> Result<String, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
@@ -1862,6 +1917,7 @@ impl SqliteQueue {
             ("cards", ID_ORDER),
             ("comments", ID_ORDER),
             ("comment_versions", comments::VERSION_ORDER),
+            ("refs", ID_ORDER),
             ("events", "ORDER BY seq"),
         ] {
             if !schema::has_table(&tx, table)? {
@@ -2454,12 +2510,12 @@ enum Hold<'a> {
 /// question's `gist` and `matters` (`docs/features/plain-questions.md`
 /// "Acceptance criteria", PQ8), 13 → 14 the collision ledger (task spec
 /// `collision-pass` CP6), 14 → 15 the comments, their versions and a
-/// proposal's `comment_id` (task spec `comments`; 0 → 15
-/// runs all fifteen, every due step in this one transaction; a schema-5
-/// DB opens as 15, every `interpretation`, `drift`, `drift_hash`,
-/// `card_id`, `why`, `gist`, `matters`, `comment_id` `NULL`, no card, an
-/// empty ledger, no comment; a schema-9 card reads no task, a schema-11 one
-/// no mandate);
+/// proposal's `comment_id` (task spec `comments`), 15 → 16 the references
+/// (task spec `work-references`; 0 → 16 runs all sixteen, every due step
+/// in this one transaction; a schema-5 DB opens as 16, every
+/// `interpretation`, `drift`, `drift_hash`, `card_id`, `why`, `gist`,
+/// `matters`, `comment_id` `NULL`, no card, an empty ledger, no comment, no
+/// reference; a schema-9 card reads no task, a schema-11 one no mandate);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -2537,6 +2593,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 14 {
         tx.execute_batch(STEP_15).db()?;
         version = 15;
+    }
+    if version == 15 {
+        tx.execute_batch(STEP_16).db()?;
+        version = 16;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;

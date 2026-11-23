@@ -489,8 +489,9 @@ describe("the Package tab and the version guard (AC-10)", () => {
     const text = document.querySelector(".task-json")?.textContent ?? "";
     expect(JSON.parse(text)).toStrictEqual(pkg);
     // 28 since department-practices' `practices` (docs/features/department-practices.md "Acceptance criteria", DP12);
-    // 29 since comments' `comments` (docs/features/comments.md "The card context and the task package").
-    expect(Object.keys(JSON.parse(text) as object)).toHaveLength(29);
+    // 29 since comments' `comments` (docs/features/comments.md "The card context and the task package");
+    // 30 since work-references' `references` (docs/features/work-references.md "A card's context and the task package").
+    expect(Object.keys(JSON.parse(text) as object)).toHaveLength(30);
     expect(text).toContain('"goal": null');
     expect(text).toContain('"bindings": []');
     expect(text).toContain('"tested": null');

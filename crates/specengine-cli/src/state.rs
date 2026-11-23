@@ -404,7 +404,8 @@ fn foreign_row(state: &StoredQueue, slug: &str, db: &Path) -> Result<(), CliErro
     }
 }
 
-/// [`foreign_row`] of the comment tables (task spec `comments`, "Backup").
+/// [`foreign_row`] of the comment tables (task spec `comments`, "Backup")
+/// and of `refs` (task spec `work-references`, "Dump format 9").
 fn foreign_comment(talk: &StoredComments, slug: &str, db: &Path) -> Result<(), CliError> {
     let foreign = talk
         .comments
@@ -426,6 +427,18 @@ fn foreign_comment(talk: &StoredComments, slug: &str, db: &Path) -> Result<(), C
                         "version {} of comment `{}` in {} is not",
                         row.version,
                         row.comment_id().unwrap_or("NULL"),
+                        db.display()
+                    )
+                })
+        })
+        .or_else(|| {
+            talk.refs
+                .iter()
+                .find(|row| row.project() != Some(slug))
+                .map(|row| {
+                    format!(
+                        "reference `{}` in {} is not",
+                        row.id().unwrap_or("NULL"),
                         db.display()
                     )
                 })

@@ -1480,12 +1480,21 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// and 39th: mounted for every login, trusted reads of the project's queue a
 /// login already reads through `cards`, `inbox` and `events` (the comments,
 /// people's words, and who they mention), never `[team]`, no corpus.
-const GET_ROUTES: [&str; 39] = [
+///
+/// docs/features/work-references.md (RM-0137, "HTTP"; ADR-0088) judged
+/// `/api/projects/{p}/references` and `/api/projects/{p}/blobs/{b3}`, the
+/// 40th and 41st: mounted for every login ("per-file or per-login access"
+/// out of scope: any login reads every project's files, as every read), a
+/// trusted read of the queue's references and a file served sandboxed by
+/// its BLAKE3 only when a live reference of the project names it, no turn,
+/// never `[team]`.
+const GET_ROUTES: [&str; 41] = [
     "/",
     "/api/guide",
     "/api/guide/{topic}",
     "/api/identity",
     "/api/projects",
+    "/api/projects/{p}/blobs/{b3}",
     "/api/projects/{p}/bundle",
     "/api/projects/{p}/cards",
     "/api/projects/{p}/cards/counts",
@@ -1507,6 +1516,7 @@ const GET_ROUTES: [&str; 39] = [
     "/api/projects/{p}/nodes/{*ref}",
     "/api/projects/{p}/proposals/{id}",
     "/api/projects/{p}/proposals/{id}/confirm",
+    "/api/projects/{p}/references",
     "/api/projects/{p}/rings",
     "/api/projects/{p}/roadmap",
     "/api/projects/{p}/round",
@@ -2310,8 +2320,10 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
     // docs/features/auto-feed.md FD3 (`feed`); 35 since
     // docs/features/doc-library.md DL2 (`library`); 37 since
     // docs/features/specengine-guide.md GU6 (`guide`, `guide/{topic}`); 39
-    // since docs/features/comments.md CM14 (`comments`, `mentions`).
-    assert_eq!(GET_ROUTES.len(), 39);
+    // since docs/features/comments.md CM14 (`comments`, `mentions`); 41
+    // since docs/features/work-references.md RF18 (`references`,
+    // `blobs/{b3}`).
+    assert_eq!(GET_ROUTES.len(), 41);
     // The pin's positive control: one more route is seen.
     let anchor = "let routes = Router::new()\n";
     let added = format!(

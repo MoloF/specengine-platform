@@ -415,6 +415,7 @@ const TASK_KEYS = {
     bundle: true,
     practices: true,
     comments: true,
+    references: true,
     roadmap: true,
     author: true,
     created_at: true,
@@ -458,7 +459,7 @@ const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, comments, roadmap, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, comments, references, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -502,13 +503,14 @@ describe("the task types (AC-02 of ui-tasks, AC-13 of ui-live-tasks)", () => {
   });
 
   // 28 package keys since department-practices' `practices` (docs/features/department-practices.md "Acceptance criteria", DP12);
-  // 29 since comments' `comments` (docs/features/comments.md "The card context and the task package").
-  it("count 29 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document, 7 roadmap keys", () => {
+  // 29 since comments' `comments` (docs/features/comments.md "The card context and the task package");
+  // 30 since work-references' `references` after it (docs/features/work-references.md "A card's context and the task package").
+  it("count 30 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document, 7 roadmap keys", () => {
     expect(
       [TASK_KEYS.TaskPackage, TASK_KEYS.TaskListEntry, TASK_KEYS.TaskRun, TASK_KEYS.OwnerNote, TASK_KEYS.TaskNotFound, TASK_KEYS.TaskRoadmap].map(
         (keys) => Object.keys(keys).length,
       ),
-    ).toEqual([29, 6, 7, 2, 2, 7]);
+    ).toEqual([30, 6, 7, 2, 2, 7]);
   });
 
   it.each(Object.keys(TASK_KEYS))("%s cites the canon's heading", (type) => {

@@ -12,15 +12,18 @@ import {
   type MapOptions,
   type MentionsOptions,
   type NodeOptions,
+  type ReferencesOptions,
   type RoadmapOptions,
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
   type TraceOptions,
   type TreeOptions,
+  type UploadProgress,
 } from "./client";
 import type {
   ApiError,
+  BlobStored,
   BundleView,
   Card,
   CardAcceptBody,
@@ -67,6 +70,9 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  Reference,
+  ReferenceAddBody,
+  ReferenceList,
   RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
@@ -116,8 +122,9 @@ const API = "/api";
  * the cards' nine (`docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md`
  * "Data"), then auto mode's four and the gate's one, which only the feed reads again
  * (`docs/features/auto-feed.md` "The UI"), then the comments' three, no body in any
- * (`docs/features/comments.md` "HTTP"). An EventSource hands a named event only to a listener of
- * that name: a type missing here is never seen.
+ * (`docs/features/comments.md` "HTTP"), then the references' two, no title, URL, name, hash or
+ * "what matters" in either (`docs/features/work-references.md` "Events and feed"). An EventSource
+ * hands a named event only to a listener of that name: a type missing here is never seen.
  */
 export const QUEUE_EVENT_TYPES = [
   "proposal.created",
@@ -153,6 +160,8 @@ export const QUEUE_EVENT_TYPES = [
   "comment.created",
   "comment.edited",
   "comment.deleted",
+  "reference.created",
+  "reference.deleted",
 ] as const;
 
 /** The first wait before a stream the browser gave up on is opened again; doubled per failure. */
@@ -224,6 +233,11 @@ function tracePath(project: string): string {
 /** The comments' requests, a chunk of their own (`docs/features/comments.md` "HTTP"). */
 function commentsHttp() {
   return import("./commentsHttp");
+}
+
+/** The references' requests and the upload, a chunk of their own (`docs/features/work-references.md` "HTTP"). */
+function referencesHttp() {
+  return import("./referencesHttp");
 }
 
 const NOT_JSON = Symbol("not JSON");
@@ -809,6 +823,29 @@ export class HttpClient implements SpecEngineClient {
 
   async raiseFromComment(project: string, id: string, body: CommentRaiseBody): Promise<IntakeDocument> {
     return (await commentsHttp()).raiseFromComment(project, id, body);
+  }
+
+  // References (`docs/features/work-references.md` "HTTP"): their requests and the upload in a chunk
+  // of their own (./referencesHttp.ts), loaded with the first reference's call; the file's address alone here.
+
+  async getReferences(project: string, options: ReferencesOptions, signal?: AbortSignal): Promise<ReferenceList> {
+    return (await referencesHttp()).getReferences(project, options, signal);
+  }
+
+  async putBlob(project: string, blob: Blob, onProgress: UploadProgress, signal: AbortSignal): Promise<BlobStored> {
+    return (await referencesHttp()).putBlob(`${API}${projectPath(project)}/blobs`, blob, onProgress, signal);
+  }
+
+  async addReference(project: string, body: ReferenceAddBody): Promise<Reference> {
+    return (await referencesHttp()).addReference(project, body);
+  }
+
+  async deleteReference(project: string, id: string): Promise<Reference> {
+    return (await referencesHttp()).deleteReference(project, id);
+  }
+
+  blobUrl(project: string, b3: string): string {
+    return `${API}${projectPath(project)}/blobs/${segment(b3)}`;
   }
 
   /**

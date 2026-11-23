@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # Daemon: spec serve
 
-`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens and serves the web UI compiled into it (`serve-ui.md`). The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`, `unpublished_daemon`, `daemon_text`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL`, `DAEMON_PUBLISH_WAIT`), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
+`spec serve` launches `specengine-http` (`crates/specengine-http/README.md`), one daemon per data directory, which publishes where it listens and serves the web UI compiled into it (`serve-ui.md`). The gate never consults it (ADR-0039, `docs/canon/architecture.md#control`); agents keep the stdio MCP server, a `spec mcp` bridge comes on a trigger (05 s1 (6)). Code: CLI `serve.rs` (`serve`, `ServeRequest`, `Serve::{Running, Start}`, `DaemonFile`, `DaemonProject`, `read_daemon_file`; `DAEMON_BIN`, `DAEMON_LOCK`, `DAEMON_FILE`, `DAEMON_PORT` 7777, `DAEMON_POLL`), `main.rs` `run_serve`, `exec`; http `daemon.rs` (`lock`, `publish`), `start.rs` `served`.
 
 ## Launcher
 
@@ -44,9 +44,9 @@ Beside `<slug>.db`, never under a root (ADR-0003). `daemon.lock`: empty, its `fl
 }
 ```
 
-`pid` `std::process::id()`; `port` the bound one (`--port 0`: the chosen); `url` the `listening` line's; `projects` in `--root` order, `root` canonical (as `/api/projects`); `started` `utc_now()`. No token, key, secret, version or build (ADR-0034). Readers take the five keys and ignore others; one missing or mistyped: unreadable.
+`pid` `std::process::id()`; `port` the bound one (`--port 0`'s chosen); `url` the `listening` line's; `projects` in `--root` order, `root` canonical (as `/api/projects`); `started` `utc_now()`. No token, key, secret, version or build (ADR-0034). Readers take the five keys and ignore others; one missing or mistyped: unreadable.
 
-`proposal-floor`, a hub's alone: its `PR-` floor and its spec-ID side, written once at its start (`queue-backup.md` "ID floor").
+`proposal-floor`, a hub's alone: its `PR-` floor and its spec-ID side, written once at its start (`queue-backup.md` "ID floor"). `blobs/<slug>/`: references' files (`work-references.md`).
 
 ## Lines
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # Hub MCP: `/mcp/<slug>` under each request's login
@@ -33,7 +33,7 @@ Held in memory only: session id -> slug, login, last use. The ids are rmcp's, a 
 - **Bound.** A session belongs to the slug and login of the POST whose 2xx issued it. A request naming an id not bound to its own slug and login gets 404 `Not Found: Session not found`, rmcp's bytes, on every method, with rmcp never called. The id may be unknown, ended, another login's or another project's; all four answer alike, so no login learns of another's session.
 - **One id per request.** A request carrying more than one `Mcp-Session-Id` value, equal or not, gets the same 404, with rmcp never called and nothing unbound. rmcp would close only the first on DELETE, leaving sessions no cap counts.
 - **Drop-safe.** A request dropped after rmcp issued an id, before the daemon bound it, has that session closed: no unbound session outlives its request.
-- **Caps.** 4 per login per project and 64 per hub, counting only the sessions rmcp still holds. A login's fifth session in a project closes its least recently used one there. Past 64, the new session is closed and the answer is 503 `refused: this hub holds 64 MCP sessions, its cap: try again once one ends`. No login's session is ever closed for another's.
+- **Caps.** 4 per login per project and 64 per hub, counting the sessions rmcp holds. A login's fifth session in a project closes its least recently used one there. Past 64, the new session is closed and the answer is 503 `refused: this hub holds 64 MCP sessions, its cap: try again once one ends`. No login's session is ever closed for another's.
 - **Life.** A session ends at a restart, after 300 s idle, at its own login's DELETE, or at an eviction. The stateless era opens none. A GET stream (one resuming a POST's too) ends 300 s after it opens, not its session, which rmcp's idle, re-armed by that GET first, ends. Nothing rides it (no hub tool notifies or asks): a reconnect loses nothing.
 - **Stored nowhere, naming no one.** No id is in the queue, an event, a dump, a trailer, a commit, an answer body or stderr. A session only refuses: it is never a login, an author, an actor, a `run` or an argument.
 
@@ -53,17 +53,17 @@ The transport stays in `specengine-http`: `App::new` builds one service per proj
 
 ## Tools
 
-Twenty-one tools and the resources, each its stdio twin's CLI call:
+Twenty-four tools and the resources, each its stdio twin's CLI call:
 - **reads:** `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_roadmap`, `get_flow`, `get_trace`, `get_proposal`; `get_guide` (`spec-guide.md`);
 - **queue**, without `task_id`: `propose_change` (four kinds, `dry_run`, a create's `distinct_from`, `keywords`: `proposal-similar.md`), `ask_question`, `report_discrepancy`, `report_decision`;
 - **cards:** `list_cards`, `get_card`, `create_card`, `split_card`, `edit_card`, `move_card`;
-- **comments:** `list_comments`, `add_comment` (`comments-surfaces.md`).
+- **comments:** `list_comments`, `add_comment` (`comments-surfaces.md`); **references:** `list_references`, `get_reference`, `add_reference` (`work-references-surfaces.md`).
 
-None decides: a person confirms (`hub-confirm.md`), on the hub or a terminal, or the hub's code after the call (`hub-auto.md`). Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 21 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would grow on invented names.
+None decides: a person confirms (`hub-confirm.md`), on the hub or a terminal, or the hub's code after the call (`hub-auto.md`). Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 24 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached, so invented names grow no schema cache.
 
 Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub); `get_collisions`, `mark_pairs` (local: `collision-pass.md`).
 
-**Texts.** `HUB_INSTRUCTIONS` (2 047 B, no resources line), and fourteen hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools, `add_comment` and the four card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other seven are stdio's; eleven are stdio's routes as they are (`SHARED`). Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
+**Texts.** `HUB_INSTRUCTIONS` (2 045 B, no resources line), and fifteen hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools, `add_comment`, `add_reference` and the four card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other nine are stdio's; thirteen are stdio's routes as they are (`SHARED`). Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
 
 ## Identity
 
@@ -78,7 +78,7 @@ No hub schema holds `login`, `as`, `actor` or `task_id`. A hub write that finds 
 <a id="trust"></a>
 ## Trust
 
-As in `hub.md#trust`: no authentication inside SpecEngine (ADR-0034); the daemon trusts one header (ADR-0059), holding no account, token, key or login session. A protocol session binds a login in memory, identifying no one. Raising proposals is the daemon's for `/mcp` and a card's `items`, on ADR-0057's precedent of a proposing daemon.
+As in `hub.md#trust`: no authentication inside SpecEngine (ADR-0034), one trusted header (ADR-0059). A protocol session binds a login in memory, identifying no one. Raising proposals is the daemon's for `/mcp` and a card's `items`, on ADR-0057's precedent of a proposing daemon.
 
 **The daemon can defend:** another login's session id, or a second id in one request (404); an invented tool name, refused before rmcp; `Authorization` on a route but `/mcp`, where the proxy forwards it; a query; an identity argument, which no schema holds; every decision, which no tool makes.
 
@@ -102,7 +102,7 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 - A login's AI reads others' proposals and cards: data, never a decision.
 - A bearer `Remote-User` that is an email or a UUID would split a person in two; the deployment's Basic user is the door login.
 - Answers carry the corpus to the client's model vendor.
-- A forged `Remote-User` raises proposals as anyone: no real use before the gate, step 11b-3.
+- A forged `Remote-User` raises proposals as anyone (`hub.md#trust`).
 - A body's buffer is reserved by its `Content-Length`, at most 4 MiB.
 - A body that is no JSON-RPC message but names an unknown tool is refused as one.
 - A duplicated JSON key costs up to three parses.

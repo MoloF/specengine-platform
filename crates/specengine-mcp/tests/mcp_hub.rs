@@ -51,10 +51,14 @@ use specengine_mcp::{
 /// The hub's tools, sorted (docs/features/hub-mcp.md "Data"): seventeen,
 /// eighteen since docs/features/department-split.md "Acceptance criteria",
 /// S8 (`split_card`); twenty-one since docs/features/comments.md CM15
-/// (`list_comments`, `add_comment`).
-const EIGHTEEN: [&str; 21] = [
+/// (`list_comments`, `add_comment`); twenty-four since
+/// docs/features/work-references.md RF20 (`list_references`,
+/// `get_reference`, `add_reference`).
+const EIGHTEEN: [&str; 24] = [
     // docs/features/comments.md CM15.
     "add_comment",
+    // docs/features/work-references.md RF20.
+    "add_reference",
     "ask_question",
     "create_card",
     "edit_card",
@@ -65,12 +69,16 @@ const EIGHTEEN: [&str; 21] = [
     "get_guide",
     "get_node",
     "get_proposal",
+    // docs/features/work-references.md RF20.
+    "get_reference",
     "get_roadmap",
     "get_trace",
     "get_tree",
     "list_cards",
     // docs/features/comments.md CM15.
     "list_comments",
+    // docs/features/work-references.md RF20.
+    "list_references",
     "move_card",
     "propose_change",
     "report_decision",
@@ -476,8 +484,9 @@ const GET_TASKS_SENTENCE: &str = "tasks: each linked task {id, status, title, st
 #[test]
 fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
     // department-split S8: eighteen with `split_card`; 21 since
-    // docs/features/comments.md CM15.
-    assert_eq!(HUB_TOOLS.len(), 21);
+    // docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(HUB_TOOLS.len(), 24);
     let server = hub();
     for (name, word, sentence) in [
         ("edit_card", "task", HUB_EDIT_TASK_SENTENCE),

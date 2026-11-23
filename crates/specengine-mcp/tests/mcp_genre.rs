@@ -727,9 +727,10 @@ fn hub_mcp_h11_the_hub_texts_hold_no_stack_word_and_no_game_kind() {
         // docs/features/department-split.md S8: eighteen descriptions;
         // nineteen since docs/features/specengine-guide.md (`get_guide`);
         // twenty-one since docs/features/comments.md (`list_comments`,
-        // `add_comment`).
-        22,
-        "the instructions and twenty-one descriptions"
+        // `add_comment`); twenty-four since docs/features/work-references.md
+        // RF20 (`list_references`, `get_reference`, `add_reference`).
+        25,
+        "the instructions and twenty-four descriptions"
     );
     let mut offenders = Vec::new();
     for (name, text) in &texts {

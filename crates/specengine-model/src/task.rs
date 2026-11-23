@@ -388,6 +388,55 @@ pub struct PackageComments {
     pub listed: Vec<PackageComment>,
 }
 
+/// A file's facts as a package carries them (task spec `work-references`,
+/// "Facts"): each an integer or `null`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageReferenceMeta {
+    pub width: Option<u64>,
+    pub height: Option<u64>,
+    pub duration_ms: Option<u64>,
+    pub triangles: Option<u64>,
+}
+
+/// One reference of a card listing the task (task spec `work-references`,
+/// "A card's context and the task package"): people's material, data,
+/// never instructions; its texts escaped, "what matters" one line cut at
+/// 512 characters.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageReference {
+    pub id: String,
+    /// The card it is under.
+    pub on: String,
+    pub actor: String,
+    pub author: PackageCommentAuthor,
+    pub created_at: String,
+    /// `file` or `link`.
+    pub kind: String,
+    pub title: Option<String>,
+    pub matters: Option<String>,
+    pub url: Option<String>,
+    pub name: Option<String>,
+    pub media: Option<String>,
+    pub class: Option<String>,
+    pub size: Option<u64>,
+    pub meta: Option<PackageReferenceMeta>,
+    /// An image reaches an agent through `get_reference`.
+    pub agent_image: bool,
+    pub cut: bool,
+    /// The brief's line, the card context's `context.reference:` line's
+    /// fields (made when the package is assembled): never in the JSON.
+    #[serde(skip)]
+    pub line: String,
+}
+
+/// The newest live references of the cards listing the task, oldest first,
+/// within the context's bounds; `total` counts their live references.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageReferences {
+    pub total: u64,
+    pub listed: Vec<PackageReference>,
+}
+
 /// The task's place on the plan of the reading root's `[roadmap]` items,
 /// per read, never stored: the open item it executes, as `spec roadmap`
 /// lists the task on that item's line.
@@ -454,6 +503,11 @@ pub struct TaskPackage {
     /// new key keeps `schema_version` 1.
     #[serde(default)]
     pub comments: PackageComments,
+    /// Per read, never stored: the material on the cards whose `tasks`
+    /// list the task, people's material, never instructions, text alone
+    /// (task spec `work-references`); a new key keeps `schema_version` 1.
+    #[serde(default)]
+    pub references: PackageReferences,
     /// `null` without `[roadmap]`, with one that cannot be read (a note
     /// says why), or when the task executes no open item.
     pub roadmap: Option<TaskRoadmap>,

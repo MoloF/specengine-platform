@@ -1711,16 +1711,17 @@ fn without_plain_columns(line: &str) -> String {
 /// for the header and the two nulls. M: the format 6 import path dropped.
 #[test]
 fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
-    // 8 and 15 since docs/features/comments.md CM13, CM1.
-    assert_eq!(STATE_FORMAT, 8);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    // 8 and 15 since docs/features/comments.md CM13, CM1; 9 and 16 since
+    // docs/features/work-references.md RF17, RF1.
+    assert_eq!(STATE_FORMAT, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     assert_eq!(PROPOSAL_COLUMNS.len(), 51);
     let pair = Pair::new("pq-pq8", "spec-a");
     mixed_queue(&pair);
     let dumps = pair.scratch.dir("dumps");
     let lines = export(&pair, &pair.home, &dumps.join("seven.jsonl"));
     assert!(
-        lines[0].starts_with("{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -1737,6 +1738,8 @@ fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
             // docs/features/comments.md CM13: format 8's two counts.
             "comments",
             "comment_versions",
+            // docs/features/work-references.md RF17: format 9's count.
+            "refs",
             "events"
         ]
     );
@@ -1776,11 +1779,11 @@ fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
     let mut six = lines.clone();
     six[0] = six[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":6,\"queue_schema\":12,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     for index in &rows {
         six[*index] = without_plain_columns(&lines[*index]);
         assert_eq!(
@@ -1834,29 +1837,29 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
     // alone) at schema 12.
     header_12[0] = header_12[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":7,\"queue_schema\":12,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     let mut no_matters = lines.clone();
     let at = no_matters[row].rfind(",\"matters\":").unwrap();
     no_matters[row] = format!("{}}}}}", &no_matters[row][..at]);
     let mut six_with_gist = lines.clone();
     six_with_gist[0] = six_with_gist[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":6,\"queue_schema\":12,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     for (index, line) in lines.iter().enumerate().skip(1) {
         if line.starts_with("{\"proposals\":") && index != row {
             six_with_gist[index] = without_plain_columns(line);
         }
     }
     let mut eight = lines.clone();
-    eight[0] = eight[0].replacen("\"format\":8,", "\"format\":9,", 1);
+    eight[0] = eight[0].replacen("\"format\":9,", "\"format\":10,", 1);
     for (name, bad, line, says) in [
         (
             "header-12",
@@ -1880,18 +1883,18 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
         assert!(!data_dir(&fresh).exists(), "{name}: nothing written");
     }
 
-    // A queue a newer build stepped: refused, left at 16 (this build's 15
-    // since docs/features/comments.md CM1).
-    pair.sql("PRAGMA user_version = 16;");
+    // A queue a newer build stepped: refused, left at 17 (this build's 16
+    // since docs/features/work-references.md RF1).
+    pair.sql("PRAGMA user_version = 17;");
     let run = pair.spec_piped(&pair.linked, &["inbox"], b"");
     assert_eq!(run.code, 2, "{}", run.show());
     assert!(
         run.stderr
-            .contains("schema version 16, this build knows 15"),
+            .contains("schema version 17, this build knows 16"),
         "{}",
         run.stderr
     );
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "16");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "17");
 }
 
 // ----------------------------------------------------------------- PQ10

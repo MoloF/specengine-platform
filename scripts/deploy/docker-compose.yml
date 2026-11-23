@@ -88,11 +88,19 @@ services:
       # Passed through bare: absent from .env, absent here (the daemon's
       # default threshold); never interpolated, which would hand an empty value.
       SPECENGINE_SLOW_MS:
+      # The blob store's caps (work-references), bare as SPECENGINE_SLOW_MS:
+      # absent, the defaults; set, they only lower the caps or raise the floor.
+      SPECENGINE_BLOB_FILE_MAX:
+      SPECENGINE_BLOB_QUOTA:
+      SPECENGINE_BLOB_FLOOR:
       GIT_SSH_COMMAND: ssh -i /run/secrets/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/run/secrets/known_hosts -o StrictHostKeyChecking=yes
     secrets: [deploy_key, known_hosts]
     volumes:
       - ./projects:/projects
       - specengine-data:/data
+      # References' files (ADR-0088): their own volume, on this service alone;
+      # no dump, backup or restore carries it.
+      - specengine-blobs:/data/specengine/blobs
     # specengine-health (scripts/deploy/health.sh): a loopback GET / answered
     # 403 by the fence, and websecure's port open in this namespace. Docker
     # restarts no unhealthy container: `unhealthy` is the operator's signal.
@@ -203,6 +211,8 @@ secrets:
   restic_env: {file: ./secrets/restic_env}
 volumes:
   specengine-data: {}
+  # References' files, lost with the host by the owner's choice (ADR-0088).
+  specengine-blobs: {}
   authelia-data: {}
   traefik-acme: {}
   # The dumps' staging: tmpfs, so no dump touches the host's disk (R4).

@@ -213,7 +213,8 @@ fn s8_tools_list_holds_split_card() {
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
     // 35 since docs/features/comments.md CM15 (`list_comments`, `add_comment`).
-    assert_eq!(TOOLS.len(), 35);
+    // 38 since docs/features/work-references.md RF20.
+    assert_eq!(TOOLS.len(), 38);
     assert!(TOOLS.contains(&"split_card"));
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -463,8 +464,9 @@ fn s8_both_texts_hold() {
     let stdio = described("split_card");
     let stdio_create = described("create_card");
     drop(session.finish());
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(HUB_TOOLS.len(), 21);
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(HUB_TOOLS.len(), 24);
     assert!(
         HUB_TOOLS.contains(&"split_card"),
         "M: split_card missing from HUB_TOOLS"

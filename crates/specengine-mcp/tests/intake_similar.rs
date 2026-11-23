@@ -60,8 +60,10 @@ use specengine_mcp::{
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
 const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/features/work-references.md RF20: the hub's text names
+// `list_references`, `get_reference` and `add_reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
+    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
 
 /// The "Text" example's file and its note.
 const ENDURANCE: &str = "docs/spec/movement/endurance.md";
@@ -715,9 +717,10 @@ async fn is8_a_hub_answers_the_is1_call_alike() {
     drop(session.finish());
     let hub = hub_answers(&remote.main, &remote.home, &calls).await;
     let listed = tool_names(&hub[0]);
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(listed.len(), 21, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 21);
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(listed.len(), 24, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 24);
     for (n, (args, local)) in calls.iter().zip(&stdio).enumerate() {
         let remote = &hub[n + 1];
         assert_ne!(remote["isError"], json!(true), "{args}: {remote}");

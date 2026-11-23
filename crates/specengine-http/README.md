@@ -18,7 +18,7 @@ Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge),
 
 ## Fence
 
-Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`, but for the landing (`serve-ui.md` "Rules"); any sent twice -> 403. No authentication (ADR-0034). No `Access-Control-*` header, `OPTIONS` included; `Cache-Control: no-store` always. A hub's, `--public-origin`: `hub.md`.
+Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`, but for the landing (`serve-ui.md` "Rules"); any sent twice -> 403. No authentication (ADR-0034). No `Access-Control-*` header, `OPTIONS` included; `Cache-Control: no-store` but on a served file (`ServedFile`, the blob GET's 200, 206, 304). A hub's, `--public-origin`: `hub.md`.
 
 Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 405 `Allow: GET`; the decision route POST and DELETE, else 405 `Allow: POST, DELETE`, `round/answers` POST, else `Allow: POST`, both ending ``confirmed on a terminal``; the card routes `board-ui.md`'s; an unknown path -> 404 listing the routes, whatever the method.
 
@@ -28,7 +28,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 | Method, path | Query | Answer |
 |---|---|---|
-| GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order: `name` or `null`, `root` canonical, `branch` current or `null` |
+| GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order, `root` canonical, a missing `name` or `branch` `null` |
 | GET `/api/identity`, `.../workspaces`; a hub's `.../team`, GET, POST `.../proposals/:id/confirm`; a `--push` hub's `.../sync` | -- | `hub{,-department,-team,-git}.md`, `workspaces.md` |
 | GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json` |
 | GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json` |
@@ -49,6 +49,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | POST, DELETE `.../proposals/:id/decision` | -- | stage, unstage |
 | GET `.../cards`, `.../cards/:id`, `.../cards/counts`, `.../trace`; POST `.../cards`, `.../cards/split`, `:id`'s seven verbs, `.../trace/clear` | `board-ui.md`, `card-counts.md` | Board, Overview |
 | GET `.../comments`, `.../mentions`; POST, DELETE the comment writes | `comments-surfaces.md` "HTTP" | Comments, Mentions |
+| GET `.../references`, `.../blobs/:b3`; PUT `.../blobs`; POST, DELETE the reference writes | `work-references-surfaces.md` "HTTP" | References |
 | POST, GET, DELETE `/mcp/<slug>`, a hub's alone (`mcp.rs`) | refused | MCP (`hub-mcp.md`) |
 | GET `/`, `/assets/<file>` | ignored | the web UI (`serve-ui.md`) |
 
@@ -58,9 +59,9 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 ## Answers and statuses
 
-One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {root}`, `render_json`), the config found again first (a changed slug or a config `discover` refuses -> 503 with the reason, `check` too; `/api/projects` 503 if any). Exit 0 -> 200, the document; 1 -> 404, the exit-1 document; 2 -> 503, the error body, `message` the `CliError` line(s) verbatim. **The exceptions** (`answered`), never a verdict word: `Outcome::Check` (a report), `Outcome::RoundAnswers` 200 whatever the exit; `Outcome::{Stage,Confirm}`, `Outcome::Card{,Group}`, `Outcome::Comment{,List}` by their cause (`caused`; `decision-staging.md` "Daemon"); a `CliError` 503. **Error body** `{"status":<code>,"message":"..."}`, exactly two keys: 400, 403, 404 (an unknown slug or route, listing the served ones), 405, 413, 415, 500 (a caught panic), 503. Bodies `application/json; charset=utf-8`, the CLI's stdout less the final LF; stderr not carried (a read's notes: JSON `notes`).
+One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {root}`, `render_json`), the config found again first (a changed slug or a config `discover` refuses -> 503 with the reason, `check` too; `/api/projects` 503 if any). Exit 0 -> 200, the document; 1 -> 404, the exit-1 document; 2 -> 503, the error body, `message` the `CliError` line(s) verbatim. **The exceptions** (`answered`), never a verdict word: `Outcome::Check` (a report), `Outcome::RoundAnswers` 200 whatever the exit; `Outcome::{Stage,Confirm}`, `Outcome::Card{,Group}`, `Outcome::{Comment,Reference}{,List}`, `Outcome::Blob` by their cause (`caused`; `decision-staging.md` "Daemon"); a `CliError` 503. **Error body** `{"status":<code>,"message":"..."}`, exactly two keys: 400, 403, 404 (an unknown slug or route, listing the served ones), 405, 411, 413, 415, 429, 500 (a caught panic), 503. Bodies `application/json; charset=utf-8`, the CLI's stdout less the final LF; stderr not carried.
 
-**One door.** The write routes stage, unstage, past `decision-staging.md` "Daemon"'s steps, or write a card or a comment (`board-ui.md`, `comments.md`). No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`, any `card_` outside `CARD_CALLS` (13), `confirm_*` outside `src/confirm.rs`, `auto_apply` outside `src/auto.rs`; `check` only plain; `tests/door.rs` scans `src` for these and six more. A departing accept's proposal stands inside `card_accept` (ADR-0057), a card's question or decision inside `card_raise` (ADR-0077); a hub's `/mcp` raises proposals and writes cards through `specengine-mcp`'s hub server (`hub-mcp.md`). No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind, a workspace or module name or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, but a hub's confirm and delegated apply (`hub-auto.md`), in the data directory: stages, cards and comments in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`).
+**One door.** The write routes stage, unstage, past `decision-staging.md` "Daemon"'s steps, or write a card, a comment or a reference (`board-ui.md`, `comments.md`, `work-references.md`). No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`, any `card_` outside `CARD_CALLS` (13), `confirm_*` outside `src/confirm.rs`, `auto_apply` outside `src/auto.rs`; `check` only plain; `tests/door.rs` scans `src` for these and six more. A departing accept's proposal stands inside `card_accept` (ADR-0057), a card's question or decision inside `card_raise` (ADR-0077); a hub's `/mcp` raises proposals and writes cards through `specengine-mcp`'s hub server (`hub-mcp.md`). No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind, a workspace or module name or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, but a hub's confirm and delegated apply (`hub-auto.md`), in the data directory: stages, cards, comments and references in the queue (files in `blobs/`), the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`).
 
 **Worktrees**: the corpus reads read the root's files on disk (uncommitted edits too, never `HEAD` but `catalog`'s last change; `check`, `health` untracked and ignored ones, `check` no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
 
@@ -70,7 +71,7 @@ One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {ro
 
 ## Concurrency
 
-One request per project at a time, projects in parallel: `serve.md` "Concurrency". On a hub each call runs in its project's `IndexTrust` scope (`Project.trust`): read routes trust (`run_read`, `run_as`), the rest walk; a panic or exit 2 doubts (`spec-read-freshness.md`). `Project.memo`, in the turn: `spec-check-write.md`.
+One request per project at a time, projects in parallel: `serve.md` "Concurrency". On a hub each call runs in its project's `IndexTrust` scope (`Project.trust`): read routes trust, the rest walk; a panic or exit 2 doubts (`spec-read-freshness.md`). `Project.memo`, in the turn: `spec-check-write.md`.
 
 ## Known limits
 
@@ -80,4 +81,4 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused. Files: byte parity with `spec ... --json` (`{parity,graph,flow,check,health,tasks,roadmap,delivery,catalog,map,rings,workspaces,feed_route}.rs`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust,_auto}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin,_ops}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `slow.rs`, `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients. Files: byte parity with `spec ... --json` (`parity.rs` and a file per read), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (`fixtures/daemon-keys.json`; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub*.rs`, `common/mcp_http.rs`; its deployment's `deploy*.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `slow.rs`, `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

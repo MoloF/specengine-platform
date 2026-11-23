@@ -60,3 +60,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0085](decisions/ADR-0085.md) SpecEngine's guide ships in the build and is served read-only beside a project, never inside it · architecture · accepted
 - [ADR-0086](decisions/ADR-0086.md) A crash, a hang or a leak is a critical defect, judged by soaks against written budgets · architecture · accepted
 - [ADR-0087](decisions/ADR-0087.md) A comment is queue data under a card, a node or a proposal, never truth · architecture · accepted
+- [ADR-0088](decisions/ADR-0088.md) A work reference is queue data; its file stays in the data directory, never in git, a dump or off the host · architecture · accepted

@@ -80,6 +80,7 @@ use specengine_core::comment::PEOPLES_WORDS;
 use specengine_core::patch::{locate, span_bytes};
 use specengine_core::practice::{DISCIPLINES_MAX, discipline_name_problem};
 use specengine_core::proposal::{Author, AuthorType};
+use specengine_core::reference::PEOPLES_MATERIAL;
 use specengine_core::task::{
     CRITERION_TEXT_MAX, DEFAULT_TASK_BUDGET, DIFF_MAX, DIFFS_TOTAL_MAX, PACKAGE_BINDINGS_MAX,
     PACKAGE_BUDGET,
@@ -87,9 +88,10 @@ use specengine_core::task::{
 use specengine_core::{GroupKind, Plan, PlanTask, RoadmapConfig, plan, task_item};
 use specengine_model::{
     BindingRow, IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackageComment,
-    PackageCommentAuthor, PackageComments, PackagePractice, PackageProposal, PackageTarget,
-    SnapshotDiff, SnapshotNode, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor,
-    TaskAuthorType, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
+    PackageCommentAuthor, PackageComments, PackagePractice, PackageProposal, PackageReference,
+    PackageReferenceMeta, PackageReferences, PackageTarget, SnapshotDiff, SnapshotNode,
+    SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskCriterion,
+    TaskPackage, TaskRoadmap, TaskRun,
 };
 use specengine_store::{
     Decoded, GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
@@ -111,7 +113,7 @@ use crate::{CliError, Env, Globals, Message, escape_controls, one_line};
 
 /// The brief's sections, in print order; Practices only when the package
 /// lists a practice, Bindings only when it lists a row.
-pub const SECTIONS: [&str; 13] = [
+pub const SECTIONS: [&str; 14] = [
     "Goal",
     "Criteria",
     "Targets",
@@ -123,6 +125,7 @@ pub const SECTIONS: [&str; 13] = [
     "Runs",
     "Practices",
     "Comments",
+    "References",
     "Bindings",
     "Bundle",
 ];
@@ -740,6 +743,7 @@ pub(crate) fn assemble(
     let cards = listing_cards(context, task, &mut notes);
     let disciplines = task_disciplines(&cards);
     let comments = task_comments(context, &cards, &mut notes);
+    let references = task_references(context, &cards, &mut notes);
     let read = TaskRead {
         env,
         globals,
@@ -820,6 +824,7 @@ pub(crate) fn assemble(
         },
         practices,
         comments,
+        references,
         roadmap,
         author: task_author(&task.author),
         created_at: task.created_at.clone(),
@@ -1130,6 +1135,73 @@ fn task_comments(
     }
 }
 
+/// The newest live references of `cards` under a card context's bounds,
+/// each naming its card, text alone (task spec `work-references`, "A
+/// card's context and the task package"); a queue that cannot be read is a
+/// note and none.
+fn task_references(
+    context: &QueueContext,
+    cards: &[(String, Option<String>)],
+    notes: &mut Vec<String>,
+) -> PackageReferences {
+    let ids: Vec<&str> = cards.iter().map(|(id, _)| id.as_str()).collect();
+    let store = crate::reference::context_store(&context.data_dir, &context.slug);
+    match crate::reference::context_references(&context.queue, &store, &ids, true) {
+        Ok((read, unread)) => {
+            notes.extend(unread);
+            PackageReferences {
+                total: read.total,
+                listed: read
+                    .listed
+                    .into_iter()
+                    .map(|reference| PackageReference {
+                        line: crate::reference::context_line(&reference, ""),
+                        id: reference.id,
+                        on: reference.on.unwrap_or_default(),
+                        actor: reference.actor,
+                        author: PackageCommentAuthor {
+                            author_type: match reference.author.author_type {
+                                AuthorType::Human => TaskAuthorType::Human,
+                                AuthorType::Agent => TaskAuthorType::Agent,
+                            },
+                            role: reference.author.role,
+                            model: reference.author.model,
+                            run: reference.author.run,
+                            login: reference.author.login,
+                        },
+                        created_at: reference.created_at,
+                        kind: reference.kind.to_owned(),
+                        title: reference.title,
+                        matters: reference.matters,
+                        url: reference.url,
+                        name: reference.name,
+                        media: reference.media.map(str::to_owned),
+                        class: reference.class.map(str::to_owned),
+                        size: reference.size,
+                        meta: reference.meta.map(|meta| PackageReferenceMeta {
+                            width: meta.width,
+                            height: meta.height,
+                            duration_ms: meta.duration_ms,
+                            triangles: meta.triangles,
+                        }),
+                        agent_image: reference.agent_image,
+                        cut: reference.cut,
+                    })
+                    .collect(),
+            }
+        }
+        Err(error) => {
+            let cause = error
+                .message
+                .strip_prefix("spec: ")
+                .unwrap_or(&error.message)
+                .to_owned();
+            notes.push(one_line(&format!("references: not read: {cause}")));
+            PackageReferences::default()
+        }
+    }
+}
+
 /// The practices of `disciplines` at the reading root, by path, at most
 /// 32, the note past them in `notes`: the bundle's own read's, else (the
 /// bundle stopped before its read) their own read; none without a
@@ -1299,6 +1371,7 @@ pub(crate) fn render_brief(package: &TaskPackage) -> String {
         .filter(|&&name| match name {
             "Practices" => !package.practices.is_empty(),
             "Comments" => package.comments.total > 0,
+            "References" => package.references.total > 0,
             "Bindings" => {
                 !package.bindings.is_empty()
                     || package
@@ -1414,6 +1487,18 @@ fn section(package: &TaskPackage, name: &str) -> String {
                     comment.body
                 ));
             }
+        }
+        "References" => {
+            let references = &package.references;
+            out.push_str(&format!(
+                " {} of {}, the newest; {PEOPLES_MATERIAL}\n",
+                references.listed.len(),
+                references.total
+            ));
+            for reference in &references.listed {
+                out.push_str(&format!("  {}\n", reference.line));
+            }
+            out.push_str("  get_reference shows a file's details and its image\n");
         }
         "Bindings" => {
             out.push_str(&format!(" {}\n", package.bindings.len()));

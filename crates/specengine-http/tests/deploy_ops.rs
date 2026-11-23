@@ -1574,6 +1574,9 @@ fn op02_the_dumps_live_on_tmpfs_and_backup_has_its_network_alone() {
         keys(volumes, "volumes"),
         set(&[
             "specengine-data",
+            // docs/canon/work-references-surfaces.md "Deploy" (RF22): the
+            // references' files, on `specengine` alone.
+            "specengine-blobs",
             "authelia-data",
             "traefik-acme",
             "hub-dumps",
@@ -2636,8 +2639,9 @@ fn data_a_queue_round_dumps_real_queues_with_the_built_spec() {
             // Format 5 since docs/features/card-questions.md S5; 6 since
             // docs/features/task-mandate.md M5; 7 since
             // docs/features/plain-questions.md PQ8; 8 since
-            // docs/features/comments.md CM13.
-            assert_eq!(header["format"], 8, "{shell}: {name}: {dump}");
+            // docs/features/comments.md CM13; 9 since
+            // docs/features/work-references.md RF17.
+            assert_eq!(header["format"], 9, "{shell}: {name}: {dump}");
             assert_eq!(header["proposals"], 1, "{shell}: {name}: {dump}");
             if name == "a" {
                 assert_eq!(header["project"], "lantern-keep", "{shell}: {dump}");

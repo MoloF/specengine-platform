@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture, crates/specengine-eval, crates/specengine-http, scripts/deploy]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # Soak runs: crashes, hangs and leaks against written budgets
@@ -39,6 +39,7 @@ The owner's stability policy (ADR-0086), how a soak measures it in this reposito
   Each judge sees what the other cannot. After a call's step, libmalloc keeps its freed pages resident (98 % fragmentation at the end of a write run), so RSS judged every clean write run red. The footprint sampled every second falls for minutes as the pages go back, which hid a real 2 KiB-per-write leak in 4 of 5 runs; the live heap read that leak as 2.16 MiB/min and a clean run as 0.0 (write-memory "Cause"). The live heap misses what malloc does not count, the freed large blocks it keeps: under writers and inbox readers together they climbed while the live heap stayed level, and the quiet footprint read that 25.0 and 12.5, a clean run at most 0 (mixed-load-memory).
 - **The slope** is in MiB/min, Theil-Sen (`library_common::theil_sen_mib_per_minute`) over the readings from `SOAK_SECS/3` on. The probe gives 6 judged readings in 300 s; fewer than 5 break the run, for either judge.
 - **Leak or plateau.** A leak grows in proportion to the load and is positive in every third. A plateau's per-third slopes fall as a bounded structure reaches its cap. A plateau passes only when a run past its cap shows its last third within budget, or, when the cap takes hours to reach, when a test pins the structure's real bytes under its cap (write-memory WM7).
+- **On a hub** the image sets `MALLOC_ARENA_MAX=2`, capping glibc's arenas at two, so a write's transient corpus load is not kept in one arena per thread (write-memory WM10); it reaches the daemon and, harmlessly, `dump-queue` on the same image (`hub-ops.md` "Health").
 - **The step** is one call's working set, the first samples' rise. It is reported, not judged; heap mode (`MallocStackLogging`, `leaks -outputGraph`, `heap -diffFrom`) shows whether any of it survives.
 
 ## Budgets
@@ -54,6 +55,7 @@ The owner's stability policy (ADR-0086), how a soak measures it in this reposito
 | write-memory R | `write_soak.rs` | 10 readers of `get_node`, `search`, `GET …/inbox` | 0.5, live heap (Linux RSS); 5, footprint at the quiet moments (macOS) | as W | 0.0, 0.0; 0.0, 0.016 (2026-11-20) |
 | write-memory H | `write_soak.rs` | 8 writers repeating one question, a hit each | reported only | as W | RSS 0.215, one run (2026-11-20) |
 | write-memory CM over 2 000 comments | `write_soak.rs`, `WRITE_SOAK_VARIANT=CM` | 10 logins over 2 000 comments on 20 cards: 8 `add_comment` writers over `/mcp` beside readers of `get_card {context}`, `GET …/comments`, `GET …/mentions` | 0.25, live heap (Linux RSS); 5, footprint at the quiet moments (macOS) | as W | live heap, then quiet footprint (2026-11-22, comments CM19): 0.0, 0.0; −1.42, −2.96; RSS 5.2 → 81.1 and 80.2 MiB; 22 295 and 22 031 calls, all answered, 0 hangs. A planted 2 KiB per `add_comment`: live heap 4.40, red; the quiet footprint alone read 1.86, under 5: the live heap is the judge that catches a steady leak |
+| write-memory RF over 20 stored files | `write_soak.rs`, `WRITE_SOAK_VARIANT=RF` | CM's pre-fill and writers; 20 stored 16 MiB WAV files; after the first 60 s, 2 uploaders cycling a 200 MiB WAV put, attach, delete at 25 MiB/s each, and 10 Range readers of 10 windows of 1 MiB a second each, every byte checked; a page reader of `GET …/cards`, `GET …/comments` | 0.25, live heap (Linux RSS); 5, footprint at the quiet moments (macOS) | as W; the page p95 after the first 60 s at most 1.5 × its p95 before + 50 ms; the store whole at the end (the 20 files, no `.part`); 6 GiB free to start | live heap, then quiet footprint (2026-11-23, work-references RF23, paced): 0.0, 0.0; −0.55, −0.36; RSS 5.4 → 31 MiB; page p95 27 → 56, 28 → 56 ms; 0 hangs. A rate override diagnoses, never evidences |
 
 Why 0.25 for writes: at about 500 writes a minute it allows at most 0.5 KiB kept per write. On the live heap the readers and a clean writer read 0.0 and a 2 KiB-per-write leak 2.16, so the bar sits above the clean runs and below a real leak. Why 5 for the quiet footprint: clean runs read at most 0, and M over 2 000 pending read 25.0 and 12.5 before its fix, so the bar sits 2.5 times under the lowest red run: noisy, so read the thirds too. `write_soak.rs`'s `WRITE_BUDGET_MIB_PER_MIN`, `READ_BUDGET_MIB_PER_MIN` and `FOOTPRINT_BUDGET_MIB_PER_MIN` hold the write-memory rows' numbers, and a test compares them (write-memory WM6, mixed-load-memory MX6).
 
@@ -64,6 +66,7 @@ Why 0.25 for writes: at about 500 writes a minute it allows at most 0.5 KiB kept
 - The quiet probe is macOS's (`vmmap`). It pauses the load every 30 s, 0.7-2.5 s each time, so a run's calls per minute include the pauses.
 - On Linux, RSS keeps glibc's freed arenas as well, so read a Linux run's thirds beside its slope.
 - **Memory malloc does not count** escaped the live heap until RM-0134: under writers and inbox readers together, each inbox read re-sized buffers of about 6.6 KB per pending item and libmalloc kept the freed large blocks, RSS 216 → 443 MiB in 300 s over 2 000 pending. One read now holds its answer (`proposal-review.md` "Inbox"). M with no prefill still shows RSS 1.4 MiB/min on macOS, reported only; a Linux run judges RSS, so read it there (write-memory WM10).
+- **RF unpaced** on one laptop (760 MiB/s up, 1.1 GiB/s read): memory green, the page p95 over its bar from CPU contention (`docs/features/work-references.md` "Release").
 - The daemon has no watchdog thread of its own: a soak's request watchdog is the only one. The owner's frame watchdog is for his games.
 - macOS's allocator is not the hub's glibc (Debian trixie). A Linux run in the hub's image is an owner's gate (write-memory WM10).
 

@@ -232,6 +232,7 @@ impl SpecEngineServer {
             + Self::task_tools()
             + Self::card_tools()
             + Self::comment_tools()
+            + Self::reference_tools()
             + Self::collision_tools()
             + Self::guide_tools();
         #[cfg(feature = "probes")]

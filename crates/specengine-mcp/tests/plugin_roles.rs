@@ -1408,10 +1408,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // the 0.49.2 patch (write-memory, RM-0132, a version-only bump): 0.49.2;
     // the 0.49.3 patch (mixed-load-memory, RM-0134, a version-only bump):
     // 0.49.3; comments (RM-0136, MINOR, `list_comments`, `add_comment`):
-    // 0.50.0.
-    if plugin["version"] != "0.50.0" {
+    // 0.50.0; work-references (RM-0137, MINOR, `list_references`,
+    // `get_reference`, `add_reference`): 0.51.0.
+    if plugin["version"] != "0.51.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.50.0",
+            "plugin.json: version {}, not 0.51.0",
             plugin["version"]
         ));
     }
@@ -1481,9 +1482,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.50.0\"", "\"0.49.3\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.50.0");
-    assert_names(&r2_problems(&older, &market), "not 0.50.0", "0.49.3");
+    let older = plugin.replacen("\"0.51.0\"", "\"0.50.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.51.0");
+    assert_names(&r2_problems(&older, &market), "not 0.51.0", "0.50.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

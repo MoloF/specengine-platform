@@ -1005,8 +1005,8 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":2,\
-             \"tasks\":5,\"runs\":2,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"events\":{events}}}"
+            "{{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":2,\
+             \"tasks\":5,\"runs\":2,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":{events}}}"
         )
     );
     assert_eq!(lines.len(), 1 + 2 + 5 + 2 + events);
@@ -1136,8 +1136,8 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":1,\
-         \"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"events\":1}"
+        "{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":1,\
+         \"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":1}"
     );
     // Format 1, schema 3: the header's five keys, rows without `task_id`,
     // the stage's two, `interpretation`, `drift` and `drift_hash`.
@@ -1171,11 +1171,11 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     // Refused headers and rows: line 1 (the header) or 2 (the row).
     let two = |line: &str| {
         line.replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1)
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1)
         .replacen("\"cards\":0,", "", 1)
     };
     let mut six = v4_lines.clone();

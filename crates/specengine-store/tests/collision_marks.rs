@@ -161,11 +161,11 @@ fn event_count(db: &Path) -> String {
 /// type, notnull, pk), STRICT; `proposals` still the 50 columns.
 #[test]
 fn cp6_a_new_queue_stands_at_14_with_the_ledger_pinned() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     let scratch = Scratch::new("cm-cp6-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "15");
+    assert_eq!(user_version(&db), "16");
     assert_eq!(
         sqlite3(
             &db,
@@ -204,7 +204,7 @@ fn schema_13(db: &Path) {
     drop(queue);
     sqlite3(
         db,
-        "DROP TABLE collision_marks; DROP TABLE comment_versions; DROP TABLE comments; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 13;",
+        "DROP TABLE refs; DROP TABLE collision_marks; DROP TABLE comment_versions; DROP TABLE comments; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 13;",
     );
 }
 
@@ -221,13 +221,13 @@ fn cp6_a_schema_13_queue_steps_keeping_every_row() {
     assert_ne!(event_count(&db), "0", "premise: events");
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(user_version(&db), "15");
+    assert_eq!(user_version(&db), "16");
     assert_eq!(rows_but_the_ledger(&db), before, "every row as it was");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM collision_marks;"), "0");
     assert_eq!(queue.collision_marks().expect("read").marks, Vec::new());
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "15", "stepped once");
+    assert_eq!(user_version(&db), "16", "stepped once");
     assert_eq!(rows_but_the_ledger(&db), before);
 }
 
@@ -279,7 +279,8 @@ fn cp6_a_newer_schema_is_refused() {
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     let newer = QUEUE_SCHEMA_VERSION + 1;
-    assert_eq!(newer, 16);
+    // 17 since docs/features/work-references.md RF1.
+    assert_eq!(newer, 17);
     sqlite3(&db, &format!("PRAGMA user_version = {newer};"));
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
@@ -290,7 +291,7 @@ fn cp6_a_newer_schema_is_refused() {
             other => panic!("expected SchemaTooNew {newer}, got {other:?}"),
         }
     }
-    assert_eq!(user_version(&db), "16", "left alone");
+    assert_eq!(user_version(&db), "17", "left alone");
 }
 
 /// CP6: marks change neither `dump()`, `stored_rows()` nor `counts()`; the

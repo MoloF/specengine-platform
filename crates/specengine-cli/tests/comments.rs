@@ -1330,10 +1330,13 @@ fn comment_lines(text: &str) -> Vec<String> {
         .iter()
         .position(|line| line.starts_with("context.comments: "))
         .unwrap_or_else(|| panic!("a context.comments line: {text}"));
+    // The references' lines follow since docs/features/work-references.md.
     let end = lines
         .iter()
-        .position(|line| line.starts_with("context.bundle: "))
-        .expect("a context.bundle line");
+        .position(|line| {
+            line.starts_with("context.references: ") || line.starts_with("context.bundle: ")
+        })
+        .expect("a context.references or context.bundle line");
     assert!(
         lines[start - 1].starts_with("context.parent.goal: "),
         "after the parent's goal: {text}"
@@ -1929,9 +1932,9 @@ fn cm13_comments_round_trip_through_format_8() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":\
+            "{{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":\
              {proposals},\"tasks\":0,\"runs\":0,\"cards\":1,\"comments\":4,\
-             \"comment_versions\":2,\"events\":{events}}}"
+             \"comment_versions\":2,\"refs\":0,\"events\":{events}}}"
         )
     );
     let of = |table: &str| -> Vec<Value> {
@@ -2056,7 +2059,8 @@ fn cm13_a_format_7_dump_imports_with_no_comments() {
             .expect("sqlite3");
         String::from_utf8(output.stdout).expect("UTF-8")
     };
-    assert_eq!(sql("PRAGMA user_version;").trim(), "15");
+    // 16 since docs/features/work-references.md RF1.
+    assert_eq!(sql("PRAGMA user_version;").trim(), "16");
     assert_eq!(
         sql("SELECT count(*), count(comment_id) FROM proposals;").trim(),
         "1|0"
@@ -2079,12 +2083,12 @@ fn cm13_a_format_7_dump_imports_with_no_comments() {
     want[0] = want[0]
         .replacen(
             "\"format\":7,\"queue_schema\":14,",
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             1,
         )
         .replacen(
             "\"cards\":1,",
-            "\"cards\":1,\"comments\":0,\"comment_versions\":0,",
+            "\"cards\":1,\"comments\":0,\"comment_versions\":0,\"refs\":0,",
             1,
         );
     for line in want
@@ -2110,18 +2114,18 @@ fn cm13_a_schema_14_queue_exports_as_format_8_unmigrated() {
     );
     asked(&pair, &["MEC-SPRINT"], "Does a sprint end at zero?", &[]);
     pair.sql(
-        "DROP TABLE comment_versions; DROP TABLE comments; \
+        "DROP TABLE refs; DROP TABLE comment_versions; DROP TABLE comments; \
          DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 14;",
     );
     let out = pair.scratch.dir("dumps").join("fourteen.jsonl");
     let lines = dump_lines(&export(&pair, &pair.home, &out));
     assert!(
-        lines[0].starts_with("{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
     assert!(
-        lines[0].contains(",\"comments\":0,\"comment_versions\":0,\"events\":"),
+        lines[0].contains(",\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":"),
         "{}",
         lines[0]
     );
@@ -2133,7 +2137,8 @@ fn cm13_a_schema_14_queue_exports_as_format_8_unmigrated() {
     assert_eq!(pair.sql("PRAGMA user_version;").trim(), "14", "unmigrated");
 
     let mut nine = lines.clone();
-    nine[0] = nine[0].replacen("\"format\":8,", "\"format\":9,", 1);
+    // Format 10 since docs/features/work-references.md (this build writes 9).
+    nine[0] = nine[0].replacen("\"format\":9,", "\"format\":10,", 1);
     let file = pair.scratch.dir("dumps").join("nine.jsonl");
     let mut text = nine.join("\n");
     text.push('\n');
@@ -2152,7 +2157,7 @@ fn cm13_a_schema_14_queue_exports_as_format_8_unmigrated() {
     );
     let message = match refused {
         Err(error) => error.to_string(),
-        Ok(outcome) => panic!("format 9 imported: {outcome:?}"),
+        Ok(outcome) => panic!("format 10 imported: {outcome:?}"),
     };
     assert!(message.contains("upgrade SpecEngine"), "{message}");
     assert!(

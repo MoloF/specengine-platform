@@ -28,6 +28,9 @@ import type {
   Cited,
   CommentDocument,
   CommentList,
+  BlobStored,
+  Reference,
+  ReferenceList,
   DeliveryCounts,
   DeliveryDocument,
   DeliveryLate,
@@ -629,6 +632,7 @@ export function aTaskPackage(fields: Partial<TaskPackage> & Pick<TaskPackage, "i
     bundle: fields.bundle ?? null,
     practices: fields.practices ?? [],
     comments: fields.comments ?? { total: 0, listed: [] },
+    references: fields.references ?? { total: 0, listed: [] },
     roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at ?? "2026-10-01T09:00:00Z",
@@ -1438,4 +1442,66 @@ export function aComment(fields: Partial<CommentDocument> & { id: string }): Com
 /** A page of a target's comments: every one given, oldest first, none older. */
 export function aCommentList(comments: CommentDocument[], fields: Partial<CommentList> = {}): CommentList {
   return { on: comments[0]?.on ?? { kind: "card", id: "C-0007" }, total: comments.length, comments, next_before: null, notes: [], ...fields };
+}
+
+/** A BLAKE3 as the store names a file: 64 lower-case hex, `seed`'s digits repeated. */
+export function aB3(seed: string): string {
+  return seed.repeat(64).slice(0, 64);
+}
+
+/**
+ * A reference as `spec ref list --json` gives one (docs/features/work-references.md "Documents"):
+ * mira's PNG on C-0007, 1200x800, 300 KiB, stored, agent-ready (no copy), live.
+ */
+export function aReference(fields: Partial<Reference> & { id: string }): Reference {
+  return {
+    on: { kind: "card", id: "C-0007" },
+    on_rev: null,
+    actor: "mira",
+    author: { type: "human", role: null, model: null, run: null, login: "mira" },
+    kind: "file",
+    title: `Title of ${fields.id}`,
+    matters: null,
+    url: null,
+    name: "harbour.png",
+    b3: aB3("a"),
+    agent_b3: null,
+    size: 307_200,
+    media: "image/png",
+    class: "image",
+    inline: true,
+    meta: { width: 1200, height: 800, duration_ms: null, triangles: null },
+    file: "stored",
+    warning: null,
+    created_at: "2026-11-23T10:04:05Z",
+    deleted: null,
+    ...fields,
+  };
+}
+
+/** A link reference: lev's moodboard on C-0007, no file. */
+export function aLinkReference(fields: Partial<Reference> & { id: string }): Reference {
+  return aReference({ actor: "lev", author: { type: "human", role: null, model: null, run: null, login: "lev" }, kind: "link", title: "Moodboard", url: "https://example.org/board", name: null, b3: null, size: null, media: null, class: null, inline: null, meta: null, file: null, ...fields });
+}
+
+/** A page of a target's references: every one given, oldest first, none older. */
+export function aReferenceList(references: Reference[], fields: Partial<ReferenceList> = {}): ReferenceList {
+  return { on: references[0]?.on ?? { kind: "card", id: "C-0007" }, total: references.length, references, next_before: null, notes: [], ...fields };
+}
+
+/** What `PUT .../blobs` answers for a PNG within the agents' limits, stored new (docs/features/work-references.md "Documents"). */
+export function aBlobStored(fields: Partial<BlobStored> = {}): BlobStored {
+  return {
+    b3: aB3("b"),
+    size: 307_200,
+    media: "image/png",
+    class: "image",
+    inline: true,
+    meta: { width: 1200, height: 800, duration_ms: null, triangles: null },
+    agent_ready: true,
+    needs_matters: false,
+    warning: null,
+    stored: "new",
+    ...fields,
+  };
 }

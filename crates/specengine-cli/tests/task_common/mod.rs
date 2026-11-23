@@ -37,7 +37,7 @@ pub const CLOCK: &str = "2026-10-07T09:00:00Z";
 /// (the 17th) since docs/features/tested-reads.md "Per read"; `practices`
 /// after `bundle` (the 28th key) since docs/features/department-practices.md
 /// "The task package: `practices`".
-pub const PACKAGE_KEYS: [&str; 29] = [
+pub const PACKAGE_KEYS: [&str; 30] = [
     "schema_version",
     "id",
     "project",
@@ -63,6 +63,9 @@ pub const PACKAGE_KEYS: [&str; 29] = [
     "practices",
     // docs/features/comments.md "The card context and the task package".
     "comments",
+    // docs/canon/task-package.md "Package": `references` after `comments`
+    // since docs/features/work-references.md (RF15).
+    "references",
     "roadmap",
     "author",
     "created_at",

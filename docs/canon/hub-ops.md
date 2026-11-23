@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [scripts/deploy, .github/workflows]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # Hub ops: off-host dumps, restore, upgrade, health and `--push`
 
-ADR-0071 (`hub-ops`, RM-0074, step 11b-2), his review open. A hub's state leaves the host every 15 minutes, encrypted, once the owner names a backend (`hub-restic.md`); no crate change, Docker socket or `docker exec`. Files: `scripts/deploy/`; setup: its guide.
+ADR-0071 (`hub-ops`, RM-0074, step 11b-2), his review open. A hub's state, references' files aside, leaves the host every 15 minutes, encrypted, once the owner names a backend (`hub-restic.md`); no Docker socket or `docker exec`. Files: `scripts/deploy/`; setup: its guide.
 
 <a id="dumps"></a>
 ## Dumps
@@ -41,7 +41,7 @@ The backend, its two secrets, `restic_env`'s lines, redaction, retention, `backu
 - No or empty users file: exit 1.
 - It copies by `cat`, each present: `users.yml`, the MCP users file as `mcp-users`, `acts.log`. With `db.sqlite3`: `authelia storage user webauthn export --config C --file DIR/webauthn.yml`, then `totp`'s, each under `timeout` `DUMP_BOUND` (300 s; none: exit 1); exit 1 `the dump timed out` or `the door's passkey|TOTP export failed: <door said>`. stdout: `dumped <files>`.
 - **An empty export**, its file left out, is one that exits 1, writes no file and says exactly `Error: no data to export` (no one holds a passkey, or a TOTP); any other failure still refuses the dump, exit 1. `restore` skips a missing file.
-- **`C`**, on every storage call (the dump's exports, `restore`'s migration and imports, `reset`'s deletes; `disable` makes no door call): `<tmp>/hub-admin.<pid>.storage.yml`, comment-only, mode 600, written before each call and removed. Without it the CLI loads `/config/configuration.yml`, the image's `X_AUTHELIA_CONFIG`, which neither `admin` nor `dump-door` mounts.
+- **`C`**, on every storage call (the dump's exports, `restore`'s migration and imports, `reset`'s deletes; `disable` makes no door call): `<tmp>/hub-admin.<pid>.storage.yml`, comment-only, mode 600, written before each call and removed. Without it the CLI loads `/config/configuration.yml` (`X_AUTHELIA_CONFIG`), which neither mounts.
 
 Never dumped: the deploy key, Authelia's secrets (a restore imports under new ones), `traefik-acme`, the index, `proposal-floor`, `.env`.
 
@@ -74,7 +74,7 @@ Without `--push` the hub's commits die with the host: a restored `applied` propo
 3. `git fetch --tags origin && git checkout v<new>`, `diff .env.example .env` (new optional keys may stay unset), `SPECENGINE_VERSION=<new>`.
 4. `docker compose pull`, `up -d`, `ps`: all healthy (`backup` only once backups are on).
 
-Migrations run forward: an older binary refuses the DB and a newer dump; after a queue step (0.50.0: schema 15, dump 8) the laptop's binaries and plugin come from the same tag. Back: `down`, the old tag and `.env`, remove `specengine-data`, the floor if raised, `up -d traefik authelia specengine`, the noted queue snapshot by Restore step 6, `up -d`; a door pin alike (`authelia-data`, the door snapshot). Every `spec` writing to its repositories runs 0.29.1+ before a hub's first record or create (`spec-ids.md` "Older binaries").
+Migrations run forward: an older binary refuses the DB and a newer dump; after a queue step (0.51.0: schema 16, dump 9, `specengine-blobs` added) the laptop's binaries and plugin come from the same tag. Back: `down`, the old tag and `.env`, remove `specengine-data` (never `specengine-blobs`), the floor if raised, `up -d traefik authelia specengine`, the noted queue snapshot by Restore step 6, `up -d`; a door pin alike (`authelia-data`, the door snapshot). Every `spec` writing to its repositories runs 0.29.1+ before a hub's first record or create (`spec-ids.md` "Older binaries").
 
 ## Push
 
@@ -90,7 +90,7 @@ After the gate (`hub-git.md` "Rules"):
 - **`specengine`**: `specengine-health`, bash for `/dev/tcp`, every 30 s. Its `GET /` has `Host: 127.0.0.1:<port>` alone. Alive: `HTTP/1.1 403 ` within 5 s (the fence refuses a loopback `Host`: `hub.md` "Fence" step 1), and `127.0.0.1:443` accepting, so a Traefik crash's dead namespace is unhealthy. Ports `SPECENGINE_HEALTH_PORT` (7777), `SPECENGINE_HEALTH_PROXY_PORT` (443); exit 0 or 1, a line.
 - **`backup`**: `fresh`. **`admin`, `dump-door`**: `healthcheck: {disable: true}`: the door image's own probes a server they never run.
 - **Outside**: `https://<DOOR_HOST>/` answers 200. Docker restarts nothing unhealthy; `docker compose logs dump-queue dump-door backup` say why.
-- **Memory**: the image's runtime stage sets `MALLOC_ARENA_MAX=2` (`scripts/deploy/Dockerfile`, pinned by a `deploy.rs` test), so glibc's arenas are capped at two and a write's transient corpus load is not kept in one arena per thread (write-memory WM10). It reaches the daemon; `dump-queue`, on the same image, inherits it harmlessly. After an upgrade, read `docker stats` under real use; the 0.49.0 baseline was 254.4 MiB after 7 h (2026-11-20).
+- **Memory**: the image sets `MALLOC_ARENA_MAX=2` (its `Dockerfile`, a `deploy.rs` pin; why: `soak-runs.md` "Memory"). After an upgrade, read `docker stats` under real use (0.49.0, 2026-11-20: 254.4 MiB in 7 h).
 
 ## Auto
 
@@ -102,6 +102,7 @@ ADR-0082, from 0.47.0 (`hub-auto.md`). Older binaries refuse `[auto]`: upgrade t
 ## Known limits
 
 - The door's storage calls verified on 4.39.28, 2026-11-20 (`hub-backups.md` HB5). Until VF4-VF9 (`docs/features/hub-ops.md`): the images' `find -prune -mmin`, `date -u +%s`, `awk` `ENVIRON`, `tr`, `ls -A`, restic's exits 10, 12; redaction tried in BSD awk alone.
+- **References' files** live on `specengine-blobs` alone, carried by no dump, `backup` or restore: lost with the host, the owner's accepted risk (2026-11-22, ADR-0088); never removed (`work-references.md`).
 - tmpfs can be swapped: plaintext stays off the host's disk only without swap.
 - `fresh` turns unhealthy about 40 minutes after a part's last generation (busybox `-mmin +35` is 36, plus the check's 5).
 - A timeout is read by its exit: an OOM kill reads `timed out`; a door exiting 1 on TERM is retried (VF5).

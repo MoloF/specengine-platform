@@ -72,9 +72,9 @@ use specengine_core::{WorkspaceConfig, WorkspaceSource};
 use specengine_model::{RunOutcome, TaskStatus};
 use specengine_store::{
     EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_COMMENT_CREATED, EVENT_COMMENT_DELETED,
-    EVENT_COMMENT_EDITED, EVENT_GATE_OBSERVED, EVENT_REJECTED, EVENT_TASK_APPROVED,
-    EVENT_TASK_RUN_REPORTED, FeedEvent, FeedProposal, FeedRun, FeedTask, FeedWindow, GitEnv,
-    ProposalStatus, SqliteQueue, Task, same_repository,
+    EVENT_COMMENT_EDITED, EVENT_GATE_OBSERVED, EVENT_REFERENCE_CREATED, EVENT_REFERENCE_DELETED,
+    EVENT_REJECTED, EVENT_TASK_APPROVED, EVENT_TASK_RUN_REPORTED, FeedEvent, FeedProposal, FeedRun,
+    FeedTask, FeedWindow, GitEnv, ProposalStatus, SqliteQueue, Task, same_repository,
 };
 
 // The lane of a task under no module's workspace, and of a line: `spec auto
@@ -614,8 +614,10 @@ impl Rows<'_> {
             Subject::None => {}
         }
         // A comment's event names the comment; its payload holds no body
-        // (task spec `comments`, "Events").
-        if family == "comment"
+        // (task spec `comments`, "Events"); a reference's names the
+        // reference, no title, URL, name, hash or "what matters" (task spec
+        // `work-references`, "Events and feed").
+        if (family == "comment" || family == "reference")
             && let Some(id) = text(payload, "id")
         {
             entry.subject = id;
@@ -691,6 +693,12 @@ fn words(kind: &str, payload: &Value, entry: &FeedEntry) -> String {
             word(payload, "as")
         )),
         EVENT_COMMENT_DELETED => Some(format!("by {}", word(payload, "as"))),
+        EVENT_REFERENCE_CREATED => Some(format!(
+            "attached to {} by {}",
+            word(payload, "on"),
+            word(payload, "as")
+        )),
+        EVENT_REFERENCE_DELETED => Some(format!("deleted by {}", word(payload, "as"))),
         EVENT_GATE_OBSERVED => Some(match text(payload, "zone") {
             Some(zone) => format!("{} ({zone})", entry.path.as_deref().unwrap_or(ABSENT)),
             None => format!("{} (config)", entry.path.as_deref().unwrap_or(ABSENT)),

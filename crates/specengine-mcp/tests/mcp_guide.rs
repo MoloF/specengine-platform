@@ -207,7 +207,7 @@ fn gu5_the_tool_is_listed_and_described() {
         let list = session.tools();
         let mut names = tool_names(&list);
         names.sort();
-        assert_eq!(names, KNOWN_TOOLS, "{era:?}: thirty-five tools");
+        assert_eq!(names, KNOWN_TOOLS, "{era:?}: thirty-eight tools");
         let guide = tool(&list, TOOL);
         let description = guide["description"].as_str().expect("a description");
         assert!(
@@ -474,8 +474,9 @@ async fn hub_answers(root: PathBuf, home: PathBuf, calls: &[(&str, Value)]) -> (
 /// live). M (named): the hub tool taking the turn.
 #[tokio::test]
 async fn gu5_a_hub_answers_alike_and_takes_no_turn() {
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(HUB_TOOLS.len(), 21, "{HUB_TOOLS:?}");
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(HUB_TOOLS.len(), 24, "{HUB_TOOLS:?}");
     assert!(HUB_TOOLS.contains(&TOOL), "{HUB_TOOLS:?}");
     assert!(!HUB_READ_TOOLS.contains(&TOOL), "it reads no index");
     let pages = source_pages();
@@ -491,8 +492,9 @@ async fn gu5_a_hub_answers_alike_and_takes_no_turn() {
     let (answers, turns) = hub_answers(root.clone(), home.clone(), &calls).await;
     assert_eq!(turns, 0, "M: get_guide took the project's turn");
     let listed = tool_names(&answers[0]);
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(listed.len(), 21, "{listed:?}");
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(listed.len(), 24, "{listed:?}");
     assert!(listed.iter().any(|name| name == TOOL), "{listed:?}");
     let schemas = output_schemas(&answers[0]);
     for (n, form) in all.iter().enumerate() {

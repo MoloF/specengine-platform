@@ -365,7 +365,7 @@ fn open_comments(env: &Env, globals: &Globals) -> Result<OpenComments, CliError>
 }
 
 /// What `--on` reads as.
-enum Written {
+pub(crate) enum Written {
     Card(String),
     Proposal(String),
     Node(String),
@@ -374,7 +374,7 @@ enum Written {
 /// `--on X` as written: a card, a proposal or a node REF; a look-alike card
 /// or proposal ID exits 2 with its Latin form, and so does an `[ids]` taking
 /// the prefix it reads as.
-fn written_on(project: &ProjectRoot, written: &str) -> Result<Written, CliError> {
+pub(crate) fn written_on(project: &ProjectRoot, written: &str) -> Result<Written, CliError> {
     let trimmed = written.trim();
     match parse_card_id(trimmed) {
         Ok(id) => {
@@ -411,7 +411,7 @@ fn written_on(project: &ProjectRoot, written: &str) -> Result<Written, CliError>
 
 /// A node REF resolved over the index this call refreshes: its canonical
 /// ID and revision, or why not (exit 1, the resolve's line).
-fn resolved_node_rev(
+pub(crate) fn resolved_node_rev(
     env: &Env,
     project: &ProjectRoot,
     written: &str,
@@ -436,7 +436,7 @@ fn resolved_node_rev(
 /// section through its document, a revision, a wiki link) or one naming
 /// several nodes (held by several files, declared twice) is a rule, a 409;
 /// anything else names no node, a 404.
-fn resolve_cause(unresolved: &Unresolved) -> CommentCause {
+pub(crate) fn resolve_cause(unresolved: &Unresolved) -> CommentCause {
     if unresolved.another_form || unresolved.ambiguous {
         CommentCause::Refused
     } else {
@@ -447,10 +447,14 @@ fn resolve_cause(unresolved: &Unresolved) -> CommentCause {
 /// A node REF's refusal line for a comment: `on: <reason>`, a target naming
 /// several nodes worded for a comment.
 fn on_line(unresolved: &Unresolved) -> String {
+    on_line_of(unresolved, "a comment names one node")
+}
+
+/// A node REF's refusal line, `on: <reason>`, a target naming several
+/// nodes worded `names` (a comment's, a reference's).
+pub(crate) fn on_line_of(unresolved: &Unresolved, names: &str) -> String {
     let reason = if unresolved.ambiguous {
-        unresolved
-            .reason
-            .replace(NAMES_ONE_NODE, "a comment names one node")
+        unresolved.reason.replace(NAMES_ONE_NODE, names)
     } else {
         unresolved.reason.clone()
     };
@@ -537,7 +541,7 @@ pub fn comment_query_problem(
 
 /// The person's words of `--as`, trimmed: `local` when absent; off a card
 /// person's grammar exit 2.
-fn person_of(written: Option<&str>) -> Result<String, CliError> {
+pub(crate) fn person_of(written: Option<&str>) -> Result<String, CliError> {
     let actor = written.unwrap_or(LOCAL_ACTOR);
     match card_person_problem(actor) {
         Some(problem) => Err(CliError::spec(format!("--as: {problem}"))),
@@ -1174,7 +1178,7 @@ fn run_raise(
 }
 
 /// A body's `as`, trimmed, a card person's; else exit 2.
-fn checked_as(actor: Option<String>) -> Result<Option<String>, CliError> {
+pub(crate) fn checked_as(actor: Option<String>) -> Result<Option<String>, CliError> {
     match actor {
         None => Ok(None),
         Some(actor) => person_of(Some(&actor)).map(Some),

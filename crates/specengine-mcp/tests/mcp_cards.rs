@@ -203,7 +203,8 @@ fn ac10_the_card_tools_and_their_schemas() {
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
     // 35 since docs/features/comments.md CM15 (`list_comments`, `add_comment`).
-    assert_eq!(TOOLS.len(), 35);
+    // 38 since docs/features/work-references.md RF20.
+    assert_eq!(TOOLS.len(), 38);
     for name in CARD_TOOLS {
         assert!(TOOLS.contains(&name), "{name}");
     }
@@ -1367,7 +1368,8 @@ fn card_tasks_the_stdio_descriptions_name_task() {
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
     // 35 since docs/features/comments.md CM15 (`list_comments`, `add_comment`).
-    assert_eq!(TOOLS.len(), 35);
+    // 38 since docs/features/work-references.md RF20.
+    assert_eq!(TOOLS.len(), 38);
     let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
     let list = session.tools();
     for (name, word, sentence) in [

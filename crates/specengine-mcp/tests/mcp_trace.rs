@@ -713,7 +713,8 @@ fn ac10_no_tool_clears_and_get_trace_is_a_read() {
     // 32 since docs/features/collision-pass.md CP8 (`get_collisions`,
     // `mark_pairs`).
     // 35 since docs/features/comments.md CM15 (`list_comments`, `add_comment`).
-    assert_eq!(TOOLS.len(), 35);
+    // 38 since docs/features/work-references.md RF20.
+    assert_eq!(TOOLS.len(), 38);
     assert!(TOOLS.contains(&"get_trace"));
     let instructions = specengine_mcp::INSTRUCTIONS;
     // 2 039 since docs/features/collision-pass.md CP8.

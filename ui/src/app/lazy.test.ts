@@ -290,3 +290,43 @@ describe("the comments' lazy chunks (CM18 of comments)", () => {
     expect(importers.sort()).toEqual(["/src/comments/CommentsPart.tsx", "/src/comments/MentionsBadge.tsx", "/src/comments/MentionsView.tsx"]);
   });
 });
+
+// docs/features/work-references.md "UI" (Language: "first load stays under 845 000 B") and RF21;
+// docs/canon/ui-languages.md "Size": the references stay out of first load. The part arrives in a
+// chunk of its own through src/references/lazy.tsx, the one module the work item, the document view
+// and the proposal pane import of src/references/; its reads, its upload and its English ride in that
+// chunk alone, `HttpClient` reaching ./referencesHttp by a dynamic import. M: a static import of
+// ReferencesPart, of the references' requests or of their English in first load.
+const outsideReferences = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}", "!/src/references/**"], { query: "?raw", import: "default", eager: true });
+const everySource = import.meta.glob<string>(["/src/**/*.{ts,tsx}", "!/src/**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
+
+describe("the references' lazy chunk (RF21 of work-references)", () => {
+  it("reaches the References part by lazy(() => import(...)) alone, in src/references/lazy.tsx", () => {
+    const lazySource = everySource["/src/references/lazy.tsx"] ?? "";
+    expect(lazySource).toContain('const ReferencesPart = lazy(() => import("./ReferencesPart").then((module) => ({ default: module.ReferencesPart })));');
+    expect(importLines(lazySource).filter((line) => line.includes("ReferencesPart"))).toEqual([]);
+  });
+
+  it("imports nothing of src/references/ statically outside it but lazy.tsx, from the four places the part stands", () => {
+    const statics = Object.entries(outsideReferences).flatMap(([path, text]) =>
+      importLines(text)
+        .filter((line) => !line.startsWith("import type ") && /\/references\/(?!lazy";)/.test(line))
+        .map((line) => `${path}: ${line}`),
+    );
+    expect(statics).toEqual([]);
+    expect(Object.keys(outsideReferences).filter((path) => (outsideReferences[path] ?? "").includes('from "../references/lazy";')).sort()).toEqual([
+      "/src/board/CardPanel.tsx",
+      "/src/doc/DocBody.tsx",
+      "/src/inbox/ClosedProposal.tsx",
+      "/src/inbox/ProposalCard.tsx",
+    ]);
+  });
+
+  it("brings the references' English, reads and requests with the chunk alone (M: an import of any in first load)", () => {
+    const importers = (pattern: RegExp) => Object.keys(everySource).filter((path) => importLines(everySource[path] ?? "").some((line) => !line.startsWith("import type ") && pattern.test(line))).sort();
+    expect(importers(/(i18n\/enReferences|\.\/enReferences)";$/)).toEqual(["/src/references/ReferencesPart.tsx"]);
+    expect(importers(/referenceQueries";$/).every((path) => path.startsWith("/src/references/"))).toBe(true);
+    expect(importers(/referencesHttp";$/)).toEqual([]);
+    expect(everySource["/src/api/http.ts"] ?? "").toContain('return import("./referencesHttp");');
+  });
+});

@@ -17,7 +17,7 @@
   "TaskList": ["tasks", "notes"],
   "TaskListEntry": ["id", "status", "title", "targets", "stale", "updated_at"],
   "TaskNotFound": ["id", "reason"],
-  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "tested", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "practices", "comments", "roadmap", "author", "created_at", "updated_at", "notes"],
+  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "tested", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "practices", "comments", "references", "roadmap", "author", "created_at", "updated_at", "notes"],
   "TaskTarget": ["id", "path", "kind", "title"],
   "TaskCriterion": ["ref", "text"],
   "TaskAssumption": ["proposal", "text"],
@@ -185,5 +185,10 @@
   "CommentOn": ["kind", "id"],
   "CommentDeleted": ["by", "at"],
   "CommentItem": ["id", "kind", "status"],
-  "MentionList": ["login", "comments", "next_before", "notes"]
+  "MentionList": ["login", "comments", "next_before", "notes"],
+  "Reference": ["id", "on", "on_rev", "actor", "author", "kind", "title", "matters", "url", "name", "b3", "agent_b3", "size", "media", "class", "inline", "meta", "file", "warning", "created_at", "deleted"],
+  "ReferenceMeta": ["width", "height", "duration_ms", "triangles"],
+  "ReferenceDeleted": ["by", "at"],
+  "ReferenceList": ["on", "total", "references", "next_before", "notes"],
+  "BlobStored": ["b3", "size", "media", "class", "inline", "meta", "agent_ready", "needs_matters", "warning", "stored"]
 }

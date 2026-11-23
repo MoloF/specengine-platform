@@ -273,7 +273,8 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
     expect(fact(card, "Agent task")).toBe("No agent task");
     // The status is the head's lozenge, no fact (DS5 of docs/features/design-sweep.md "Acceptance criteria").
     expect(card.querySelector(".issue-view-meta .lozenge")?.textContent).toBe("Open");
-    // Talk under the proposal last, its count once its thread is read (docs/features/comments.md "UI").
+    // Talk under the proposal last, its count once its thread is read (docs/features/comments.md "UI");
+    // its references above it, their count once read (docs/features/work-references.md "UI").
     await waitFor(() => {
       expect(Array.from(card.querySelectorAll(".card-body h3"), (heading) => heading.textContent)).toEqual([
         "Targets",
@@ -281,6 +282,7 @@ describe("the Inbox takes the amendment by structure (AC-U1)", () => {
         "Rationale",
         "Provenance",
         "Section diff",
+        "References \u00b7 0",
         "Comments \u00b7 0",
       ]);
     });

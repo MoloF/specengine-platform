@@ -59,8 +59,10 @@ use upstream_scene::{Scene, Stop, data_upstream};
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
 const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/features/work-references.md RF20: the hub's text names
+// `list_references`, `get_reference` and `add_reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
+    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
 
 /// US-11: `get_card`'s two edits and `list_cards`' sentence, as the spec's data
 /// gives them.
@@ -508,9 +510,10 @@ async fn us10_a_hub_answers_alike() {
     drop(session.finish());
     let hub = hub_answers(&scene, &calls).await;
     let listed = tool_names(&hub[0]);
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(listed.len(), 21, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 21);
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(listed.len(), 24, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 24);
     for (n, ((name, args), local)) in calls.iter().zip(&stdio).enumerate() {
         let remote = &hub[n + 1];
         assert_ne!(remote["isError"], json!(true), "{name} {args}: {remote}");

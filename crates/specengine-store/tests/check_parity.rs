@@ -800,19 +800,26 @@ fn the_core_render_is_the_committed_index() {
         (&set[5], "## Canon", shard_label(INDEX_LIVE_SHARDS[3].1)),
         // docs/features/collision-pass.md: the `code-*` code-layer canons.
         (&set[6], "## Canon", shard_label(INDEX_LIVE_SHARDS[4].1)),
+        // docs/features/work-references.md: the `comments*` and `work-*`
+        // talk and reference canons.
         (&set[7], "## Canon", shard_label(INDEX_LIVE_SHARDS[5].1)),
-        // docs/features/specengine-guide.md: SpecEngine's guide, canon.
         (&set[8], "## Canon", shard_label(INDEX_LIVE_SHARDS[6].1)),
+        // docs/features/specengine-guide.md: SpecEngine's guide, canon.
+        (&set[9], "## Canon", shard_label(INDEX_LIVE_SHARDS[7].1)),
         // auto-mode (docs/features/auto-rule.md RL1): ADR-0001 to
         // ADR-0039 first, by four claims, then the rest.
-        (&set[9], "## Decisions", shard_label(INDEX_LIVE_SHARDS[7].1)),
         (
             &set[10],
             "## Decisions",
             shard_label(INDEX_LIVE_SHARDS[8].1),
         ),
-        (&set[11], "## Canon", shard_label(INDEX_LIVE_SHARDS[9].1)),
-        (&set[12], "## Specs", shard_label(INDEX_LIVE_SHARDS[10].1)),
+        (
+            &set[11],
+            "## Decisions",
+            shard_label(INDEX_LIVE_SHARDS[9].1),
+        ),
+        (&set[12], "## Canon", shard_label(INDEX_LIVE_SHARDS[10].1)),
+        (&set[13], "## Specs", shard_label(INDEX_LIVE_SHARDS[11].1)),
     ] {
         let (path, text) = (output.path.as_str(), output.bytes.as_str());
         assert!(
@@ -843,13 +850,14 @@ fn the_core_render_is_the_committed_index() {
     // card-tasks (RM-0092, the `card*` shard), ten since
     // docs/features/collision-pass.md (the `code-*` shard), eleven since
     // auto-mode (`docs/index-decisions-0.md`), twelve since
-    // docs/features/specengine-guide.md (`docs/index-guide.md`): the archive
-    // and eleven live shards.
-    assert_eq!(INDEX_SET - 1, 12);
+    // docs/features/specengine-guide.md (`docs/index-guide.md`), thirteen
+    // since docs/features/work-references.md (`docs/index-canon-work.md`):
+    // the archive and twelve live shards.
+    assert_eq!(INDEX_SET - 1, 13);
     assert_eq!(
         section_lines(root, SHARDS).len(),
         INDEX_SET - 1,
-        "{INDEX}: twelve pointers"
+        "{INDEX}: thirteen pointers"
     );
     // No plan item in the root: each is claimed or Tier 3.
     assert!(
@@ -1208,7 +1216,8 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     // The decisions split in two since auto-mode: the second shard's one
     // claim, `docs/decisions/*.md`, still covers every decision.
     // The guide's shard (docs/features/specengine-guide.md) after the canon's.
-    let [_, _, _, _, _, _, _, _, (_, [decisions]), _, _] = INDEX_LIVE_SHARDS else {
+    // The `comments*`, `work-*` shard (docs/features/work-references.md) sixth.
+    let [_, _, _, _, _, _, _, _, _, (_, [decisions]), _, _] = INDEX_LIVE_SHARDS else {
         panic!("the decisions shard has one claim")
     };
     assert_eq!(
@@ -1427,6 +1436,8 @@ fn each_seed_blocks_exactly_its_target() {
         _,
         _,
         // The `code-*` shard (docs/features/collision-pass.md).
+        _,
+        // The `comments*`, `work-*` shard (docs/features/work-references.md).
         _,
         (canon, _),
         // SpecEngine's guide (docs/features/specengine-guide.md).
@@ -2028,9 +2039,10 @@ const SEEDS: &[Seed] = &[
     // `spec-*` one): the shard drifts, the root untouched.
     (
         "a new canon document, not rendered",
-        // The `docs/canon/*.md` shard, sixth since
-        // docs/features/collision-pass.md (the `code-*` shard fifth).
-        INDEX_LIVE_SHARDS[5].0,
+        // The `docs/canon/*.md` shard, seventh since
+        // docs/features/work-references.md (the `code-*` shard fifth, the
+        // `comments*`, `work-*` shard sixth).
+        INDEX_LIVE_SHARDS[6].0,
         "index-drift",
         |r| {
             write_new(
@@ -2041,12 +2053,13 @@ const SEEDS: &[Seed] = &[
         },
     ),
     // The decision's live line is in the first decisions shard (its claim
-    // `docs/decisions/ADR-001*.md` since auto-mode; eighth since
-    // docs/features/specengine-guide.md put the guide's shard seventh): it
-    // leaves that shard for the archive, the root untouched.
+    // `docs/decisions/ADR-001*.md` since auto-mode; ninth since
+    // docs/features/work-references.md put the `comments*`, `work-*` shard
+    // sixth and the guide's eighth): it leaves that shard for the archive,
+    // the root untouched.
     (
         "ADR-0010 superseded-by ADR-0001, not rendered",
-        INDEX_LIVE_SHARDS[7].0,
+        INDEX_LIVE_SHARDS[8].0,
         "index-drift",
         |r| {
             set_key(

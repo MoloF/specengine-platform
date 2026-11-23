@@ -2,7 +2,7 @@
 // "Choice", "Switcher"). Only src/i18n/ imports i18next or react-i18next: the rest of the UI reads
 // `t` from useTranslate() or takes a Translate argument, so no string is resolved at module load and
 // a switch re-renders what shows text, remounting nothing. English is in the main chunk and loads
-// with it, but for the parts a view's chunk brings with it (`addEnglishPart`: the comments'); Russian is a chunk of its own, reached through the one `import("./ru")` below and loaded
+// with it, but for the parts a view's chunk brings with it (`addEnglishPart`: the comments', the references'); Russian is a chunk of its own, reached through the one `import("./ru")` below and loaded
 // when a page starts in it or the viewer first chooses it.
 import i18next, { type TFunction } from "i18next";
 import { useSyncExternalStore } from "react";
@@ -70,7 +70,7 @@ void instance.use(initReactI18next).init({
 });
 
 /**
- * Merges a part of English that loads with its view's chunk (./enComments.ts) into the instance, deep,
+ * Merges a part of English that loads with its view's chunk (./enComments.ts, ./enReferences.ts) into the instance, deep,
  * a word already there kept: called once by the part's module as its chunk lands, before any view of
  * it renders. Russian holds every part already, in its one chunk.
  */

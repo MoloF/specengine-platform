@@ -1582,9 +1582,14 @@ fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
         .into_iter()
         .map(|(source, _)| source.trim_end_matches('/').to_owned())
         .collect();
+    // `specengine-blobs` since docs/features/work-references.md RF22.
     assert_eq!(
         sources,
-        BTreeSet::from(["./projects".to_owned(), "specengine-data".to_owned()]),
+        BTreeSet::from([
+            "./projects".to_owned(),
+            "specengine-blobs".to_owned(),
+            "specengine-data".to_owned()
+        ]),
         "specengine's mounts"
     );
     for source in &sources {
@@ -3485,4 +3490,105 @@ fn hb04_the_door_sidecars_carry_no_door_configuration() {
         mounts(door, "authelia").contains(&("./authelia/config".to_owned(), "/config".to_owned())),
         "the door itself reads its configuration at /config"
     );
+}
+
+/// docs/features/work-references.md RF22 (ADR-0088), the compose half: a
+/// top-level volume `specengine-blobs`, mounted at `/data/specengine/blobs`
+/// on `specengine` alone (after `specengine-data:/data`), never on
+/// `dump-queue`, `backup` or any other service; `specengine` passes the
+/// three blob settings through bare (no value, never interpolated);
+/// `.env.example` names them commented, never set. M: the volume mounted on
+/// `dump-queue`.
+#[test]
+fn rf22_the_blob_volume_is_the_daemons_alone() {
+    let compose = compose();
+    let volumes = object(at(&compose, &["volumes"]), "volumes");
+    assert!(volumes.contains_key("specengine-blobs"), "{volumes:?}");
+    for (name, definition) in services(&compose) {
+        let mounted: Vec<(String, String)> = mounts(definition, name)
+            .into_iter()
+            .filter(|(source, _)| source == "specengine-blobs")
+            .collect();
+        if name == "specengine" {
+            assert_eq!(
+                mounted,
+                [(
+                    "specengine-blobs".to_owned(),
+                    "/data/specengine/blobs".to_owned()
+                )],
+                "{name}"
+            );
+            let all = mounts(definition, name);
+            let data = all
+                .iter()
+                .position(|(source, target)| source == "specengine-data" && target == "/data")
+                .expect("specengine-data:/data");
+            let blobs = all
+                .iter()
+                .position(|(source, _)| source == "specengine-blobs")
+                .expect("specengine-blobs");
+            assert!(data < blobs, "the blobs' mount after /data's: {all:?}");
+        } else {
+            assert!(mounted.is_empty(), "M: {name} mounts specengine-blobs");
+        }
+    }
+    let daemon = service(&compose, "specengine");
+    let env = environment(daemon, "specengine");
+    for name in [
+        "SPECENGINE_BLOB_FILE_MAX",
+        "SPECENGINE_BLOB_QUOTA",
+        "SPECENGINE_BLOB_FLOOR",
+    ] {
+        assert_eq!(
+            env.get(name).map(String::as_str),
+            Some(""),
+            "{name} passed through bare"
+        );
+    }
+    let raw = read(&deploy().join("docker-compose.yml"));
+    assert!(!raw.contains("${SPECENGINE_BLOB_"), "never interpolated");
+    let example = read(&deploy().join(".env.example"));
+    for name in [
+        "SPECENGINE_BLOB_FILE_MAX",
+        "SPECENGINE_BLOB_QUOTA",
+        "SPECENGINE_BLOB_FLOOR",
+    ] {
+        assert!(
+            example
+                .lines()
+                .any(|line| line.trim() == format!("# {name}=")),
+            ".env.example names {name} commented"
+        );
+        assert!(
+            !env_example().iter().any(|(key, _)| key == name),
+            "{name} is never set in .env.example"
+        );
+    }
+}
+
+/// RF22, the image half: the runtime stage creates `/data/specengine/blobs`,
+/// owned 10001:10001 (its parent too) and mode 0700, before `USER
+/// 10001:10001`, so a new, empty named volume takes that owner and mode.
+#[test]
+fn rf22_the_image_makes_the_mount_point_before_its_user() {
+    let stages = stages(instructions(&read(&deploy().join("Dockerfile"))));
+    let runtime = stages.last().expect("a runtime stage");
+    let at_user = runtime
+        .body
+        .iter()
+        .position(|instruction| instruction.keyword == "USER")
+        .expect("a USER");
+    assert_eq!(runtime.body[at_user].args, "10001:10001");
+    let made = runtime.body[..at_user]
+        .iter()
+        .filter(|instruction| instruction.keyword == "RUN")
+        .find(|instruction| instruction.args.contains("/data/specengine/blobs"))
+        .unwrap_or_else(|| panic!("no RUN making /data/specengine/blobs before USER"));
+    let args = made.args.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(args.contains("mkdir -p /data/specengine/blobs"), "{args}");
+    assert!(
+        args.contains("chown 10001:10001 /data/specengine /data/specengine/blobs"),
+        "{args}"
+    );
+    assert!(args.contains("chmod 0700 /data/specengine/blobs"), "{args}");
 }

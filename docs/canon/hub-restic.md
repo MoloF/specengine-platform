@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [scripts/deploy]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-23
 ---
 
 # Hub restic: the off-host backend, off until the owner names one
 
-ADR-0071, built by `hub-ops` (RM-0074); moved here from `hub-ops.md` by `hub-backups` (RM-0130). The dumps, their grid and the `upload` round: `hub-ops.md` "Dumps". **Off by the owner's word, 2026-11-20**: with no `RESTIC_REPOSITORY` in `restic_env`, `backup` stays up, unhealthy, its line(s) each round, calling no restic (`hub-ops.md` "Exits"). His steps to turn it on: `scripts/deploy/README.md` "Going live".
+ADR-0071, built by `hub-ops` (RM-0074); moved here from `hub-ops.md` by `hub-backups` (RM-0130). The dumps, their grid and the `upload` round: `hub-ops.md` "Dumps". **Off by the owner's word, 2026-11-20**: with no `RESTIC_REPOSITORY` in `restic_env`, `backup` stays up, unhealthy, its line(s) each round, calling no restic (`hub-ops.md` "Exits"). His steps to turn it on: `scripts/deploy/README.md` "Going live". It never carries references' files, which live on `specengine-blobs` alone and are lost with the host, his accepted risk of 2026-11-22 (ADR-0088, `work-references.md`).
 
 ## The backend
 

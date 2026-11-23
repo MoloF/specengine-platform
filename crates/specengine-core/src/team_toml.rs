@@ -67,7 +67,8 @@ impl TeamRole {
     }
 
     /// The acts the role opens, as `GET .../team`'s `allowed` names them; an
-    /// `owner` deletes any comment too (`docs/canon/comments.md` "Delete").
+    /// `owner` deletes any comment too (`docs/canon/comments.md` "Delete"),
+    /// and any reference (task spec `work-references` D2).
     pub const fn allowed(self) -> &'static [&'static str] {
         match self {
             Self::Member => &["stage", "accept", "clear"],
@@ -79,6 +80,7 @@ impl TeamRole {
                 "group_clear",
                 "confirm",
                 "delete_comment",
+                "delete_reference",
             ],
         }
     }
@@ -86,6 +88,12 @@ impl TeamRole {
     /// Any comment is open to the role's delete on a hub, not only its own
     /// (task spec `comments` D7): an `owner` alone.
     pub const fn deletes_comments(self) -> bool {
+        matches!(self, Self::Owner)
+    }
+
+    /// Any reference is open to the role's delete on a hub, not only its own
+    /// (task spec `work-references` D2): an `owner` alone, as a comment.
+    pub const fn deletes_references(self) -> bool {
         matches!(self, Self::Owner)
     }
 

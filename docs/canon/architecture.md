@@ -16,7 +16,7 @@ The rules all code is written by, each with its ADRs; a rule changes only throug
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
 - The operational database lives outside the repository, in the data directory (`serve.md`). Git receives the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `queue-backup.md`). ADR-0003.
 - A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position is computed per read, never stored, its `depends_on` chain ordering work, never gating it (`spec-roadmap.md`). ADR-0052.
-- A comment is queue data under a card, a node or a proposal: never a file, a commit or `queue.md`, deciding nothing; it reaches the spec only through an item made from it (`comments.md`). ADR-0087.
+- A comment or a reference is queue data under a card, a node or a proposal: never a file, a commit or `queue.md`, deciding nothing, reaching the spec only through an item made from it (`comments.md`). A reference's file stays in the data directory (a hub's own volume), never in git, a dump or off the host (`work-references.md`). ADR-0087, ADR-0088.
 
 <a id="layout"></a>
 ## Spec layout in a project
@@ -30,7 +30,7 @@ Directories come from `[paths]`, so a consumer's `docs/` stays intact, each defa
 <a id="apply"></a>
 ## Applying proposals
 
-An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`proposal-apply.md`). Spec files are written only by `apply_proposal` once a person confirms: on a terminal, one `[y/N]` each, or on a hub alone under a login `[team]` entitles, one click per item; or, under a project's committed `[auto]` rule, by SpecEngine's code alone, a `Delegated-by:` commit each, for what it covers (`auto-mode.md`, `hub-auto.md`). A hub's `--push` sync merges others' commits, `spec.lock` too, never rebasing and authoring neither (`hub-git.md`); else the UI and the owner's MCP form only stage, and no tool takes a choice from an agent (`decision-staging.md`, `hub-confirm.md`, `review-form.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038, ADR-0054, ADR-0061, ADR-0064, ADR-0081, ADR-0082.
+An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, the spec beside its code) and committed at once as its own commit `spec: apply PR-…` with provenance (`proposal-apply.md`). Spec files are written only by `apply_proposal` once a person confirms: on a terminal, one `[y/N]` each, or on a hub alone under a login `[team]` entitles, one click per item; or, under a project's committed `[auto]` rule, by SpecEngine's code alone, a `Delegated-by:` commit each, for what it covers (`auto-mode.md`, `hub-auto.md`). A hub's `--push` sync merges others' commits, `spec.lock` too, never rebasing and authoring neither (`hub-git.md`); else the UI and the owner's MCP form only stage, and no tool takes a choice from an agent (`decision-staging.md`, `hub-confirm.md`, `review-form.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038, ADR-0054, ADR-0061, ADR-0064, ADR-0081, ADR-0082.
 
 A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue; SpecEngine the index entry's outputs: `proposal-outputs.md`; a project's generator its own). ADR-0003, ADR-0013, ADR-0022, ADR-0062, ADR-0064; owner, Q3, 2026-09-30.
 
@@ -42,8 +42,8 @@ A `generated` document is no spec file: only its registered generator writes it 
 - Discrepancies, questions and proposals block nothing: a node may have several open proposals, rebased on `base_hash` when applied; an agent keeps working on a working answer, marked `// @assumes PR-…`, and a decision unlike it makes a follow-up task. ADR-0012.
 - The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`), or starting a pack there under a committed `[auto]` rule, whose code approves and lands its tasks (`auto-mode.md`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`gate.md`). ADR-0012, ADR-0039, ADR-0081.
 - `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; a binding it cannot verify is never `ok` (`architecture-code.md#verify`). ADR-0042, ADR-0045, ADR-0050.
-- Reads of nodes show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it (`architecture-code.md#sync-in-reads`). ADR-0046.
-- `spec health` lists, read-only, suspect markers, unbound nodes and drift. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them (`architecture-code.md#health`). ADR-0047, ADR-0051.
+- Reads of nodes show each binding's `sync`, verify's plain state per read, never stored or depended on (`architecture-code.md#sync-in-reads`). ADR-0046.
+- `spec health` lists, read-only, suspect markers, unbound nodes and drift; no exit 1, check finding, status, claim, approval, task or gate depends on them (`architecture-code.md#health`). ADR-0047, ADR-0051.
 
 <a id="tasks"></a>
 ## Tasks and stack skills
@@ -62,7 +62,7 @@ EARS ("WHEN … the system SHALL …") is a suggested rule template, not a check
 
 The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `spec-check-process.md`), the nodes to bind (`[[health.bound]]`), a flow's ends (`[flow]`) and the plan's scale (`[roadmap]`) live in each project's `specengine.toml` and importer. The core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
 
-Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` keeps its meaning and cycle warning (`flow-links.md`). ADR-0055.
+Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` unchanged (`flow-links.md`). ADR-0055.
 
 <a id="ids"></a>
 ## Identifiers
@@ -77,7 +77,7 @@ Code is linked to the spec by a comment `// @implements ID@rev [tiers]` (also `@
 <a id="code-identity"></a>
 ## Symbol identity and digest
 
-The marker is a link's identity; the digest is a normalized tree-sitter AST. MVP: tree-sitter and markers; rust-analyzer a Phase 3 precision layer. Layers: `architecture-code.md#code-identity`. ADR-0020, ADR-0021.
+The marker is a link's identity; the digest is a normalized tree-sitter AST. Layers: `architecture-code.md#code-identity`. ADR-0020, ADR-0021.
 
 A layer B fact, one only a build or run of the project knows, is a file the project writes and names in `[code]`; SpecEngine never builds or runs the project for it. Its facts annotate symbols, never bind, lock, judge or block; on what is registered where they outrank the syntactic detector, both shown. ADR-0048.
 
@@ -88,7 +88,7 @@ Layer C, rust-analyzer, lives only in the separate executable `specengine-ra`, s
 
 Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. Its chrome is English or Russian per viewer and spec content as written (`ui-languages.md`), so search and token estimates handle any script. ADR-0011, ADR-0072.
 
-The UI reads, stages or confirms decisions (`#apply`) and writes cards, comments and the items raised from them only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data", each write under a typed name or a hub's login. It computes no core logic, renders the daemon's answers with types generated from Rust, takes dependencies from the owner's allowlist at exact versions, and renders spec prose and comments as markdown only through `ui/src/markdown/` (`ui/README.md`). ADR-0033, ADR-0036, ADR-0057, ADR-0059, ADR-0077, ADR-0080, ADR-0087.
+The UI reads, stages or confirms decisions (`#apply`) and writes cards, comments, references and the items raised from them only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data", each write under a typed name or a hub's login. It computes no core logic, renders the daemon's answers with types generated from Rust, takes dependencies from the owner's allowlist at exact versions, and renders spec prose and comments as markdown only through `ui/src/markdown/` (`ui/README.md`). ADR-0033, ADR-0036, ADR-0057, ADR-0059, ADR-0077, ADR-0080, ADR-0087, ADR-0088.
 
 <a id="checks-migration"></a>
 ## Documentation checks in projects

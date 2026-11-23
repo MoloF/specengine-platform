@@ -687,7 +687,7 @@ fn concurrent_raises_from_two_handles_store_one_item() {
 #[test]
 fn schema_6_and_7_step_to_8() {
     // 12 since docs/features/task-mandate.md M5.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     assert_eq!(PROPOSAL_COLUMNS.len(), 51);
     assert_eq!(PROPOSAL_COLUMNS[44..46], ["drift", "drift_hash"]);
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
@@ -707,7 +707,8 @@ fn schema_6_and_7_step_to_8() {
     assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..50]));
     // 51 at 15 (docs/features/comments.md CM1: `comment_id`).
     assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(16), None);
+    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(17), None);
     for version in [6, 7] {
         let scratch = Scratch::new(&format!("qdr-schema-{version}"));
         let db = scratch.db("q");
@@ -738,7 +739,7 @@ fn schema_6_and_7_step_to_8() {
                  ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; \
                  ALTER TABLE proposals DROP COLUMN card_id; \
                  ALTER TABLE proposals DROP COLUMN drift_hash; \
-                 ALTER TABLE proposals DROP COLUMN drift; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = {version};"
+                 ALTER TABLE proposals DROP COLUMN drift; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = {version};"
             ),
         );
         assert_eq!(
@@ -754,7 +755,7 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(sqlite3(&db, "PRAGMA user_version;"), version.to_string());
 
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping to 12");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "16", "from {version}");
         assert_eq!(
             sqlite3(
                 &db,
@@ -776,7 +777,7 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(id, "PR-0002");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15", "stepped once");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "16", "stepped once");
     }
 }
 

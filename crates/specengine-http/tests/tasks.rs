@@ -45,7 +45,7 @@ use task_state::{A, B, Case, repo_in_s};
 /// docs/features/roadmap-surfaces.md (Q-D); `tested` after `bindings` since
 /// docs/features/tested-reads.md "Per read".
 // 28 since docs/features/department-practices.md "The task package: `practices`".
-const PACKAGE_KEYS: [&str; 29] = [
+const PACKAGE_KEYS: [&str; 30] = [
     "schema_version",
     "id",
     "project",
@@ -72,6 +72,9 @@ const PACKAGE_KEYS: [&str; 29] = [
     "practices",
     // docs/features/comments.md "The card context and the task package".
     "comments",
+    // docs/canon/task-package.md "Package": `references` after `comments`
+    // since docs/features/work-references.md (RF15).
+    "references",
     "roadmap",
     "author",
     "created_at",

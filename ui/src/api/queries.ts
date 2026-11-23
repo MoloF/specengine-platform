@@ -35,6 +35,7 @@ import type {
   Inbox,
   IntakeDocument,
   Proposal,
+  ReferenceList,
   RoundAnswerBody,
   RoundAnswersOutcome,
   StageChoice,
@@ -201,6 +202,11 @@ export function catalogsOf(project: string) {
 /** Every comment thread of a project, whatever its target or pages: ./commentQueries.ts keys each under it (docs/features/comments.md "UI"). */
 export function commentsOf(project: string) {
   return ["comments", project] as const;
+}
+
+/** Every references read of a project, whatever its target or pages: ./referenceQueries.ts keys each under it (docs/features/work-references.md "UI"). */
+export function referencesOf(project: string) {
+  return ["references", project] as const;
 }
 
 /** Every mentions read of a project, whatever its login: the nav's badge and the Mentions view share one. */
@@ -511,6 +517,29 @@ const CARD_EVENT = "card.";
 /** A comment's queue events, no body in any (`docs/features/comments.md` "HTTP"). */
 const COMMENT_EVENT = "comment.";
 
+/** A reference's queue events, no title, URL, name, hash or "what matters" in either (`docs/features/work-references.md` "Events and feed"). */
+const REFERENCE_EVENT = "reference.";
+
+/**
+ * Whether a cached references read (./referenceQueries.ts, its pages) is the target an event names
+ * (`on`, a `reference.created`'s) or lists the reference `id` (a `reference.deleted`'s): that read alone is read again.
+ */
+function holdsReference(key: readonly unknown[], data: unknown, on: string | null, id: string | null): boolean {
+  const pages = (data as InfiniteData<ReferenceList> | undefined)?.pages ?? [];
+  if (on !== null && (key[2] === on || pages.some((page) => page.on.id === on))) {
+    return true;
+  }
+  return id !== null && pages.some((page) => page.references.some((reference) => reference.id === id));
+}
+
+/** An event payload's `on`, a string, else null. */
+function eventOn(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null || !("on" in payload)) {
+    return null;
+  }
+  return typeof payload.on === "string" ? payload.on : null;
+}
+
 /** A new item: raised from a comment or not, no event says which, so every thread of the project is read again. */
 const CREATED = "proposal.created";
 
@@ -564,9 +593,11 @@ function holdsItem(data: unknown, id: string): boolean {
  * "The UI", Live; src/api/feedQueries.ts). A `comment.*` event reads that project's comment threads,
  * mentions and task packages (which carry their cards' comments) again, nothing else; `proposal.created`
  * every thread too, and any other `proposal.*` event but a stage the threads listing that item among a
- * comment's items, with its state (docs/features/comments.md "UI", Live). No other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
+ * comment's items, with its state (docs/features/comments.md "UI", Live). A `reference.*` event reads the
+ * references of the target it names (an attach's `on`) or of the reads listing it (a delete's `id`)
+ * and the task packages again, nothing else (docs/features/work-references.md "UI", Live). No other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
- * reads, the round sheets, the cards, the comment threads and the mentions of the project again. Only the reads on screen are fetched, once each
+ * reads, the round sheets, the cards, the comment threads, the mentions and the references of the project again. Only the reads on screen are fetched, once each
  * but the health read's one more after a walk (the check and the health read only while Health
  * shows them: `docs/features/health-left.md` "Description and interactions"; the health read also
  * while the Spec tree shows its drift: `docs/features/ui-tree-drift.md`); the rest are marked
@@ -695,6 +726,16 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
           readAgain({ queryKey: ["task", project] });
           return;
         }
+        // A reference's event names its target (an attach) or itself (a delete): the reads holding
+        // either are read again, every one when it names neither, and the task packages, which carry
+        // their cards' references (docs/features/work-references.md "UI", Live); a reference is no
+        // write of what it is under.
+        if (event.type.startsWith(REFERENCE_EVENT)) {
+          const on = eventOn(event.payload);
+          readAgain(on === null && id === null ? { queryKey: referencesOf(project) } : { queryKey: referencesOf(project), predicate: (query) => holdsReference(query.queryKey, query.state.data, on, id) });
+          readAgain({ queryKey: ["task", project] });
+          return;
+        }
         if (event.type.startsWith(CARD_EVENT)) {
           if (id === null) {
             readAgain({ queryKey: cardsOf(project) });
@@ -780,6 +821,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         readDeliveryAgain();
         readAgain({ queryKey: commentsOf(project) });
         readAgain({ queryKey: mentionsOf(project) });
+        readAgain({ queryKey: referencesOf(project) });
       },
     );
     return () => {

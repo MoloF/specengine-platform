@@ -109,9 +109,12 @@ const ZERKALO: &str = "zerkalo";
 /// eighteen since docs/features/department-split.md "Acceptance criteria", S8
 /// (`split_card`), nineteen since docs/features/specengine-guide.md GU5
 /// (`get_guide`), twenty-one since docs/features/comments.md CM15
-/// (`list_comments`, `add_comment`).
-const HUB_TOOLS: [&str; 21] = [
+/// (`list_comments`, `add_comment`), twenty-four since
+/// docs/features/work-references.md RF20 (`list_references`,
+/// `get_reference`, `add_reference`).
+const HUB_TOOLS: [&str; 24] = [
     "add_comment",
+    "add_reference",
     "ask_question",
     "create_card",
     "edit_card",
@@ -121,11 +124,13 @@ const HUB_TOOLS: [&str; 21] = [
     "get_guide",
     "get_node",
     "get_proposal",
+    "get_reference",
     "get_roadmap",
     "get_trace",
     "get_tree",
     "list_cards",
     "list_comments",
+    "list_references",
     "move_card",
     "propose_change",
     "report_decision",
@@ -171,7 +176,7 @@ const LEFT_OUT: [&str; 14] = [
 /// is too but for [`HUB_READ_TEXTED`]'s read tail.
 /// docs/features/comments.md CM15: `list_comments` too, stdio's text and
 /// schemas as they are.
-const SHARED: [&str; 11] = [
+const SHARED: [&str; 13] = [
     "get_card",
     "get_context_bundle",
     "get_flow",
@@ -179,10 +184,14 @@ const SHARED: [&str; 11] = [
     "get_guide",
     "get_node",
     "get_proposal",
+    // docs/features/work-references.md RF20: stdio's route, as it is.
+    "get_reference",
     "get_trace",
     "get_tree",
     "list_cards",
     "list_comments",
+    // docs/features/work-references.md RF20: stdio's route, as it is.
+    "list_references",
     "search",
 ];
 
@@ -204,9 +213,11 @@ const HUB_READ_TAIL: &str = "Reads the hub's index, which each confirm and merge
 /// The eight whose descriptions are the hub's variants (docs/features/hub-mcp.md
 /// "Data", iteration 2): `get_roadmap`, the four queue writes and the three card
 /// writes; department-split S8: `split_card`, a fourth card write;
-/// docs/features/comments.md CM15: `add_comment`, its author the login.
-const VARIANTS: [&str; 10] = [
+/// docs/features/comments.md CM15: `add_comment`, its author the login;
+/// docs/features/work-references.md RF20: `add_reference`, likewise.
+const VARIANTS: [&str; 11] = [
     "add_comment",
+    "add_reference",
     "ask_question",
     "create_card",
     "edit_card",
@@ -1454,6 +1465,33 @@ fn every_tool(client: &mut Client, world: &World, label: &str) -> BTreeSet<Strin
         "list_comments",
         json!({"on": card}),
     );
+    // docs/features/work-references.md RF20: a link attached into the queue
+    // (no file under the root), then the card's references and the link read.
+    let linked = both(
+        client,
+        &mut called,
+        label,
+        "add_reference",
+        json!({"on": card, "url": "https://example.org/wick", "author_role": "writer"}),
+    );
+    both(
+        client,
+        &mut called,
+        label,
+        "list_references",
+        json!({"on": card}),
+    );
+    let reference = linked["structuredContent"]["id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{label}: add_reference stored a link: {linked}"))
+        .to_owned();
+    both(
+        client,
+        &mut called,
+        label,
+        "get_reference",
+        json!({"reference_id": reference}),
+    );
     both(
         client,
         &mut called,
@@ -1589,11 +1627,12 @@ fn h9_nothing_on_a_hub_decides() {
     }
     // department-split S8: thirty with `split_card`, on both servers;
     // thirty-two on stdio since collision-pass CP8, the hub's 18 unchanged.
-    // 35 on stdio and 21 on a hub since docs/features/comments.md CM15.
-    assert_eq!(stdio_names.len(), 35, "{stdio_names:?}");
+    // 35 on stdio and 21 on a hub since docs/features/comments.md CM15; 38
+    // and 24 since docs/features/work-references.md RF20.
+    assert_eq!(stdio_names.len(), 38, "{stdio_names:?}");
     let mut union: Vec<&str> = HUB_TOOLS.iter().chain(LEFT_OUT.iter()).copied().collect();
     union.sort_unstable();
-    assert_eq!(stdio_names, union, "the 21 and the 14 are stdio's 35");
+    assert_eq!(stdio_names, union, "the 24 and the 14 are stdio's 38");
 }
 
 // ---------------------------------------------------------------------- H10
@@ -1886,8 +1925,8 @@ fn h11_the_hub_texts_hold_their_budget_and_their_words() {
     shared_and_variants.sort_unstable();
     assert_eq!(
         shared_and_variants, HUB_TOOLS,
-        "eleven shared (ten until comments, nine until specengine-guide) and ten variants (nine \
-         until comments)"
+        "thirteen shared (eleven until work-references, ten until comments, nine until \
+         specengine-guide) and eleven variants (ten until work-references, nine until comments)"
     );
     for name in VARIANTS {
         let description = tool(&hub, name)["description"].as_str().expect("text");
@@ -2743,8 +2782,10 @@ fn board_handoff_the_hub_card_texts_name_the_new_keys() {
         .map(|tool| tool["name"].as_str().expect("a name"))
         .collect();
     // department-split S8: eighteen; nineteen since specengine-guide
-    // (`get_guide`); 21 since comments (`list_comments`, `add_comment`).
-    assert_eq!(names.len(), 21, "{names:?}");
+    // (`get_guide`); 21 since comments (`list_comments`, `add_comment`); 24
+    // since work-references (`list_references`, `get_reference`,
+    // `add_reference`).
+    assert_eq!(names.len(), 24, "{names:?}");
     for (name, key) in [
         ("create_card", "reviewer"),
         ("move_card", "note"),
@@ -2882,8 +2923,10 @@ fn card_tasks_ct7_the_hub_tools_keep_the_ids_and_read_no_task() {
     let mut session = world.session(KEEP, "mira");
     let hub = session.tools();
     // department-split S8: eighteen; nineteen since specengine-guide
-    // (`get_guide`); 21 since comments (`list_comments`, `add_comment`).
-    assert_eq!(tool_names(&hub).len(), 21);
+    // (`get_guide`); 21 since comments (`list_comments`, `add_comment`); 24
+    // since work-references (`list_references`, `get_reference`,
+    // `add_reference`).
+    assert_eq!(tool_names(&hub).len(), 24);
     let description = tool(&hub, "edit_card")["description"]
         .as_str()
         .expect("a description");

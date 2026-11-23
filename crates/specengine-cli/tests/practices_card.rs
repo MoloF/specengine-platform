@@ -24,7 +24,8 @@
 //!   note naming the 33rd's path; a goal citing 80 distinct resolvable IDs
 //!   gives 64 `cited`, the first seen. M: no `PRACTICES_MAX`.
 //! - DP12: `task show T-0001 --json`: 28 keys (29 since
-//!   docs/features/comments.md, `comments`), `practices` art.md, dev.md,
+//!   docs/features/comments.md, `comments`; 30 since
+//!   docs/features/work-references.md, `references`), `practices` art.md, dev.md,
 //!   shared.md once each by path; `bundle.disciplines` `["art",
 //!   "development"]` and its hash `spec bundle`'s with both; the brief's
 //!   Practices section before Bundle; T-0002 `[]` and `[]`;
@@ -694,7 +695,8 @@ fn package(scene: &Scene, id: &str) -> (Value, String) {
     doc(scene, &["task", "show", id])
 }
 
-/// DP12: T-0001's package (28 keys, 29 with comments', practices by path once each, the
+/// DP12: T-0001's package (28 keys, 29 with comments', 30 with
+/// references'), practices by path once each, the
 /// bundle's disciplines and hash, the brief's section before Bundle);
 /// T-0002's `[]` and `[]`; `schema_version` 1. M: a task no card lists
 /// given every practice.
@@ -703,7 +705,7 @@ fn dp12_the_task_package_carries_its_cards_practices() {
     let scene = Scene::new("dp12");
     let (document, raw) = package(&scene, "T-0001");
     assert_eq!(task_common::keys(&raw), PACKAGE_KEYS, "{raw}");
-    assert_eq!(PACKAGE_KEYS[28], "notes");
+    assert_eq!(PACKAGE_KEYS[29], "notes");
     assert_eq!(
         PACKAGE_KEYS
             .iter()

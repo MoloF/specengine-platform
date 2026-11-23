@@ -13,14 +13,17 @@ import {
   type MapOptions,
   type MentionsOptions,
   type NodeOptions,
+  type ReferencesOptions,
   type RoadmapOptions,
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
   type TraceOptions,
   type TreeOptions,
+  type UploadProgress,
 } from "../api/client";
 import type {
+  BlobStored,
   BundleView,
   Card,
   CardAcceptBody,
@@ -66,6 +69,9 @@ import type {
   NodeView,
   Project,
   Proposal,
+  Reference,
+  ReferenceAddBody,
+  ReferenceList,
   RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
@@ -83,7 +89,10 @@ import type {
   WorkspaceDocument,
 } from "../api/types";
 import {
+  aB3,
+  aBlobStored,
   aBundle,
+  aReference,
   aCardCounts,
   aCardList,
   aCheckReport,
@@ -148,7 +157,22 @@ function storedOf(stage: RoundAnswerBody["stage"]): Stage {
  * mockImplementation.
  */
 export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
-  const state: { proposals: Proposal[]; notes: string[]; round: RoundSheet; comments: CommentDocument[] } = { proposals: [...proposals], notes, round: aRoundSheet([]), comments: [] };
+  const state: { proposals: Proposal[]; notes: string[]; round: RoundSheet; comments: CommentDocument[]; references: Reference[]; blobs: Blob[] } = {
+    proposals: [...proposals],
+    notes,
+    round: aRoundSheet([]),
+    comments: [],
+    references: [],
+    blobs: [],
+  };
+  /** The stub's reference by ID, or the daemon's 404. */
+  const referenceOf = (id: string): Reference => {
+    const found = state.references.find((reference) => reference.id === id);
+    if (found === undefined) {
+      throw new ClientError({ status: 404, message: `no reference ${id}` });
+    }
+    return found;
+  };
   /** The stub's comment by ID, or the daemon's 404. */
   const commentOf = (id: string): CommentDocument => {
     const found = state.comments.find((comment) => comment.id === id);
@@ -348,6 +372,37 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       commentOf(id).items.push({ id: "PR-0102", kind: body.kind, status: "open" });
       return Promise.resolve({ id: "PR-0102", created: true, hits: [], related: [], linked: null, diagnostics: [], notes: [] });
     }),
+    // References (docs/features/work-references.md "HTTP") over `state.references`: a list is every
+    // reference on the target, oldest first, one page. An upload reports its whole body sent, keeps
+    // the blob in `state.blobs` and answers an agent-ready PNG named by its order (`aB3` of its count);
+    // an attach stores the next RF- under the name sent (`local` with none); a delete leaves the
+    // tombstone. Files are read at `/api/projects/<p>/blobs/<b3>`, as the daemon's. A test overriding what any answers.
+    getReferences: vi.fn<(project: string, options: ReferencesOptions, signal?: AbortSignal) => Promise<ReferenceList>>((_project, options) => {
+      const listed = state.references.filter((reference) => reference.on.id === options.on);
+      return Promise.resolve(structuredClone({ on: listed[0]?.on ?? { kind: "card", id: options.on }, total: listed.length, references: listed, next_before: null, notes: [] }));
+    }),
+    putBlob: vi.fn<(project: string, blob: Blob, onProgress: UploadProgress, signal: AbortSignal) => Promise<BlobStored>>((_project, blob, onProgress) => {
+      state.blobs.push(blob);
+      onProgress(blob.size, blob.size);
+      return Promise.resolve(aBlobStored({ b3: aB3(String(state.blobs.length)), size: blob.size }));
+    }),
+    addReference: vi.fn<(project: string, body: ReferenceAddBody) => Promise<Reference>>((_project, body) => {
+      const id = `RF-${String(state.references.length + 20).padStart(4, "0")}`;
+      const actor = body.as ?? "local";
+      const author = { type: "human", role: null, model: null, run: null };
+      const made =
+        "url" in body
+          ? aReference({ id, on: { kind: "card", id: body.on }, actor, author, kind: "link", url: body.url, title: body.title, matters: body.matters, name: null, b3: null, size: null, media: null, class: null, inline: null, meta: null, file: null, created_at: STAGED_AT })
+          : aReference({ id, on: { kind: "card", id: body.on }, actor, author, b3: body.b3, agent_b3: body.agent_b3, name: body.name, title: body.title, matters: body.matters, created_at: STAGED_AT });
+      state.references.push(made);
+      return Promise.resolve(structuredClone(made));
+    }),
+    deleteReference: vi.fn<(project: string, id: string) => Promise<Reference>>((_project, id) => {
+      const stored = referenceOf(id);
+      Object.assign(stored, { title: null, matters: null, url: null, name: null, b3: null, agent_b3: null, meta: null, file: null, deleted: { by: "local", at: STAGED_AT } });
+      return Promise.resolve(structuredClone(stored));
+    }),
+    blobUrl: vi.fn<(project: string, b3: string) => string>((project, b3) => `/api/projects/${encodeURIComponent(project)}/blobs/${encodeURIComponent(b3)}`),
     // Marks and rollups (docs/features/card-trace.md): none.
     getTrace: vi.fn<(project: string, options?: TraceOptions, signal?: AbortSignal) => Promise<TraceDocument>>(() => Promise.resolve(aTrace([]))),
     /** No live tail; a plain function (`callsOf` never counts it) a test may replace to emit events. */

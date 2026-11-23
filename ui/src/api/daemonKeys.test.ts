@@ -123,6 +123,11 @@ import type {
   MapGhost,
   MapNode,
   MentionList,
+  BlobStored,
+  Reference,
+  ReferenceDeleted,
+  ReferenceList,
+  ReferenceMeta,
   MapParent,
   NodeView,
   OwnerNote,
@@ -534,6 +539,8 @@ const KEYS = {
     practices: true,
     // docs/features/comments.md "The card context and the task package": the 29th, after `practices`.
     comments: true,
+    // docs/features/work-references.md "A card's context and the task package": the 30th, after `comments`, ahead of the file.
+    references: true,
     roadmap: true,
     author: true,
     created_at: true,
@@ -1337,6 +1344,46 @@ const KEYS = {
   CommentDeleted: { by: true, at: true } satisfies Record<keyof CommentDeleted, true>,
   CommentItem: { id: true, kind: true, status: true } satisfies Record<keyof CommentItem, true>,
   MentionList: { login: true, comments: true, next_before: true, notes: true } satisfies Record<keyof MentionList, true>,
+  // docs/features/work-references.md "Documents": a reference, its facts, its tombstone, a list, a
+  // stored blob, the names "Documents" gives them, ahead of the file.
+  Reference: {
+    id: true,
+    on: true,
+    on_rev: true,
+    actor: true,
+    author: true,
+    kind: true,
+    title: true,
+    matters: true,
+    url: true,
+    name: true,
+    b3: true,
+    agent_b3: true,
+    size: true,
+    media: true,
+    class: true,
+    inline: true,
+    meta: true,
+    file: true,
+    warning: true,
+    created_at: true,
+    deleted: true,
+  } satisfies Record<keyof Reference, true>,
+  ReferenceMeta: { width: true, height: true, duration_ms: true, triangles: true } satisfies Record<keyof ReferenceMeta, true>,
+  ReferenceDeleted: { by: true, at: true } satisfies Record<keyof ReferenceDeleted, true>,
+  ReferenceList: { on: true, total: true, references: true, next_before: true, notes: true } satisfies Record<keyof ReferenceList, true>,
+  BlobStored: {
+    b3: true,
+    size: true,
+    media: true,
+    class: true,
+    inline: true,
+    meta: true,
+    agent_ready: true,
+    needs_matters: true,
+    warning: true,
+    stored: true,
+  } satisfies Record<keyof BlobStored, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -1379,7 +1426,7 @@ const CITED: Record<Named, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, comments, roadmap, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, practices, comments, references, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -1547,6 +1594,11 @@ const CITED: Record<Named, string> = {
   CommentDeleted: "by, at",
   CommentItem: "id, kind, status",
   MentionList: "login, comments, next_before, notes",
+  Reference: "id, on, on_rev, actor, author, kind, title, matters, url, name, b3, agent_b3, size, media, class, inline, meta, file, warning, created_at, deleted",
+  ReferenceMeta: "width, height, duration_ms, triangles",
+  ReferenceDeleted: "by, at",
+  ReferenceList: "on, total, references, next_before, notes",
+  BlobStored: "b3, size, media, class, inline, meta, agent_ready, needs_matters, warning, stored",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1977,8 +2029,17 @@ const COMMENTS: readonly Named[] = ["CommentList", "Comment", "CommentOn", "Comm
 /** comments' one key on a set the fixture names, as a pair: the review document's `comment_id` after `why` (56 served). */
 const COMMENTS_KEYS: readonly (readonly [Named, string])[] = [["Proposal", "comment_id"]];
 
+/** The hundred and eighty-seven types the fixture names before work-references, comments' six last. */
+const BEFORE_REFERENCES: readonly Named[] = [...BEFORE_COMMENTS, ...COMMENTS];
+
+/** work-references' five, sets 188 to 192 in "Documents"' order: a reference, its facts, its tombstone, a list, a stored blob (docs/features/work-references.md "Documents", RM-0137). */
+const REFERENCES: readonly Named[] = ["Reference", "ReferenceMeta", "ReferenceDeleted", "ReferenceList", "BlobStored"];
+
+/** work-references' one key on a set the fixture names, as a pair: the package's `references` after `comments` (30 served). */
+const REFERENCES_KEYS: readonly (readonly [Named, string])[] = [["TaskPackage", "references"]];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_COMMENTS, ...COMMENTS];
+const ALL: readonly Named[] = [...BEFORE_REFERENCES, ...REFERENCES];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -2053,6 +2114,9 @@ function served(name: Named): string[] {
  * "Acceptance criteria", DP14), then empty again.
  * And comments' review key, as a pair, and its six sets, every key of each, until its Rust test
  * wrote them (docs/features/comments.md "HTTP", RM-0136), then empty again.
+ * And work-references' five sets, every key of each, and its package key, as a pair (the package's
+ * `references` after `comments`), until its Rust test wrote them (docs/features/work-references.md
+ * "Documents", RM-0137), then empty again.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -2127,7 +2191,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DEPARTMENT_PRACTICES.at(-1)).toBe("LibraryChange");
     expect(BEFORE_SPECENGINE_GUIDE.at(-1)).toBe("Cited");
     expect(BEFORE_COMMENTS.at(-1)).toBe("GuideRuleRead");
-    expect(ALL.at(-1)).toBe("MentionList");
+    expect(BEFORE_REFERENCES.at(-1)).toBe("MentionList");
+    expect(ALL.at(-1)).toBe("BlobStored");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -2158,8 +2223,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
     // 174 since doc-library's five (docs/features/doc-library.md "Acceptance criteria", DL2); 176 since
     // department-practices' two (docs/features/department-practices.md "Acceptance criteria", DP14);
-    // 181 since specengine-guide's five (docs/features/specengine-guide.md "Data", GU6); 187 since comments' six (docs/features/comments.md "HTTP").
-    expect(ALL).toHaveLength(187);
+    // 181 since specengine-guide's five (docs/features/specengine-guide.md "Data", GU6); 187 since comments' six (docs/features/comments.md "HTTP");
+    // 192 since work-references' five (docs/features/work-references.md "Documents").
+    expect(ALL).toHaveLength(192);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -2195,9 +2261,19 @@ describe("the daemon's document types (AC-09)", () => {
     const mapKey = listed(CORPUS_MAP_KEYS);
     const practicesKey = listed(DEPARTMENT_PRACTICES_KEYS);
     const commentKey = listed(COMMENTS_KEYS);
+    const referenceKey = listed(REFERENCES_KEYS);
     expect(
       AHEAD_OF_FIXTURE.filter(
-        ([name, key]) => !SCOPE_RINGS.includes(name) && !CORPUS_MAP.includes(name) && !mapKey(name, key) && !DEPARTMENT_PRACTICES.includes(name) && !practicesKey(name, key) && !COMMENTS.includes(name) && !commentKey(name, key),
+        ([name, key]) =>
+          !SCOPE_RINGS.includes(name) &&
+          !CORPUS_MAP.includes(name) &&
+          !mapKey(name, key) &&
+          !DEPARTMENT_PRACTICES.includes(name) &&
+          !practicesKey(name, key) &&
+          !COMMENTS.includes(name) &&
+          !commentKey(name, key) &&
+          !REFERENCES.includes(name) &&
+          !referenceKey(name, key),
       ),
     ).toEqual([]);
     // None of delivery-analytics' but delivery-timeline's `timeline` on its document, a pair of its own.
@@ -2230,6 +2306,9 @@ describe("the daemon's document types (AC-09)", () => {
     // comments' review key and its six sets, every key (1, then 5, 13, 2, 2, 3, 4), until its Rust test
     // wrote them (docs/features/comments.md "HTTP"), then empty again.
     expect(AHEAD_OF_FIXTURE.filter(([name, key]) => COMMENTS.includes(name) || commentKey(name, key))).toEqual([]);
+    // work-references' five sets, every key (21, 4, 2, 5, 10), and its package key since its Rust test
+    // wrote them (docs/features/work-references.md "Documents"); empty again.
+    expect(AHEAD_OF_FIXTURE.filter(([name, key]) => REFERENCES.includes(name) || referenceKey(name, key))).toEqual([]);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
     // A flow's display title right after its name (docs/features/departments.md "Acceptance criteria", DP-1).
     expect(served("CardFlow")).toEqual(["name", "title", "disciplines", "columns", "moves", "accept", "return"]);
@@ -2362,7 +2441,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect([row.slice(row.indexOf("tags"), row.indexOf("tags") + 3), row.length]).toEqual([["tags", "disciplines", "rev"], 23]);
     const pkg = declaredKeys("TaskPackage");
     // 29 since comments' `comments` after `practices` (docs/features/comments.md "The card context and the task package").
-    expect([pkg.indexOf("practices"), pkg.length]).toEqual([22, 29]);
+    // 30 since work-references' `references` after `comments` (docs/features/work-references.md "A card's context and the task package").
+    expect([pkg.indexOf("practices"), pkg.length]).toEqual([22, 30]);
     expect(declaredKeys("TaskBundle")).toEqual(["node_ids", "budget", "disciplines", "bundle_hash"]);
     expect(declaredKeys("BundleLayers")).toEqual(["targets", "open_questions", "ancestors", "criteria", "bindings", "decisions", "neighbours", "terms", "tests", "practices"]);
     expect(source).toMatch(/^ {2}practices: BundleItem\[\];\n\}$/m);
@@ -2414,9 +2494,28 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^ {2}deleted: CommentDeleted \| null;\n {2}items: CommentItem\[\];\n\}$/m);
     expect(source).toMatch(/^export interface MentionList \{\n {2}login: string \| null;\n {2}comments: CommentDocument\[\];\n {2}next_before: string \| null;\n {2}notes: string\[\];\n\}$/m);
     expect(served("Proposal").slice(served("Proposal").indexOf("why"), served("Proposal").indexOf("why") + 2)).toEqual(["why", "comment_id"]);
-    expect(ALL.slice(BEFORE_COMMENTS.length)).toEqual([...COMMENTS]);
+    expect(ALL.slice(BEFORE_COMMENTS.length, BEFORE_REFERENCES.length)).toEqual([...COMMENTS]);
     // Ahead of the file until its Rust test wrote the six sets and the review's `comment_id`: no key now.
     expect([...COMMENTS.flatMap((name) => served(name).filter((key) => isAhead(name, key))), isAhead("Proposal", "comment_id")]).toEqual([false]);
+  });
+
+  it('types work-references\' five as the spec writes them: 21, 4, 2, 5, 10 keys in "Documents"\' order, every one present, a reference\'s `on` a comment\'s, its texts, hashes, size, type, facts and file state nullable; the package\'s `references` after `comments`; each citing `docs/features/work-references.md` (RM-0137)', () => {
+    expect(REFERENCES.map((name) => served(name).length)).toEqual([21, 4, 2, 5, 10]);
+    for (const name of REFERENCES) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} `);
+      expect([name, source.slice(source.lastIndexOf("/**", at), at).includes("`docs/features/work-references.md`")]).toEqual([name, true]);
+    }
+    expect(source).toMatch(/^export interface ReferenceMeta \{\n {2}width: number \| null;\n {2}height: number \| null;\n {2}duration_ms: number \| null;\n {2}triangles: number \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface ReferenceDeleted \{\n {2}by: string;\n {2}at: string;\n\}$/m);
+    expect(source).toMatch(/^export interface ReferenceList \{\n {2}on: CommentOn;\n {2}total: number;\n {2}references: Reference\[\];\n {2}next_before: string \| null;\n {2}notes: string\[\];\n\}$/m);
+    expect(source).toMatch(/^ {2}on: CommentOn;\n {2}on_rev: number \| null;\n {2}actor: string;\n {2}author: Author;\n {2}kind: string;\n {2}title: string \| null;\n {2}matters: string \| null;\n {2}url: string \| null;\n {2}name: string \| null;\n {2}b3: string \| null;\n {2}agent_b3: string \| null;\n {2}size: number \| null;\n {2}media: string \| null;\n {2}class: ReferenceClass \| null;\n {2}inline: boolean \| null;\n {2}meta: ReferenceMeta \| null;\n {2}file: ReferenceFile \| null;\n {2}warning: string \| null;\n {2}created_at: string;\n {2}deleted: ReferenceDeleted \| null;\n\}$/m);
+    expect(source).toMatch(/^ {2}agent_ready: boolean;\n {2}needs_matters: boolean;\n {2}warning: string \| null;\n {2}stored: string;\n\}$/m);
+    const pkg = served("TaskPackage");
+    expect(pkg.slice(pkg.indexOf("comments"), pkg.indexOf("comments") + 2)).toEqual(["comments", "references"]);
+    expect(ALL.slice(BEFORE_REFERENCES.length)).toEqual([...REFERENCES]);
+    // The five sets and the package's `references` since its Rust test wrote them: none ahead.
+    expect([...REFERENCES.flatMap((name) => served(name).filter((key) => isAhead(name, key))), isAhead("TaskPackage", "references")]).toEqual([false]);
   });
 
   it('types intake-similar\'s key as the spec writes it: the review document\'s `similar` always null, after `why`, 51 keys then, 53 since plain-questions\' two, 54 since collision-pairs\' `pair`, the key citing `docs/features/intake-similar.md` "Acceptance criteria" (IS10 of intake-similar)', () => {
@@ -2692,8 +2791,9 @@ describe("the daemon's document types (AC-09)", () => {
 
   it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 27, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks, UI-1 of roadmap-surfaces, UI of tested-reads)", () => {
     // The package's 28 and its bundle's 4 since department-practices' `practices` and `disciplines` (docs/features/department-practices.md "Acceptance criteria", DP12);
-    // the package's 29 since comments' `comments` (docs/features/comments.md "The card context and the task package").
-    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 29, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 4, 4]);
+    // the package's 29 since comments' `comments` (docs/features/comments.md "The card context and the task package");
+    // its 30 since work-references' `references` (docs/features/work-references.md "A card's context and the task package").
+    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 30, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 4, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
@@ -2735,15 +2835,17 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DEPARTMENT_PRACTICES).toHaveLength(174);
     expect(BEFORE_SPECENGINE_GUIDE).toHaveLength(176);
     expect(BEFORE_COMMENTS).toHaveLength(181);
-    expect(ALL).toHaveLength(187);
-    expect(new Set(ALL).size).toBe(187);
+    expect(BEFORE_REFERENCES).toHaveLength(187);
+    expect(ALL).toHaveLength(192);
+    expect(new Set(ALL).size).toBe(192);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
     const pkg = Object.keys(KEYS.TaskPackage);
     // department-practices' `practices` between them (docs/features/department-practices.md "Acceptance criteria", DP12).
     // comments' `comments` after it (docs/features/comments.md "The card context and the task package").
-    expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 5)).toEqual(["bundle", "practices", "comments", "roadmap", "author"]);
+    // work-references' `references` after them (docs/features/work-references.md "A card's context and the task package").
+    expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 6)).toEqual(["bundle", "practices", "comments", "references", "roadmap", "author"]);
     expect(declaredKeys("TaskPackage")).toEqual(pkg);
     expect(source).toMatch(/^  roadmap: TaskRoadmap \| null;$/m);
     // The TaskRoadmap set came with 3a's roadmap document (docs/features/roadmap-screen.md UI-1): the ten names.
@@ -2765,7 +2867,8 @@ describe("the daemon's document types (AC-09)", () => {
     const pkg = served("TaskPackage");
     // 28 since department-practices' `practices` (docs/features/department-practices.md "Acceptance criteria", DP12);
     // 29 since comments' `comments` (docs/features/comments.md "The card context and the task package").
-    expect([pkg.indexOf("tested"), pkg.length]).toEqual([16, 29]);
+    // 30 since work-references' `references` (docs/features/work-references.md "A card's context and the task package").
+    expect([pkg.indexOf("tested"), pkg.length]).toEqual([16, 30]);
     expect(pkg.slice(pkg.indexOf("bindings"), pkg.indexOf("bindings") + 3)).toEqual(["bindings", "tested", "spec_snapshot"]);
     expect(declaredKeys("TaskPackage")).toEqual(pkg);
     expect(source).toMatch(/^ {2}tested: TestedRow\[\] \| null;$/m);
@@ -3186,20 +3289,22 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     // scope-rings' three since its Rust test wrote them
     // (docs/features/scope-rings.md "Acceptance criteria", SR4) and corpus-map's six since its own did
     // (docs/features/corpus-map.md "Acceptance criteria", CM3): all hundred and sixty.
-    expect(ALL.filter((name) => !expected.includes(name))).toEqual([...SCOPE_RINGS, ...CORPUS_MAP, ...DEPARTMENT_PRACTICES, ...COMMENTS].filter((name) => !Object.hasOwn(sets, name)));
+    expect(ALL.filter((name) => !expected.includes(name))).toEqual([...SCOPE_RINGS, ...CORPUS_MAP, ...DEPARTMENT_PRACTICES, ...COMMENTS, ...REFERENCES].filter((name) => !Object.hasOwn(sets, name)));
     expect(expected.slice(0, BEFORE_SCOPE_RINGS.length)).toEqual(BEFORE_SCOPE_RINGS);
     expect(Object.keys(sets)).toEqual([...expected]);
     expect(Object.keys(sets)).toHaveLength(expected.length);
     // department-practices' two once its Rust test writes them (docs/features/department-practices.md "Acceptance criteria", DP14).
-    expect(expected).toEqual(ALL.filter((name) => !(DEPARTMENT_PRACTICES.includes(name) || COMMENTS.includes(name)) || Object.hasOwn(sets, name)));
+    expect(expected).toEqual(ALL.filter((name) => !(DEPARTMENT_PRACTICES.includes(name) || COMMENTS.includes(name) || REFERENCES.includes(name)) || Object.hasOwn(sets, name)));
     expect(expected.slice(0, BEFORE_DEPARTMENT_PRACTICES.length)).toEqual([...BEFORE_DEPARTMENT_PRACTICES]);
     // auto-feed's eight since its Rust test wrote them (docs/features/auto-feed.md "Acceptance criteria", FD3): all hundred and sixty-eight.
     // hub-auto's `Delegated` since its Rust test wrote it (HA7): a hundred and sixty-nine.
     // doc-library's five since its Rust test wrote them (docs/features/doc-library.md "Acceptance criteria", DL2): a hundred and seventy-four;
     // a hundred and seventy-six once department-practices' Rust test writes its two (DP14);
     // a hundred and eighty-one since specengine-guide's Rust test wrote its five (docs/features/specengine-guide.md "Data", GU6).
-    // A hundred and eighty-seven once comments' Rust test writes its six (docs/features/comments.md "HTTP").
-    expect(expected).toHaveLength(COMMENTS.every((name) => Object.hasOwn(sets, name)) ? 187 : 181);
+    // A hundred and eighty-seven once comments' Rust test writes its six (docs/features/comments.md "HTTP");
+    // a hundred and ninety-two once work-references' writes its five (docs/features/work-references.md "Documents").
+    const written = (names: readonly Named[]) => names.every((name) => Object.hasOwn(sets, name));
+    expect(expected).toHaveLength(181 + (written(COMMENTS) ? 6 : 0) + (written(REFERENCES) ? 5 : 0));
   });
 
   it("names department-split's three after IntakeMatch, sets 119 to 121 with their keys in the types' order: 5, 8, 9 (S3, U2 of department-split; a subtask's `mandate` last, M2 of task-mandate)", () => {
@@ -3324,7 +3429,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.TaskPackage).toEqual(compared("TaskPackage"));
     // 28 once department-practices' Rust test writes `practices` after `bundle` (docs/features/department-practices.md "Acceptance criteria", DP12);
     // 29 since comments' Rust test wrote `comments` after `practices` (docs/features/comments.md "The card context and the task package").
-    expect(sets.TaskPackage).toHaveLength(29);
+    // 30 once work-references' Rust test writes `references` after `comments` (docs/features/work-references.md "A card's context and the task package").
+    expect(sets.TaskPackage).toHaveLength(isAhead("TaskPackage", "references") && !(sets.TaskPackage ?? []).includes("references") ? 29 : 30);
   });
 
   it("names health-left's keys in the document's order: the health document's three, then health-code's three, then health-drift's drift, then usage-orphans' orphans once written, an amendment's six (AC-T2; UI-1 of health-code, of health-drift; UO9 of usage-orphans)", () => {
@@ -3540,13 +3646,23 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it("names comments' six last, after GuideRuleRead, sets 182 to 187: 5, 13, 2, 2, 3, 4 keys, each as provisional.ts declares it; the review's `comment_id` after `why` (RM-0136, docs/features/comments.md \"HTTP\")", () => {
-    expect(Object.keys(sets).slice(BEFORE_COMMENTS.length)).toEqual([...COMMENTS]);
+    expect(Object.keys(sets).slice(BEFORE_COMMENTS.length, BEFORE_REFERENCES.length)).toEqual([...COMMENTS]);
     expect(Object.keys(sets).indexOf("CommentList")).toBe(181);
     expect(Object.keys(sets).at(BEFORE_COMMENTS.length - 1)).toBe("GuideRuleRead");
     expect(COMMENTS.map((name) => sets[name])).toEqual(COMMENTS.map((name) => declaredKeys(DECLARED_AS[name] ?? name)));
     expect(COMMENTS.map((name) => sets[name]?.length)).toEqual([5, 13, 2, 2, 3, 4]);
     const review = sets.Proposal ?? [];
     expect(review.slice(review.indexOf("why"), review.indexOf("why") + 2)).toEqual(["why", "comment_id"]);
+  });
+
+  it("names work-references' five after MentionList once its Rust test writes them, sets 188 to 192: 21, 4, 2, 5, 10 keys, each as provisional.ts declares it; the package's `references` after `comments` (RM-0137, docs/features/work-references.md \"Documents\")", () => {
+    const named = REFERENCES.filter((name) => Object.hasOwn(sets, name));
+    // All five or none: a slice's sets come in one change.
+    expect([0, REFERENCES.length]).toContain(named.length);
+    expect(Object.keys(sets).slice(BEFORE_REFERENCES.length)).toEqual(named);
+    expect(named.map((name) => sets[name])).toEqual(named.map((name) => declaredKeys(name)));
+    const pkg = sets.TaskPackage ?? [];
+    expect(pkg.slice(pkg.indexOf("comments") + 1, pkg.indexOf("comments") + 2)).toEqual(pkg.includes("references") ? ["references"] : ["roadmap"]);
   });
 
   it("names doc-library's five last, after Delegated, sets 170 to 174: 6, 5, 22, 10, 5 keys in the types' order, each as provisional.ts declares it (DL2 of doc-library)", () => {

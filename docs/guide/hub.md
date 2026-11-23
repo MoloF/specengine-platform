@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 summarises: [docs/canon/hub.md#identity, docs/canon/hub.md#trust, docs/canon/hub-team.md#team, docs/canon/hub-team.md#acts, docs/canon/hub-confirm.md#rules, docs/canon/hub-mcp.md#tools, docs/canon/hub-ops.md#dumps, docs/canon/hub-ops.md#upgrade, docs/canon/hub-restic.md#the-backend, docs/canon/hub-deploy.md#accounts]
 ---
 
@@ -44,7 +44,7 @@ claude mcp add --transport http --scope user hub-lamp-game https://hub.example.o
   --header "Authorization: Basic <printed>"
 ```
 
-The hub serves the reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, `get_roadmap`, `get_flow`, `get_trace`, `get_proposal`), the queue tools (`propose_change`, `ask_question`, `report_discrepancy`, `report_decision`), the card tools and `get_guide`. Each item is stored under the caller's login. No tool decides. Code tools and task tools stay on terminals: a hub holds no code index and runs no `T-` tasks.
+The hub serves the reads (`get_tree`, `get_node`, `search`, `get_context_bundle`, `get_roadmap`, `get_flow`, `get_trace`, `get_proposal`), the queue tools (`propose_change`, `ask_question`, `report_discrepancy`, `report_decision`), the card tools, the comment tools (`list_comments`, `add_comment`), the reference tools (`list_references`, `get_reference`, `add_reference`, links only) and `get_guide`. Each item is stored under the caller's login. No tool decides. Code tools and task tools stay on terminals: a hub holds no code index and runs no `T-` tasks.
 
 ### Screen
 
@@ -52,7 +52,7 @@ The same web UI as locally. Each login lands on its department (`[[workspace]] l
 
 ## Where it lives
 
-On the host: the proxy (Traefik), the login door (Authelia), the SpecEngine image, and sidecars that dump the queue and the door every 15 minutes. A `backup` sidecar sends the dumps off the host with restic once a backend is named in `secrets/restic_env`; until then it waits, unhealthy, saying why each round. Projects are checkouts under `/projects/<name>`; the queue and index are in a data volume. `.env` pins `SPECENGINE_VERSION` and turns on `SPECENGINE_PUSH`.
+On the host: the proxy (Traefik), the login door (Authelia), the SpecEngine image, and sidecars that dump the queue and the door every 15 minutes. A `backup` sidecar sends the dumps off the host with restic once a backend is named in `secrets/restic_env`; until then it waits, unhealthy, saying why each round. Projects are checkouts under `/projects/<name>`; the queue and index are in a data volume, references' files in a volume of their own, `specengine-blobs`, which no dump or backup carries: they are lost with the host, so keep your originals. `.env` pins `SPECENGINE_VERSION` and turns on `SPECENGINE_PUSH`.
 
 In the project, the people who act beyond plain writes are listed in the committed `specengine.toml`:
 
@@ -94,7 +94,7 @@ Each person's Claude Code gets its own secret, at `--scope user`. `mcp revoke` o
 
 ### Dump before every upgrade {#GD-HUB-UPGRADE-WITH-DUMP}
 
-Upgrade by the runbook: a dump of the queue and the door on the old version (with off-host backups off, copy the dumps off the host by hand), then the new tag, `SPECENGINE_VERSION`, `docker compose pull` and `up -d`. Upgrade the hub before any terminal starts using a config key the old build refuses. A newer queue refuses an older binary, so the dump is your way back.
+Upgrade by the runbook: a dump of the queue and the door on the old version (with off-host backups off, copy the dumps off the host by hand), then the new tag, `SPECENGINE_VERSION`, `docker compose pull` and `up -d`. Upgrade the hub before any terminal starts using a config key the old build refuses. A newer queue refuses an older binary, so the dump is your way back. Never remove `specengine-blobs`.
 
 ### Turn off-host backups on deliberately {#GD-HUB-OFFSITE-BACKUPS}
 

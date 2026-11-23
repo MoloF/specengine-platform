@@ -267,10 +267,15 @@ impl StoredCommentVersion {
 
 /// The comment tables as stored: `comments` by ID number, `comment_versions`
 /// by comment ID number and version.
+///
+/// It carries the queue's `refs` rows too, by ID number (task spec
+/// `work-references`, "Dump format 9"): the queue's talk and material, the
+/// rows a dump adds after the proposals', tasks', runs' and cards'.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StoredComments {
     pub comments: Vec<StoredComment>,
     pub versions: Vec<StoredCommentVersion>,
+    pub refs: Vec<super::refs::StoredRef>,
 }
 
 impl StoredComments {
@@ -295,6 +300,12 @@ impl StoredComments {
                 "version {} of comment {}: not a row of the project `{project}`",
                 row.version,
                 row.comment_id().unwrap_or("NULL")
+            )));
+        }
+        if let Some(row) = self.refs.iter().find(|row| row.project() != Some(project)) {
+            return Err(QueueError::Invalid(format!(
+                "reference {}: not a row of the project `{project}`",
+                row.id().unwrap_or("NULL")
             )));
         }
         Ok(())
@@ -1173,7 +1184,7 @@ impl SqliteQueue {
     /// a reader or a writer active anywhere makes it give up silently (the
     /// next checkpoint, or the last connection's close, takes the frames);
     /// nothing it does or fails to do changes the delete.
-    fn checkpoint_now(&self) {
+    pub(super) fn checkpoint_now(&self) {
         let Ok(timeout) = self
             .conn
             .pragma_query_value(None, "busy_timeout", |row| row.get::<_, i64>(0))
@@ -1208,7 +1219,7 @@ impl SqliteQueue {
     /// cell's old place, is zeroed in that write, so a later delete leaves no
     /// copy of any version in the file. Comment writes alone pay it: every
     /// handle is one call's, and no other write touches a comment's pages.
-    fn erasing(&self) -> Result<(), QueueError> {
+    pub(super) fn erasing(&self) -> Result<(), QueueError> {
         Ok(self.conn.pragma_update(None, "secure_delete", "ON").db()?)
     }
 

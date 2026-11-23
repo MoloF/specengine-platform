@@ -4,6 +4,7 @@
 // index.ts's `import("./ru")`.
 import type { en } from "./en";
 import type { enComments } from "./enComments";
+import type { enReferences } from "./enReferences";
 
 /** The chrome's languages: a third one is a new decision (ADR-0072). */
 export type Language = "en" | "ru";
@@ -24,12 +25,12 @@ type Shaped<T> = {
 
 /**
  * The whole English catalog: `en`, in first load, and the parts that load with their views' chunks
- * (the comments', ./enComments.ts). It types `t` and Russian alike.
+ * (the comments', ./enComments.ts; the references', ./enReferences.ts). It types `t` and Russian alike.
  */
-export type English = typeof en & { readonly comments: typeof enComments };
+export type English = typeof en & { readonly comments: typeof enComments; readonly references: typeof enReferences };
 
-/** A part of English that loads with its view's chunk, merged into the instance by `addEnglishPart`. */
-export type EnglishPart = Pick<English, "comments">;
+/** A part of English that loads with its view's chunk, merged into the instance by `addEnglishPart`: one part each. */
+export type EnglishPart = Pick<English, "comments"> | Pick<English, "references">;
 
 /** A catalog of the chrome: what `ru.ts` is typed as. */
 export type Catalog = Shaped<English>;

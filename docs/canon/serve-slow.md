@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, scripts/deploy]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-23
 ---
 
 # Daemon: slow requests, long turns and the proxy's access log
@@ -65,6 +65,7 @@ Fourteen flags in the `traefik` service's `command:` (`hub-deploy.md` "Host"; `t
 - `index=walked` on a hub: a read that ran the reconcile walk (`spec-read-freshness.md` "A hub's trusted index"). `status=gone`: a person who left. `by=sync`: the `--push` merge.
 - **Below the threshold.** A measurement under 2 s, a gate's, needs a line per request: set `SPECENGINE_SLOW_MS=0` in `.env`, `docker compose up -d`, read, then remove it and `docker compose up -d` again.
 - **Where a request's time went**: `check_ms`, `index_ms`, `git_ms` over `git` processes, `write_ms`; `run_ms` less their sum is the rest (config, rendering, the queue's reads).
+- **An upload, not a stall.** A `PUT …/blobs` line's `wait_ms` runs from its arrival to the turn its commit takes only after the whole body (`work-references.md` "On a hub"), so it holds the upload's own time: a large one there is the body, not a stalled holder.
 - **A stream, not a hang.** The page's tail (`GET …/events`, router `hub@file`) and an agent's `/mcp` GET stream (`hub-mcp@file`) stay open up to 300 s: Traefik logs each with a `Duration` near 300 s, and the daemon writes no `slow request` line for it. A long Traefik line with a daemon request line at the same moment is a slow request; one with neither a daemon line nor a 300 s stream's shape spent its time at the proxy or the door (`Overhead`).
 
 ## Known limits

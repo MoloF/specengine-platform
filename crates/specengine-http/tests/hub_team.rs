@@ -325,14 +325,16 @@ fn no_row(login: &str) -> String {
 const MEMBER_ACTS: [&str; 3] = ["stage", "accept", "clear"];
 const LEAD_ACTS: [&str; 5] = ["stage", "accept", "clear", "group_clear", "confirm"];
 /// An `owner`'s: a lead's and, since docs/features/comments.md (RM-0136,
-/// D7), `delete_comment`, last.
-const OWNER_ACTS: [&str; 6] = [
+/// D7), `delete_comment`, then, since docs/features/work-references.md
+/// (RM-0137, D2), `delete_reference`, last.
+const OWNER_ACTS: [&str; 7] = [
     "stage",
     "accept",
     "clear",
     "group_clear",
     "confirm",
     "delete_comment",
+    "delete_reference",
 ];
 
 // --------------------------------------------------------------- the six acts
@@ -865,8 +867,10 @@ fn a3_a_login_outside_team_keeps_the_five_writes_and_every_read() {
 }
 
 /// "Data": `GET .../team` is the asker's own row, keys in order, exact bytes:
-/// the first three acts for a `member`, five for a `lead`, six for an `owner`
-/// (`delete_comment` since docs/features/comments.md D7), and a repeat of the
+/// the first three acts for a `member`, five for a `lead`, seven for an
+/// `owner` (`delete_comment` since docs/features/comments.md D7,
+/// `delete_reference` since docs/features/work-references.md D2), and a
+/// repeat of the
 /// same bytes. M: an absent entry read as `member`.
 #[test]
 fn a3_team_answers_the_askers_own_row() {

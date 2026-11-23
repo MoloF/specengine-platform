@@ -1123,11 +1123,11 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    // This build's queue schema is 15 (docs/features/comments.md CM1): 16 is
-    // newer. M1's record at a62c81c: 11 over 10; task-mandate R1's at
-    // 8a43e5d: 12 over 11; plain-questions' at 4d52ec3c: 13 over 12 (the
-    // HEAD build refusing a schema 13 queue); collision-pass: 14 over 13.
-    sqlite3(&db(&s.home), "PRAGMA user_version = 16;");
+    // This build's queue schema is 16 (docs/features/work-references.md
+    // RF1): 17 is newer. M1's record at a62c81c: 11 over 10; task-mandate
+    // R1's at 8a43e5d: 12 over 11; plain-questions' at 4d52ec3c: 13 over 12
+    // (the HEAD build refusing a schema 13 queue); collision-pass: 14 over 13.
+    sqlite3(&db(&s.home), "PRAGMA user_version = 17;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
@@ -1135,14 +1135,14 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
     assert!(
-        message.contains("16") && message.contains("15"),
+        message.contains("17") && message.contains("16"),
         "{message}"
     );
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "16",
+        "17",
         "left alone"
     );
     assert_eq!(

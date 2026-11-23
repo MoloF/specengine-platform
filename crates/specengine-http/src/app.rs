@@ -32,6 +32,13 @@
 //! page's dialog; on a hub the author or a `[team]` `owner` judged in the
 //! call) and `comment_raise`; `…/mentions` a read, a hub's login asked when
 //! the query names none. No agent tool edits or deletes a comment.
+//! A reference's routes (task spec `work-references`, "HTTP"):
+//! `…/references` a trusted read and a write, its 405 `Allow: GET, POST`;
+//! `…/references/<id>` a DELETE alone, through the board's door, the
+//! library's `reference_add` (its files judged before the turn by
+//! `reference_prepare`) and `reference_delete`; `…/blobs` the one binary
+//! door, a PUT alone, and `…/blobs/<b3>` a read that takes no turn
+//! ([`crate::blobs`]). No agent tool deletes a reference or uploads a file.
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `/api/guide` and `/api/guide/<topic>`
 //! SpecEngine's own guide as this build embedded it, no project, no turn,
@@ -90,7 +97,7 @@ use axum::http::header::{ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, HOS
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::routing::{MethodRouter, any, delete, get, post};
+use axum::routing::{MethodRouter, any, delete, get, post, put};
 use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
@@ -99,15 +106,17 @@ use specengine_cli::{
     CardSplitBody, CatalogRequest, CheckRequest, CliError, CommentAddBody, CommentDeleteRequest,
     CommentEditBody, CommentListRequest, CommentMentionsRequest, CommentRaiseBody, DeliveryRequest,
     Exit, FlowRequest, GraphRequest, GuideRequest, HealthRequest, InboxRequest, IndexTrust,
-    LastChangeCache, LibraryRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest,
-    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
-    StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest,
-    UnstageRequest, View, WorkspaceRequest, comment_query_problem, process_git, project_entry,
+    LastChangeCache, LibraryRequest, LockDiffRequest, Outcome, ReferenceAddBody,
+    ReferenceDeleteRequest, ReferenceListRequest, ReviewRequest, RoadmapRequest, RoundAnswersBody,
+    RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest,
+    TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View,
+    WorkspaceRequest, comment_query_problem, process_git, project_entry, reference_query_problem,
     roadmap_flags, round_limit, team_read, utc_now,
 };
 
 use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
 use crate::args::{Args, percent_decode, project_path};
+use crate::blobs::{self, Uploads};
 use crate::hub::{Hub, Login};
 use crate::mcp::{self, Mounts};
 use crate::start::Project;
@@ -137,6 +146,9 @@ pub(crate) struct App {
     /// (`docs/features/direction-catalog.md` "Acceptance criteria", DC-8;
     /// task spec `doc-library` DL11): the daemon's one such cache.
     pub catalogs: LastChangeCache,
+    /// The uploads running now, the daemon's and each login's
+    /// ([`crate::blobs`], task spec `work-references`).
+    pub uploads: Uploads,
 }
 
 pub(crate) type Shared = Arc<App>;
@@ -176,6 +188,7 @@ impl App {
             mcp,
             life,
             catalogs: LastChangeCache::default(),
+            uploads: Uploads::default(),
         }
     }
 
@@ -427,6 +440,33 @@ pub(crate) fn router(app: Shared) -> Router {
             "/api/projects/{p}/mentions",
             read(mentions).noted("/api/projects/{p}/mentions"),
         )
+        // A reference's routes (task spec `work-references`, "HTTP"): the
+        // list a read and the attach a write; a delete on one reference; the
+        // binary door, its one PUT; a stored file's read, no turn.
+        .route(
+            "/api/projects/{p}/references",
+            get(references)
+                .post(add_reference)
+                .head(only_references)
+                .fallback(only_references)
+                .noted("/api/projects/{p}/references"),
+        )
+        .route(
+            "/api/projects/{p}/references/{id}",
+            delete(delete_reference)
+                .fallback(only_delete)
+                .noted("/api/projects/{p}/references/{id}"),
+        )
+        .route(
+            "/api/projects/{p}/blobs",
+            put(blobs::put_blob)
+                .fallback(only_put)
+                .noted("/api/projects/{p}/blobs"),
+        )
+        .route(
+            "/api/projects/{p}/blobs/{b3}",
+            read(blobs::get_blob).noted("/api/projects/{p}/blobs/{b3}"),
+        )
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
             post(stage)
@@ -530,7 +570,9 @@ where
 /// `same-origin` or `none`, but for the [`landing`]
 /// (docs/features/local-landing.md). A hub judges [`Hub::fenced`] instead
 /// and hands the handlers its [`Login`]; a local daemon reads no login
-/// header. Every response gets `Cache-Control: no-store`.
+/// header. Every response gets `Cache-Control: no-store` but a served
+/// file's (the blob GET's 200, 206 and 304, marked [`blobs::ServedFile`]),
+/// which keeps its own `private, no-cache`.
 async fn fence(State(app): State<Shared>, mut request: Request, next: Next) -> Response {
     let passed = match &app.hub {
         Some(hub) => {
@@ -552,7 +594,12 @@ async fn fence(State(app): State<Shared>, mut request: Request, next: Next) -> R
     } else {
         next.run(request).await
     };
-    response.headers_mut().insert(CACHE_CONTROL, NO_STORE);
+    // Every response `no-store` (an event stream's and `/mcp`'s too), but a
+    // served file's, tagged by its handler alone (`private, no-cache`: task
+    // spec `work-references`, "Serving").
+    if response.extensions().get::<blobs::ServedFile>().is_none() {
+        response.headers_mut().insert(CACHE_CONTROL, NO_STORE);
+    }
     response
 }
 
@@ -690,7 +737,28 @@ async fn only_comments(method: Method, uri: Uri) -> Response {
     )
 }
 
-/// 405 on one comment's route.
+/// 405 on a reference's list, `HEAD` included.
+async fn only_references(method: Method, uri: Uri) -> Response {
+    method_refused(
+        &method,
+        &uri,
+        "this path takes only GET (the references) and POST (a new reference)",
+        Some("GET, POST"),
+    )
+}
+
+/// 405 on the binary door: a PUT of the bytes alone (no `Access-Control-*`
+/// on any answer, `OPTIONS` included).
+async fn only_put(method: Method, uri: Uri) -> Response {
+    method_refused(
+        &method,
+        &uri,
+        "this path takes only PUT (a file's bytes, application/octet-stream)",
+        Some("PUT"),
+    )
+}
+
+/// 405 on one comment's or reference's route.
 async fn only_delete(method: Method, uri: Uri) -> Response {
     method_refused(&method, &uri, "only DELETE is served here", Some("DELETE"))
 }
@@ -713,7 +781,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, cards/counts, round, \
-             comments, mentions, events, delivery, catalog, map, rings, library, workspaces}}, \
+             comments, mentions, references, references/<id>, blobs, blobs/<b3>, events, \
+             delivery, catalog, map, rings, library, workspaces}}, \
              /api/identity, /api/guide and /api/guide/<topic>; the web UI: / and \
              /assets/<file>",
             uri.path()
@@ -1861,6 +1930,113 @@ async fn delete_comment(State(app): State<Shared>, request: Request) -> Result<R
         };
         specengine_cli::comment_delete(env, globals, &request, &mut |_| true)
             .map(|outcome| Outcome::Comment(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/references?on=X[&before=RF][&limit=N]`: `spec ref list --json`
+/// (task spec `work-references`, "HTTP"), a trusted read on a hub: 200 the
+/// page, 404 `{id, reason}` no such target, 409 an alias; a query off its
+/// grammar a 400 with the CLI's line, nothing run.
+async fn references(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("references", &["on", "before", "limit"], &uri)?;
+    let (on, before, limit) = (|| {
+        Ok::<_, String>((
+            args.required_text("on")?,
+            args.text("before")?,
+            args.integer("limit")?,
+        ))
+    })()
+    .map_err(Refusal::bad_request)?;
+    if let Some(problem) = reference_query_problem(before.as_deref(), limit) {
+        return Err(Refusal::bad_request(problem));
+    }
+    Ok(run_read(project, move |env, globals| {
+        let request = ReferenceListRequest {
+            on,
+            before,
+            limit: limit.and_then(|limit| u64::try_from(limit).ok()),
+        };
+        specengine_cli::reference_list(env, globals, &request)
+            .map(|outcome| Outcome::ReferenceList(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// The project and the reference ID (percent-decoded once, judged by the
+/// CLI) of `…/references/<id>`, from a same-origin page only.
+fn reference_target(
+    app: &App,
+    uri: &Uri,
+    headers: &HeaderMap,
+) -> Result<(Arc<Project>, String), Refusal> {
+    let (project, rest) = app.project_of(uri)?;
+    same_origin(headers)?;
+    let raw = rest
+        .strip_prefix("references/")
+        .filter(|raw| !raw.is_empty() && !raw.contains('/'))
+        .ok_or_else(|| unknown_route_of(uri))?;
+    let id = percent_decode(raw).map_err(Refusal::bad_request)?;
+    Ok((project, id))
+}
+
+/// `POST …/references` `{on, b3, agent_b3, name, url, title, matters, as}`:
+/// `ref add` (task spec `work-references`, "HTTP"), past the board's door:
+/// the served slug (404), a same-origin page (403), JSON (415), at most 1
+/// MiB (413), the body (400: an unknown key, a shape, a cap); on a hub `as`
+/// bound to the login. Before the turn the named files are stat'ed, sniffed
+/// and their facts read (`reference_prepare`); in the turn the library
+/// checks them again and inserts the row: 200 the reference, 400 a missing
+/// "what matters" or an `agent_b3` rule, 404 no such target or blob, 409 an
+/// alias, 503 cannot run. A plain write: `[team]` is not read.
+async fn add_reference(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(request.uri())?;
+    same_origin(request.headers())?;
+    let login = login_of(&request);
+    let mut body = written_body(request, ReferenceAddBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    let (b3, agent_b3) = (body.b3.clone(), body.agent_b3.clone());
+    let prepared = if b3.is_some() {
+        Some(
+            answer::read(Arc::clone(&project), move |env, globals, _| {
+                specengine_cli::reference_prepare(env, globals, b3.as_deref(), agent_b3.as_deref())
+            })
+            .await?,
+        )
+    } else {
+        None
+    };
+    Ok(run(project, move |env, globals| {
+        let mut request = body.request(utc_now(), login.map(|Login(login)| login));
+        request.prepared = prepared;
+        specengine_cli::reference_add(env, globals, &request)
+            .map(|outcome| Outcome::Reference(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `DELETE …/references/<id>`, no body: `ref delete`, its consent the
+/// page's dialog. On a hub the library judges the request's login, the
+/// reference's author or a `[team]` `owner` (`[team]` absent or bad: the
+/// author alone), else a 403 with its line; locally anyone, `deleted_by`
+/// `local`. Its texts erased and its files, named by no other live
+/// reference, collected in the same call, in the turn. A plain write.
+async fn delete_reference(
+    State(app): State<Shared>,
+    request: Request,
+) -> Result<Response, Refusal> {
+    let (project, id) = reference_target(&app, request.uri(), request.headers())?;
+    let login = login_of(&request);
+    Ok(run(project, move |env, globals| {
+        let request = ReferenceDeleteRequest {
+            id,
+            actor: None,
+            login: login.map(|Login(login)| login),
+            now: utc_now(),
+        };
+        specengine_cli::reference_delete(env, globals, &request, &mut |_| true)
+            .map(|outcome| Outcome::Reference(Box::new(outcome)))
     })
     .await)
 }

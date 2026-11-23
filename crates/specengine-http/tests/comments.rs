@@ -513,8 +513,9 @@ fn delete_line(id: &str, author: &str) -> String {
 /// each, a tombstone naming the deleter); the lead, a member and a login
 /// outside `[team]` get 403 with the line, nothing changed; a person
 /// deletes their own agent's comment; a second delete is a 409;
-/// `GET .../team`'s `allowed` ends with `delete_comment` for the owner
-/// alone. M: any `[team]` login may delete; the author check dropped.
+/// `GET .../team`'s `allowed` holds `delete_comment` (since
+/// docs/features/work-references.md followed by `delete_reference`) for the
+/// owner alone. M: any `[team]` login may delete; the author check dropped.
 #[test]
 fn cm6_the_author_and_the_owner_delete_on_a_hub() {
     let hub = hub("cm-hub-cm6", Some(TEAM));
@@ -598,7 +599,8 @@ fn cm6_the_author_and_the_owner_delete_on_a_hub() {
             "clear",
             "group_clear",
             "confirm",
-            "delete_comment"
+            "delete_comment",
+            "delete_reference"
         ])
     );
     for login in ["lena", "tomas"] {
@@ -1017,7 +1019,8 @@ fn cm15_the_hubs_tools_on_the_wire() {
     let mut agent = Stateless::new(hub.server.port, SLUG, "lev");
     let list = agent.tools();
     let names = common::mcp_http::tool_names(&list);
-    assert_eq!(names.len(), 21, "{names:?}");
+    // 24 since docs/features/work-references.md RF20.
+    assert_eq!(names.len(), 24, "{names:?}");
     for name in ["add_comment", "list_comments"] {
         assert!(names.iter().any(|known| known == name), "{name}: {names:?}");
     }

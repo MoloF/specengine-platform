@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # UI languages: the chrome in English and Russian
@@ -17,7 +17,7 @@ Every chrome string is a key of one catalog, `ui/src/i18n/`: English, `en.ts`, t
 
 ## Catalog
 
-- **Files**: `en.ts` (`as const`, values byte-equal to the strings they replaced); `enComments.ts`, English loading with the comments' chunks (`addEnglishPart`; `English` = `en` + `comments`); `ru.ts` (`ru: Catalog`, every part); `catalog.ts` (`Language`, `LANGUAGES`, `isLanguage`; `Catalog`, `English`'s shape, string leaves, each plural group gaining required `_few`, `_many`; `Messages`, plain nested text, for the parity test; it imports `en` as a type and no value); `i18next.d.ts` (`CustomTypeOptions`: keys typed by `en`); `index.ts`; `fill.ts`.
+- **Files**: `en.ts` (`as const`, values byte-equal to the strings they replaced); `enComments.ts`, `enReferences.ts`, English loading with those parts' chunks (`addEnglishPart`; `English` = `en` + `comments` + `references`); `ru.ts` (`ru: Catalog`, every part); `catalog.ts` (`Language`, `LANGUAGES`, `isLanguage`; `Catalog`, `English`'s shape, string leaves, each plural group gaining required `_few`, `_many`; `Messages`, plain nested text, for the parity test; it imports `en` as a type and no value); `i18next.d.ts` (`CustomTypeOptions`: keys typed by `en`); `index.ts`; `fill.ts`.
 - **Keys**: `[a-z][A-Za-z0-9_]*` segments joined by `.`, the first a `src/` directory (`home` for `overview/`, `round` for Questions) or `language`; only a plural form ends `_one`, `_few`, `_many`, `_other`.
 - **Values**: plain text, `{{name}}` placeholders, `{{count}}` in every plural form and nowhere else; no markup, `$t(` or format; a command to copy is code. Key caps (`Esc`, `Enter`, `Cmd-K`, letters) match in both; the arrows and Space are words, translated. Two counts on one line are two plural groups joined by a third key.
 - **Elements**: `fill(t(key, {link: slot("link")}), {link: <a/>})` places a React node at each slot of the translated text; never markup. `around(text, value)` cuts a translated sentence at the first `value`, so a count is drawn on its own and the words around it read out: the count's placeholder comes first in every form of both languages, no digit before it, and every key a view cuts is in `catalog.test.ts` `AROUND`.
@@ -31,7 +31,7 @@ Every chrome string is a key of one catalog, `ui/src/i18n/`: English, `en.ts`, t
 
 ## Switcher
 
-A Language select in the shell's header beside Department, each option under its `lang` and named in its own language by `languageName(l)`: `Intl.DisplayNames([l], {type: "language"})`, its first letter upper-cased, else the code, so Russian reads right before its chunk loads. A choice is stored and, its catalog in, applies at once: no request, focus, view state and query data kept. Not in yet: the page keeps its language and `lang`, the select shows the choice with `aria-busy`, and it applies when the chunk lands. A failed chunk first reloads the page, once per build ("Size"); then English stays, and `language.failed` shows under the select as `role="status"` until the next choice, which imports again. The root error page (`RootFailure`) has none.
+A Language select in the shell's header beside Department, each option under its `lang` and named in its own language by `languageName(l)`: `Intl.DisplayNames([l], {type: "language"})`, its first letter upper-cased, else the code, so Russian reads right before its chunk loads. A choice is stored and, its catalog in, applies at once: no request; focus, view state, query data kept. Not in yet: the page keeps its language and `lang`, the select shows the choice, `aria-busy`, applied when the chunk lands. A failed chunk first reloads the page, once per build ("Size"); then English stays, and `language.failed` shows under the select as `role="status"` until the next choice, which imports again. The root error page (`RootFailure`) has none.
 
 ## Served text
 
@@ -58,9 +58,9 @@ Every screen and panel. Every `src/` directory but `api/`, `i18n/`, `mocks/`, `s
 
 ## Size
 
-The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus every `<link rel="modulepreload">` it lists, raw bytes on disk, as the daemon sends them (no `content-encoding`, `serve-ui.md`). Each UI slice prints it in its "Implementation" with the first-load gzip (Vite's per-chunk figures, summed) and `ru-*.js` raw and gzip (a hub's proxy may compress). Baseline, 2026-11-09 (RM-0090): 768.96 kB (`Icon-*.js` holding i18next and English), gzip 219.15 kB; `ru-*.js` 134.98 kB, gzip 31.13 kB.
+The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus every `<link rel="modulepreload">` it lists, raw bytes on disk, as sent (no `content-encoding`, `serve-ui.md`). Each UI slice prints it in its "Implementation" with the first-load gzip (Vite's per-chunk figures, summed) and `ru-*.js` raw and gzip (a proxy may compress). Baseline, 2026-11-09 (RM-0090): 768.96 kB (`Icon-*.js`: i18next, English), gzip 219.15 kB; `ru-*.js` 134.98 kB, gzip 31.13 kB.
 
-**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a part out of first load (a lazy chunk: `HealthRegions`, `RoundScreen`, `Markdown`, `DocBody`, `RoadmapView`, `GraphView`, `DepartmentOverview`, `MapView`, `RingsView`, `FeedView`, `CardPage`, `DocumentsView`, `BindingsPanel`, `TasksView`, the comments' four) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. At `comments`: 815 001 B.
+**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a part out of first load (a lazy chunk: `HealthRegions`, `RoundScreen`, `Markdown`, `DocBody`, `RoadmapView`, `GraphView`, `DepartmentOverview`, `MapView`, `RingsView`, `FeedView`, `CardPage`, `DocumentsView`, `BindingsPanel`, `TasksView`, the comments' four, `ReferencesPart`) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. At `work-references`: 816 857 B.
 
 **Reload.** A page open across a redeploy asks for lazy chunks that are gone, and `React.lazy` keeps the failure. `app/reload.ts`, installed by `main.tsx` before `readyLanguage()`, takes `vite:preloadError` (from first load's `preload-helper-*.js`) and reloads once per build, silently: `sessionStorage` `specengine.reloaded` holds the entry's hashed `import.meta.url`; holding this build, or a storage call throwing, leaves the route's error and Retry. Never `preventDefault`. `index.ts` chains Russian's handlers on the bare `import("./ru")`, outside Vite's wrapper, so its failure reaches the reload too.
 

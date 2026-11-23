@@ -115,16 +115,17 @@ const COMMENTS_INFO: &str = "0 id TEXT 1 1\n1 project TEXT 1 0\n2 on_kind TEXT 1
 const COMMENT_VERSIONS_INFO: &str = "0 comment_id TEXT 1 1\n1 project TEXT 1 0\n\
 2 version INTEGER 1 2\n3 body TEXT 0 0\n4 written_at TEXT 1 0";
 
-/// CM1: 15; both tables as the DDL writes them, STRICT, indexed; the three
+/// CM1: 15 (16 since docs/features/work-references.md RF1); both tables as
+/// the DDL writes them, STRICT, indexed; the three
 /// column lists equal `PRAGMA table_info`. M: a column dropped from
 /// `STEP_15`.
 #[test]
 fn cm1_a_new_queue_stands_at_15_with_both_tables_pinned() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     let scratch = Scratch::new("cm-cm1-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "15");
+    assert_eq!(user_version(&db), "16");
 
     assert_eq!(table_info(&db, "comments"), COMMENTS_INFO);
     assert_eq!(table_info(&db, "comment_versions"), COMMENT_VERSIONS_INFO);
@@ -182,7 +183,8 @@ fn cm1_a_new_queue_stands_at_15_with_both_tables_pinned() {
     assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..]));
     assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..50]));
     assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..50]));
-    assert_eq!(proposal_columns(16), None);
+    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(17), None);
 }
 
 /// Rows of every queue table as this build's schema holds them, written raw
@@ -224,7 +226,7 @@ fn schema_14(db: &Path) {
     some_rows(db);
     sqlite3(
         db,
-        "DROP TABLE comment_versions; DROP TABLE comments; \
+        "DROP TABLE refs; DROP TABLE comment_versions; DROP TABLE comments; \
          DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 14;",
     );
     assert_eq!(
@@ -261,7 +263,7 @@ fn cm1_a_schema_14_queue_steps_keeping_every_row() {
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM events;"), "3");
 
     drop(SqliteQueue::open(&db, PROJECT).expect("open steps"));
-    assert_eq!(user_version(&db), "15");
+    assert_eq!(user_version(&db), "16");
     assert_eq!(rows_of_14(&db), before, "every row as it was");
     assert_eq!(table_info(&db, "comments"), COMMENTS_INFO);
     assert_eq!(table_info(&db, "comment_versions"), COMMENT_VERSIONS_INFO);
@@ -283,7 +285,7 @@ fn cm1_a_schema_14_queue_steps_keeping_every_row() {
     let stepped = tables(&db);
 
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "15", "stepped once");
+    assert_eq!(user_version(&db), "16", "stepped once");
     assert_eq!(rows_of_14(&db), before);
     assert_eq!(tables(&db), stepped);
 }
@@ -351,7 +353,8 @@ fn cm1_a_newer_schema_is_refused() {
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     let newer = QUEUE_SCHEMA_VERSION + 1;
-    assert_eq!(newer, 16);
+    // 17 since docs/features/work-references.md RF1.
+    assert_eq!(newer, 17);
     sqlite3(&db, &format!("PRAGMA user_version = {newer};"));
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
@@ -362,5 +365,5 @@ fn cm1_a_newer_schema_is_refused() {
             other => panic!("expected SchemaTooNew {newer}, got {other:?}"),
         }
     }
-    assert_eq!(user_version(&db), "16", "left alone");
+    assert_eq!(user_version(&db), "17", "left alone");
 }

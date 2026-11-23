@@ -18,10 +18,11 @@ use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
 use specengine_core::intake::{DRIFT_KIND, INTERPRETATION_KIND};
 
 use super::comments::{self, StoredComments};
+use super::refs;
 use super::{
     CARD_ITEMS_SCHEMA, COMMENTS_SCHEMA, ID_ORDER, MANDATE_SCHEMA, PLAIN_QUESTIONS_SCHEMA,
-    QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, cards, corrupt, migrate, stage, tasks,
-    user_version,
+    QUEUE_SCHEMA_VERSION, QueueError, REFS_SCHEMA, SqliteQueue, cards, corrupt, migrate, stage,
+    tasks, user_version,
 };
 
 use crate::error::{Db, StoreError};
@@ -471,8 +472,10 @@ impl SqliteQueue {
     /// [`Self::stored_rows`] and every row of `comments` and
     /// `comment_versions`, every project's, in the same one read transaction
     /// (task spec `comments`, "Backup"): `comments` by ID number,
-    /// `comment_versions` by comment ID number and `version`. A queue below
-    /// step 15 (no step runs here) holds none.
+    /// `comment_versions` by comment ID number and `version`; and every row
+    /// of `refs`, by ID number (task spec `work-references`, "Dump format
+    /// 9"). A queue below step 15 (no step runs here) holds no comment,
+    /// one below 16 no reference.
     pub fn stored_rows_with_comments(&self) -> Result<(StoredQueue, StoredComments), QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();
@@ -549,6 +552,9 @@ impl SqliteQueue {
             if version >= COMMENTS_SCHEMA {
                 talk = comments::stored_in(&tx)?;
             }
+            if version >= REFS_SCHEMA {
+                talk.refs = refs::stored_in(&tx)?;
+            }
             let mut statement = tx
                 .prepare(&format!(
                     "SELECT {} FROM main.events ORDER BY seq",
@@ -584,10 +590,10 @@ impl SqliteQueue {
         self.restore_with_comments(state, &StoredComments::default())
     }
 
-    /// [`Self::restore`] with the comments and their versions of `talk`
-    /// inserted as given in the same transaction (task spec `comments`,
-    /// "Backup"), a table holding a row of either making the queue
-    /// occupied. A comment or version of another project than the handle's
+    /// [`Self::restore`] with the comments, their versions and the
+    /// references of `talk` inserted as given in the same transaction (task
+    /// specs `comments`, "Backup", and `work-references`), a table holding a
+    /// row of any making the queue occupied. A comment or version of another project than the handle's
     /// is [`QueueError::Invalid`], nothing written.
     pub fn restore_with_comments(
         &mut self,
@@ -651,7 +657,7 @@ impl SqliteQueue {
         migrate(&mut self.conn)?;
         let tx = self.write()?;
         let counts = counts_in(&tx)?;
-        if !counts.is_empty() || comments::any_in(&tx)? {
+        if !counts.is_empty() || comments::any_in(&tx)? || refs::any_in(&tx)? {
             return Ok(Restore::Occupied(counts));
         }
         // No dump holds the collision ledger: a restore starts it empty
@@ -738,6 +744,7 @@ impl SqliteQueue {
                     .db()?;
             }
             comments::insert_stored(&tx, talk)?;
+            refs::insert_stored(&tx, &talk.refs)?;
         }
         // A dump of queue schema 6 holds its open approve stages in that
         // schema's shape: rewritten as step 6 → 7 rewrites them.

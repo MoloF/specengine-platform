@@ -396,7 +396,7 @@ fn ac01_every_state_round_trips_into_a_fresh_queue() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":{STATE_FORMAT},\"queue_schema\":{QUEUE_SCHEMA_VERSION},\"project\":\"lantern-keep\",\"proposals\":7,\"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"events\":{}}}",
+            "{{\"format\":{STATE_FORMAT},\"queue_schema\":{QUEUE_SCHEMA_VERSION},\"project\":\"lantern-keep\",\"proposals\":7,\"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":{}}}",
             built.events
         )
     );
@@ -847,8 +847,9 @@ fn ac05_a_defective_dump_is_refused_naming_the_line() {
     let (label, message) = refused_import(&pair, "cut", &dump_of(head));
     assert_eq!(
         message,
-        // Seven counts since docs/features/comments.md (format 8).
-        format!("{label}: header counts 2, 0, 0, 0, 0, 0, 3; found 2, 0, 0, 0, 0, 0, 2")
+        // Seven counts since docs/features/comments.md (format 8), eight since
+        // docs/features/work-references.md (format 9, `refs`).
+        format!("{label}: header counts 2, 0, 0, 0, 0, 0, 0, 3; found 2, 0, 0, 0, 0, 0, 0, 2")
     );
 }
 
@@ -969,9 +970,11 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let pair = Pair::new("qe-ac06", "spec-a");
     let (_, lines) = small_dump(&pair);
     for (name, from, to) in [
-        // 9 and 16 since docs/features/comments.md (format 8, schema 15).
-        ("format-9", "\"format\":8,", "\"format\":9,"),
-        ("schema-16", "\"queue_schema\":15,", "\"queue_schema\":16,"),
+        // 9 and 16 since docs/features/comments.md (format 8, schema 15);
+        // 10 and 17 since docs/features/work-references.md (format 9,
+        // schema 16).
+        ("format-10", "\"format\":9,", "\"format\":10,"),
+        ("schema-17", "\"queue_schema\":16,", "\"queue_schema\":17,"),
     ] {
         let mut newer = lines.clone();
         newer[0] = newer[0].replacen(from, to, 1);
@@ -989,7 +992,7 @@ fn ac06_a_newer_or_another_projects_dump_is_refused() {
     let other_file = other.scratch.dir("dumps").join("zerkalo.jsonl");
     export_ok(&other, &other.home, &other.main, Some(&other_file), NOW);
     let bytes = fs::read(&other_file).unwrap();
-    assert!(bytes.starts_with(b"{\"format\":8,\"queue_schema\":15,\"project\":\"zerkalo\","));
+    assert!(bytes.starts_with(b"{\"format\":9,\"queue_schema\":16,\"project\":\"zerkalo\","));
     let (label, message) = refused_import(&pair, "spec-b", &bytes);
     assert!(message.starts_with(&format!("{label}:1: ")), "{message}");
     assert!(
@@ -1244,7 +1247,7 @@ fn ac08_the_worktree_top_or_the_root_without_git_bounds_the_destination() {
     assert_eq!((outcome.proposals, outcome.events), (0, 0));
     assert_eq!(
         fs::read(&out).unwrap(),
-        b"{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"events\":0}\n"
+        b"{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":0,\"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":0}\n"
     );
     assert!(
         !data_dir(&pair.home).exists(),
@@ -2252,7 +2255,7 @@ fn iter2_every_text_is_escaped_as_serde_json_writes_it() {
     let mut expected = format!(
         "{{\"format\":{STATE_FORMAT},\"queue_schema\":{QUEUE_SCHEMA_VERSION},\"project\":{},\
          \"proposals\":{},\"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\
-         \"comment_versions\":0,\"events\":{}}}\n",
+         \"comment_versions\":0,\"refs\":0,\"events\":{}}}\n",
         json(&pair.slug),
         stored.proposals.len(),
         stored.events.len()
@@ -2370,7 +2373,7 @@ fn iter3_the_top_id_round_trips_and_nothing_is_proposed_after_it() {
     assert!(
         lines[0].ends_with(
             ",\"proposals\":2,\"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\
-             \"comment_versions\":0,\"events\":2}"
+             \"comment_versions\":0,\"refs\":0,\"events\":2}"
         ),
         "{}",
         lines[0]
@@ -2537,9 +2540,10 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     // Format 5, schema 11 since docs/features/card-questions.md S5: a card
     // row as format 4 wrote it. Format 6, schema 12 since
     // docs/features/task-mandate.md M5: `mandate` after `tasks`.
-    // 8 and 15 since docs/features/comments.md CM13, CM1.
-    assert_eq!(STATE_FORMAT, 8);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    // 8 and 15 since docs/features/comments.md CM13, CM1; 9 and 16 since
+    // docs/features/work-references.md RF17, RF1.
+    assert_eq!(STATE_FORMAT, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     let pair = Pair::new("qe-ct4", "studio-lamp");
     let main = pair.main.clone();
     let spec_ok = |home: &Path, args: &[&str]| {
@@ -2606,8 +2610,8 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":8,\"queue_schema\":15,\"project\":\"studio-lamp\",\"proposals\":0,\
-             \"tasks\":2,\"runs\":0,\"cards\":2,\"comments\":0,\"comment_versions\":0,\"events\":{events}}}"
+            "{{\"format\":9,\"queue_schema\":16,\"project\":\"studio-lamp\",\"proposals\":0,\
+             \"tasks\":2,\"runs\":0,\"cards\":2,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":{events}}}"
         )
     );
     let cards = card_rows(&lines);
@@ -2659,11 +2663,11 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     let mut v3 = lines.clone();
     v3[0] = v3[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":3,\"queue_schema\":9,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     for index in &cards {
         v3[*index] = without_tasks(&without_mandate(&lines[*index]));
         assert_eq!(
@@ -2719,7 +2723,7 @@ fn card_tasks_ct4_format_4_carries_the_links_and_format_3_imports() {
     v3_with_tasks[0] = v3[0].clone();
     // docs/features/task-mandate.md R1: format 6 refused at 8a43e5d, 7 here.
     let mut format_7 = lines.clone();
-    format_7[0] = format_7[0].replacen("\"format\":8,", "\"format\":9,", 1);
+    format_7[0] = format_7[0].replacen("\"format\":9,", "\"format\":10,", 1);
     for (name, defective, line, needle) in [
         ("format-6-of-seven-keys", seven, 1, ""),
         ("format-6-card-without-tasks", no_tasks, first_card + 1, ""),
@@ -2823,9 +2827,10 @@ fn proposal_rows(lines: &[String]) -> Vec<usize> {
 #[test]
 fn card_questions_s5_format_5_carries_card_id_and_why() {
     // Format 6, schema 12 since docs/features/task-mandate.md M5.
-    // 8 and 15 since docs/features/comments.md CM13, CM1.
-    assert_eq!(STATE_FORMAT, 8);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    // 8 and 15 since docs/features/comments.md CM13, CM1; 9 and 16 since
+    // docs/features/work-references.md RF17, RF1.
+    assert_eq!(STATE_FORMAT, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     assert_eq!(PROPOSAL_COLUMNS.len(), 51);
     let pair = Pair::new("qe-cq-s5", "studio-lamp");
     let main = pair.main.clone();
@@ -2884,13 +2889,14 @@ fn card_questions_s5_format_5_carries_card_id_and_why() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":8,\"queue_schema\":15,\"project\":\"studio-lamp\",\"proposals\":2,\
-             \"tasks\":0,\"runs\":0,\"cards\":1,\"comments\":0,\"comment_versions\":0,\"events\":{events}}}"
+            "{{\"format\":9,\"queue_schema\":16,\"project\":\"studio-lamp\",\"proposals\":2,\
+             \"tasks\":0,\"runs\":0,\"cards\":1,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":{events}}}"
         )
     );
     let header: Value = serde_json::from_str(&lines[0]).unwrap();
-    // 10 since docs/features/comments.md CM13 (`comments`, `comment_versions`).
-    assert_eq!(header.as_object().map(serde_json::Map::len), Some(10));
+    // 10 since docs/features/comments.md CM13 (`comments`, `comment_versions`);
+    // 11 since docs/features/work-references.md RF17 (`refs`).
+    assert_eq!(header.as_object().map(serde_json::Map::len), Some(11));
     let rows = proposal_rows(&lines);
     assert_eq!(rows.len(), 2, "{lines:?}");
     for index in &rows {
@@ -2935,11 +2941,11 @@ fn card_questions_s5_format_5_carries_card_id_and_why() {
     let mut v4 = lines.clone();
     v4[0] = v4[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":4,\"queue_schema\":10,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     // A format-4 card row holds no `mandate` (docs/features/task-mandate.md
     // M5); this queue's one holds `null`.
     for index in card_rows(&lines) {
@@ -2998,14 +3004,14 @@ fn card_questions_s5_format_5_carries_card_id_and_why() {
     // docs/features/comments.md CM13).
     schema_11[0] = schema_11[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":7,\"queue_schema\":11,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     // docs/features/task-mandate.md R1: format 6 refused at 8a43e5d, 7 here.
     let mut format_7 = lines.clone();
-    format_7[0] = format_7[0].replacen("\"format\":8,", "\"format\":9,", 1);
+    format_7[0] = format_7[0].replacen("\"format\":9,", "\"format\":10,", 1);
     for (name, defective, line, needle) in [
         ("format-6-row-without-card-id", no_card, first + 1, ""),
         ("format-6-row-without-why", no_why, first + 1, ""),
@@ -3042,7 +3048,7 @@ fn card_questions_s5_a_schema_10_database_exports_as_format_5_unmigrated() {
     let current = dumps.join("v5.jsonl");
     export_ok(&pair, &pair.home, &main, Some(&current), NOW);
     let lines = lines_of(&fs::read(&current).unwrap());
-    assert!(lines[0].starts_with("{\"format\":8,\"queue_schema\":15,"));
+    assert!(lines[0].starts_with("{\"format\":9,\"queue_schema\":16,"));
     pair.sql(
         "ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
          ALTER TABLE cards DROP COLUMN mandate; PRAGMA user_version = 10;",
@@ -3104,9 +3110,10 @@ fn tasks_and_mandate_null(line: &str) -> String {
 /// `STATE_FORMAT` left 5; a format-5 row read as 26 columns.
 #[test]
 fn task_mandate_m5_format_6_carries_the_mandate() {
-    // 8 and 15 since docs/features/comments.md CM13, CM1.
-    assert_eq!(STATE_FORMAT, 8);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    // 8 and 15 since docs/features/comments.md CM13, CM1; 9 and 16 since
+    // docs/features/work-references.md RF17, RF1.
+    assert_eq!(STATE_FORMAT, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     assert_eq!(CARD_COLUMNS.len(), 26);
     let pair = Pair::new("qe-tm-m5", "studio-lamp");
     let main = pair.main.clone();
@@ -3150,13 +3157,14 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":8,\"queue_schema\":15,\"project\":\"studio-lamp\",\"proposals\":0,\
-             \"tasks\":0,\"runs\":0,\"cards\":3,\"comments\":0,\"comment_versions\":0,\"events\":{events}}}"
+            "{{\"format\":9,\"queue_schema\":16,\"project\":\"studio-lamp\",\"proposals\":0,\
+             \"tasks\":0,\"runs\":0,\"cards\":3,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":{events}}}"
         )
     );
     let header: Value = serde_json::from_str(&lines[0]).unwrap();
-    // 10 since docs/features/comments.md CM13 (`comments`, `comment_versions`).
-    assert_eq!(header.as_object().map(serde_json::Map::len), Some(10));
+    // 10 since docs/features/comments.md CM13 (`comments`, `comment_versions`);
+    // 11 since docs/features/work-references.md RF17 (`refs`).
+    assert_eq!(header.as_object().map(serde_json::Map::len), Some(11));
     let cards = card_rows(&lines);
     assert_eq!(cards.len(), 3, "{lines:?}");
     for index in &cards {
@@ -3192,11 +3200,11 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
     let mut v5 = lines.clone();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":5,\"queue_schema\":11,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     let mut v4 = v5.clone();
     v4[0] = v4[0].replacen(
         "\"format\":5,\"queue_schema\":11,",
@@ -3259,20 +3267,21 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
     // docs/features/comments.md CM13).
     schema_11[0] = schema_11[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":7,\"queue_schema\":11,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     let mut format_7 = lines.clone();
-    format_7[0] = format_7[0].replacen("\"format\":8,", "\"format\":9,", 1);
+    format_7[0] = format_7[0].replacen("\"format\":9,", "\"format\":10,", 1);
     // A newer build's dump (docs/features/plain-questions.md PQ8: 8 over this
     // build's 7, 14 over 13; docs/features/collision-pass.md D6: 15 over 14;
-    // docs/features/comments.md: 9 over 8, 16 over 15).
+    // docs/features/comments.md: 9 over 8, 16 over 15;
+    // docs/features/work-references.md: 10 over 9, 17 over 16).
     let mut schema_13 = lines.clone();
     schema_13[0] = schema_13[0].replacen(
-        "\"format\":8,\"queue_schema\":15,",
         "\"format\":9,\"queue_schema\":16,",
+        "\"format\":10,\"queue_schema\":17,",
         1,
     );
     for (name, defective, line, needle) in [
@@ -3285,7 +3294,7 @@ fn task_mandate_m5_format_6_carries_the_mandate() {
             "(it holds queue schemas 13 to 14)",
         ),
         ("format-7", format_7, 1, "upgrade SpecEngine"),
-        ("format-9-schema-16", schema_13, 1, "upgrade SpecEngine"),
+        ("format-10-schema-17", schema_13, 1, "upgrade SpecEngine"),
     ] {
         assert_ne!(defective, lines, "{name}");
         let (label, message) = refused_import(&pair, name, &dump_of(&defective));
@@ -3374,7 +3383,7 @@ fn task_mandate_r2_a_format_5_dump_upgrades_into_schema_12() {
     export_ok(&pair, &pair.home, &main, Some(&current), NOW);
     let lines = lines_of(&fs::read(&current).unwrap());
     assert!(
-        lines[0].starts_with("{\"format\":8,\"queue_schema\":15,"),
+        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,"),
         "{}",
         lines[0]
     );
@@ -3400,11 +3409,11 @@ fn task_mandate_r2_a_format_5_dump_upgrades_into_schema_12() {
     let mut v5 = lines.clone();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":5,\"queue_schema\":11,",
             1,
         )
-        .replacen("\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen("\"comments\":0,\"comment_versions\":0,\"refs\":0,", "", 1);
     for index in &cards {
         v5[*index] = without_mandate(&lines[*index]);
     }
@@ -3423,8 +3432,9 @@ fn task_mandate_r2_a_format_5_dump_upgrades_into_schema_12() {
     import_ok(&upgraded, &main, &v5_file);
     let db = db_of(&upgraded, "studio-lamp");
     // 13 since docs/features/plain-questions.md PQ8, 14 since
-    // docs/features/collision-pass.md D6.
-    assert_eq!(pair_sql(&db, "PRAGMA user_version;"), "15");
+    // docs/features/collision-pass.md D6, 16 since
+    // docs/features/work-references.md RF1.
+    assert_eq!(pair_sql(&db, "PRAGMA user_version;"), "16");
     assert_eq!(
         pair_sql(&db, "SELECT count(*) FROM cards WHERE mandate IS NULL;"),
         "2"

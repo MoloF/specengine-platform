@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # `spec feed`: what happened, newest change first, and what needs the owner
@@ -30,7 +30,7 @@ needs me: unlanded
   <task> | <status> | pack <pack>
 ```
 
-No head line; `needs me:` sections only under `--needs-me` (an empty one `needs me: <list>: none`), then `note:` lines on stderr; `-` for an absent value, controls escaped. **Subject**: a `proposal.*` event's proposal; a `comment.*` event's comment; else the task, else the proposal, else the card, else a line `<pack>/<n>`, else `-`. The title and status follow it: the task's title now (else the proposal's `target_id`), the card's title, the task's or proposal's state now. **Words**: `task.run_reported` `<outcome>: <the summary's first line, 160 characters>`; `task.approved` `by rule` or `-`; `proposal.applied` `as <sha12>`, ` by rule` when so; `proposal.rejected` the reason's first line; `proposal.apply_failed` `step <n>: <reason>`; `auto.started` `<n> task(s), <m> line(s) on <branch>`; `auto.bound` `line <pack>/<n>`; `auto.held` `<reason>: <detail>`; `auto.landed` `on <branch> as <sha12>`; `gate.observed` `<path> (<zone>)`, a config `(config)`; `comment.created` `on <target> by <as>`, `comment.edited` `v<n> by <as>`, `comment.deleted` `by <as>` (no body: `comments.md`); others `-`.
+No head line; `needs me:` sections only under `--needs-me` (an empty one `needs me: <list>: none`), then `note:` lines on stderr; `-` for an absent value, controls escaped. **Subject**: a `proposal.*` event's proposal; a `comment.*` or `reference.*` event's comment or reference; else the task, else the proposal, else the card, else a line `<pack>/<n>`, else `-`. The title and status follow it: the task's title now (else the proposal's `target_id`), the card's title, the task's or proposal's state now. **Words**: `task.run_reported` `<outcome>: <the summary's first line, 160 characters>`; `task.approved` `by rule` or `-`; `proposal.applied` `as <sha12>`, ` by rule` when so; `proposal.rejected` the reason's first line; `proposal.apply_failed` `step <n>: <reason>`; `auto.started` `<n> task(s), <m> line(s) on <branch>`; `auto.bound` `line <pack>/<n>`; `auto.held` `<reason>: <detail>`; `auto.landed` `on <branch> as <sha12>`; `gate.observed` `<path> (<zone>)`, a config `(config)`; `comment.created` `on <target> by <as>`, `comment.edited` `v<n> by <as>`, `comment.deleted` `by <as>` (no body: `comments.md`); `reference.created` `attached to <target> by <as>`, `reference.deleted` `deleted by <as>` (no title or URL: `work-references.md`); others `-`.
 
 ## JSON
 

@@ -14,12 +14,12 @@ The operator's guide: from a clean Linux VPS with Docker to a running hub. Why t
 
 - **A domain for the hub alone**, final before anyone enrols: passkeys bind to it. Two names on it point at the VPS (A/AAAA), e.g. `hub.example.org` and `login.example.org`; nothing else lives on that domain, since the door's cookie covers all of it.
 - **A VPS**: at least 2 vCPU, 4 GB of memory, 40-80 GB of local SSD; Docker Engine with the compose plugin; nothing else running. Keep a second SSH key and the provider's console.
-- **The image** is `ghcr.io/molof/specengine:<version>`, pulled, never built here. If the GHCR package is private, log in first with a read-only token (`docker login ghcr.io`), or have the owner make it public.
+- **The image** is `ghcr.io/molof/specengine:<version>`, pulled, never built here. If private: `docker login ghcr.io` with a read-only token, or make it public.
 
 ## Install
 
 ```sh
-git clone --branch v0.50.0 https://github.com/MoloF/specengine-platform
+git clone --branch v0.51.0 https://github.com/MoloF/specengine-platform
 cd specengine-platform/scripts/deploy
 cp .env.example .env            # set the three names and ACME_EMAIL; keep the staging CA
 install -d -m 700 secrets authelia/users traefik/mcp-users admin-log
@@ -44,6 +44,7 @@ sudo chown 10001:10001 secrets/deploy_key
 - `secrets/known_hosts` holds the forge's published SSH host keys, checked against the fingerprints it documents: `ssh-keyscan` alone trusts the network. `chown 10001:10001` it too.
 - `authelia_storage_key` encrypts the door's database: lose it and every account is lost with it.
 - **Off-host backups** stay off until the owner turns them on ("Going live"): with `restic_env` empty, `backup` waits, unhealthy, its line(s) each round.
+- **References' files** live on `specengine-blobs`, never dumped or backed up: lost with the host (ADR-0088). Never remove it; from 0.50.x: `docs/canon/hub-ops.md` "Upgrade".
 
 The container user is 10001: if a mounted file or folder is not theirs, git refuses a "dubious ownership" and ssh a key file's mode.
 
@@ -57,7 +58,7 @@ Keep the printed password, then bring a project over: its step 3 is the first `u
 
 ## Accounts
 
-`docker compose run --rm admin <act>`: a one-shot container with no network or log on the door's own image. Root is your shell here. Acts that write, and `code`, need a terminal: a piped `run -T` is refused. One act at a time; each is logged in `admin-log/acts.log`, never a secret.
+`docker compose run --rm admin <act>`: a one-shot container, no network or log, on the door's image; root is your shell. Acts that write, and `code`, need a terminal: a piped `run -T` is refused. One act at a time; each is logged in `admin-log/acts.log`, never a secret.
 
 | Act | Does |
 |---|---|
@@ -114,14 +115,14 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 ## Going live
 
 - **TLS.** The staging CA gives untrusted certificates: check the whole flow with them. Then set `ACME_CA_SERVER=https://acme-v02.api.letsencrypt.org/directory`, `docker compose down`, remove the `traefik-acme` volume, `docker compose up -d`.
-- **Running.** `docker compose ps`: `specengine` healthy, `backup` once backups are on; else `docker compose logs dump-queue dump-door backup` say why (`dump-door`: `dumped …` each round). Runbooks: `docs/canon/hub-ops.md` "Restore", "Upgrade", "Push".
-- **Slow pages.** `docker compose logs -t --since 2h specengine | grep ' slow '`, then `traefik`'s: `docs/canon/serve-slow.md` "Reading them". Every request's line: `SPECENGINE_SLOW_MS=0` in `.env`, `docker compose up -d`; after, remove it, `up -d`.
+- **Running.** `docker compose ps`: `specengine` healthy, `backup` once backups are on; else `docker compose logs dump-queue dump-door backup` say why. Runbooks: `docs/canon/hub-ops.md` "Restore", "Upgrade", "Push".
+- **Slow pages.** `docker compose logs -t --since 2h specengine | grep ' slow '`, then `traefik`'s: `docs/canon/serve-slow.md` "Reading them"; every line: `SPECENGINE_SLOW_MS=0` in `.env`, `up -d`, later removed.
 - **Off-host backups**, the owner's step: choose a restic backend; write `RESTIC_REPOSITORY` and its keys into `secrets/restic_env` (`docs/canon/hub-restic.md`) in place, or `docker compose restart backup` after an editor that saves by rename (the secret is a bind mount of the old inode); keep it, `restic_password` and `.env` off the host too; `docker compose run --rm backup init` once. After a round, `docker compose run --rm backup snapshots` lists `queue` and `door` under 35 minutes old and `backup` is healthy; then a restore drill on a scratch host (`hub-ops.md` "Restore").
 - **The gate.** Before real people, the owner tries the hub by hand (step 11b-3, `docs/features/hub-deploy.md` H1-H17). `--push` waits for it.
 
 ## Before the gate
 
-`hub-admin` and `hub-ops` were tested against stand-ins; the door's storage calls were checked on its pinned image on 2026-11-20 (`docs/features/hub-backups.md` HB5). Before real people, on the pinned images: VF1-VF3 of `docs/features/hub-accounts.md` and VF4-VF9 of `docs/features/hub-ops.md`.
+`hub-admin` and `hub-ops` were tested on stand-ins; the door's storage calls on its pinned image, 2026-11-20 (`docs/features/hub-backups.md` HB5). Before real people, on the pinned images: VF1-VF3 of `docs/features/hub-accounts.md` and VF4-VF9 of `docs/features/hub-ops.md`.
 
 ## Limits
 

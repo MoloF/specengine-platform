@@ -1,5 +1,6 @@
 import type {
   ApiError,
+  BlobStored,
   BundleView,
   Card,
   CardAcceptBody,
@@ -46,6 +47,9 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  Reference,
+  ReferenceAddBody,
+  ReferenceList,
   RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
@@ -230,6 +234,20 @@ export interface MentionsOptions {
   before?: string;
   limit?: number;
 }
+
+/**
+ * `spec ref list --on X [--before RF] [--limit N]` (`docs/features/work-references.md` "HTTP"): `on`
+ * a card's or a proposal's ID or a node's REF; `before` a page's cursor, a list's `next_before`;
+ * `limit` 1 to 100, absent the daemon's 100. The References part sends no limit.
+ */
+export interface ReferencesOptions {
+  on: string;
+  before?: string;
+  limit?: number;
+}
+
+/** How much of an upload has gone: bytes sent of the body's whole, as the browser counts them. */
+export type UploadProgress = (sent: number, total: number) => void;
 
 /**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
@@ -447,6 +465,26 @@ export interface SpecEngineClient {
   deleteComment(project: string, id: string): Promise<CommentDocument>;
   /** POST /api/projects/:p/comments/:id/items (= spec propose question|decision|discrepancy --comment CM): 200 the intake document, stored or not */
   raiseFromComment(project: string, id: string, body: CommentRaiseBody): Promise<IntakeDocument>;
+  // References (docs/features/work-references.md "HTTP"; ADR-0088): files and links under a card, a
+  // proposal or a node, none of them a write of what it is under. The read is judged as the comments'
+  // are. A file goes in two steps: `putBlob` streams its bytes and answers their BLAKE3, then
+  // `addReference` attaches them (or a link). The writes take no AbortSignal but the upload, which
+  // Cancel aborts; a refusal rejects with the daemon's words verbatim.
+  /** GET /api/projects/:p/references?on=X[&before=RF][&limit=N] (= spec ref list --json) */
+  getReferences(project: string, options: ReferencesOptions, signal?: AbortSignal): Promise<ReferenceList>;
+  /**
+   * PUT /api/projects/:p/blobs, the binary door: the bytes as `application/octet-stream`, never
+   * multipart, through an XMLHttpRequest so `onProgress` follows `upload.onprogress`; `signal`
+   * aborts it (an AbortError, never a ClientError). A 429 waits its `Retry-After` and tries again,
+   * at most 5 times. 200 the stored blob; 411, 413, 415, 429 and 503 reject in the daemon's words.
+   */
+  putBlob(project: string, blob: Blob, onProgress: UploadProgress, signal: AbortSignal): Promise<BlobStored>;
+  /** POST /api/projects/:p/references (= spec ref add): 200 the reference */
+  addReference(project: string, body: ReferenceAddBody): Promise<Reference>;
+  /** DELETE /api/projects/:p/references/:id, no body (= spec ref delete; its consent the page's dialog): 200 the tombstone */
+  deleteReference(project: string, id: string): Promise<Reference>;
+  /** Where a stored file is read, GET /api/projects/:p/blobs/:b3 (served sandboxed, one Range): the one source of an image's, a sound's or a video's `src` and a download's `href`. */
+  blobUrl(project: string, b3: string): string;
   /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] [--stage S] [--summary] --json, the browser view; 404 the exit-1 document) */
   getTrace(project: string, options?: TraceOptions, signal?: AbortSignal): Promise<TraceDocument>;
   /**

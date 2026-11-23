@@ -9969,3 +9969,206 @@ mark {
   line-height: var(--line-height-small);
   font-weight: var(--font-weight-semibold);
 }
+
+/* References (src/references/; docs/features/work-references.md "UI"): people's material under a task,
+   a document or a proposal, sunken tiles newest first as the comments' entries are. An image's thumbnail
+   stays within the column and a set height, sound and video take the tile's width up to the reading
+   width; titles, names, addresses and "what matters" wrap whatever their script, nothing cut. The add
+   dialog's drop zone is dashed, accent-bordered while a file is over it; its progress bar takes the
+   accent. Every value a token. */
+.references {
+  display: grid;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
+.references-about {
+  margin: 0;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.references-adds,
+.reference-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-050);
+}
+
+.references-list {
+  display: grid;
+  gap: var(--space-100);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference {
+  display: grid;
+  gap: var(--space-050);
+  min-width: 0;
+  padding: var(--space-100) var(--space-150);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-sunken);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.reference-head,
+.reference-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  margin: 0;
+}
+
+.reference-title {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.reference-id {
+  margin-left: auto;
+}
+
+.reference-who,
+.reference-name,
+.reference-url,
+.reference-download,
+.reference-file-link {
+  overflow-wrap: anywhere;
+}
+
+.reference-name,
+.reference-url,
+.reference-deleted,
+.reference-lost {
+  margin: 0;
+}
+
+.reference-deleted {
+  font-style: italic;
+}
+
+.reference-thumb {
+  display: block;
+  justify-self: start;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-panel);
+  cursor: zoom-in;
+}
+
+.reference-thumb:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.reference-thumb img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(var(--space-600) * 4);
+  border-radius: var(--radius-s);
+  object-fit: contain;
+}
+
+.reference-media {
+  width: 100%;
+  max-width: var(--reading-width);
+}
+
+video.reference-media {
+  max-height: calc(var(--space-600) * 6);
+  background: var(--surface-canvas);
+}
+
+.reference-download,
+.reference-file-link {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: var(--space-050);
+}
+
+.reference-matters {
+  display: grid;
+  gap: var(--space-025);
+}
+
+.reference-matters-label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.reference-matters-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dialog.reference-dialog {
+  width: min(var(--modal-width-m), 100%);
+}
+
+.reference-full {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.reference-drop {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+  padding: var(--space-150);
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-s);
+}
+
+.reference-drop-over {
+  border-color: var(--accent);
+  background: var(--surface-selected);
+}
+
+.reference-picker {
+  max-width: 100%;
+}
+
+.reference-drop-text,
+.reference-progress-text,
+.reference-uploaded p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reference-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-100);
+}
+
+.reference-progress-text {
+  flex-basis: 100%;
+}
+
+.reference-progress-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.reference-uploaded {
+  display: grid;
+  gap: var(--space-050);
+}

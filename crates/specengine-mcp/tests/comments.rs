@@ -250,7 +250,8 @@ fn cm15_the_stdio_tools_and_their_schemas() {
     let mut session = repo.session();
     let list = session.tools();
     let names = tool_names(&list);
-    assert_eq!(names.len(), 35, "{names:?}");
+    // 38 since docs/features/work-references.md RF20.
+    assert_eq!(names.len(), 38, "{names:?}");
     let talk: Vec<&String> = names
         .iter()
         .filter(|name| name.contains("comment") || name.contains("mention"))
@@ -361,13 +362,14 @@ fn cm15_the_stdio_tools_and_their_schemas() {
     drop(session.finish());
 }
 
-/// CM15 and CM6, the hub's constants: 21 tools, both comment tools, no
-/// delete or edit; `list_comments` trusts (`HUB_READ_TOOLS`, 8), and
+/// CM15 and CM6, the hub's constants: 21 tools (24 since
+/// docs/features/work-references.md RF20), both comment tools, no delete or
+/// edit; `list_comments` trusts (`HUB_READ_TOOLS`, 8, 10 since RF20), and
 /// `add_comment` does not; the instructions stay ASCII. M: a delete tool
 /// added (`HUB_TOOLS` pin).
 #[test]
 fn cm15_the_hub_lists_21_tools() {
-    assert_eq!(HUB_TOOLS.len(), 21, "{HUB_TOOLS:?}");
+    assert_eq!(HUB_TOOLS.len(), 24, "{HUB_TOOLS:?}");
     for name in ["list_comments", "add_comment"] {
         assert!(HUB_TOOLS.contains(&name), "{name}");
     }
@@ -377,7 +379,7 @@ fn cm15_the_hub_lists_21_tools() {
             "M: {name}"
         );
     }
-    assert_eq!(HUB_READ_TOOLS.len(), 8, "{HUB_READ_TOOLS:?}");
+    assert_eq!(HUB_READ_TOOLS.len(), 10, "{HUB_READ_TOOLS:?}");
     assert!(HUB_READ_TOOLS.contains(&"list_comments"));
     assert!(!HUB_READ_TOOLS.contains(&"add_comment"));
     assert!(HUB_INSTRUCTIONS.is_ascii());

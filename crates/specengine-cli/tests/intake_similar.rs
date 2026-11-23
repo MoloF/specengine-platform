@@ -1335,8 +1335,9 @@ const INTAKE: [&str; 10] = [
 #[test]
 fn is7_nothing_new_is_stored() {
     // 13 since docs/features/plain-questions.md PQ8; 15 since
-    // docs/features/comments.md CM1.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    // docs/features/comments.md CM1; 16 since
+    // docs/features/work-references.md RF1.
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     let at = std::env::temp_dir().join(format!("specengine-cli-is7-{}", std::process::id()));
     let named = {
         let pair = pair_at(&at);
@@ -1376,9 +1377,10 @@ fn is7_nothing_new_is_stored() {
         let header: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
         // Format 7, schema 13 since docs/features/plain-questions.md PQ8, 14
         // since docs/features/collision-pass.md D6; format 8, schema 15
-        // since docs/features/comments.md CM13.
-        assert_eq!(header["format"], json!(8), "{header}");
-        assert_eq!(header["queue_schema"], json!(15), "{header}");
+        // since docs/features/comments.md CM13; format 9, schema 16 since
+        // docs/features/work-references.md RF17, RF1.
+        assert_eq!(header["format"], json!(9), "{header}");
+        assert_eq!(header["queue_schema"], json!(16), "{header}");
         let line: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
         let keys: Vec<&str> = line["proposals"]
             .as_object()

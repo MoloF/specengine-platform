@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # Queue backup and restore
@@ -19,12 +19,12 @@ The queue (`proposals`, `tasks`, `runs`, `cards`, `comments`, `comment_versions`
 
 ## Format
 
-`STATE_FORMAT` = 8 (CLI; tasks: `tasks.md` "Backup"; cards: `cards.md` "Backup"; comments: `comments.md` "Store and backup"): UTF-8 compact JSON, one object per LF-ended line.
+`STATE_FORMAT` = 9 (CLI; tasks: `tasks.md` "Backup"; cards: `cards.md` "Backup"; comments: `comments.md` "Store and backup"; references, never a file's bytes: `work-references.md` "Store and backup"): UTF-8 compact JSON, one object per LF-ended line.
 
-1. The header `{"format":8,"queue_schema":15,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
-2. Every `proposals` row by ID number (`ORDER BY length(id), id`), the `tasks`, `runs`, `cards` rows, every `comments` row by ID number, every `comment_versions` row by comment ID number and `version`, then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 51, `comment_id` last; `CARD_COLUMNS`, 26; `COMMENT_COLUMNS`, 15; `COMMENT_VERSION_COLUMNS`, 5; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `run`, `position`, `on_rev`, `version`, `seq` numbers; JSON columns stay the strings stored.
+1. The header `{"format":9,"queue_schema":16,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"refs":<f>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
+2. Every `proposals` row by ID number (`ORDER BY length(id), id`), the `tasks`, `runs`, `cards` rows, every `comments` row by ID number, every `comment_versions` row by comment ID number and `version`, every `refs` row by ID number, then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 51, `comment_id` last; `CARD_COLUMNS`, 26; `COMMENT_COLUMNS`, 15; `COMMENT_VERSION_COLUMNS`, 5; `REF_COLUMNS`, 20; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `run`, `position`, `on_rev`, `version`, `size`, `seq` numbers; JSON columns stay the strings stored.
 
-No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. An older dump restores with its schema's columns, the later NULL (`proposal-queue.md` "Store"); a schema-6 dump's open approve stages gain `"editorial":null`. A schema 1-14 DB exports as format 8, schema 15, unmigrated, its comment counts 0. A drift row round-trips byte-identical (`drift` as stored).
+No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. An older dump restores with its schema's columns, the later NULL (`proposal-queue.md` "Store"); a schema-6 dump's open approve stages gain `"editorial":null`. A schema 1-15 DB exports as format 9, schema 16, unmigrated, its missing counts 0. A drift row round-trips byte-identical (`drift` as stored).
 
 | Format | Queue schemas | Header keys; counts | Adds |
 |---|---|---|---|
@@ -36,9 +36,10 @@ No export time, host or rowid: equal queues give byte-identical dumps, in any in
 | 6 | 12 | 8; 5 | a card's `mandate` |
 | 7 | 13-14 | 8; 5 | `gist`, `matters` |
 | 8 | 15 | 10; 7 | `comment_id`, `comments`, `comment_versions` |
+| 9 | 16 | 11; 8 | `refs` |
 
 ```
-{"format":8,"queue_schema":15,"project":"lantern-keep","proposals":1,"tasks":0,"runs":0,"cards":0,"comments":0,"comment_versions":0,"events":1}
+{"format":9,"queue_schema":16,"project":"lantern-keep","proposals":1,"tasks":0,"runs":0,"cards":0,"comments":0,"comment_versions":0,"refs":0,"events":1}
 {"proposals":{"id":"PR-0001","project":"lantern-keep","kind":"update",…,"updated_at":"2026-10-05T12:00:00Z"}}
 {"events":{"seq":1,"project":"lantern-keep","type":"proposal.created","payload":"{\"id\":\"PR-0001\"}","at":"2026-10-05T12:00:00Z"}}
 ```

@@ -21,7 +21,7 @@
 //! - Top-level keys: `project`, `paths`, `ids`, `decision_records`, then
 //!   `budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code`,
 //!   `verify`, `health`, `roadmap`, `flow`, `card`, `team`, `workspace`,
-//!   `module`, `map`, which are only name-checked here
+//!   `module`, `map`, `auto`, `references`, which are only name-checked here
 //!   (their readers are the check's, [`crate::gate`]'s for `zones` and
 //!   `gate`, [`crate::code_toml`]'s and [`crate::verify`]'s, read only where
 //!   code is read, [`crate::health_toml`]'s and [`crate::roadmap_toml`]'s,
@@ -333,6 +333,11 @@ struct RawFile {
     /// this read's error.
     #[serde(default)]
     auto: Option<IgnoredAny>,
+    /// `[references]` (task spec `work-references`): read apart by
+    /// [`crate::reference::ReferencesConfig::from_toml`] where a reference
+    /// is written, never this read's error.
+    #[serde(default)]
+    references: Option<IgnoredAny>,
 }
 
 /// `[project]`; any other key is an error.

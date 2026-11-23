@@ -1,0 +1,303 @@
+{
+  "about": "docs/features/work-references.md RF3 and RF10: each stored file's sniffed media type, class, serving, facts, size, agent readiness, the need of \"what matters\" and its warning; each refused file's line (or, for an archive whose kind's word the spec leaves open, the kind); facts_only: files whose facts alone are pinned (blob::facts given their media type), never uploaded.",
+  "facts_only": {
+    "truncated.png": {
+      "media": "image/png",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": null,
+        "width": null
+      }
+    }
+  },
+  "refused": {
+    "bundle.tar": {
+      "archive": "tar"
+    },
+    "bundle.zip": {
+      "archive": "zip"
+    },
+    "map.svg": {
+      "line": "refused: map.svg: this file is SVG, which is never stored here"
+    },
+    "notes.txt.gz": {
+      "archive": "gzip"
+    },
+    "notes.xml": {
+      "line": "refused: notes.xml: this file is XML, which is never stored here"
+    },
+    "packed.blend": {
+      "line": "refused: packed.blend: an archive (zstd) is never stored here; save the .blend uncompressed"
+    },
+    "page-as-png.png": {
+      "line": "refused: page-as-png.png: this file is HTML, which is never stored here"
+    },
+    "page.html": {
+      "line": "refused: page.html: this file is HTML, which is never stored here"
+    },
+    "run.sh": {
+      "line": "refused: run.sh: a program is never stored here"
+    },
+    "tool.elf": {
+      "line": "refused: tool.elf: a program is never stored here"
+    }
+  },
+  "stored": {
+    "bell.flac": {
+      "agent_ready": false,
+      "class": "audio",
+      "inline": true,
+      "media": "audio/flac",
+      "meta": {
+        "duration_ms": 1500,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 42,
+      "warning": null
+    },
+    "crate.glb": {
+      "agent_ready": false,
+      "class": "model",
+      "inline": false,
+      "media": "model/gltf-binary",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": 16,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 1296,
+      "warning": null
+    },
+    "dusk.jpg": {
+      "agent_ready": false,
+      "class": "image",
+      "inline": true,
+      "media": "image/jpeg",
+      "meta": {
+        "duration_ms": null,
+        "height": 1200,
+        "triangles": null,
+        "width": 1600
+      },
+      "needs_matters": false,
+      "size": 31654,
+      "warning": null
+    },
+    "harbour.png": {
+      "agent_ready": false,
+      "class": "image",
+      "inline": true,
+      "media": "image/png",
+      "meta": {
+        "duration_ms": null,
+        "height": 3024,
+        "triangles": null,
+        "width": 4032
+      },
+      "needs_matters": false,
+      "size": 1559,
+      "warning": null
+    },
+    "lantern.gif": {
+      "agent_ready": true,
+      "class": "image",
+      "inline": true,
+      "media": "image/gif",
+      "meta": {
+        "duration_ms": null,
+        "height": 240,
+        "triangles": null,
+        "width": 320
+      },
+      "needs_matters": false,
+      "size": 495,
+      "warning": null
+    },
+    "plan.pdf": {
+      "agent_ready": false,
+      "class": "pdf",
+      "inline": false,
+      "media": "application/pdf",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 125,
+      "warning": null
+    },
+    "scene.blend": {
+      "agent_ready": false,
+      "class": "model",
+      "inline": false,
+      "media": "application/x-blender",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 68,
+      "warning": "a .blend is only downloaded here; Blender can run the scripts it holds: open it with Auto Run Python Scripts off"
+    },
+    "sea-extended.webp": {
+      "agent_ready": true,
+      "class": "image",
+      "inline": true,
+      "media": "image/webp",
+      "meta": {
+        "duration_ms": null,
+        "height": 360,
+        "triangles": null,
+        "width": 640
+      },
+      "needs_matters": false,
+      "size": 662,
+      "warning": null
+    },
+    "sea-lossless.webp": {
+      "agent_ready": true,
+      "class": "image",
+      "inline": true,
+      "media": "image/webp",
+      "meta": {
+        "duration_ms": null,
+        "height": 48,
+        "triangles": null,
+        "width": 64
+      },
+      "needs_matters": false,
+      "size": 44,
+      "warning": null
+    },
+    "sea-lossy.webp": {
+      "agent_ready": true,
+      "class": "image",
+      "inline": true,
+      "media": "image/webp",
+      "meta": {
+        "duration_ms": null,
+        "height": 300,
+        "triangles": null,
+        "width": 400
+      },
+      "needs_matters": false,
+      "size": 368,
+      "warning": null
+    },
+    "sound.wav": {
+      "agent_ready": false,
+      "class": "audio",
+      "inline": true,
+      "media": "audio/wav",
+      "meta": {
+        "duration_ms": 2000,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 16068,
+      "warning": null
+    },
+    "step-tagged.mp3": {
+      "agent_ready": false,
+      "class": "audio",
+      "inline": true,
+      "media": "audio/mpeg",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 1688,
+      "warning": null
+    },
+    "step.mp3": {
+      "agent_ready": false,
+      "class": "audio",
+      "inline": true,
+      "media": "audio/mpeg",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 1668,
+      "warning": null
+    },
+    "voice.opus": {
+      "agent_ready": false,
+      "class": "audio",
+      "inline": true,
+      "media": "audio/ogg",
+      "meta": {
+        "duration_ms": 2500,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 471,
+      "warning": null
+    },
+    "walk.mp4": {
+      "agent_ready": false,
+      "class": "video",
+      "inline": true,
+      "media": "video/mp4",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 40,
+      "warning": null
+    },
+    "walk.webm": {
+      "agent_ready": false,
+      "class": "video",
+      "inline": true,
+      "media": "video/webm",
+      "meta": {
+        "duration_ms": null,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 41,
+      "warning": null
+    },
+    "wind.ogg": {
+      "agent_ready": false,
+      "class": "audio",
+      "inline": true,
+      "media": "audio/ogg",
+      "meta": {
+        "duration_ms": 3000,
+        "height": null,
+        "triangles": null,
+        "width": null
+      },
+      "needs_matters": true,
+      "size": 562,
+      "warning": null
+    }
+  }
+}

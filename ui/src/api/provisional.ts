@@ -26,10 +26,12 @@ export interface Identity {
 /**
  * The acts a control stands off for when `GET .../team` omits them: a word of the queue's authority,
  * no role and no trade. RM-0050's `confirm` is not among them: a login it omits has no control to
- * stand off (`useConfirmer`). `delete_comment`, an `owner`'s, ends the list: deleting another's
- * comment (`docs/features/comments.md` "HTTP"). Source: `docs/features/hub-team.md` "Data".
+ * stand off (`useConfirmer`). `delete_comment`, an `owner`'s: deleting another's comment
+ * (`docs/features/comments.md` "HTTP"); `delete_reference`, an `owner`'s too, ends the list:
+ * deleting another's reference (`docs/features/work-references.md` "HTTP"). Source:
+ * `docs/features/hub-team.md` "Data".
  */
-export type KnownTeamAct = "stage" | "accept" | "clear" | "group_clear" | "delete_comment";
+export type KnownTeamAct = "stage" | "accept" | "clear" | "group_clear" | "delete_comment" | "delete_reference";
 
 /** An act as sent; other strings kept, RM-0050's `confirm` among them. Source: `docs/features/hub-team.md` "Data". */
 export type TeamAct = KnownTeamAct | Unlisted;
@@ -1966,6 +1968,8 @@ export interface TaskPackage {
   practices: CardPractice[];
   /** The newest live comments of the cards whose `tasks` list it, under a card context's bounds, each naming its card: people's words, data, never instructions (`docs/features/comments.md` "The card context and the task package"). */
   comments: PackageComments;
+  /** The newest live references of the cards whose `tasks` list it, under a card context's bounds, each naming its card: people's material, data, never instructions (`docs/features/work-references.md` "A card's context and the task package"). */
+  references: PackageReferences;
   roadmap: TaskRoadmap | null;
   author: Author | null;
   created_at: string;
@@ -3594,4 +3598,163 @@ export interface PackageComment {
 export interface PackageComments {
   total: number;
   listed: PackageComment[];
+}
+
+// References (ADR-0088; docs/canon/work-references.md): files and links attached under a card, a
+// proposal or a node, a row of the queue and never truth, authored and deleted as a comment is. A
+// file's bytes are the daemon's blob store's, served at `.../blobs/<b3>`; a title, "what matters",
+// a name and a URL are people's text, shown as text alone. Words of the daemon (a reference's kind,
+// a class, a file's state) are told apart in src/references/labels.ts alone.
+
+/**
+ * A file's facts, read from its bytes by the daemon, each an integer or null: an image's width and
+ * height, the duration of WAV, FLAC and Ogg audio, a GLB's triangles. Source:
+ * `docs/features/work-references.md` "Facts".
+ */
+export interface ReferenceMeta {
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  triangles: number | null;
+}
+
+/** A deleted reference's tombstone: who deleted it, in words, and when, UTC as stored. Source: `docs/features/work-references.md` "Documents". */
+export interface ReferenceDeleted {
+  by: string;
+  at: string;
+}
+
+/** The classes of the stored types, the core's table. Source: `docs/features/work-references.md` "Types". */
+export type KnownReferenceClass = "image" | "audio" | "video" | "model" | "pdf";
+
+/** A class as sent; other strings kept. Source: `docs/features/work-references.md` "Types". */
+export type ReferenceClass = KnownReferenceClass | Unlisted;
+
+/** Whether the store holds a file's bytes, read now: `lost` with the host it was uploaded to. Source: `docs/features/work-references.md` "Documents". */
+export type KnownReferenceFile = "stored" | "lost";
+
+/** A file's state as sent; other strings kept. Source: `docs/features/work-references.md` "Documents". */
+export type ReferenceFile = KnownReferenceFile | Unlisted;
+
+/**
+ * The reference document, 21 keys, every one present: `on` resolved as a comment's, `on_rev` a
+ * node's revision when attached; `actor` and `author` a comment's; `kind` `file` or `link`, a plain
+ * string; a link's `url`, a file's `name`, `b3` (its BLAKE3), `agent_b3` (its agent copy's), `size`,
+ * `media` (the sniffed type), `class`, `inline` and `warning` (derived from `media`) and `meta` (null
+ * for a link); `file` `stored` or `lost`, null for a link or a deleted reference; `deleted` null or
+ * the tombstone, its texts and hashes then null. Source: `docs/features/work-references.md` "Documents".
+ */
+export interface Reference {
+  id: string;
+  on: CommentOn;
+  on_rev: number | null;
+  actor: string;
+  author: Author;
+  kind: string;
+  title: string | null;
+  matters: string | null;
+  url: string | null;
+  name: string | null;
+  b3: string | null;
+  agent_b3: string | null;
+  size: number | null;
+  media: string | null;
+  class: ReferenceClass | null;
+  inline: boolean | null;
+  meta: ReferenceMeta | null;
+  file: ReferenceFile | null;
+  warning: string | null;
+  created_at: string;
+  deleted: ReferenceDeleted | null;
+}
+
+/**
+ * `spec ref list --json`, the answer of `GET .../references?on=X`: `on` as resolved, `total` every
+ * reference on it, deleted ones too; `references` one page, oldest first, the newest page first;
+ * `next_before` the page's smallest ID when older ones exist, else null; `notes` the daemon's lines.
+ * Source: `docs/features/work-references.md` "Documents".
+ */
+export interface ReferenceList {
+  on: CommentOn;
+  total: number;
+  references: Reference[];
+  next_before: string | null;
+  notes: string[];
+}
+
+/**
+ * The answer of `PUT .../blobs`, 10 keys: the bytes' BLAKE3 and size, their sniffed type, class,
+ * `inline`, facts, whether they reach agents as they are (`agent_ready`), whether "what matters" is
+ * required (`needs_matters`), a `.blend`'s `warning`, and `stored` `new` or `existing`. Nothing is
+ * attached until a POST names `b3`. Source: `docs/features/work-references.md` "Documents".
+ */
+export interface BlobStored {
+  b3: string;
+  size: number;
+  media: string;
+  class: ReferenceClass;
+  inline: boolean;
+  meta: ReferenceMeta;
+  agent_ready: boolean;
+  needs_matters: boolean;
+  warning: string | null;
+  stored: string;
+}
+
+/**
+ * POST `.../references`, a file: `on` a card's or a proposal's ID or a node's REF, `b3` a stored
+ * blob's, `agent_b3` its agent copy's or null, `name` as picked, `title` and `matters` null when not
+ * given, `as` the acting name (a hub's login stands in for it). Source:
+ * `docs/features/work-references.md` "HTTP".
+ */
+export interface ReferenceFileBody {
+  on: string;
+  b3: string;
+  agent_b3: string | null;
+  name: string;
+  title: string | null;
+  matters: string | null;
+  as: string | null;
+}
+
+/** POST `.../references`, a link: `url` alone in place of a file's three, never fetched. Source: `docs/features/work-references.md` "HTTP". */
+export interface ReferenceLinkBody {
+  on: string;
+  url: string;
+  title: string | null;
+  matters: string | null;
+  as: string | null;
+}
+
+/** POST `.../references`: exactly one of a file's `b3` and a link's `url`. Source: `docs/features/work-references.md` "HTTP". */
+export type ReferenceAddBody = ReferenceFileBody | ReferenceLinkBody;
+
+/**
+ * A reference as a task's package carries it to an agent: `on` the card it is under, then the keys an
+ * agent reads, `matters` one line cut at 512 characters (`cut` true then), `agent_image` whether an
+ * image reaches agents. Source: `docs/features/work-references.md` "A card's context and the task package".
+ */
+export interface PackageReference {
+  id: string;
+  on: string;
+  actor: string;
+  author: Author;
+  created_at: string;
+  kind: string;
+  title: string | null;
+  matters: string | null;
+  url: string | null;
+  name: string | null;
+  media: string | null;
+  class: ReferenceClass | null;
+  size: number | null;
+  meta: ReferenceMeta | null;
+  agent_image: boolean;
+  cut: boolean;
+}
+
+/** The package's `references`: `total` the cards' live references, `listed` the newest that fit, oldest first. Source: `docs/features/work-references.md` "A card's context and the task package". */
+export interface PackageReferences {
+  total: number;
+  listed: PackageReference[];
 }

@@ -55,6 +55,7 @@ mod answer;
 mod app;
 mod args;
 mod auto;
+mod blobs;
 mod confirm;
 mod daemon;
 mod feed;
@@ -199,6 +200,12 @@ fn main() -> ExitCode {
         return cannot_start(&reason);
     }
     slow::set_threshold(cli.slow_ms);
+    // The blob caps' settings (task spec `work-references`): they narrow,
+    // nothing widens; any other value stops the start.
+    match specengine_cli::BlobCaps::from_process() {
+        Ok(caps) => blobs::set_caps(caps),
+        Err(line) => return cannot_start(&line),
+    }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

@@ -1,22 +1,26 @@
-//! The queue's dump, format 8
-//! (canon `queue-backup`, "Format", "Import"; comments: task spec
+//! The queue's dump, format 9
+//! (canon `queue-backup`, "Format", "Import"; references: task spec
+//! `work-references`, "Dump format 9"; comments: task spec
 //! `comments`, "Backup";
 //! cards: canon `cards`, "Backup"; tasks: canon `tasks`, "Backup"; a
 //! proposal's card and why: canon `card-questions`, "The rule"; a card's
 //! mandate: canon `card-mandate`, "The rule"; a question's gist and
 //! matters: task spec `plain-questions` PQ8): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":8,"queue_schema":15,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"events":<e>}`
+//! `{"format":9,"queue_schema":16,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"refs":<f>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `cards` row by ID number, every
 //! `comments` row by ID number, every `comment_versions` row by comment ID
-//! number and `version`, every `events` row by `seq`, each
+//! number and `version`, every `refs` row by ID number, every `events` row
+//! by `seq`, each
 //! `{"<table>":{…}}` with every column in table order: `TEXT` a string,
-//! `NULL` `null`, `run`, `position`, `on_rev`, `version` and `seq` numbers;
-//! JSON columns stay the strings stored. No export time and no host inside:
-//! equal queues give equal bytes. Format 8 holds queue schema 15, its
-//! proposals' 51 columns, `comment_id` last. A format-7 dump holds queue
+//! `NULL` `null`, `run`, `position`, `on_rev`, `version`, `size` and `seq`
+//! numbers; JSON columns stay the strings stored. A dump never holds a
+//! file's bytes. No export time and no host inside: equal queues give equal
+//! bytes. Format 9 holds queue schema 16, its proposals' 51 columns,
+//! `comment_id` last. A format-8 dump holds queue schema 15 and still
+//! restores, no reference (ten header keys). A format-7 dump holds queue
 //! schema 13 or
 //! 14 and still restores, no comment, its proposals' 50 columns, `gist` and
 //! `matters` last, `comment_id` restored `NULL`; step 14 adds
@@ -56,18 +60,19 @@ use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use specengine_core::card::card_number;
 use specengine_core::comment::comment_number;
 use specengine_core::proposal::proposal_number;
+use specengine_core::reference::reference_number;
 use specengine_core::task::task_number;
 use specengine_store::{
     CARD_COLUMNS, COMMENT_COLUMNS, COMMENT_VERSION_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS,
-    QUEUE_SCHEMA_VERSION, RUN_COLUMNS, StoredCard, StoredComment, StoredCommentVersion,
-    StoredComments, StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
-    card_columns, proposal_columns,
+    QUEUE_SCHEMA_VERSION, REF_COLUMNS, RUN_COLUMNS, StoredCard, StoredComment,
+    StoredCommentVersion, StoredComments, StoredEvent, StoredProposal, StoredQueue, StoredRef,
+    StoredRun, StoredTask, TASK_COLUMNS, card_columns, proposal_columns,
 };
 
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 8;
+pub const STATE_FORMAT: u64 = 9;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
@@ -91,6 +96,9 @@ const NO_PLAIN_QUESTIONS_FORMAT: u64 = 6;
 /// The format without comments: queue schemas 13 and 14.
 const NO_COMMENTS_FORMAT: u64 = 7;
 
+/// The format without references: queue schema 15 alone.
+const NO_REFS_FORMAT: u64 = 8;
+
 /// The first queue schema with tasks and runs: format 1 holds the schemas
 /// before it, format 2 it and those after, to [`CARDS_SCHEMA`].
 const TASKS_SCHEMA: i64 = 4;
@@ -113,12 +121,30 @@ const MANDATE_SCHEMA: i64 = 12;
 /// format 7 holds it and 14 (step 14 changes no dumped table).
 const PLAIN_QUESTIONS_SCHEMA: i64 = 13;
 
-/// The first queue schema with comments: format 8 holds it, to this
-/// build's.
+/// The first queue schema with comments: format 8 holds it alone.
 const COMMENTS_SCHEMA: i64 = 15;
 
+/// The first queue schema with references: format 9 holds it, to this
+/// build's.
+const REFS_SCHEMA: i64 = 16;
+
 /// The header's keys, in the order written.
-const HEADER_KEYS: [&str; 10] = [
+const HEADER_KEYS: [&str; 11] = [
+    "format",
+    "queue_schema",
+    "project",
+    "proposals",
+    "tasks",
+    "runs",
+    "cards",
+    "comments",
+    "comment_versions",
+    "refs",
+    "events",
+];
+
+/// A format-8 header's keys.
+const HEADER_KEYS_8: [&str; 10] = [
     "format",
     "queue_schema",
     "project",
@@ -166,6 +192,9 @@ const ON_REV: &str = "on_rev";
 /// The `comments` and `comment_versions` column that is no `TEXT`.
 const VERSION: &str = "version";
 
+/// The `refs` column that is no `TEXT` beside `on_rev`.
+const SIZE: &str = "size";
+
 /// The dump of `state`, the queue of `slug` (see the module documentation):
 /// every string escaped by `serde_json` straight into the buffer, no text
 /// copied first.
@@ -184,13 +213,14 @@ pub(crate) fn render(
     writeln!(
         out,
         ",\"proposals\":{},\"tasks\":{},\"runs\":{},\"cards\":{},\"comments\":{},\
-         \"comment_versions\":{},\"events\":{}}}",
+         \"comment_versions\":{},\"refs\":{},\"events\":{}}}",
         counts.proposals,
         counts.tasks,
         counts.runs,
         counts.cards,
         talk.comments.len(),
         talk.versions.len(),
+        talk.refs.len(),
         counts.events
     )?;
     for row in &state.proposals {
@@ -274,6 +304,27 @@ pub(crate) fn render(
         }
         out.extend_from_slice(b"}}\n");
     }
+    for row in &talk.refs {
+        out.extend_from_slice(b"{\"refs\":{");
+        let mut texts = row.columns.iter();
+        for (index, column) in REF_COLUMNS.iter().enumerate() {
+            if index > 0 {
+                out.push(b',');
+            }
+            match *column {
+                ON_REV => {
+                    write!(out, "\"{ON_REV}\":")?;
+                    serde_json::to_writer(&mut out, &row.on_rev)?;
+                }
+                SIZE => {
+                    write!(out, "\"{SIZE}\":")?;
+                    serde_json::to_writer(&mut out, &row.size)?;
+                }
+                _ => push_column(&mut out, column, texts.next().and_then(Option::as_deref))?,
+            }
+        }
+        out.extend_from_slice(b"}}\n");
+    }
     for row in &state.events {
         write!(out, "{{\"events\":{{\"seq\":{}", row.seq)?;
         for (column, value) in EVENT_COLUMNS[1..].iter().zip(&row.columns) {
@@ -321,6 +372,7 @@ pub(crate) fn parse(
     let mut talk = StoredComments::default();
     let mut comment_ids: HashMap<String, usize> = HashMap::new();
     let mut version_keys: HashMap<(String, i64), usize> = HashMap::new();
+    let mut ref_ids: HashMap<String, usize> = HashMap::new();
     let mut ids: HashMap<String, usize> = HashMap::new();
     let mut task_ids: HashMap<String, usize> = HashMap::new();
     let mut card_ids: HashMap<String, usize> = HashMap::new();
@@ -400,6 +452,16 @@ pub(crate) fn parse(
                 }
                 talk.versions.push(*row);
             }
+            Row::Ref(row) => {
+                let id = row.id().unwrap_or_default().to_owned();
+                if let Some(first) = ref_ids.insert(id, number) {
+                    return Err(at(
+                        number,
+                        &format!("`id` repeats the `refs` row of line {first}"),
+                    ));
+                }
+                talk.refs.push(*row);
+            }
             Row::Event(row) => {
                 if let Some(first) = seqs.insert(row.seq, number) {
                     return Err(at(
@@ -427,13 +489,37 @@ pub(crate) fn parse(
     let found = state.counts();
     let found_comments = talk.comments.len() as u64;
     let found_versions = talk.versions.len() as u64;
+    let found_refs = talk.refs.len() as u64;
     let counts_differ = found.proposals != header.proposals
         || found.tasks != header.tasks
         || found.runs != header.runs
         || found.cards != header.cards
         || found.events != header.events
         || found_comments != header.comments
-        || found_versions != header.comment_versions;
+        || found_versions != header.comment_versions
+        || found_refs != header.refs;
+    if counts_differ && header.format > NO_REFS_FORMAT {
+        return Err(CliError::cannot(format!(
+            "{label}: header counts {}, {}, {}, {}, {}, {}, {}, {}; found {}, {}, {}, {}, {}, \
+             {}, {}, {}",
+            header.proposals,
+            header.tasks,
+            header.runs,
+            header.cards,
+            header.comments,
+            header.comment_versions,
+            header.refs,
+            header.events,
+            found.proposals,
+            found.tasks,
+            found.runs,
+            found.cards,
+            found_comments,
+            found_versions,
+            found_refs,
+            found.events
+        )));
+    }
     if counts_differ && header.format > NO_COMMENTS_FORMAT {
         return Err(CliError::cannot(format!(
             "{label}: header counts {}, {}, {}, {}, {}, {}, {}; found {}, {}, {}, {}, {}, {}, {}",
@@ -503,6 +589,8 @@ struct Header {
     /// Format 8's; none before.
     comments: u64,
     comment_versions: u64,
+    /// Format 9's; none before.
+    refs: u64,
     events: u64,
 }
 
@@ -514,6 +602,7 @@ enum Row {
     Card(Box<StoredCard>),
     Comment(Box<StoredComment>),
     CommentVersion(Box<StoredCommentVersion>),
+    Ref(Box<StoredRef>),
     Event(StoredEvent),
 }
 
@@ -569,6 +658,7 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         PROPOSALS_ONLY_FORMAT => &HEADER_KEYS_1,
         NO_CARDS_FORMAT => &HEADER_KEYS_2,
         NO_TASK_LINKS_FORMAT..=NO_COMMENTS_FORMAT => &HEADER_KEYS_7,
+        NO_REFS_FORMAT => &HEADER_KEYS_8,
         _ => &HEADER_KEYS,
     };
     let mut keys: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).collect();
@@ -599,7 +689,7 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     // cards, format 3 the one before a card's tasks, format 4 the one before
     // a proposal's card, format 5 the one before a card's mandate, format 6
     // the one before a question's gist, format 7 those before the comments,
-    // format 8 the rest.
+    // format 8 the one before the references, format 9 the rest.
     let held = match format {
         PROPOSALS_ONLY_FORMAT => 1..TASKS_SCHEMA,
         NO_CARDS_FORMAT => TASKS_SCHEMA..CARDS_SCHEMA,
@@ -608,7 +698,8 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         NO_MANDATE_FORMAT => CARD_ITEMS_SCHEMA..MANDATE_SCHEMA,
         NO_PLAIN_QUESTIONS_FORMAT => MANDATE_SCHEMA..PLAIN_QUESTIONS_SCHEMA,
         NO_COMMENTS_FORMAT => PLAIN_QUESTIONS_SCHEMA..COMMENTS_SCHEMA,
-        _ => COMMENTS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
+        NO_REFS_FORMAT => COMMENTS_SCHEMA..REFS_SCHEMA,
+        _ => REFS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
     };
     let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {
@@ -652,6 +743,11 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     } else {
         (0, 0)
     };
+    let refs = if format > NO_REFS_FORMAT {
+        count("refs")?
+    } else {
+        0
+    };
     Ok(Header {
         format,
         project: project.clone(),
@@ -663,6 +759,7 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         cards,
         comments,
         comment_versions,
+        refs,
         events: count("events")?,
     })
 }
@@ -679,6 +776,7 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
     let with_tasks = header.format != PROPOSALS_ONLY_FORMAT;
     let with_cards = header.format > NO_CARDS_FORMAT;
     let with_comments = header.format > NO_COMMENTS_FORMAT;
+    let with_refs = header.format > NO_REFS_FORMAT;
     if entries.len() != 1 {
         return Err(SHAPE.to_owned());
     }
@@ -690,7 +788,15 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
         "cards" if with_cards => header.card_columns,
         "comments" if with_comments => &COMMENT_COLUMNS,
         "comment_versions" if with_comments => &COMMENT_VERSION_COLUMNS,
+        "refs" if with_refs => &REF_COLUMNS,
         "events" => &EVENT_COLUMNS,
+        _ if with_refs => {
+            return Err(
+                "a row of an unknown table (a dump holds `proposals`, `tasks`, `runs`, `cards`, \
+                 `comments`, `comment_versions`, `refs` and `events` rows)"
+                    .to_owned(),
+            );
+        }
         _ if with_comments => {
             return Err(
                 "a row of an unknown table (a dump holds `proposals`, `tasks`, `runs`, `cards`, \
@@ -830,6 +936,9 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
     if table == "comments" {
         return comment_row(taken, project).map(|row| Row::Comment(Box::new(row)));
     }
+    if table == "refs" {
+        return ref_row(taken, project).map(|row| Row::Ref(Box::new(row)));
+    }
     if table == "comment_versions" {
         return version_row(taken, project).map(|row| Row::CommentVersion(Box::new(row)));
     }
@@ -945,6 +1054,52 @@ fn version_row(taken: Vec<(&str, Json)>, project: &str) -> Result<StoredCommentV
         .is_some_and(|number| number >= 1)
     {
         return Err("`comment_id` is not a comment ID as the queue writes it".to_owned());
+    }
+    if row.project() != Some(project) {
+        return Err(format!("`project` is not the header's (`{project}`)"));
+    }
+    Ok(row)
+}
+
+/// A `refs` row's columns, read: `on_rev` and `size` an integer or `null`,
+/// `id` a reference ID as the queue writes it, `project` the header's.
+fn ref_row(taken: Vec<(&str, Json)>, project: &str) -> Result<StoredRef, String> {
+    let mut columns: [Option<String>; REF_COLUMNS.len() - 2] = Default::default();
+    let (mut on_rev, mut size) = (None, None);
+    let mut slot = 0;
+    let integer = |column: &str, value: Json| match value {
+        Json::Null => Ok(None),
+        Json::Count(number) => i64::try_from(number)
+            .map(Some)
+            .map_err(|_| format!("`{column}` is not an integer or null")),
+        Json::Negative(number) => Ok(Some(number)),
+        _ => Err(format!("`{column}` is not an integer or null")),
+    };
+    for (column, value) in taken {
+        match column {
+            ON_REV => on_rev = integer(ON_REV, value)?,
+            SIZE => size = integer(SIZE, value)?,
+            _ => {
+                columns[slot] = text(column, value)?;
+                slot += 1;
+            }
+        }
+    }
+    let row = StoredRef {
+        on_rev,
+        size,
+        columns,
+    };
+    if !row
+        .id()
+        .and_then(reference_number)
+        .is_some_and(|number| number >= 1)
+    {
+        return Err(format!(
+            "`id` is not a reference ID as the queue writes it (`RF-` and 4 or more digits, \
+             numbered from 1 to {})",
+            u64::MAX
+        ));
     }
     if row.project() != Some(project) {
         return Err(format!("`project` is not the header's (`{project}`)"));

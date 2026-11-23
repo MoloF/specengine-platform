@@ -909,7 +909,8 @@ fn d1_review_proposal_is_listed_with_one_input_the_consent_meta_and_get_proposal
         // docs/features/department-split.md S8: thirty with `split_card`.
         // 32 since docs/features/collision-pass.md CP8.
         // 35 since docs/features/comments.md CM15.
-        assert_eq!(TOOLS.len(), 35);
+        // 38 since docs/features/work-references.md RF20.
+        assert_eq!(TOOLS.len(), 38);
         let review = tool(&list, "review_proposal");
         let input = &review["inputSchema"];
         assert_eq!(input["type"], json!("object"), "{era:?}: {input}");

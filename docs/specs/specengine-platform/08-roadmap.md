@@ -673,8 +673,8 @@ Then, the same day: "you can start executing, to the end". The main session runs
 
 | # | Slice | Item | Fixed now |
 |---|---|---|---|
-| 1 | `comments` (`docs/features/comments.md`) | RM-0136 | must; ADR-0087: a comment is queue data, never truth; queue schema 15, dump format 8; `list_comments`, `add_comment` (`HUB_TOOLS` 21); plugin 0.50.0 (MINOR), tag `v0.50.0`; **shipped 2026-11-22** (`docs/canon/comments.md`, `comments-surfaces.md`); open: CM19's soak, the full run, CM21 on the live hub |
-| 2 | `work-references` | RM-0137 | must, after 1; its ADR (number 0088) to come: a BLAKE3-named store in the data directory, its own volume on a hub, never in a repository, a dump or an off-host copy; schema 16; plugin 0.51.0 |
+| 1 | `comments` (`docs/features/comments.md`) | RM-0136 | must; ADR-0087: a comment is queue data, never truth; queue schema 15, dump format 8; `list_comments`, `add_comment` (`HUB_TOOLS` 21); plugin 0.50.0 (MINOR), tag `v0.50.0`; **shipped 2026-11-22** (`docs/canon/comments.md`, `comments-surfaces.md`); CM19's soak and the full run passed; open: CM21 on the live hub |
+| 2 | `work-references` (`docs/features/work-references.md`) | RM-0137 | must, after 1; ADR-0088: a reference is queue data, its file in a BLAKE3-named store in the data directory, its own volume `specengine-blobs` on a hub, never in a repository, a dump or an off-host copy; queue schema 16, dump format 9; `spec ref`, `list_references`, `get_reference`, `add_reference` (`HUB_TOOLS` 24); plugin 0.51.0 (MINOR), tag `v0.51.0`; **shipped 2026-11-23** (`docs/canon/work-references.md`, `work-references-surfaces.md`); open: the RF23 soak, the full run, RF25 (an upload through Traefik) and RF26 (an image to Claude Code) on the live hub |
 | 3 | `reference-promotion` | RM-0138 | must, after 2; its ADR (number 0089) to come: a `reference` proposal applied to a `[references]` home, LFS by `.gitattributes`, git-lfs in the image; `INDEX_FORMAT` 22; plugin 0.52.0 |
 
 **Ten people at once** (his word of 2026-11-15) binds every slice:

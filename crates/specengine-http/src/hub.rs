@@ -316,7 +316,9 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
 /// (`docs/features/department-split.md` "Acceptance criteria", S7) or
 /// `.../cards/:id/{move,edit,assign,cancel,items}`; POST on `.../comments`
 /// and `.../comments/:id/{edit,items}`, DELETE on `.../comments/:id`, whose
-/// handler judges the author or an `owner` (task spec `comments`). Team:
+/// handler judges the author or an `owner` (task spec `comments`); PUT on
+/// `.../blobs`, POST on `.../references`, DELETE on `.../references/:id`
+/// (task spec `work-references`). Team:
 /// POST, DELETE on
 /// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
 /// `.../cards/:id/{accept,clear}`, `.../trace/clear` and
@@ -359,6 +361,12 @@ fn class(method: &Method, path: &str) -> Option<Class> {
         ["comments", id, verb] if post && !id.is_empty() && COMMENT_WRITES.contains(verb) => {
             Some(Class::Plain)
         }
+        // A reference's three writes (task spec `work-references`, "HTTP"):
+        // the binary door's PUT, the attach and the delete, whose handler
+        // judges the author or an `owner`.
+        ["blobs"] if method == Method::PUT => Some(Class::Plain),
+        ["references"] if post => Some(Class::Plain),
+        ["references", id] if method == Method::DELETE && !id.is_empty() => Some(Class::Plain),
         ["proposals", id, "confirm"] if post && !id.is_empty() => Some(Class::Confirm),
         ["round", _] if post && path.ends_with("/round/answers") => Some(Class::Team),
         ["trace", "clear"] if post => Some(Class::Confirm),

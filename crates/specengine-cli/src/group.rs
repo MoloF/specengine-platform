@@ -4,7 +4,8 @@
 //! spawned as the leader of a process group of its own and waited for,
 //! through POSIX calls std does not expose (`killpg`, `sigaction`,
 //! `waitid`; and `kill` with signal 0, [`alive`], for `spec auto land`'s
-//! stale lock), the CLI's only `unsafe`, each block with its `SAFETY` note
+//! stale lock; and `statvfs`, [`available_bytes`], the blob store's free
+//! space: task spec `work-references`), the CLI's only `unsafe`, each block with its `SAFETY` note
 //! (after eval's `ra/sys.rs` `kill_group`, which the CLI may not depend
 //! on). The I/O is each caller's.
 //!
@@ -157,6 +158,32 @@ pub(crate) fn alive(pid: u32) -> bool {
     // positive `pid` names a process; no memory is passed.
     let status = unsafe { libc::kill(pid, 0) };
     status == 0 || io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+}
+
+/// The bytes an unprivileged process may still write on the file system
+/// holding `path` (`statvfs`: `f_bavail` × `f_frsize`), saturating.
+pub(crate) fn available_bytes(path: &std::path::Path) -> io::Result<u64> {
+    use std::os::unix::ffi::OsStrExt as _;
+    let mut bytes = path.as_os_str().as_bytes().to_vec();
+    if bytes.contains(&0) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "a path holding NUL",
+        ));
+    }
+    bytes.push(0);
+    // SAFETY: an all-zero `statvfs` is a valid value of the plain C struct,
+    // which the call overwrites.
+    let mut stats: libc::statvfs = unsafe { MaybeUninit::zeroed().assume_init() };
+    // SAFETY: `bytes` is a NUL-terminated path that outlives the call, and
+    // `stats` a writable struct of the type the call fills.
+    let status = unsafe { libc::statvfs(bytes.as_ptr().cast::<libc::c_char>(), &mut stats) };
+    if status != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    #[allow(clippy::useless_conversion)]
+    let available = u64::from(stats.f_bavail).saturating_mul(u64::from(stats.f_frsize));
+    Ok(available)
 }
 
 /// `before` made `signal`'s disposition again.

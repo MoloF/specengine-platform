@@ -72,8 +72,10 @@ use specengine_mcp::{
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
 const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/features/work-references.md RF20: the hub's text names
+// `list_references`, `get_reference` and `add_reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
+    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
 
 /// "MCP": the line `INSTRUCTIONS` gains after the review line.
 const COLLISIONS_LINE: &str = "- get_collisions, mark_pairs = spec collisions, collisions mark.\n";
@@ -253,8 +255,9 @@ fn cp8_the_two_tools_answer_as_their_twins() {
         let repo = Repo::new(&format!("mcp-cp8-{era:?}"));
         let mut session = repo.session(era);
         let list = session.tools();
-        // 35 since docs/features/comments.md CM15.
-        assert_eq!(tool_names(&list).len(), 35, "{era:?}");
+        // 35 since docs/features/comments.md CM15; 38 since
+        // docs/features/work-references.md RF20.
+        assert_eq!(tool_names(&list).len(), 38, "{era:?}");
         assert_eq!(tool_names(&list), TOOLS, "{era:?}");
         let schemas = output_schemas(&list);
         let called = |session: &mut Session, tool: &str, args: Value| -> Value {
@@ -715,9 +718,10 @@ async fn cp8_a_hub_lists_18_and_knows_neither_tool() {
     ];
     let hub = hub_messages(&repo.root, &repo.home, &calls).await;
     let listed = tool_names(&hub[0]["result"]);
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(listed.len(), 21, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 21);
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(listed.len(), 24, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 24);
     for name in ["get_collisions", "mark_pairs"] {
         assert!(!listed.iter().any(|tool| tool == name), "{name} listed");
         assert!(!HUB_TOOLS.contains(&name), "{name} in HUB_TOOLS");
@@ -853,6 +857,81 @@ const TOOLS_LIST_COMMENTS_B3: [(Era, &str); 2] = [
         "f6fdfdb7c7200323034e9363743141389b87d702362d7fd71d64e0765147c4e5",
     ),
 ];
+
+/// The same listing since docs/features/work-references.md (RM-0137, RF20):
+/// the three reference tools and `references` in a card's context and a
+/// task package ([`without_references`] takes them out).
+const TOOLS_LIST_REFERENCES_B3: [(Era, &str); 2] = [
+    (
+        Era::Legacy,
+        "59ea66e45d0a58b57f3002349c7be37bef403e3774b3adbee0593d8bfce4b01e",
+    ),
+    (
+        Era::Stateless,
+        "344df25f9b2ed42a009b49fa7eeac3157cd07a2f3f3725524e0ad9af38599023",
+    ),
+];
+
+/// `list` as comments listed it: `list_references`, `get_reference` and
+/// `add_reference` out, `references` out of a card's context (beside
+/// `parent`, `bundle`, `comments`) and of a task package (beside `bundle`,
+/// `practices`, `comments`), each from its `required` too. The tools each
+/// change touched, by name.
+fn without_references(list: &mut Value) -> Vec<String> {
+    fn strip(value: &mut Value) -> usize {
+        let has = |value: &Value, keys: &[&str]| {
+            value
+                .get("properties")
+                .and_then(Value::as_object)
+                .is_some_and(|properties| keys.iter().all(|key| properties.contains_key(*key)))
+        };
+        let mut found = 0;
+        if has(value, &["parent", "bundle", "comments", "references"])
+            || has(value, &["bundle", "practices", "comments", "references"])
+        {
+            let removed = value
+                .get_mut("properties")
+                .and_then(Value::as_object_mut)
+                .is_some_and(|properties| properties.remove("references").is_some());
+            assert!(removed);
+            if let Some(required) = value.get_mut("required").and_then(Value::as_array_mut) {
+                required.retain(|name| name != "references");
+            }
+            found += 1;
+        }
+        match value {
+            Value::Object(object) => {
+                for (_, inner) in object.iter_mut() {
+                    found += strip(inner);
+                }
+            }
+            Value::Array(items) => {
+                for inner in items {
+                    found += strip(inner);
+                }
+            }
+            _ => {}
+        }
+        found
+    }
+    let tools = list["tools"].as_array_mut().expect("tools");
+    let before = tools.len();
+    tools.retain(|tool| {
+        !["list_references", "get_reference", "add_reference"]
+            .contains(&tool["name"].as_str().unwrap_or_default())
+    });
+    assert_eq!(before - tools.len(), 3, "the three reference tools");
+    let mut touched = Vec::new();
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap_or_default().to_owned();
+        if let Some(schema) = tool.get_mut("outputSchema")
+            && strip(schema) > 0
+        {
+            touched.push(name);
+        }
+    }
+    touched
+}
 
 /// docs/features/comments.md: each description edit of the slice, `(tool,
 /// now, before)`, exactly as written (the words some texts gave up to keep
@@ -1314,21 +1393,37 @@ fn cn7_the_tools_list_is_byte_equal_to_collision_pass() {
     assert_eq!(TOOLS_LIST_PRACTICES_B3.map(|(era, _)| era), ERAS);
     assert_eq!(TOOLS_LIST_GUIDE_B3.map(|(era, _)| era), ERAS);
     assert_eq!(TOOLS_LIST_COMMENTS_B3.map(|(era, _)| era), ERAS);
-    for ((((((era, pinned), (_, paired)), (_, used)), (_, practiced)), (_, guided)), (_, talked)) in
-        TOOLS_LIST_B3
-            .into_iter()
-            .zip(TOOLS_LIST_PAIR_B3)
-            .zip(TOOLS_LIST_USAGE_B3)
-            .zip(TOOLS_LIST_PRACTICES_B3)
-            .zip(TOOLS_LIST_GUIDE_B3)
-            .zip(TOOLS_LIST_COMMENTS_B3)
+    assert_eq!(TOOLS_LIST_REFERENCES_B3.map(|(era, _)| era), ERAS);
+    for (
+        ((((((era, pinned), (_, paired)), (_, used)), (_, practiced)), (_, guided)), (_, talked)),
+        (_, referenced),
+    ) in TOOLS_LIST_B3
+        .into_iter()
+        .zip(TOOLS_LIST_PAIR_B3)
+        .zip(TOOLS_LIST_USAGE_B3)
+        .zip(TOOLS_LIST_PRACTICES_B3)
+        .zip(TOOLS_LIST_GUIDE_B3)
+        .zip(TOOLS_LIST_COMMENTS_B3)
+        .zip(TOOLS_LIST_REFERENCES_B3)
     {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let mut list = session.tools();
         assert_eq!(
             blake3_hex(canonical(&list).as_bytes()),
-            talked,
+            referenced,
             "{era:?}: tools/list changed"
+        );
+        // docs/features/work-references.md: without the slice's tools and
+        // keys, the listing is comments'.
+        assert_eq!(
+            without_references(&mut list),
+            ["get_card", "get_task"],
+            "{era:?}: the tools the slice touched"
+        );
+        assert_eq!(
+            blake3_hex(canonical(&list).as_bytes()),
+            talked,
+            "{era:?}: tools/list without work-references' tools and keys is comments'"
         );
         // docs/features/comments.md: without the slice's tools, keys and
         // edits, the listing is specengine-guide's.

@@ -41,12 +41,14 @@
 //! `cards` (GET) without `marks`, `cards/<id>` (no marks),
 //! `cards/counts` (no index read), `comments` (GET) and `mentions` (task
 //! spec `comments`: they read the queue, a node resolved from the trusted
-//! index). Not on it,
+//! index), `references` (GET; task spec `work-references`). A stored
+//! file's read (`blobs/<b3>`) takes no turn at all ([`read`]). Not on it,
 //! so walking: trace data wherever it is shown (`trace`, `flow?trace=true`,
 //! `cards?marks=true`, `catalog`, `rings`: the rollups and marks a person accepts a card on,
 //! judged on the files as they are now); the round's sheet (it writes a
 //! round), the stage, the round's answers, every card write, the trace's
-//! clear, every comment write and a confirm's read and write.
+//! clear, every comment and reference write (a `PUT …/blobs` holding the
+//! turn for its rename alone) and a confirm's read and write.
 
 use std::sync::Arc;
 
@@ -56,7 +58,8 @@ use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use specengine_cli::{
     CardCause, CliError, CommentCause, ConfirmCause, Env, Exit, Globals, IndexTrust, Outcome,
-    ProjectRoot, StageCause, check_memo, cost, discover, render_json, trusted, walking,
+    ProjectRoot, ReferenceCause, StageCause, check_memo, cost, discover, render_json, trusted,
+    walking,
 };
 
 use crate::start::Project;
@@ -207,6 +210,35 @@ fn answered(outcome: &Outcome) -> Answered {
             };
         }
         Outcome::CommentList(list) => return caused(outcome, comment_status(list.cause())),
+        // A reference's write, read and stored blob (task spec
+        // `work-references`, "HTTP"): done 200; a body 400 with its line; no
+        // such target, reference or blob 404 `{id, reason}`; a rule 409
+        // `{id, reason}`; not the person 403, a cap 413 and a type 415, each
+        // with `refused: <line>`.
+        Outcome::Reference(reference) => {
+            return reference_answered(
+                outcome,
+                reference.cause(),
+                reference
+                    .refused
+                    .as_ref()
+                    .map(|refused| refused.reason.as_str()),
+            );
+        }
+        Outcome::ReferenceList(list) => {
+            return reference_answered(
+                outcome,
+                list.cause(),
+                list.refused.as_ref().map(|refused| refused.reason.as_str()),
+            );
+        }
+        Outcome::Blob(blob) => {
+            return reference_answered(
+                outcome,
+                blob.cause(),
+                blob.refused.as_ref().map(|refused| refused.reason.as_str()),
+            );
+        }
         // A split: 200 written or planned, 400 a usage rule, 409 refused
         // with the document; never a 404, the path naming no card
         // (`docs/features/department-split.md`
@@ -245,6 +277,41 @@ fn comment_status(cause: Option<CommentCause>) -> Option<StatusCode> {
         Some(CommentCause::Unknown) => Some(StatusCode::NOT_FOUND),
         Some(CommentCause::Refused) => Some(StatusCode::CONFLICT),
         Some(CommentCause::Forbidden) => Some(StatusCode::FORBIDDEN),
+    }
+}
+
+/// A reference command's answer by its cause (see [`answered`]): a line
+/// that is no `refused: …` gets the prefix where the error body carries it.
+fn reference_answered(
+    outcome: &Outcome,
+    cause: Option<ReferenceCause>,
+    reason: Option<&str>,
+) -> Answered {
+    let line = || {
+        let reason = reason.unwrap_or_default();
+        if reason.starts_with("refused: ") {
+            reason.to_owned()
+        } else {
+            format!("refused: {reason}")
+        }
+    };
+    match cause {
+        None => caused(outcome, Some(StatusCode::OK)),
+        Some(ReferenceCause::Body) => caused(outcome, None),
+        Some(ReferenceCause::Unknown) => caused(outcome, Some(StatusCode::NOT_FOUND)),
+        Some(ReferenceCause::Refused) => caused(outcome, Some(StatusCode::CONFLICT)),
+        Some(ReferenceCause::Forbidden) => Answered::Refused {
+            status: StatusCode::FORBIDDEN,
+            message: line(),
+        },
+        Some(ReferenceCause::TooLarge) => Answered::Refused {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: line(),
+        },
+        Some(ReferenceCause::Type) => Answered::Refused {
+            status: StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            message: line(),
+        },
     }
 }
 
@@ -434,6 +501,6 @@ pub(crate) fn found(
 /// The message of a call that panicked.
 const INTERNAL: &str = "internal error: the call failed";
 
-fn internal() -> Response {
+pub(crate) fn internal() -> Response {
     error(StatusCode::INTERNAL_SERVER_ERROR, INTERNAL)
 }

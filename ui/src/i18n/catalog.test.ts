@@ -3,10 +3,11 @@ import { enT } from "../test/text";
 import { isLanguage, LANGUAGES, type Messages } from "./catalog";
 import { en as eager } from "./en";
 import { enComments } from "./enComments";
+import { enReferences } from "./enReferences";
 import { ru } from "./ru";
 
-/** The whole English catalog: first load's and the part the comments' chunks bring (catalog.ts `English`). */
-const en = { ...eager, comments: enComments };
+/** The whole English catalog: first load's and the parts the comments' and the references' chunks bring (catalog.ts `English`). */
+const en = { ...eager, comments: enComments, references: enReferences };
 
 // LG-1 and LG-9 of docs/features/ui-languages.md: the two catalogs hold the same keys, plural
 // groups in each language's forms, the same placeholders, `{{count}}` in plural forms alone, plain
@@ -20,7 +21,7 @@ const SEGMENT = /^[a-z][A-Za-z0-9_]*$/;
 // "map" since docs/features/corpus-map.md "Acceptance criteria", CM13: the Graph's Map;
 // "documents" since docs/features/doc-library.md "Acceptance criteria", DL19: the Documents section;
 // "practices" since docs/features/department-practices.md "Acceptance criteria", DP21: a task's Practices part (src/practices/).
-const FIRST_SEGMENTS = ["app", "palette", "home", "ui", "workspace", "board", "flow", "health", "inbox", "tasks", "tree", "roadmap", "round", "graph", "trace", "markdown", "language", "doc", "rings", "map", "feed", "documents", "practices", "guide", "comments"];
+const FIRST_SEGMENTS = ["app", "palette", "home", "ui", "workspace", "board", "flow", "health", "inbox", "tasks", "tree", "roadmap", "round", "graph", "trace", "markdown", "language", "doc", "rings", "map", "feed", "documents", "practices", "guide", "comments", "references"];
 
 /** Every leaf by its dotted path. */
 function flat(messages: Messages, prefix = ""): Map<string, string> {
@@ -149,6 +150,16 @@ describe("the catalogs (LG-1)", () => {
     expect(Object.keys(en.comments)).toEqual(Object.keys(enComments));
     expect([eager.app.mentions, eager.app.comments, eager.app.lazy.comments, eager.app.lazy.mentions]).toEqual(["Mentions", "Comments", "Reading the comments", "Reading the mentions"]);
     expect(problemsOf({ comments: enComments }, { comments: ru.comments })).toEqual([]);
+  });
+
+  // docs/features/work-references.md "UI", Language: the references' English is a part of its own,
+  // loaded with their chunk; first load's catalog holds only the two words drawn before it, under
+  // `app`, and the Board's act-off line. M: the part's words kept in en.ts.
+  it("keep the references' English out of first load's catalog: `en` holds no `references`, the part holds them all, `app` the two drawn before", () => {
+    expect(Object.keys(eager)).not.toContain("references");
+    expect(Object.keys(en.references)).toEqual(Object.keys(enReferences));
+    expect([eager.app.references, eager.app.lazy.references, eager.board.actOff.delete_reference]).toEqual(["References", "Reading the references", "Your login deletes only its own references on this project."]);
+    expect(problemsOf({ references: enReferences }, { references: ru.references })).toEqual([]);
   });
 
   it("are the two languages the select offers", () => {

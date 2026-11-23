@@ -259,8 +259,9 @@ fn gu5_a_hub_over_mcp_is_the_cli_and_takes_no_turn() {
     let mut agent = Stateless::new(server.port, SLUG, "mira");
     let list = agent.tools();
     let names = tool_names(&list);
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(names.len(), 21, "{names:?}");
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(names.len(), 24, "{names:?}");
     assert!(names.iter().any(|name| name == "get_guide"), "{names:?}");
     let all = forms(&pages);
     let picked: Vec<&Form> = all

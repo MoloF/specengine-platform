@@ -12,14 +12,14 @@ The owner's screens: 07 s3, flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md
 
 ## Stack
 
-A standalone pnpm project, strict TypeScript, no root `package.json`. Tests: Vitest, jsdom, Testing Library: `src/**/*.test.ts(x)`, `fetch`, `EventSource` stubbed.
+A standalone pnpm project, strict TypeScript, no root `package.json`. Tests: Vitest, jsdom, Testing Library, `src/**/*.test.ts(x)`, `fetch` and `EventSource` stubbed.
 
 ## Contract seam
 
-- One interface, `src/api/client.ts` `SpecEngineClient`, methods named after the daemon's endpoints; reads take the query's `AbortSignal` (superseded: aborted, never by a live event's re-read; never the check or health read: `ui-client.md`), writes none. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily.
-- App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
-- An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry.
-- The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`decision-staging.md`) or, on a hub, by one click per item (`hub-confirm.md`); a card is written (`board-ui.md`).
+- One interface, `src/api/client.ts` `SpecEngineClient`, methods named after the daemon's endpoints; reads take the query's `AbortSignal` (superseded: aborted, never by a live event's re-read; never the check or health read: `ui-client.md`), writes none but `putBlob` (`work-references-surfaces.md` "Screen"). The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily.
+- App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` (later the generated `src/api/generated/`). Provisional types copy documented shapes, citing each source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
+- An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry.
+- The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`decision-staging.md`) or one click per item on a hub (`hub-confirm.md`); a card is written (`board-ui.md`).
 
 ## Screen rules
 
@@ -75,7 +75,7 @@ Run in `ui/` by the UI roles:
 | `pnpm install --frozen-lockfile` | installs the lockfile; no unmet peer |
 | `pnpm lint` | `eslint . --max-warnings=0` |
 | `pnpm build` | `tsc --noEmit`, `vite build` into `ui/dist/` |
-| `pnpm test` | `vitest run`; a test calling `console.error` or `console.warn` fails |
+| `pnpm test` | `vitest run`; a test calling `console.error` or `.warn` fails |
 
 From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers`. The hook and CI run no UI gate.
 
@@ -87,8 +87,8 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. Build and install: `serve-ui.md` "Build order"; `spec serve` alone serves the UI.
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`; no `--host` with the daemon up. The mock: `?scenario=<name>` before the `#`.
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/` (not `localhost`); no `--host` with the daemon up. The mock: `?scenario=<name>` before the `#`.
 
 ## Roles here
 
-`ui-developer` writes `ui/**` and the UI tests, never this README or `src/api/generated/`; `test-engineer` owns `ui_policy.rs` and the `ui/` part of `anonymity.rs`, runs gates and mutations. Until `generated/` exists, each slice spec lists its exceptions to `.claude/agents/ui-developer.md` (ADR-0033).
+`ui-developer` writes `ui/**` and the UI tests, never this README or `src/api/generated/`; `test-engineer` owns `ui_policy.rs` and `anonymity.rs`' `ui/` part, runs gates and mutations. Until `generated/` exists, each slice spec lists its exceptions to `.claude/agents/ui-developer.md` (ADR-0033).

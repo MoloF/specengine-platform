@@ -150,6 +150,7 @@
 pub mod anchor;
 pub mod auto;
 pub mod auto_toml;
+pub mod blob;
 pub mod card;
 pub mod card_counts;
 pub mod card_split;
@@ -186,6 +187,7 @@ pub mod project_toml;
 pub mod proposal;
 pub mod raise;
 pub mod record;
+pub mod reference;
 mod revision;
 pub mod rings;
 pub mod roadmap;

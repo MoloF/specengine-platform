@@ -53,8 +53,8 @@ describe("the mock's hub scenario", () => {
   it("names the login mira and her row, every act and confirm; normal names none", async () => {
     const client = new MockClient("hub", { now: () => AT });
     expect(await client.getIdentity()).toEqual({ login: "mira" });
-    // An owner's row: `delete_comment` ends it (docs/features/comments.md "HTTP").
-    expect((await client.getTeam("harbor-sim")).allowed).toEqual(["stage", "accept", "clear", "group_clear", "confirm", "delete_comment"]);
+    // An owner's row: `delete_comment` (docs/features/comments.md "HTTP"), then `delete_reference` ends it (docs/features/work-references.md "HTTP").
+    expect((await client.getTeam("harbor-sim")).allowed).toEqual(["stage", "accept", "clear", "group_clear", "confirm", "delete_comment", "delete_reference"]);
     expect((await new MockClient("normal", { now: () => AT }).getIdentity()).login).toBeNull();
   });
 

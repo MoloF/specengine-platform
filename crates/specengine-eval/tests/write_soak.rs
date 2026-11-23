@@ -23,7 +23,23 @@
 //!   cycling `get_card {context: true}`, `GET .../comments?on=` and `GET
 //!   .../mentions`; the queue first holds [`CM_PREFILL`] comments by those
 //!   logins on those cards ([`comments_prefill`], a template `HOME` copied
-//!   per run), judged as W.
+//!   per run), judged as W; `RF`
+//!   (docs/features/work-references.md "Soak RF", RF23) CM's writers and
+//!   pre-fill, beside [`RF_FILES`] WAV files of
+//!   [`RF_FILE_BYTES`] stored and attached to the cards (the template
+//!   `HOME` holds their blob store), and from [`RF_BASELINE`] on
+//!   [`RF_UPLOADERS`] uploaders (logins `uploader-N`) each cycling a fresh
+//!   [`RF_UPLOAD_BYTES`] WAV `PUT` at [`RF_UPLOAD_MIBS`] (a valid header,
+//!   counter bytes generated as sent, never held whole), its `POST
+//!   .../references` with "what matters" and its `DELETE`, and [`READERS`]
+//!   Range readers (logins `reader-N`) each reading [`RF_RANGES_PER_S`]
+//!   random [`RF_WINDOW`] windows of the stored files a second, every
+//!   answer's bytes checked (the rates a hub sees over the network; an
+//!   override is a diagnosis, [`rf_knob`]); a page reader (`page-0`) reads
+//!   `GET .../cards` and `GET .../comments?on=` every second from the start,
+//!   its p95 after [`RF_BASELINE`] at most 1.5 x its p95 before + 50 ms;
+//!   at the end the store holds exactly the stored files and no `.part`; a
+//!   run refuses to start with less than [`RF_FREE_MIN`] free, naming it.
 //! - **Memory** sampled every [`SAMPLE_EVERY`]: the resident set and, on
 //!   macOS, `phys_footprint` (`proc_pid_rusage`, what `footprint` reports).
 //! - **The quiet probe** (macOS): every [`QUIET_EVERY`] the clients are
@@ -101,9 +117,13 @@
 mod git;
 mod import_support;
 mod library_common;
+#[path = "../../specengine-cli/tests/work_refs_common/mod.rs"]
+mod refs_common;
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::{Read as _, Write as _};
+use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -146,6 +166,27 @@ const CM_CARDS: usize = 20;
 const CM_PEOPLE: usize = 10;
 /// CM19: the comments the queue holds before each CM run.
 const CM_PREFILL: usize = 2_000;
+/// RF23 ("Soak RF"): the files stored and attached before each RF run.
+const RF_FILES: usize = 20;
+/// RF23: each stored file's bytes.
+const RF_FILE_BYTES: u64 = 16 * 1024 * 1024;
+/// RF23: each upload's bytes.
+const RF_UPLOAD_BYTES: u64 = 200 * 1024 * 1024;
+/// RF23: the uploaders.
+const RF_UPLOADERS: usize = 2;
+/// RF23: a Range reader's window.
+const RF_WINDOW: u64 = 1024 * 1024;
+/// RF23: each uploader's pace, MiB a second (RF19's): uploads reach a hub
+/// over the network through Traefik. Unthrottled on one laptop the
+/// harness itself saturated it (load 11-16) and the page bar read the
+/// machine, not the daemon.
+const RF_UPLOAD_MIBS: f64 = 25.0;
+/// RF23: each Range reader's pace, windows a second.
+const RF_RANGES_PER_S: f64 = 10.0;
+/// RF23: the first phase, CM's writers and the page reader alone.
+const RF_BASELINE: Duration = Duration::from_secs(60);
+/// RF23: a run refuses to start with less free space than this.
+const RF_FREE_MIN: u64 = 6 * 1024 * 1024 * 1024;
 /// When heap mode takes its first snapshot, seconds into the run.
 const HEAP_FIRST_AT: f64 = 60.0;
 /// How often the quiet probe reads the live heap (macOS): the clients held,
@@ -181,6 +222,7 @@ enum Variant {
     M,
     H,
     CM,
+    RF,
 }
 
 impl Variant {
@@ -193,7 +235,8 @@ impl Variant {
             "M" => Self::M,
             "H" => Self::H,
             "CM" => Self::CM,
-            other => panic!("WRITE_SOAK_VARIANT={other:?}: one of W, U, R, M, H, CM"),
+            "RF" => Self::RF,
+            other => panic!("WRITE_SOAK_VARIANT={other:?}: one of W, U, R, M, H, CM, RF"),
         }
     }
 
@@ -205,6 +248,7 @@ impl Variant {
             Self::M => "M",
             Self::H => "H",
             Self::CM => "CM",
+            Self::RF => "RF",
         }
     }
 
@@ -213,7 +257,7 @@ impl Variant {
     }
 
     fn readers(self) -> usize {
-        if matches!(self, Self::R | Self::M | Self::CM) {
+        if matches!(self, Self::R | Self::M | Self::CM | Self::RF) {
             READERS
         } else {
             0
@@ -223,7 +267,7 @@ impl Variant {
     /// The budget it is judged against; H is reported, not judged.
     fn budget(self) -> Option<f64> {
         match self {
-            Self::W | Self::U | Self::M | Self::CM => Some(WRITE_BUDGET_MIB_PER_MIN),
+            Self::W | Self::U | Self::M | Self::CM | Self::RF => Some(WRITE_BUDGET_MIB_PER_MIN),
             Self::R => Some(READ_BUDGET_MIB_PER_MIN),
             Self::H => None,
         }
@@ -958,6 +1002,11 @@ struct Shared {
     timeline: Mutex<Vec<Point>>,
     /// Each inbox read: `(at_s, response bytes, ms)`.
     inbox_reads: Mutex<Vec<(f64, usize, u64)>>,
+    /// RF23: each page read's `(at_s, ms)`.
+    page_ms: Mutex<Vec<(f64, u64)>>,
+    /// RF23: uploads answered, Range reads checked.
+    uploads: AtomicUsize,
+    ranges: AtomicUsize,
 }
 
 impl Shared {
@@ -985,6 +1034,8 @@ struct Run<'a> {
     reads: Reads,
     /// Questions pending before the run (RM-0134).
     prefill: usize,
+    /// RF23: the stored files, `(b3, seed)`.
+    files: &'a [(String, u64)],
 }
 
 impl Run<'_> {
@@ -1224,7 +1275,7 @@ fn writer(run: &Run<'_>, tree: &Tree, targets: &[Target], index: usize) {
                     true,
                 );
             }
-            Variant::CM => run.call(
+            Variant::CM | Variant::RF => run.call(
                 &login,
                 "add_comment",
                 json!({
@@ -1348,11 +1399,521 @@ fn comments_prefill(tree: &Tree) -> PathBuf {
     home
 }
 
+// ------------------------------------------------------------ RF23
+
+/// The data directory under `home` (the CLI's README "Database").
+fn data_dir(home: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        home.join("Library/Application Support/specengine")
+    } else {
+        home.join(".local/share/specengine")
+    }
+}
+
+/// The free bytes of the file system holding `path` (`df -k`).
+fn free_bytes(path: &Path) -> Option<u64> {
+    let output = Command::new("/bin/df").arg("-k").arg(path).output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let line = text.lines().nth(1)?;
+    let kib: u64 = line.split_whitespace().nth(3)?.parse().ok()?;
+    Some(kib * 1024)
+}
+
+/// A page's upload headers on the hub: its `Origin` and the binary type.
+fn upload_headers(login: &str) -> Vec<(String, String)> {
+    let mut headers = library_common::page_headers(login);
+    headers.push(("Origin".to_owned(), library_common::ORIGIN.to_owned()));
+    headers.push((
+        "Content-Type".to_owned(),
+        "application/octet-stream".to_owned(),
+    ));
+    headers
+}
+
+/// One of RF's paces, read once: `default` unless `name` is set, its
+/// value then (0: unthrottled), `(pace, overridden)`, `None` unthrottled.
+/// `WRITE_SOAK_RF_UPLOAD_MIBS` overrides [`RF_UPLOAD_MIBS`],
+/// `WRITE_SOAK_RF_RANGES_PER_S` [`RF_RANGES_PER_S`]. A run with either set
+/// is a diagnosis, never RF23's evidence (its report says `overridden`).
+fn rf_knob(
+    name: &'static str,
+    default: f64,
+    cell: &'static std::sync::OnceLock<(Option<f64>, bool)>,
+) -> (Option<f64>, bool) {
+    *cell.get_or_init(|| match std::env::var(name) {
+        Ok(value) => {
+            let pace = value
+                .parse::<f64>()
+                .unwrap_or_else(|_| panic!("{name}={value:?}: a number (0: unthrottled)"));
+            ((pace > 0.0).then_some(pace), true)
+        }
+        Err(_) => (Some(default), false),
+    })
+}
+
+fn rf_upload_knob() -> (Option<f64>, bool) {
+    static CELL: std::sync::OnceLock<(Option<f64>, bool)> = std::sync::OnceLock::new();
+    rf_knob("WRITE_SOAK_RF_UPLOAD_MIBS", RF_UPLOAD_MIBS, &CELL)
+}
+
+fn rf_ranges_knob() -> (Option<f64>, bool) {
+    static CELL: std::sync::OnceLock<(Option<f64>, bool)> = std::sync::OnceLock::new();
+    rf_knob("WRITE_SOAK_RF_RANGES_PER_S", RF_RANGES_PER_S, &CELL)
+}
+
+/// Each uploader's MiB a second, `None` unthrottled.
+fn rf_upload_mibs() -> Option<f64> {
+    rf_upload_knob().0
+}
+
+/// Each Range reader's windows a second, `None` unthrottled.
+fn rf_ranges_per_s() -> Option<f64> {
+    rf_ranges_knob().0
+}
+
+/// `PUT /api/projects/<slug>/blobs` of a [`refs_common::SeekWav`] of
+/// `total` bytes and `seed`, written in 64 KiB pieces as generated (never
+/// held whole; at [`rf_upload_mibs`] unless unthrottled), the answer read
+/// to its end.
+fn put_stream(
+    port: u16,
+    slug: &str,
+    login: &str,
+    total: u64,
+    seed: u64,
+    timeout: Duration,
+) -> Result<library_common::Answer, String> {
+    let started = Instant::now();
+    let mut stream =
+        TcpStream::connect(("127.0.0.1", port)).map_err(|error| format!("connect: {error}"))?;
+    stream
+        .set_read_timeout(Some(timeout))
+        .map_err(|error| error.to_string())?;
+    let mut head = format!("PUT /api/projects/{slug}/blobs HTTP/1.1\r\n");
+    for (name, value) in upload_headers(login) {
+        head.push_str(&format!("{name}: {value}\r\n"));
+    }
+    head.push_str(&format!(
+        "Content-Length: {total}\r\nConnection: close\r\n\r\n"
+    ));
+    stream
+        .write_all(head.as_bytes())
+        .map_err(|error| format!("write the head: {error}"))?;
+    let mut body = refs_common::SeekWav::new(total, seed);
+    let mut buffer = vec![0u8; 65_536];
+    let rate = rf_upload_mibs().map(|mibs| mibs * 1_048_576.0);
+    let mut sent = 0u64;
+    loop {
+        let n = body.read(&mut buffer).map_err(|error| error.to_string())?;
+        if n == 0 {
+            break;
+        }
+        stream
+            .write_all(&buffer[..n])
+            .map_err(|error| format!("write the body: {error}"))?;
+        sent += n as u64;
+        if let Some(rate) = rate {
+            let due = Duration::from_secs_f64(sent as f64 / rate);
+            if let Some(rest) = due.checked_sub(started.elapsed()) {
+                thread::sleep(rest);
+            }
+        }
+    }
+    let mut raw = Vec::new();
+    stream
+        .read_to_end(&mut raw)
+        .map_err(|error| format!("read after {:?}: {error}", started.elapsed()))?;
+    let end = raw
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .ok_or_else(|| format!("no head: {}", String::from_utf8_lossy(&raw)))?;
+    let text = String::from_utf8_lossy(&raw[..end]).into_owned();
+    let status = text
+        .split("\r\n")
+        .next()
+        .and_then(|line| line.split(' ').nth(1))
+        .and_then(|code| code.parse().ok())
+        .ok_or_else(|| format!("no status: {text}"))?;
+    let body = raw[end + 4..].to_vec();
+    let body = if text
+        .to_ascii_lowercase()
+        .contains("transfer-encoding: chunked")
+    {
+        dechunk(&body)
+    } else {
+        body
+    };
+    Ok(library_common::Answer {
+        status,
+        headers: Vec::new(),
+        body,
+        elapsed: started.elapsed(),
+    })
+}
+
+fn dechunk(mut rest: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    while let Some(end) = rest.windows(2).position(|pair| pair == b"\r\n") {
+        let size = usize::from_str_radix(
+            String::from_utf8_lossy(&rest[..end])
+                .split(';')
+                .next()
+                .unwrap_or("0")
+                .trim(),
+            16,
+        )
+        .unwrap_or(0);
+        rest = &rest[end + 2..];
+        if size == 0 || rest.len() < size {
+            break;
+        }
+        out.extend_from_slice(&rest[..size]);
+        rest = &rest[(size + 2).min(rest.len())..];
+    }
+    out
+}
+
+/// RF23's pre-fill on CM's template `HOME`: a hub over it stores
+/// [`RF_FILES`] WAV files of [`RF_FILE_BYTES`] (seeds `1000 + n`) and
+/// attaches each to a card with "what matters", then stops; each run copies
+/// the `HOME`, its blob store with it. The files' `(b3, seed)`.
+fn references_prefill(tree: &Tree, home: &Path) -> Vec<(String, u64)> {
+    let hub = Hub::start(&tree.root, home, &tree.git, 3600);
+    let started = Instant::now();
+    let mut files = Vec::new();
+    for at in 0..RF_FILES {
+        let seed = 1000 + at as u64;
+        let answer = put_stream(
+            hub.port,
+            &tree.slug,
+            "person-0",
+            RF_FILE_BYTES,
+            seed,
+            TIMEOUT,
+        )
+        .unwrap_or_else(|error| panic!("prefill PUT {at}: {error}"));
+        assert_eq!(answer.status, 200, "prefill PUT {at}: {}", answer.text());
+        let blob: Value = serde_json::from_slice(&answer.body).expect("a stored blob");
+        let b3 = blob["b3"].as_str().expect("a b3").to_owned();
+        let mut headers = library_common::page_headers("person-0");
+        headers.push(("Origin".to_owned(), library_common::ORIGIN.to_owned()));
+        headers.push(("Content-Type".to_owned(), "application/json".to_owned()));
+        let body = json!({
+            "on": cm_card(at),
+            "b3": b3,
+            "name": format!("tide-{at}.wav"),
+            "matters": "the swell under the hull",
+        });
+        let attached = library_common::exchange(
+            hub.port,
+            "POST",
+            &format!("/api/projects/{}/references", tree.slug),
+            &headers,
+            body.to_string().as_bytes(),
+            TIMEOUT,
+        )
+        .unwrap_or_else(|error| panic!("prefill POST {at}: {error}"));
+        assert_eq!(
+            attached.status,
+            200,
+            "prefill POST {at}: {}",
+            attached.text()
+        );
+        files.push((b3, seed));
+    }
+    drop(hub);
+    println!(
+        "write_soak references prefill: {} files of {RF_FILE_BYTES} bytes in {:.0} s",
+        files.len(),
+        started.elapsed().as_secs_f64()
+    );
+    files
+}
+
+/// Waits out [`RF_BASELINE`] (or the run's end).
+fn wait_baseline(run: &Run<'_>) {
+    while run.running() && run.start.elapsed() < RF_BASELINE {
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+impl Run<'_> {
+    /// One RF step by `login`, timed, gated and watched: `step` answers
+    /// `Ok(stored)` or why it failed.
+    fn step(
+        &self,
+        login: &str,
+        what: &str,
+        write: bool,
+        step: impl FnOnce() -> Result<bool, String>,
+    ) {
+        let _active = self.gate();
+        let what = format!("{what} by {login}");
+        let open = self.shared.in_flight.begin(&what);
+        let started = Instant::now();
+        let outcome = step();
+        self.shared.in_flight.end(open);
+        let at = started.duration_since(self.start).as_secs_f64();
+        let took = ms(started.elapsed());
+        let (ok, stored) = match outcome {
+            Ok(stored) => (true, stored),
+            Err(why) => {
+                self.shared.fail(format!("{what}: {why}"));
+                (false, false)
+            }
+        };
+        if stored {
+            self.shared.stored.fetch_add(1, Ordering::SeqCst);
+        }
+        self.shared.calls.lock().expect("calls").push(Call {
+            write,
+            at,
+            ok,
+            stored,
+            hit: false,
+            ms: took,
+        });
+    }
+}
+
+/// An uploader from [`RF_BASELINE`] on: a fresh [`RF_UPLOAD_BYTES`] WAV
+/// `PUT` (a new file), its `POST` with "what matters" on a card, its
+/// `DELETE` (the file collected), a whole cycle once begun, so the store
+/// ends with the pre-fill's files alone.
+fn rf_uploader(run: &Run<'_>, index: usize) {
+    let login = format!("uploader-{index}");
+    wait_baseline(run);
+    let mut n = 0u64;
+    let headers = {
+        let mut headers = library_common::page_headers(&login);
+        headers.push(("Origin".to_owned(), library_common::ORIGIN.to_owned()));
+        headers
+    };
+    while run.running() {
+        n += 1;
+        let seed = ((index as u64 + 1) << 40) | n;
+        let mut b3 = None;
+        run.step(&login, "PUT blobs", true, || {
+            let answer = put_stream(
+                run.hub.port,
+                run.slug,
+                &login,
+                RF_UPLOAD_BYTES,
+                seed,
+                TIMEOUT,
+            )?;
+            if answer.status != 200 {
+                return Err(format!("{}: {}", answer.status, answer.text()));
+            }
+            let blob: Value = serde_json::from_slice(&answer.body).map_err(|e| e.to_string())?;
+            if blob["stored"] != json!("new") || blob["size"] != json!(RF_UPLOAD_BYTES) {
+                return Err(format!("not a new file of its size: {blob}"));
+            }
+            b3 = blob["b3"].as_str().map(str::to_owned);
+            run.shared.uploads.fetch_add(1, Ordering::SeqCst);
+            Ok(false)
+        });
+        let Some(b3) = b3 else { continue };
+        let mut id = None;
+        run.step(&login, "POST references", true, || {
+            let mut posting = headers.clone();
+            posting.push(("Content-Type".to_owned(), "application/json".to_owned()));
+            let body = json!({
+                "on": cm_card(usize::try_from(seed % 1_000_003).unwrap_or(0)),
+                "b3": b3,
+                "name": format!("take-{index}-{n}.wav"),
+                "matters": nonce_words(seed, 5),
+            });
+            let answer = library_common::exchange(
+                run.hub.port,
+                "POST",
+                &format!("/api/projects/{}/references", run.slug),
+                &posting,
+                body.to_string().as_bytes(),
+                TIMEOUT,
+            )?;
+            if answer.status != 200 {
+                return Err(format!("{}: {}", answer.status, answer.text()));
+            }
+            let made: Value = serde_json::from_slice(&answer.body).map_err(|e| e.to_string())?;
+            id = made["id"].as_str().map(str::to_owned);
+            Ok(id.is_some())
+        });
+        let Some(id) = id else { continue };
+        run.step(&login, "DELETE references", true, || {
+            let answer = library_common::exchange(
+                run.hub.port,
+                "DELETE",
+                &format!("/api/projects/{}/references/{id}", run.slug),
+                &headers,
+                b"",
+                TIMEOUT,
+            )?;
+            if answer.status != 200 {
+                return Err(format!("{}: {}", answer.status, answer.text()));
+            }
+            let gone: Value = serde_json::from_slice(&answer.body).map_err(|e| e.to_string())?;
+            if gone["deleted"]["by"] != json!(login) {
+                return Err(format!("not deleted by {login}: {gone}"));
+            }
+            Ok(true)
+        });
+    }
+}
+
+/// A Range reader from [`RF_BASELINE`] on: random [`RF_WINDOW`] windows of
+/// the pre-filled files, each answer a 206 whose bytes are the window's.
+fn rf_reader(run: &Run<'_>, index: usize) {
+    let login = format!("reader-{index}");
+    wait_baseline(run);
+    let mut state = 0x5EED_0000_u64 + index as u64;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let pace = rf_ranges_per_s().map(|per_s| Duration::from_secs_f64(1.0 / per_s));
+    while run.running() {
+        let tick = Instant::now();
+        let (b3, seed) = &run.files[usize::try_from(next() % RF_FILES as u64).unwrap_or(0)];
+        let offset = next() % (RF_FILE_BYTES - RF_WINDOW);
+        let last = offset + RF_WINDOW - 1;
+        run.step(&login, "GET blobs Range", false, || {
+            let mut headers = library_common::page_headers(&login);
+            headers.push(("Range".to_owned(), format!("bytes={offset}-{last}")));
+            let answer = library_common::exchange(
+                run.hub.port,
+                "GET",
+                &format!("/api/projects/{}/blobs/{b3}", run.slug),
+                &headers,
+                b"",
+                TIMEOUT,
+            )?;
+            if answer.status != 206 {
+                return Err(format!("{}: {}", answer.status, answer.text()));
+            }
+            if answer.body != refs_common::wav_window(RF_FILE_BYTES, *seed, offset, RF_WINDOW) {
+                return Err(format!("bytes {offset}-{last} of {b3} differ"));
+            }
+            run.shared.ranges.fetch_add(1, Ordering::SeqCst);
+            Ok(false)
+        });
+        if let Some(rest) = pace.and_then(|pace| pace.checked_sub(tick.elapsed())) {
+            thread::sleep(rest);
+        }
+    }
+}
+
+/// The page reader: every second `GET .../cards` and a card's `GET
+/// .../comments?on=`, each timed into `page_ms`.
+fn rf_page_reader(run: &Run<'_>) {
+    let login = "page-0";
+    let mut n = 0usize;
+    while run.running() {
+        let tick = Instant::now();
+        for path in [
+            format!("/api/projects/{}/cards", run.slug),
+            format!("/api/projects/{}/comments?on={}", run.slug, cm_card(n)),
+        ] {
+            let mut took = 0;
+            let mut at = 0.0;
+            run.step(login, &format!("GET {path}"), false, || {
+                let started = Instant::now();
+                at = started.duration_since(run.start).as_secs_f64();
+                let answer = page_get(run.hub.port, &path, login, TIMEOUT)?;
+                took = ms(started.elapsed());
+                if answer.status != 200 {
+                    return Err(format!("{}: {}", answer.status, answer.text()));
+                }
+                Ok(false)
+            });
+            run.shared.page_ms.lock().expect("pages").push((at, took));
+        }
+        n += 1;
+        if let Some(rest) = Duration::from_secs(1).checked_sub(tick.elapsed()) {
+            thread::sleep(rest);
+        }
+    }
+}
+
+/// The page reads before [`RF_BASELINE`] and after it, ms.
+fn page_phases(pages: &[(f64, u64)]) -> (Vec<u64>, Vec<u64>) {
+    let line = RF_BASELINE.as_secs_f64();
+    (
+        pages
+            .iter()
+            .filter(|(at, _)| *at < line)
+            .map(|(_, ms)| *ms)
+            .collect(),
+        pages
+            .iter()
+            .filter(|(at, _)| *at >= line)
+            .map(|(_, ms)| *ms)
+            .collect(),
+    )
+}
+
+fn quantile_of(values: &[u64], q: f64) -> Option<u64> {
+    (!values.is_empty()).then(|| library_common::quantile(values, q))
+}
+
+/// RF23's own bars: the page reader's p95 after the baseline at most 1.5 x
+/// its p95 before + 50 ms; uploads and Range reads ran; the store holds
+/// exactly the pre-filled files and no `.part`.
+fn rf_verdict(shared: &Shared, home: &Path, slug: &str, files: &[(String, u64)]) -> Vec<String> {
+    let mut broken = Vec::new();
+    let pages = shared.page_ms.lock().expect("pages").clone();
+    let (before, after) = page_phases(&pages);
+    match (quantile_of(&before, 0.95), quantile_of(&after, 0.95)) {
+        (Some(base), Some(late)) => {
+            let bar = base as f64 * 1.5 + 50.0;
+            if late as f64 > bar {
+                broken.push(format!(
+                    "the page reader's p95 {late} ms after the baseline > 1.5 x {base} + 50 = {bar} ms"
+                ));
+            }
+        }
+        _ => broken.push(format!(
+            "the page reader read {} times before and {} after the baseline",
+            before.len(),
+            after.len()
+        )),
+    }
+    if shared.uploads.load(Ordering::SeqCst) == 0 {
+        broken.push("no upload ran".to_owned());
+    }
+    if shared.ranges.load(Ordering::SeqCst) == 0 {
+        broken.push("no Range read ran".to_owned());
+    }
+    let store = data_dir(home).join("blobs").join(slug);
+    let held = refs_common::store_files(&store);
+    let mut want: Vec<String> = files.iter().map(|(b3, _)| b3.clone()).collect();
+    want.sort();
+    if held != want {
+        broken.push(format!(
+            "the store holds {} files, not the {} pre-filled ({} extra)",
+            held.len(),
+            want.len(),
+            held.iter().filter(|name| !want.contains(name)).count()
+        ));
+    }
+    let parts = refs_common::parts(&store);
+    if !parts.is_empty() {
+        broken.push(format!("{} .part files left: {parts:?}", parts.len()));
+    }
+    broken
+}
+
 /// A reader: `get_node`, `search`, the inbox, in turn (those
 /// `WRITE_SOAK_READS` names), until the deadline.
 fn reader(run: &Run<'_>, corpus: &Corpus, index: usize) {
     if run.variant == Variant::CM {
         cm_reader(run, index);
+        return;
+    }
+    if run.variant == Variant::RF {
+        rf_reader(run, index);
         return;
     }
     let login = format!("reader-{index}");
@@ -1867,6 +2428,7 @@ fn soak_run(
     daemon: &Path,
     run_no: usize,
     template: Option<(&Path, usize)>,
+    files: &[(String, u64)],
 ) -> (Value, Vec<String>) {
     let variant = settings.variant;
     let secs = settings.secs;
@@ -1880,6 +2442,15 @@ fn soak_run(
     let home = tree.scratch.join(&format!("hub-home-{run_no}"));
     // The questions the template holds: the run's pending count at its start.
     let prefilled = template.map_or(0, |(_, stored)| stored);
+    if variant == Variant::RF {
+        let free = free_bytes(&tree.scratch.0);
+        assert!(
+            free.is_some_and(|free| free >= RF_FREE_MIN),
+            "RF23: {} has {} bytes free, under {RF_FREE_MIN} (6 GiB): the RF run refuses to start",
+            tree.scratch.0.display(),
+            free.map_or_else(|| "unknown".to_owned(), |free| free.to_string())
+        );
+    }
     if let Some((template, _)) = template {
         copy_tree(template, &home);
     }
@@ -1901,8 +2472,16 @@ fn soak_run(
         variant,
         reads: settings.reads,
         prefill: prefilled,
+        files,
     };
     thread::scope(|scope| {
+        if variant == Variant::RF {
+            for at in 0..RF_UPLOADERS {
+                let run = &run;
+                scope.spawn(move || rf_uploader(run, at));
+            }
+            scope.spawn(|| rf_page_reader(&run));
+        }
         for at in 0..variant.writers() {
             let (run, targets) = (&run, &targets);
             scope.spawn(move || writer(run, tree, targets, at));
@@ -1936,6 +2515,11 @@ fn soak_run(
     thread::sleep(Duration::from_millis(500));
     let lines = hub.requests();
     drop(hub);
+    let rf_broken = if variant == Variant::RF {
+        rf_verdict(&shared, &home, &tree.slug, files)
+    } else {
+        Vec::new()
+    };
 
     let calls = shared.calls.lock().expect("calls").clone();
     let samples = shared.samples.lock().expect("samples").clone();
@@ -1987,6 +2571,7 @@ fn soak_run(
             .map(Sample::json)
     };
     let mut broken = shared.failures.lock().expect("failures").clone();
+    broken.extend(rf_broken.iter().cloned());
     broken.extend(judged_broken);
     broken.extend(footprint_broken);
     if variant.writers() > 0 && writes.is_empty() {
@@ -2076,7 +2661,94 @@ fn soak_run(
     // beside the pending count every TIMELINE_EVERY.
     report["reads_mix"] = json!(settings.reads.names());
     // CM19: the comments the run started over and the cards they sit on.
-    report["comments"] = if variant == Variant::CM {
+    report["references"] = if variant == Variant::RF {
+        let pages = shared.page_ms.lock().expect("pages").clone();
+        let (before, after) = page_phases(&pages);
+        // The page reader's own daemon lines (`GET …/cards` is its alone;
+        // its reads alternate cards, comments), split where its reads cross
+        // RF_BASELINE: the turn's wait beside the handler's run tells a held
+        // turn from a busy machine. Reported, not judged.
+        let line = RF_BASELINE.as_secs_f64();
+        let cards_before = pages.iter().step_by(2).filter(|(at, _)| *at < line).count();
+        let cards: Vec<&library_common::Line> = lines
+            .iter()
+            .filter(|line| line.method == "GET" && line.route == "/api/projects/{p}/cards")
+            .collect();
+        let phase = |part: &[&library_common::Line]| {
+            json!({
+                "count": part.len(),
+                "ms": spread(&part.iter().map(|line| line.ms).collect::<Vec<_>>()),
+                "wait_ms": spread(&part.iter().filter_map(|line| line.wait_ms).collect::<Vec<_>>()),
+                "run_ms": spread(&part.iter().filter_map(|line| line.run_ms).collect::<Vec<_>>()),
+            })
+        };
+        let split = cards_before.min(cards.len());
+        // Every kind of request by phase (its line's `at=` against the
+        // first line's, before or after RF_BASELINE): who waits for the
+        // turn and who holds it. Reported, not judged.
+        let seconds_of = |line: &library_common::Line| -> Option<f64> {
+            let at = line
+                .raw
+                .split(' ')
+                .find_map(|pair| pair.strip_prefix("at="))?;
+            let time = at.split_once('T')?.1.trim_end_matches('Z');
+            let mut parts = time.split(':');
+            let hours: f64 = parts.next()?.parse().ok()?;
+            let minutes: f64 = parts.next()?.parse().ok()?;
+            let seconds: f64 = parts.next()?.parse().ok()?;
+            Some(hours * 3600.0 + minutes * 60.0 + seconds)
+        };
+        let first = lines
+            .iter()
+            .filter_map(seconds_of)
+            .fold(f64::INFINITY, f64::min);
+        let mut kinds: BTreeMap<String, [Vec<&library_common::Line>; 2]> = BTreeMap::new();
+        for request in &lines {
+            let Some(at) = seconds_of(request) else {
+                continue;
+            };
+            let kind = if request.tool == "-" {
+                format!("{} {}", request.method, request.route)
+            } else {
+                format!("mcp {}", request.tool)
+            };
+            kinds.entry(kind).or_default()[usize::from(at - first >= line)].push(request);
+        }
+        let by_phase: serde_json::Map<String, Value> = kinds
+            .iter()
+            .map(|(kind, [early, late])| {
+                (
+                    kind.clone(),
+                    json!({"before": phase(early), "after": phase(late)}),
+                )
+            })
+            .collect();
+        json!({
+            "upload_mib_s": rf_upload_mibs(),
+            "ranges_per_s": rf_ranges_per_s(),
+            // A pace set by hand: a diagnosis, never RF23's evidence.
+            "overridden": rf_upload_knob().1 || rf_ranges_knob().1,
+            "lines_by_phase": by_phase,
+            "files": files.len(),
+            "file_bytes": RF_FILE_BYTES,
+            "upload_bytes": RF_UPLOAD_BYTES,
+            "uploads": shared.uploads.load(Ordering::SeqCst),
+            "ranges": shared.ranges.load(Ordering::SeqCst),
+            "page_p50_before_ms": quantile_of(&before, 0.50),
+            "page_p50_after_ms": quantile_of(&after, 0.50),
+            "page_p95_before_ms": quantile_of(&before, 0.95),
+            "page_p95_after_ms": quantile_of(&after, 0.95),
+            "page_reads": pages.len(),
+            "page_cards_lines": {
+                "before": phase(&cards[..split]),
+                "after": phase(&cards[split..]),
+            },
+            "broken": rf_broken,
+        })
+    } else {
+        Value::Null
+    };
+    report["comments"] = if matches!(variant, Variant::CM | Variant::RF) {
         json!({"prefilled": CM_PREFILL, "cards": CM_CARDS, "people": CM_PEOPLE})
     } else {
         Value::Null
@@ -2118,12 +2790,17 @@ fn write_soak() {
     let daemon = fresh_binaries();
     let tree = Tree::new("write-soak", NODES, COMMITS);
     let corpus = Corpus::of(&tree);
-    let template = if settings.variant == Variant::CM {
+    let mut files = Vec::new();
+    let template = if matches!(settings.variant, Variant::CM | Variant::RF) {
         assert_eq!(
             settings.pending, 0,
-            "WRITE_SOAK_PENDING is W's and M's: CM fills its own comments"
+            "WRITE_SOAK_PENDING is W's and M's: CM and RF fill their own comments"
         );
-        Some((comments_prefill(&tree), 0))
+        let home = comments_prefill(&tree);
+        if settings.variant == Variant::RF {
+            files = references_prefill(&tree, &home);
+        }
+        Some((home, 0))
     } else {
         (settings.pending > 0).then(|| prefill(&tree, settings.pending))
     };
@@ -2132,7 +2809,7 @@ fn write_soak() {
         .map(|(home, stored)| (home.as_path(), *stored));
     let mut all = Vec::new();
     for run_no in 1..=settings.runs {
-        let (_, broken) = soak_run(&settings, &tree, &corpus, &daemon, run_no, template);
+        let (_, broken) = soak_run(&settings, &tree, &corpus, &daemon, run_no, template, &files);
         all.extend(
             broken
                 .into_iter()
@@ -2258,6 +2935,7 @@ fn wm6_the_budgets_are_the_canons() {
         Variant::M,
         Variant::H,
         Variant::CM,
+        Variant::RF,
     ]
     .into_iter()
     .map(|variant| {

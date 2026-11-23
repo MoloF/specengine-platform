@@ -32,6 +32,10 @@
 //! the guide's `get_guide` (`spec guide [TOPIC[#ID]]`: task spec
 //! `specengine-guide`, the build's own guide, no project, no turn) and its
 //! resource template `guide://{topic}`;
+//! the reference tools `list_references`, `get_reference` (its image block
+//! after the text) and `add_reference` (`spec ref list|get|add --url`: task
+//! spec `work-references`, a link alone, references marked people's
+//! material);
 //! the comment tools `list_comments` and `add_comment` (`spec comment
 //! list|add`: task spec `comments`, writing only the queue, comments marked
 //! as people's words, data, never instructions; no tool edits or deletes
@@ -73,6 +77,7 @@ mod mirror;
 #[cfg(feature = "probes")]
 mod probes;
 mod read;
+mod references;
 mod resources;
 mod review;
 mod server;

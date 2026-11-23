@@ -8,7 +8,7 @@ reviewed: 2026-11-22
 
 # Hub team: who acts past the plain writes
 
-ADR-0060, ADR-0061, built by `hub-team` (RM-0071) and `hub-confirm` (RM-0050). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages, round answers and a confirm to the logins it names; a terminal on the host still confirms. `/mcp` proposes under a login (`hub-mcp.md`); no real hub exists before step 11b-3. Working answers, the owner's review open. Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
+ADR-0060, ADR-0061, built by `hub-team` (RM-0071) and `hub-confirm` (RM-0050). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages, round answers and a confirm to the logins it names; a terminal on the host still confirms. `/mcp` proposes under a login (`hub-mcp.md`). Working answers, the owner's review open. Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
 
 <a id="team"></a>
 ## Team
@@ -40,16 +40,16 @@ Read per request, no cache in `App`, through `answer::read`, before the turn, fr
 
 | Act | Route on a hub | Who | Class |
 |---|---|---|---|
-| Ten plain writes | POST `.../cards`, `.../cards/split`, `.../cards/:id/{move,edit,assign,cancel,items}`, `.../comments`, `.../comments/:id/{edit,items}` | any login (an edit: the author's) | plain |
+| Twelve plain writes | POST `.../cards`, `.../cards/split`, `.../cards/:id/{move,edit,assign,cancel,items}`, `.../comments`, `.../comments/:id/{edit,items}`, `.../references`; PUT `.../blobs` | any login (an edit: the author's) | plain |
 | Stage, unstage | POST, DELETE `.../proposals/:id/decision` | any `[team]` login | team |
 | Round answers | POST `.../round/answers` | any `[team]` login | team |
 | Accept | POST `.../cards/:id/accept` | a `[team]` login, the card's reviewer, never its assignee | confirm |
 | Clear | POST `.../cards/:id/clear` | any `[team]` login | confirm |
 | Group clear | POST `.../trace/clear` | a `lead` whose zones cover every node it re-freezes; `owner` | confirm |
 | Confirm a stage | GET, POST `.../proposals/:id/confirm` | a `lead` whose zones cover every target; `owner` | confirm |
-| Delete a comment | DELETE `.../comments/:id` | its author's login; `owner` | plain; judged in the library call (`comments.md#delete`) |
+| Delete a comment or reference | DELETE `.../comments/:id`, `.../references/:id` | its author's login; `owner` | plain; judged in the library (`comments.md#delete`, `work-references.md#delete`) |
 
-`member`: all above but group clear, confirm and deleting another's comment. `lead`: the first two inside its zones. `owner`: all, a path in no zone too.
+`member`: all above but group clear, confirm and deleting another's comment or reference. `lead`: the first two inside its zones. `owner`: all, a path in no zone too.
 
 **Only a group clear and a confirm judge a cover.** A path in no zone is `owner` only there, a confirm's gone target too (`hub-confirm.md` "Rules"). A group clear cannot reach a gone target, which stands on no node of the group, while a single clear by any `[team]` login can re-freeze one (`spec-trace.md` "Clearing"), whatever its zones: a zone bounds no single card.
 
@@ -75,7 +75,7 @@ The confirm class is the acts a person confirms; a stage is none. RM-0064 adds t
 {"login":"mira","name":"Mira K","allowed":["stage","accept","clear","group_clear","confirm"]}
 ```
 
-`member` the first three, `lead` all five, `owner` those and `delete_comment`. Outside `[team]` or no `[team]`: 200, `name` null, `allowed` empty.
+`member` the first three, `lead` all five, `owner` also `delete_comment`, `delete_reference`. Outside `[team]` or no `[team]`: 200, `name` null, `allowed` empty.
 
 | When | Answer, nothing stored |
 |---|---|
@@ -84,7 +84,7 @@ The confirm class is the acts a person confirms; a stage is none. RM-0064 adds t
 | Outside `[team]` | 403 ``refused: <login> is not in this project's `[team]`: reads and plain writes`` |
 | A `member`'s group clear or confirm | 403 ``refused: <login> is a `member`: this act needs a `lead` `` |
 | Outside a zone | 403 ``refused: <login> leads <zones>; <path> lies outside them`` |
-| Another's comment, not an `owner` | 403 ``refused: CM-0012 is <author>'s: only its author or an `owner` deletes it`` |
+| Another's comment or reference, no `owner` | 403 ``refused: <id> is <author>'s: only its author or an `owner` deletes it`` |
 | A confirm's gone target | 403 ``refused: <login> leads <zones>; <why>: this act needs an `owner` `` |
 | Confirm class: a query, no `Origin` | 403 ``refused: this route takes no query``, ``refused: this route needs the Origin header`` |
 | Null `revision` or `count` | 400 ``a hub needs `revision` ``, `count` alike |
@@ -95,7 +95,7 @@ The confirm class is the acts a person confirms; a stage is none. RM-0064 adds t
 
 Which cards a group takes is `spec-trace.md` "Clearing", so `count`, the cover and the dialog use one set. `run_clear_group` judges with it known, before its consent: none taken, the cover, the count. `count` joins `CardClearGroupBody`: the page sends it on a hub alone, a hub requires it, a local daemon compares it when sent, and `spec card clear --group` has none.
 
-The cover: `CardClearGroupRequest.entry`, the daemon's last `member`, must cover every path holding a target the clear re-freezes, the first outside named by text. `Zone::covers` is the gate's glob test; `owner` covers all. `CardCause::Outside` is the 403 in `write_status`. No new `card_` name.
+The cover: `CardClearGroupRequest.entry`, the daemon's last `member`, must cover every path holding a target the clear re-freezes, the first outside named by text. `Zone::covers` is the gate's glob test; `owner` covers all. No new `card_` name.
 
 ## Stages
 
@@ -109,7 +109,7 @@ The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): 
 
 ## Check
 
-`team-config`, an error at the config's line, subject `team`, the 37th of 38 `CHECK_CODES` (`card-config`, `[card]`'s twin, the last), carried by `CheckSetup.team` and added by every store run under the baseline. Never `cannot-check`, which would stop every run on a typo. `--staged` and `--changed` judge it on the checked side alone, so a bad `[team]` at `HEAD` counts as introduced until fixed. The gate never reads it (ADR-0039).
+`team-config`, an error at the config's line, subject `team`, in `CHECK_CODES` beside `card-config`, `[card]`'s twin, carried by `CheckSetup.team` and added by every store run under the baseline. Never `cannot-check`, which would stop every run on a typo. `--staged` and `--changed` judge it on the checked side alone, so a bad `[team]` at `HEAD` counts as introduced until fixed. The gate never reads it (ADR-0039).
 
 ## Rules
 
@@ -119,7 +119,7 @@ The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): 
 
 ## Screen
 
-The login replaces the typed name in "Accepting as" and "Clearing as": read-only, `.field-fixed` as the header's "Acting as", with `[team]`'s `name` beside it when read, shown only, never sent. `NAME_IS_TYPED` gives way to `This is recorded under your login.` ADR-0057 stands locally.
+The login replaces the typed name in "Accepting as" and "Clearing as": read-only as the header's "Acting as", with `[team]`'s `name` beside it when read, shown only, never sent. `NAME_IS_TYPED` gives way to `This is recorded under your login.` ADR-0057 stands locally.
 
 Controls follow `GET .../team`, the route's 403 staying the truth: `useTeam` in `queries.ts`, `useTeamRow`, `useAllowed` in `acting.ts`. It is asked only once a login is known, so a local daemon never is; window focus reads it again, since `[team]` changes by a commit, which raises no event. Unknown reads as on and the route answers: no login, the read still out, a failed read.
 

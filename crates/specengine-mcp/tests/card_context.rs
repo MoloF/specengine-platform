@@ -82,8 +82,10 @@ const G1: &str = "Readers learn stamina before they sprint.";
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
 const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/features/work-references.md RF20: the hub's text names
+// `list_references`, `get_reference` and `add_reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
+    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
 
 /// CC9: the description's head and its sentence, as the spec gives them.
 const GET_HEAD: &str = "One card: the same as `spec card show C --marks [--history] [--context \
@@ -414,7 +416,7 @@ fn cc7_get_card_is_the_cli_read_with_context() {
     assert!(
         text.contains(&format!(
             "history: -\npractices: -\ncited: -\ncontext.parent: -\ncontext.parent.goal: -\n\
-             context.comments: -\ncontext.bundle: {hash}\n{body}"
+             context.comments: -\ncontext.references: -\ncontext.bundle: {hash}\n{body}"
         )),
         "{text}"
     );
@@ -458,10 +460,11 @@ fn cc7_the_schemas_hold_the_context_keys() {
     let context = &output["properties"]["context"];
     let mut keys = properties(context);
     keys.sort();
-    // `comments` since docs/features/comments.md CM10.
+    // `comments` since docs/features/comments.md CM10, `references` since
+    // docs/features/work-references.md RF15.
     assert_eq!(
         keys,
-        ["bundle", "comments", "notes", "parent"],
+        ["bundle", "comments", "notes", "parent", "references"],
         "M: notes dropped"
     );
     let shape = object(context);
@@ -706,9 +709,10 @@ async fn cc7_a_hub_answers_alike_and_keeps_its_texts() {
     drop(session.finish());
     let hub = hub_answers(&repo, &calls).await;
     let listed = tool_names(&hub[0]);
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(listed.len(), 21, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 21);
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(listed.len(), 24, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 24);
     for (n, (args, local)) in calls.iter().zip(&stdio).enumerate() {
         let remote = &hub[n + 1];
         assert_ne!(remote["isError"], json!(true), "{args}: {remote}");

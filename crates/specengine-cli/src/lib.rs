@@ -209,6 +209,13 @@
 //!   row and never truth; [`comment_raise`] the daemon's door that turns one
 //!   into a question, a decision or a discrepancy; `--comment CM` on the three
 //!   intake commands ([`propose_question_from`] and its kin);
+//! - [`reference_add`], [`reference_add_file`], [`reference_list`],
+//!   [`reference_get`], [`reference_delete`]: `spec ref …` (task spec
+//!   `work-references`), files and links attached to work, a queue row and
+//!   a file in the data directory's blob store, never truth; the daemon's
+//!   binary door streams an upload through [`blob_begin`], [`Upload`] and
+//!   [`blob_commit`], serves a file through [`blob_read`], and judges a
+//!   `POST`'s files before its turn ([`reference_prepare`]);
 //! - [`card_counts()`]: `spec card counts` (task spec `department-overview`
 //!   DO9), the cards counted per (flow, column) and per flow by the store's
 //!   grouped statements, never from the cut list; `[card]` and the queue
@@ -263,6 +270,7 @@ mod auto_next;
 mod auto_pack;
 mod auto_read;
 mod bindings;
+mod blob_store;
 mod bump;
 mod bundle;
 mod cap;
@@ -332,6 +340,7 @@ mod proposals;
 mod propose;
 #[cfg(test)]
 mod read_trust_tests;
+mod reference;
 mod refresh;
 mod refs;
 mod review;
@@ -569,12 +578,28 @@ pub use specengine_core::upstream::{UPSTREAM_MAX, Upstream, UpstreamChange, Upst
 /// `spec card split`'s plan-only flag, without its dashes: one spelling for
 /// the parser and the usage line that names it.
 pub const SPLIT_DRY_RUN_FLAG: &str = "dry-run";
+pub use blob_store::{BlobFailure, BlobFlight, BlobSeams, Spooled, Upload};
 pub use comment::{
     CommentAddBody, CommentAddRequest, CommentCause, CommentDeleteRequest, CommentDocument,
     CommentEditBody, CommentEditRequest, CommentListOutcome, CommentListRequest,
     CommentMentionsRequest, CommentOutcome, CommentRaiseBody, CommentRaiseRequest, CommentRefused,
     ContextComment, ContextComments, MentionsOutcome, comment_add, comment_delete, comment_edit,
     comment_list, comment_mentions, comment_query_problem, comment_raise,
+};
+pub use reference::{
+    AgentImage, BlobBegun, BlobOutcome, BlobPutRequest, BlobRead, BlobStoredDocument,
+    ContextReference, ContextReferences, Prepared, ReferenceAddBody, ReferenceAddRequest,
+    ReferenceCause, ReferenceDeleteRequest, ReferenceDocument, ReferenceFileRequest,
+    ReferenceGetRequest, ReferenceListOutcome, ReferenceListRequest, ReferenceOutcome,
+    ReferenceRefused, UPLOAD_NAME, base64, blob_begin, blob_commit, blob_failed, blob_read,
+    reference_add, reference_add_file, reference_delete, reference_get, reference_images,
+    reference_list, reference_prepare, reference_query_problem,
+};
+/// The blob store's and the references' words (core's, task spec
+/// `work-references`), for the bridges.
+pub use specengine_core::blob::{
+    AGENT_BYTES, AGENT_EDGE, BLOB_BUFFER, BlobCaps, BlobRefusalKind, UPLOAD_IDLE, UPLOADS_PER_HUB,
+    UPLOADS_PER_LOGIN, is_b3 as is_blob_name,
 };
 /// The collision pass's caps, verdicts and input (core's, task spec
 /// `collision-pass`), for the bridges.
@@ -602,6 +627,10 @@ pub use specengine_core::proposal::AUTHOR_FIELD_MAX;
 /// The first number of a hub's spec IDs (core's; the `spec-ids` spec), for
 /// the bridges' texts.
 pub use specengine_core::record::HUB_ID_START;
+pub use specengine_core::reference::{
+    CONTEXT_IMAGES, MATTERS_MAX as REFERENCE_MATTERS_MAX, NAME_MAX as REFERENCE_NAME_MAX,
+    REFERENCE_PAGE_MAX, TITLE_MAX as REFERENCE_TITLE_MAX, URL_MAX as REFERENCE_URL_MAX,
+};
 /// A drift item's follow-up kind (`spec reject PR --follow-up code|spec`;
 /// core's).
 pub use specengine_core::task::FollowUp;
@@ -918,6 +947,12 @@ pub enum Outcome {
     CommentList(Box<CommentListOutcome>),
     /// `comment mentions`: one page of a login's mentions.
     Mentions(Box<MentionsOutcome>),
+    /// `ref add|get|delete`: the reference, or why not.
+    Reference(Box<ReferenceOutcome>),
+    /// `ref list`: one page of a target's references.
+    ReferenceList(Box<ReferenceListOutcome>),
+    /// A daemon's `PUT …/blobs`: the stored blob, or why not.
+    Blob(Box<BlobOutcome>),
 }
 
 impl Outcome {
@@ -964,6 +999,9 @@ impl Outcome {
             Self::PairsMarked(marked) => marked.exit(),
             Self::Comment(comment) => comment.exit(),
             Self::CommentList(list) => list.exit(),
+            Self::Reference(reference) => reference.exit(),
+            Self::ReferenceList(list) => list.exit(),
+            Self::Blob(blob) => blob.exit(),
             _ => Exit::Answered,
         }
     }
@@ -1081,6 +1119,26 @@ impl Outcome {
                     .map(|message| escape_controls(&message.line()))
                     .collect();
             }
+            // People's material, escaped: the notes, then the refusal.
+            Self::Reference(outcome) => {
+                let mut lines: Vec<String> = outcome
+                    .messages
+                    .iter()
+                    .map(|message| escape_controls(&message.line()))
+                    .collect();
+                lines.extend(reference::refusal_lines(outcome.refused.as_ref()));
+                return lines;
+            }
+            Self::ReferenceList(outcome) => {
+                let mut lines: Vec<String> = outcome
+                    .messages
+                    .iter()
+                    .map(|message| escape_controls(&message.line()))
+                    .collect();
+                lines.extend(reference::refusal_lines(outcome.refused.as_ref()));
+                return lines;
+            }
+            Self::Blob(outcome) => return reference::refusal_lines(outcome.refused.as_ref()),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -1226,6 +1284,9 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Comment(outcome) => comment::render_write(outcome),
         Outcome::CommentList(outcome) => comment::render_list(outcome),
         Outcome::Mentions(outcome) => comment::render_mentions(outcome),
+        Outcome::Reference(outcome) => reference::render_one(outcome),
+        Outcome::ReferenceList(outcome) => reference::render_list(outcome),
+        Outcome::Blob(outcome) => reference::render_blob(outcome),
     }
 }
 
@@ -1296,6 +1357,9 @@ impl serde::Serialize for Outcome {
             Self::Comment(outcome) => outcome.serialize(serializer),
             Self::CommentList(outcome) => outcome.serialize(serializer),
             Self::Mentions(outcome) => outcome.serialize(serializer),
+            Self::Reference(outcome) => outcome.serialize(serializer),
+            Self::ReferenceList(outcome) => outcome.serialize(serializer),
+            Self::Blob(outcome) => outcome.serialize(serializer),
         }
     }
 }

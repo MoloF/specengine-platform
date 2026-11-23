@@ -8,11 +8,15 @@ import config from "../../vite.config";
 // else: an Origin is dropped only when it is the dev server's own, any other is sent on for the
 // daemon to refuse; another machine is refused before the proxy.
 
-/** A proxied request's headers as the hook sees them. */
+/** A proxied request's method, path and headers as the hook sees them. */
 class OutgoingStub {
   readonly headers = new Map<string, string | string[]>();
 
-  constructor(origin: string | string[] | undefined) {
+  constructor(
+    origin: string | string[] | undefined,
+    readonly method = "POST",
+    readonly path = "/api/projects/alpha/cards",
+  ) {
     if (origin !== undefined) {
       this.headers.set("origin", origin);
     }
@@ -24,6 +28,10 @@ class OutgoingStub {
 
   removeHeader(name: string): void {
     this.headers.delete(name);
+  }
+
+  setHeader(name: string, value: string): void {
+    this.headers.set(name, value);
   }
 }
 
@@ -54,8 +62,8 @@ function proxyListeners(): Map<string, ProxyHook[]> {
 }
 
 /** The Origin the daemon receives for a request that came in on `localPort` carrying `origin`. */
-function forwarded(origin: string | string[] | undefined, localPort: number | undefined): unknown {
-  const proxyReq = new OutgoingStub(origin);
+function forwarded(origin: string | string[] | undefined, localPort: number | undefined, method?: string, path?: string): unknown {
+  const proxyReq = new OutgoingStub(origin, method, path);
   for (const listener of proxyListeners().get("proxyReq") ?? []) {
     listener(proxyReq, { socket: { localPort } });
   }
@@ -172,6 +180,18 @@ describe("the /api proxy's Origin (R-m1)", () => {
 
   it("adds no Origin to a request without one (a same-origin GET)", () => {
     expect(forwarded(undefined, 5173)).toBeUndefined();
+  });
+
+  // docs/features/work-references.md "HTTP", the binary door: `PUT .../blobs` requires an Origin, the
+  // daemon's own byte for byte; the dev server's own is replaced by it there alone. M: dropped there too.
+  it("gives the upload's PUT .../blobs the daemon's own Origin in place of the dev server's, and nothing else", () => {
+    expect(forwarded("http://127.0.0.1:5173", 5173, "PUT", "/api/projects/alpha/blobs")).toBe("http://127.0.0.1:7777");
+    expect(forwarded("http://localhost:5174", 5174, "PUT", "/api/projects/a%20b/blobs")).toBe("http://127.0.0.1:7777");
+    // Another page's Origin stays for the daemon to refuse; a read of a file and an attach keep the rule above.
+    expect(forwarded("http://evil.example:5173", 5173, "PUT", "/api/projects/alpha/blobs")).toBe("http://evil.example:5173");
+    expect(forwarded("http://127.0.0.1:5173", 5173, "GET", `/api/projects/alpha/blobs/${"a".repeat(64)}`)).toBeUndefined();
+    expect(forwarded("http://127.0.0.1:5173", 5173, "POST", "/api/projects/alpha/references")).toBeUndefined();
+    expect(forwarded("http://127.0.0.1:5173", 5173, "PUT", "/api/projects/alpha/blobs/x")).toBeUndefined();
   });
 });
 

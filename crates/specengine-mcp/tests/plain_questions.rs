@@ -69,8 +69,10 @@ use specengine_mcp::{
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
 const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/features/work-references.md RF20: the hub's text names
+// `list_references`, `get_reference` and `add_reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "c61b19d7ffbf7632313912b3f9745212825ca8eb8da986b29279a422bcd93f19";
+    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
 
 /// The "Data" example's fields.
 const TEXT: &str =
@@ -270,8 +272,9 @@ fn pq1_pq9_ask_question_answers_as_its_twin_and_get_proposal_returns_the_fields(
     // 32 since docs/features/collision-pass.md CP8.
     assert_eq!(
         tool_names(&list).len(),
-        35,
-        "stdio keeps 35 tools (33 until comments, 32 until specengine-guide)"
+        38,
+        "stdio keeps 38 tools (35 until work-references, 33 until comments, 32 until \
+         specengine-guide)"
     );
     let schemas = output_schemas(&list);
 
@@ -735,9 +738,10 @@ async fn pq9_a_hub_stores_the_fields() {
     ];
     let hub = hub_answers(&remote.main, &remote.home, &calls).await;
     let listed = tool_names(&hub[0]);
-    // 21 since docs/features/comments.md CM15.
-    assert_eq!(listed.len(), 21, "{listed:?}");
-    assert_eq!(HUB_TOOLS.len(), 21);
+    // 21 since docs/features/comments.md CM15; 24 since
+    // docs/features/work-references.md RF20.
+    assert_eq!(listed.len(), 24, "{listed:?}");
+    assert_eq!(HUB_TOOLS.len(), 24);
     let asked = &hub[1];
     assert_ne!(asked["isError"], json!(true), "{asked}");
     assert_eq!(

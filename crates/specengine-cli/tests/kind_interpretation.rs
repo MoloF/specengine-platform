@@ -1563,7 +1563,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":8,\"queue_schema\":15,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1601,11 +1601,15 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":8,\"queue_schema\":15,",
+            "\"format\":9,\"queue_schema\":16,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )
-        .replacen("\"cards\":0,\"comments\":0,\"comment_versions\":0,", "", 1);
+        .replacen(
+            "\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,",
+            "",
+            1,
+        );
     let file = dumps.join("v5-with-44.jsonl");
     std::fs::write(&file, format!("{}\n", v5.join("\n"))).unwrap();
     let home = pair.scratch.home("v5");

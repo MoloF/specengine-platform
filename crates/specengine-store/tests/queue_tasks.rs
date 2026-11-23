@@ -223,11 +223,11 @@ fn task_events(queue: &SqliteQueue) -> Vec<(String, serde_json::Value)> {
 fn schema_4_makes_the_tasks_and_runs_tables() {
     // Schema 11 since docs/features/card-questions.md S1; 12 since
     // docs/features/task-mandate.md M5.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     let scratch = Scratch::new("qt-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "16");
     let info = |table: &str| {
         sqlite3(
             &db,
@@ -321,7 +321,7 @@ fn schema_1_to_3_databases_step_to_4() {
         sqlite3(
             &db,
             &format!(
-                "DROP INDEX IF EXISTS proposals_comment; {} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = \
+                "DROP INDEX IF EXISTS proposals_comment; {} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = \
                  {version};",
                 drops.join(" ")
             ),
@@ -332,7 +332,7 @@ fn schema_1_to_3_databases_step_to_4() {
         );
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
         // 12 since docs/features/task-mandate.md M5.
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "16", "from {version}");
         assert_eq!(
             sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
             "51"
@@ -347,7 +347,7 @@ fn schema_1_to_3_databases_step_to_4() {
         assert_eq!(task.id, "T-0001", "from {version}");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "15");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "16");
     }
 }
 

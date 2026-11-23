@@ -14,14 +14,17 @@ import {
   type MapOptions,
   type MentionsOptions,
   type NodeOptions,
+  type ReferencesOptions,
   type RoadmapOptions,
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
   type TraceOptions,
   type TreeOptions,
+  type UploadProgress,
 } from "../api/client";
 import type {
+  BlobStored,
   BundleView,
   Card,
   CardAcceptBody,
@@ -69,6 +72,9 @@ import type {
   Project,
   Proposal,
   QueueEvent,
+  Reference,
+  ReferenceAddBody,
+  ReferenceList,
   RingsDocument,
   RoadmapDocument,
   RoundAnswerBody,
@@ -129,6 +135,7 @@ import { delegatedProposals, feedOf, MORNING, payloadOf, type NightEvent } from 
 import { catalogOf } from "./catalog";
 import { addIn, deleteIn, editIn, listIn, LOCAL, mentionsIn, mockComments, raiseIn, type MockComments } from "./comments";
 import { plainQuestionsScenario } from "./plainQuestions";
+import { attachIn, deleteRefIn, mockReferences, putIn, referencesIn, urlIn, type MockReferences } from "./references";
 import { collisionPairsScenario } from "./collisionPairs";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { mockMap } from "./map";
@@ -165,7 +172,7 @@ const NO_CONFIRM_ROUTE = "no route /api/projects/<slug>/proposals/<id>/confirm: 
 const NO_SYNC_ROUTE = "no route /api/projects/<slug>/sync: the routes are /api/projects and the web UI (mock)";
 
 /** The `hub` scenario's login and its `[team]` row: every act and Confirm (`docs/canon/hub-confirm.md` "Routes"). */
-const HUB_TEAM: Team = { login: "mira", name: "Mira Holt", allowed: ["stage", "accept", "clear", "group_clear", "confirm", "delete_comment"] };
+const HUB_TEAM: Team = { login: "mira", name: "Mira Holt", allowed: ["stage", "accept", "clear", "group_clear", "confirm", "delete_comment", "delete_reference"] };
 
 /** Who a hub's confirm records, its login and `[team]` email (`docs/canon/hub-confirm.md` "Rules", Identity). */
 const HUB_DECIDER = "mira <mira@harbor.example.invalid>";
@@ -227,6 +234,8 @@ export class MockClient implements SpecEngineClient {
   private readonly splitConflicted = new Set<string>();
   /** Each project's comments by slug (src/mocks/comments.ts): the daemon's writes on them, until a reload. */
   private readonly comments = new Map<string, MockComments>();
+  /** Each project's references and uploaded files by slug (src/mocks/references.ts): the daemon's writes on them, until a reload. */
+  private readonly references = new Map<string, MockReferences>();
   /** `feed`: harbor-sim's morning events the live tail has said so far (src/mocks/feed.ts). */
   private readonly morning: NightEvent[] = [];
 
@@ -241,6 +250,7 @@ export class MockClient implements SpecEngineClient {
       this.tasks.set(project.project.slug, mockTasks(project.project.slug));
       this.boards.set(project.project.slug, mockBoard(project.project.slug, scenario, at));
       this.comments.set(project.project.slug, mockComments(scenario === "empty" ? "" : project.project.slug, at));
+      this.references.set(project.project.slug, mockReferences(scenario === "empty" ? "" : project.project.slug, at));
     }
     // The night's applies by rule (src/mocks/feed.ts): decided rows, so the Inbox lists neither.
     this.project("harbor-sim").proposals.push(...delegatedProposals("harbor-sim", at));
@@ -1018,6 +1028,45 @@ export class MockClient implements SpecEngineClient {
   async raiseFromComment(project: string, id: string, body: CommentRaiseBody): Promise<IntakeDocument> {
     await this.wait();
     return raiseIn(this.commentsOf(project), this.project(project).proposals, project, id, body, this.stamp());
+  }
+
+  // References (docs/features/work-references.md "HTTP"; src/mocks/references.ts): who attaches is a
+  // comment's writer; the `hub` login deletes another's as its `[team]` row allows, a local page anyone's.
+
+  private referencesOf(project: string): MockReferences {
+    this.project(project);
+    let store = this.references.get(project);
+    if (store === undefined) {
+      store = mockReferences("", this.at);
+      this.references.set(project, store);
+    }
+    return store;
+  }
+
+  async getReferences(project: string, options: ReferencesOptions): Promise<ReferenceList> {
+    await this.read();
+    return referencesIn(this.referencesOf(project), options, this.placeOf(project, options.on));
+  }
+
+  async putBlob(project: string, blob: Blob, onProgress: UploadProgress, signal: AbortSignal): Promise<BlobStored> {
+    await this.wait();
+    return putIn(this.referencesOf(project), blob, onProgress, signal);
+  }
+
+  async addReference(project: string, body: ReferenceAddBody): Promise<Reference> {
+    await this.wait();
+    const { actor, login } = this.commenter(body.as);
+    return attachIn(this.referencesOf(project), body, this.placeOf(project, body.on), actor, login, this.stamp());
+  }
+
+  async deleteReference(project: string, id: string): Promise<Reference> {
+    await this.wait();
+    const hub = this.scenario === "hub";
+    return deleteRefIn(this.referencesOf(project), id, hub ? HUB_TEAM.login : LOCAL, !hub || HUB_TEAM.allowed.includes("delete_reference"), this.stamp());
+  }
+
+  blobUrl(project: string, b3: string): string {
+    return urlIn(this.referencesOf(project), project, b3);
   }
 
   /**

@@ -957,7 +957,13 @@ fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
 // `PRACTICES_CHARS_MAX` and `CITED_CHARS_MAX` (16 384 each) to 10 and 26.
 // 467 591 since docs/features/comments.md CM10: the context's
 // `"comments":{"total":0,"listed":[]}` (35 characters) on a card with none.
-const CARD_CONTEXT_MAXIMUM: usize = 467_591;
+// 467 640 since docs/features/work-references.md RF15: the context's
+// `,"references":{"total":0,"listed":[],"images":[]}` (49 characters) on a
+// card with none;
+// docs/canon/work-references-surfaces.md "A card's context and the brief".
+// The text is at its 40 000 cut and stays 40 261.
+// MAX_RESULT_CHARS is 500 000.
+const CARD_CONTEXT_MAXIMUM: usize = 467_640;
 
 /// The clock of every write of the card scenes.
 const CARD_CLOCK: &str = "2026-11-12T09:00:00Z";

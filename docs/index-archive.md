@@ -214,6 +214,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/verify-node.md](features/verify-node.md) shipped
 - [docs/features/verify-task.md](features/verify-task.md) shipped
 - [docs/features/verify-tests.md](features/verify-tests.md) shipped
+- [docs/features/work-references.md](features/work-references.md) shipped
 - [docs/features/workspaces.md](features/workspaces.md) shipped
 - [docs/features/write-cost.md](features/write-cost.md) shipped
 - [docs/features/write-memory.md](features/write-memory.md) shipped
@@ -318,4 +319,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0133.md](roadmap/RM-0133.md) shipped
 - [docs/roadmap/RM-0134.md](roadmap/RM-0134.md) shipped
 - [docs/roadmap/RM-0136.md](roadmap/RM-0136.md) shipped
+- [docs/roadmap/RM-0137.md](roadmap/RM-0137.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

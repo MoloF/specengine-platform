@@ -594,6 +594,43 @@ describe("source policy", () => {
     expect(reads.test("if (turn === TURNS.discrepancy) {")).toBe(false);
   });
 
+  // RF21 of docs/features/work-references.md: a reference's texts are people's, drawn as React text,
+  // never Markdown and never HTML; a stored file is shown only by an `<img>`, an `<audio>` or a
+  // `<video>` whose `src` is the client's `blobUrl` (served with `CSP: sandbox` and `nosniff`), or
+  // offered as a download, never framed or embedded; a link opens with no opener, referrer or follow.
+  it("draws a reference's texts as text and its file only through img, audio and video of the client's blobUrl: src/references/ holds no sink, no Markdown, no frame (RF21 of work-references)", () => {
+    const references = Object.keys(sources).filter((path) => path.startsWith("/src/references/") && /\.tsx?$/.test(path) && !isTestPath(path));
+    expect(references).toEqual(expect.arrayContaining(["/src/references/ReferencesPart.tsx", "/src/references/ReferenceTile.tsx", "/src/references/AddFileDialog.tsx", "/src/references/labels.ts"]));
+    const sink = new RegExp(["dangerously" + "SetInnerHTML", "inner" + "HTML", "outer" + "HTML", "insertAdjacent" + "HTML", "src" + "Doc"].join("|"));
+    expect(references.filter((path) => sink.test(sources[path] ?? ""))).toEqual([]);
+    expect(references.filter((path) => importsOf(sources[path] ?? "").some((specifier) => /markdown|react-markdown|remark-gfm/.test(specifier)))).toEqual([]);
+    expect(references.filter((path) => /<(iframe|object|embed|source)\b|createObjectURL|["'`]data:/.test(sources[path] ?? ""))).toEqual([]);
+    // Every `src` a tile sets is a file's address from the client.
+    const tileSource = sources["/src/references/ReferenceTile.tsx"] ?? "";
+    const srcs = Array.from(tileSource.matchAll(/\bsrc=\{([^}]*\}?)\}/g), (match) => match[1] ?? "");
+    expect(srcs.length).toBeGreaterThan(3);
+    expect(srcs.filter((value) => !/^(src|file|client\.blobUrl\(project, thumbnail\))$/.test(value))).toEqual([]);
+    expect(tileSource).toContain('rel="noopener noreferrer nofollow"');
+  });
+
+  // docs/features/work-references.md "UI": what a reference is (its kind), its class, its media type
+  // and its file's state are told apart in src/references/labels.ts alone; no other module of
+  // src/references/ compares one or an event type.
+  it("compares a reference's kind, class, media type or file state in src/references/labels.ts alone, an event type nowhere in src/references/ (work-references)", () => {
+    const outside = Object.keys(sources).filter((path) => path.startsWith("/src/references/") && path !== "/src/references/labels.ts" && !isTestPath(path));
+    expect(outside.length).toBeGreaterThan(5);
+    // A served word quoted anywhere but a `case` of the tile's own `Shown` (labels.ts's union, never served).
+    const reads = /\.(kind|class|media|file)\s*[!=]==(?!\s*(null|undefined)\b)|["'`]reference\.(created|deleted)["'`]|(?<!case )["'`](image|audio|video|model|pdf|stored|lost|link)\/?[a-z+-]*["'`]/;
+    expect(outside.filter((path) => reads.test(sources[path] ?? ""))).toEqual([]);
+    const labels = sources["/src/references/labels.ts"] ?? "";
+    expect([/export function shownAs\(/.test(labels), /const RASTER: readonly string\[\] = \["image\/png", "image\/jpeg", "image\/gif", "image\/webp"\];/.test(labels)]).toEqual([true, true]);
+    // The detector itself.
+    for (const line of ['if (reference.class === "image") {', 'type === "reference.created"', 'media === "image/png"', "if (stored.file !== kept) {"]) {
+      expect([line, reads.test(line)]).toEqual([line, true]);
+    }
+    expect([reads.test('if (shown === "deleted") {'), reads.test('    case "image":'), reads.test("if (reference.class !== null) {")]).toEqual([false, false, false]);
+  });
+
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
     const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/", "/src/doc/", "/src/guide/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);

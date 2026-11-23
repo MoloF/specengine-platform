@@ -59,5 +59,11 @@ ENV XDG_DATA_HOME=/data HOME=/var/lib/specengine/home
 # write's transient corpus load is not kept in an arena per thread
 # (write-memory, WM10). It changes no answer.
 ENV MALLOC_ARENA_MAX=2
+# The blob store's mount point (work-references): a new, empty named volume
+# takes this directory's owner and mode on its first mount, so
+# specengine-blobs starts owned by 10001, 0700, under specengine-data.
+RUN mkdir -p /data/specengine/blobs \
+    && chown 10001:10001 /data/specengine /data/specengine/blobs \
+    && chmod 0700 /data/specengine/blobs
 USER 10001:10001
 ENTRYPOINT ["specengine-entrypoint"]

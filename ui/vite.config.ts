@@ -18,8 +18,11 @@ interface IncomingRequest {
 
 /** The proxied request to the daemon, before it is sent. */
 interface OutgoingRequest {
+  method: string;
+  path: string;
   getHeader(name: string): unknown;
   removeHeader(name: string): void;
+  setHeader(name: string, value: string): unknown;
 }
 
 /** The proxy server's `proxyReq` event (Node's EventEmitter, unresolved without Node's types). */
@@ -43,17 +46,28 @@ function ownOrigins(localPort: number | undefined): string[] {
   return localPort === undefined ? [] : [`http://127.0.0.1:${localPort}`, `http://localhost:${localPort}`];
 }
 
+/** Where the proxy sends `/api`: the daemon's default address, its own origin. */
+const DAEMON = "http://127.0.0.1:7777";
+
+/** The binary door, `PUT .../blobs` (`docs/features/work-references.md` "HTTP"), which requires an Origin. */
+const BLOB_UPLOAD = /^\/api\/projects\/[^/]+\/blobs(?:\?|$)/;
+
 /**
  * A proxied request's Origin is removed only when it is this server's own: the UI itself (a
  * same-origin POST or DELETE, the decision's stage, carries one), which the daemon then answers;
- * the browser's `Sec-Fetch-Site: same-origin` goes on unchanged, as the stage needs it. Any other
- * Origin (another page or port, a LAN address, a list of two) is sent on unchanged, and the
- * daemon refuses it, 403 in its own words.
+ * the browser's `Sec-Fetch-Site: same-origin` goes on unchanged, as the stage needs it. The one
+ * route that requires an Origin, the upload's `PUT .../blobs`, gets the daemon's own in its place, as
+ * the page `spec serve` serves would send. Any other Origin (another page or port, a LAN address, a
+ * list of two) is sent on unchanged, and the daemon refuses it, 403 in its own words.
  */
 function dropOwnOrigin(proxyReq: OutgoingRequest, req: IncomingRequest): void {
   const origin = proxyReq.getHeader("origin");
   if (typeof origin === "string" && ownOrigins(req.socket.localPort).includes(origin)) {
-    proxyReq.removeHeader("origin");
+    if (proxyReq.method === "PUT" && BLOB_UPLOAD.test(proxyReq.path)) {
+      proxyReq.setHeader("origin", DAEMON);
+    } else {
+      proxyReq.removeHeader("origin");
+    }
   }
 }
 
@@ -102,7 +116,7 @@ export default defineConfig({
     cors: false,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:7777",
+        target: DAEMON,
         changeOrigin: true,
         configure: (proxy) => {
           (proxy as unknown as ProxyRequests).on("proxyReq", dropOwnOrigin);

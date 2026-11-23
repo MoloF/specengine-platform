@@ -203,6 +203,11 @@ pub use queue::{
     ByRule, EVENT_AUTO_BOUND, EVENT_AUTO_HELD, EVENT_AUTO_LANDED, EVENT_AUTO_STARTED, StoredAuto,
 };
 pub use queue::{
+    BlobReader, BlobServed, EVENT_REFERENCE_CREATED, EVENT_REFERENCE_DELETED, NewReference,
+    REF_COLUMNS, Reference, ReferenceContext, ReferenceDelete, ReferenceDeleted, ReferencePage,
+    StoredRef, unreadable_reference_line,
+};
+pub use queue::{
     COMMENT_COLUMNS, COMMENT_VERSION_COLUMNS, Comment, CommentContext, CommentDeleted, CommentEdit,
     CommentItem, CommentPage, CommentRefusal, EVENT_COMMENT_CREATED, EVENT_COMMENT_DELETED,
     EVENT_COMMENT_EDITED, NewComment, StoredComment, StoredCommentVersion, StoredComments,

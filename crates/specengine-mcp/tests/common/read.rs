@@ -112,9 +112,11 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// docs/features/collision-pass.md (`get_collisions`, `mark_pairs`),
 /// thirty-three since docs/features/specengine-guide.md (`get_guide`),
 /// thirty-five since docs/features/comments.md (`list_comments`,
-/// `add_comment`).
-pub const TOOLS: [&str; 35] = [
+/// `add_comment`), thirty-eight since docs/features/work-references.md
+/// (`list_references`, `get_reference`, `add_reference`).
+pub const TOOLS: [&str; 38] = [
     "add_comment",
+    "add_reference",
     "ask_question",
     "check_binding",
     "claim_task",
@@ -130,12 +132,14 @@ pub const TOOLS: [&str; 35] = [
     "get_impact",
     "get_node",
     "get_proposal",
+    "get_reference",
     "get_roadmap",
     "get_task",
     "get_trace",
     "get_tree",
     "list_cards",
     "list_comments",
+    "list_references",
     "mark_pairs",
     "move_card",
     "propose_change",
@@ -1111,6 +1115,52 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             },
         )
         .map(|outcome| Outcome::PairsMarked(Box::new(outcome))),
+        // docs/canon/work-references-surfaces.md "MCP" (RF20): `spec ref list
+        // --on X [--before RF] [--limit N]`, `spec ref get RF` (its image read
+        // for MCP) and `spec ref add --url U`, the author always an agent.
+        "list_references" => specengine_cli::reference_list(
+            env,
+            globals,
+            &specengine_cli::ReferenceListRequest {
+                on: text("on").unwrap_or_default(),
+                before: text("before"),
+                limit: args["limit"].as_u64(),
+            },
+        )
+        .map(|outcome| Outcome::ReferenceList(Box::new(outcome))),
+        "get_reference" => specengine_cli::reference_get(
+            env,
+            globals,
+            &specengine_cli::ReferenceGetRequest {
+                id: text("reference_id").unwrap_or_default(),
+                out: None,
+                agent_copy: false,
+                image: true,
+            },
+        )
+        .map(|outcome| Outcome::Reference(Box::new(outcome))),
+        "add_reference" => specengine_cli::reference_add(
+            env,
+            globals,
+            &specengine_cli::ReferenceAddRequest {
+                on: text("on").unwrap_or_default(),
+                b3: None,
+                agent_b3: None,
+                url: text("url"),
+                name: None,
+                title: text("title"),
+                matters: text("matters"),
+                actor: None,
+                author_role: text("author_role"),
+                author_model: text("author_model"),
+                run: text("run"),
+                agent: true,
+                login: None,
+                prepared: None,
+                now: specengine_cli::utc_now(),
+            },
+        )
+        .map(|outcome| Outcome::Reference(Box::new(outcome))),
         other => panic!("no CLI counterpart for tool {other}"),
     };
     expected(outcome)

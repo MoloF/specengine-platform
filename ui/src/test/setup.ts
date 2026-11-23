@@ -3,11 +3,13 @@ import { afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { recordConsole, takeConsoleCalls } from "./console";
 
 // The comments' chunks (docs/features/comments.md "UI"): the nav's Mentions badge stands on every
-// screen, the Comments part under every task, document and proposal. Loaded once per file ahead of its
-// tests, so no screen's first render waits on their first import, as no later one does.
+// screen, the Comments part under every task, document and proposal; the References part above it
+// (docs/features/work-references.md "UI"). Loaded once per file ahead of its tests, so no screen's
+// first render waits on their first import, as no later one does.
 beforeAll(async () => {
   await import("../comments/MentionsBadge");
   await import("../comments/CommentsPart");
+  await import("../references/ReferencesPart");
 });
 
 beforeEach(async () => {

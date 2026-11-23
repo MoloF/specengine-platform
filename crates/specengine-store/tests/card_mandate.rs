@@ -306,11 +306,11 @@ fn rows_of_11(db: &Path) -> String {
 /// and 26 for 9 to 12, `None` for 13 and 8.
 #[test]
 fn m5_a_new_queue_stands_at_12_with_26_card_columns() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 15);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
     let scratch = Scratch::new("cm-m5-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "15");
+    assert_eq!(user_version(&db), "16");
     assert_eq!(card_table(&db), CARD_COLUMNS);
     assert_eq!(CARD_COLUMNS.len(), 26);
     assert_eq!(CARD_COLUMNS[25], "mandate");
@@ -333,7 +333,8 @@ fn m5_a_new_queue_stands_at_12_with_26_card_columns() {
     }
     // 14 since docs/features/collision-pass.md D6: no card column changes.
     assert_eq!(card_columns(14).map(<[_]>::len), Some(26));
-    assert_eq!(card_columns(16), None);
+    assert_eq!(card_columns(16), Some(&CARD_COLUMNS[..]));
+    assert_eq!(card_columns(17), None);
     assert_eq!(card_columns(8), None);
     // No index on the new column.
     assert_eq!(
@@ -356,14 +357,14 @@ fn m5_a_schema_11_queue_with_three_cards_steps_at_its_first_open() {
     three_cards(&db);
     sqlite3(
         &db,
-        "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE cards DROP COLUMN mandate; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = 11;",
+        "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE cards DROP COLUMN mandate; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 11;",
     );
     assert_eq!(card_table(&db), CARD_COLUMNS[..25], "premise");
     let before = rows_of_11(&db);
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM cards;"), "3", "premise");
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(user_version(&db), "15");
+    assert_eq!(user_version(&db), "16");
     assert_eq!(card_table(&db), CARD_COLUMNS);
     assert_eq!(rows_of_11(&db), before, "every row as it was");
     assert_eq!(
@@ -376,7 +377,7 @@ fn m5_a_schema_11_queue_with_three_cards_steps_at_its_first_open() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "15", "stepped once");
+    assert_eq!(user_version(&db), "16", "stepped once");
     assert_eq!(card_table(&db), CARD_COLUMNS, "no second column");
 }
 
@@ -391,7 +392,7 @@ fn m5_a_schema_9_queue_reaches_12_in_one_migrate() {
         &db,
         "UPDATE proposals SET card_id = NULL; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; \
          ALTER TABLE proposals DROP COLUMN card_id; ALTER TABLE cards DROP COLUMN mandate; \
-         ALTER TABLE cards DROP COLUMN tasks; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = 9;",
+         ALTER TABLE cards DROP COLUMN tasks; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 9;",
     );
     let cards = sqlite3(
         &db,
@@ -401,7 +402,7 @@ fn m5_a_schema_9_queue_reaches_12_in_one_migrate() {
         ),
     );
     drop(SqliteQueue::open(&db, PROJECT).expect("open steps"));
-    assert_eq!(user_version(&db), "15");
+    assert_eq!(user_version(&db), "16");
     assert_eq!(card_table(&db), CARD_COLUMNS);
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(
@@ -435,7 +436,7 @@ fn m5_a_hand_made_mandate_column_fails_step_12() {
     three_cards(&eleven);
     sqlite3(
         &eleven,
-        "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = 11;",
+        "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 11;",
     );
     assert!(card_table(&eleven).contains(&"mandate".to_owned()));
     if let Ok(queue) = SqliteQueue::open(&eleven, PROJECT) {
@@ -449,7 +450,7 @@ fn m5_a_hand_made_mandate_column_fails_step_12() {
     sqlite3(
         &ten,
         "UPDATE proposals SET card_id = NULL; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; \
-         ALTER TABLE proposals DROP COLUMN card_id; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = 10;",
+         ALTER TABLE proposals DROP COLUMN card_id; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 10;",
     );
     let proposals = proposal_table(&ten);
     assert_eq!(proposals, PROPOSAL_COLUMNS[..46], "premise");
@@ -471,7 +472,7 @@ fn m5_open_existing_reads_an_11_queue_mandate_none_and_steps_nothing() {
     three_cards(&db);
     sqlite3(
         &db,
-        "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE cards DROP COLUMN mandate; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = 11;",
+        "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE cards DROP COLUMN mandate; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 11;",
     );
     let queue = SqliteQueue::open_existing(&db, PROJECT)
         .expect("open_existing")
@@ -497,7 +498,7 @@ fn m5_open_existing_reads_an_11_queue_mandate_none_and_steps_nothing() {
     sqlite3(
         &db,
         "UPDATE proposals SET card_id = NULL; ALTER TABLE proposals DROP COLUMN why; \
-         ALTER TABLE proposals DROP COLUMN card_id; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; PRAGMA user_version = 10;",
+         ALTER TABLE proposals DROP COLUMN card_id; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 10;",
     );
     let queue = SqliteQueue::open_existing(&db, PROJECT)
         .expect("open_existing")

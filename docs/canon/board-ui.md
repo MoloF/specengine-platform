@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # Board: card routes, door and fence
@@ -45,7 +45,7 @@ ADR-0056, ADR-0057, built by `board-ui` (RM-0046): an ordinary kanban on the loc
 | 409 | refused, a lost compare-and-set too: the write document, its reason the last of `notes` |
 | 503 | cannot run: a `revision` off its grammar, a look-alike ID, a bad `[card]`, a corrupt row, a newer schema |
 
-`answer.rs` `caused` maps `Outcome::Stage`, `Outcome::Card` and `Outcome::CardGroup` alike. A null `as` is `local`: on accept the reviewer rule refuses it, on a clear `clearer_problem`. A departing accept outside a worktree cannot run: 503. A card's raise answers as the intake: `card-questions.md` "The card door".
+`answer.rs` `caused` maps `Outcome::Stage`, `Outcome::Card` and `Outcome::CardGroup` alike. A null `as` is `local`: on accept the reviewer rule refuses it, on a clear `clearer_problem`. A departing accept outside a worktree cannot run: 503. A card's raise answers as the intake: `card-questions.md` "The card door". One binary sibling takes no JSON: `PUT .../blobs`, a reference's file as `application/octet-stream`, streamed, its own caps and answers (`work-references-surfaces.md` "HTTP").
 
 ## Fence and trust
 
@@ -61,7 +61,7 @@ The Board's screen, the card modal and page, lanes, the hand-off and return dial
 
 ## Acts off
 
-On a hub a control whose act `GET .../team`'s `allowed` omits is off (`hub-team.md` "Screen"): Accept in `board/CardPanel`, Clear there and in `trace/CardsBlock`, Clear all there, Stage, Unstage and the decisions that stage in `inbox/ProposalCard` and `round/RoundScreen`. The inbox's keys announce the same line (`inbox/InboxView`). A round's item stays to read, its choices off, no answer written (`round/RoundItemCard`). The two decisions that send nothing stay on. The Move menu drops its Accept line: a menu has no line to keep. Delete on another's comment where `allowed` lacks `delete_comment`, in every Comments part (`comments-surfaces.md` "Screen").
+On a hub a control whose act `GET .../team`'s `allowed` omits is off (`hub-team.md` "Screen"): Accept in `board/CardPanel`, Clear there and in `trace/CardsBlock`, Clear all there, Stage, Unstage and the decisions that stage in `inbox/ProposalCard` and `round/RoundScreen`. The inbox's keys announce the same line (`inbox/InboxView`). A round's item stays to read, its choices off, no answer written (`round/RoundItemCard`). The two decisions that send nothing stay on. The Move menu drops its Accept line: a menu has no line to keep. Delete on another's comment where `allowed` lacks `delete_comment`, in every Comments part (`comments-surfaces.md` "Screen"), and on another's reference where it lacks `delete_reference`, in every References part (`work-references-surfaces.md` "Screen").
 
 ## Types
 

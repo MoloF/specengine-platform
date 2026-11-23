@@ -22,8 +22,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/board-screen.md](canon/board-screen.md) Board screen: a still grid, the card modal and page, lanes, hand-off and return · ui · tier 2
 - [docs/canon/board-ui.md](canon/board-ui.md) Board: card routes, door and fence · crates/specengine-http, crates/specengine-cli, ui · tier 2
 - [docs/canon/collision-pass.md](canon/collision-pass.md) Collision pass: pairs that may collide, an agent's verdicts, a local ledger · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-eval, plugin · tier 2
-- [docs/canon/comments-surfaces.md](canon/comments-surfaces.md) Comments: the surfaces · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
-- [docs/canon/comments.md](canon/comments.md) Comments: talk under cards, nodes and proposals · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/decision-record-template.md](canon/decision-record-template.md) Decision records: config, template, flags · crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/decision-record.md](canon/decision-record.md) Decision records: a deciding item approved · crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp · tier 2
 - [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2

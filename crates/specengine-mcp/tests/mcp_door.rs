@@ -803,6 +803,44 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"on": "RULE-STAM-REGEN", "body": 5}),
             ],
         ),
+        // docs/canon/work-references-surfaces.md "MCP" (RF20): the two
+        // reads and the link-only write; no schema holds `as` or a file.
+        "list_references" => (
+            vec![
+                json!({"on": "RULE-STAM-REGEN"}),
+                json!({"on": "C-0099", "limit": 5}),
+            ],
+            vec![
+                json!({}),
+                json!({"on": "RULE-STAM-REGEN", "limit": "five"}),
+                json!({"on": "RULE-STAM-REGEN", "bogus": true}),
+            ],
+        ),
+        "get_reference" => (
+            vec![
+                json!({"reference_id": "RF-0001"}),
+                json!({"reference_id": "RF-0099"}),
+            ],
+            vec![
+                json!({}),
+                json!({"reference_id": 5}),
+                json!({"reference_id": "RF-0001", "bogus": true}),
+            ],
+        ),
+        "add_reference" => (
+            vec![
+                json!({"on": "RULE-STAM-REGEN", "url": "https://example.org/board",
+                    "title": "Board", "matters": "the palette", "author_role": "writer"}),
+                json!({"on": "C-0099", "url": "https://example.org/nobody"}),
+            ],
+            vec![
+                json!({"url": "https://example.org/no-target"}),
+                json!({"on": "RULE-STAM-REGEN", "url": "https://example.org/a", "as": "mira"}),
+                json!({"on": "RULE-STAM-REGEN", "url": 5}),
+                json!({"on": "RULE-STAM-REGEN", "url": "https://example.org/a",
+                    "b3": "0".repeat(64)}),
+            ],
+        ),
         "mark_pairs" => {
             let pair = |a: &str, b: &str, verdict: &str| {
                 json!({"a": a, "a_norm": format!("b3:{}", "0".repeat(64)), "b": b,
