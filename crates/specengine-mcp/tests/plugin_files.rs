@@ -344,6 +344,11 @@
 //!   ([`as_of_0_49_3`]) 0.49.0's pin. M: the schemas changed while
 //!   plugin.json stays 0.49.3; another file changed; `SCHEMA_PINS` not
 //!   appended.
+//! - reference-promotion's image patch: 0.52.0 -> 0.52.1, PATCH, a
+//!   version-only bump (no plugin file changed). A `PINS` entry 0.52.1,
+//!   the tree with plugin.json's version set back 0.52.0's; no
+//!   `SCHEMA_PINS` entry, the last still 0.52.0. M: plugin.json left at
+//!   0.52.0; another file changed.
 //!
 //! The repository is only read.
 
@@ -875,6 +880,12 @@ const PINS: &[(&str, &str)] = &[
     (
         "0.52.0",
         "a6cf645ffe3746e26245332ecb0ddd6776b9e0c6c66ad8c41907eb5228768182",
+    ),
+    // reference-promotion's image patch (0.52.0 -> 0.52.1, PATCH):
+    // plugin.json's version alone; set back, the tree hashes as 0.52.0's pin.
+    (
+        "0.52.1",
+        "385087fdbf8137e8ada0c96dfcfb93d23f940cc7bdd4f26f9f126fd2f4a56699",
     ),
 ];
 
@@ -2647,7 +2658,9 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// `list_comments` bullet, `ask-owner`'s `comment_id` sentence, each
 /// trimmed to its budget, their descriptions unchanged), 0.51.0 since
 /// work-references (RM-0137: `implement`'s references sentence, its
-/// description unchanged).
+/// description unchanged), 0.52.0 since reference-promotion (RM-0138:
+/// `propose-spec-change`'s promotion section), 0.52.1 since its image patch
+/// (no skill text changed).
 /// M: a 34-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -2670,7 +2683,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.52.0")
+        json!("0.52.1")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2823,11 +2836,37 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // reference-promotion's image patch (0.52.0 -> 0.52.1, PATCH):
+    // plugin.json's version alone; set back, the tree is 0.52.0's pinned
+    // content, every skill and role byte-equal. M: plugin.json left at
+    // 0.52.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.52.1"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.52.1"),
+        "plugin.json's version"
+    );
+    let at_0_52_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.52.1\"",
+        "\"version\": \"0.52.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_52_0),
+        PINS[PINS.len() - 2].1,
+        "0.52.1 changes plugin.json's version only"
+    );
+    let tree = at_0_52_0;
+    let pins_0_52_0 = &PINS[..PINS.len() - 1];
     // reference-promotion (RM-0138, PR20: 0.51.0 -> 0.52.0, MINOR):
     // plugin.json's version and [`PROMOTION_EDITS`]; all set back, the tree
     // is 0.51.0's pinned content, every other skill and role byte-equal. M:
     // plugin.json left at 0.51.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.52.0"));
+    assert_eq!(
+        pins_0_52_0.last().map(|(version, _)| *version),
+        Some("0.52.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.52.0"),
@@ -2844,11 +2883,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     }
     assert_eq!(
         content_hash(&at_0_51_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_52_0[pins_0_52_0.len() - 2].1,
         "0.52.0 changes plugin.json's version and propose-spec-change only"
     );
     let tree = at_0_51_0;
-    let pins_0_51_0 = &PINS[..PINS.len() - 1];
+    let pins_0_51_0 = &pins_0_52_0[..pins_0_52_0.len() - 1];
     // work-references (RM-0137, RF24: 0.50.0 -> 0.51.0, MINOR): plugin.json's
     // version and [`REFERENCES_EDITS`]; all set back, the tree is 0.50.0's
     // pinned content, every other skill and role byte-equal. M: plugin.json

@@ -1303,8 +1303,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // 0.49.3 since the patch of mixed-load-memory (RM-0134, a version-only
     // bump); 0.50.0 since comments (RM-0136: `list_comments`, `add_comment`,
     // `comment_id`, `comments`); 0.51.0 since work-references (RM-0137);
-    // 0.52.0 since reference-promotion (RM-0138: the `reference` kind).
-    assert_eq!(manifest["version"], "0.52.0");
+    // 0.52.0 since reference-promotion (RM-0138: the `reference` kind);
+    // 0.52.1 since its image patch (a version-only bump).
+    assert_eq!(manifest["version"], "0.52.1");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1435,8 +1436,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // 0.49.3 since the patch of mixed-load-memory (RM-0134, a version-only
     // bump); 0.50.0 since comments (RM-0136: `list_comments`, `add_comment`,
     // `comment_id`, `comments`); 0.51.0 since work-references (RM-0137);
-    // 0.52.0 since reference-promotion (RM-0138: the `reference` kind).
-    assert_eq!(manifest["version"], "0.52.0");
+    // 0.52.0 since reference-promotion (RM-0138: the `reference` kind);
+    // 0.52.1 since its image patch (a version-only bump).
+    assert_eq!(manifest["version"], "0.52.1");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1580,7 +1582,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.52.0",
+        manifest["version"], "0.52.1",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1608,7 +1610,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          comments (`list_comments`, `add_comment`, `comment_id`, `comments`): 0.50.0; \
          work-references (`list_references`, `get_reference`, `add_reference`, \
          `references`): 0.51.0; reference-promotion (`propose_change`'s `reference` kind, \
-         `reference_id`, `name`): 0.52.0"
+         `reference_id`, `name`): 0.52.0; its image patch: 0.52.1"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2793,7 +2795,7 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // patch of mixed-load-memory (RM-0134); 0.50.0 since comments (RM-0136);
     // 0.51.0 since work-references (RM-0137); 0.52.0 since reference-promotion
     // (RM-0138).
-    assert_eq!(manifest["version"], "0.52.0");
+    assert_eq!(manifest["version"], "0.52.1");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s

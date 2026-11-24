@@ -102,7 +102,7 @@ The model keeps the entries as written (`Fields.references`, `Vec<FmValue>`); co
 
 From 0.51.x (`hub-ops.md` "Upgrade"): queue schema 17, dump format 10, index format 22 (rebuilt at the first write), git-lfs in the image.
 1. A dump on 0.51.x, its snapshot IDs noted: "Back" restores it, 0.51.x reading no format 10.
-2. `v0.52.0`, `SPECENGINE_VERSION=0.52.0`, `pull`, `up -d`, healthy; `docker compose exec specengine git lfs version`.
+2. `v0.52.1`, `SPECENGINE_VERSION=0.52.1`, `pull`, `up -d`, healthy; `docker compose exec specengine git lfs version`.
 3. The laptop's `spec` and plugin from the tag.
 4. Only then commit a project's `[[references.homes]]` and its homes' `.gitattributes` lines: 0.51.x reads `homes` as an unknown key and refuses every reference write.
 5. With `--push` (after gate 11b-3) the deploy key needs write access, which LFS uses too (from memory: PR10).
