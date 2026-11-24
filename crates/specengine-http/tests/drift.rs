@@ -94,7 +94,9 @@ fn drift_item_is_served_and_cannot_be_staged() {
     // docs/features/collision-pairs.md PP8 (`pair`, `null`).
     // 55 since docs/features/department-practices.md "Proposals: `cited`".
     // 56 since docs/features/comments.md (`comment_id` after `why`).
-    assert_eq!(object.len(), 56, "{review}");
+    // 57 since docs/features/reference-promotion.md (`ref_id` after
+    // `comment_id`).
+    assert_eq!(object.len(), 57, "{review}");
     assert_eq!(review["pair"], Value::Null, "{review}");
     assert_eq!(review["similar"], Value::Null, "{review}");
     assert_eq!(review["kind"], json!("drift"));

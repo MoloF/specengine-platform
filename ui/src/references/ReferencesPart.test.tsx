@@ -248,8 +248,8 @@ describe("the tiles (RF21)", () => {
     stub.getReferences.mockImplementation((_project, options) =>
       Promise.resolve(
         options.before === undefined
-          ? { on: { kind: "card", id: "C-0007" }, total: 2, references: [aLinkReference({ id: "RF-0030" })], next_before: "RF-0030", notes: [] }
-          : { on: { kind: "card", id: "C-0007" }, total: 2, references: [aLinkReference({ id: "RF-0004", title: "Older" })], next_before: null, notes: [] },
+          ? { on: { kind: "card", id: "C-0007" }, total: 2, references: [aLinkReference({ id: "RF-0030" })], next_before: "RF-0030", notes: [], in_spec: [] }
+          : { on: { kind: "card", id: "C-0007" }, total: 2, references: [aLinkReference({ id: "RF-0004", title: "Older" })], next_before: null, notes: [], in_spec: [] },
       ),
     );
     const shown = await part(stub);

@@ -1811,13 +1811,13 @@ fn marked(label: &str) -> (Scene, String, String) {
 fn cp6_the_ledger_is_never_dumped() {
     // 15 and format 8 since docs/features/comments.md CM1, CM13; 16 and 9
     // since docs/features/work-references.md RF1, RF17.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
-    assert_eq!(STATE_FORMAT, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
+    assert_eq!(STATE_FORMAT, 10);
     let (scene, e, s) = marked("cp6-dump");
     let dumps = scene.pair.scratch.dir("dumps");
     let lines = export(&scene, &scene.pair.home, &dumps.join("q.jsonl"));
     assert!(
-        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -1854,7 +1854,7 @@ fn cp6_the_ledger_is_never_dumped() {
     let fresh = scene.pair.scratch.home("fresh");
     assert_eq!(import(&scene, &fresh, &dumps.join("q.jsonl")), Ok(()));
     let db = data_dir(&fresh).join("lantern-keep.db");
-    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "16");
+    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "17");
     assert_eq!(sql_at(&db, "SELECT count(*) FROM collision_marks;"), "0");
     assert_eq!(
         export(&scene, &fresh, &dumps.join("again.jsonl")),
@@ -1867,11 +1867,11 @@ fn cp6_the_ledger_is_never_dumped() {
     // CM13, docs/features/work-references.md RF17); at 17 it is refused.
     let mut thirteen: Vec<String> = lines
         .iter()
-        .map(|line| line.replace(",\"comment_id\":null}}", "}}"))
+        .map(|line| line.replace(",\"comment_id\":null,\"ref_id\":null}}", "}}"))
         .collect();
     thirteen[0] = thirteen[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":7,\"queue_schema\":13,",
             1,
         )
@@ -1881,11 +1881,11 @@ fn cp6_the_ledger_is_never_dumped() {
     let older = scene.pair.scratch.home("older");
     assert_eq!(import(&scene, &older, &file), Ok(()));
     let db = data_dir(&older).join("lantern-keep.db");
-    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "16");
+    assert_eq!(sql_at(&db, "PRAGMA user_version;"), "17");
     assert_eq!(sql_at(&db, "SELECT count(*) FROM collision_marks;"), "0");
 
     let mut seventeen = lines.clone();
-    seventeen[0] = seventeen[0].replacen("\"queue_schema\":16,", "\"queue_schema\":17,", 1);
+    seventeen[0] = seventeen[0].replacen("\"queue_schema\":17,", "\"queue_schema\":18,", 1);
     let file = dumps.join("seventeen.jsonl");
     fs::write(&file, format!("{}\n", seventeen.join("\n"))).unwrap();
     let newer = scene.pair.scratch.home("newer");
@@ -1922,7 +1922,7 @@ fn cp6_a_newer_queue_is_refused_and_a_13_queue_reads_no_marks() {
         .is_none(),
         "premise: the mark hides the pair"
     );
-    scene.pair.sql("PRAGMA user_version = 17;");
+    scene.pair.sql("PRAGMA user_version = 18;");
     for args in [
         vec!["collisions", "--kind", "mechanic"],
         vec!["collisions", "mark", "--input", "-"],
@@ -1931,20 +1931,20 @@ fn cp6_a_newer_queue_is_refused_and_a_13_queue_reads_no_marks() {
         assert_eq!(run.code, 2, "{args:?}: {}", run.show());
         assert!(
             run.stderr
-                .contains("schema version 17, this build knows 16"),
+                .contains("schema version 18, this build knows 17"),
             "{args:?}: {}",
             run.show()
         );
     }
     assert_eq!(
         scene.pair.sql("PRAGMA user_version;").trim(),
-        "17",
+        "18",
         "left alone"
     );
 
     scene
         .pair
-        .sql("DROP TABLE refs; DROP TABLE collision_marks; DROP TABLE comment_versions; DROP TABLE comments; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 13;");
+        .sql("DROP TABLE refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; DROP TABLE collision_marks; DROP TABLE comment_versions; DROP TABLE comments; DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 13;");
     let document = scene.collisions(&["--kind", "mechanic"]);
     let pair = find(&document, "MEC-ENDURANCE", "MEC-STAMINA")
         .unwrap_or_else(|| panic!("a 13 queue reads no marks: {document}"));

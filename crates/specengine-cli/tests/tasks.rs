@@ -818,7 +818,7 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
         // 54 since docs/features/collision-pairs.md PP8 (`pair`); 55 since
         // docs/features/department-practices.md "Proposals: `cited`".
         // 56 since docs/features/comments.md (`comment_id`).
-        assert_eq!(keys.len(), 56, "{keys:?}");
+        assert_eq!(keys.len(), 57, "{keys:?}");
         assert_eq!(
             keys[45..],
             [
@@ -831,6 +831,7 @@ fn ac10_the_review_document_names_its_task_and_the_inbox_does_not() {
                 "why",
                 // docs/features/comments.md: after `why`.
                 "comment_id",
+                "ref_id",
                 "similar",
                 "notes",
                 "cited"
@@ -1005,7 +1006,7 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":5,\"runs\":2,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":{events}}}"
         )
     );
@@ -1136,13 +1137,13 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":1}"
     );
     // Format 1, schema 3: the header's five keys, rows without `task_id`,
     // the stage's two, `interpretation`, `drift` and `drift_hash`.
     let later = ",\"task_id\":null,\"staged\":null,\"staged_at\":null,\"interpretation\":null,\
-                 \"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
+                 \"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null,\"ref_id\":null}}";
     let mut v3_lines = v4_lines.clone();
     v3_lines[0] = "{\"format\":1,\"queue_schema\":3,\"project\":\"lantern-keep\",\"proposals\":1,\
                    \"events\":1}"
@@ -1171,7 +1172,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     // Refused headers and rows: line 1 (the header) or 2 (the row).
     let two = |line: &str| {
         line.replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )

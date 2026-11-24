@@ -172,8 +172,9 @@ describe("the normal scenario", () => {
     const reviews = await Promise.all(proposals.map((entry) => client.getProposal("harbor-sim", entry.id)));
     for (const review of reviews) {
       // `cited` last since department-practices, filled on this route alone (docs/features/department-practices.md "Acceptance criteria", DP13).
-      // `comment_id` after `why` since comments (docs/features/comments.md "HTTP").
-      expect([review.id, Object.keys(review).slice(-11)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "comment_id", "similar", "notes", "cited"]]);
+      // `comment_id` after `why` since comments (docs/features/comments.md "HTTP"); `ref_id` after it since
+      // reference-promotion (docs/canon/work-references-promotion-surfaces.md "Documents and text").
+      expect([review.id, Object.keys(review).slice(-12)]).toEqual([review.id, ["choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "comment_id", "ref_id", "similar", "notes", "cited"]]);
       expect([review.id, Array.isArray(review.cited)]).toEqual([review.id, true]);
       expect([review.id, review.similar]).toEqual([review.id, null]);
       expect([review.staged, review.staged_at]).toEqual([null, null]);

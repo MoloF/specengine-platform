@@ -852,16 +852,19 @@ fn row_keys_order_as_lock_keys_keyless_first() {
 /// doc-library `tag-invalid` as the 39th (docs/features/doc-library.md
 /// DL7) and department-practices `practice-discipline` as the 40th
 /// (docs/features/department-practices.md "Data") and specengine-guide
-/// `summary-stale` as the 41st (docs/features/specengine-guide.md "Data"),
-/// no other. M: a verify code added to the check.
+/// `summary-stale` as the 41st (docs/features/specengine-guide.md "Data")
+/// and reference-promotion `reference-entry` as the 42nd
+/// (docs/features/reference-promotion.md D15), no other. M: a verify code
+/// added to the check.
 #[test]
 fn check_codes_stay_35() {
-    assert_eq!(CHECK_CODES.len(), 41, "{CHECK_CODES:?}");
+    assert_eq!(CHECK_CODES.len(), 42, "{CHECK_CODES:?}");
     assert_eq!(
         CHECK_CODES.last(),
-        Some(&"summary-stale"),
+        Some(&"reference-entry"),
         "{CHECK_CODES:?}"
     );
+    assert_eq!(CHECK_CODES[40], "summary-stale", "{CHECK_CODES:?}");
     assert_eq!(CHECK_CODES[39], "practice-discipline", "{CHECK_CODES:?}");
     assert_eq!(CHECK_CODES[38], "tag-invalid", "{CHECK_CODES:?}");
     assert_eq!(CHECK_CODES[37], "card-config", "{CHECK_CODES:?}");

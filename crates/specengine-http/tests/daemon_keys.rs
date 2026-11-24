@@ -1196,6 +1196,21 @@ fn comment_documents() -> (String, String) {
 fn reference_documents() -> (String, Vec<String>) {
     let scratch = Scratch::new("daemon-keys-references");
     let root = scratch.repo("spec-a", "a", "main");
+    // docs/canon/work-references-promotion-surfaces.md "Documents and text": two entries
+    // in MEC-SPRINT's `references:`, so the list on its card carries
+    // `in_spec` rows.
+    let sprint = "docs/spec/movement/sprint.md";
+    let text = fs::read_to_string(root.join(sprint)).expect("sprint");
+    let text = text.replacen(
+        "links:\n",
+        "references:\n  - \"media/sprint.png | the runner's lean\"\n  - \"media/steps.wav\"\nlinks:\n",
+        1,
+    );
+    assert!(text.contains("references:"), "premise: {text}");
+    fs::write(root.join(sprint), text).expect("sprint");
+    scratch
+        .git()
+        .run(&root, &["commit", "-qam", "Two entries."]);
     let home = scratch.home("h");
     let cwd = scratch.dir("cwd");
     let server = Server::serve(&home, &cwd, &[&root]);
@@ -1510,6 +1525,10 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         .map(|item| raw_object(item, "deleted"))
         .collect();
     assert_eq!(reference_deleted.len(), 1, "{reference_list}");
+    // docs/canon/work-references-promotion-surfaces.md "Documents and text": the list's
+    // two `in_spec` rows.
+    let in_spec = raw_items(&reference_list, "in_spec");
+    assert_eq!(in_spec.len(), 2, "{reference_list}");
     let (guide_index, guide_pages, guide_rule_reads) = guide_documents();
     let guide_topics = raw_items(&guide_index, "topics");
     assert_eq!(guide_topics.len(), 10, "{guide_index}");
@@ -3252,6 +3271,8 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "BlobStored",
             one_key_set("BlobStored", &blobs_stored, keys_of),
         ),
+        // docs/canon/work-references-promotion-surfaces.md "Documents and text", set 193.
+        ("InSpec", one_key_set("InSpec", &in_spec, keys_of)),
     ]
 }
 
@@ -3570,7 +3591,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // keys. docs/features/comments.md "HTTP": `comment_id` after
     // `why`, 56 keys.
     assert_eq!(sets[2].0, "Proposal");
-    assert_eq!(sets[2].1.len(), 56, "{:?}", sets[2].1);
+    assert_eq!(sets[2].1.len(), 57, "{:?}", sets[2].1);
     let evidence = sets[2].1.iter().position(|key| key == "evidence");
     assert_eq!(
         sets[2].1[evidence.expect("evidence")..evidence.expect("evidence") + 3],
@@ -3603,6 +3624,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "card_id",
             "why",
             "comment_id",
+            "ref_id",
             "similar",
             "notes",
             "cited"
@@ -3613,7 +3635,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        192,
+        193,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
@@ -3624,7 +3646,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
          direction-catalog: 140; department-overview: 143; collision-pairs: 145; \
          delivery-timeline: 148; usage-orphans: 151; scope-rings: 154; corpus-map: 160; \
          auto-feed: 168; hub-auto: 169; doc-library: 174; department-practices: 176; \
-         specengine-guide: 181; comments: 187; work-references: 192)"
+         specengine-guide: 181; comments: 187; work-references: 192; \
+         reference-promotion: 193)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -3672,7 +3695,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("TaskNotFound", 2),
             // docs/features/department-practices.md: `practices` after
             // `bundle`, 28.
-            ("TaskPackage", 30),
+            // 31 since docs/features/reference-promotion.md
+            // (`spec_references`).
+            ("TaskPackage", 31),
             ("TaskTarget", 4),
             ("TaskCriterion", 2),
             ("TaskAssumption", 2),
@@ -3694,12 +3719,21 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // after `bindings`.
     assert_eq!(sets[18].1[15..17], ["bindings", "tested"]);
     // `comments` after `practices` since docs/features/comments.md,
-    // `references` after it since docs/features/work-references.md.
+    // `references` after it since docs/features/work-references.md,
+    // `spec_references` after that since
+    // docs/features/reference-promotion.md.
     assert_eq!(
-        sets[18].1[21..26],
-        ["bundle", "practices", "comments", "references", "roadmap"]
+        sets[18].1[21..27],
+        [
+            "bundle",
+            "practices",
+            "comments",
+            "references",
+            "spec_references",
+            "roadmap"
+        ]
     );
-    assert_eq!(sets[18].1[29], "notes");
+    assert_eq!(sets[18].1[30], "notes");
     assert_eq!(
         sets[29].1,
         [
@@ -4957,7 +4991,15 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("ReferenceDeleted", vec!["by", "at"]),
             (
                 "ReferenceList",
-                vec!["on", "total", "references", "next_before", "notes"]
+                // `in_spec` after `notes` since docs/features/reference-promotion.md.
+                vec![
+                    "on",
+                    "total",
+                    "references",
+                    "next_before",
+                    "notes",
+                    "in_spec"
+                ]
             ),
             (
                 "BlobStored",
@@ -4976,7 +5018,21 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ),
         ]
     );
-    assert_eq!(sets.len(), 192);
+    // docs/canon/work-references-promotion-surfaces.md "Documents and text": `InSpec`,
+    // set 193, last.
+    assert_eq!(
+        sets[192],
+        (
+            "InSpec",
+            vec![
+                "node".to_owned(),
+                "document".to_owned(),
+                "path".to_owned(),
+                "matters".to_owned()
+            ]
+        )
+    );
+    assert_eq!(sets.len(), 193);
     // docs/features/doc-library.md DL2: sets 170 to 174, each "Data"'s
     // keys in order.
     let library: Vec<(&str, Vec<&str>)> = sets[169..174]
@@ -5178,8 +5234,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        192,
-        "192 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        193,
+        "193 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -5198,7 +5254,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
          department-practices' two (DP14) and specengine-guide's five (GU6) and \
          comments' six (docs/features/comments.md, HTTP) and work-references' five \
-         (docs/features/work-references.md, Documents)"
+         (docs/features/work-references.md, Documents) and reference-promotion's `InSpec` \
+         (docs/canon/work-references-promotion-surfaces.md, Documents and text)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -5213,8 +5270,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
     // docs/features/plain-questions.md "Acceptance criteria" PQ10; 54 since
     // collision-pairs PP8, 55 since docs/features/department-practices.md
-    // (`cited`), 56 since docs/features/comments.md (`comment_id`).
-    assert_eq!(set("Proposal").len(), 56);
+    // (`cited`), 56 since docs/features/comments.md (`comment_id`), 57 since
+    // docs/features/reference-promotion.md (`ref_id`).
+    assert_eq!(set("Proposal").len(), 57);
 
     let scratch = Scratch::new("daemon-keys-kd");
     let a = scratch.repo("spec-a", "a", "main");
@@ -5371,8 +5429,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        192,
-        "192 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        193,
+        "193 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -5391,7 +5449,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          hub-auto's `Delegated` (HA7) and doc-library's five (DL2) and \
          department-practices' two (DP14) and specengine-guide's five (GU6) and \
          comments' six (docs/features/comments.md, HTTP) and work-references' five \
-         (docs/features/work-references.md, Documents)"
+         (docs/features/work-references.md, Documents) and reference-promotion's `InSpec` \
+         (docs/canon/work-references-promotion-surfaces.md, Documents and text)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -5406,8 +5465,9 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     // docs/features/intake-similar.md "Acceptance criteria" IS10; 53 since
     // docs/features/plain-questions.md "Acceptance criteria" PQ10; 54 since
     // collision-pairs PP8, 55 since docs/features/department-practices.md
-    // (`cited`), 56 since docs/features/comments.md (`comment_id`).
-    assert_eq!(set("Proposal").len(), 56);
+    // (`cited`), 56 since docs/features/comments.md (`comment_id`), 57 since
+    // docs/features/reference-promotion.md (`ref_id`).
+    assert_eq!(set("Proposal").len(), 57);
 
     let scratch = Scratch::new("daemon-keys-ka");
     let a = scratch.repo("spec-a", "a", "main");

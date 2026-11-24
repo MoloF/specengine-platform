@@ -848,6 +848,7 @@ struct Writer<'t> {
     insert_anchor: Statement<'t>,
     insert_diagnostic: Statement<'t>,
     insert_discipline: Statement<'t>,
+    insert_promoted: Statement<'t>,
     delete_nodes: Statement<'t>,
     delete_file: Statement<'t>,
     store_stat: Statement<'t>,
@@ -899,6 +900,11 @@ impl<'t> Writer<'t> {
                 .db()?,
             insert_discipline: tx
                 .prepare("INSERT INTO disciplines (file_id, ord, discipline) VALUES (?1, ?2, ?3)")
+                .db()?,
+            insert_promoted: tx
+                .prepare(
+                    "INSERT INTO promoted (file_id, ord, path, matters) VALUES (?1, ?2, ?3, ?4)",
+                )
                 .db()?,
             // Nodes go first and one by one through their FTS delete
             // trigger; the file's other rows follow it by cascade.
@@ -1041,6 +1047,16 @@ impl<'t> Writer<'t> {
         for (ord, discipline) in rows.disciplines.iter().enumerate() {
             self.insert_discipline
                 .execute((file_id, ord_value(ord), discipline.as_str()))
+                .db()?;
+        }
+        for (ord, entry) in rows.promoted.iter().enumerate() {
+            self.insert_promoted
+                .execute((
+                    file_id,
+                    ord_value(ord),
+                    entry.path.as_str(),
+                    entry.matters.as_deref(),
+                ))
                 .db()?;
         }
         for name in &rows.names {

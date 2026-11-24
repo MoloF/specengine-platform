@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 ---
 
 # Hub MCP: `/mcp/<slug>` under each request's login
@@ -55,7 +55,7 @@ The transport stays in `specengine-http`: `App::new` builds one service per proj
 
 Twenty-four tools and the resources, each its stdio twin's CLI call:
 - **reads:** `get_tree`, `get_node`, `search`, `get_context_bundle`, `get_roadmap`, `get_flow`, `get_trace`, `get_proposal`; `get_guide` (`spec-guide.md`);
-- **queue**, without `task_id`: `propose_change` (four kinds, `dry_run`, a create's `distinct_from`, `keywords`: `proposal-similar.md`), `ask_question`, `report_discrepancy`, `report_decision`;
+- **queue**, without `task_id`: `propose_change` (five kinds, `dry_run`, a create's `distinct_from`, `keywords`: `proposal-similar.md`), `ask_question`, `report_discrepancy`, `report_decision`;
 - **cards:** `list_cards`, `get_card`, `create_card`, `split_card`, `edit_card`, `move_card`;
 - **comments:** `list_comments`, `add_comment` (`comments-surfaces.md`); **references:** `list_references`, `get_reference`, `add_reference` (`work-references-surfaces.md`).
 

@@ -1932,7 +1932,7 @@ fn cm13_comments_round_trip_through_format_8() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":\
+            "{{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\",\"proposals\":\
              {proposals},\"tasks\":0,\"runs\":0,\"cards\":1,\"comments\":4,\
              \"comment_versions\":2,\"refs\":0,\"events\":{events}}}"
         )
@@ -2060,7 +2060,7 @@ fn cm13_a_format_7_dump_imports_with_no_comments() {
         String::from_utf8(output.stdout).expect("UTF-8")
     };
     // 16 since docs/features/work-references.md RF1.
-    assert_eq!(sql("PRAGMA user_version;").trim(), "16");
+    assert_eq!(sql("PRAGMA user_version;").trim(), "17");
     assert_eq!(
         sql("SELECT count(*), count(comment_id) FROM proposals;").trim(),
         "1|0"
@@ -2083,7 +2083,7 @@ fn cm13_a_format_7_dump_imports_with_no_comments() {
     want[0] = want[0]
         .replacen(
             "\"format\":7,\"queue_schema\":14,",
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             1,
         )
         .replacen(
@@ -2096,7 +2096,8 @@ fn cm13_a_format_7_dump_imports_with_no_comments() {
         .filter(|line| line.starts_with("{\"proposals\":"))
     {
         let body = line.strip_suffix("}}").expect("a row's end").to_owned();
-        *line = format!("{body},\"comment_id\":null}}}}");
+        // `ref_id` since docs/features/reference-promotion.md (format 10).
+        *line = format!("{body},\"comment_id\":null,\"ref_id\":null}}}}");
     }
     assert_eq!(eight, want);
 }
@@ -2114,13 +2115,13 @@ fn cm13_a_schema_14_queue_exports_as_format_8_unmigrated() {
     );
     asked(&pair, &["MEC-SPRINT"], "Does a sprint end at zero?", &[]);
     pair.sql(
-        "DROP TABLE refs; DROP TABLE comment_versions; DROP TABLE comments; \
+        "DROP TABLE refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; DROP TABLE comment_versions; DROP TABLE comments; \
          DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 14;",
     );
     let out = pair.scratch.dir("dumps").join("fourteen.jsonl");
     let lines = dump_lines(&export(&pair, &pair.home, &out));
     assert!(
-        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -2133,12 +2134,15 @@ fn cm13_a_schema_14_queue_exports_as_format_8_unmigrated() {
         .iter()
         .find(|line| line.starts_with("{\"proposals\":"))
         .expect("a proposal row");
-    assert!(proposal.ends_with(",\"comment_id\":null}}"), "{proposal}");
+    assert!(
+        proposal.ends_with(",\"comment_id\":null,\"ref_id\":null}}"),
+        "{proposal}"
+    );
     assert_eq!(pair.sql("PRAGMA user_version;").trim(), "14", "unmigrated");
 
     let mut nine = lines.clone();
     // Format 10 since docs/features/work-references.md (this build writes 9).
-    nine[0] = nine[0].replacen("\"format\":9,", "\"format\":10,", 1);
+    nine[0] = nine[0].replacen("\"format\":10,", "\"format\":11,", 1);
     let file = pair.scratch.dir("dumps").join("nine.jsonl");
     let mut text = nine.join("\n");
     text.push('\n');

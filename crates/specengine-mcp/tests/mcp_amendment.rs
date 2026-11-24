@@ -265,7 +265,7 @@ fn ac_r11_propose_change_amends_as_its_twin() {
                 let document = &review["structuredContent"];
                 assert_eq!(
                     document.as_object().map(serde_json::Map::len),
-                    Some(56),
+                    Some(57),
                     "{label}: the review's 56 keys (docs/features/rev-discipline.md, \
                      docs/features/drift-queue.md, docs/features/card-questions.md L1, \
                      docs/features/intake-similar.md IS6, docs/features/plain-questions.md \
@@ -382,7 +382,9 @@ fn ac_r11_the_enum_of_four_and_the_texts_name_amendment() {
                 UPDATE_KIND,
                 CREATE_KIND,
                 INTERPRETATION_KIND,
-                AMENDMENT_KIND
+                AMENDMENT_KIND,
+                // docs/canon/work-references-promotion-surfaces.md "MCP": the fifth.
+                "reference"
             ]),
             "{era:?}"
         );
@@ -410,7 +412,10 @@ fn ac_r11_the_enum_of_four_and_the_texts_name_amendment() {
     assert!(instructions.len() <= 2048, "{}", instructions.len());
     assert!(
         instructions
-            .contains("- propose_change = spec propose update|create|interpretation|amendment:"),
+            // `|reference` after it since docs/features/reference-promotion.md.
+            .contains(
+                "- propose_change = spec propose update|create|interpretation|amendment|reference:"
+            ),
         "{instructions}"
     );
 }

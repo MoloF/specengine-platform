@@ -70,6 +70,7 @@ import type {
   MentionList,
   NodeView,
   Project,
+  PromoteBody,
   Proposal,
   QueueEvent,
   Reference,
@@ -135,7 +136,7 @@ import { delegatedProposals, feedOf, MORNING, payloadOf, type NightEvent } from 
 import { catalogOf } from "./catalog";
 import { addIn, deleteIn, editIn, listIn, LOCAL, mentionsIn, mockComments, raiseIn, type MockComments } from "./comments";
 import { plainQuestionsScenario } from "./plainQuestions";
-import { attachIn, deleteRefIn, mockReferences, putIn, referencesIn, urlIn, type MockReferences } from "./references";
+import { attachIn, deleteRefIn, documentOf, mockReferences, promotedIn, promoteIn, putIn, referencesIn, urlIn, type MockReferences } from "./references";
 import { collisionPairsScenario } from "./collisionPairs";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { mockMap } from "./map";
@@ -629,6 +630,10 @@ export class MockClient implements SpecEngineClient {
     const commit = approve ? fakeHex(`${review.id}\n${at}`, 40) : null;
     if (approve) {
       logItemEvent(board, review.id, "proposal.applied", { commit }, at);
+      // A promotion's entry joins its document's key (docs/canon/work-references-promotion-surfaces.md "HTTP").
+      if (review.ref_id !== null) {
+        promotedIn(this.referencesOf(project ?? ""), review);
+      }
     }
     const decided: StoredReview = {
       ...review,
@@ -1045,7 +1050,25 @@ export class MockClient implements SpecEngineClient {
 
   async getReferences(project: string, options: ReferencesOptions): Promise<ReferenceList> {
     await this.read();
-    return referencesIn(this.referencesOf(project), options, this.placeOf(project, options.on));
+    const kind = this.placeOf(project, options.on);
+    return referencesIn(this.referencesOf(project), options, kind, this.inheritedFrom(project, kind, options.on));
+  }
+
+  /**
+   * The documents whose `references:` keys a target's list carries "In the spec": a card's every
+   * target's document, in target order; a node's own document; a proposal's none (docs/canon/work-references-promotion-surfaces.md "Documents and text").
+   */
+  private inheritedFrom(project: string, kind: string, on: string): string[] {
+    const { corpus } = this.project(project);
+    const refs = kind === "card" ? (this.board(project).cards.find((card) => card.id === on)?.targets ?? []) : kind === "node" ? [on] : [];
+    return refs.flatMap((ref) => {
+      try {
+        const found = documentOf(corpus, ref);
+        return found === null ? [] : [found.file.path];
+      } catch {
+        return [];
+      }
+    });
   }
 
   async putBlob(project: string, blob: Blob, onProgress: UploadProgress, signal: AbortSignal): Promise<BlobStored> {
@@ -1063,6 +1086,14 @@ export class MockClient implements SpecEngineClient {
     await this.wait();
     const hub = this.scenario === "hub";
     return deleteRefIn(this.referencesOf(project), id, hub ? HUB_TEAM.login : LOCAL, !hub || HUB_TEAM.allowed.includes("delete_reference"), this.stamp());
+  }
+
+  async promoteReference(project: string, id: string, body: PromoteBody): Promise<Proposal> {
+    await this.wait();
+    const { login } = this.commenter(body.as);
+    const author = login === null ? { type: "human", role: null, model: null, run: null } : { type: "human", role: null, model: null, run: null, login };
+    const entry = this.project(project);
+    return structuredClone(promoteIn(this.referencesOf(project), entry.proposals, entry.corpus, project, id, body, author, this.stamp()));
   }
 
   blobUrl(project: string, b3: string): string {

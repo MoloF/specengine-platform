@@ -2905,8 +2905,10 @@ fn import_s_typed_key_table_is_core_s_and_core_reads_by_it() {
     // (32); `disciplines`, typed `List` (33):
     // docs/features/department-practices.md "Front-matter `disciplines`";
     // `summarises`, typed `List`, appended last (34):
-    // docs/features/specengine-guide.md "Front-matter `summarises`".
-    assert_eq!(core.len(), 34);
+    // docs/features/specengine-guide.md "Front-matter `summarises`";
+    // `references`, typed `List`, appended last (35):
+    // docs/canon/work-references-promotion-surfaces.md "The `references:` key".
+    assert_eq!(core.len(), 35);
     assert!(
         core.contains(&("stage".to_owned(), "Text".to_owned())),
         "{core:?}"
@@ -2918,8 +2920,13 @@ fn import_s_typed_key_table_is_core_s_and_core_reads_by_it() {
         "{core:?}"
     );
     assert_eq!(
+        core[33],
+        ("summarises".to_owned(), "List".to_owned()),
+        "{core:?}"
+    );
+    assert_eq!(
         core.last(),
-        Some(&("summarises".to_owned(), "List".to_owned())),
+        Some(&("references".to_owned(), "List".to_owned())),
         "{core:?}"
     );
 

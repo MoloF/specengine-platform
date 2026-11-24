@@ -135,8 +135,9 @@ describe("harbor-sim's amendment (AC-U1 of kind-amendment)", () => {
     // the gist and why it matters since plain-questions (docs/features/plain-questions.md "Acceptance criteria", PQ10),
     // the pair since collision-pairs (docs/features/collision-pairs.md "Acceptance criteria", PP8), the cited IDs
     // last since department-practices (docs/features/department-practices.md "Acceptance criteria", DP13): 55; the comment
-    // it was raised from since comments (docs/features/comments.md "HTTP"): 56.
-    expect(Object.keys(review)).toHaveLength(56);
+    // it was raised from since comments (docs/features/comments.md "HTTP"): 56; the reference a promotion
+    // copies since reference-promotion (docs/canon/work-references-promotion-surfaces.md "Documents and text"): 57.
+    expect(Object.keys(review)).toHaveLength(57);
     expect(review).toMatchObject({
       id: AMENDMENT,
       project: SLUG,

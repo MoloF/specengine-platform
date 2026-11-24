@@ -705,7 +705,7 @@ fn dp12_the_task_package_carries_its_cards_practices() {
     let scene = Scene::new("dp12");
     let (document, raw) = package(&scene, "T-0001");
     assert_eq!(task_common::keys(&raw), PACKAGE_KEYS, "{raw}");
-    assert_eq!(PACKAGE_KEYS[29], "notes");
+    assert_eq!(PACKAGE_KEYS[30], "notes");
     assert_eq!(
         PACKAGE_KEYS
             .iter()

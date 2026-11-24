@@ -149,10 +149,10 @@ Moved by this slice (all landed): the index shard `docs/index-canon-work.md` (`c
 
 Plugin 0.51.0 (MINOR), tag `v0.51.0`; queue schema 16, `STATE_FORMAT` 9, `INDEX_FORMAT` unchanged at 21; the hub's upgrade takes a dump first, adds `specengine-blobs` and every binary comes from the tag (`hub-ops.md` "Upgrade", `scripts/deploy/README.md`). First load 816 857 B (815 001 before; bar 845 kB).
 - Iterations: Rust three, UI three; reviews ACCEPT.
-- The full run: pending.
+- The full run: passed; committed at b6b42516, tagged `v0.51.0` and released to the hub 2026-11-23 (`specengine-blobs`, queue schema 16).
 - RF23, two paced 300 s runs on release binaries (2 uploaders of 200 MiB at 25 MiB/s, 10 Range readers at 10 windows a second, CM's writers; no override; load under 6, `caffeinate -i -s`), both green:
   - run 3: 16 411 calls/min (12 738 writes, 3 673 reads); 58 uploads, 11.3 GiB; 17 862 Range windows, every byte checked; live heap 0.000, quiet footprint −0.547 MiB/min; RSS 5.4 → 31.4 MiB; p50/p95/p99/worst 23/49/53/8 132 ms; page p95 27 → 56 ms (bar 90.5); 0 hangs;
   - run 4: 16 805 (12 987, 3 818); 58, 11.3 GiB; 18 570; 0.000, −0.360; 5.4 → 31.1 MiB; 24/50/53/8 120 ms; 28 → 56 ms (bar 92); 0 hangs;
   - the worst call is one 200 MiB PUT at 25 MiB/s, about 8 s by design; the twins 2.4 % apart; each store ended with its 20 files and no `.part`; the planted leak (64 KiB kept per PUT) red at 14.809 MiB/min on the live heap.
 - Before pacing: Unpaced, client and daemon on one laptop (the client about 760 MiB/s of uploads and 1.1 GiB/s of Range windows, load 11-16): memory green (live heap 0.018 and 0.031 MiB/min, quiet footprint 0.031 and −0.656), but the page p95 26 → 237 and 28 → 221 ms against bars 89 and 92, from CPU contention: the page's turn wait p50 18 → 106, p95 23 → 145 ms, its handler ~6 ms, `add_comment` 2 → 12 ms; the uploads' own turn work small (commit p50 10 ms, POST 6, DELETE 10; ~0.1 s of turn a second). A paced diagnostic run: page p95 28 → 60 ms (bar 92), live heap 0.001. The planted leak: red, 14.809 MiB/min.
-- Open for the owner: RF25 and RF26 on the live hub; the laptop's reinstall from the tag.
+- Open for the owner: RF25 and RF26 on the live hub.

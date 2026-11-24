@@ -45,6 +45,7 @@ import type {
   MentionList,
   NodeView,
   Project,
+  PromoteBody,
   Proposal,
   QueueEvent,
   Reference,
@@ -483,6 +484,14 @@ export interface SpecEngineClient {
   addReference(project: string, body: ReferenceAddBody): Promise<Reference>;
   /** DELETE /api/projects/:p/references/:id, no body (= spec ref delete; its consent the page's dialog): 200 the tombstone */
   deleteReference(project: string, id: string): Promise<Reference>;
+  /**
+   * POST /api/projects/:p/references/:id/promote (= spec propose reference RF --to REF --brief;
+   * docs/canon/work-references-promotion-surfaces.md "HTTP"): a stored file proposed into git beside a document,
+   * nothing written under the root. 200 the `--brief` review document of the stored proposal, which a
+   * person confirms in the Inbox; a 400 error body, a 403, a `{id, reason}` 404 or 409 and a 503
+   * reject in the daemon's words.
+   */
+  promoteReference(project: string, id: string, body: PromoteBody): Promise<Proposal>;
   /** Where a stored file is read, GET /api/projects/:p/blobs/:b3 (served sandboxed, one Range): the one source of an image's, a sound's or a video's `src` and a download's `href`. */
   blobUrl(project: string, b3: string): string;
   /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] [--stage S] [--summary] --json, the browser view; 404 the exit-1 document) */

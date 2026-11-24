@@ -174,6 +174,12 @@ const LATER: &[&str] = &[
     // guide's REF `TOPIC#ID` splits at `#`; no SCIP descriptor. (Its build
     // script lies at the crate's root, outside `src/`, so outside the scan.)
     "crates/specengine-cli/src/guide.rs",
+    // docs/features/reference-promotion.md: a promotion joins a document's
+    // directory, its home and the file's name with `/` and names a
+    // parentless path's directory `.`; the store's `promoted` reads join a
+    // root's place to a document's path with `/`. No SCIP descriptor.
+    "crates/specengine-cli/src/promote.rs",
+    "crates/specengine-store/src/promoted.rs",
 ];
 
 /// R10's Cargo words: no literal of the store, core or CLI holds one.

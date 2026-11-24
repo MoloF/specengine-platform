@@ -105,6 +105,23 @@ const OPERATION_PATHS: [(&str, Operation); 7] = [
 /// Names of scratch files, unique within the process.
 static SCRATCH_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// One attribute's state for a path (`git check-attr`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum AttrState {
+    #[default]
+    Unspecified,
+    Set,
+    Unset,
+    Value(String),
+}
+
+/// A path's `filter` and `text` attributes ([`WorktreeGit::attributes`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PathAttributes {
+    pub filter: AttrState,
+    pub text: AttrState,
+}
+
 /// Why a git command gave nothing usable.
 #[derive(Debug)]
 pub enum GitError {
@@ -336,6 +353,14 @@ impl WorktreeGit {
         self.vars
             .iter()
             .map(|(name, value)| (name.as_os_str(), value.as_os_str()))
+    }
+
+    /// This handle with `name` set to `value` on every later child (a
+    /// sync's `GIT_LFS_SKIP_SMUDGE=1`, task spec `reference-promotion`, "On
+    /// a hub"); nothing is run.
+    pub(crate) fn with_var(mut self, name: &str, value: &str) -> Self {
+        self.vars.insert(name.into(), value.into());
+        self
     }
 
     /// This handle with every later command stopped when it outlives
@@ -1093,6 +1118,94 @@ impl WorktreeGit {
             Some(1) => Ok(false),
             _ => Err(failed(COMMAND, &output)),
         }
+    }
+
+    /// `path`'s `filter` and `text` attributes as `.gitattributes` give
+    /// them now (`check-attr -z filter text -- :(literal)<path>`; task spec
+    /// `reference-promotion`, "LFS"): each `unspecified`, `set`, `unset` or
+    /// its value.
+    pub fn attributes(&self, path: &str) -> Result<PathAttributes, GitError> {
+        const COMMAND: &str = "check-attr";
+        let output = self.read(COMMAND, &["check-attr", "-z", "filter", "text", "--", path])?;
+        let mut fields = output.split(|&byte| byte == 0);
+        let mut attributes = PathAttributes::default();
+        while let (Some(_), Some(name), Some(info)) = (fields.next(), fields.next(), fields.next())
+        {
+            let state = match info {
+                b"unspecified" => AttrState::Unspecified,
+                b"set" => AttrState::Set,
+                b"unset" => AttrState::Unset,
+                value => AttrState::Value(String::from_utf8_lossy(value).into_owned()),
+            };
+            match name {
+                b"filter" => attributes.filter = state,
+                b"text" => attributes.text = state,
+                _ => {}
+            }
+        }
+        Ok(attributes)
+    }
+
+    /// The repository's object format (`rev-parse --show-object-format`):
+    /// `sha1` or `sha256`.
+    pub fn object_format(&self) -> Result<String, GitError> {
+        const COMMAND: &str = "rev-parse";
+        let output = self.read(COMMAND, &["rev-parse", "--show-object-format"])?;
+        one_line(&output)
+            .and_then(|line| std::str::from_utf8(line).ok())
+            .map(str::to_owned)
+            .ok_or(GitError::Unreadable { command: COMMAND })
+    }
+
+    /// git-lfs's version as `git lfs version` prints it (`git-lfs/3.8.0
+    /// (…)`), its major and minor read; `None` when git-lfs is not
+    /// installed (git names no `lfs` command, or the command fails).
+    pub fn lfs_version(&self) -> Result<Option<(u32, u32)>, GitError> {
+        let mut command = self.command(&[OsStr::new("lfs"), OsStr::new("version")], true);
+        command.env("GIT_LFS_SKIP_SMUDGE", "1");
+        let output = self.bounded(command)?;
+        if !output.status.success() {
+            return Ok(None);
+        }
+        let text = String::from_utf8_lossy(&output.stdout);
+        let version = text
+            .split_whitespace()
+            .next()
+            .and_then(|word| word.strip_prefix("git-lfs/"))
+            .map(|version| {
+                let mut parts = version.split('.');
+                let major = parts.next().and_then(|part| part.parse().ok());
+                let minor = parts.next().and_then(|part| {
+                    let digits: String = part.chars().take_while(char::is_ascii_digit).collect();
+                    digits.parse().ok()
+                });
+                (major.unwrap_or(0), minor.unwrap_or(0))
+            });
+        Ok(Some(version.unwrap_or((0, 0))))
+    }
+
+    /// The repository's LFS storage directory, where `git lfs clean` puts
+    /// an object: `lfs.storage` when set (relative to the common dir), else
+    /// `<common dir>/lfs`. Nothing is created.
+    pub fn lfs_storage(&self) -> Result<PathBuf, GitError> {
+        let common = self.common_dir()?;
+        let output = self.output(
+            &[
+                OsStr::new("config"),
+                OsStr::new("--get"),
+                OsStr::new("lfs.storage"),
+            ],
+            true,
+        )?;
+        let set = one_line(&output.stdout)
+            .and_then(|line| std::str::from_utf8(line).ok())
+            .filter(|line| output.status.success() && !line.is_empty())
+            .map(PathBuf::from);
+        Ok(match set {
+            Some(path) if path.is_absolute() => path,
+            Some(path) => common.join(path),
+            None => common.join("lfs"),
+        })
     }
 
     /// The blob OID of the top-relative `path` in `commit`'s tree (`ls-tree

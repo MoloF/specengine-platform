@@ -1,0 +1,52 @@
+{
+  "prefixes": [
+    "CHR",
+    "LOC",
+    "MEC",
+    "RULE"
+  ],
+  "kinds": [
+    "location",
+    "mechanic",
+    "persona",
+    "rule"
+  ],
+  "documents": {
+    "LOC-HARBOUR": {
+      "path": "docs/spec/world/harbour.md",
+      "kind": "location",
+      "home": "docs/spec/world/media",
+      "lfs": true,
+      "sections": [
+        "RULE-HARBOUR-TIDES"
+      ]
+    },
+    "CHR-MIRA": {
+      "path": "docs/spec/cast/mira.md",
+      "kind": "persona",
+      "home": "docs/spec/cast/art",
+      "lfs": false,
+      "sections": []
+    },
+    "MEC-TIDE": {
+      "path": "docs/spec/tide.md",
+      "kind": "mechanic",
+      "home": null,
+      "lfs": false,
+      "sections": []
+    },
+    "LOC-LIGHTHOUSE": {
+      "path": "docs/spec/world/lighthouse.md",
+      "kind": "location",
+      "home": "docs/spec/world/media",
+      "lfs": true,
+      "sections": []
+    }
+  },
+  "no_id": "docs/spec/world/almanac.md",
+  "team": {
+    "ann": "owner",
+    "lev": "lead of docs/spec/world/*.md",
+    "mira": "lead of docs/spec/world/**"
+  }
+}

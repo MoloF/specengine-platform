@@ -917,14 +917,14 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     // its record with 4d52ec3c's build: 13 over 12).
     // 16 over 15 since docs/features/comments.md CM1; 17 over 16 since
     // docs/features/work-references.md RF1.
-    pair.sql("PRAGMA user_version = 17;");
+    pair.sql("PRAGMA user_version = 18;");
     let ran = spec_path_once(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(
         &ran,
         "Reinstall spec and the plugin from one commit.",
         "schema 17",
     );
-    pair.sql("PRAGMA user_version = 16;");
+    pair.sql("PRAGMA user_version = 17;");
 
     // The root outside git.
     let loose = pair.scratch.copy("spec-a", "no-git");

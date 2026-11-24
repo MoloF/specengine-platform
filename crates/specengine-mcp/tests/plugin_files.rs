@@ -867,6 +867,57 @@ const PINS: &[(&str, &str)] = &[
         "0.51.0",
         "03ab5a15ea6f82abfa1b8ac31a54ebf76cec100398338d0604118182459efddc",
     ),
+    // reference-promotion (RM-0138, PR20: 0.51.0 -> 0.52.0, MINOR):
+    // plugin.json's version and `propose-spec-change`'s "Promoting a
+    // reference" section (its ID `RF-…`, no digit), the skill trimmed to
+    // keep its budget ([`PROMOTION_EDITS`]); set back, the tree hashes as
+    // 0.51.0's pin.
+    (
+        "0.52.0",
+        "a6cf645ffe3746e26245332ecb0ddd6776b9e0c6c66ad8c41907eb5228768182",
+    ),
+];
+
+/// reference-promotion (RM-0138, PR20): each edit of `propose-spec-change`,
+/// `(file, now, before)`, exactly as written: the "Promoting a reference"
+/// section naming the kind and `reference_id`, and the words the skill gave
+/// up to keep its 4 096-byte body.
+const PROMOTION_EDITS: [(&str, &str, &str); 7] = [
+    (
+        PROPOSE_SKILL,
+        "3. Write the span's whole new text, not a diff: keep every ID heading and its level, add no heading at the section's level or above it, change only what must change. Keep every rev as you read it: approval sets revisions. If it is editorial (wording, no meaning), say \"editorial\" in the rationale; the owner decides.\n",
+        "3. Write the span's whole new text, not a diff: keep every ID heading and its level, add no heading at the section's level or above it, change only what must change. Keep every rev as you read it: approval sets revisions. If you believe the change is editorial (wording, no meaning), say \"editorial\" in the rationale; the owner decides.\n",
+    ),
+    (
+        PROPOSE_SKILL,
+        "- A new spec file: `target` a free root-relative .md path inside the spec's directories; `\"base\": null`; the text the whole file, its ID in `id:`, if any.\n",
+        "- A new spec file: `target` a free root-relative .md path inside the spec's directories; `\"base\": null`; the text the whole file, its ID in the front-matter's `id:`, if any.\n",
+    ),
+    (
+        PROPOSE_SKILL,
+        "- Held by your own earlier proposal: never take the next free ID (it adds the node twice); name it in your report, ask the owner to reject it, resend once it is rejected.\n- Your new IDs are held while the proposal is open (the reply's `target_ids`).\n- The reply's `similar` lists what yours may repeat: prefer an update of it. One with `gates` true keeps yours unstored (`id` null) until you resend naming it in `distinct_from`.\n",
+        "- Held by your own earlier proposal: never take the next free ID (it adds the node twice); name that proposal in your report, ask the owner to reject it, resend once `get_proposal` shows it rejected.\n- Your new IDs are held while the proposal is open; the reply's `target_ids` lists the target and them.\n- The reply's `similar` lists what yours may repeat, with why: prefer an update of it. One with `gates` true keeps yours unstored (`id` null) until you resend naming it in `distinct_from`.\n",
+    ),
+    (
+        PROPOSE_SKILL,
+        "When an accepted decision becomes a rule only through your reading, send the update as `\"kind\": \"interpretation\"` with `decision` (its ID), `how` (how you applied it) and `why` (why it needed interpreting), a short paragraph each. A superseded decision is refused naming its successor: resend with that one.\n\n## Promoting a reference\n\nAsked to promote a stored file: `\"kind\": \"reference\"`, `reference_id` (`RF-\u{2026}`), `target` its document, `text` what matters (`\"\"`: the reference's own), no `base`.\n",
+        "When an accepted decision becomes a rule only through your reading of it, send the update as `\"kind\": \"interpretation\"` with `decision` (its ID), `how` (how you applied it) and `why` (why it needed interpreting), a short paragraph each. A superseded decision is refused naming its successor: resend with that one.\n",
+    ),
+    (
+        PROPOSE_SKILL,
+        "- `get_proposal` with its `id` gives its `status` and the owner's `decision_note`.\n",
+        "- `get_proposal` with its `id` as `proposal_id` gives its `status` and the owner's `decision_note`.\n",
+    ),
+    (
+        PROPOSE_SKILL,
+        "- A corrected text is a new proposal beside the earlier one: name the one it replaces in its `rationale` and report; a corrected create's earlier one holds its IDs.\n- Nothing waits for the owner: keep working; name the proposal and its new IDs in your report.\n",
+        "- A corrected text is a new proposal, the earlier one open beside it: name the one it replaces in its `rationale` and your report; a corrected create's earlier one holds its IDs (above).\n- Nothing waits for the owner: keep working; name the proposal and its new IDs in your report where your work assumes them.\n",
+    ),
+    (
+        PROPOSE_SKILL,
+        "{\"kind\": \"update\", \"target\": \"<ID>\", \"base\": \"<its span_hash>\", \"text\": \"<the span's whole new text>\", \"rationale\": \"<why>\", \"author_role\": \"<your-role>\"}\n",
+        "{\n  \"kind\": \"update\",\n  \"target\": \"<ID>\",\n  \"base\": \"<its span_hash>\",\n  \"text\": \"<the span's whole new text>\",\n  \"rationale\": \"<why>\",\n  \"author_role\": \"<your-role>\"\n}\n",
+    ),
 ];
 
 /// work-references (RM-0137, RF24): each skill edit of the slice, `(file,
@@ -1490,6 +1541,15 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.51.0",
         "25a26e6bcc25a777725d15a6576287d8034cceeabca5b16373aa9ff71bab7517",
+    ),
+    // reference-promotion (RM-0138, PR16, PR20): `propose_change`'s
+    // `reference` kind, `reference_id` and `name`; `ref_id` in a proposal
+    // document; `spec_references` in a card's context and a task package;
+    // `in_spec` in a reference list ([`as_of_0_51_0`] takes them out:
+    // 0.51.0's pin).
+    (
+        "0.52.0",
+        "947da44cc0458b3aea09b18ca9e44bb89fc45e4472166b885efeabb5850e3edb",
     ),
 ];
 
@@ -2610,7 +2670,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.51.0")
+        json!("0.52.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2763,11 +2823,40 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // reference-promotion (RM-0138, PR20: 0.51.0 -> 0.52.0, MINOR):
+    // plugin.json's version and [`PROMOTION_EDITS`]; all set back, the tree
+    // is 0.51.0's pinned content, every other skill and role byte-equal. M:
+    // plugin.json left at 0.51.0; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.52.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.52.0"),
+        "plugin.json's version"
+    );
+    let mut at_0_51_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.52.0\"",
+        "\"version\": \"0.51.0\"",
+    );
+    for (file, now, before) in PROMOTION_EDITS {
+        at_0_51_0 = edited(&at_0_51_0, file, now, before);
+    }
+    assert_eq!(
+        content_hash(&at_0_51_0),
+        PINS[PINS.len() - 2].1,
+        "0.52.0 changes plugin.json's version and propose-spec-change only"
+    );
+    let tree = at_0_51_0;
+    let pins_0_51_0 = &PINS[..PINS.len() - 1];
     // work-references (RM-0137, RF24: 0.50.0 -> 0.51.0, MINOR): plugin.json's
     // version and [`REFERENCES_EDITS`]; all set back, the tree is 0.50.0's
     // pinned content, every other skill and role byte-equal. M: plugin.json
     // left at 0.50.0; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.51.0"));
+    assert_eq!(
+        pins_0_51_0.last().map(|(version, _)| *version),
+        Some("0.51.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.51.0"),
@@ -2784,11 +2873,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     }
     assert_eq!(
         content_hash(&at_0_50_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_51_0[pins_0_51_0.len() - 2].1,
         "0.51.0 changes plugin.json's version and implement only"
     );
     let tree = at_0_50_0;
-    let pins_0_50_0 = &PINS[..PINS.len() - 1];
+    let pins_0_50_0 = &pins_0_51_0[..pins_0_51_0.len() - 1];
     // comments (RM-0136, CM20: 0.49.3 -> 0.50.0, MINOR): plugin.json's
     // version and [`COMMENTS_EDITS`]; all set back, the tree is 0.49.3's
     // pinned content, every other skill and role byte-equal. M: plugin.json
@@ -4676,6 +4765,82 @@ fn as_of_0_49_3(schemas: &mut Value) {
 /// in a card's context (one holds `parent`, `bundle` and `comments`) nor in
 /// a task package (one holds `bundle`, `practices` and `comments`), each out
 /// of its `required` too. Each change is counted on the tool it belongs to.
+/// reference-promotion (RM-0138): `schemas` as 0.51.0 listed them: no
+/// `reference` kind, `reference_id` or `name` in `propose_change`'s input;
+/// no `ref_id` in a proposal document (one holds `comment_id` and
+/// `ref_id`), no `spec_references` in a card's context or a task package
+/// (one holds `references` and `spec_references`), no `in_spec` in a
+/// reference list (one holds `next_before` and `in_spec`). Each change is
+/// counted on the tool it belongs to.
+fn as_of_0_51_0(schemas: &mut Value) {
+    fn strip(value: &mut Value, found: &mut Vec<&'static str>) {
+        let has = |value: &Value, keys: &[&str]| {
+            value
+                .get("properties")
+                .and_then(Value::as_object)
+                .is_some_and(|properties| keys.iter().all(|key| properties.contains_key(*key)))
+        };
+        if has(value, &["comment_id", "ref_id"]) {
+            assert!(without_property(value, "ref_id"));
+            found.push("proposal");
+        }
+        if has(value, &["references", "spec_references"]) {
+            assert!(without_property(value, "spec_references"));
+            found.push("spec references");
+        }
+        if has(value, &["next_before", "in_spec"]) {
+            assert!(without_property(value, "in_spec"));
+            found.push("in spec");
+        }
+        match value {
+            Value::Object(object) => {
+                for (_, inner) in object.iter_mut() {
+                    strip(inner, found);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    strip(item, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let tools = schemas.as_object_mut().expect("the schemas by tool");
+    let input = &mut tools
+        .get_mut("propose_change")
+        .expect("propose_change is listed")["inputSchema"];
+    assert!(without_property(input, "reference_id"), "reference_id");
+    assert!(without_property(input, "name"), "name");
+    let kinds = input["properties"]["kind"]["enum"]
+        .as_array_mut()
+        .expect("the kind enum");
+    let before = kinds.len();
+    kinds.retain(|kind| kind != "reference");
+    assert_eq!(kinds.len() + 1, before, "the reference kind");
+    let mut by_tool: BTreeMap<String, Vec<&'static str>> = BTreeMap::new();
+    for (name, schema) in tools.iter_mut() {
+        let mut found = Vec::new();
+        strip(&mut schema["outputSchema"], &mut found);
+        if !found.is_empty() {
+            without_unreferenced_defs(&mut schema["outputSchema"]);
+            by_tool.insert(name.clone(), found);
+        }
+    }
+    assert_eq!(
+        by_tool,
+        BTreeMap::from([
+            ("get_card".to_owned(), vec!["spec references"]),
+            ("get_proposal".to_owned(), vec!["proposal"]),
+            ("get_task".to_owned(), vec!["spec references"]),
+            ("list_references".to_owned(), vec!["in spec"]),
+            ("propose_change".to_owned(), vec!["proposal"]),
+            ("review_proposal".to_owned(), vec!["proposal"]),
+        ]),
+        "the tools the slice touched"
+    );
+}
+
 fn as_of_0_50_0(schemas: &mut Value) {
     fn strip(value: &mut Value, found: &mut Vec<&'static str>) {
         let has = |value: &Value, keys: &[&str]| {
@@ -5735,7 +5900,23 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[39].0, "0.49.0", "an entry for 0.49.0");
     assert_eq!(SCHEMA_PINS[40].0, "0.50.0", "an entry for 0.50.0");
     assert_eq!(SCHEMA_PINS[41].0, "0.51.0", "an entry for 0.51.0");
-    assert_eq!(SCHEMA_PINS.len(), 42, "0.51.0 the last entry");
+    assert_eq!(SCHEMA_PINS[42].0, "0.52.0", "an entry for 0.52.0");
+    assert_eq!(SCHEMA_PINS.len(), 43, "0.52.0 the last entry");
+    // reference-promotion (RM-0138, PR16, PR20): 0.51.0's schemas are
+    // today's without the slice's kind and keys. M: `SCHEMA_PINS` not
+    // appended.
+    let mut at_0_51_0 = schemas.clone();
+    as_of_0_51_0(&mut at_0_51_0);
+    let at_0_51_0_hash = schema_hash(&at_0_51_0);
+    assert_eq!(
+        at_0_51_0_hash, SCHEMA_PINS[41].1,
+        "0.51.0's schemas are today's without reference-promotion's kind and keys"
+    );
+    assert_ne!(
+        at_0_51_0_hash, current,
+        "reference-promotion changed the schemas"
+    );
+    let (schemas, current) = (at_0_51_0, at_0_51_0_hash);
     // work-references (RM-0137, RF24): 0.50.0's schemas are today's without
     // the slice's. M: `SCHEMA_PINS` not appended.
     let mut at_0_50_0 = schemas.clone();

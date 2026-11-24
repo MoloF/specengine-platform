@@ -21,8 +21,8 @@ use super::comments::{self, StoredComments};
 use super::refs;
 use super::{
     CARD_ITEMS_SCHEMA, COMMENTS_SCHEMA, ID_ORDER, MANDATE_SCHEMA, PLAIN_QUESTIONS_SCHEMA,
-    QUEUE_SCHEMA_VERSION, QueueError, REFS_SCHEMA, SqliteQueue, cards, corrupt, migrate, stage,
-    tasks, user_version,
+    PROMOTION_SCHEMA, QUEUE_SCHEMA_VERSION, QueueError, REFS_SCHEMA, SqliteQueue, cards, corrupt,
+    migrate, stage, tasks, user_version,
 };
 
 use crate::error::{Db, StoreError};
@@ -41,8 +41,10 @@ use crate::schema;
 /// 11 appends (`docs/canon/card-questions.md` "The rule"), then a
 /// question's `gist` and `matters` step 13 appends
 /// (`docs/features/plain-questions.md` "Acceptance criteria", PQ8), then the
-/// comment an item is raised from step 15 appends (task spec `comments`).
-pub const PROPOSAL_COLUMNS: [&str; 51] = [
+/// comment an item is raised from step 15 appends (task spec `comments`),
+/// then the reference a promotion names step 17 appends (task spec
+/// `reference-promotion`).
+pub const PROPOSAL_COLUMNS: [&str; 52] = [
     "id",
     "project",
     "kind",
@@ -95,6 +97,7 @@ pub const PROPOSAL_COLUMNS: [&str; 51] = [
     "gist",
     "matters",
     "comment_id",
+    "ref_id",
 ];
 
 /// The first queue schema with `tasks` and `runs` (step 3 → 4).
@@ -139,6 +142,10 @@ const SCHEMA_11_COLUMNS: usize = 48;
 /// proposal column): the first of [`PROPOSAL_COLUMNS`].
 const SCHEMA_13_COLUMNS: usize = 50;
 
+/// The columns of queue schemas 15 and 16's `proposals` (step 16 adds no
+/// proposal column): the first of [`PROPOSAL_COLUMNS`].
+const SCHEMA_15_COLUMNS: usize = 51;
+
 /// The `proposals` columns of queue schema `schema`, in table order: 1 to
 /// 15 (this build's; step 14 adds no proposal column) are known, a dump of
 /// any restores; `None` for any other.
@@ -153,7 +160,8 @@ pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
         DRIFT_SCHEMA..CARD_ITEMS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_8_COLUMNS]),
         CARD_ITEMS_SCHEMA..PLAIN_QUESTIONS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_11_COLUMNS]),
         PLAIN_QUESTIONS_SCHEMA..COMMENTS_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_13_COLUMNS]),
-        COMMENTS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
+        COMMENTS_SCHEMA..PROMOTION_SCHEMA => Some(&PROPOSAL_COLUMNS[..SCHEMA_15_COLUMNS]),
+        PROMOTION_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&PROPOSAL_COLUMNS),
         _ => None,
     }
 }

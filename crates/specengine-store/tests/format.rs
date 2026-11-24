@@ -475,14 +475,16 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
 
 /// docs/features/release-tail.md "The grammar (RT9, RT10)", RT12: rule (7)
 /// taking a guide citation's `#ID` and `@rev` changes a stored reference set,
-/// so `INDEX_FORMAT` is 21 (no table, no column), and the history is the
-/// twenty earlier lines, verbatim (specengine-guide's `20` among them),
-/// followed by exactly one `21 <hash>` line (no earlier `21`). Replaces
-/// specengine-guide's format-20 pin, whose line stays verbatim. M:
-/// `INDEX_FORMAT` kept at 20; an earlier line edited.
+/// so `INDEX_FORMAT` was 21 (no table, no column).
+/// docs/canon/work-references-promotion-surfaces.md "Index format 22": the
+/// `promoted` table makes it 22, and the history is the twenty-one earlier
+/// lines, verbatim (release-tail's `21` among them), followed by exactly one
+/// `22 <hash>` line (no earlier `22`). Replaces release-tail's format-21 pin, whose
+/// line stays verbatim. M: `INDEX_FORMAT` kept at 21; an earlier line
+/// edited.
 #[test]
-fn release_tail_pins_format_21_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 21);
+fn reference_promotion_pins_format_22_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 22);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -512,11 +514,12 @@ fn release_tail_pins_format_21_with_one_new_history_line() {
         "18 dcbb8c09cd4c7fb1b397bc190ef6dbf09de5a5cb622983880cfffb9b845afe59",
         "19 8c3fd9327abf7c9b7fbf7549408aad98f7a5cb5c5d2ff0cb54cfa8fabc8cdc80",
         "20 0b3d0d8888ddf6bc4ec8393424b3073f3a390dd8d6908bd58e74ec7c2068b1c2",
+        "21 7cdb880b284ca344e61d617ac5da53a01c8b834edaa63bd1c2de7a6caa54e910",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "specengine-guide's history plus exactly one new line:\n{history}"
+        "release-tail's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -525,15 +528,15 @@ fn release_tail_pins_format_21_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "21", "the new line is format 21: {last}");
+    assert_eq!(format, "22", "the new line is format 22: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("21 ")).count(),
+        lines.iter().filter(|line| line.starts_with("22 ")).count(),
         1,
-        "no earlier `21` line"
+        "no earlier `22` line"
     );
 }
 
@@ -615,6 +618,21 @@ fn release_tail_the_dump_differs_from_20s_only_in_index_meta() {
         stamped_back(&format_dump(), "20"),
         "0b3d0d8888ddf6bc4ec8393424b3073f3a390dd8d6908bd58e74ec7c2068b1c2",
         "format 20's dump, but for the stamp"
+    );
+}
+
+/// docs/canon/work-references-promotion-surfaces.md "Index format 22": one table more,
+/// `promoted`, written from `references:` alone, which no dumped corpus
+/// writes, so the dump differs from format 21's only in `index_meta` (the
+/// history's `22` line is format 21's dump but for the stamp). M: rows
+/// written for a document with no `references:`; another table or column
+/// moved.
+#[test]
+fn reference_promotion_the_dump_differs_from_21s_only_in_index_meta() {
+    assert_eq!(
+        stamped_back(&format_dump(), "21"),
+        "7cdb880b284ca344e61d617ac5da53a01c8b834edaa63bd1c2de7a6caa54e910",
+        "format 21's dump, but for the stamp"
     );
 }
 
@@ -905,7 +923,7 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
     assert_eq!(version, QUEUE_SCHEMA_VERSION);
     // Queue schema 11 since docs/features/card-questions.md S1; 12 since
     // docs/features/task-mandate.md M5.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
     conn.execute(
         "UPDATE proposals SET id = 'PR-9999' WHERE id = 'PR-0002'",
         [],

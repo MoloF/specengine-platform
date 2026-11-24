@@ -39,6 +39,9 @@
 //! `reference_prepare`) and `reference_delete`; `…/blobs` the one binary
 //! door, a PUT alone, and `…/blobs/<b3>` a read that takes no turn
 //! ([`crate::blobs`]). No agent tool deletes a reference or uploads a file.
+//! `…/references/<id>/promote` a POST (task spec `reference-promotion`
+//! D11), through the board's door, the library's `promote_reference`: a
+//! proposal stored, nothing written under the root; a person confirms it.
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); `/api/guide` and `/api/guide/<topic>`
 //! SpecEngine's own guide as this build embedded it, no project, no turn,
@@ -106,7 +109,7 @@ use specengine_cli::{
     CardSplitBody, CatalogRequest, CheckRequest, CliError, CommentAddBody, CommentDeleteRequest,
     CommentEditBody, CommentListRequest, CommentMentionsRequest, CommentRaiseBody, DeliveryRequest,
     Exit, FlowRequest, GraphRequest, GuideRequest, HealthRequest, InboxRequest, IndexTrust,
-    LastChangeCache, LibraryRequest, LockDiffRequest, Outcome, ReferenceAddBody,
+    LastChangeCache, LibraryRequest, LockDiffRequest, Outcome, PromoteBody, ReferenceAddBody,
     ReferenceDeleteRequest, ReferenceListRequest, ReviewRequest, RoadmapRequest, RoundAnswersBody,
     RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest,
     TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest, UnstageRequest, View,
@@ -456,6 +459,12 @@ pub(crate) fn router(app: Shared) -> Router {
             delete(delete_reference)
                 .fallback(only_delete)
                 .noted("/api/projects/{p}/references/{id}"),
+        )
+        .route(
+            "/api/projects/{p}/references/{id}/promote",
+            post(promote_reference)
+                .fallback(only_post)
+                .noted("/api/projects/{p}/references/{id}/promote"),
         )
         .route(
             "/api/projects/{p}/blobs",
@@ -2012,6 +2021,50 @@ async fn add_reference(State(app): State<Shared>, request: Request) -> Result<Re
         request.prepared = prepared;
         specengine_cli::reference_add(env, globals, &request)
             .map(|outcome| Outcome::Reference(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// The most bytes of a promotion's body.
+const PROMOTE_BODY_MAX: usize = 65_536;
+
+/// `POST …/references/<id>/promote` `{to, name, matters, rationale, as}`:
+/// `spec propose reference <id> --to … --brief` (task spec
+/// `reference-promotion` D11), past the board's door: the served slug
+/// (404), a same-origin page (403), JSON (415), at most 64 KiB (413), the
+/// body (400: an unknown key, no `to` or `rationale`); on a hub `as` bound
+/// to the login (403), the proposal authored by it as a comment's raise
+/// authors its item. One call in the project's turn: 200 the brief review,
+/// 404 `{id, reason}` an unknown reference or target, 409 `{id, reason}` a
+/// refusal, 503 cannot run. Nothing under the root is written. A plain
+/// write: `[team]` is not read.
+async fn promote_reference(
+    State(app): State<Shared>,
+    request: Request,
+) -> Result<Response, Refusal> {
+    let (project, rest) = app.project_of(request.uri())?;
+    same_origin(request.headers())?;
+    let raw = rest
+        .strip_prefix("references/")
+        .and_then(|rest| rest.strip_suffix("/promote"))
+        .filter(|raw| !raw.is_empty() && !raw.contains('/'))
+        .ok_or_else(|| unknown_route_of(request.uri()))?;
+    let id = percent_decode(raw).map_err(Refusal::bad_request)?;
+    let login = login_of(&request);
+    json_typed(request.headers())?;
+    let bytes = body(request, PROMOTE_BODY_MAX).await?;
+    let mut body =
+        PromoteBody::from_json(&bytes).map_err(|error| Refusal::bad_request(error.message))?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    Ok(run(project, move |env, globals| {
+        let request = body.request(
+            id,
+            utc_now(),
+            process_git(env),
+            login.map(|Login(login)| login),
+        )?;
+        specengine_cli::promote_reference(env, globals, &request)
+            .map(|outcome| Outcome::Promotion(Box::new(outcome)))
     })
     .await)
 }

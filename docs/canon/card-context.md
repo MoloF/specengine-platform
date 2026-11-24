@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin, ui]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 ---
 
 # Card context: a task read with its context in one call
@@ -20,6 +20,7 @@ Built by `card-context` (RM-0108, plugin 0.39.0) on accepted decisions alone: a 
 - **Live text**: the bundle reads the corpus now, never the card's `snapshot`; the card's `mark` says when its brief changed.
 - **Comments** (ADR-0087): the card's newest live comments, at most 20 within 8 192 characters, as `context.comments:` and `context.comment:` lines after `context.parent.goal:`, before `context.bundle:`, counted in `U`, never in the bundle, so `bundle_hash` ignores them (`comments.md` "Agents' context").
 - **References** (ADR-0088): the card's newest 10 live references within 4 096 characters, as `context.references:`, `context.reference:` and `context.images:` lines after the comments', counted in `U`, outside the bundle; MCP adds the named images after the text (`work-references-surfaces.md` "A card's context and the brief").
+- **Spec references** (ADR-0089): the entries of every target's document's `references:` key, at most 20 within 2 048 characters, as `context.spec-references:` and `context.spec-reference:` lines after `context.images:`, counted in `U`, outside the bundle (`work-references-promotion-surfaces.md` "Documents and text").
 - **Practices** (ADR-0084): the bundle is asked with the card's discipline (layer 10), and `--context` fills `practices` and `cited`, their `practices:` and `cited:` lines counted in `U` (`card-practices.md`).
 
 ## The room
@@ -40,9 +41,9 @@ context.bundle: b3:<64 hex digits>
 
 `context.parent:` is `<id> | <title>` or `-`; `context.parent.goal:` the goal through `one_line`, or `-` (no parent, no goal); `context.bundle:` the `bundle_hash` or `-`, the body only when made. Tokens, characters and bytes are in the JSON. The context's notes print as `note: context: <note>` after every message the read printed before, then the bundle's own `note:` and `warning:` lines verbatim, all outside the cut. The whole text, body included, goes through `escape_controls`.
 
-JSON: `context` is the card document's 35th key, between `history` and `practices` (`cards.md` "Documents and events"): `null`, or `{parent: {id, title, goal} | null, bundle, comments: {total, listed}, references: {total, listed, images}, notes}`. `bundle` is `spec bundle --json`'s document exactly, 13 keys (`spec-cli-bundle.md` "Output"), from the bundle's own serializer, equal as a value to `spec bundle <REFs> --budget N --json`; never its exit-1 document. `notes` drop the `context: ` prefix; the document's top-level `notes` hold none of them.
+JSON: `context` is the card document's 35th key, between `history` and `practices` (`cards.md` "Documents and events"): `null`, or `{parent: {id, title, goal} | null, bundle, comments: {total, listed}, references: {total, listed, images}, spec_references: {total, listed}, notes}`. `bundle` is `spec bundle --json`'s document exactly, 13 keys (`spec-cli-bundle.md` "Output"), from the bundle's own serializer, equal as a value to `spec bundle <REFs> --budget N --json`; never its exit-1 document. `notes` drop the `context: ` prefix; the document's top-level `notes` hold none of them.
 
-Library: `CardShowRequest` has `context: bool`, `budget: Option<i64>`, set at every construction; `CardShowOutcome.context: Option<CardContext>`; `CardContext {parent: Option<CardContextParent>, bundle: Option<BundleOutcome>, comments: ContextComments, references: ContextReferences, notes}`, `CardContextParent {id, title, goal}`, both exported. `BundleRequest` and `bundle()` are unchanged.
+Library: `CardShowRequest` has `context: bool`, `budget: Option<i64>`, set at every construction; `CardShowOutcome.context: Option<CardContext>`; `CardContext {parent: Option<CardContextParent>, bundle: Option<BundleOutcome>, comments: ContextComments, references: ContextReferences, spec_references: ContextSpecReferences, notes}`, `CardContextParent {id, title, goal}`, both exported. `BundleRequest` and `bundle()` are unchanged.
 
 ## Notes and exits
 
@@ -80,6 +81,7 @@ Writes: the data directory alone (the bundle's index update and code refresh), n
 - **Escaping.** `escape_controls` runs over the body too, so on a corpus holding C0/C1 controls or bidi marks the body's bytes differ from `spec bundle`'s and `get_context_bundle`'s; and escaping can pass 40 000, the residue `mcp-read.md` "Size" names.
 - **The frame over the room** reads `… over the <room>-character ceiling, whatever the budget (--budget N) …: name fewer targets`: it names `--budget` when none was passed, and the room, not the budget, limits it. To fold into the `no room` note.
 - **`GetCardArgs.budget`'s doc** names 4294967295 and 10000 with no assert.
+- **A bundle failing before its freshness step** (an unreadable config) drops the walk's warnings: only the `no bundle:` note shows.
 - **Older servers**, a terminal's or a hub's at 0.38, refuse `context` (`unknown field`); `read-spec` names the fallback.
 
 ## Tests

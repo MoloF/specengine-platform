@@ -847,7 +847,12 @@ pub fn settle(corpus: &str, section: &str, cases: BTreeMap<String, Value>) {
     assert_eq!(keys, stored_keys, "{corpus} {section}: the cases");
     let cases: BTreeMap<String, Value> = cases
         .into_iter()
-        .map(|(case, value)| (case, without_null_comment_id(without_null_cited(value))))
+        .map(|(case, value)| {
+            (
+                case,
+                without_null_comment_id(without_null_ref_id(without_null_cited(value))),
+            )
+        })
         .collect();
     for (case, value) in &cases {
         let want = &stored[case];
@@ -890,6 +895,46 @@ pub fn without_null_cited(value: Value) -> Value {
             Value::Object(
                 map.into_iter()
                     .map(|(key, item)| (key, without_null_cited(item)))
+                    .collect(),
+            )
+        }
+        other => other,
+    }
+}
+
+/// docs/canon/work-references-promotion-surfaces.md "Queue schema 17 and dump format 10"
+/// (`proposals.ref_id`):
+/// every proposal document gains `ref_id` after `comment_id`, `null` but on a
+/// `reference`, so an answer is 0.47.0's but for one `"ref_id":null,` in each
+/// proposal document it prints (`--json`, carried as text; in a parsed
+/// reply, the key of an object holding `diagnostics`), and a review's text
+/// its one `ref_id: -` line. Exactly that is taken out before a golden
+/// compares (before [`without_null_comment_id`]); nothing else is touched,
+/// and a `ref_id` that is not `null` stays (and differs).
+pub fn without_null_ref_id(value: Value) -> Value {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim_start();
+            if (trimmed.starts_with('{') || trimmed.starts_with('['))
+                && text.contains("\"diagnostics\":")
+                && serde_json::from_str::<Value>(&text).is_ok()
+            {
+                Value::String(text.replace(",\"ref_id\":null,", ","))
+            } else if text.contains("\nwhy: ") {
+                // A review's text: its `ref_id: -` line after `comment_id:`.
+                Value::String(text.replace("\nref_id: -\n", "\n"))
+            } else {
+                Value::String(text)
+            }
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(without_null_ref_id).collect()),
+        Value::Object(mut map) => {
+            if map.contains_key("diagnostics") && map.get("ref_id") == Some(&Value::Null) {
+                map.remove("ref_id");
+            }
+            Value::Object(
+                map.into_iter()
+                    .map(|(key, item)| (key, without_null_ref_id(item)))
                     .collect(),
             )
         }

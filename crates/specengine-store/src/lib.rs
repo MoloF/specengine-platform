@@ -127,6 +127,7 @@ mod index;
 mod layer_c;
 mod outputs;
 mod practices;
+mod promoted;
 mod queue;
 mod read;
 mod roles;
@@ -176,6 +177,7 @@ pub use layer_c::{
 };
 pub use outputs::{Committed, CommittedTree, HeadFile, committed_tree};
 pub use practices::PracticeRow;
+pub use promoted::PromotedRow;
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, CARD_COLUMNS, CardAccept, CardAccepted, CardChange, CardClear,
     CardCleared, CardClearing, CardDeparture, CardEdit, CardItems, CardList, CardRefresh, Choice,
@@ -221,8 +223,9 @@ pub use source::{GitIndex, Listing, Probed, Source, StatKey, WorkingTree};
 pub use sparse::{SparseError, SparseSet, sparse_set};
 pub use symbols::{SymbolHit, SymbolTier};
 pub use sync::{
-    ChangedPaths, CommitFailure, Looked, MergedTree, NetFailure, Pushed, Relation, Replacement,
-    SyncGit, TreeEntry, Upstream, ahead_behind, file_mode, holds_secret, named, sync_place,
+    ChangedPaths, CommitFailure, LFS_SKIP_SMUDGE, LfsUpload, Looked, MergedTree, NetFailure,
+    Pushed, Relation, Replacement, SyncGit, TreeEntry, Upstream, ahead_behind, file_mode,
+    holds_secret, named, sync_place,
 };
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use verify_git::{
@@ -230,9 +233,10 @@ pub use verify_git::{
     IndexRefusal, MISSING_COMMIT_BLOB, ObjectBlob, VerifyGit,
 };
 pub use worktree::{
-    BatchBlob, BlobBatch, ChangedPath, CreateFileError, CreatedFile, DiskName, FileChange,
-    GitError, LastCommits, ListedWorktree, LoggedCommit, Merge, Operation, PlaceError, STDERR_MAX,
-    StatusEntry, WorktreeGit, create_file, disk_name, replace_file, same_repository,
+    AttrState, BatchBlob, BlobBatch, ChangedPath, CreateFileError, CreatedFile, DiskName,
+    FileChange, GitError, LastCommits, ListedWorktree, LoggedCommit, Merge, Operation,
+    PathAttributes, PlaceError, STDERR_MAX, StatusEntry, WorktreeGit, create_file, disk_name,
+    replace_file, same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change
@@ -336,7 +340,13 @@ pub use worktree::{
 /// reference to `S-2` and a stored reference set changes; no table, no
 /// column. An unchanged file is re-parsed only on a new stamp
 /// (`docs/features/release-tail.md` "The grammar (RT9, RT10)").
-pub const INDEX_FORMAT: u32 = 21;
+///
+/// 22: the typed front-matter key `references` (`fields.references`), no
+/// longer kept in `extra` with `unknown-key`, and the table `promoted`, a
+/// document's kept entries, their paths root-relative, written by every
+/// update for every document (`docs/canon/work-references-promotion-surfaces.md`
+/// "Index format 22").
+pub const INDEX_FORMAT: u32 = 22;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

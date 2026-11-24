@@ -312,6 +312,24 @@ impl Reader<'_> {
             "summarises" => {
                 self.out.fields.summarises = self.string_list(&name, &value, line);
             }
+            // Every list entry as written, a non-text one kept as its value;
+            // the check judges each one (`reference-entry`), the index keeps
+            // the passing ones; never counted. Only a value that is no list
+            // is `frontmatter-type`, so a bad entry never nulls the norm hash
+            // (task spec `reference-promotion` D15).
+            "references" => match &value.value {
+                YValue::Seq(items) => {
+                    let entries = items
+                        .iter()
+                        .map(|item| {
+                            let at = self.line_or(item, line);
+                            self.fm_value(&name, item, at)
+                        })
+                        .collect();
+                    self.out.fields.references = Some(entries);
+                }
+                _ => self.mistyped(&name, &value, line, "a list of strings"),
+            },
             _ => {
                 self.out.diagnostics.push(Diagnostic::new(
                     DiagnosticCode::UnknownKey,
@@ -870,7 +888,7 @@ pub enum KeyType {
 
 /// Every typed front-matter key and its [`KeyType`]; any other key is
 /// untyped (`unknown-key`, kept in `extra`).
-pub const TYPED_KEYS: [(&str, KeyType); 34] = [
+pub const TYPED_KEYS: [(&str, KeyType); 35] = [
     ("id", KeyType::Text),
     ("kind", KeyType::Text),
     ("class", KeyType::Text),
@@ -905,6 +923,7 @@ pub const TYPED_KEYS: [(&str, KeyType); 34] = [
     ("tags", KeyType::List),
     ("disciplines", KeyType::List),
     ("summarises", KeyType::List),
+    ("references", KeyType::List),
 ];
 
 /// Keys with a type: a null value leaves them absent.

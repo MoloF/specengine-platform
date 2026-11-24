@@ -1034,19 +1034,20 @@ fn ac02_a_queue_of_a_newer_schema_exits_2_naming_both() {
     // R1's at 8a43e5d: 12 over 11; plain-questions' with 4d52ec3c's build: 13
     // over 12.
     // 16 over this build's 15 since docs/features/comments.md CM1; 17 over
-    // 16 since docs/features/work-references.md RF1.
-    pair.sql("PRAGMA user_version = 17;");
+    // 16 since docs/features/work-references.md RF1; 18 over 17 since
+    // docs/features/reference-promotion.md.
+    pair.sql("PRAGMA user_version = 18;");
     for args in [vec!["inbox"], vec!["review", "PR-0001"]] {
         let run = pair.spec_piped(&pair.main, &args, b"");
         run.code(2);
         assert!(
             run.stderr
-                .contains("schema version 17, this build knows 16"),
+                .contains("schema version 18, this build knows 17"),
             "{args:?}: {}",
             run.show()
         );
     }
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "17", "left alone");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "18", "left alone");
 }
 
 // ------------------------------------------------------------------ AC-12
@@ -1140,7 +1141,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
         json.contains(&format!(
             "\"staged\":{{\"decision\":\"reject\",\"reason\":\"asked before\"}},\"staged_at\":\
              \"{STAGED}\",\"interpretation\":null,\"card_id\":null,\"why\":null,\"comment_id\":null,\
-             \"similar\":null,\"notes\":"
+             \"ref_id\":null,\"similar\":null,\"notes\":"
         )),
         "{json}"
     );
@@ -1164,7 +1165,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
     let bytes = export(&pair, &pair.home, &dumps.join("q.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":9,\"queue_schema\":16,"),
+        rows[0].starts_with("{\"format\":10,\"queue_schema\":17,"),
         "{}",
         rows[0]
     );
@@ -1173,7 +1174,7 @@ fn ac12_review_and_inbox_show_the_stage_and_backups_keep_it() {
         .filter(|row| {
             row.contains(&format!(
                 "\"staged_at\":\"{STAGED}\",\"interpretation\":null,\"drift\":null,\
-                 \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}}}"
+                 \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null,\"ref_id\":null}}}}"
             ))
         })
         .count();
@@ -1212,11 +1213,11 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let v6 = lines(&current);
     assert_eq!(
         v6[0],
-        "{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":1,\
+        "{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\",\"proposals\":1,\
          \"tasks\":0,\"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":1}"
     );
     let tail = ",\"staged\":null,\"staged_at\":null,\"interpretation\":null,\"drift\":null,\
-                \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
+                \"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null,\"ref_id\":null}}";
     assert!(v6[1].ends_with(tail), "{}", v6[1]);
     let write = |name: &str, rows: &[String]| {
         let file = dumps.join(name);
@@ -1229,12 +1230,12 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // dump.
     // docs/features/card-questions.md: `card_id`, `why` after them.
     // docs/features/comments.md: `comment_id` last.
-    let drift = ",\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
+    let drift = ",\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null,\"ref_id\":null}}";
     for schema in [6, 7] {
         let mut older = v6.clone();
         older[0] = older[0]
             .replacen(
-                "\"format\":9,\"queue_schema\":16,",
+                "\"format\":10,\"queue_schema\":17,",
                 &format!("\"format\":2,\"queue_schema\":{schema},"),
                 1,
             )
@@ -1261,11 +1262,11 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     // Format 2, schema 5 (docs/features/kind-interpretation.md "Data"): its
     // 43 columns; restores, `interpretation` NULL, and re-exports as the
     // current dump.
-    let interpretation = ",\"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null}}";
+    let interpretation = ",\"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\"comment_id\":null,\"ref_id\":null}}";
     let mut v5 = v6.clone();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )
@@ -1282,7 +1283,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let mut v4 = v6.clone();
     v4[0] = v4[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":2,\"queue_schema\":4,",
             1,
         )
@@ -1349,7 +1350,7 @@ fn ac12_older_dumps_restore_and_formats_hold_their_schemas() {
     let bytes = export(&pair, &pair.home, &dumps.join("from-4.jsonl"));
     let rows = lines(&bytes);
     assert!(
-        rows[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
+        rows[0].starts_with("{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\",\"proposals\":1,\"tasks\":1,"),
         "{}",
         rows[0]
     );

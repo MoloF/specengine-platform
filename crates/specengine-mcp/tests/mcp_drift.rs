@@ -293,7 +293,7 @@ fn report_drift_answers_as_its_twin_and_writes_only_the_queue() {
     // 54 since docs/features/collision-pairs.md PP8 (`pair`, `null`); 55
     // since docs/features/department-practices.md "Proposals: `cited`" (`cited`);
     // 56 since docs/features/comments.md (`comment_id`).
-    assert_eq!(document.as_object().map(serde_json::Map::len), Some(56));
+    assert_eq!(document.as_object().map(serde_json::Map::len), Some(57));
     assert_eq!(document["similar"], Value::Null);
     assert_eq!(document["kind"], json!("drift"));
     assert_eq!(document["preview"], Value::Null);

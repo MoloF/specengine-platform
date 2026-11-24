@@ -508,13 +508,14 @@ const KEPT: &str = "docs/spec/practices/art/2025-photoreal.md|art\n\
 
 /// DP4: `INDEX_FORMAT` 19 (20 since docs/features/specengine-guide.md, the
 /// typed `summarises`; 21 since docs/features/release-tail.md, rule (7)'s
-/// citation tail); after `spec index` the table holds [`KEPT`], each file's
-/// `ord` distinct.
+/// citation tail; 22 since docs/features/reference-promotion.md, the
+/// `promoted` table); after `spec index` the table holds [`KEPT`], each
+/// file's `ord` distinct.
 #[test]
 fn dp4_the_table_holds_the_kept_entries() {
     assert_eq!(
         specengine_store::INDEX_FORMAT,
-        21,
+        22,
         "M: the format left at 18"
     );
     let scene = Scene::files("dp4-table", false);
@@ -531,8 +532,9 @@ fn dp4_the_table_holds_the_kept_entries() {
     );
     assert_eq!(
         sql(&db, "SELECT value FROM index_meta WHERE key = 'format';"),
-        "21\n",
-        "the stored stamp is the build's (20 since specengine-guide, 21 since release-tail)"
+        "22\n",
+        "the stored stamp is the build's (20 since specengine-guide, 21 since release-tail, 22 \
+         since reference-promotion)"
     );
 }
 

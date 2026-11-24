@@ -370,12 +370,14 @@ fn the_shipping_config_writes_the_root_and_the_archive_shard() {
         } else if claims == ["docs/canon/comments*.md", "docs/canon/work-*.md"] {
             // The talk and reference canons (docs/features/work-references.md
             // "Pins that move"): comments' two pages and the references' two
-            // (its surfaces split off under the Tier 2 cap, as comments' were).
+            // (its surfaces split off under the Tier 2 cap, as comments' were);
+            // the promotion's page since docs/features/reference-promotion.md.
             assert_eq!(
                 claimed_live,
                 [
                     "docs/canon/comments-surfaces.md",
                     "docs/canon/comments.md",
+                    "docs/canon/work-references-promotion.md",
                     "docs/canon/work-references-surfaces.md",
                     "docs/canon/work-references.md"
                 ]

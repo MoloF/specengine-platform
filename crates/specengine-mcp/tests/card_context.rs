@@ -81,11 +81,15 @@ const G1: &str = "Readers learn stamina before they sprint.";
 // steps back to the value this slice pinned, `7de2fdaa…`).
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
-const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/canon/work-references-promotion-surfaces.md "MCP": the
+// `propose_change` line names `reference` (its create clause trimmed).
+const INSTRUCTIONS_B3: &str = "8ba19da38733c3ad0a51d1d6d5bbe8124cba6e3aaef4755c8e420c974a862225";
 // Re-pinned by docs/features/work-references.md RF20: the hub's text names
 // `list_references`, `get_reference` and `add_reference`.
+// Re-pinned by docs/canon/work-references-promotion-surfaces.md "MCP": the hub's
+// `propose_change` line names `reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
+    "f2cadf741aff02cc8db12aa163a7a71ade67eaf2cddfdd8ffc918407730c6950";
 
 /// CC9: the description's head and its sentence, as the spec gives them.
 const GET_HEAD: &str = "One card: the same as `spec card show C --marks [--history] [--context \
@@ -416,7 +420,8 @@ fn cc7_get_card_is_the_cli_read_with_context() {
     assert!(
         text.contains(&format!(
             "history: -\npractices: -\ncited: -\ncontext.parent: -\ncontext.parent.goal: -\n\
-             context.comments: -\ncontext.references: -\ncontext.bundle: {hash}\n{body}"
+             context.comments: -\ncontext.references: -\ncontext.spec-references: -\n\
+             context.bundle: {hash}\n{body}"
         )),
         "{text}"
     );
@@ -461,10 +466,18 @@ fn cc7_the_schemas_hold_the_context_keys() {
     let mut keys = properties(context);
     keys.sort();
     // `comments` since docs/features/comments.md CM10, `references` since
-    // docs/features/work-references.md RF15.
+    // docs/features/work-references.md RF15, `spec_references` since
+    // docs/features/reference-promotion.md PR6.
     assert_eq!(
         keys,
-        ["bundle", "comments", "notes", "parent", "references"],
+        [
+            "bundle",
+            "comments",
+            "notes",
+            "parent",
+            "references",
+            "spec_references"
+        ],
         "M: notes dropped"
     );
     let shape = object(context);

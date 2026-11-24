@@ -134,6 +134,7 @@ impl Pair {
                 &super::TRACE_ALMANAC,
                 &super::STUDIO_LAMP,
                 &super::AUTO_MINI,
+                &super::PROMOTE_MINI,
             ])
             .find(|(name, _)| *name == fixture)
             .map_or_else(

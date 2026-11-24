@@ -488,8 +488,8 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     // Schema 11 and 48 columns since docs/features/card-questions.md S1; 46
     // since docs/features/drift-queue.md "Queue schema 8". Schema 12 since
     // docs/features/task-mandate.md M5, `proposals` unchanged.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 51);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 52);
     assert_eq!(PROPOSAL_COLUMNS[24..35], INTAKE_COLUMNS);
     assert_eq!(PROPOSAL_COLUMNS[35..40], RECORD_COLUMNS);
     assert_eq!(PROPOSAL_COLUMNS[40], "task_id");
@@ -505,7 +505,8 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
             "why",
             "gist",
             "matters",
-            "comment_id"
+            "comment_id",
+            "ref_id"
         ]
     );
     assert_eq!(proposal_columns(1), Some(&PROPOSAL_COLUMNS[..24]));
@@ -532,9 +533,11 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..50]));
     assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..50]));
     // 51 at 15 (docs/features/comments.md CM1: `comment_id`).
-    assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(17), None);
+    assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..51]));
+    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..51]));
+    // 52 since docs/features/reference-promotion.md: step 17 appends `ref_id`.
+    assert_eq!(proposal_columns(17), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(18), None);
 
     let scratch = Scratch::new("qi-v1");
     let db = scratch.db("q");
@@ -554,16 +557,16 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert_eq!(row.id(), Some("PR-0007"));
     assert_eq!(row.columns[2].as_deref(), Some("update"));
     assert_eq!(row.columns[23].as_deref(), Some(T0));
-    assert_eq!(row.columns.len(), 51, "{row:?}");
+    assert_eq!(row.columns.len(), 52, "{row:?}");
     assert!(
         row.columns[24..].iter().all(Option::is_none),
-        "the twenty-six later columns None: {row:?}"
+        "the twenty-eight later columns None: {row:?}"
     );
     assert!(state.tasks.is_empty() && state.runs.is_empty(), "no task");
 
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps the schema");
     // 12 since docs/features/task-mandate.md M5.
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
     let tables: Vec<String> = sqlite3(
         &db,
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('tasks', 'runs') \
@@ -592,9 +595,10 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     let proposals = dump.lines().next().expect("the proposals line");
     assert!(
         // 26 since docs/features/plain-questions.md PQ8 (`gist`, `matters`);
-        // 27 since docs/features/comments.md CM1 (`comment_id`).
-        proposals.ends_with(&format!("\"{T0}\",{}]", ["null"; 27].join(","))),
-        "the twenty-seven NULL: {proposals}"
+        // 27 since docs/features/comments.md CM1 (`comment_id`); 28 since
+        // docs/features/reference-promotion.md PR11 (`ref_id`).
+        proposals.ends_with(&format!("\"{T0}\",{}]", ["null"; 28].join(","))),
+        "the twenty-eight NULL: {proposals}"
     );
     let next = queue
         .create_intake(&question(&["A-1"], "Why?", &[]), &[], None, T1)
@@ -604,7 +608,7 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert_eq!(next.id, "PR-0008");
     drop(queue);
     let reopened = SqliteQueue::open(&db, PROJECT).expect("reopen");
-    assert_eq!(user_version(&db), "16", "stepped once");
+    assert_eq!(user_version(&db), "17", "stepped once");
     assert_eq!(reopened.get("PR-0008").unwrap().unwrap(), next);
 }
 

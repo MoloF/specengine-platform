@@ -1344,7 +1344,7 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     let lines = dump_lines(&bytes);
     assert!(
         lines[0].starts_with(
-            "{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":3,\
+            "{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\",\"proposals\":3,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{}",
@@ -1353,8 +1353,9 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     let columns = specengine_store::PROPOSAL_COLUMNS;
     // 46 since docs/features/drift-queue.md "Queue schema 8", 48 since
     // docs/features/card-questions.md S1, 50 since
-    // docs/features/plain-questions.md PQ8, 51 since docs/features/comments.md.
-    assert_eq!(columns.len(), 51);
+    // docs/features/plain-questions.md PQ8, 51 since docs/features/comments.md,
+    // 52 since docs/features/reference-promotion.md.
+    assert_eq!(columns.len(), 52);
     for line in &lines[1..4] {
         assert_columns(line, &columns);
     }
@@ -1428,16 +1429,16 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     let record_nulls = ",\"record_id\":null,\"record_path\":null,\"record_title\":null,\
 \"record_text\":null,\"choice\":null,\"task_id\":null,\"staged\":null,\"staged_at\":null,\
 \"interpretation\":null,\"drift\":null,\"drift_hash\":null,\"card_id\":null,\"why\":null,\"gist\":null,\"matters\":null,\
-\"comment_id\":null}}";
+\"comment_id\":null,\"ref_id\":null}}";
     let mut v2_lines = v3_lines.clone();
     assert!(
-        v2_lines[0].starts_with("{\"format\":9,\"queue_schema\":16,"),
+        v2_lines[0].starts_with("{\"format\":10,\"queue_schema\":17,"),
         "{}",
         v2_lines[0]
     );
     v2_lines[0] = v2_lines[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":1,\"queue_schema\":2,",
             1,
         )
@@ -1480,7 +1481,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
         .map(|column| format!("ALTER TABLE proposals DROP COLUMN {column};"))
         .collect();
     pair.sql(&format!(
-        "DROP INDEX IF EXISTS proposals_comment; {} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 2;",
+        "DROP INDEX IF EXISTS proposals_comment; DROP INDEX IF EXISTS proposals_ref; {} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 2;",
         drops.join(" ")
     ));
     assert_eq!(pair.sql("PRAGMA user_version;").trim(), "2");
@@ -1498,7 +1499,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     // 12 since docs/features/task-mandate.md M5 (`proposals` unchanged); 13
     // since docs/features/plain-questions.md PQ8; 16 since
     // docs/features/work-references.md RF1.
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "16");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "17");
     assert_eq!(
         pair.sql("SELECT name FROM pragma_table_info('proposals');")
             .lines()

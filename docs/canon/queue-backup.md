@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 ---
 
 # Queue backup and restore
@@ -19,12 +19,12 @@ The queue (`proposals`, `tasks`, `runs`, `cards`, `comments`, `comment_versions`
 
 ## Format
 
-`STATE_FORMAT` = 9 (CLI; tasks: `tasks.md` "Backup"; cards: `cards.md` "Backup"; comments: `comments.md` "Store and backup"; references, never a file's bytes: `work-references.md` "Store and backup"): UTF-8 compact JSON, one object per LF-ended line.
+`STATE_FORMAT` = 10 (CLI; tasks: `tasks.md` "Backup"; cards: `cards.md` "Backup"; comments: `comments.md` "Store and backup"; references, never a file's bytes: `work-references.md` "Store and backup"; promotions: `work-references-promotion-surfaces.md`): UTF-8 compact JSON, one object per LF-ended line.
 
-1. The header `{"format":9,"queue_schema":16,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"refs":<f>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
-2. Every `proposals` row by ID number (`ORDER BY length(id), id`), the `tasks`, `runs`, `cards` rows, every `comments` row by ID number, every `comment_versions` row by comment ID number and `version`, every `refs` row by ID number, then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 51, `comment_id` last; `CARD_COLUMNS`, 26; `COMMENT_COLUMNS`, 15; `COMMENT_VERSION_COLUMNS`, 5; `REF_COLUMNS`, 20; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `run`, `position`, `on_rev`, `version`, `size`, `seq` numbers; JSON columns stay the strings stored.
+1. The header `{"format":10,"queue_schema":17,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"refs":<f>,"events":<e>}`, keys in this order: `STATE_FORMAT`, the store's `QUEUE_SCHEMA_VERSION`, the root's slug, the row counts of the same snapshot.
+2. Every `proposals` row by ID number (`ORDER BY length(id), id`), the `tasks`, `runs`, `cards` rows, every `comments` row by ID number, every `comment_versions` row by comment ID number and `version`, every `refs` row by ID number, then every `events` row by `seq`, each `{"<table>":{…}}` with every column in table order (`PROPOSAL_COLUMNS`, 52, `ref_id` last; `CARD_COLUMNS`, 26; `COMMENT_COLUMNS`, 15; `COMMENT_VERSION_COLUMNS`, 5; `REF_COLUMNS`, 20; `EVENT_COLUMNS`): TEXT a string, NULL `null`, `run`, `position`, `on_rev`, `version`, `size`, `seq` numbers; JSON columns stay the strings stored.
 
-No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. An older dump restores with its schema's columns, the later NULL (`proposal-queue.md` "Store"); a schema-6 dump's open approve stages gain `"editorial":null`. A schema 1-15 DB exports as format 9, schema 16, unmigrated, its missing counts 0. A drift row round-trips byte-identical (`drift` as stored).
+No export time, host or rowid: equal queues give byte-identical dumps, in any insertion order. Test oracle: `SqliteQueue::dump()`. An older dump restores with its schema's columns, the later NULL (`proposal-queue.md` "Store"); a schema-6 dump's open approve stages gain `"editorial":null`. A schema 1-16 DB exports as format 10, schema 17, unmigrated, its missing counts 0. A drift row round-trips byte-identical (`drift` as stored).
 
 | Format | Queue schemas | Header keys; counts | Adds |
 |---|---|---|---|
@@ -37,9 +37,10 @@ No export time, host or rowid: equal queues give byte-identical dumps, in any in
 | 7 | 13-14 | 8; 5 | `gist`, `matters` |
 | 8 | 15 | 10; 7 | `comment_id`, `comments`, `comment_versions` |
 | 9 | 16 | 11; 8 | `refs` |
+| 10 | 17 | 11; 8 | a proposal's `ref_id` |
 
 ```
-{"format":9,"queue_schema":16,"project":"lantern-keep","proposals":1,"tasks":0,"runs":0,"cards":0,"comments":0,"comment_versions":0,"refs":0,"events":1}
+{"format":10,"queue_schema":17,"project":"lantern-keep","proposals":1,"tasks":0,"runs":0,"cards":0,"comments":0,"comment_versions":0,"refs":0,"events":1}
 {"proposals":{"id":"PR-0001","project":"lantern-keep","kind":"update",…,"updated_at":"2026-10-05T12:00:00Z"}}
 {"events":{"seq":1,"project":"lantern-keep","type":"proposal.created","payload":"{\"id\":\"PR-0001\"}","at":"2026-10-05T12:00:00Z"}}
 ```
@@ -78,7 +79,7 @@ Neither command writes a spec file, commits, runs apply or completion, or runs g
 | `counts() -> QueueCounts {<C>}` | every table, every project's, one snapshot (`is_empty()`) |
 | `restore(&StoredQueue) -> Restore {Restored, Occupied(QueueCounts)}`, `restore_with_comments` | schema steps, then one `Immediate` transaction: all empty or `Occupied`, plain `INSERT`s, commit; a row of another project than the handle's -> `Invalid`, nothing written |
 
-`StoredQueue {proposals, tasks, runs, cards, events}` (`counts()`); `StoredProposal {columns: [Option<String>; 51]}` (`id()`, `project()`), `StoredTask`, `StoredRun`, `StoredCard` (`tasks.md`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (51; `proposal_columns(schema)`: `proposal-queue.md` "Store"), `CARD_COLUMNS` (26; `card_columns(schema)`, 24 at 9, 25 at 10-11), `TASK_COLUMNS` (17), `RUN_COLUMNS` (11), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
+`StoredQueue {proposals, tasks, runs, cards, events}` (`counts()`); `StoredProposal {columns: [Option<String>; 52]}` (`id()`, `project()`), `StoredTask`, `StoredRun`, `StoredCard` (`tasks.md`); `StoredEvent {seq: i64, columns: [Option<String>; 4]}` (`project()`). `PROPOSAL_COLUMNS` (51; `proposal_columns(schema)`: `proposal-queue.md` "Store"), `CARD_COLUMNS` (26; `card_columns(schema)`, 24 at 9, 25 at 10-11), `TASK_COLUMNS` (17), `RUN_COLUMNS` (11), `EVENT_COLUMNS` (5): the columns in table order, pinned to `PRAGMA table_info` by a store test. `WorktreeGit::top_if_repository() -> Option<PathBuf>` (`None` only on git's not-a-repository message, else `Err`), `worktrees() -> Vec<ListedWorktree {path, bare}>` (path canonical where it exists, else as printed).
 
 ## Known limits
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { aBlobStored, aLinkReference, aReference, aReferenceList } from "../test/builders";
+import { aBlobStored, aLinkReference, aProposal, aReference, aReferenceList } from "../test/builders";
 import { errorAnswer, jsonAnswer, stubFetch, urlsOf } from "../test/daemonStub";
 import { ClientError } from "./client";
 import { HttpClient, QUEUE_EVENT_TYPES } from "./http";
@@ -136,6 +136,23 @@ describe("the read and the writes", () => {
     stubFetch(() => errorAnswer(400, "spec: matters: required for audio, video, models and PDF: say what matters here"));
     const refused = await rejection(client.addReference("alpha", { on: "C-0007", b3: "f".repeat(64), agent_b3: null, name: "sound.wav", title: null, matters: null, as: null }));
     expect(refused instanceof ClientError ? [refused.status, refused.message] : refused).toEqual([400, "spec: matters: required for audio, video, models and PDF: say what matters here"]);
+  });
+
+  it("posts a promotion's body to the reference's own route, one segment each; 200 the review document; a 409 and a 503 in the daemon's words (docs/canon/work-references-promotion-surfaces.md \"HTTP\"; PR16 of reference-promotion)", async () => {
+    const review = aProposal({ id: "PR-0042", kind: "reference", target_id: "LOC-HARBOUR", ref_id: "RF-0012", notes: ["adds docs/spec/world/media/harbour.png: RF-0012, image/png 2.1 MiB, LFS"] });
+    const stub = stubFetch(() => jsonAnswer(200, review));
+    const client = new HttpClient();
+    const body = { to: "LOC-HARBOUR", name: null, matters: "the light at dusk, not the boats", rationale: "Promote RF-0012 beside LOC-HARBOUR", as: "mira" };
+    expect(await client.promoteReference("a b", "RF-0012", body)).toEqual(review);
+    expect(urlsOf(stub)).toEqual(["/api/projects/a%20b/references/RF-0012/promote"]);
+    const [, init] = stub.mock.calls[0] ?? [];
+    expect([init?.method, typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : init?.body]).toEqual(["POST", body]);
+    stubFetch(() => jsonAnswer(409, { id: "RF-0012", reason: "RF-0012 is already proposed for `LOC-HARBOUR` by PR-0042 (open)" }));
+    const twin = await rejection(client.promoteReference("alpha", "RF-0012", body));
+    expect(twin instanceof ClientError ? [twin.status, twin.message] : twin).toEqual([409, "RF-0012 is already proposed for `LOC-HARBOUR` by PR-0042 (open)"]);
+    stubFetch(() => errorAnswer(503, "spec: no [references] home takes kind `mechanic` (`MEC-TIDE`): add one to [[references.homes]] in specengine.toml; nothing stored"));
+    const home = await rejection(client.promoteReference("alpha", "RF-0012", { ...body, to: "MEC-TIDE" }));
+    expect(home instanceof ClientError ? [home.status, home.message] : home).toEqual([503, "spec: no [references] home takes kind `mechanic` (`MEC-TIDE`): add one to [[references.homes]] in specengine.toml; nothing stored"]);
   });
 
   it("gives each file's address under the project, its hash one segment", () => {

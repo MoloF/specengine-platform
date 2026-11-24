@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 summarises: [docs/canon/auto-mode.md#rule, docs/canon/auto-mode.md#switches, docs/canon/auto-mode.md#judging-an-item, docs/canon/spec-auto.md#start, docs/canon/auto-runner.md#loop, docs/canon/hub-auto.md#rules, docs/canon/hub-ops.md#auto]
 ---
 

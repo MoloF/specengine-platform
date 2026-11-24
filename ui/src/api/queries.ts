@@ -792,6 +792,9 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         if (event.type === APPLIED) {
           // An apply may move a linked task's `stale` too, which the card read above serves as read now.
           readSpecAgain();
+          // A list's "In the spec" is its documents' `references:` keys, which an apply may write
+          // (docs/canon/work-references-promotion-surfaces.md "Documents and text").
+          readAgain({ queryKey: referencesOf(project) });
         } else {
           readCatalogAgain();
         }

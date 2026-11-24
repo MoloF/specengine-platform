@@ -465,16 +465,25 @@ fn every_corpus_under_a_memo_of_the_whole_budget() {
     under_a_memo(specengine_store::check_memo::BUDGET);
 }
 
+/// The corpora added after 0.47.0, named here on purpose: they have no
+/// golden (docs/features/reference-promotion.md's `promote-mini` declares
+/// `[[references.homes]]`, which 0.47.0 cannot read).
+const AFTER_0_47_0: [&str; 1] = ["promote-mini"];
+
 /// The list of corpora is the disk's: a corpus added after 0.47.0 has no
 /// golden and must be named here on purpose.
 #[test]
 fn every_fixture_corpus_is_listed() {
-    assert_eq!(
-        corpora_on_disk(),
-        CORPORA
-            .iter()
-            .map(|name| (*name).to_owned())
-            .collect::<Vec<_>>()
+    let mut listed: Vec<String> = CORPORA
+        .iter()
+        .chain(AFTER_0_47_0.iter())
+        .map(|name| (*name).to_owned())
+        .collect();
+    listed.sort();
+    assert_eq!(corpora_on_disk(), listed);
+    assert!(
+        AFTER_0_47_0.iter().all(|name| !CORPORA.contains(name)),
+        "a corpus is in the goldens or after them, not both"
     );
 }
 

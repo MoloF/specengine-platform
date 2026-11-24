@@ -151,6 +151,7 @@ export function aProposal(fields: Partial<Proposal> & { id: string }): Proposal 
     card_id: null,
     why: null,
     comment_id: null,
+    ref_id: null,
     similar: null,
     notes: [],
     cited: null,
@@ -234,6 +235,7 @@ export function noReview(id: string): Proposal {
     card_id: null,
     why: null,
     comment_id: null,
+    ref_id: null,
     similar: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
     cited: null,
@@ -633,6 +635,7 @@ export function aTaskPackage(fields: Partial<TaskPackage> & Pick<TaskPackage, "i
     practices: fields.practices ?? [],
     comments: fields.comments ?? { total: 0, listed: [] },
     references: fields.references ?? { total: 0, listed: [] },
+    spec_references: fields.spec_references ?? { total: 0, listed: [] },
     roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at ?? "2026-10-01T09:00:00Z",
@@ -1486,7 +1489,7 @@ export function aLinkReference(fields: Partial<Reference> & { id: string }): Ref
 
 /** A page of a target's references: every one given, oldest first, none older. */
 export function aReferenceList(references: Reference[], fields: Partial<ReferenceList> = {}): ReferenceList {
-  return { on: references[0]?.on ?? { kind: "card", id: "C-0007" }, total: references.length, references, next_before: null, notes: [], ...fields };
+  return { on: references[0]?.on ?? { kind: "card", id: "C-0007" }, total: references.length, references, next_before: null, notes: [], in_spec: [], ...fields };
 }
 
 /** What `PUT .../blobs` answers for a PNG within the agents' limits, stored new (docs/features/work-references.md "Documents"). */

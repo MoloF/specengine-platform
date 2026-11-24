@@ -125,11 +125,11 @@ fn ddl_names() -> Vec<String> {
 /// column dropped from `STEP_16`.
 #[test]
 fn rf1_a_new_queue_stands_at_16_with_refs_pinned() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
     let scratch = Scratch::new("rf-rf1-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
 
     assert_eq!(table_info(&db, "refs"), REFS_INFO);
     assert_eq!(
@@ -162,7 +162,11 @@ fn rf1_a_new_queue_stands_at_16_with_refs_pinned() {
     assert_eq!(REF_COLUMNS.len(), 20);
     assert_eq!(column_names(&db, "refs"), REF_COLUMNS);
     assert_eq!(ddl_names(), REF_COLUMNS);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 51, "PROPOSAL_COLUMNS stays 51");
+    assert_eq!(
+        PROPOSAL_COLUMNS.len(),
+        52,
+        "PROPOSAL_COLUMNS stays 51, and `ref_id` since PR11"
+    );
     assert_eq!(column_names(&db, "proposals"), PROPOSAL_COLUMNS);
     assert_eq!(COMMENT_COLUMNS.len(), 15);
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM refs;"), "0");
@@ -218,7 +222,10 @@ fn some_rows(db: &Path) {
 fn schema_15(db: &Path) {
     drop(SqliteQueue::open(db, PROJECT).expect("open"));
     some_rows(db);
-    sqlite3(db, "DROP TABLE refs; PRAGMA user_version = 15;");
+    sqlite3(
+        db,
+        "DROP TABLE refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; PRAGMA user_version = 15;",
+    );
     assert_eq!(
         sqlite3(
             db,
@@ -229,15 +236,25 @@ fn schema_15(db: &Path) {
     );
 }
 
-/// Every row of the seven queue tables of schema 15, in a stable order.
+/// Every row of the seven queue tables of schema 15, in a stable order;
+/// the proposals' columns of schema 15 alone (step 17's `ref_id`, task
+/// spec `reference-promotion` PR11, comes after them).
 fn rows_of_15(db: &Path) -> String {
+    let columns = PROPOSAL_COLUMNS
+        .iter()
+        .filter(|column| **column != "ref_id")
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
     sqlite3(
         db,
-        "SELECT * FROM proposals ORDER BY id; SELECT * FROM cards ORDER BY id; \
-         SELECT * FROM tasks ORDER BY id; SELECT * FROM runs ORDER BY task_id, run; \
-         SELECT * FROM comments ORDER BY id; \
-         SELECT * FROM comment_versions ORDER BY comment_id, version; \
-         SELECT * FROM events ORDER BY seq;",
+        &format!(
+            "SELECT {columns} FROM proposals ORDER BY id; SELECT * FROM cards ORDER BY id; \
+             SELECT * FROM tasks ORDER BY id; SELECT * FROM runs ORDER BY task_id, run; \
+             SELECT * FROM comments ORDER BY id; \
+             SELECT * FROM comment_versions ORDER BY comment_id, version; \
+             SELECT * FROM events ORDER BY seq;"
+        ),
     )
 }
 
@@ -254,7 +271,7 @@ fn rf1_a_schema_15_queue_steps_keeping_every_row() {
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM events;"), "4");
 
     drop(SqliteQueue::open(&db, PROJECT).expect("open steps"));
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
     assert_eq!(rows_of_15(&db), before, "every row as it was");
     assert_eq!(table_info(&db, "refs"), REFS_INFO);
     assert_eq!(column_names(&db, "refs"), REF_COLUMNS);
@@ -272,7 +289,7 @@ fn rf1_a_schema_15_queue_steps_keeping_every_row() {
     let stepped = tables(&db);
 
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "16", "stepped once");
+    assert_eq!(user_version(&db), "17", "stepped once");
     assert_eq!(rows_of_15(&db), before);
     assert_eq!(tables(&db), stepped);
 }
@@ -313,7 +330,7 @@ fn rf1_a_14_queue_failing_at_16_stays_at_14() {
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     sqlite3(
         &db,
-        "DROP TABLE refs; DROP TABLE comment_versions; DROP TABLE comments; \
+        "DROP TABLE refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; DROP TABLE comment_versions; DROP TABLE comments; \
          DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; \
          PRAGMA user_version = 14; CREATE TABLE refs (x TEXT);",
     );
@@ -336,7 +353,7 @@ fn rf1_a_newer_schema_is_refused() {
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     let newer = QUEUE_SCHEMA_VERSION + 1;
-    assert_eq!(newer, 17);
+    assert_eq!(newer, 18);
     sqlite3(&db, &format!("PRAGMA user_version = {newer};"));
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
@@ -347,5 +364,5 @@ fn rf1_a_newer_schema_is_refused() {
             other => panic!("expected SchemaTooNew {newer}, got {other:?}"),
         }
     }
-    assert_eq!(user_version(&db), "17", "left alone");
+    assert_eq!(user_version(&db), "18", "left alone");
 }

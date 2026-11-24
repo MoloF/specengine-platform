@@ -68,6 +68,7 @@ import type {
   MentionList,
   NodeView,
   Project,
+  PromoteBody,
   Proposal,
   QueueEvent,
   Reference,
@@ -842,6 +843,10 @@ export class HttpClient implements SpecEngineClient {
 
   async deleteReference(project: string, id: string): Promise<Reference> {
     return (await referencesHttp()).deleteReference(project, id);
+  }
+
+  async promoteReference(project: string, id: string, body: PromoteBody): Promise<Proposal> {
+    return (await referencesHttp()).promoteReference(project, id, body);
   }
 
   blobUrl(project: string, b3: string): string {

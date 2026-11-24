@@ -285,8 +285,9 @@ fn dp14_the_schemas_and_descriptions() {
     let package = &tool(&list, "get_task")["outputSchema"];
     let package_keys = properties(package);
     // 29 since docs/features/comments.md (`comments`), 30 since
-    // docs/features/work-references.md (`references`).
-    assert_eq!(package_keys.len(), 30, "{package_keys:?}");
+    // docs/features/work-references.md (`references`), 31 since
+    // docs/features/reference-promotion.md (`spec_references`).
+    assert_eq!(package_keys.len(), 31, "{package_keys:?}");
     assert_eq!(
         properties(&items(&package["properties"]["practices"])),
         sorted(&["name", "title", "path", "disciplines", "rules"])

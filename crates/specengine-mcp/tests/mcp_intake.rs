@@ -883,7 +883,9 @@ fn ac12_the_queue_tools_are_described_as_data_says() {
                 json!("update"),
                 json!("create"),
                 json!("interpretation"),
-                json!("amendment")
+                json!("amendment"),
+                // docs/canon/work-references-promotion-surfaces.md "MCP": the fifth.
+                json!("reference")
             ]
         );
         assert_eq!(

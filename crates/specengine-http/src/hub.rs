@@ -318,7 +318,8 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
 /// and `.../comments/:id/{edit,items}`, DELETE on `.../comments/:id`, whose
 /// handler judges the author or an `owner` (task spec `comments`); PUT on
 /// `.../blobs`, POST on `.../references`, DELETE on `.../references/:id`
-/// (task spec `work-references`). Team:
+/// (task spec `work-references`), POST on `.../references/:id/promote`
+/// (task spec `reference-promotion`). Team:
 /// POST, DELETE on
 /// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
 /// `.../cards/:id/{accept,clear}`, `.../trace/clear` and
@@ -367,6 +368,9 @@ fn class(method: &Method, path: &str) -> Option<Class> {
         ["blobs"] if method == Method::PUT => Some(Class::Plain),
         ["references"] if post => Some(Class::Plain),
         ["references", id] if method == Method::DELETE && !id.is_empty() => Some(Class::Plain),
+        // A promotion's proposal (task spec `reference-promotion` D11): a
+        // plain write, a person confirms it.
+        ["references", id, "promote"] if post && !id.is_empty() => Some(Class::Plain),
         ["proposals", id, "confirm"] if post && !id.is_empty() => Some(Class::Confirm),
         ["round", _] if post && path.ends_with("/round/answers") => Some(Class::Team),
         ["trace", "clear"] if post => Some(Class::Confirm),

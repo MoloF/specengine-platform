@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 summarises: [docs/canon/card-practices.md#the-rule, docs/canon/card-practices.md#disciplines, docs/canon/card-practices.md#caps, docs/canon/card-practices.md#the-card, docs/canon/card-practices.md#the-task-and-the-proposal, docs/canon/hub-team.md#team, docs/canon/auto-mode.md#rule]
 ---
 

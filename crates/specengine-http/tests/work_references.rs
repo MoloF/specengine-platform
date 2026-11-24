@@ -2448,7 +2448,15 @@ fn the_routes_answer_the_documents() {
     assert_eq!(list.status, 200);
     assert_eq!(
         keys_in_order(list.text()),
-        ["on", "total", "references", "next_before", "notes"]
+        // `in_spec` since docs/features/reference-promotion.md.
+        [
+            "on",
+            "total",
+            "references",
+            "next_before",
+            "notes",
+            "in_spec"
+        ]
     );
     let gone = delete(&hub, "mira", &id_of(&made));
     assert_eq!(gone.status, 200, "{}", gone.text());

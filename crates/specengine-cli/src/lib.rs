@@ -336,6 +336,7 @@ mod pair_tests;
 mod practice;
 mod preflight;
 mod project;
+mod promote;
 mod proposals;
 mod propose;
 #[cfg(test)]
@@ -523,6 +524,10 @@ pub use practice::{CardPractice, Cited};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
+pub use promote::{
+    PromoteBody, PromoteRequest, PromotionOutcome, promote_reference, propose_reference,
+    propose_reference_brief,
+};
 pub use proposals::{
     Delegated, Preview, ProposalDocument, ProposalDrift, ProposalOutcome, QueueCommand,
 };
@@ -620,7 +625,7 @@ pub use specengine_core::intake::{
     GIST_MAX, GapType, INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX,
     IntakeOption, IntakeSeverity, Interpretation, LABEL_MAX, LINE_LIMIT, LOCATION_MAX, MATTERS_MAX,
     NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, ProposedPatch, QUESTION_OPTIONS_MAX,
-    RATIONALE_MAX, SUMMARY_MAX, UPDATE_KIND, with_article,
+    RATIONALE_MAX, REFERENCE_KIND, SUMMARY_MAX, UPDATE_KIND, with_article,
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;
@@ -953,6 +958,9 @@ pub enum Outcome {
     ReferenceList(Box<ReferenceListOutcome>),
     /// A daemon's `PUT …/blobs`: the stored blob, or why not.
     Blob(Box<BlobOutcome>),
+    /// A daemon's `POST …/references/<id>/promote`: the brief review of the
+    /// stored promotion, or `{id, reason}` (task spec `reference-promotion`).
+    Promotion(Box<PromotionOutcome>),
 }
 
 impl Outcome {
@@ -1002,6 +1010,7 @@ impl Outcome {
             Self::Reference(reference) => reference.exit(),
             Self::ReferenceList(list) => list.exit(),
             Self::Blob(blob) => blob.exit(),
+            Self::Promotion(promotion) => promotion.exit(),
             _ => Exit::Answered,
         }
     }
@@ -1053,6 +1062,10 @@ impl Outcome {
             Self::VerifyTests(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Promotion(outcome) => (
+                &outcome.proposal.messages,
+                outcome.proposal.refusal.as_deref(),
+            ),
             // Each item told its own lines; the walk's notes close its text.
             Self::OpenWalk(_) => return Vec::new(),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
@@ -1178,6 +1191,7 @@ impl Outcome {
         if matches!(
             self,
             Self::Proposal(_)
+                | Self::Promotion(_)
                 | Self::Graph(_)
                 | Self::Bump(_)
                 | Self::Lock(_)
@@ -1287,6 +1301,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Reference(outcome) => reference::render_one(outcome),
         Outcome::ReferenceList(outcome) => reference::render_list(outcome),
         Outcome::Blob(outcome) => reference::render_blob(outcome),
+        Outcome::Promotion(outcome) => proposals::render_text(&outcome.proposal),
     }
 }
 
@@ -1360,6 +1375,7 @@ impl serde::Serialize for Outcome {
             Self::Reference(outcome) => outcome.serialize(serializer),
             Self::ReferenceList(outcome) => outcome.serialize(serializer),
             Self::Blob(outcome) => outcome.serialize(serializer),
+            Self::Promotion(outcome) => outcome.serialize(serializer),
         }
     }
 }

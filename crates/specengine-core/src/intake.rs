@@ -54,6 +54,12 @@ pub const DECISION_KIND: &str = "decision";
 /// typed; approving it runs `spec lock accept` for its node.
 pub const DRIFT_KIND: &str = "drift";
 
+/// The kind of a proposal promoting a reference's file into git beside a
+/// document (task spec `reference-promotion`, ADR-0089): its text one entry
+/// of the document's `references:` key; applied as an update of that key
+/// plus the file, one commit; never applied under `[auto]`.
+pub const REFERENCE_KIND: &str = "reference";
+
 /// The most `node_ids` of one item.
 pub const NODE_IDS_MAX: usize = 16;
 /// The most bytes of a question's or a decision's `text` and a

@@ -685,7 +685,7 @@ function MainParts({
       </Part>
       <Activity project={project} card={card} flow={flow} />
       {/* People's material for the task, never a write of it (docs/features/work-references.md "UI"): its own chunk, above the talk. */}
-      <References project={project} on={card.id} level={3} />
+      <References project={project} on={card.id} targets={card.targets} level={3} />
       {/* Talk under the task, never a write of it (docs/features/comments.md "UI"): its own chunk. */}
       <Comments project={project} on={card.id} targets={card.targets} level={3} mandate={card.mandate} />
     </>

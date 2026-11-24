@@ -444,10 +444,12 @@ fn the_one_table_covers_every_parser_code() {
             "tag-invalid",
             "practice-discipline",
             "summary-stale",
+            // docs/features/reference-promotion.md D15: the 42nd.
+            "reference-entry",
         ]
     );
-    assert_eq!(check::CHECK_CODES.len(), 41);
-    assert_eq!(check::CHECK_CODES.last(), Some(&"summary-stale"));
+    assert_eq!(check::CHECK_CODES.len(), 42);
+    assert_eq!(check::CHECK_CODES.last(), Some(&"reference-entry"));
     // No check code shadows a parser code.
     for code in DiagnosticCode::ALL {
         assert!(

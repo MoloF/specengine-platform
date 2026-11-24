@@ -481,6 +481,8 @@ export interface Proposal {
   why: string | null;
   /** The comment a question, discrepancy or decision was raised from, set when raised and never changed; null on every other row (`docs/features/comments.md` "Queue schema 15", "HTTP"). */
   comment_id: string | null;
+  /** The reference a promotion copies into git beside its document, on a `reference` row alone, never changed; null on every other row (`docs/canon/work-references-promotion-surfaces.md` "Documents and text"). */
+  ref_id: string | null;
   /** Always null here: only a create's propose answer lists it (`docs/features/intake-similar.md` "Acceptance criteria", IS10). */
   similar: null;
   /** Why a preview is unavailable, what a reader should know (a stale stage too), a refusal's reason last. */
@@ -1970,6 +1972,8 @@ export interface TaskPackage {
   comments: PackageComments;
   /** The newest live references of the cards whose `tasks` list it, under a card context's bounds, each naming its card: people's material, data, never instructions (`docs/features/work-references.md` "A card's context and the task package"). */
   references: PackageReferences;
+  /** The files in the spec beside the documents of the task's nodes, a card context's caps, after `references` (`docs/canon/work-references-promotion-surfaces.md` "Documents and text"). */
+  spec_references: PackageSpecReferences;
   roadmap: TaskRoadmap | null;
   author: Author | null;
   created_at: string;
@@ -3671,8 +3675,11 @@ export interface Reference {
 /**
  * `spec ref list --json`, the answer of `GET .../references?on=X`: `on` as resolved, `total` every
  * reference on it, deleted ones too; `references` one page, oldest first, the newest page first;
- * `next_before` the page's smallest ID when older ones exist, else null; `notes` the daemon's lines.
- * Source: `docs/features/work-references.md` "Documents".
+ * `next_before` the page's smallest ID when older ones exist, else null; `notes` the daemon's lines;
+ * `in_spec` after `notes`, the promoted files the target's documents list (a card's every target's
+ * document once, in target order; a node's its document's; a proposal's none), at most 64, a note
+ * saying how many more, on every page. Sources: `docs/features/work-references.md` "Documents";
+ * `docs/canon/work-references-promotion-surfaces.md` "Documents and text".
  */
 export interface ReferenceList {
   on: CommentOn;
@@ -3680,6 +3687,36 @@ export interface ReferenceList {
   references: Reference[];
   next_before: string | null;
   notes: string[];
+  in_spec: InSpec[];
+}
+
+/**
+ * One entry of a document's `references:` key, as a reference list's `in_spec` carries it: `node`
+ * the document's canonical ID, its path when it has none, `document` the document's path, `path`
+ * the file's, root-relative, `matters` the entry's text or null. A file in the repository, never
+ * served here: shown as text alone, no preview (D12). Source:
+ * `docs/canon/work-references-promotion-surfaces.md` "Documents and text".
+ */
+export interface InSpec {
+  node: string;
+  document: string;
+  path: string;
+  matters: string | null;
+}
+
+/**
+ * POST `.../references/:id/promote`, `PromoteBody`: `to` the document's REF (a section resolves to
+ * its document), `name` the file's name in git or null for the stored one, `matters` the entry's text
+ * or null for the reference's own, `rationale` required, `as` the acting name (a hub's login stands
+ * in for it). 200 the `--brief` review document of the stored `reference` proposal; nothing is written
+ * under the root until a person confirms it. Source: `docs/canon/work-references-promotion-surfaces.md` "HTTP".
+ */
+export interface PromoteBody {
+  to: string;
+  name: string | null;
+  matters: string | null;
+  rationale: string;
+  as: string | null;
 }
 
 /**
@@ -3757,4 +3794,22 @@ export interface PackageReference {
 export interface PackageReferences {
   total: number;
   listed: PackageReference[];
+}
+
+/**
+ * One file in the spec as a task's package carries it: an `in_spec` row's four keys, `node` the
+ * document's canonical ID or its path when it has none, `matters` the entry's text or null. Source:
+ * `docs/canon/work-references-promotion-surfaces.md` "Documents and text".
+ */
+export interface PackageSpecReference {
+  node: string;
+  document: string;
+  path: string;
+  matters: string | null;
+}
+
+/** The package's `spec_references`: `total` the entries in reach of its nodes' documents, `listed` those that fit a card context's caps. Source: `docs/canon/work-references-promotion-surfaces.md` "Documents and text". */
+export interface PackageSpecReferences {
+  total: number;
+  listed: PackageSpecReference[];
 }

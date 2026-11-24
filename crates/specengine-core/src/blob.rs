@@ -212,6 +212,28 @@ impl Media {
         }
     }
 
+    /// The file-name extensions of the type, lower-case, without the dot,
+    /// the usual one first (task spec `reference-promotion`, "Propose and
+    /// apply"): a promoted file keeps one, so `.gitattributes` and tools
+    /// judge it by its name.
+    pub const fn extensions(self) -> &'static [&'static str] {
+        match self {
+            Self::Png => &["png"],
+            Self::Jpeg => &["jpg", "jpeg"],
+            Self::Gif => &["gif"],
+            Self::Webp => &["webp"],
+            Self::Wav => &["wav"],
+            Self::Flac => &["flac"],
+            Self::Ogg => &["ogg", "oga", "opus"],
+            Self::Mpeg => &["mp3"],
+            Self::Mp4 => &["mp4", "m4v"],
+            Self::Webm => &["webm"],
+            Self::Glb => &["glb"],
+            Self::Blender => &["blend"],
+            Self::Pdf => &["pdf"],
+        }
+    }
+
     /// A type an agent copy may be.
     pub const fn copyable(self) -> bool {
         matches!(self, Self::Jpeg | Self::Png | Self::Webp)

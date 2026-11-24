@@ -421,7 +421,7 @@ fn a_newer_queue_is_schema_too_new() {
     // path an older build meets at 11 (M1's record at a62c81c: 11 over 10);
     // docs/features/task-mandate.md R1: 13 over 12, recorded at 8a43e5d;
     // 17 over 16 since docs/features/work-references.md RF1.
-    assert_eq!(newer, 17);
+    assert_eq!(newer, 18);
     sqlite3(&repos.db, &format!("PRAGMA user_version = {newer};"));
     let queue = open_for_gate(&repos.db, PROJECT, later())
         .unwrap()
@@ -615,7 +615,7 @@ fn the_record_is_one_event_with_its_four_keys_in_order() {
 #[test]
 fn the_record_goes_only_into_schema_six() {
     // docs/features/card-questions.md S1; docs/features/task-mandate.md M5.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16, "this build's queue schema");
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17, "this build's queue schema");
     let repos = Repos::new("qg-record-4");
     drop(repos.queue(PROJECT));
     // A queue at schema 6 (as a build before rev-discipline left it).

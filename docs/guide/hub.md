@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 summarises: [docs/canon/hub.md#identity, docs/canon/hub.md#trust, docs/canon/hub-team.md#team, docs/canon/hub-team.md#acts, docs/canon/hub-confirm.md#rules, docs/canon/hub-mcp.md#tools, docs/canon/hub-ops.md#dumps, docs/canon/hub-ops.md#upgrade, docs/canon/hub-restic.md#the-backend, docs/canon/hub-deploy.md#accounts]
 ---
 

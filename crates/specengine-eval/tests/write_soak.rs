@@ -39,7 +39,25 @@
 //!   `GET .../cards` and `GET .../comments?on=` every second from the start,
 //!   its p95 after [`RF_BASELINE`] at most 1.5 x its p95 before + 50 ms;
 //!   at the end the store holds exactly the stored files and no `.part`; a
-//!   run refuses to start with less than [`RF_FREE_MIN`] free, naming it.
+//!   run refuses to start with less than [`RF_FREE_MIN`] free, naming it;
+//!   `RP` (docs/canon/soak-runs.md "Budgets", PR19) RF's whole
+//!   load over a tree whose config gives the `node` kind a home `media`
+//!   (`[[references.homes]]`), whose `.gitattributes` gives `lfs-*.wav`
+//!   there to LFS, whose `[team]` names the owner [`RP_OWNER`], and whose
+//!   first [`RP_CARDS`] cards' targets hold [`RP_ENTRIES`] entries each; from
+//!   [`RF_BASELINE`] on, every [`RP_EVERY`] a promoter puts a distinct
+//!   [`RP_FILE_BYTES`] WAV, attaches it to a node, promotes it to that node's
+//!   document (alternately `plain-R-N.wav` and `lfs-R-N.wav`), stages and
+//!   confirms it as the owner (git-lfs on the daemon's `PATH`, no push);
+//!   [`RP_READERS`] readers cycle `GET .../references?on=` and `get_card
+//!   {context: true}` on those cards; at the end every confirm is `applied`
+//!   and its blob (plain: the bytes; LFS: a pointer whose object is the
+//!   bytes, by SHA-256) checked; the confirms' time (the turn they hold) is
+//!   reported, p50 and max. RP is judged by its own budgets (live heap,
+//!   quiet footprint, no hang, every confirm checked at `HEAD`): RF's page
+//!   p95 is reported beside them, never judged (the coordinator's decision
+//!   for 0.52.0, a known limit: the copy stays inside the turn, task spec
+//!   `reference-promotion` D10); an RF run judges its page bar as before.
 //! - **Memory** sampled every [`SAMPLE_EVERY`]: the resident set and, on
 //!   macOS, `phys_footprint` (`proc_pid_rusage`, what `footprint` reports).
 //! - **The quiet probe** (macOS): every [`QUIET_EVERY`] the clients are
@@ -116,6 +134,8 @@
 #[path = "../../specengine-cli/tests/common/git.rs"]
 mod git;
 mod import_support;
+#[path = "../../specengine-cli/tests/promote_common/lfs.rs"]
+mod lfs;
 mod library_common;
 #[path = "../../specengine-cli/tests/work_refs_common/mod.rs"]
 mod refs_common;
@@ -187,6 +207,25 @@ const RF_RANGES_PER_S: f64 = 10.0;
 const RF_BASELINE: Duration = Duration::from_secs(60);
 /// RF23: a run refuses to start with less free space than this.
 const RF_FREE_MIN: u64 = 6 * 1024 * 1024 * 1024;
+/// RP (PR19): a promotion every this, from [`RF_BASELINE`] on.
+const RP_EVERY: Duration = Duration::from_secs(10);
+/// RP: each promoted WAV's bytes.
+const RP_FILE_BYTES: u64 = 16 * 1024 * 1024;
+/// RP: the readers of the inherited entries.
+const RP_READERS: usize = 4;
+/// RP: the cards (`C-0001` on) whose target documents hold [`RP_ENTRIES`]
+/// entries.
+const RP_CARDS: usize = 4;
+/// RP: the entries written into each of those documents (`PROMOTED_MAX`).
+const RP_ENTRIES: usize = 32;
+/// RP: the `[team]` owner who promotes, stages and confirms.
+const RP_OWNER: &str = "owner-0";
+/// RP: the nodes each run's promoter takes, from its own offset: the runs
+/// share one tree, whose commits keep each run's promotions, so a later
+/// run promotes to other nodes and names (else `already listed`).
+const RP_RUN_NODES: usize = 200;
+/// RP: the runs whose promoter has started in this process.
+static RP_RUNS: AtomicUsize = AtomicUsize::new(0);
 /// When heap mode takes its first snapshot, seconds into the run.
 const HEAP_FIRST_AT: f64 = 60.0;
 /// How often the quiet probe reads the live heap (macOS): the clients held,
@@ -223,6 +262,7 @@ enum Variant {
     H,
     CM,
     RF,
+    RP,
 }
 
 impl Variant {
@@ -236,7 +276,8 @@ impl Variant {
             "H" => Self::H,
             "CM" => Self::CM,
             "RF" => Self::RF,
-            other => panic!("WRITE_SOAK_VARIANT={other:?}: one of W, U, R, M, H, CM, RF"),
+            "RP" => Self::RP,
+            other => panic!("WRITE_SOAK_VARIANT={other:?}: one of W, U, R, M, H, CM, RF, RP"),
         }
     }
 
@@ -249,6 +290,7 @@ impl Variant {
             Self::H => "H",
             Self::CM => "CM",
             Self::RF => "RF",
+            Self::RP => "RP",
         }
     }
 
@@ -257,17 +299,29 @@ impl Variant {
     }
 
     fn readers(self) -> usize {
-        if matches!(self, Self::R | Self::M | Self::CM | Self::RF) {
+        if matches!(self, Self::R | Self::M | Self::CM | Self::RF | Self::RP) {
             READERS
         } else {
             0
         }
     }
 
+    /// RF's load (RP carries it: D19).
+    fn files(self) -> bool {
+        matches!(self, Self::RF | Self::RP)
+    }
+
+    /// Whether RF's page bar breaks the run: RF's own; RP reports it only.
+    fn page_judged(self) -> bool {
+        self == Self::RF
+    }
+
     /// The budget it is judged against; H is reported, not judged.
     fn budget(self) -> Option<f64> {
         match self {
-            Self::W | Self::U | Self::M | Self::CM | Self::RF => Some(WRITE_BUDGET_MIB_PER_MIN),
+            Self::W | Self::U | Self::M | Self::CM | Self::RF | Self::RP => {
+                Some(WRITE_BUDGET_MIB_PER_MIN)
+            }
             Self::R => Some(READ_BUDGET_MIB_PER_MIN),
             Self::H => None,
         }
@@ -1007,6 +1061,21 @@ struct Shared {
     /// RF23: uploads answered, Range reads checked.
     uploads: AtomicUsize,
     ranges: AtomicUsize,
+    /// PR19: each confirmed promotion.
+    promotions: Mutex<Vec<Promotion>>,
+    /// PR19: each confirm's POST, ms (the turn it holds, and its wait).
+    confirm_ms: Mutex<Vec<u64>>,
+}
+
+/// PR19: a promotion the owner confirmed.
+#[derive(Debug, Clone)]
+struct Promotion {
+    id: String,
+    /// The file's path, root-relative.
+    path: String,
+    seed: u64,
+    lfs: bool,
+    b3: String,
 }
 
 impl Shared {
@@ -1275,7 +1344,7 @@ fn writer(run: &Run<'_>, tree: &Tree, targets: &[Target], index: usize) {
                     true,
                 );
             }
-            Variant::CM | Variant::RF => run.call(
+            Variant::CM | Variant::RF | Variant::RP => run.call(
                 &login,
                 "add_comment",
                 json!({
@@ -1859,16 +1928,24 @@ fn quantile_of(values: &[u64], q: f64) -> Option<u64> {
 }
 
 /// RF23's own bars: the page reader's p95 after the baseline at most 1.5 x
-/// its p95 before + 50 ms; uploads and Range reads ran; the store holds
-/// exactly the pre-filled files and no `.part`.
-fn rf_verdict(shared: &Shared, home: &Path, slug: &str, files: &[(String, u64)]) -> Vec<String> {
+/// its p95 before + 50 ms (when `judge_page`; RP reports it only); uploads
+/// and Range reads ran; the store holds exactly the pre-filled files and no
+/// `.part`.
+fn rf_verdict(
+    shared: &Shared,
+    home: &Path,
+    slug: &str,
+    files: &[(String, u64)],
+    promoted: &[String],
+    judge_page: bool,
+) -> Vec<String> {
     let mut broken = Vec::new();
     let pages = shared.page_ms.lock().expect("pages").clone();
     let (before, after) = page_phases(&pages);
     match (quantile_of(&before, 0.95), quantile_of(&after, 0.95)) {
         (Some(base), Some(late)) => {
             let bar = base as f64 * 1.5 + 50.0;
-            if late as f64 > bar {
+            if judge_page && late as f64 > bar {
                 broken.push(format!(
                     "the page reader's p95 {late} ms after the baseline > 1.5 x {base} + 50 = {bar} ms"
                 ));
@@ -1888,8 +1965,14 @@ fn rf_verdict(shared: &Shared, home: &Path, slug: &str, files: &[(String, u64)])
     }
     let store = data_dir(home).join("blobs").join(slug);
     let held = refs_common::store_files(&store);
-    let mut want: Vec<String> = files.iter().map(|(b3, _)| b3.clone()).collect();
+    // RP: a promoted reference stays queue data, its file kept.
+    let mut want: Vec<String> = files
+        .iter()
+        .map(|(b3, _)| b3.clone())
+        .chain(promoted.iter().cloned())
+        .collect();
     want.sort();
+    want.dedup();
     if held != want {
         broken.push(format!(
             "the store holds {} files, not the {} pre-filled ({} extra)",
@@ -1905,6 +1988,323 @@ fn rf_verdict(shared: &Shared, home: &Path, slug: &str, files: &[(String, u64)])
     broken
 }
 
+// ------------------------------------------------------------ PR19
+
+/// PR19: the hub's `PATH` with git-lfs alone before it (the real git's
+/// directory, `/usr/bin`, `/bin`, as [`Hub::start_with`] sets).
+fn rp_path(tree: &Tree) -> String {
+    let lfs_dir = lfs::lfs_dir(&tree.scratch.0);
+    let git_dir = tree
+        .git
+        .git_program()
+        .parent()
+        .expect("git's directory")
+        .to_path_buf();
+    std::env::join_paths([
+        lfs_dir,
+        git_dir,
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+    ])
+    .expect("a PATH")
+    .to_string_lossy()
+    .into_owned()
+}
+
+/// PR19: the tree made RP's, committed before any hub starts: a home
+/// `media` for the `node` kind, `lfs-*.wav` there given to LFS, the owner
+/// [`RP_OWNER`] in `[team]`, and [`RP_ENTRIES`] entries in each of the first
+/// [`RP_CARDS`] part documents (the targets of `C-0001` on).
+fn rp_prepare(tree: &Tree) {
+    let config_path = tree.root.join("specengine.toml");
+    let mut config = fs::read_to_string(&config_path).expect("the config");
+    config.push_str(&format!(
+        "\n[[references.homes]]\nkinds = [\"node\"]\ndir   = \"media\"\n\n[team.{RP_OWNER}]\n\
+         role  = \"owner\"\nemail = \"{RP_OWNER}@example.org\"\n"
+    ));
+    // Every other login of the load a member, so a `[team]` refuses none of
+    // RF's writes (its uploaders delete their own references).
+    let members = (0..WRITERS)
+        .map(|n| format!("agent-{n}"))
+        .chain((0..CM_PEOPLE).map(|n| format!("person-{n}")))
+        .chain((0..RF_UPLOADERS).map(|n| format!("uploader-{n}")))
+        .chain((0..READERS).map(|n| format!("reader-{n}")))
+        .chain((0..RP_READERS).map(|n| format!("spec-reader-{n}")))
+        .chain(std::iter::once("page-0".to_owned()));
+    for login in members {
+        config.push_str(&format!(
+            "\n[team.{login}]\nrole  = \"member\"\nemail = \"{login}@example.org\"\n"
+        ));
+    }
+    fs::write(&config_path, config).expect("the config");
+    fs::write(
+        tree.root.join(".gitattributes"),
+        "areas/**/media/lfs-*.wav filter=lfs diff=lfs merge=lfs -text\n",
+    )
+    .expect(".gitattributes");
+    let entries: String = (0..RP_ENTRIES)
+        .map(|n| format!("  - \"media/entry-{n:02}.png | entry {n} of the soak\"\n"))
+        .collect();
+    for at in 0..RP_CARDS {
+        let path = tree.root.join(&tree.parts[at]);
+        let text = fs::read_to_string(&path).expect("a part file");
+        assert!(
+            text.starts_with("---\n"),
+            "{}: a front-matter",
+            path.display()
+        );
+        let close = 4 + text[4..].find("\n---\n").expect("a closing fence") + 1;
+        let written = format!("{}references:\n{entries}{}", &text[..close], &text[close..]);
+        fs::write(&path, written).expect("the entries");
+    }
+    tree.git.git(&tree.root, &["add", "-A"]);
+    tree.git.git(
+        &tree.root,
+        &[
+            "commit",
+            "-q",
+            "--no-verify",
+            "-m",
+            "RP: a home, the owner, 32 entries",
+        ],
+    );
+}
+
+/// `method path` of the JSON `body` by `login` as a page sends it.
+fn rp_send(
+    run: &Run<'_>,
+    login: &str,
+    method: &str,
+    path: &str,
+    body: &Value,
+) -> Result<Value, String> {
+    let mut headers = library_common::page_headers(login);
+    headers.push(("Origin".to_owned(), library_common::ORIGIN.to_owned()));
+    headers.push(("Content-Type".to_owned(), "application/json".to_owned()));
+    let bytes = if body.is_null() {
+        Vec::new()
+    } else {
+        body.to_string().into_bytes()
+    };
+    let answer = library_common::exchange(run.hub.port, method, path, &headers, &bytes, TIMEOUT)?;
+    if answer.status != 200 {
+        return Err(format!(
+            "{}: {}",
+            answer.status,
+            answer.text().chars().take(300).collect::<String>()
+        ));
+    }
+    serde_json::from_slice(&answer.body).map_err(|error| format!("not JSON: {error}"))
+}
+
+/// PR19's promoter: from [`RF_BASELINE`] on, every [`RP_EVERY`], a distinct
+/// WAV put, attached to a node of its own, promoted to the node's document
+/// (`plain-R-N.wav`, then `lfs-R-N.wav`, `R` the run's round, its nodes
+/// [`RP_RUN_NODES`] on from the last round's), staged and confirmed by the
+/// owner.
+fn rp_promoter(run: &Run<'_>, tree: &Tree) {
+    let login = RP_OWNER;
+    let round = RP_RUNS.fetch_add(1, Ordering::SeqCst);
+    wait_baseline(run);
+    let base = format!("/api/projects/{}", run.slug);
+    let mut next = Instant::now();
+    let mut n = 0usize;
+    while run.running() {
+        if Instant::now() < next {
+            thread::sleep(Duration::from_millis(100));
+            continue;
+        }
+        next += RP_EVERY;
+        n += 1;
+        let at = RP_CARDS + round * RP_RUN_NODES + n;
+        let node = tree.part_id(at);
+        let document = tree.parts[at % tree.parts.len()].clone();
+        let lfs_home = n.is_multiple_of(2);
+        let name = format!("{}-{round}-{n}.wav", if lfs_home { "lfs" } else { "plain" });
+        let seed = (7u64 << 56) | ((round as u64) << 32) | n as u64;
+        let mut b3 = None;
+        run.step(login, "PUT blobs (RP)", true, || {
+            let answer = put_stream(run.hub.port, run.slug, login, RP_FILE_BYTES, seed, TIMEOUT)?;
+            if answer.status != 200 {
+                return Err(format!("{}: {}", answer.status, answer.text()));
+            }
+            let blob: Value = serde_json::from_slice(&answer.body).map_err(|e| e.to_string())?;
+            b3 = blob["b3"].as_str().map(str::to_owned);
+            Ok(b3.is_some())
+        });
+        let Some(b3) = b3 else { continue };
+        let mut reference = None;
+        run.step(login, "POST references (RP)", true, || {
+            let made = rp_send(
+                run,
+                login,
+                "POST",
+                &format!("{base}/references"),
+                &json!({"on": node, "b3": b3, "name": name, "matters": "the swell under the hull"}),
+            )?;
+            reference = made["id"].as_str().map(str::to_owned);
+            Ok(reference.is_some())
+        });
+        let Some(reference) = reference else { continue };
+        let mut proposal = None;
+        run.step(login, "POST promote", true, || {
+            let review = rp_send(
+                run,
+                login,
+                "POST",
+                &format!("{base}/references/{reference}/promote"),
+                &json!({"to": node, "rationale": format!("Soak promotion {n}.")}),
+            )?;
+            proposal = review["id"]
+                .as_str()
+                .map(|id| (id.to_owned(), review["updated_at"].clone()));
+            Ok(proposal.is_some())
+        });
+        let Some((id, updated_at)) = proposal else {
+            continue;
+        };
+        let mut staged = false;
+        run.step(login, "POST decision (RP)", true, || {
+            rp_send(
+                run,
+                login,
+                "POST",
+                &format!("{base}/proposals/{id}/decision"),
+                &json!({"decision": "approve", "updated_at": updated_at}),
+            )?;
+            staged = true;
+            Ok(true)
+        });
+        if !staged {
+            continue;
+        }
+        let dir = Path::new(&document)
+            .parent()
+            .expect("a part file's directory")
+            .to_string_lossy()
+            .into_owned();
+        let path = format!("{dir}/media/{name}");
+        run.step(login, "POST confirm (RP)", true, || {
+            let read = rp_send(
+                run,
+                login,
+                "GET",
+                &format!("{base}/proposals/{id}/confirm"),
+                &Value::Null,
+            )?;
+            let started = Instant::now();
+            let done = rp_send(
+                run,
+                login,
+                "POST",
+                &format!("{base}/proposals/{id}/confirm"),
+                &json!({"question": read["question"], "updated_at": read["updated_at"]}),
+            )?;
+            run.shared
+                .confirm_ms
+                .lock()
+                .expect("confirms")
+                .push(ms(started.elapsed()));
+            if done["status"] != json!("applied") {
+                return Err(format!("{id} not applied: {done}"));
+            }
+            run.shared
+                .promotions
+                .lock()
+                .expect("promotions")
+                .push(Promotion {
+                    id: id.clone(),
+                    path: path.clone(),
+                    seed,
+                    lfs: lfs_home,
+                    b3: b3.trim_start_matches("b3:").to_owned(),
+                });
+            Ok(true)
+        });
+    }
+}
+
+/// PR19's readers of the inherited entries: `GET .../references?on=` and
+/// `get_card {context: true}` on the cards whose targets hold 32 entries.
+fn rp_reader(run: &Run<'_>, index: usize) {
+    let login = format!("spec-reader-{index}");
+    let mut n = index;
+    while run.running() {
+        let card = cm_card(n % RP_CARDS);
+        run.page(
+            &login,
+            &format!("/api/projects/{}/references?on={card}", run.slug),
+        );
+        if !run.running() {
+            break;
+        }
+        run.call(
+            &login,
+            "get_card",
+            json!({"card_id": card, "context": true}),
+            false,
+        );
+        n += 1;
+    }
+}
+
+/// PR19's end: at least one promotion; each committed at `HEAD` as its home
+/// says: plain, the bytes; LFS, a v1 pointer of the size whose object is
+/// the bytes and whose `oid` is their SHA-256.
+fn rp_verdict(shared: &Shared, tree: &Tree) -> Vec<String> {
+    let mut broken = Vec::new();
+    let promotions = shared.promotions.lock().expect("promotions").clone();
+    if promotions.iter().filter(|p| p.lfs).count() == 0
+        || promotions.iter().filter(|p| !p.lfs).count() == 0
+    {
+        broken.push(format!(
+            "RP confirmed {} promotions: none into one of the homes",
+            promotions.len()
+        ));
+    }
+    for promotion in &promotions {
+        let blob = tree.git.git(
+            &tree.root,
+            &["cat-file", "blob", &format!("HEAD:{}", promotion.path)],
+        );
+        if promotion.lfs {
+            let Some(pointer) = lfs::Pointer::parse(&blob) else {
+                broken.push(format!(
+                    "{}: {} is no LFS pointer",
+                    promotion.id, promotion.path
+                ));
+                continue;
+            };
+            let object = lfs::lfs_object(&tree.root.join(".git"), &pointer.oid);
+            if pointer.size != RP_FILE_BYTES
+                || !object.is_file()
+                || !refs_common::file_equals(
+                    &object,
+                    refs_common::SeekWav::new(RP_FILE_BYTES, promotion.seed),
+                )
+                || lfs::sha256_file(&object) != pointer.oid
+            {
+                broken.push(format!(
+                    "{}: {}'s pointer or object is not the file's",
+                    promotion.id, promotion.path
+                ));
+            }
+        } else {
+            let mut want = Vec::new();
+            refs_common::SeekWav::new(RP_FILE_BYTES, promotion.seed)
+                .read_to_end(&mut want)
+                .expect("the generator");
+            if blob != want {
+                broken.push(format!(
+                    "{}: {}'s blob is not the file",
+                    promotion.id, promotion.path
+                ));
+            }
+        }
+    }
+    broken
+}
+
 /// A reader: `get_node`, `search`, the inbox, in turn (those
 /// `WRITE_SOAK_READS` names), until the deadline.
 fn reader(run: &Run<'_>, corpus: &Corpus, index: usize) {
@@ -1912,7 +2312,7 @@ fn reader(run: &Run<'_>, corpus: &Corpus, index: usize) {
         cm_reader(run, index);
         return;
     }
-    if run.variant == Variant::RF {
+    if run.variant.files() {
         rf_reader(run, index);
         return;
     }
@@ -2434,15 +2834,20 @@ fn soak_run(
     let secs = settings.secs;
     let macos = cfg!(target_os = "macos");
     let label = format!("wm-{}-run{run_no}", variant.name());
-    let extra: Vec<(String, String)> = if settings.heap {
+    let mut extra: Vec<(String, String)> = if settings.heap {
         vec![("MallocStackLogging".to_owned(), "lite".to_owned())]
     } else {
         Vec::new()
     };
+    if variant == Variant::RP {
+        // PR19: git-lfs alone added before the hub's `PATH` (D18: missing,
+        // the run fails naming it).
+        extra.push(("PATH".to_owned(), rp_path(tree)));
+    }
     let home = tree.scratch.join(&format!("hub-home-{run_no}"));
     // The questions the template holds: the run's pending count at its start.
     let prefilled = template.map_or(0, |(_, stored)| stored);
-    if variant == Variant::RF {
+    if variant.files() {
         let free = free_bytes(&tree.scratch.0);
         assert!(
             free.is_some_and(|free| free >= RF_FREE_MIN),
@@ -2475,12 +2880,19 @@ fn soak_run(
         files,
     };
     thread::scope(|scope| {
-        if variant == Variant::RF {
+        if variant.files() {
             for at in 0..RF_UPLOADERS {
                 let run = &run;
                 scope.spawn(move || rf_uploader(run, at));
             }
             scope.spawn(|| rf_page_reader(&run));
+        }
+        if variant == Variant::RP {
+            scope.spawn(|| rp_promoter(&run, tree));
+            for at in 0..RP_READERS {
+                let run = &run;
+                scope.spawn(move || rp_reader(run, at));
+            }
         }
         for at in 0..variant.writers() {
             let (run, targets) = (&run, &targets);
@@ -2515,11 +2927,28 @@ fn soak_run(
     thread::sleep(Duration::from_millis(500));
     let lines = hub.requests();
     drop(hub);
-    let rf_broken = if variant == Variant::RF {
-        rf_verdict(&shared, &home, &tree.slug, files)
+    let promoted: Vec<String> = shared
+        .promotions
+        .lock()
+        .expect("promotions")
+        .iter()
+        .map(|promotion| promotion.b3.clone())
+        .collect();
+    let mut rf_broken = if variant.files() {
+        rf_verdict(
+            &shared,
+            &home,
+            &tree.slug,
+            files,
+            &promoted,
+            variant.page_judged(),
+        )
     } else {
         Vec::new()
     };
+    if variant == Variant::RP {
+        rf_broken.extend(rp_verdict(&shared, tree));
+    }
 
     let calls = shared.calls.lock().expect("calls").clone();
     let samples = shared.samples.lock().expect("samples").clone();
@@ -2661,7 +3090,7 @@ fn soak_run(
     // beside the pending count every TIMELINE_EVERY.
     report["reads_mix"] = json!(settings.reads.names());
     // CM19: the comments the run started over and the cards they sit on.
-    report["references"] = if variant == Variant::RF {
+    report["references"] = if variant.files() {
         let pages = shared.page_ms.lock().expect("pages").clone();
         let (before, after) = page_phases(&pages);
         // The page reader's own daemon lines (`GET …/cards` is its alone;
@@ -2738,6 +3167,9 @@ fn soak_run(
             "page_p50_after_ms": quantile_of(&after, 0.50),
             "page_p95_before_ms": quantile_of(&before, 0.95),
             "page_p95_after_ms": quantile_of(&after, 0.95),
+            // RF's bar, 1.5 x the p95 before + 50 ms; RP reports it only.
+            "page_p95_bar_ms": quantile_of(&before, 0.95).map(|base| base as f64 * 1.5 + 50.0),
+            "page_judged": variant.page_judged(),
             "page_reads": pages.len(),
             "page_cards_lines": {
                 "before": phase(&cards[..split]),
@@ -2748,8 +3180,27 @@ fn soak_run(
     } else {
         Value::Null
     };
-    report["comments"] = if matches!(variant, Variant::CM | Variant::RF) {
+    report["comments"] = if matches!(variant, Variant::CM | Variant::RF | Variant::RP) {
         json!({"prefilled": CM_PREFILL, "cards": CM_CARDS, "people": CM_PEOPLE})
+    } else {
+        Value::Null
+    };
+    // PR19: the promotions and the confirms' hold of the turn.
+    report["promotions"] = if variant == Variant::RP {
+        let confirms = shared.confirm_ms.lock().expect("confirms").clone();
+        let promotions = shared.promotions.lock().expect("promotions").clone();
+        json!({
+            "every_s": RP_EVERY.as_secs(),
+            "file_bytes": RP_FILE_BYTES,
+            "confirmed": promotions.len(),
+            "lfs": promotions.iter().filter(|promotion| promotion.lfs).count(),
+            "plain": promotions.iter().filter(|promotion| !promotion.lfs).count(),
+            "confirm_ms_p50": quantile_of(&confirms, 0.50),
+            "confirm_ms_max": confirms.iter().max(),
+            "confirm_ms": spread(&confirms),
+            "entries_per_card_target": RP_ENTRIES,
+            "readers": RP_READERS,
+        })
     } else {
         Value::Null
     };
@@ -2791,13 +3242,16 @@ fn write_soak() {
     let tree = Tree::new("write-soak", NODES, COMMITS);
     let corpus = Corpus::of(&tree);
     let mut files = Vec::new();
-    let template = if matches!(settings.variant, Variant::CM | Variant::RF) {
+    let template = if matches!(settings.variant, Variant::CM | Variant::RF | Variant::RP) {
         assert_eq!(
             settings.pending, 0,
-            "WRITE_SOAK_PENDING is W's and M's: CM and RF fill their own comments"
+            "WRITE_SOAK_PENDING is W's and M's: CM, RF and RP fill their own comments"
         );
+        if settings.variant == Variant::RP {
+            rp_prepare(&tree);
+        }
         let home = comments_prefill(&tree);
-        if settings.variant == Variant::RF {
+        if settings.variant.files() {
             files = references_prefill(&tree, &home);
         }
         Some((home, 0))
@@ -2936,6 +3390,7 @@ fn wm6_the_budgets_are_the_canons() {
         Variant::H,
         Variant::CM,
         Variant::RF,
+        Variant::RP,
     ]
     .into_iter()
     .map(|variant| {
@@ -3494,6 +3949,29 @@ fn the_reads_knob_names_what_readers_cycle() {
         Reads::parse(Some("node,cards"))
             .is_err_and(|error| error.contains("\"cards\" is none of node, search, inbox"))
     );
+}
+
+/// docs/features/reference-promotion.md PR19, D19: the `RP` variant carries
+/// RF's load (its writers, readers, uploaders and Range readers) and is
+/// judged as W, both bars; a promotion every 10 s of a 16 MiB WAV; 4
+/// readers of the inherited entries over cards whose targets hold 32.
+#[test]
+fn pr19_the_promotion_variant_is_judged_as_w() {
+    let rp = Variant::RP;
+    assert_eq!(rp.name(), "RP");
+    assert!(rp.files(), "RF's load");
+    assert_eq!(rp.writers(), WRITERS);
+    assert_eq!(rp.readers(), READERS);
+    assert_eq!(rp.budget(), Some(WRITE_BUDGET_MIB_PER_MIN));
+    assert_eq!(rp.footprint_budget(), Some(FOOTPRINT_BUDGET_MIB_PER_MIN));
+    assert_eq!(RP_EVERY, Duration::from_secs(10));
+    assert_eq!(RP_FILE_BYTES, 16 * 1024 * 1024);
+    assert_eq!((RP_READERS, RP_CARDS, RP_ENTRIES), (4, 4, 32));
+    assert_eq!(RF_BASELINE, Duration::from_secs(60));
+    // RF's page p95 is reported beside RP's budgets, never judged; RF's own
+    // runs judge it.
+    assert!(!rp.page_judged());
+    assert!(Variant::RF.page_judged());
 }
 
 /// docs/features/comments.md CM19: the `CM` variant writes with 8 logins

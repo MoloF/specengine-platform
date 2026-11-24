@@ -165,7 +165,7 @@ export function ClosedProposal({ project, proposal }: { project: string; proposa
               </Section>
             )}
             {/* Its references stay after a decision (docs/features/work-references.md "UI"): their own chunk. */}
-            <References project={project} on={id} level={3} />
+            <References project={project} on={id} targets={proposal.target_ids} level={3} />
             {/* Talk under it stays open after a decision (docs/features/comments.md "UI"): its own chunk. */}
             <Comments project={project} on={id} targets={proposal.target_ids} level={3} />
           </>

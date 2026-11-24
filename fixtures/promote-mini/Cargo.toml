@@ -1,0 +1,11 @@
+# Package of the promote-mini fixture: parsed by the code walk, never built.
+# Its one unit roots `src/lib.rs`, so the marker there binds LOC-HARBOUR to a
+# lockable item (`spec lock accept`, docs/features/reference-promotion.md
+# PR5). `[workspace]` keeps it out of the repository workspace.
+[package]
+name = "harbour-gate"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

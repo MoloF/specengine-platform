@@ -35,10 +35,12 @@ use super::comments::CommentRefusal;
 use super::stage::{as_key, json_text};
 use super::state::stored_text;
 use super::{
-    ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, REFS_SCHEMA, SqliteQueue, UnreadableRow,
-    check_time, corrupt, index_only, log_text, to_json, user_version,
+    EVENT_CREATED, ID_ORDER, NewProposal, Proposal, ProposalKind, QUEUE_SCHEMA_VERSION, QueueError,
+    REFS_SCHEMA, SqliteQueue, UnreadableRow, check_time, corrupt, existing, index_only,
+    insert_update, log_text, new_proposal_problem, tasks, to_json, user_version,
 };
 use crate::error::{Db, StoreError};
+use crate::floor::read_floor;
 use crate::schema;
 
 /// `reference.created`, with `id`, `on` (the target's ID) and `as`.
@@ -903,6 +905,116 @@ impl SqliteQueue {
             reference: stored,
             unnamed,
         })
+    }
+
+    /// Stores `proposal`, a `reference` (task spec `reference-promotion`,
+    /// "Queue schema 17"), as `open` under the next ID with `ref_id`
+    /// `reference`, bound to `task` when given, and logs `proposal.created`,
+    /// in one `Immediate` transaction. Read inside it: the reference, which
+    /// must be the project's, live and a file
+    /// ([`QueueError::ReferenceRefused`]: `no reference RF-0099`, `RF-0012
+    /// is deleted: nothing to promote`, `RF-0010 is a link: only a file is
+    /// promoted into git`), and the live twin: an `open` or `approved`
+    /// promotion of the same reference to the same document refuses
+    /// (`RF-0012 is already proposed for `<ID>` by PR-0042 (open)`).
+    /// Nothing written on any refusal.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_promotion(
+        &mut self,
+        proposal: &NewProposal,
+        reference: &str,
+        task: Option<&str>,
+        actor: Option<&str>,
+        now: &str,
+    ) -> Result<Proposal, QueueError> {
+        check_time(now)?;
+        if proposal.kind != ProposalKind::Reference {
+            return Err(QueueError::Invalid(format!(
+                "`create_promotion` stores a reference, not {}",
+                proposal.kind.with_article()
+            )));
+        }
+        if reference_number(reference).is_none() {
+            return Err(QueueError::Invalid(format!(
+                "`{reference}` is no reference ID"
+            )));
+        }
+        if let Some(problem) = new_proposal_problem(proposal) {
+            return Err(QueueError::Invalid(problem));
+        }
+        let project = self.project.clone();
+        let dir = self.dir.clone();
+        let tx = self.write()?;
+        if let Some(task) = task {
+            tasks::check_binding(&tx, &project, task, &proposal.place)?;
+        }
+        let stored = select_reference(&tx, &project, reference)?;
+        let Some(stored) = stored else {
+            return Err(refusal(
+                reference,
+                CommentRefusal::Unknown,
+                no_reference(reference),
+            ));
+        };
+        if stored.deleted.is_some() {
+            return Err(refusal(
+                reference,
+                CommentRefusal::Refused,
+                format!("{reference} is deleted: nothing to promote"),
+            ));
+        }
+        if stored.kind != ReferenceKind::File {
+            return Err(refusal(
+                reference,
+                CommentRefusal::Refused,
+                format!("{reference} is a link: only a file is promoted into git"),
+            ));
+        }
+        if stored.b3.is_none() {
+            return Err(refusal(
+                reference,
+                CommentRefusal::Refused,
+                format!("{reference}'s file is not on this host: nothing to promote"),
+            ));
+        }
+        let twin: Option<(String, String)> = tx
+            .query_row(
+                &format!(
+                    "SELECT id, status FROM main.proposals WHERE project = ?1 AND ref_id = ?2 \
+                     AND target_path = ?3 AND status IN ('open', 'approved') {ID_ORDER} LIMIT 1"
+                ),
+                (&project, reference, &proposal.target_path),
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .db()?;
+        if let Some((twin, status)) = twin {
+            return Err(refusal(
+                reference,
+                CommentRefusal::Refused,
+                format!(
+                    "{reference} is already proposed for `{}` by {twin} ({status})",
+                    proposal.target_id
+                ),
+            ));
+        }
+        let floor = read_floor(&dir)?;
+        let id = insert_update(
+            &tx,
+            &project,
+            proposal,
+            None,
+            task,
+            Some(reference),
+            floor,
+            now,
+        )?;
+        // A page's promotion names its person as a raise's `as` does.
+        let payload = format!("{{\"id\":{}{}}}", json_text(&id), as_key(actor));
+        log_text(&tx, &project, EVENT_CREATED, &payload, now)?;
+        let created = existing(&tx, &project, &id)?;
+        tx.commit().db()?;
+        Ok(created)
     }
 
     /// The project's reference `id`, in one snapshot; `Ok(None)` when there

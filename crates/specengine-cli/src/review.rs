@@ -352,7 +352,15 @@ pub(crate) fn preview_run(
         ));
         return run;
     }
-    let prepared = if proposal.new_file() {
+    let prepared = if proposal.kind == specengine_store::ProposalKind::Reference {
+        // A promotion's span is its document's, as step 5 read it.
+        crate::promote::prepare_promotion(env, git_env, context, proposal, messages).map(
+            |prepared| {
+                run.span = Some(prepared.span.clone());
+                prepared.preview
+            },
+        )
+    } else if proposal.new_file() {
         prepare_file(env, git_env, context, proposal, messages).map(|_| Preview::Applies)
     } else {
         // The review's notes read the whole recorded index step 4 decodes.

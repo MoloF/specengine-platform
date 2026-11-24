@@ -452,8 +452,8 @@ impl Serialize for ReferenceOutcome {
     }
 }
 
-/// What `list` answered: `{on, total, references, next_before, notes}`, or
-/// why there is no such target.
+/// What `list` answered: `{on, total, references, next_before, notes,
+/// in_spec}`, or why there is no such target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReferenceListOutcome {
     pub on: ReferenceOnJson,
@@ -461,6 +461,11 @@ pub struct ReferenceListOutcome {
     pub references: Vec<ReferenceDocument>,
     pub next_before: Option<String>,
     pub notes: Vec<String>,
+    /// The files in the spec beside the target's documents (task spec
+    /// `reference-promotion`, "Documents and text"): a card's every
+    /// target's document once, in target order; a node's document's; a
+    /// proposal's none; at most 64, on every page.
+    pub in_spec: Vec<crate::promote::InSpec>,
     pub refused: Option<ReferenceRefused>,
     pub messages: Vec<Message>,
 }
@@ -472,6 +477,7 @@ struct ReferenceListJson<'a> {
     references: &'a [ReferenceDocument],
     next_before: Option<&'a str>,
     notes: &'a [String],
+    in_spec: &'a [crate::promote::InSpec],
 }
 
 impl ReferenceListOutcome {
@@ -498,6 +504,7 @@ impl Serialize for ReferenceListOutcome {
                 references: &self.references,
                 next_before: self.next_before.as_deref(),
                 notes: &self.notes,
+                in_spec: &self.in_spec,
             }
             .serialize(serializer),
         }
@@ -1439,6 +1446,7 @@ fn run_list(
             references: Vec::new(),
             next_before: None,
             notes: Vec::new(),
+            in_spec: Vec::new(),
             refused: Some(ReferenceRefused {
                 id: Some(id.to_owned()),
                 reason: one_line(&reason),
@@ -1447,6 +1455,8 @@ fn run_list(
             messages,
         }
     };
+    // The documents whose files in the spec the list carries.
+    let mut reached: Vec<String> = Vec::new();
     let (on, on_id) = match written_on(&context.project, &request.on)? {
         Written::Card(id) => {
             if !target_exists(&context.queue, CommentOn::Card, &id)? {
@@ -1456,6 +1466,9 @@ fn run_list(
                     ReferenceCause::Unknown,
                     messages,
                 ));
+            }
+            if let Some(card) = context.queue.get_card(&id).map_err(queue_cannot)? {
+                reached = card.targets;
             }
             (CommentOn::Card, id)
         }
@@ -1472,7 +1485,10 @@ fn run_list(
         }
         Written::Node(written) => {
             match resolved_node_rev(env, &context.project, &written, &mut messages)? {
-                Ok((id, _)) => (CommentOn::Node, id),
+                Ok((id, _)) => {
+                    reached = vec![id.clone()];
+                    (CommentOn::Node, id)
+                }
                 Err(unresolved) => {
                     // A gone node's references stay under its old ID.
                     let stored = context
@@ -1497,6 +1513,14 @@ fn run_list(
         .list_references(on, &on_id, before.as_deref(), limit)
         .map_err(queue_cannot)?;
     notes.extend(page.unreadable.iter().map(unreadable_reference_line));
+    let reached: Vec<&str> = reached.iter().map(String::as_str).collect();
+    let (in_spec, more) = crate::promote::capped_in_spec(crate::promote::in_spec_of(
+        env,
+        &context.project,
+        &reached,
+        &mut messages,
+    )?);
+    notes.extend(more);
     messages.extend(notes.iter().cloned().map(Message::Note));
     Ok(ReferenceListOutcome {
         on: ReferenceOnJson {
@@ -1511,6 +1535,7 @@ fn run_list(
             .collect(),
         next_before: page.next_before,
         notes,
+        in_spec,
         refused: None,
         messages,
     })
@@ -2027,6 +2052,10 @@ pub(crate) fn render_list(outcome: &ReferenceListOutcome) -> String {
     if let Some(next) = &outcome.next_before {
         let _ = writeln!(out, "next: --before {next}");
     }
+    out.push_str(&crate::promote::in_spec_text(
+        &outcome.on.id,
+        &outcome.in_spec,
+    ));
     out
 }
 

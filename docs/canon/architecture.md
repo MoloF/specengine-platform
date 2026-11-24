@@ -3,20 +3,20 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 ---
 
 # SpecEngine architecture rules
 
-The rules all code is written by, each with its ADRs; a rule changes only through a new decision in the same change. Its detail is in the document its section names (the code layer's: `architecture-code.md`); the design: `docs/specs/specengine-platform/`.
+The rules all code follows, each with its ADRs; a rule changes only through a new decision in the same change. Its detail is in the document its section names (the code layer's: `architecture-code.md`); design: `docs/specs/specengine-platform/`.
 
 <a id="storage"></a>
 ## Storage
 
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
 - The operational database lives outside the repository, in the data directory (`serve.md`). Git receives the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `queue-backup.md`). ADR-0003.
-- A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position is computed per read, never stored, its `depends_on` chain ordering work, never gating it (`spec-roadmap.md`). ADR-0052.
-- A comment or a reference is queue data under a card, a node or a proposal: never a file, a commit or `queue.md`, deciding nothing, reaching the spec only through an item made from it (`comments.md`). A reference's file stays in the data directory (a hub's own volume), never in git, a dump or off the host (`work-references.md`). ADR-0087, ADR-0088.
+- A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position computed per read, never stored; `depends_on` orders work, never gates it (`spec-roadmap.md`). ADR-0052.
+- A comment or a reference is queue data under a card, a node or a proposal: never a file, a commit or `queue.md`, deciding nothing, reaching the spec only through an item made from it (`comments.md`). A reference's file stays in the data directory (a hub's volume), never in a dump or off the host; in git only as a confirmed `reference` proposal's (`work-references-promotion.md`). ADR-0087, ADR-0088, ADR-0089.
 
 <a id="layout"></a>
 ## Spec layout in a project
@@ -34,7 +34,7 @@ An approved proposal is applied only in the worktree, branch and base commit it 
 
 A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue; SpecEngine the index entry's outputs: `proposal-outputs.md`; a project's generator its own). ADR-0003, ADR-0013, ADR-0022, ADR-0062, ADR-0064; owner, Q3, 2026-09-30.
 
-`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the owner's accepted blobs alone; never otherwise `apply_proposal`, nor an MCP tool, a role, a rule, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
+`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, its writers in `architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the owner's accepted blobs alone; never otherwise `apply_proposal`, nor an MCP tool, a role, a rule, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 <a id="control"></a>
 ## Control and no blocking
@@ -60,7 +60,7 @@ EARS ("WHEN … the system SHALL …") is a suggested rule template, not a check
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `spec-check-process.md`), the nodes to bind (`[[health.bound]]`), a flow's ends (`[flow]`) and the plan's scale (`[roadmap]`) live in each project's `specengine.toml` and importer. The core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `spec-check-process.md`), the nodes to bind (`[[health.bound]]`), a flow's ends (`[flow]`) and the plan's scale (`[roadmap]`) live in each project's `specengine.toml` and importer. The core is exercised on two or more pilot projects of different nature, never carrying one's structure into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
 
 Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` unchanged (`flow-links.md`). ADR-0055.
 
@@ -93,7 +93,7 @@ The UI reads, stages or confirms decisions (`#apply`) and writes cards, comments
 <a id="checks-migration"></a>
 ## Documentation checks in projects
 
-A project's own generators (schemas, registries) stay in the project; their output is class generated. Documentation checks move into `spec check` once it reaches parity with the project's checks. ADR-0013.
+A project's own generators (schemas, registries) stay in the project; their output is class generated. Documentation checks move into `spec check` at parity with the project's checks. ADR-0013.
 
 <a id="stability"></a>
 ## Stability
@@ -108,7 +108,7 @@ The convention `documentation-system.md` is built in: it applies to every projec
 <a id="language"></a>
 ## Repository language
 
-All content of this repository — documentation, decisions, role prompts, code comments, messages — is in English but the UI's Russian catalog. ADR-0024, ADR-0072.
+All this repository's content (documentation, decisions, role prompts, code comments, messages) is in English but the UI's Russian catalog. ADR-0024, ADR-0072.
 
 <a id="distribution"></a>
 ## Distribution and mode

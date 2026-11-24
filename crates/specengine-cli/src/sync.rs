@@ -15,6 +15,11 @@
 //!   tree (a conflicted one read at `L`'s bytes first); reached by `merge
 //!   --ff-only`. Any other conflict is `held`, the paths named, nothing
 //!   touched. No `MERGE_HEAD` ever exists.
+//! - **The LFS upload** (task spec `reference-promotion`, "On a hub"):
+//!   before each push, the LFS objects the outgoing commits add are
+//!   uploaded under the deadline; a failed upload is `retrying`, `the LFS
+//!   upload failed: <stderr>`, and the push waits, so the remote never
+//!   holds a pointer without its object. No git-lfs: no step.
 //! - **The push**: accepted, `ok`; not a fast-forward, phases 2-4 again, at
 //!   most three rounds; refused by the remote, `held`; anything else,
 //!   `retrying`. Pushed is never stored: [`hub_sync`] computes `ahead` and
@@ -40,9 +45,9 @@ use std::time::Duration;
 use serde::Serialize;
 use specengine_core::card::is_format_character;
 use specengine_store::{
-    CONFIG_FILE, CommitFailure, GitEnv, GitError, IndexWriter as _, Looked, NamedBytes, NetFailure,
-    Pushed, Relation, Replacement, STDERR_MAX, SyncGit, Upstream, WorkingTree, ahead_behind,
-    file_mode, load_config, named, sync_place,
+    CONFIG_FILE, CommitFailure, GitEnv, GitError, IndexWriter as _, LfsUpload, Looked, NamedBytes,
+    NetFailure, Pushed, Relation, Replacement, STDERR_MAX, SyncGit, Upstream, WorkingTree,
+    ahead_behind, file_mode, load_config, named, sync_place,
 };
 
 use crate::freshness;
@@ -299,6 +304,21 @@ pub fn sync_once(
             Some(Merged::Done) => {}
             Some(Merged::Ended(outcome)) => return outcome,
             None => return stopped("the merge did not run".to_owned()),
+        }
+        match sync.lfs_upload(&upstream) {
+            LfsUpload::Absent | LfsUpload::Nothing | LfsUpload::Uploaded => {}
+            LfsUpload::Failed(stderr) => {
+                return SyncOutcome::ended(
+                    SyncState::Retrying,
+                    format!("the LFS upload failed: {stderr}"),
+                );
+            }
+            LfsUpload::Deadline => {
+                return SyncOutcome::ended(
+                    SyncState::Retrying,
+                    format!("the LFS upload passed its deadline of {seconds} s"),
+                );
+            }
         }
         match sync.push(&upstream) {
             Pushed::Accepted => return SyncOutcome::ok(),

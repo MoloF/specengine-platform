@@ -295,7 +295,7 @@ fn at_schema_10(db: &Path) {
     sqlite3(
         db,
         "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
-         ALTER TABLE cards DROP COLUMN mandate; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 10;",
+         ALTER TABLE cards DROP COLUMN mandate; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; PRAGMA user_version = 10;",
     );
 }
 
@@ -322,13 +322,13 @@ fn rows_of_10(db: &Path) -> String {
 #[test]
 fn s1_a_new_queue_stands_at_11_with_48_columns() {
     // 12 since docs/features/task-mandate.md M5, `proposals` unchanged.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
     let scratch = Scratch::new("cq-s1-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 51);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 52);
     // 50 since docs/features/plain-questions.md PQ8: step 13's two after.
     assert_eq!(PROPOSAL_COLUMNS[46..48], STEP_11_COLUMNS);
     assert_eq!(proposal_columns(11).map(<[_]>::len), Some(48));
@@ -347,9 +347,11 @@ fn s1_a_new_queue_stands_at_11_with_48_columns() {
     assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..50]));
     assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..50]));
     // 51 at 15 (docs/features/comments.md CM1: `comment_id`).
-    assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(17), None);
+    assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..51]));
+    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..51]));
+    // 52 since docs/features/reference-promotion.md: step 17 appends `ref_id`.
+    assert_eq!(proposal_columns(17), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(18), None);
     for schema in 10..=11 {
         assert_eq!(
             card_columns(schema).map(<[_]>::len),
@@ -361,7 +363,8 @@ fn s1_a_new_queue_stands_at_11_with_48_columns() {
     // 14 since docs/features/collision-pass.md D6: no card column changes.
     assert_eq!(card_columns(14).map(<[_]>::len), Some(26));
     assert_eq!(card_columns(16), Some(&CARD_COLUMNS[..]));
-    assert_eq!(card_columns(17), None);
+    assert_eq!(card_columns(17), Some(&CARD_COLUMNS[..]));
+    assert_eq!(card_columns(18), None);
     assert_eq!(
         sqlite3(
             &db,
@@ -390,7 +393,7 @@ fn s1_a_schema_10_queue_steps_to_11_at_its_first_open() {
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
     // 12 since docs/features/task-mandate.md M5: steps 11 and 12.
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(rows_of_10(&db), before, "every row as it was");
     assert_eq!(sqlite3(&db, &card_25), cards);
@@ -411,7 +414,7 @@ fn s1_a_schema_10_queue_steps_to_11_at_its_first_open() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "16", "stepped once");
+    assert_eq!(user_version(&db), "17", "stepped once");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS, "no second column");
 }
 
@@ -426,12 +429,12 @@ fn s1_a_schema_9_queue_reaches_11_in_one_open() {
         &db,
         "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
          ALTER TABLE cards DROP COLUMN mandate; ALTER TABLE cards DROP COLUMN tasks; \
-         DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 9;",
+         DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; PRAGMA user_version = 9;",
     );
     let before = rows_of_10(&db);
     drop(SqliteQueue::open(&db, PROJECT).expect("open steps"));
     // 12 and 26 since docs/features/task-mandate.md M5.
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
     assert_eq!(proposal_table(&db), PROPOSAL_COLUMNS);
     assert_eq!(card_table(&db).len(), 26);
     assert_eq!(card_table(&db).last().map(String::as_str), Some("mandate"));
@@ -450,7 +453,7 @@ fn s1_a_failing_step_11_leaves_a_schema_9_queue_at_9() {
     sqlite3(
         &db,
         "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; ALTER TABLE proposals DROP COLUMN why; ALTER TABLE cards DROP COLUMN mandate; \
-         ALTER TABLE cards DROP COLUMN tasks; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 9;",
+         ALTER TABLE cards DROP COLUMN tasks; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; PRAGMA user_version = 9;",
     );
     assert!(
         proposal_table(&db).contains(&"card_id".to_owned()),
@@ -488,8 +491,13 @@ fn s1_open_existing_reads_a_schema_10_queue_and_steps_nothing() {
     assert_eq!(stored.proposals.len(), 4);
     for row in &stored.proposals {
         // Step 13's `gist` and `matters` none either, nor step 15's
-        // `comment_id` (docs/features/comments.md CM1).
-        assert_eq!(row.columns[46..], [None, None, None, None, None], "{row:?}");
+        // `comment_id` (docs/features/comments.md CM1), nor step 17's
+        // `ref_id` (docs/features/reference-promotion.md PR11).
+        assert_eq!(
+            row.columns[46..],
+            [None, None, None, None, None, None],
+            "{row:?}"
+        );
     }
     let items = queue.card_items("C-0001").expect("card_items");
     assert!(items.items.is_empty() && items.unreadable.is_empty());

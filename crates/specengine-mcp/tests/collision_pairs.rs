@@ -326,8 +326,9 @@ fn pp7_the_schema_holds_a_closed_pair() {
             "{name}: evidence"
         );
         // 55 since docs/features/department-practices.md "Proposals: `cited`"
-        // (`cited`); 56 since docs/features/comments.md (`comment_id`).
-        assert_eq!(keys.len(), 56, "{name}: 56 keys");
+        // (`cited`); 56 since docs/features/comments.md (`comment_id`); 57
+        // since docs/features/reference-promotion.md (`ref_id`).
+        assert_eq!(keys.len(), 57, "{name}: 57 keys");
         assert!(
             schema["required"]
                 .as_array()

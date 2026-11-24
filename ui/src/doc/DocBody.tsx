@@ -309,7 +309,7 @@ export function DocMain({
       <DocInside project={project} docRef={docRef} open={insideOpen} onToggle={onInside} level={level} />
       <DocHistory project={project} docRef={docRef} open={historyOpen} onToggle={onHistory} level={level} />
       {/* People's material for the node, kept with its revision (docs/features/work-references.md "UI"): its own chunk, under the comments' target. */}
-      <References project={project} on={holder.id ?? holder.path} level={level} />
+      <References project={project} on={holder.id ?? holder.path} targets={[holder.id ?? holder.path]} level={level} />
       {/* Talk under the node, kept with its revision, never a write of it (docs/features/comments.md "UI"): its own chunk, under its canonical ID, an ID-less document's path. */}
       <Comments project={project} on={holder.id ?? holder.path} targets={[holder.id ?? holder.path]} level={level} />
     </>

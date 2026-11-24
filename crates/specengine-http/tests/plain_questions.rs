@@ -146,7 +146,9 @@ fn pq10_the_daemon_serves_gist_and_matters() {
     // 54 since docs/features/collision-pairs.md PP8 (`pair`).
     // 55 since docs/features/department-practices.md "Proposals: `cited`".
     // 56 since docs/features/comments.md (`comment_id` after `why`).
-    assert_eq!(keys.len(), 56, "{raw}");
+    // 57 since docs/features/reference-promotion.md (`ref_id` after
+    // `comment_id`).
+    assert_eq!(keys.len(), 57, "{raw}");
     let summary = keys
         .iter()
         .position(|key| key == "summary")

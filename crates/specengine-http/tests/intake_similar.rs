@@ -87,7 +87,9 @@ fn is10_the_daemon_serves_similar_null_among_51_keys() {
         // 54 since docs/features/collision-pairs.md PP8 (`pair`).
         // 55 since docs/features/department-practices.md "Proposals: `cited`".
         // 56 since docs/features/comments.md (`comment_id` after `why`).
-        assert_eq!(object.len(), 56, "{id}: {raw}");
+        // 57 since docs/features/reference-promotion.md (`ref_id` after
+        // `comment_id`).
+        assert_eq!(object.len(), 57, "{id}: {raw}");
         assert_eq!(document["similar"], Value::Null, "{id}: {raw}");
         let why = raw.find("\"why\":").expect("why");
         let similar = raw.find("\"similar\":").expect("similar");

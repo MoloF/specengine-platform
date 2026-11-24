@@ -188,6 +188,8 @@ describe("the cases the slice names (Data, Mock)", () => {
       "comments",
       // Their material (docs/features/work-references.md "A card's context and the task package").
       "references",
+      // The files in the spec beside its nodes' documents (docs/canon/work-references-promotion-surfaces.md "Documents and text").
+      "spec_references",
       "roadmap",
       "author",
       "created_at",
@@ -196,6 +198,8 @@ describe("the cases the slice names (Data, Mock)", () => {
     ]);
     // No card of the mock lists a task's practices: `[]`, and the bundle's disciplines none.
     expect([pkg.practices, pkg.bundle?.disciplines ?? []]).toEqual([[], []]);
+    // Nor its nodes' documents' entries: none in reach.
+    expect(pkg.spec_references).toEqual({ total: 0, listed: [] });
   });
 
   it("serve no code and no evidence, as without [code]: every package's bindings [] and tested null (tested-reads)", () => {

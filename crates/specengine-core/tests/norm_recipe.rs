@@ -283,8 +283,9 @@ fn te1_golden_inputs_of_spec_a_and_spec_b() {
 // ------------------------------------------------------------------ the base
 
 /// A document carrying every typed front-matter key (the six counted ones
-/// and the 27 never counted: `disciplines` since
-/// docs/features/department-practices.md DP1), an untyped key, a non-ID subheading, two ID
+/// and the never counted: `disciplines` since
+/// docs/features/department-practices.md DP1, `references` since
+/// docs/features/reference-promotion.md PR5), an untyped key, a non-ID subheading, two ID
 /// sections and a nested one: the base of TE-2 and TE-3.
 const BASE: &str = "\
 ---
@@ -317,6 +318,8 @@ stage: gather
 tags: [light]
 disciplines: [art]
 summarises: [docs/canon/light.md]
+references:
+  - media/lantern.png | The lamp lit at dusk
 links:
   derived_from: [R-12, A-101]
   depends_on: [MEC-SPRINT]
@@ -681,6 +684,13 @@ fn never_counted_changes() -> Vec<(&'static str, &'static str, &'static str)> {
             "summarises: [docs/canon/light.md]\n",
             "summarises: [docs/canon/light.md, docs/canon/dark.md#the-rule]\n",
         ),
+        // docs/features/reference-promotion.md PR5: a promoted file listed
+        // or its text changed is no change of the document's meaning.
+        (
+            "references",
+            "references:\n  - media/lantern.png | The lamp lit at dusk\n",
+            "references:\n  - media/lantern.png | The lamp at dawn\n  - media/wick.png\n",
+        ),
     ]
 }
 
@@ -738,6 +748,9 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
         // Never counted: docs/features/specengine-guide.md
         // "Front-matter `summarises`".
         "summarises",
+        // Never counted (PR5): docs/canon/work-references-promotion-surfaces.md
+        // "The `references:` key".
+        "references",
     ]
     .into_iter()
     .collect();

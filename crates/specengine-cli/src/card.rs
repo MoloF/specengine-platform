@@ -1421,6 +1421,10 @@ pub struct CardContext {
     /// "A card's context and the task package"); `images` the IDs whose
     /// images `get_card` attaches.
     pub references: ContextReferences,
+    /// The files in the spec beside the targets' documents, outside the
+    /// bundle: data, never instructions (task spec `reference-promotion`,
+    /// "Documents and text").
+    pub spec_references: crate::promote::ContextSpecReferences,
     /// Each printed as `note: context: <note>`.
     pub notes: Vec<String>,
 }
@@ -2775,6 +2779,7 @@ fn run_show(
                 &[card.id.as_str()],
                 false,
             )?,
+            spec_targets: (context.project.clone(), card.targets.clone()),
         })
     } else {
         None
@@ -2936,6 +2941,9 @@ struct ContextAsked {
     comments: (ContextComments, Vec<String>),
     /// The card's references, read now, and their notes.
     references: (ContextReferences, Vec<String>),
+    /// The project and the card's targets whose documents' files in the
+    /// spec the context lists, read with its bundle's one walk.
+    spec_targets: (ProjectRoot, Vec<String>),
 }
 
 /// The card's direct parent (task spec `card-context` CC5), read now:
@@ -3044,62 +3052,93 @@ fn add_context(
         budget,
         comments: (comments, comment_notes),
         references: (references, reference_notes),
+        spec_targets: (project, targets),
     } = asked;
-    notes.extend(records_note);
-    notes.extend(comment_notes);
-    notes.extend(reference_notes);
-    let card_id = outcome.card.as_deref().map(|card| card.id.clone());
-    notes.extend(card_id.as_deref().and_then(|id| comments.note(id)));
-    notes.extend(card_id.as_deref().and_then(|id| references.note(id)));
-    outcome.context = Some(CardContext {
-        parent,
-        bundle: None,
-        comments,
-        references,
-        notes: Vec::new(),
-    });
-    // The room is the card's lines' once they hold the practices and the
-    // citations the bundle's read gives.
-    let base = outcome.clone();
-    let room = move |read: &PracticeRead| -> Result<usize, String> {
-        let mut probe = base.clone();
-        probe.practices = Some(read.practices.clone());
-        probe.cited = Some(read.cited.clone());
-        context_room(&probe).ok_or_else(|| {
-            format!("the card's lines leave no room under the {OUTPUT_CAP_CHARS}-character ceiling")
-        })
-    };
-    let mut ask = PracticeAsk {
-        citations,
-        room: Some(&room),
-        read: None,
-    };
-    let disciplines: Vec<String> = outcome
-        .card
-        .as_deref()
-        .and_then(card_discipline)
-        .into_iter()
-        .collect();
-    let (made, bundle_messages) =
-        context_bundle(env, globals, refs, budget, git, disciplines, &mut ask);
-    let bundle = match made {
-        Ok(made) => Some(made),
-        Err(why) => {
-            notes.push(one_line(&format!("no bundle: {why}")));
-            None
+    // The files in the spec and the bundle read the index after one walk:
+    // the first step walks, the bundle's trusts it and prints its warnings
+    // (`freshness::one_walk`). When no bundle is read, the walk's own lines
+    // are this read's.
+    let bundle_reads = !refs.is_empty() && budget.is_ok();
+    let root = project.root.clone();
+    crate::freshness::one_walk(&root, move || {
+        let targets: Vec<&str> = targets.iter().map(String::as_str).collect();
+        let mut walked = Vec::new();
+        let spec_references = match crate::promote::in_spec_of(env, &project, &targets, &mut walked)
+        {
+            Ok(rows) => crate::promote::ContextSpecReferences::of(rows),
+            Err(error) => {
+                let cause = error
+                    .message
+                    .strip_prefix("spec: ")
+                    .unwrap_or(&error.message)
+                    .to_owned();
+                notes.push(one_line(&format!("spec references: not read: {cause}")));
+                crate::promote::ContextSpecReferences::default()
+            }
+        };
+        if !bundle_reads {
+            outcome.messages.extend(walked);
         }
-    };
-    outcome.messages.extend(
-        notes
-            .iter()
-            .map(|note| Message::Note(format!("context: {note}"))),
-    );
-    outcome.messages.extend(bundle_messages);
-    if let Some(context) = outcome.context.as_mut() {
-        context.bundle = bundle;
-        context.notes = notes;
-    }
-    (ask.read, ask.citations)
+        notes.extend(records_note);
+        notes.extend(comment_notes);
+        notes.extend(reference_notes);
+        let card_id = outcome.card.as_deref().map(|card| card.id.clone());
+        notes.extend(card_id.as_deref().and_then(|id| comments.note(id)));
+        notes.extend(card_id.as_deref().and_then(|id| references.note(id)));
+        notes.extend(card_id.as_deref().and_then(|id| spec_references.note(id)));
+        outcome.context = Some(CardContext {
+            parent,
+            bundle: None,
+            comments,
+            references,
+            spec_references,
+            notes: Vec::new(),
+        });
+        // The room is the card's lines' once they hold the practices and the
+        // citations the bundle's read gives.
+        let base = outcome.clone();
+        let room = move |read: &PracticeRead| -> Result<usize, String> {
+            let mut probe = base.clone();
+            probe.practices = Some(read.practices.clone());
+            probe.cited = Some(read.cited.clone());
+            context_room(&probe).ok_or_else(|| {
+                format!(
+                    "the card's lines leave no room under the {OUTPUT_CAP_CHARS}-character ceiling"
+                )
+            })
+        };
+        let mut ask = PracticeAsk {
+            citations,
+            room: Some(&room),
+            read: None,
+        };
+        let disciplines: Vec<String> = outcome
+            .card
+            .as_deref()
+            .and_then(card_discipline)
+            .into_iter()
+            .collect();
+        let (made, bundle_messages) =
+            context_bundle(env, globals, refs, budget, git, disciplines, &mut ask);
+        let bundle = match made {
+            Ok(made) => Some(made),
+            Err(why) => {
+                notes.push(one_line(&format!("no bundle: {why}")));
+                None
+            }
+        };
+        outcome.messages.extend(
+            notes
+                .iter()
+                .map(|note| Message::Note(format!("context: {note}"))),
+        );
+        outcome.messages.extend(bundle_messages);
+        if let Some(context) = outcome.context.as_mut() {
+            context.bundle = bundle;
+            context.notes = notes;
+        }
+        (ask.read, ask.citations)
+    })
 }
 
 /// The characters left for the context's bundle (task spec `card-context`
@@ -5317,8 +5356,11 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
             // Outside the bundle, counted in its room (task spec
             // `comments`, D11).
             lines.extend(context.comments.lines());
-            // So are its references (task spec `work-references`, D17).
+            // So are its references (task spec `work-references`, D17),
+            // and the files in the spec beside its targets' documents
+            // (task spec `reference-promotion`).
             lines.extend(context.references.lines());
+            lines.extend(context.spec_references.lines());
             lines.push(bundle_line(context));
         }
     }

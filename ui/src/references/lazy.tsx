@@ -14,6 +14,8 @@ export interface ReferencesProps {
   project: string;
   /** What the references are under, as the daemon takes `on`: a card's or a proposal's ID, a node's canonical ID, an ID-less document's path. */
   on: string;
+  /** The documents "Promote to canon…" offers, the first chosen at first (docs/canon/work-references-promotion-surfaces.md "UI"): the node; a card's targets; a proposal's targets. */
+  targets: readonly string[];
   /** The part heading's level among its siblings'. */
   level: 2 | 3;
 }

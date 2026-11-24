@@ -479,6 +479,12 @@ pub const STUDIO_LAMP: (&str, &str) = ("studio-lamp", "studio-lamp");
 /// out of [`FIXTURES`] too, for the same reason.
 pub const AUTO_MINI: (&str, &str) = ("auto-mini", "auto-mini");
 
+/// The fixture of docs/features/reference-promotion.md "Acceptance criteria"
+/// (places, people, rules and a mechanic; homes `media`, LFS, and `art`,
+/// plain), with its slug: the promotion tests run on it; kept out of
+/// [`FIXTURES`] too, for the same reason.
+pub const PROMOTE_MINI: (&str, &str) = ("promote-mini", "promote-mini");
+
 /// A header line of `spec show`: the fields split on ` | `.
 pub fn header_fields(line: &str) -> Vec<&str> {
     line.split(" | ").collect()

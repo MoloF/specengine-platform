@@ -3,8 +3,8 @@
 #   docker build -f scripts/deploy/Dockerfile .
 # from the repository root, with Dockerfile.dockerignore beside this file.
 # Three stages: the web UI, the two binaries with that UI compiled in, and a
-# Debian slim runtime holding `spec`, `specengine-http`, git, ssh and the
-# three scripts alone.
+# Debian slim runtime holding `spec`, `specengine-http`, git, git-lfs, ssh and
+# the three scripts alone.
 # Every base is an exact tag and its multi-arch index digest, pending the
 # owner (Q7).
 
@@ -30,14 +30,17 @@ COPY --from=ui /src/ui/dist ui/dist
 RUN cargo build --locked --release -p specengine-cli -p specengine-http
 
 # The runtime: git 2.38 or later (`merge-tree --write-tree`), ssh for the deploy
-# key, the CA roots, and the base's `sh`, which a sync's SIGTERM needs. Nothing
-# more: no git extension that fetches content on checkout (hub-git.md "Known
-# limits"), no Rust toolchain, no rust-analyzer.
+# key, the CA roots, and the base's `sh`, which a sync's SIGTERM needs; git-lfs
+# (Debian 13's, 3.0 or later) to upload a promoted file's object before a push
+# (reference-promotion D8, D9), installed as a program and never configured as
+# a filter: no `git lfs install`, so no checkout, merge or fast-forward fetches
+# or smudges content (hub-git.md "Known limits"). No Rust toolchain, no
+# rust-analyzer.
 FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 # GHCR links the package to the repository it names.
 LABEL org.opencontainers.image.source=https://github.com/MoloF/specengine-platform
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git openssh-client \
+    && apt-get install -y --no-install-recommends ca-certificates git git-lfs openssh-client \
     && rm -rf /var/lib/apt/lists/*
 # uid and gid 10001 own /data and /projects, so a fresh named volume takes
 # that ownership, and the user's home, a system path under /var/lib.
@@ -59,6 +62,9 @@ ENV XDG_DATA_HOME=/data HOME=/var/lib/specengine/home
 # write's transient corpus load is not kept in an arena per thread
 # (write-memory, WM10). It changes no answer.
 ENV MALLOC_ARENA_MAX=2
+# A checkout writes LFS pointers and fetches no object, whatever a person's
+# config might add (reference-promotion D8); every sync child sets it too.
+ENV GIT_LFS_SKIP_SMUDGE=1
 # The blob store's mount point (work-references): a new, empty named volume
 # takes this directory's owner and mode on its first mount, so
 # specengine-blobs starts owned by 10001, 0700, under specengine-data.

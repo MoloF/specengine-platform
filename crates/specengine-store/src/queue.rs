@@ -138,6 +138,11 @@
 //!   ADR-0088): step 16 adds `refs`, a file's or a link's row under a card,
 //!   a proposal or a node; its file's bytes are the CLI's blob store's,
 //!   never the queue's. No card, proposal, gate or decision reads one.
+//! - **Promotions** (task spec `reference-promotion`; ADR-0089): step 17
+//!   adds a proposal's `ref_id`, the reference a `reference` proposal
+//!   promotes, set when stored and never written again; a second live
+//!   promotion of one reference to one document is refused in the insert's
+//!   transaction ([`ProposalQueue::create_promotion`]).
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
@@ -173,7 +178,7 @@ use specengine_core::drift::{DriftEvidence, StoredJson, is_drift_hash};
 pub use specengine_core::intake::Interpretation;
 use specengine_core::intake::{
     AMENDMENT_KIND, CREATE_KIND, DECISION_KIND, DISCREPANCY_KIND, DRIFT_KIND, Evidence, GapType,
-    INTERPRETATION_KIND, IntakeOption, IntakeSeverity, QUESTION_KIND, UPDATE_KIND,
+    INTERPRETATION_KIND, IntakeOption, IntakeSeverity, QUESTION_KIND, REFERENCE_KIND, UPDATE_KIND,
     normalized_summary, with_article,
 };
 use specengine_core::is_clean_relative;
@@ -230,7 +235,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 16;
+pub const QUEUE_SCHEMA_VERSION: i64 = 17;
 
 /// The first queue schema whose `proposals` holds `card_id` and `why`
 /// (step 10 → 11).
@@ -250,6 +255,10 @@ pub(crate) const COMMENTS_SCHEMA: i64 = 15;
 /// The first queue schema with `refs` (step 15 → 16; task spec
 /// `work-references`).
 pub(crate) const REFS_SCHEMA: i64 = 16;
+
+/// The first queue schema whose `proposals` holds `ref_id` (step 16 → 17;
+/// task spec `reference-promotion`).
+pub(crate) const PROMOTION_SCHEMA: i64 = 17;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -461,6 +470,14 @@ CREATE INDEX refs_b3       ON refs (project, b3);
 CREATE INDEX refs_agent_b3 ON refs (project, agent_b3);
 ";
 
+/// Step 16 → 17: the reference a `reference` proposal promotes (task spec
+/// `reference-promotion`, "Queue schema 17"), `NULL` on every row stepped,
+/// and the index a reference's live promotions are read by.
+const STEP_17: &str = "
+ALTER TABLE proposals ADD COLUMN ref_id TEXT;
+CREATE INDEX proposals_ref ON proposals (project, ref_id);
+";
+
 /// The record columns, in table order.
 const RECORD_COLUMNS: [&str; 5] = [
     "record_id",
@@ -486,23 +503,33 @@ macro_rules! step_10_columns {
 /// Every column of `proposals`, in table order.
 const COLUMNS: &str = concat!(
     step_10_columns!(),
-    ", card_id, why, gist, matters, comment_id"
+    ", card_id, why, gist, matters, comment_id, ref_id"
 );
 
 /// [`COLUMNS`] over a queue still at schema 8, 9 or 10, no step run (a
 /// handle of [`SqliteQueue::open_existing`]): `card_id`, `why`, `gist`,
 /// `matters` and `comment_id` read `NULL`, as on a row steps 11, 13 and 15
 /// stepped.
-const COLUMNS_10: &str = concat!(step_10_columns!(), ", NULL, NULL, NULL, NULL, NULL");
+const COLUMNS_10: &str = concat!(step_10_columns!(), ", NULL, NULL, NULL, NULL, NULL, NULL");
 
 /// [`COLUMNS`] over a queue still at schema 11 or 12, no step run: `gist`,
 /// `matters` and `comment_id` read `NULL`, as on a row steps 13 and 15
 /// stepped.
-const COLUMNS_12: &str = concat!(step_10_columns!(), ", card_id, why, NULL, NULL, NULL");
+const COLUMNS_12: &str = concat!(step_10_columns!(), ", card_id, why, NULL, NULL, NULL, NULL");
 
 /// [`COLUMNS`] over a queue still at schema 13 or 14, no step run:
 /// `comment_id` reads `NULL`, as on a row step 15 stepped.
-const COLUMNS_14: &str = concat!(step_10_columns!(), ", card_id, why, gist, matters, NULL");
+const COLUMNS_14: &str = concat!(
+    step_10_columns!(),
+    ", card_id, why, gist, matters, NULL, NULL"
+);
+
+/// [`COLUMNS`] over a queue still at schema 15 or 16, no step run: `ref_id`
+/// reads `NULL`, as on a row step 17 stepped.
+const COLUMNS_16: &str = concat!(
+    step_10_columns!(),
+    ", card_id, why, gist, matters, comment_id, NULL"
+);
 
 /// The order of proposal IDs: by number (`PR-9999` before `PR-10000`).
 const ID_ORDER: &str = "ORDER BY length(id), id";
@@ -554,6 +581,11 @@ pub enum ProposalKind {
     /// (task spec `drift-queue`): approved by the lock accept of its node,
     /// one commit of `spec.lock` alone.
     Drift,
+    /// Promote a reference's file into git beside a document (task spec
+    /// `reference-promotion`, ADR-0089): its text one entry of the
+    /// document's `references:` key, its `ref_id` the reference; applied as
+    /// that key's update plus the file, one commit; never under `[auto]`.
+    Reference,
 }
 
 /// What approving a kind does, every kind in exactly one family
@@ -571,7 +603,7 @@ pub enum KindFamily {
 }
 
 impl ProposalKind {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Update,
         Self::Question,
         Self::Discrepancy,
@@ -580,6 +612,7 @@ impl ProposalKind {
         Self::Decision,
         Self::Amendment,
         Self::Drift,
+        Self::Reference,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -592,6 +625,7 @@ impl ProposalKind {
             Self::Decision => DECISION_KIND,
             Self::Amendment => AMENDMENT_KIND,
             Self::Drift => DRIFT_KIND,
+            Self::Reference => REFERENCE_KIND,
         }
     }
 
@@ -613,9 +647,11 @@ impl ProposalKind {
     /// record; a `drift` writes `spec.lock` through its node's accept.
     pub const fn family(self) -> KindFamily {
         match self {
-            Self::Update | Self::Create | Self::Interpretation | Self::Amendment => {
-                KindFamily::Applies
-            }
+            Self::Update
+            | Self::Create
+            | Self::Interpretation
+            | Self::Amendment
+            | Self::Reference => KindFamily::Applies,
             Self::Question | Self::Discrepancy | Self::Decision => KindFamily::Decides,
             Self::Drift => KindFamily::Locks,
         }
@@ -634,7 +670,8 @@ impl ProposalKind {
             | Self::Discrepancy
             | Self::Interpretation
             | Self::Decision
-            | Self::Drift => false,
+            | Self::Drift
+            | Self::Reference => false,
         }
     }
 
@@ -652,7 +689,8 @@ impl ProposalKind {
             | Self::Create
             | Self::Interpretation
             | Self::Decision
-            | Self::Drift => false,
+            | Self::Drift
+            | Self::Reference => false,
         }
     }
 
@@ -669,7 +707,8 @@ impl ProposalKind {
             | Self::Create
             | Self::Interpretation
             | Self::Amendment
-            | Self::Drift => false,
+            | Self::Drift
+            | Self::Reference => false,
         }
     }
 
@@ -682,9 +721,12 @@ impl ProposalKind {
             Self::Question => Some(IntakeShape::Question),
             Self::Decision => Some(IntakeShape::Decision),
             Self::Discrepancy => Some(IntakeShape::Discrepancy),
-            Self::Update | Self::Create | Self::Interpretation | Self::Amendment | Self::Drift => {
-                None
-            }
+            Self::Update
+            | Self::Create
+            | Self::Interpretation
+            | Self::Amendment
+            | Self::Drift
+            | Self::Reference => None,
         }
     }
 }
@@ -1156,6 +1198,10 @@ pub struct Proposal {
     /// The comment it was raised from (`CM-NNNN`), a deciding kind's only;
     /// set when stored, never changed (task spec `comments`).
     pub comment_id: Option<String>,
+    /// The reference a `reference` proposal promotes (`RF-NNNN`), its
+    /// kind's only; set when stored, never changed (task spec
+    /// `reference-promotion`).
+    pub ref_id: Option<String>,
     /// The owner's staged choice, on an `open` proposal only
     /// (`docs/canon/decision-staging.md`).
     pub staged: Option<StagedChoice>,
@@ -2511,11 +2557,13 @@ enum Hold<'a> {
 /// "Acceptance criteria", PQ8), 13 → 14 the collision ledger (task spec
 /// `collision-pass` CP6), 14 → 15 the comments, their versions and a
 /// proposal's `comment_id` (task spec `comments`), 15 → 16 the references
-/// (task spec `work-references`; 0 → 16 runs all sixteen, every due step
-/// in this one transaction; a schema-5 DB opens as 16, every
+/// (task spec `work-references`), 16 → 17 a proposal's `ref_id` (task spec
+/// `reference-promotion`; 0 → 17 runs all seventeen, every due step in
+/// this one transaction; a schema-5 DB opens as 17, every
 /// `interpretation`, `drift`, `drift_hash`, `card_id`, `why`, `gist`,
-/// `matters`, `comment_id` `NULL`, no card, an empty ledger, no comment, no
-/// reference; a schema-9 card reads no task, a schema-11 one no mandate);
+/// `matters`, `comment_id`, `ref_id` `NULL`, no card, an empty ledger, no
+/// comment, no reference; a schema-9 card reads no task, a schema-11 one no
+/// mandate);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -2597,6 +2645,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 15 {
         tx.execute_batch(STEP_16).db()?;
         version = 16;
+    }
+    if version == 16 {
+        tx.execute_batch(STEP_17).db()?;
+        version = 17;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;
@@ -2914,8 +2966,10 @@ impl RawRow {
         // Step 13's: intake columns of a question.
         columns.gist = take();
         columns.matters = take();
-        // Step 15's, last in the table: the comment an item was raised from.
+        // Step 15's: the comment an item was raised from.
         let comment_id = take();
+        // Step 17's, last in the table: the reference a promotion names.
+        let ref_id = take();
         if let Some(task) = &task_id
             && specengine_core::task::task_number(task).is_none()
         {
@@ -2955,6 +3009,45 @@ impl RawRow {
                     format!("`{comment}` is no comment ID"),
                 ));
             }
+        }
+        // A promotion's reference: a `reference` alone names one, and its
+        // text is one entry the key keeps (task spec `reference-promotion`,
+        // "Queue schema 17").
+        match (&ref_id, kind == ProposalKind::Reference) {
+            (None, true) => {
+                return Err(corrupt(&id, "ref_id", "it is NULL on a reference"));
+            }
+            (Some(_), false) => {
+                return Err(corrupt(
+                    &id,
+                    "ref_id",
+                    format!(
+                        "it is set on {}, which names no reference",
+                        kind.with_article()
+                    ),
+                ));
+            }
+            (Some(reference), true) => {
+                if specengine_core::reference::reference_number(reference).is_none() {
+                    return Err(corrupt(
+                        &id,
+                        "ref_id",
+                        format!("`{reference}` is no reference ID"),
+                    ));
+                }
+                let kept =
+                    specengine_core::promote::judge_entries(&[specengine_model::FmValue::Str(
+                        new_text.clone(),
+                    )]);
+                if kept.kept.is_empty() {
+                    return Err(corrupt(
+                        &id,
+                        "new_text",
+                        format!("{new_text:?} is no entry the references key keeps"),
+                    ));
+                }
+            }
+            (None, false) => {}
         }
         if why.is_some() && !kind.holds_why() {
             return Err(corrupt(
@@ -3031,6 +3124,7 @@ impl RawRow {
             task_id,
             card_id,
             comment_id,
+            ref_id,
             staged,
             interpretation,
             drift,
@@ -3748,6 +3842,8 @@ pub(crate) fn columns_of(conn: &Connection) -> Result<&'static str, QueueError> 
         COLUMNS_12
     } else if version < COMMENTS_SCHEMA {
         COLUMNS_14
+    } else if version < PROMOTION_SCHEMA {
+        COLUMNS_16
     } else {
         COLUMNS
     })
@@ -3853,24 +3949,26 @@ fn next_id(tx: &Transaction<'_>, floor: u64) -> Result<String, QueueError> {
 /// `linked` to the given proposal, bound to `task`; the `target_ids` of a
 /// kind that adds nodes set ([`create_targets`]), an update's `NULL`; an
 /// interpretation's `interpretation`; its ID.
+#[allow(clippy::too_many_arguments)]
 fn insert_update(
     tx: &Transaction<'_>,
     project: &str,
     proposal: &NewProposal,
     linked: Option<&str>,
     task: Option<&str>,
+    reference: Option<&str>,
     floor: u64,
     now: &str,
 ) -> Result<String, QueueError> {
     let author = to_json(&proposal.author)?;
     let diagnostics = to_json(&proposal.diagnostics)?;
-    let target_ids = proposal
-        .kind
-        .adds_nodes()
+    // A kind adding nodes its target and new IDs; a promotion its document
+    // alone (task spec `reference-promotion`, "Queue schema 17").
+    let target_ids = (proposal.kind.adds_nodes() || reference.is_some())
         .then(|| {
             to_json(&create_targets(
                 &proposal.target_id,
-                proposal.base_hash.is_none(),
+                proposal.kind.adds_nodes() && proposal.base_hash.is_none(),
                 &proposal.new_ids,
             ))
         })
@@ -3883,7 +3981,7 @@ fn insert_update(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL, NULL, NULL, ?19, ?19, \
              ?21, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?20, NULL, NULL, NULL, \
-             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL, NULL, NULL, NULL, NULL, NULL)"
+             NULL, NULL, ?22, NULL, NULL, ?23, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?24)"
         ),
         rusqlite::params![
             id,
@@ -3909,6 +4007,7 @@ fn insert_update(
             target_ids,
             task,
             interpretation,
+            reference,
         ],
     )
     .db()?;
@@ -4198,7 +4297,7 @@ fn insert_intake(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, NULL, NULL, NULL, NULL, NULL, NULL, \
-             ?25, NULL, NULL, NULL, NULL, NULL, ?26, ?27, ?28, ?29, ?30)"
+             ?25, NULL, NULL, NULL, NULL, NULL, ?26, ?27, ?28, ?29, ?30, NULL)"
         ),
         rusqlite::params![
             id,
@@ -4364,7 +4463,7 @@ fn insert_drift(
             "INSERT INTO main.proposals ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
              ?10, ?11, NULL, NULL, NULL, NULL, NULL, ?12, ?13, NULL, NULL, NULL, NULL, ?14, ?14, \
              ?15, ?16, NULL, ?17, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20, NULL, NULL, NULL, NULL, NULL)"
+             NULL, NULL, ?18, NULL, NULL, NULL, ?19, ?20, NULL, NULL, NULL, NULL, NULL, NULL)"
         ),
         rusqlite::params![
             id,
@@ -4613,7 +4712,7 @@ impl SqliteQueue {
         let mut linked = None;
         if let Some(patch) = patch {
             // The linked update takes the item's task, in this transaction.
-            let update = insert_update(&tx, &project, patch, Some(&id), task, floor, now)?;
+            let update = insert_update(&tx, &project, patch, Some(&id), task, None, floor, now)?;
             tx.execute(
                 "UPDATE main.proposals SET linked = ?1 WHERE id = ?2 AND project = ?3",
                 [update.as_str(), id.as_str(), project.as_str()],
@@ -4645,6 +4744,12 @@ impl ProposalQueue for SqliteQueue {
         now: &str,
     ) -> Result<Proposal, QueueError> {
         check_time(now)?;
+        if proposal.kind == ProposalKind::Reference {
+            return Err(QueueError::Invalid(
+                "a reference names the reference it promotes: `create_promotion` stores it"
+                    .to_owned(),
+            ));
+        }
         if let Some(problem) = new_proposal_problem(proposal) {
             return Err(QueueError::Invalid(problem));
         }
@@ -4669,7 +4774,7 @@ impl ProposalQueue for SqliteQueue {
             }
         }
         let floor = read_floor(&dir)?;
-        let id = insert_update(&tx, &project, proposal, None, task, floor, now)?;
+        let id = insert_update(&tx, &project, proposal, None, task, None, floor, now)?;
         log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
         let stored = existing(&tx, &project, &id)?;
         tx.commit().db()?;

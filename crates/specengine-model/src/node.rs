@@ -186,6 +186,15 @@ pub struct Fields {
     /// counted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summarises: Option<Vec<String>>,
+    /// The files promoted beside the document, every list entry as written
+    /// (a non-text entry kept as its value), in written order (task spec
+    /// `reference-promotion`, "The `references:` key"; ADR-0089): each text
+    /// entry `<path>` or `<path> | <what matters>`, the path relative to the
+    /// document's directory. The check judges each entry
+    /// (`reference-entry`), the index keeps the passing ones, root-relative;
+    /// never counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub references: Option<Vec<FmValue>>,
 }
 
 /// A place a `path#name` link can land on: a heading's GitHub slug, a

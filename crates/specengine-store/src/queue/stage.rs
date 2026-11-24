@@ -262,7 +262,8 @@ impl Stage {
                         | ProposalKind::Create
                         | ProposalKind::Interpretation
                         | ProposalKind::Amendment
-                        | ProposalKind::Drift => None,
+                        | ProposalKind::Drift
+                        | ProposalKind::Reference => None,
                     }
                 };
                 if let Some(flag) = flag {

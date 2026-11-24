@@ -201,8 +201,9 @@ pub fn git_status(dir: &Path, pathspec: &str) -> String {
 /// (docs/features/pack.md), `fixtures/auto-mini`
 /// (docs/features/auto-rule.md "Fixture"), `fixtures/write-cost-golden`
 /// (docs/features/doc-library.md: the preset fixtures' new base commit IDs,
-/// a fixture's own date unmasked) or `fixtures/hub-backups`
-/// (docs/features/hub-backups.md HB5: the invented passkey export), each
+/// a fixture's own date unmasked), `fixtures/hub-backups`
+/// (docs/features/hub-backups.md HB5: the invented passkey export) or
+/// `fixtures/promote-mini` (docs/features/reference-promotion.md), each
 /// untracked until the owner commits it, nothing else.
 pub fn assert_fixtures_status_clean() {
     let status = git_status(&repository_root(), "fixtures/");
@@ -228,6 +229,7 @@ pub fn assert_fixtures_status_clean() {
                 && !path.starts_with("fixtures/auto-mini/")
                 && !path.starts_with("fixtures/write-cost-golden/")
                 && !path.starts_with("fixtures/hub-backups/")
+                && !path.starts_with("fixtures/promote-mini/")
                 && path != "fixtures/daemon-keys.json"
         })
         .collect();
@@ -238,8 +240,8 @@ pub fn assert_fixtures_status_clean() {
          fixtures/flow-hire, fixtures/flow-gaps, fixtures/card-press, \
          fixtures/trace-almanac, fixtures/apply-outputs, fixtures/parent-ref, \
          fixtures/studio-lamp, fixtures/flow-aside, fixtures/plant-diary, \
-         fixtures/auto-mini, fixtures/write-cost-golden, fixtures/hub-backups and \
-         fixtures/daemon-keys.json:\n{}",
+         fixtures/auto-mini, fixtures/write-cost-golden, fixtures/hub-backups, \
+         fixtures/promote-mini and fixtures/daemon-keys.json:\n{}",
         foreign.join("\n")
     );
 }

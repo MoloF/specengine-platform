@@ -1302,8 +1302,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // 0.49.2 since the patch of write-memory (RM-0132, a version-only bump);
     // 0.49.3 since the patch of mixed-load-memory (RM-0134, a version-only
     // bump); 0.50.0 since comments (RM-0136: `list_comments`, `add_comment`,
-    // `comment_id`, `comments`); 0.51.0 since work-references (RM-0137).
-    assert_eq!(manifest["version"], "0.51.0");
+    // `comment_id`, `comments`); 0.51.0 since work-references (RM-0137);
+    // 0.52.0 since reference-promotion (RM-0138: the `reference` kind).
+    assert_eq!(manifest["version"], "0.52.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1433,8 +1434,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // 0.49.2 since the patch of write-memory (RM-0132, a version-only bump);
     // 0.49.3 since the patch of mixed-load-memory (RM-0134, a version-only
     // bump); 0.50.0 since comments (RM-0136: `list_comments`, `add_comment`,
-    // `comment_id`, `comments`); 0.51.0 since work-references (RM-0137).
-    assert_eq!(manifest["version"], "0.51.0");
+    // `comment_id`, `comments`); 0.51.0 since work-references (RM-0137);
+    // 0.52.0 since reference-promotion (RM-0138: the `reference` kind).
+    assert_eq!(manifest["version"], "0.52.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1494,6 +1496,45 @@ fn kind_decision_iteration2_ask_owner_tells_an_accepted_decision_from_a_decision
     );
 }
 
+/// PR20, docs/canon/work-references-promotion-surfaces.md "Image, plugin, guide":
+/// `propose-spec-change` names the `reference` kind and `reference_id`
+/// (the names are the server's: the kind one of `propose_change`'s `kind`
+/// enum, `reference_id` its property), its body within 4 096 bytes; the
+/// plugin 0.52.0. M: the kind or `reference_id` left out; the body over its
+/// budget.
+#[test]
+fn reference_promotion_pr20_propose_spec_change_names_the_kind() {
+    let skills = committed();
+    let skill = &skills["propose-spec-change"];
+    assert!(
+        skill.contains("reference"),
+        "the skill names the kind: {skill}"
+    );
+    assert!(
+        skill.contains("reference_id"),
+        "the skill names `reference_id`: {skill}"
+    );
+    let body = skill
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert!(body.len() <= 4096, "the body is {} bytes", body.len());
+    let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
+    let list = session.tools();
+    let schema = &tool(&list, "propose_change")["inputSchema"];
+    assert!(
+        schema["properties"]["kind"]["enum"]
+            .as_array()
+            .is_some_and(|kinds| kinds.contains(&Value::from("reference"))),
+        "{schema}"
+    );
+    assert!(
+        schema["properties"].get("reference_id").is_some(),
+        "{schema}"
+    );
+    drop(session.finish());
+}
+
 /// docs/features/kind-amendment.md AC-R12, W36 ("Plugin"):
 /// `propose-spec-change` teaches the kind in one bullet of "A new section
 /// or file": `"kind": "amendment"`, `"base": null`, a new spec or decision
@@ -1539,7 +1580,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.51.0",
+        manifest["version"], "0.52.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1566,7 +1607,8 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          write-memory (no key): 0.49.2; the patch of mixed-load-memory (no key): 0.49.3; \
          comments (`list_comments`, `add_comment`, `comment_id`, `comments`): 0.50.0; \
          work-references (`list_references`, `get_reference`, `add_reference`, \
-         `references`): 0.51.0"
+         `references`): 0.51.0; reference-promotion (`propose_change`'s `reference` kind, \
+         `reference_id`, `name`): 0.52.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2678,7 +2720,8 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
         (
             "- Your new IDs are held while the proposal is open, in the spec only once approved; \
              the reply",
-            "- Your new IDs are held while the proposal is open; the reply",
+            // Trimmed by docs/features/reference-promotion.md (0.52.0).
+            "- Your new IDs are held while the proposal is open (the reply's",
         ),
         (
             "ask the owner to reject it, and resend once",
@@ -2748,8 +2791,9 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // specengine-guide (RM-0129); 0.49.1 since the patch of release-tail;
     // 0.49.2 since the patch of write-memory (RM-0132); 0.49.3 since the
     // patch of mixed-load-memory (RM-0134); 0.50.0 since comments (RM-0136);
-    // 0.51.0 since work-references (RM-0137).
-    assert_eq!(manifest["version"], "0.51.0");
+    // 0.51.0 since work-references (RM-0137); 0.52.0 since reference-promotion
+    // (RM-0138).
+    assert_eq!(manifest["version"], "0.52.0");
 }
 
 /// docs/features/departments.md (RM-0096) D12: the sentence `read-spec`'s
@@ -3058,10 +3102,12 @@ const PROPOSE_SIMILAR_EDITS: [(&str, &str); 6] = [
     (
         "- Your new IDs are held while the proposal is open; the reply's `target_ids` lists the \
          target and them.\n- A document amending",
-        "- Your new IDs are held while the proposal is open; the reply's `target_ids` lists the \
-         target and them.\n- The reply's `similar` lists what yours may repeat, with why: prefer \
-         an update of it. One with `gates` true keeps yours unstored (`id` null) until you resend \
-         naming it in `distinct_from`.\n- A document amending",
+        // Trimmed by docs/features/reference-promotion.md (0.52.0) to keep
+        // the body within its 4 096 bytes; the `similar` list still taught.
+        "- Your new IDs are held while the proposal is open (the reply's `target_ids`).\n- The \
+         reply's `similar` lists what yours may repeat: prefer an update of it. One with `gates` \
+         true keeps yours unstored (`id` null) until you resend naming it in `distinct_from`.\n- \
+         A document amending",
     ),
     (
         "- Refused for a stale `base`: the span changed since you read it; read it again, redo \
@@ -3122,8 +3168,10 @@ fn intake_similar_the_two_skills_teach_the_similar_list() {
         (
             "propose-spec-change",
             &PROPOSE_SIMILAR_EDITS[..],
-            4374,
-            4088,
+            // 4 374 and 4 088 at intake-similar; 4 375 and 4 089 since
+            // reference-promotion's section (0.52.0, `RF-…`, no digit).
+            4375,
+            4089,
             PROPOSE_DESCRIPTION_0_41_0,
         ),
         (
@@ -3172,9 +3220,9 @@ fn intake_similar_the_two_skills_teach_the_similar_list() {
     let propose = &skills["propose-spec-change"];
     assert!(
         propose.contains(
-            "\n- The reply's `similar` lists what yours may repeat, with why: prefer an update of \
-             it. One with `gates` true keeps yours unstored (`id` null) until you resend naming \
-             it in `distinct_from`.\n"
+            "\n- The reply's `similar` lists what yours may repeat: prefer an update of it. One \
+             with `gates` true keeps yours unstored (`id` null) until you resend naming it in \
+             `distinct_from`.\n"
         ),
         "the similar bullet"
     );

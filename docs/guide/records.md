@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-22
+reviewed: 2026-11-23
 summarises: [docs/canon/documentation-system.md#2-four-classes, docs/canon/documentation-system.md#5-the-promotion-rule, docs/canon/architecture.md#layout, docs/canon/architecture.md#ids, docs/canon/node-revision.md#revision]
 ---
 

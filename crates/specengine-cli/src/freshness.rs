@@ -267,6 +267,20 @@ pub fn trusting<T>(run: impl FnOnce() -> T) -> T {
     )
 }
 
+/// `run`, its reads of `root` walking at most once (one walk per read):
+/// inside a scope, its reads trusting the scope's trusts ([`trusting`]);
+/// outside one, a trust of `root` for `run`'s extent, so the first
+/// freshness step walks and every later one trusts that walk, printing its
+/// warnings. A card's context reads its files in the spec and its bundle so.
+pub(crate) fn one_walk<T>(root: &Path, run: impl FnOnce() -> T) -> T {
+    let scoped = SCOPE.with_borrow(|scope| !scope.trusts.is_empty());
+    if scoped {
+        return trusting(run);
+    }
+    let trust = IndexTrust::new(root.to_path_buf());
+    trusted(&[&trust], run)
+}
+
 /// The scope's trust whose root is `root` (canonical).
 fn matching(root: &Path) -> Option<Arc<Inner>> {
     SCOPE.with_borrow(|scope| {

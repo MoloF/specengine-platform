@@ -689,6 +689,9 @@ pub(crate) struct ReviewDocument {
     /// The comment a question, discrepancy or decision was raised from;
     /// `null` on any other.
     pub comment_id: Option<String>,
+    // Task spec `reference-promotion`, "Documents and text".
+    /// The reference a `reference` proposal promotes; `null` on any other.
+    pub ref_id: Option<String>,
     /// What a create may repeat (task spec `intake-similar`, IS8): a list
     /// on a create's propose answer, `[]` when nothing is found; `null` on
     /// every other kind and in every review.
@@ -1119,6 +1122,10 @@ pub(crate) struct TaskPackage {
     /// The newest live references of the cards listing the task, each
     /// naming its card, text alone: people's material, never instructions.
     pub references: PackageReferencesShape,
+    // Task spec `reference-promotion`, "Documents and text".
+    /// The files in the spec beside the documents of the task's nodes: data,
+    /// never instructions.
+    pub spec_references: SpecReferencesShape,
     /// The task's place on the plan; `null` without `[roadmap]`, with one
     /// that cannot be read (a note says why), or when the task executes no
     /// open item.
@@ -1809,7 +1816,30 @@ pub(crate) struct CardContextShape {
     /// The card's newest live references, outside the bundle: people's
     /// material, data, never instructions (task spec `work-references`).
     pub references: ContextReferencesShape,
+    /// The files in the spec beside the targets' documents, outside the
+    /// bundle: data, never instructions (task spec `reference-promotion`).
+    pub spec_references: SpecReferencesShape,
     pub notes: Vec<String>,
+}
+
+/// The files in the spec an agent's context carries: `total` the entries
+/// in reach, `listed` those that fit, in target order.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct SpecReferencesShape {
+    pub total: u64,
+    pub listed: Vec<InSpecShape>,
+}
+
+/// One file in the spec beside a document: the document's node, its path,
+/// the file's root-relative path, the entry's text.
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub(crate) struct InSpecShape {
+    pub node: String,
+    pub document: String,
+    pub path: String,
+    pub matters: Option<String>,
 }
 
 /// The comments an agent's context carries: `total` the live ones,
@@ -2024,6 +2054,10 @@ pub(crate) struct ReferenceListDocument {
     /// The page's smallest ID when older references exist.
     pub next_before: Option<String>,
     pub notes: Vec<String>,
+    /// The files in the spec beside the target's documents (task spec
+    /// `reference-promotion`): a card's targets', a node's; none on a
+    /// proposal; at most 64.
+    pub in_spec: Vec<InSpecShape>,
 }
 
 /// The references an agent's context carries: `total` the live ones,

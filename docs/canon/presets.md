@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, scripts, fixtures]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-24
 ---
 
 # Presets: `spec init` and the packs it installs
@@ -60,7 +60,7 @@ A table those readers only name-check (`RawFile`), such as `[gate]`, `[roadmap]`
 
 Each is a header comment, `[[card.flow]]` tables, `[[workspace]]` tables, then commented examples; no `[project]`, `[team]`, `[ids]`, live `[[module]]` or live `[[card.split]]` row (roots and kinds are a project's). Each flow is its own discipline, `accept` its last two columns, no `moves`, its `return` column second (`card-flows.md` "Config"). The header says to install it with `spec init --pack <this file>` or copy it, to add modules, a workspace's `module` and titles in the project's language, that every name is data (ADR-0008, ADR-0073), and that a flow's `title` and `return` and a `[[card.split]]` row need a build that reads them on every terminal, plugin and hub serving the project.
 
-**`gamedev.toml`**, a game studio's trades; no name echoes `[team]`'s `lead`. Header lines 1-5 name `--pack` (they replaced the old lines 1-4 alone); lines 6-9 keep the data and build rules. Six flows, `narrative` "Narrative", `development` "Programming", `art` "Art", `level-design` "Level design", `production` "Production", `sound` "Sound", the role research's columns, the return column `sent-back` "Returned". After the workspaces, a commented direction `scenes` and two commented `[[card.split]]` rows (`card-split.md`).
+**`gamedev.toml`**, a game studio's trades; no name echoes `[team]`'s `lead`. Header lines 1-5 name `--pack` (they replaced the old lines 1-4 alone); lines 6-9 keep the data and build rules. Six flows, `narrative` "Narrative", `development` "Programming", `art` "Art", `level-design` "Level design", `production` "Production", `sound` "Sound", the role research's columns, the return column `sent-back` "Returned". After the workspaces, a commented direction `scenes` and two commented `[[card.split]]` rows (`card-split.md`); then a commented `[[references.homes]]` (`kinds = ["character", "scene"]`, `dir = "media"`) with its `.gitattributes` LFS line and the 50 MiB plain cap (`work-references-promotion.md`).
 
 | Workspace | Sections | Landing | Flows |
 |---|---|---|---|

@@ -109,6 +109,13 @@ CREATE TABLE disciplines (
   discipline TEXT NOT NULL,
   PRIMARY KEY (file_id, ord)
 ) STRICT;
+CREATE TABLE promoted (
+  file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  path TEXT NOT NULL,
+  matters TEXT,
+  PRIMARY KEY (file_id, ord)
+) STRICT;
 CREATE TABLE edges (
   file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
   ord INTEGER NOT NULL,
@@ -338,7 +345,7 @@ const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "node
 /// `code_worktrees`, which `code_resolve` references; format 16's edge
 /// tables before `files`, which they reference; format 17's `file_stats`
 /// before `files` and `walk_notes` before `worktrees`; format 19's
-/// `disciplines` before `files`.
+/// `disciplines` before `files`; format 22's `promoted` before `files`.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",
     "aliases",
@@ -346,6 +353,7 @@ const FORMAT_TABLES: &[&str] = &[
     "anchors",
     "diagnostics",
     "disciplines",
+    "promoted",
     "nodes",
     "edges",
     "edge_parents",

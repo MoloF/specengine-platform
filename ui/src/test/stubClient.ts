@@ -61,6 +61,7 @@ import type {
   HubSync,
   Identity,
   Inbox,
+  InSpec,
   IntakeDocument,
   LockDiffView,
   LibraryDocument,
@@ -68,6 +69,7 @@ import type {
   MentionList,
   NodeView,
   Project,
+  PromoteBody,
   Proposal,
   Reference,
   ReferenceAddBody,
@@ -111,6 +113,7 @@ import {
   aGuidePage,
   aHealthReport,
   aNode,
+  aProposal,
   aRoadmap,
   aRoadmapGroup,
   aRoadmapItem,
@@ -157,13 +160,14 @@ function storedOf(stage: RoundAnswerBody["stage"]): Stage {
  * mockImplementation.
  */
 export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
-  const state: { proposals: Proposal[]; notes: string[]; round: RoundSheet; comments: CommentDocument[]; references: Reference[]; blobs: Blob[] } = {
+  const state: { proposals: Proposal[]; notes: string[]; round: RoundSheet; comments: CommentDocument[]; references: Reference[]; blobs: Blob[]; inSpec: Record<string, InSpec[]> } = {
     proposals: [...proposals],
     notes,
     round: aRoundSheet([]),
     comments: [],
     references: [],
     blobs: [],
+    inSpec: {},
   };
   /** The stub's reference by ID, or the daemon's 404. */
   const referenceOf = (id: string): Reference => {
@@ -379,7 +383,7 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     // tombstone. Files are read at `/api/projects/<p>/blobs/<b3>`, as the daemon's. A test overriding what any answers.
     getReferences: vi.fn<(project: string, options: ReferencesOptions, signal?: AbortSignal) => Promise<ReferenceList>>((_project, options) => {
       const listed = state.references.filter((reference) => reference.on.id === options.on);
-      return Promise.resolve(structuredClone({ on: listed[0]?.on ?? { kind: "card", id: options.on }, total: listed.length, references: listed, next_before: null, notes: [] }));
+      return Promise.resolve(structuredClone({ on: listed[0]?.on ?? { kind: "card", id: options.on }, total: listed.length, references: listed, next_before: null, notes: [], in_spec: state.inSpec[options.on] ?? [] }));
     }),
     putBlob: vi.fn<(project: string, blob: Blob, onProgress: UploadProgress, signal: AbortSignal) => Promise<BlobStored>>((_project, blob, onProgress) => {
       state.blobs.push(blob);
@@ -401,6 +405,23 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       const stored = referenceOf(id);
       Object.assign(stored, { title: null, matters: null, url: null, name: null, b3: null, agent_b3: null, meta: null, file: null, deleted: { by: "local", at: STAGED_AT } });
       return Promise.resolve(structuredClone(stored));
+    }),
+    // A promotion (docs/canon/work-references-promotion-surfaces.md "HTTP") stores the next PR- of kind `reference`
+    // naming its reference, the entry its name and text, and answers its review document.
+    promoteReference: vi.fn<(project: string, id: string, body: PromoteBody) => Promise<Proposal>>((_project, id, body) => {
+      const stored = referenceOf(id);
+      const made = aProposal({
+        id: `PR-${String(state.proposals.length + 140).padStart(4, "0")}`,
+        kind: "reference",
+        target_id: body.to,
+        target_ids: [body.to],
+        new_text: body.matters === null ? (body.name ?? stored.name ?? "") : `${body.name ?? stored.name ?? ""} | ${body.matters}`,
+        rationale: body.rationale,
+        ref_id: id,
+        notes: [`adds media/${body.name ?? stored.name ?? ""}: ${id}, ${stored.media ?? ""}, plain`],
+      });
+      state.proposals.push(made);
+      return Promise.resolve(structuredClone(made));
     }),
     blobUrl: vi.fn<(project: string, b3: string) => string>((project, b3) => `/api/projects/${encodeURIComponent(project)}/blobs/${encodeURIComponent(b3)}`),
     // Marks and rollups (docs/features/card-trace.md): none.

@@ -2267,7 +2267,7 @@ fn ac07_cards_round_trip_through_a_format_3_dump() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":9,\"queue_schema\":16,\"project\":\"card-press\",\"proposals\":0,\
+            "{{\"format\":10,\"queue_schema\":17,\"project\":\"card-press\",\"proposals\":0,\
              \"tasks\":1,\"runs\":0,\"cards\":4,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":{event_rows}}}"
         )
     );
@@ -2403,7 +2403,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let v3_lines: Vec<String> = v3.lines().map(str::to_owned).collect();
     assert_eq!(
         v3_lines[0],
-        "{\"format\":9,\"queue_schema\":16,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
+        "{\"format\":10,\"queue_schema\":17,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
          \"runs\":0,\"cards\":0,\"comments\":0,\"comment_versions\":0,\"refs\":0,\"events\":1}"
     );
     let old_header = "{\"format\":2,\"queue_schema\":8,\"project\":\"card-press\",\"proposals\":0,\
@@ -2429,7 +2429,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     pair.sql(
         "DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; ALTER TABLE proposals DROP COLUMN matters; ALTER TABLE proposals DROP COLUMN gist; \
          ALTER TABLE proposals DROP COLUMN why; ALTER TABLE proposals DROP COLUMN card_id; \
-         DROP TABLE cards; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; PRAGMA user_version = 8;",
+         DROP TABLE cards; DROP TABLE IF EXISTS collision_marks; DROP TABLE IF EXISTS comment_versions; DROP TABLE IF EXISTS comments; DROP TABLE IF EXISTS refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; PRAGMA user_version = 8;",
     );
     let from_8 = dumps.join("from-8.jsonl");
     export(&pair, &pair.home, &from_8);
@@ -2443,7 +2443,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     assert_eq!(ok(&pair, &["card", "list"]), PRESS_BOARD);
     // 12 since docs/features/task-mandate.md M5, 13 since
     // docs/features/plain-questions.md PQ8.
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "16", "stepped");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "17", "stepped");
     assert_eq!(pair.sql("SELECT * FROM tasks; SELECT * FROM events;"), rows);
 
     // The refusals, on a dump holding one card.
@@ -2470,7 +2470,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut format_2_with_a_card = lines.clone();
     format_2_with_a_card[0] = format_2_with_a_card[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
@@ -2488,14 +2488,14 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
         ("format-8-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
         (
             "format-8-of-schema-11",
-            change(0, "\"queue_schema\":16,", "\"queue_schema\":11,"),
+            change(0, "\"queue_schema\":17,", "\"queue_schema\":11,"),
             1,
         ),
         (
             "format-2-of-eight-keys",
             change(
                 0,
-                "\"format\":9,\"queue_schema\":16,",
+                "\"format\":10,\"queue_schema\":17,",
                 "\"format\":2,\"queue_schema\":8,",
             ),
             1,
@@ -2503,10 +2503,14 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
         // docs/features/task-mandate.md R1: format 6 refused at 8a43e5d, 7 there;
         // plain-questions: 8 over this build's 7, 14 over 13; comments: 9 over
         // 8, 16 over 15.
-        ("format-10", change(0, "\"format\":9,", "\"format\":10,"), 1),
+        (
+            "format-11",
+            change(0, "\"format\":10,", "\"format\":11,"),
+            1,
+        ),
         (
             "schema-16",
-            change(0, "\"queue_schema\":16,", "\"queue_schema\":17,"),
+            change(0, "\"queue_schema\":17,", "\"queue_schema\":18,"),
             1,
         ),
         ("a-card-in-format-2", format_2_with_a_card, 2),

@@ -1,15 +1,16 @@
 import { ClientError, type ReferencesOptions, type UploadProgress } from "./client";
 import { errorBodyOf, projectPath, queryOf, refusedReasonOf, request, segment } from "./http";
-import type { BlobStored, Reference, ReferenceAddBody, ReferenceList } from "./types";
+import type { BlobStored, PromoteBody, Proposal, Reference, ReferenceAddBody, ReferenceList } from "./types";
 
 // The references' requests (`docs/features/work-references.md` "HTTP"), `HttpClient`'s in a chunk of
 // their own, reached by its dynamic import alone. The read is judged: a `{id, reason}` 404 or 409
 // rejects with its reason, an older daemon's unknown route in its words. The attach a JSON body, the
 // delete none: 200 the reference, a refusal (an error body 400 or 403, `{id, reason}` 404 or 409)
-// rejecting verbatim. The upload is the binary door's one PUT: the bytes as they are, typed
-// `application/octet-stream`, never a form, through an XMLHttpRequest, so its progress is the
-// browser's own count of the body sent; the browser adds `Content-Length`, `Origin` and
-// `Sec-Fetch-Site`, which the door requires.
+// rejecting verbatim; the promote a JSON body, 200 the review document of the proposal it stored,
+// refused alike (`docs/canon/work-references-promotion-surfaces.md` "HTTP"). The upload is the binary door's one
+// PUT: the bytes as they are, typed `application/octet-stream`, never a form, through an
+// XMLHttpRequest, so its progress is the browser's own count of the body sent; the browser adds
+// `Content-Length`, `Origin` and `Sec-Fetch-Site`, which the door requires.
 
 /** What the binary door takes: the bytes as they are, never multipart (`docs/features/work-references.md` "HTTP"). */
 export const OCTET_STREAM = "application/octet-stream";
@@ -50,6 +51,15 @@ export async function addReference(project: string, body: ReferenceAddBody): Pro
 
 export async function deleteReference(project: string, id: string): Promise<Reference> {
   return (await request("DELETE", `${referencesPath(project)}/${segment(id)}`)) as Reference;
+}
+
+/**
+ * A stored file proposed into git beside a document (`docs/canon/work-references-promotion-surfaces.md` "HTTP"):
+ * 200 the `--brief` review document of the stored proposal; an error body (400, 403, 503) or an
+ * `{id, reason}` (404, 409) rejecting verbatim. Nothing is written under the root by it.
+ */
+export async function promoteReference(project: string, id: string, body: PromoteBody): Promise<Proposal> {
+  return (await request("POST", `${referencesPath(project)}/${segment(id)}/promote`, { body: JSON.stringify(body) })) as Proposal;
 }
 
 /** What one PUT came to: its status, its body as text, and its `Retry-After`. */

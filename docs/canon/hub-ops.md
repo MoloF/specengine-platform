@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [scripts/deploy, .github/workflows]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 ---
 
 # Hub ops: off-host dumps, restore, upgrade, health and `--push`
@@ -20,9 +20,9 @@ Three sidecars, `restart: unless-stopped`, `init: true`, run `/bin/sh /opt/hub-o
 
 **Staging**: the shared tmpfs volume `hub-dumps` (`size=256m,uid=10001,mode=0700`). Plaintext lives on tmpfs alone, but a restore's `restore/`, which the runbook deletes.
 
-**The grid**, UTC: a round at start, then at each slot `now - (now - off) % 900 + 900` (`date -u +%s`), `off` 0 for `queue` and `door`, 300 for `upload`, whose first round waits 60 s. Slot 03:05 (`slot % 86400 = 11100`) prunes; `once` never. No state but the clock and the names: a restart or clock step costs a round at most.
+**The grid**, UTC: a round at start, then at each slot `now - (now - off) % 900 + 900`, `off` 0 for `queue` and `door`, 300 for `upload`, whose first round waits 60 s. Slot 03:05 (`slot % 86400 = 11100`) prunes; `once` never. No state but the clock and the names: a restart or clock step costs a round at most.
 
-**Generations**: `/dumps/<part>/<t>/`, `t` the round's `date -u +%Y%m%dT%H%M%SZ`, byte order time order; folders 700, files 600. A round stages in `.<t>.<pid>.tmp`, claims `<t>` by `mkdir .<t>.claim.tmp`, then renames; a second round in one second is dropped, exit 1. A part keeps its newest 3, removes `.*.tmp` past 60 minutes (`find -prune -mmin`).
+**Generations**: `/dumps/<part>/<t>/`, `t` the round's `date -u +%Y%m%dT%H%M%SZ`, byte order time order; folders 700, files 600. A round stages in `.<t>.<pid>.tmp`, claims `<t>` by `mkdir .<t>.claim.tmp`, then renames; a second round in one second is dropped, exit 1. A part keeps its newest 3, removes `.*.tmp` past 60 minutes.
 - **`queue`**: per `/projects` folder with a `specengine.toml`, byte order, `spec export state --root /projects/<n> --out <tmp>/<n>.jsonl`. A failed export hard-links the last generation's `<n>.jsonl`, if any, lists `<n>` in `CARRIED`, exit 1. No served project: no generation, exit 1.
 - **`door`**: `hub-admin dump <tmp>` ("Door dump"); a failure empties the staging; 13 tries, 12 sleeps of 10 s, then `skipped: <its last line>`, exit 1; a timeout is not retried.
 - **`upload`**: `queue`, then `door`, its newest complete generation copied (`cp -Rp`) to `/snapshot/<part>`, then `restic backup --host "$HUB_HOST" --tag <part> /snapshot/<part>`. Not whole: none, one past 35 minutes or with `CARRIED` (still sent, its projects logged), a restic exit but 0. Exit 10 logs `run docker compose run --rm backup init`, never an `init`; 12, `the repository password is wrong`. At 03:05, per part, `forget --host <h> --tag <part> --keep-within 48h --keep-daily 30`, then `prune`. Whole: `/state/ok` touched.
@@ -74,7 +74,7 @@ Without `--push` the hub's commits die with the host: a restored `applied` propo
 3. `git fetch --tags origin && git checkout v<new>`, `diff .env.example .env` (new optional keys may stay unset), `SPECENGINE_VERSION=<new>`.
 4. `docker compose pull`, `up -d`, `ps`: all healthy (`backup` only once backups are on).
 
-Migrations run forward: an older binary refuses the DB and a newer dump; after a queue step (0.51.0: schema 16, dump 9, `specengine-blobs` added) the laptop's binaries and plugin come from the same tag. Back: `down`, the old tag and `.env`, remove `specengine-data` (never `specengine-blobs`), the floor if raised, `up -d traefik authelia specengine`, the noted queue snapshot by Restore step 6, `up -d`; a door pin alike (`authelia-data`, the door snapshot). Every `spec` writing to its repositories runs 0.29.1+ before a hub's first record or create (`spec-ids.md` "Older binaries").
+Migrations run forward: an older binary refuses the DB and a newer dump; after a queue step (0.52.0: schema 17, dump 10, git-lfs, `homes` committed after: `work-references-promotion-surfaces.md` "Upgrade"; 0.51.0 added `specengine-blobs`) the laptop's binaries and plugin come from the same tag. Back: `down`, the old tag and `.env`, remove `specengine-data` (never `specengine-blobs`), the floor if raised, `up -d traefik authelia specengine`, the noted queue snapshot by Restore step 6, `up -d`; a door pin alike (`authelia-data`, the door snapshot).
 
 ## Push
 

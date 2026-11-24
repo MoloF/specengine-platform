@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-24
 ---
 
 # Hub confirm: one click, one staged choice, one commit
 
-ADR-0061, narrowing ADR-0035 and ADR-0038 on a hub alone, built by `hub-confirm` (RM-0050). On a hub (`hub.md`) a login `[team]` entitles (`hub-team.md`) confirms one staged choice with no terminal: an approve is one commit in the hub's own checkout, a reject the queue alone; a `--push` sync carries the branch (`hub-git.md`). Working answers, the owner's review open. Code: CLI `confirm.rs`, `apply.rs` `HubRun`, `stage.rs` `records_span`, `create.rs` `checked_file`; http `confirm.rs`, `hub.rs` `confirms`, `confirming`, `answer.rs`; core `team_toml.rs` `TeamRole::confirms`, `card.rs` `is_format_character`, `proposal.rs` `Author`; UI `src/inbox/ConfirmDialog.tsx`, `src/ui/text.ts`.
+ADR-0061, narrowing ADR-0035 and ADR-0038 on a hub alone, built by `hub-confirm` (RM-0050). On a hub (`hub.md`) a login `[team]` entitles (`hub-team.md`) confirms one staged choice with no terminal: an approve is one commit in the hub's own checkout, a reject the queue alone; a `--push` sync carries the branch (`hub-git.md`). Working answers, his review open. Code: CLI `confirm.rs`, `apply.rs` `HubRun`, `stage.rs` `records_span`, `create.rs` `checked_file`; http `confirm.rs`, `hub.rs` `confirms`, `confirming`, `answer.rs`; core `team_toml.rs` `TeamRole::confirms`, `card.rs` `is_format_character`, `proposal.rs` `Author`; UI `src/inbox/ConfirmDialog.tsx`, `src/ui/text.ts`.
 
 ## Routes
 
@@ -36,7 +36,7 @@ Past the fence, nothing read or stored on a refusal: the slug; for the POST a sa
 
 ## Rules
 
-- **Cover.** Every path named lies in a held zone (`TeamEntry::covers`): `target_path` for a kind that applies, an `amendment` adding the holder of every node its `amends` links name; for one that decides every target's holder (its `target_path` is the first target's alone) and a staged `canon` REF's holder; each holder resolved now. A gone target, amended node or `canon`, or a path in no zone: `owner` only. The owner passes the cover and the run decides: a gone amended node is apply step 4's 409; a dangling `canon` is written into the record as named, the question showing `ref-dangling`. A `member` never confirms.
+- **Cover.** Every path named lies in a held zone (`TeamEntry::covers`): `target_path` for a kind that applies, a `reference` adding its file, an `amendment` the holder of every node its `amends` links name; for one that decides every target's holder (its `target_path` is the first target's alone) and a staged `canon` REF's holder; each holder resolved now. A gone target, amended node or `canon`, or a path in no zone: `owner` only. The owner passes the cover and the run decides: a gone amended node is apply step 4's 409; a dangling `canon` is written into the record as named, the question showing `ref-dangling`. A `member` never confirms.
 - **A stage, never a choice.** The choice stays what `StageBody` stored, taken as `spec approve PR` with no flags takes it; the stage picks the call, since a plain approve on a row with a reject staged applies (`proposal-apply.md` "Known limits").
 - **Consent.** `confirm_question` rehearses the run, answering no, with `failed()` quiet (`HubRun.rehearsal`). `confirm_staged` runs it again, findings memoized if inputs equal the read's (`spec-check-write.md`); its one consent answers `asked == question`, byte for byte, and it takes none from its caller. A rebase, a new raise, a replaced stage or another record ID makes another text: a 409, nothing changed. The run must read the row judged (`HubRun.judged`), so a stage raced on the one-second clock is compared by value. The text is public, so it is no token (ADR-0034).
 - **Escaping.** The question and the dialog's shown text escape every format character (Cf: U+00AD, U+200B, U+2060, U+FEFF, the rest) as `\u{XX}`, as controls are; the compare takes the escaped form. The terminal's `escape_controls` is unchanged: it runs on core `record::is_escaped`, which records, stages, cards and rounds refuse, and U+200C, U+200D carry Persian, Indic and emoji text. A create's new-file path holding a control character is refused at propose (`proposal-kinds.md` "Target").
@@ -49,7 +49,7 @@ Past the fence, nothing read or stored on a refusal: the slug; for the POST a sa
 
 ## Known limits
 
-- **A person or a script:** the route cannot tell; a script holding a person's session passes, as a faked terminal does. A driven browser clicks: only the log and the commit name who.
+- **A person or a script:** the route cannot tell; a script holding a person's session passes, as a faked terminal does: only the log and the commit name who.
 - **The step-up** (`hub.md` "Trust", item 5) is a session's level, from memory, unverified: a second factor on the session, not this click a person's. A per-click passkey is WebAuthn inside, forbidden by ADR-0034. The read shares the path, so a one-factor session learns at dialog open: the door answers a `fetch` 401 with one anchor to its login page, not a redirect (observed 2026-11-14).
 - **A deciding kind's record** lands under `[decision_records] dir`, which the cover does not judge.
 - **A forged `Remote-User`** commits and proposes as anyone (`hub-mcp.md`): `hub.md` "Trust" items 1-4 guard spec files; no real use before gate 11b-3. Agent text renders beside Confirm, so CSP `default-src 'self'` and no raw HTML in `ui/src` stay pinned.

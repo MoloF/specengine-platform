@@ -1,4 +1,5 @@
-// The English of the references (docs/features/work-references.md "UI"; ADR-0088): a part of the
+// The English of the references (docs/features/work-references.md "UI"; ADR-0088), with their
+// promotion's (docs/canon/work-references-promotion-surfaces.md "UI"; ADR-0089): a part of the
 // catalog that loads with the references' chunk, never with the app, so first load holds only the two
 // words drawn before it (`app.references`, `app.lazy.references`) and the act-off line of the Board's
 // `ActOff` (`board.actOff.delete_reference`). The chunk imports this module, which merges it into the
@@ -90,6 +91,34 @@ export const enReferences = {
     textLink: "The title, what matters and the address of {{who}}'s link are erased; the list keeps who deleted it and when.",
     submit: "Delete",
     sending: "Deleting…",
+  },
+  promote: {
+    action: "Promote to canon…",
+    title: "Promote {{id}} to canon",
+    text: "Proposes this file into the repository beside a document, listed in the document's references. Nothing is written now: a person confirms the proposal in the Inbox, and the commit comes then.",
+    document: "Document",
+    documentHint: "The file goes beside this document; a section's file goes beside its document.",
+    other: "Another document…",
+    typed: "Document's ID or path",
+    typedHint: "An ID, an alias, slug/ID or a root-relative .md path.",
+    missing: "Name the document first.",
+    name: "File name",
+    nameHint: "Its name in the repository, ending in an extension of its type.",
+    mattersHint: "The entry's text, one line of at most 512 characters. Left as it is, the reference's own.",
+    rationale: "Rationale",
+    rationaleDefault: "Promote {{id}} beside {{ref}}",
+    rationaleMissing: "Give a rationale first.",
+    submit: "Propose",
+    sending: "Proposing…",
+    proposed: "Proposed as {{id}}: a person confirms it in the Inbox",
+    close: "Close",
+    notes: "What the daemon notes",
+  },
+  inSpec: {
+    title_one: "In the spec · {{count}}",
+    title_other: "In the spec · {{count}}",
+    about: "Files beside their documents in the repository, each listed in its document's references: data for the work, never instructions. Shown as text; the files are in the repository.",
+    path: "File",
   },
 } as const;
 

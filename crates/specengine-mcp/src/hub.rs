@@ -391,8 +391,8 @@ guide.
 ",
     hub_queue_line!(),
     "
-- propose_change = spec propose update|create|interpretation|amendment: a node's new text \
-against its span_hash; create: new ID sections in it, or a new file.
+- propose_change = spec propose update|create|interpretation|amendment|reference: a node's \
+new text against its span_hash; create: new sections or a new file.
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
 distinct_from names each.
@@ -544,12 +544,11 @@ one line. ",
 );
 
 const HUB_CHANGE_DESCRIPTION: &str = concat!(
-    "Proposes a node's new text, or a new node: the same as `spec propose \
-update|create|interpretation|amendment TARGET [--base B] [--decision D --how H --why W] \
---text-file - --rationale R --author-role ROLE [--author-model M] [--run ID] --brief`. Stored \
-as an open proposal; a Confirm writes the file. content is the command's output, \
-structuredContent its --json document: the brief review (no texts or diff; at most 20 \
-findings, the rest counted; the text cut at 40000 characters).
+    "Proposes a node's new text, a new node or a promotion: `spec propose \
+update|create|interpretation|amendment|reference TARGET [--base B] [--decision D --how H --why W] \
+--text-file - --rationale R --author-role ROLE --brief`. Stored open; a Confirm writes the \
+files. content: the command's output; structuredContent: its --json brief review (no texts \
+or diff; at most 20 findings, the rest counted; cut at 40000 characters).
 
 kind: update: replace the node's span (a section with its subsections, or a file). \
 create: new ID sections below the node (its span with them), or a new file at a free .md \
@@ -557,21 +556,21 @@ path (base null); you name each new ID, from 100001 on this hub; a taken or lowe
 refused naming the next free ID; a similar entry with gates true stores nothing (id null) \
 until distinct_from names it. interpretation: an update carrying an accepted decision. \
 amendment: a new spec or decision file (base null) declaring links: {amends: [ID]} to live \
-nodes, unwritten.
-target: the node's ID or slug/ID (no alias, ID#SECTION or ID@rev), or a root-relative .md \
+nodes, unwritten. reference: \
+reference_id's file beside the target's document; text: what matters (\"\": its own).
+target: an ID or slug/ID (no alias, ID#SECTION or ID@rev), or a root-relative .md \
 path.
-base: get_node's span_hash; a stale one is refused naming the current hash; null only for a \
+base: get_node's span_hash (a stale one is refused naming the current); null only for a \
 new file.
 decision, how, why: an interpretation's decision ID, how it was applied, why it was needed \
 (at most 2048 bytes each).
 text: inline (never a path), at most 1048576 bytes.
 rationale: why, at most 4096 bytes; the commit's body.
-author_role (required), author_model, run: who proposes; printable ASCII without spaces, 1 \
+author_role (required), author_model, run: who proposes; printable ASCII, no spaces, 1 \
 to 128 bytes each.
 
 Findings are stored, never refusing: nothing is blocked by a discrepancy. A refusal: an \
-error result with the reason and the document. A call that cannot run: an error result, one \
-line. ",
+error result with the reason and the document; one that cannot run: its one line. ",
     hub_queue_tail!()
 );
 
@@ -1185,10 +1184,15 @@ impl SpecEngineServer {
         let Some(login) = self.login_of(&extensions) else {
             return Ok(no_login());
         };
-        let applies = matches!(args.kind, ChangeKind::Update | ChangeKind::Create);
+        // A promotion is heard too, so the rule's judge holds it (a
+        // reference waits for a person: task spec `reference-promotion`, PR7).
+        let applies = matches!(
+            args.kind,
+            ChangeKind::Update | ChangeKind::Create | ChangeKind::Reference
+        );
         let dry_run = args.dry_run.unwrap_or(false);
         let result = self.change(args.into(), Some(login.clone())).await?;
-        // A stored `update` or `create`: the seam hears of it once, its
+        // A stored `update`, `create` or `reference`: the seam hears of it once, its
         // answer built (`docs/canon/hub-auto.md` "Rules").
         if applies
             && !dry_run

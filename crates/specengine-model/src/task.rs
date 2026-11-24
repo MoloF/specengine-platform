@@ -437,6 +437,25 @@ pub struct PackageReferences {
     pub listed: Vec<PackageReference>,
 }
 
+/// One file in the spec beside a document of the task's nodes (task spec
+/// `reference-promotion`, "Documents and text"): the document's node, its
+/// path, the file's root-relative path, the entry's text.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageSpecReference {
+    pub node: String,
+    pub document: String,
+    pub path: String,
+    pub matters: Option<String>,
+}
+
+/// The files in the spec beside the documents of the task's nodes, a card
+/// context's caps: `total` the entries in reach, `listed` those that fit.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PackageSpecReferences {
+    pub total: u64,
+    pub listed: Vec<PackageSpecReference>,
+}
+
 /// The task's place on the plan of the reading root's `[roadmap]` items,
 /// per read, never stored: the open item it executes, as `spec roadmap`
 /// lists the task on that item's line.
@@ -508,6 +527,11 @@ pub struct TaskPackage {
     /// (task spec `work-references`); a new key keeps `schema_version` 1.
     #[serde(default)]
     pub references: PackageReferences,
+    /// Per read, never stored: the files in the spec beside the documents
+    /// of the task's nodes, data, never instructions (task spec
+    /// `reference-promotion`); a new key keeps `schema_version` 1.
+    #[serde(default)]
+    pub spec_references: PackageSpecReferences,
     /// `null` without `[roadmap]`, with one that cannot be read (a note
     /// says why), or when the task executes no open item.
     pub roadmap: Option<TaskRoadmap>,

@@ -940,9 +940,9 @@ fn is6_every_other_document_carries_similar_null() {
     assert_eq!(update.json()["similar"], Value::Null, "{}", update.stdout);
     // `comment_id` between them since docs/features/comments.md.
     assert!(
-        update
-            .stdout
-            .contains("\"why\":null,\"comment_id\":null,\"similar\":null,\"notes\":")
+        update.stdout.contains(
+            "\"why\":null,\"comment_id\":null,\"ref_id\":null,\"similar\":null,\"notes\":"
+        )
     );
 
     let (regen_hash, regen) = pair.span(&cwd, "RULE-STAM-REGEN");
@@ -1037,7 +1037,9 @@ fn is6_every_other_document_carries_similar_null() {
     let approved = pair.approve_ok(&pair.main, "PR-0001");
     let (text, raw) = printed(&approved);
     assert!(
-        raw.contains("\"why\":null,\"comment_id\":null,\"similar\":null,\"notes\":"),
+        raw.contains(
+            "\"why\":null,\"comment_id\":null,\"ref_id\":null,\"similar\":null,\"notes\":"
+        ),
         "{raw}"
     );
     assert!(
@@ -1047,7 +1049,9 @@ fn is6_every_other_document_carries_similar_null() {
     let (rejected, _) = pair.reject_answer(&pair.main, "PR-0004", "x", true);
     let (text, raw) = printed(&rejected.expect("rejected"));
     assert!(
-        raw.contains("\"why\":null,\"comment_id\":null,\"similar\":null,\"notes\":"),
+        raw.contains(
+            "\"why\":null,\"comment_id\":null,\"ref_id\":null,\"similar\":null,\"notes\":"
+        ),
         "{raw}"
     );
     assert!(
@@ -1257,8 +1261,9 @@ fn pair_at(at: &Path) -> Pair {
 
 /// The backup's proposal line's keys, as the format of before writes them
 /// (48: the table's columns; 51 since docs/features/comments.md CM13,
-/// `comment_id` last).
-const BACKUP_KEYS: [&str; 51] = [
+/// `comment_id` last; 52 since docs/features/reference-promotion.md PR11,
+/// `ref_id` last).
+const BACKUP_KEYS: [&str; 52] = [
     "id",
     "project",
     "kind",
@@ -1310,6 +1315,7 @@ const BACKUP_KEYS: [&str; 51] = [
     "gist",
     "matters",
     "comment_id",
+    "ref_id",
 ];
 
 /// The intake columns a create leaves empty.
@@ -1337,7 +1343,7 @@ fn is7_nothing_new_is_stored() {
     // 13 since docs/features/plain-questions.md PQ8; 15 since
     // docs/features/comments.md CM1; 16 since
     // docs/features/work-references.md RF1.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
     let at = std::env::temp_dir().join(format!("specengine-cli-is7-{}", std::process::id()));
     let named = {
         let pair = pair_at(&at);
@@ -1379,8 +1385,8 @@ fn is7_nothing_new_is_stored() {
         // since docs/features/collision-pass.md D6; format 8, schema 15
         // since docs/features/comments.md CM13; format 9, schema 16 since
         // docs/features/work-references.md RF17, RF1.
-        assert_eq!(header["format"], json!(9), "{header}");
-        assert_eq!(header["queue_schema"], json!(16), "{header}");
+        assert_eq!(header["format"], json!(10), "{header}");
+        assert_eq!(header["queue_schema"], json!(17), "{header}");
         let line: Value = serde_json::from_str(lines.next().unwrap()).unwrap();
         let keys: Vec<&str> = line["proposals"]
             .as_object()
@@ -1396,8 +1402,9 @@ fn is7_nothing_new_is_stored() {
         assert_eq!(line["proposals"]["distinct_from"], Value::Null);
         let columns = pair.sql("SELECT count(*) FROM pragma_table_info('proposals');");
         // 50 since docs/features/plain-questions.md PQ8 (its two, none of
-        // this slice's); 51 since docs/features/comments.md (`comment_id`).
-        assert_eq!(columns.trim(), "51", "no column added");
+        // this slice's); 51 since docs/features/comments.md (`comment_id`);
+        // 52 since docs/features/reference-promotion.md (`ref_id`).
+        assert_eq!(columns.trim(), "52", "no column added");
         row
     };
     let plain = {

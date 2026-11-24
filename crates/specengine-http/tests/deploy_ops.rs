@@ -2640,8 +2640,9 @@ fn data_a_queue_round_dumps_real_queues_with_the_built_spec() {
             // docs/features/task-mandate.md M5; 7 since
             // docs/features/plain-questions.md PQ8; 8 since
             // docs/features/comments.md CM13; 9 since
-            // docs/features/work-references.md RF17.
-            assert_eq!(header["format"], 9, "{shell}: {name}: {dump}");
+            // docs/features/work-references.md RF17; 10 since
+            // docs/features/reference-promotion.md PR11.
+            assert_eq!(header["format"], 10, "{shell}: {name}: {dump}");
             assert_eq!(header["proposals"], 1, "{shell}: {name}: {dump}");
             if name == "a" {
                 assert_eq!(header["project"], "lantern-keep", "{shell}: {dump}");

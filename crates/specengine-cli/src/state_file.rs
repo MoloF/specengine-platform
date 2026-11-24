@@ -1,5 +1,7 @@
-//! The queue's dump, format 9
-//! (canon `queue-backup`, "Format", "Import"; references: task spec
+//! The queue's dump, format 10
+//! (canon `queue-backup`, "Format", "Import"; a promotion's reference:
+//! task spec `reference-promotion`, "Queue schema 17 and dump format 10";
+//! references: task spec
 //! `work-references`, "Dump format 9"; comments: task spec
 //! `comments`, "Backup";
 //! cards: canon `cards`, "Backup"; tasks: canon `tasks`, "Backup"; a
@@ -7,7 +9,7 @@
 //! mandate: canon `card-mandate`, "The rule"; a question's gist and
 //! matters: task spec `plain-questions` PQ8): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":9,"queue_schema":16,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"refs":<f>,"events":<e>}`
+//! `{"format":10,"queue_schema":17,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"comments":<m>,"comment_versions":<v>,"refs":<f>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `cards` row by ID number, every
@@ -18,8 +20,10 @@
 //! `NULL` `null`, `run`, `position`, `on_rev`, `version`, `size` and `seq`
 //! numbers; JSON columns stay the strings stored. A dump never holds a
 //! file's bytes. No export time and no host inside: equal queues give equal
-//! bytes. Format 9 holds queue schema 16, its proposals' 51 columns,
-//! `comment_id` last. A format-8 dump holds queue schema 15 and still
+//! bytes. Format 10 holds queue schema 17, its proposals' 52 columns,
+//! `ref_id` last. A format-9 dump holds queue schema 16 and still
+//! restores, its proposals' 51 columns, `comment_id` last, `ref_id`
+//! restored `NULL`. A format-8 dump holds queue schema 15 and still
 //! restores, no reference (ten header keys). A format-7 dump holds queue
 //! schema 13 or
 //! 14 and still restores, no comment, its proposals' 50 columns, `gist` and
@@ -72,7 +76,7 @@ use specengine_store::{
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 9;
+pub const STATE_FORMAT: u64 = 10;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
@@ -99,6 +103,9 @@ const NO_COMMENTS_FORMAT: u64 = 7;
 /// The format without references: queue schema 15 alone.
 const NO_REFS_FORMAT: u64 = 8;
 
+/// The format of proposals naming no reference: queue schema 16 alone.
+const NO_PROMOTIONS_FORMAT: u64 = 9;
+
 /// The first queue schema with tasks and runs: format 1 holds the schemas
 /// before it, format 2 it and those after, to [`CARDS_SCHEMA`].
 const TASKS_SCHEMA: i64 = 4;
@@ -124,9 +131,12 @@ const PLAIN_QUESTIONS_SCHEMA: i64 = 13;
 /// The first queue schema with comments: format 8 holds it alone.
 const COMMENTS_SCHEMA: i64 = 15;
 
-/// The first queue schema with references: format 9 holds it, to this
-/// build's.
+/// The first queue schema with references: format 9 holds it alone.
 const REFS_SCHEMA: i64 = 16;
+
+/// The first queue schema whose proposals hold `ref_id`: format 10 holds
+/// it, to this build's.
+const PROMOTION_SCHEMA: i64 = 17;
 
 /// The header's keys, in the order written.
 const HEADER_KEYS: [&str; 11] = [
@@ -622,8 +632,9 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 
 /// The header line: `format` first (a newer build's header may differ in
 /// all else), then exactly the format's keys (format 1: five; 2: seven; 3
-/// to 7: eight; 8: ten), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9;
-/// 4: 10; 5: 11; 6: 12; 7: 13 and 14; 8: 15 to this build's), `project` the
+/// to 7: eight; 8: ten; 9 and 10: eleven), `queue_schema` (format 1: 1 to 3;
+/// 2: 4 to 8; 3: 9; 4: 10; 5: 11; 6: 12; 7: 13 and 14; 8: 15; 9: 16; 10: 17
+/// to this build's), `project` the
 /// root's slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
@@ -689,7 +700,8 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     // cards, format 3 the one before a card's tasks, format 4 the one before
     // a proposal's card, format 5 the one before a card's mandate, format 6
     // the one before a question's gist, format 7 those before the comments,
-    // format 8 the one before the references, format 9 the rest.
+    // format 8 the one before the references, format 9 the one before a
+    // proposal's reference, format 10 the rest.
     let held = match format {
         PROPOSALS_ONLY_FORMAT => 1..TASKS_SCHEMA,
         NO_CARDS_FORMAT => TASKS_SCHEMA..CARDS_SCHEMA,
@@ -699,7 +711,8 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         NO_PLAIN_QUESTIONS_FORMAT => MANDATE_SCHEMA..PLAIN_QUESTIONS_SCHEMA,
         NO_COMMENTS_FORMAT => PLAIN_QUESTIONS_SCHEMA..COMMENTS_SCHEMA,
         NO_REFS_FORMAT => COMMENTS_SCHEMA..REFS_SCHEMA,
-        _ => REFS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
+        NO_PROMOTIONS_FORMAT => REFS_SCHEMA..PROMOTION_SCHEMA,
+        _ => PROMOTION_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
     };
     let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {

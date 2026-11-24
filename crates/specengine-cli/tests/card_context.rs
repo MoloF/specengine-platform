@@ -528,10 +528,18 @@ fn cc1_the_bundle_is_spec_bundles_over_targets_then_records() {
     // docs/features/comments.md "The card context and the task package":
     // `comments` before `notes`;
     // docs/features/work-references.md "A card's context and the task package":
-    // `references` after `comments`.
+    // `references` after `comments`; docs/canon/work-references-promotion-surfaces.md
+    // "Documents and text": `spec_references` after `references`.
     assert_eq!(
         keys_at(&raw, "context"),
-        ["parent", "bundle", "comments", "references", "notes"]
+        [
+            "parent",
+            "bundle",
+            "comments",
+            "references",
+            "spec_references",
+            "notes"
+        ]
     );
 
     // The text: the card's lines, `history: -`, the practices' two lines
@@ -543,7 +551,8 @@ fn cc1_the_bundle_is_spec_bundles_over_targets_then_records() {
     assert_eq!(bundle["body"], json!(body), "the body is the text's");
     let tail = format!(
         "history: -\npractices: -\ncited: -\ncontext.parent: -\ncontext.parent.goal: -\n\
-         context.comments: -\ncontext.references: -\ncontext.bundle: {hash}\n{body}"
+         context.comments: -\ncontext.references: -\ncontext.spec-references: -\n\
+         context.bundle: {hash}\n{body}"
     );
     assert!(
         text.stdout.ends_with(&tail),
@@ -887,7 +896,7 @@ fn cc2_a_plain_read_reads_no_corpus_and_no_git() {
     assert!(
         asked.stdout.ends_with(
             "context.parent: -\ncontext.parent.goal: -\ncontext.comments: -\n\
-                 context.references: -\ncontext.bundle: -\n"
+                 context.references: -\ncontext.spec-references: -\ncontext.bundle: -\n"
         ),
         "{}",
         asked.stdout
@@ -1227,6 +1236,7 @@ fn cc4_a_manual_card_has_nothing_to_bundle() {
         document["context"],
         json!({"parent": null, "bundle": null, "comments": {"total": 0, "listed": []},
             "references": {"total": 0, "listed": [], "images": []},
+            "spec_references": {"total": 0, "listed": []},
             "notes": [NOTHING]})
     );
     assert!(

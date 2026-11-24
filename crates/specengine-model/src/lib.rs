@@ -47,9 +47,9 @@ pub use span::Span;
 pub use task::{
     BindingAnchor, BindingPlace, BindingRow, OwnerNote, PackageAssumption, PackageBundle,
     PackageComment, PackageCommentAuthor, PackageComments, PackagePractice, PackageProposal,
-    PackageReference, PackageReferenceMeta, PackageReferences, PackageTarget, RunOutcome,
-    SnapshotDiff, SnapshotNode, SnapshotPlace, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION,
-    TaskAuthor, TaskAuthorType, TaskClaim, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
-    TaskStatus, TestedRow,
+    PackageReference, PackageReferenceMeta, PackageReferences, PackageSpecReference,
+    PackageSpecReferences, PackageTarget, RunOutcome, SnapshotDiff, SnapshotNode, SnapshotPlace,
+    SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskClaim,
+    TaskCriterion, TaskPackage, TaskRoadmap, TaskRun, TaskStatus, TestedRow,
 };
 pub use value::{FmValue, OrderedMap};

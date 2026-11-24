@@ -232,6 +232,19 @@ fn answered(outcome: &Outcome) -> Answered {
                 list.refused.as_ref().map(|refused| refused.reason.as_str()),
             );
         }
+        // A promotion (task spec `reference-promotion`, "HTTP"): 200 the
+        // brief review; an unknown reference or target 404, a refusal 409,
+        // each `{id, reason}`.
+        Outcome::Promotion(promotion) => {
+            return reference_answered(
+                outcome,
+                promotion.cause(),
+                promotion
+                    .refused
+                    .as_ref()
+                    .map(|refused| refused.reason.as_str()),
+            );
+        }
         Outcome::Blob(blob) => {
             return reference_answered(
                 outcome,

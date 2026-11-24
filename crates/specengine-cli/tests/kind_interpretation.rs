@@ -1010,7 +1010,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     // docs/features/collision-pairs.md PP8 (`pair` after `evidence`); 55
     // since docs/features/department-practices.md "Proposals: `cited`" (`cited`
     // last); 56 since docs/features/comments.md (`comment_id` after `why`).
-    assert_eq!(keys.len(), 56, "{keys:?}");
+    assert_eq!(keys.len(), 57, "{keys:?}");
     assert_eq!(
         keys[47..],
         [
@@ -1021,6 +1021,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
             "why",
             // docs/features/comments.md: after `why`.
             "comment_id",
+            "ref_id",
             "similar",
             "notes",
             "cited"
@@ -1030,7 +1031,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert!(
         raw.contains(&format!(
             "\"staged_at\":null,\"interpretation\":{{\"decision\":\"DEC-0023\",\"how\":\"{HOW}\",\
-             \"why\":\"{WHY}\"}},\"card_id\":null,\"why\":null,\"comment_id\":null,\"similar\":null,\
+             \"why\":\"{WHY}\"}},\"card_id\":null,\"why\":null,\"comment_id\":null,\"ref_id\":null,\"similar\":null,\
              \"notes\":"
         )),
         "{raw}"
@@ -1047,7 +1048,8 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     assert_eq!(json_of(&update_raw)["interpretation"], Value::Null);
     let (update_text, _) = printed(&pair.review_ok(&pair.main, &update));
     assert!(
-        update_text.contains("\ninterpretation: -\ncard_id: -\nwhy: -\ncomment_id: -\nnotes:"),
+        update_text
+            .contains("\ninterpretation: -\ncard_id: -\nwhy: -\ncomment_id: -\nref_id: -\nnotes:"),
         "{update_text}"
     );
 
@@ -1057,7 +1059,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
         text.contains(&format!(
             "\nstaged_at: -\ninterpretation:\n  decision: DEC-0023\n  how the decision was \
              applied:\n    {HOW}\n  why interpretation was needed:\n    {WHY}\ncard_id: -\nwhy: -\n\
-             comment_id: -\nnotes:"
+             comment_id: -\nref_id: -\nnotes:"
         )),
         "{text}"
     );
@@ -1082,7 +1084,7 @@ fn ac_r7_review_brief_and_inbox_carry_the_interpretation() {
     // docs/features/collision-pairs.md PP8; 55 since
     // docs/features/department-practices.md "Proposals: `cited`" (`cited`).
     // 56 since docs/features/comments.md (`comment_id`).
-    assert_eq!(task_common::keys(&brief_json).len(), 56);
+    assert_eq!(task_common::keys(&brief_json).len(), 57);
     // The binary's `--brief --json` too.
     let run = pair.spec_piped(&pair.main, &["--json", "review", &id, "--brief"], b"");
     run.code(0);
@@ -1563,7 +1565,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1572,8 +1574,9 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let row = row["proposals"].as_object().expect("a proposals row");
     // 48 since docs/features/card-questions.md S1.
     // 50 since docs/features/plain-questions.md PQ8.
-    // 51 since docs/features/comments.md (`comment_id`).
-    assert_eq!(row.len(), 51);
+    // 51 since docs/features/comments.md (`comment_id`); 52 since
+    // docs/features/reference-promotion.md (`ref_id`).
+    assert_eq!(row.len(), 52);
     assert_eq!(row["kind"], json!("interpretation"));
     assert_eq!(
         row["interpretation"],
@@ -1601,7 +1604,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
     v5[0] = v5[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":2,\"queue_schema\":5,",
             1,
         )

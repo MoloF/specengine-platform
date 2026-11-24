@@ -1506,8 +1506,9 @@ fn dl9_a_format_17_index_is_read_again() {
     // 18 at doc-library; 19 since docs/features/department-practices.md (the
     // `disciplines` table); 20 since docs/features/specengine-guide.md (the
     // typed `summarises`); 21 since docs/features/release-tail.md (rule (7)'s
-    // citation tail): a format-17 index is still read again.
-    assert_eq!(specengine_store::INDEX_FORMAT, 21);
+    // citation tail); 22 since docs/features/reference-promotion.md (the
+    // `promoted` table): a format-17 index is still read again.
+    assert_eq!(specengine_store::INDEX_FORMAT, 22);
     let scene = Scene::new("dl9");
     let run = spec(&scene, &["index"]);
     run.code(0);

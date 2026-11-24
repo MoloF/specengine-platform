@@ -682,7 +682,7 @@ fn review_document_every_key_present() {
     // docs/features/collision-pairs.md PP8 (`pair`); 55 since
     // docs/features/department-practices.md "Proposals: `cited`"; 56 since
     // docs/features/comments.md (`comment_id`).
-    assert_eq!(keys.len(), 56, "{keys:?}");
+    assert_eq!(keys.len(), 57, "{keys:?}");
     assert_eq!(value["drift"], Value::Null);
     let json_text = serde_json::to_string(&value).unwrap();
     let printed = rev_common::printed(
@@ -733,8 +733,9 @@ fn review_document_every_key_present() {
     assert_eq!(lines[at + 1], "drift", "{text}");
     // 50 since docs/features/card-questions.md D14; 52 since
     // docs/features/plain-questions.md PQ1 (`gist:`, `matters:`); 53 since
-    // docs/features/comments.md (`comment_id:`).
-    assert_eq!(lines.len(), 53, "{text}");
+    // docs/features/comments.md (`comment_id:`); 54 since
+    // docs/features/reference-promotion.md (`ref_id:`).
+    assert_eq!(lines.len(), 54, "{text}");
     assert!(!json_text.is_empty());
 }
 

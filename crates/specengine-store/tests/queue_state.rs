@@ -276,7 +276,8 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
         // docs/features/card-store.md "Store"; 25 since docs/canon/cards.md
         // "Store" (`tasks`, queue schema 10); 26 since
         // docs/features/task-mandate.md M5 (`mandate`, queue schema 12).
-        (51, 17, 11, 26)
+        // 52 since docs/features/reference-promotion.md (`ref_id`, schema 17).
+        (52, 17, 11, 26)
     );
     assert_eq!(CARD_COLUMNS[4], "position");
     assert_eq!(CARD_COLUMNS[24], "tasks");
@@ -363,10 +364,10 @@ fn open_existing_refuses_a_newer_schema() {
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     // 16 since docs/features/work-references.md RF1.
-    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 16);
-    sqlite3(&db, "PRAGMA user_version = 17");
+    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 17);
+    sqlite3(&db, "PRAGMA user_version = 18");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 17 }) => {}
+        Err(QueueError::SchemaTooNew { found: 18 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }

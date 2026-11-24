@@ -343,7 +343,9 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         // docs/features/collision-pairs.md PP8 (`pair`, `null` on a stage).
         // 55 since docs/features/department-practices.md "Proposals: `cited`".
         // 56 since docs/features/comments.md (`comment_id` after `why`).
-        assert_eq!(document.as_object().unwrap().len(), 56, "{document}");
+        // 57 since docs/features/reference-promotion.md (`ref_id` after
+        // `comment_id`).
+        assert_eq!(document.as_object().unwrap().len(), 57, "{document}");
         assert_eq!(document["id"], json!(id));
         assert_eq!(document["status"], json!("open"), "an attribute");
         assert!(document["decided_by"].is_null() && document["applied_commit"].is_null());
@@ -356,7 +358,7 @@ fn ac03_staging_an_update_a_question_and_a_discrepancy_writes_only_the_queue() {
         assert!(
             reply.text().contains(&format!(
                 "\"staged\":{staged},\"staged_at\":\"{at}\",\"interpretation\":null,\
-                 \"card_id\":null,\"why\":null,\"comment_id\":null,\"similar\":null,\"notes\":"
+                 \"card_id\":null,\"why\":null,\"comment_id\":null,\"ref_id\":null,\"similar\":null,\"notes\":"
             )),
             "the stage's bytes, keys in the canon's order: {}",
             reply.text()
@@ -1123,11 +1125,11 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    // This build's queue schema is 16 (docs/features/work-references.md
-    // RF1): 17 is newer. M1's record at a62c81c: 11 over 10; task-mandate
+    // This build's queue schema is 17 (docs/features/reference-promotion.md
+    // PR11; 16 since docs/features/work-references.md RF1): 18 is newer. M1's record at a62c81c: 11 over 10; task-mandate
     // R1's at 8a43e5d: 12 over 11; plain-questions' at 4d52ec3c: 13 over 12
     // (the HEAD build refusing a schema 13 queue); collision-pass: 14 over 13.
-    sqlite3(&db(&s.home), "PRAGMA user_version = 17;");
+    sqlite3(&db(&s.home), "PRAGMA user_version = 18;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
@@ -1135,14 +1137,14 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
     assert!(
-        message.contains("17") && message.contains("16"),
+        message.contains("18") && message.contains("17"),
         "{message}"
     );
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "17",
+        "18",
         "left alone"
     );
     assert_eq!(
@@ -1286,7 +1288,9 @@ fn kind_interpretation_ac_r8_a_staged_approve_holds_the_span_hash() {
     // docs/features/collision-pairs.md PP8 (`pair`, `null` on a stage).
     // 55 since docs/features/department-practices.md "Proposals: `cited`".
     // 56 since docs/features/comments.md (`comment_id` after `why`).
-    assert_eq!(document.as_object().unwrap().len(), 56, "{document}");
+    // 57 since docs/features/reference-promotion.md (`ref_id` after
+    // `comment_id`).
+    assert_eq!(document.as_object().unwrap().len(), 57, "{document}");
     assert_eq!(document["kind"], json!("interpretation"));
     assert_eq!(
         document["staged"],
@@ -1407,7 +1411,9 @@ fn kind_decision_ac_r6_a_staged_decision_takes_an_answer_never_an_option() {
     // docs/features/collision-pairs.md PP8 (`pair`, `null` on a stage).
     // 55 since docs/features/department-practices.md "Proposals: `cited`".
     // 56 since docs/features/comments.md (`comment_id` after `why`).
-    assert_eq!(document.as_object().unwrap().len(), 56, "{document}");
+    // 57 since docs/features/reference-promotion.md (`ref_id` after
+    // `comment_id`).
+    assert_eq!(document.as_object().unwrap().len(), 57, "{document}");
     assert_eq!(document["kind"], json!("decision"));
     assert_eq!(document["linked"], json!("PR-0005"));
     assert_eq!(document["options"], json!([]));

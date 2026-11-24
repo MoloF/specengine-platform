@@ -2214,6 +2214,20 @@ const GUIDE_BLAKE3: &str = "c8765348afd2aac1dbac8ac43a9ba7c7c7c35da7807a05ee126d
 /// BLAKE3.
 const COMMENTS_BLAKE3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
 
+/// The server's `INSTRUCTIONS` since
+/// docs/canon/work-references-promotion-surfaces.md "MCP": its BLAKE3.
+const PROMOTION_BLAKE3: &str = "8ba19da38733c3ad0a51d1d6d5bbe8124cba6e3aaef4755c8e420c974a862225";
+
+/// docs/canon/work-references-promotion-surfaces.md "MCP": the `propose_change` line,
+/// `(now, before)`: `|reference` named, the create clause trimmed by as much
+/// (2 043 bytes either way).
+const PROMOTION_EDIT: (&str, &str) = (
+    "- propose_change = spec propose update|create|interpretation|amendment|reference: a node's \
+     new text against its span_hash; create: new sections or a new file.\n",
+    "- propose_change = spec propose update|create|interpretation|amendment: a node's new text \
+     against its span_hash; create: new ID sections in it, or a new file.\n",
+);
+
 /// docs/features/comments.md: the comments line after the cards line, its
 /// line end with it (54 bytes).
 const COMMENTS_LINE: &str = "- list_comments, add_comment = spec comment list|add.\n";
@@ -2389,7 +2403,22 @@ fn rd5_instructions_are_the_planned_text() {
     // docs/features/comments.md CM15: 2 046 + 54 - 57 = 2 043; without the
     // comments line and with its cuts undone, specengine-guide's text byte
     // for byte (every assertion below runs on that text).
-    let now = specengine_mcp::INSTRUCTIONS;
+    // docs/canon/work-references-promotion-surfaces.md "MCP": 2 043 still; with its
+    // `propose_change` line undone, comments' text byte for byte.
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2043);
+    assert_eq!(
+        blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
+        PROMOTION_BLAKE3
+    );
+    assert_eq!(PROMOTION_EDIT.0.len(), PROMOTION_EDIT.1.len());
+    assert_eq!(
+        specengine_mcp::INSTRUCTIONS
+            .matches(PROMOTION_EDIT.0)
+            .count(),
+        1
+    );
+    let comments = specengine_mcp::INSTRUCTIONS.replacen(PROMOTION_EDIT.0, PROMOTION_EDIT.1, 1);
+    let now = comments.as_str();
     assert_eq!(COMMENTS_LINE.len(), 54);
     assert_eq!(
         COMMENTS_CUTS

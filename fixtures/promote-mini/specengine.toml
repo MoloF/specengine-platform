@@ -1,0 +1,55 @@
+# Fixture corpus promote-mini (docs/features/reference-promotion.md
+# "Acceptance criteria", RM-0138): a small world of places, people, rules and
+# one mechanic, whose location and persona documents take promoted files
+# beside them (five documents, as every corpus with a `docs/` tree holds at
+# least). A location's home is `media` under its document's directory,
+# which `.gitattributes` gives to LFS; a persona's is `art`, kept plainly.
+# A mechanic has no home, so a promotion to `MEC-TIDE` cannot run. `ann` owns
+# the project; `lev` leads the world's documents alone (`*.md` crosses no
+# `/`), `mira` everything under the world, its `media` too. One marker in
+# `src/` binds LOC-HARBOUR, so the document can be locked. Kinds, prefixes,
+# homes and zones are this project's own (ADR-0008, ADR-0089). The spec's
+# fixture names the CHR kind `character`; it is `persona` here, since
+# `character` is an everyday word of the daemon's messages ("control
+# character"), which the genre scans would read as this kind.
+
+[project]
+slug = "promote-mini"
+
+[ids]
+LOC  = { kind = "location",  shape = "name" }
+CHR  = { kind = "persona",   shape = "name" }
+MEC  = { kind = "mechanic",  shape = "name" }
+RULE = { kind = "rule",      shape = "name" }
+
+[code]
+roots = ["src"]
+
+[[references.homes]]
+kinds = ["location"]
+dir   = "media"
+
+[[references.homes]]
+kinds = ["persona"]
+dir   = "art"
+
+[zones]
+world-docs = ["docs/spec/world/*.md"]
+world      = ["docs/spec/world/**"]
+
+[team.ann]
+name = "Ann"
+role = "owner"
+email = "ann@example.org"
+
+[team.lev]
+name = "Lev"
+role = "lead"
+zones = ["world-docs"]
+email = "lev@example.org"
+
+[team.mira]
+name = "Mira"
+role = "lead"
+zones = ["world"]
+email = "mira@example.org"

@@ -144,10 +144,12 @@ pub use working_set::worst_w;
 /// entry left out or listed by no declared flow (task spec
 /// `department-practices`), then `summary-stale`, a warning per
 /// `summarises:` entry naming no walked canon document or one reviewed
-/// after the summarising page (task spec `specengine-guide`). A stale
+/// after the summarising page (task spec `specengine-guide`), then
+/// `reference-entry`, a warning per `references:` entry left out (task spec
+/// `reference-promotion`). A stale
 /// baseline entry is no finding: it goes to [`Report::stale`], labelled
 /// `debt-stale` only in the detail lines.
-pub const CHECK_CODES: [&str; 41] = [
+pub const CHECK_CODES: [&str; 42] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -189,4 +191,5 @@ pub const CHECK_CODES: [&str; 41] = [
     "tag-invalid",
     "practice-discipline",
     "summary-stale",
+    "reference-entry",
 ];

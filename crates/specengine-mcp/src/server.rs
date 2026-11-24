@@ -115,8 +115,8 @@ get_trace(ref?) = trace; get_guide(topic?, rule?) = guide.
 - Code: find_symbols(query|node|file|at) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):
-- propose_change = spec propose update|create|interpretation|amendment: a node's new text \
-against its span_hash; create: new ID sections in it, or a new file.
+- propose_change = spec propose update|create|interpretation|amendment|reference: a node's \
+new text against its span_hash; create: new sections or a new file.
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
 distinct_from names each.

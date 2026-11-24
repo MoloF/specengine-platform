@@ -9,7 +9,8 @@
 //! byte for byte; [`list`] and [`matches`], at the end, are their entry points.
 //! One addition since: queue schema 15's last column, `comment_id` (task spec
 //! `comments`, "Queue schema 15"), taken and judged as `card_id` is, so the
-//! copy still builds a [`Proposal`] and reads the rows the store reads.
+//! copy still builds a [`Proposal`] and reads the rows the store reads; and
+//! queue schema 17's `ref_id` (task spec `reference-promotion`), taken last.
 
 use super::super::*;
 
@@ -343,6 +344,9 @@ impl RawRow {
             task_id,
             card_id,
             comment_id,
+            // Step 17's, last in the table (task spec `reference-promotion`):
+            // taken as written, the store's own decode judges it.
+            ref_id: take(),
             staged,
             interpretation,
             drift,

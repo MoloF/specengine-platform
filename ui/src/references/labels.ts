@@ -102,6 +102,16 @@ export function shownAs(reference: Reference): Shown {
   return "download";
 }
 
+/**
+ * Whether a tile offers "Promote to canon…" (docs/canon/work-references-promotion-surfaces.md "UI"): a live file
+ * the store holds now; never a link (D14), a deleted reference or a file lost with its host. The
+ * daemon judges the promotion either way.
+ */
+export function promotable(reference: Reference): boolean {
+  const shown = shownAs(reference);
+  return shown !== "deleted" && shown !== "link" && shown !== "lost";
+}
+
 /** A class in the catalog's words; another word raw. */
 export function classWord(value: string, t: Translate): string {
   return Object.hasOwn(CLASSES, value) ? t(`references.class.${value as KnownClass}`) : value;

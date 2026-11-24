@@ -11,7 +11,7 @@ import { Icon } from "../ui/Icon";
 import { shownSlot, shownText } from "../ui/text";
 import { formatUtc } from "../ui/time";
 import { useFocusLater } from "../ui/useFocusLater";
-import { classWord, factWords, isLink, isWebAddress, previewed, shownAs, sizeWords, thumbnailOf, thumbnailSize, viewable } from "./labels";
+import { classWord, factWords, isLink, isWebAddress, previewed, promotable, shownAs, sizeWords, thumbnailOf, thumbnailSize, viewable } from "./labels";
 
 // One reference as the References part draws it (docs/features/work-references.md "UI", Tiles): its
 // head (title or name, its class or a link's word, its ID), who attached it and when, its size and
@@ -22,7 +22,8 @@ import { classWord, factWords, isLink, isWebAddress, previewed, shownAs, sizeWor
 // with the daemon's warning), a link an anchor opening a new tab with no opener, no referrer and no
 // follow, its address whole. Each file's address is the client's `blobUrl`, served sandboxed; every
 // text is people's, drawn as React text, never Markdown and never HTML. A file the store lost says
-// so; a deleted reference says who deleted it and when, and offers nothing.
+// so; a deleted reference says who deleted it and when, and offers nothing. A stored file alone offers
+// Promote to canon… (docs/canon/work-references-promotion-surfaces.md "UI"): never a link, a deleted or a lost one.
 
 /** A stored UTC time, as stored to the minute. */
 function At({ at }: { at: string }) {
@@ -185,8 +186,20 @@ function Facts({ reference }: { reference: Reference }) {
   );
 }
 
-/** One reference, its preview and texts, its Delete (on as `deletes` says, else off with its line). */
-export function ReferenceTile({ project, reference, deletes, onDelete }: { project: string; reference: Reference; deletes: boolean; onDelete: (trigger: HTMLElement) => void }) {
+/** One reference, its preview and texts, its Promote to canon… on a stored file, its Delete (on as `deletes` says, else off with its line). */
+export function ReferenceTile({
+  project,
+  reference,
+  deletes,
+  onDelete,
+  onPromote,
+}: {
+  project: string;
+  reference: Reference;
+  deletes: boolean;
+  onDelete: (trigger: HTMLElement) => void;
+  onPromote: (trigger: HTMLElement) => void;
+}) {
   const t = useTranslate();
   const headingId = useId();
   const live = reference.deleted === null;
@@ -221,6 +234,18 @@ export function ReferenceTile({ project, reference, deletes, onDelete }: { proje
       )}
       {live && (
         <div className="reference-acts" role="group" aria-label={t("references.acts", { id: reference.id })}>
+          {promotable(reference) && (
+            <Button
+              spacing="compact"
+              appearance="subtle"
+              aria-haspopup="dialog"
+              onClick={(event) => {
+                onPromote(event.currentTarget);
+              }}
+            >
+              {t("references.promote.action")}
+            </Button>
+          )}
           <Button
             spacing="compact"
             appearance="subtle"

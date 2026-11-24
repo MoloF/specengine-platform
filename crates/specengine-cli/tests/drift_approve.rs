@@ -927,7 +927,7 @@ fn drift_review_has_no_preview() {
     // 54 since docs/features/collision-pairs.md PP8 (`pair`, `null`); 55
     // since docs/features/department-practices.md "Proposals: `cited`" (`cited`,
     // last); 56 since docs/features/comments.md (`comment_id` after `why`).
-    assert_eq!(document.as_object().unwrap().len(), 56);
+    assert_eq!(document.as_object().unwrap().len(), 57);
     assert_eq!(document["pair"], Value::Null);
     assert_eq!(document["similar"], Value::Null);
     assert_eq!(document["kind"], json!("drift"));

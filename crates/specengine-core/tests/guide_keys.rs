@@ -3,17 +3,22 @@
 //! `("summarises", KeyType::List)` after RM-0128's `disciplines`, every
 //! earlier entry kept; `CHECK_CODES` is 41, its last `summary-stale` after
 //! RM-0128's `practice-discipline` (the whole list is `check_output.rs`'s
-//! pin). M: `summarises` untyped; the code missing or not last.
+//! pin). M: `summarises` untyped; the code missing or not last. Since
+//! docs/canon/work-references-promotion-surfaces.md "The `references:` key":
+//! `TYPED_KEYS` 35, `references` (a list) after `summarises`; `CHECK_CODES`
+//! 42, `reference-entry` after `summary-stale`.
 
 use specengine_core::check::CHECK_CODES;
 use specengine_core::{KeyType, TYPED_KEYS};
 
 /// `TYPED_KEYS` 34: `summarises`, a list of strings, appended last;
-/// `disciplines` (RM-0128) before it, `tags` (RM-0127) before that.
+/// `disciplines` (RM-0128) before it, `tags` (RM-0127) before that; 35
+/// since reference-promotion, `references` after it.
 #[test]
 fn gu8_summarises_is_the_thirty_fourth_typed_key() {
-    assert_eq!(TYPED_KEYS.len(), 34);
+    assert_eq!(TYPED_KEYS.len(), 35);
     assert_eq!(TYPED_KEYS[33], ("summarises", KeyType::List));
+    assert_eq!(TYPED_KEYS[34], ("references", KeyType::List));
     let keys: Vec<&str> = TYPED_KEYS.iter().map(|(key, _)| *key).collect();
     assert_eq!(
         keys.iter().filter(|key| **key == "summarises").count(),
@@ -31,8 +36,9 @@ fn gu8_summarises_is_the_thirty_fourth_typed_key() {
 /// `CHECK_CODES` 41: `summary-stale` last, once.
 #[test]
 fn gu8_summary_stale_is_the_forty_first_check_code() {
-    assert_eq!(CHECK_CODES.len(), 41);
-    assert_eq!(CHECK_CODES.last(), Some(&"summary-stale"));
+    assert_eq!(CHECK_CODES.len(), 42);
+    assert_eq!(CHECK_CODES[40], "summary-stale");
+    assert_eq!(CHECK_CODES.last(), Some(&"reference-entry"));
     assert_eq!(CHECK_CODES[39], "practice-discipline");
     assert_eq!(
         CHECK_CODES

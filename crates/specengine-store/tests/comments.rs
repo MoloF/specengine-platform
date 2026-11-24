@@ -121,11 +121,11 @@ const COMMENT_VERSIONS_INFO: &str = "0 comment_id TEXT 1 1\n1 project TEXT 1 0\n
 /// `STEP_15`.
 #[test]
 fn cm1_a_new_queue_stands_at_15_with_both_tables_pinned() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
     let scratch = Scratch::new("cm-cm1-new");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
 
     assert_eq!(table_info(&db, "comments"), COMMENTS_INFO);
     assert_eq!(table_info(&db, "comment_versions"), COMMENT_VERSIONS_INFO);
@@ -169,8 +169,11 @@ fn cm1_a_new_queue_stands_at_15_with_both_tables_pinned() {
         COMMENT_VERSION_COLUMNS
     );
 
-    assert_eq!(PROPOSAL_COLUMNS.len(), 51);
-    assert_eq!(PROPOSAL_COLUMNS.last(), Some(&"comment_id"));
+    assert_eq!(PROPOSAL_COLUMNS.len(), 52);
+    // `comment_id` last but one since docs/features/reference-promotion.md
+    // PR11 (`ref_id` last).
+    assert_eq!(PROPOSAL_COLUMNS[50], "comment_id");
+    assert_eq!(PROPOSAL_COLUMNS.last(), Some(&"ref_id"));
     assert_eq!(column_names(&db, "proposals"), PROPOSAL_COLUMNS);
     assert_eq!(
         sqlite3(
@@ -180,11 +183,13 @@ fn cm1_a_new_queue_stands_at_15_with_both_tables_pinned() {
         ),
         "TEXT 0"
     );
-    assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(15), Some(&PROPOSAL_COLUMNS[..51]));
     assert_eq!(proposal_columns(14), Some(&PROPOSAL_COLUMNS[..50]));
     assert_eq!(proposal_columns(13), Some(&PROPOSAL_COLUMNS[..50]));
-    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(17), None);
+    assert_eq!(proposal_columns(16), Some(&PROPOSAL_COLUMNS[..51]));
+    // 52 since docs/features/reference-promotion.md: step 17 appends `ref_id`.
+    assert_eq!(proposal_columns(17), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(18), None);
 }
 
 /// Rows of every queue table as this build's schema holds them, written raw
@@ -226,7 +231,7 @@ fn schema_14(db: &Path) {
     some_rows(db);
     sqlite3(
         db,
-        "DROP TABLE refs; DROP TABLE comment_versions; DROP TABLE comments; \
+        "DROP TABLE refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; DROP TABLE comment_versions; DROP TABLE comments; \
          DROP INDEX IF EXISTS proposals_comment; ALTER TABLE proposals DROP COLUMN comment_id; PRAGMA user_version = 14;",
     );
     assert_eq!(
@@ -263,7 +268,7 @@ fn cm1_a_schema_14_queue_steps_keeping_every_row() {
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM events;"), "3");
 
     drop(SqliteQueue::open(&db, PROJECT).expect("open steps"));
-    assert_eq!(user_version(&db), "16");
+    assert_eq!(user_version(&db), "17");
     assert_eq!(rows_of_14(&db), before, "every row as it was");
     assert_eq!(table_info(&db, "comments"), COMMENTS_INFO);
     assert_eq!(table_info(&db, "comment_versions"), COMMENT_VERSIONS_INFO);
@@ -285,7 +290,7 @@ fn cm1_a_schema_14_queue_steps_keeping_every_row() {
     let stepped = tables(&db);
 
     drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
-    assert_eq!(user_version(&db), "16", "stepped once");
+    assert_eq!(user_version(&db), "17", "stepped once");
     assert_eq!(rows_of_14(&db), before);
     assert_eq!(tables(&db), stepped);
 }
@@ -354,7 +359,7 @@ fn cm1_a_newer_schema_is_refused() {
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
     let newer = QUEUE_SCHEMA_VERSION + 1;
     // 17 since docs/features/work-references.md RF1.
-    assert_eq!(newer, 17);
+    assert_eq!(newer, 18);
     sqlite3(&db, &format!("PRAGMA user_version = {newer};"));
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
@@ -365,5 +370,5 @@ fn cm1_a_newer_schema_is_refused() {
             other => panic!("expected SchemaTooNew {newer}, got {other:?}"),
         }
     }
-    assert_eq!(user_version(&db), "17", "left alone");
+    assert_eq!(user_version(&db), "18", "left alone");
 }

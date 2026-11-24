@@ -92,8 +92,9 @@ use specengine_core::proposal::{LOCK_MODE_TRAILER, LOCK_TRAILER, PROPOSAL_TRAILE
 use specengine_model::node::Node;
 use specengine_model::{IdScheme, ParsedFile, grammar};
 use specengine_store::{
-    GitEnv, GitError, KindFamily, Merge, Place, Proposal, Source as _, SpecIndex as _, SqliteIndex,
-    StoreError, WorkingTree, WorktreeGit, same_repository, span_hash, update_file,
+    GitEnv, GitError, KindFamily, Merge, Place, Proposal, ProposalKind, Source as _,
+    SpecIndex as _, SqliteIndex, StoreError, WorkingTree, WorktreeGit, same_repository, span_hash,
+    update_file,
 };
 
 use crate::create::{Corpus, canonical_in};
@@ -1323,9 +1324,34 @@ fn trailer_commits(
             // that judge would pass and then parse as Markdown.
             KindFamily::Locks => drift_commit(git, proposal, commit),
             KindFamily::Applies if proposal.new_file() => file_commit(git, proposal, commit),
+            KindFamily::Applies if proposal.kind == ProposalKind::Reference => {
+                let outputs = parent_outputs_of(git, proposal, &commit);
+                TrailerCommit {
+                    not_completing: crate::promote::promotion_problem(
+                        git, scratch, proposal, &commit, &outputs,
+                    ),
+                    commit,
+                    carries: false,
+                    unread: false,
+                }
+            }
             KindFamily::Applies => trailer_commit(git, scratch, proposal, config_now, commit),
         })
         .collect())
+}
+
+/// The outputs a promotion's trailer commit may change beside its two
+/// paths: its one parent's config's, judged for the document; none when it
+/// has no one parent (the judge names that).
+fn parent_outputs_of(
+    git: &WorktreeGit,
+    proposal: &Proposal,
+    commit: &str,
+) -> std::collections::BTreeSet<String> {
+    match git.parents(commit).as_deref() {
+        Ok([parent]) => parent_outputs(git, parent, proposal, &proposal.target_path),
+        _ => std::collections::BTreeSet::new(),
+    }
 }
 
 /// One trailer commit of a question or a discrepancy judged: it completes

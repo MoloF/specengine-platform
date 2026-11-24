@@ -1,22 +1,25 @@
 import { useId, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
 import { useReferences, type ReferencesQuery } from "../api/referenceQueries";
-import type { Reference } from "../api/types";
+import type { InSpec, Reference } from "../api/types";
 import { useAllowed, useHubLogin } from "../board/acting";
 import { useTranslate } from "../i18n";
 // The references' English, merged as this chunk lands (src/i18n/enReferences.ts).
 import "../i18n/enReferences";
+import { DocLink } from "../doc/DocLink";
 import { useAnnounce } from "../ui/announcer";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
+import { shownSlot, shownText } from "../ui/text";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { AddFileDialog } from "./AddFileDialog";
 import { AddLinkDialog } from "./AddLinkDialog";
 import { DeleteDialog } from "./DeleteDialog";
 import { deleteStands } from "./labels";
 import type { ReferencesProps } from "./lazy";
+import { PromoteDialog } from "./PromoteDialog";
 import { ReferenceTile } from "./ReferenceTile";
 
 // The References part (docs/features/work-references.md "UI"; docs/canon/work-references.md), a chunk
@@ -27,6 +30,12 @@ import { ReferenceTile } from "./ReferenceTile";
 // `delete_reference`, any locally; else off with its line); a deleted one shows who deleted it and
 // offers nothing. Every write is one call; the list shown is the daemon's, read again after each write
 // and on a `reference.*` event. Who acts is the hub's login or the acting name as typed (the Board's).
+// A stored file's tile offers Promote to canon… (docs/canon/work-references-promotion-surfaces.md "UI"), which
+// stores a proposal a person confirms in the Inbox and writes nothing else. Under the tiles, "In the
+// spec": the files the target's documents list in their `references:` keys, promoted and confirmed
+// (a card's every target's document, a node's own), each its document as a link (its canonical ID, an
+// ID-less one's path), its path and its text, plain: no preview and no download, no route serving a
+// repository file (D12).
 
 /** The part's heading at its level: the card's and a proposal's `h3`, a document's `h2` on its page. */
 function PartHeading({ level, id, children }: { level: 2 | 3; id: string; children: string }) {
@@ -47,9 +56,47 @@ export function newestFirst(query: Pick<ReferencesQuery, "data">): Reference[] {
 }
 
 /** What the part has open. */
-type Open = { what: "addFile" | "addLink"; trigger: HTMLElement } | { what: "delete"; reference: Reference; trigger: HTMLElement } | null;
+type Open = { what: "addFile" | "addLink"; trigger: HTMLElement } | { what: "delete" | "promote"; reference: Reference; trigger: HTMLElement } | null;
 
-export function ReferencesPart({ project, on, level }: ReferencesProps) {
+/**
+ * "In the spec" (docs/canon/work-references-promotion-surfaces.md "UI"): a group of the entries the target's
+ * documents keep, in the daemon's order, each its document (a link to it), its file's path and its
+ * text, all as text. No thumbnail, no player, no download: the file is in the repository and no route
+ * serves it here.
+ */
+function InSpecGroup({ project, rows, level }: { project: string; rows: readonly InSpec[]; level: 2 | 3 }) {
+  const t = useTranslate();
+  const headingId = useId();
+  const Heading = level === 2 ? "h3" : "h4";
+  return (
+    <section className="references-spec" aria-labelledby={headingId}>
+      <Heading id={headingId} className="references-spec-title">
+        {t("references.inSpec.title", { count: rows.length })}
+      </Heading>
+      <p className="references-about muted">{t("references.inSpec.about")}</p>
+      <ul className="references-spec-list">
+        {rows.map((row, index) => (
+          <li key={`${String(index)}-${row.document}-${row.path}`} className="reference-spec">
+            <p className="reference-spec-head">
+              <DocLink project={project} docRef={row.node} className="mono reference-spec-document">
+                {shownSlot(row.node)}
+              </DocLink>
+              <span className="sr-only">{t("references.inSpec.path")}</span>
+              <bdi className="mono reference-spec-path">{shownSlot(row.path)}</bdi>
+            </p>
+            {row.matters !== null && (
+              <p className="reference-spec-matters" dir="auto">
+                {shownText(row.matters)}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function ReferencesPart({ project, on, targets, level }: ReferencesProps) {
   const t = useTranslate();
   const headingId = useId();
   const section = useRef<HTMLElement>(null);
@@ -124,6 +171,9 @@ export function ReferencesPart({ project, on, level }: ReferencesProps) {
                   onDelete={(trigger) => {
                     setOpen({ what: "delete", reference, trigger });
                   }}
+                  onPromote={(trigger) => {
+                    setOpen({ what: "promote", reference, trigger });
+                  }}
                 />
               </li>
             ))}
@@ -142,6 +192,7 @@ export function ReferencesPart({ project, on, level }: ReferencesProps) {
             {isFetchingNextPage ? t("references.loadingOlder") : t("references.older")}
           </Button>
         )}
+        {first !== undefined && first.in_spec.length > 0 && <InSpecGroup project={project} rows={first.in_spec} level={level} />}
       </>
     );
   }
@@ -200,6 +251,17 @@ export function ReferencesPart({ project, on, level }: ReferencesProps) {
             announce(t("references.said.attached", { id }));
             const { trigger } = open;
             close(() => tileOf(id) ?? trigger);
+          }}
+        />
+      )}
+      {open?.what === "promote" && (
+        <PromoteDialog
+          project={project}
+          reference={open.reference}
+          documents={targets}
+          onClose={() => {
+            const { trigger } = open;
+            close(() => (trigger.isConnected ? trigger : tileOf(open.reference.id)));
           }}
         />
       )}

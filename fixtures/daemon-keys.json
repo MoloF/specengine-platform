@@ -1,7 +1,7 @@
 {
   "Project": ["slug", "name", "root", "branch"],
   "InboxEntry": ["id", "kind", "status", "target_id", "target_ids", "branch", "created_at", "rationale", "severity", "summary", "gist", "record_id", "staged_at"],
-  "Proposal": ["id", "project", "kind", "status", "target_id", "target_path", "worktree", "branch", "base_commit", "base_hash", "base_text", "new_text", "patch_hash", "rationale", "author", "diagnostics", "diff", "preview", "conflict", "revisions", "drift", "decided_by", "decided_at", "decision_note", "applied_commit", "created_at", "updated_at", "target_ids", "severity", "gap_type", "summary", "gist", "matters", "working_answer", "price_of_other", "evidence", "pair", "options", "recommendation", "distinct_from", "linked", "record_id", "record_path", "record_title", "record_text", "choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "comment_id", "similar", "notes", "cited"],
+  "Proposal": ["id", "project", "kind", "status", "target_id", "target_path", "worktree", "branch", "base_commit", "base_hash", "base_text", "new_text", "patch_hash", "rationale", "author", "diagnostics", "diff", "preview", "conflict", "revisions", "drift", "decided_by", "decided_at", "decision_note", "applied_commit", "created_at", "updated_at", "target_ids", "severity", "gap_type", "summary", "gist", "matters", "working_answer", "price_of_other", "evidence", "pair", "options", "recommendation", "distinct_from", "linked", "record_id", "record_path", "record_title", "record_text", "choice", "task_id", "staged", "staged_at", "interpretation", "card_id", "why", "comment_id", "ref_id", "similar", "notes", "cited"],
   "NodeView": ["ref", "reason", "notes", "nodes"],
   "SearchHit": ["id", "kind", "title", "path", "line", "ord", "archived", "snippet"],
   "BundleView": ["refs", "reason", "notes", "task", "budget", "tokens", "chars", "bytes", "bundle_hash", "body", "layers", "tail", "more"],
@@ -17,7 +17,7 @@
   "TaskList": ["tasks", "notes"],
   "TaskListEntry": ["id", "status", "title", "targets", "stale", "updated_at"],
   "TaskNotFound": ["id", "reason"],
-  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "tested", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "practices", "comments", "references", "roadmap", "author", "created_at", "updated_at", "notes"],
+  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "tested", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "practices", "comments", "references", "spec_references", "roadmap", "author", "created_at", "updated_at", "notes"],
   "TaskTarget": ["id", "path", "kind", "title"],
   "TaskCriterion": ["ref", "text"],
   "TaskAssumption": ["proposal", "text"],
@@ -189,6 +189,7 @@
   "Reference": ["id", "on", "on_rev", "actor", "author", "kind", "title", "matters", "url", "name", "b3", "agent_b3", "size", "media", "class", "inline", "meta", "file", "warning", "created_at", "deleted"],
   "ReferenceMeta": ["width", "height", "duration_ms", "triangles"],
   "ReferenceDeleted": ["by", "at"],
-  "ReferenceList": ["on", "total", "references", "next_before", "notes"],
-  "BlobStored": ["b3", "size", "media", "class", "inline", "meta", "agent_ready", "needs_matters", "warning", "stored"]
+  "ReferenceList": ["on", "total", "references", "next_before", "notes", "in_spec"],
+  "BlobStored": ["b3", "size", "media", "class", "inline", "meta", "agent_ready", "needs_matters", "warning", "stored"],
+  "InSpec": ["node", "document", "path", "matters"]
 }

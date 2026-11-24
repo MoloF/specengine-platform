@@ -751,7 +751,10 @@ fn package_roadmap_places_the_task() {
             // docs/features/work-references.md: `references` after
             // `comments`.
             assert_eq!(PACKAGE_KEYS[24], "references");
-            assert_eq!(PACKAGE_KEYS[25], "roadmap");
+            // docs/features/reference-promotion.md: `spec_references`
+            // after `references`.
+            assert_eq!(PACKAGE_KEYS[25], "spec_references");
+            assert_eq!(PACKAGE_KEYS[26], "roadmap");
             let package: Value = serde_json::from_str(&text).unwrap();
             assert_eq!(package["schema_version"], json!(1), "{context}");
             assert_eq!(roadmap_notes(&package), Vec::<String>::new(), "{context}");

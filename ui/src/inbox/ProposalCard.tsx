@@ -741,7 +741,7 @@ export function ProposalCard({
             </Section>
             {content}
             {/* People's material under the proposal, open or not, never a decision (docs/features/work-references.md "UI"): its own chunk. */}
-            <References project={project} on={id} level={3} />
+            <References project={project} on={id} targets={reviewed?.target_ids ?? entry.target_ids} level={3} />
             {/* Talk under the proposal, open or not, never a decision (docs/features/comments.md "UI"): its own chunk. */}
             <Comments project={project} on={id} targets={reviewed?.target_ids ?? entry.target_ids} level={3} />
           </div>

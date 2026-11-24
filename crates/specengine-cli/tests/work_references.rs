@@ -1340,10 +1340,15 @@ fn reference_lines(text: &str) -> Vec<String> {
         .iter()
         .position(|line| line.starts_with("context.references: "))
         .unwrap_or_else(|| panic!("a context.references line: {text}"));
+    // The references' lines end where the spec's begin
+    // (docs/features/reference-promotion.md: `context.spec-references:`
+    // after `context.images:`), else at the bundle's.
     let end = lines
         .iter()
-        .position(|line| line.starts_with("context.bundle: "))
-        .expect("a context.bundle line");
+        .position(|line| {
+            line.starts_with("context.spec-references: ") || line.starts_with("context.bundle: ")
+        })
+        .expect("a context.spec-references or context.bundle line");
     assert!(start < end, "before the bundle: {text}");
     let comments = lines
         .iter()
@@ -2116,7 +2121,7 @@ fn rf17_references_round_trip_through_format_9() {
     let bytes = export(&pair, &pair.home, &out);
     let lines = dump_lines(&bytes);
     assert!(
-        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -2280,7 +2285,7 @@ fn rf17_a_format_8_dump_imports_with_no_references() {
             .expect("sqlite3");
         String::from_utf8(output.stdout).expect("UTF-8")
     };
-    assert_eq!(sql("PRAGMA user_version;").trim(), "16");
+    assert_eq!(sql("PRAGMA user_version;").trim(), "17");
     assert_eq!(sql("SELECT count(*) FROM refs;").trim(), "0");
     assert_eq!(sql("SELECT count(*) FROM comments;").trim(), "3");
     let listed = spec_home(&pair, &fresh, &["--json", "ref", "list", "--on", "C-0001"]);
@@ -2294,10 +2299,19 @@ fn rf17_a_format_8_dump_imports_with_no_references() {
     want[0] = want[0]
         .replacen(
             "\"format\":8,\"queue_schema\":15,",
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             1,
         )
         .replacen(",\"events\":", ",\"refs\":0,\"events\":", 1);
+    // `ref_id` last on each proposal since docs/features/reference-promotion.md
+    // (format 10).
+    for line in want
+        .iter_mut()
+        .filter(|line| line.starts_with("{\"proposals\":"))
+    {
+        let body = line.strip_suffix("}}").expect("a row's end").to_owned();
+        *line = format!("{body},\"ref_id\":null}}}}");
+    }
     assert_eq!(nine, want);
 }
 
@@ -2312,11 +2326,11 @@ fn rf17_a_schema_15_queue_exports_as_format_9_unmigrated() {
         "Write the sprint foreword",
         &["--target", "MEC-SPRINT"],
     );
-    pair.sql("DROP TABLE refs; PRAGMA user_version = 15;");
+    pair.sql("DROP TABLE refs; DROP INDEX IF EXISTS proposals_ref; ALTER TABLE proposals DROP COLUMN ref_id; PRAGMA user_version = 15;");
     let out = pair.scratch.dir("dumps").join("fifteen.jsonl");
     let lines = dump_lines(&export(&pair, &pair.home, &out));
     assert!(
-        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -2324,7 +2338,7 @@ fn rf17_a_schema_15_queue_exports_as_format_9_unmigrated() {
     assert_eq!(pair.sql("PRAGMA user_version;").trim(), "15", "unmigrated");
 
     let mut ten = lines.clone();
-    ten[0] = ten[0].replacen("\"format\":9,", "\"format\":10,", 1);
+    ten[0] = ten[0].replacen("\"format\":10,", "\"format\":11,", 1);
     let file = pair.scratch.dir("dumps").join("ten.jsonl");
     let mut text = ten.join("\n");
     text.push('\n');
@@ -2416,7 +2430,15 @@ fn the_list_text_is_the_datas() {
     raw.code(0);
     assert_eq!(
         keys_in_order(&raw.stdout),
-        ["on", "total", "references", "next_before", "notes"]
+        // `in_spec` since docs/features/reference-promotion.md.
+        [
+            "on",
+            "total",
+            "references",
+            "next_before",
+            "notes",
+            "in_spec"
+        ]
     );
     let listed = raw.json();
     assert_eq!(listed["total"], json!(3));

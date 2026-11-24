@@ -44,7 +44,7 @@ use specengine_cli::{
     INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
     InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
     LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Mandate, MarkPairsRequest,
-    Outcome, ProposeRequest, ProposedText, QuestionRequest, ReferenceAddRequest,
+    Outcome, PromoteRequest, ProposeRequest, ProposedText, QuestionRequest, ReferenceAddRequest,
     ReferenceDeleteRequest, ReferenceFileRequest, ReferenceGetRequest, ReferenceListRequest,
     RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
     RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
@@ -1332,6 +1332,42 @@ enum Propose {
         #[arg(long, value_name = "T")]
         task: Option<String>,
     },
+    /// Promote reference RF's file into git beside the document REF names: stored as a proposal a person confirms; its apply writes the file into the home `[[references.homes]]` names for the document's kind (an LFS pointer when `.gitattributes` gives the home to LFS) and one entry into the document's `references:` key, one commit.
+    Reference {
+        /// The reference (`RF-0001`): a live file whose bytes this host stores.
+        #[arg(value_name = "RF")]
+        reference: String,
+        /// The document: an ID, `slug/ID` or root-relative `.md` path; a section names its document.
+        #[arg(long, value_name = "REF")]
+        to: String,
+        /// The file's name in its home, with an extension of its type; default the reference's name.
+        #[arg(long, value_name = "N")]
+        name: Option<String>,
+        /// What matters in it, the entry's text (one line, at most 512 characters); default the reference's.
+        #[arg(long, value_name = "TEXT", conflicts_with = "matters_file")]
+        matters: Option<String>,
+        /// The entry's text from a file, or `-` for stdin.
+        #[arg(long = "matters-file", value_name = "F")]
+        matters_file: Option<PathBuf>,
+        /// Why; the commit's body when applied.
+        #[arg(long, value_name = "T")]
+        rationale: String,
+        /// The proposing agent's role (any of the three: an agent's proposal).
+        #[arg(long = "author-role", value_name = "R")]
+        author_role: Option<String>,
+        /// The proposing agent's model.
+        #[arg(long = "author-model", value_name = "M")]
+        author_model: Option<String>,
+        /// The proposing agent's run.
+        #[arg(long, value_name = "ID")]
+        run: Option<String>,
+        /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
+        #[arg(long)]
+        brief: bool,
+        /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
+        #[arg(long, value_name = "T")]
+        task: Option<String>,
+    },
     /// Ask the owner a question about nodes, with the answer worked on meanwhile; stored in the queue unless an accepted decision or a queued question or decision already answers it.
     Question {
         /// The nodes the question is about, each an ID, `slug/ID`, or a root-relative `.md` path (its document): 1 to 16.
@@ -2074,6 +2110,48 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 specengine_cli::propose_interpretation_brief(env, globals, &request, task)?
             } else {
                 specengine_cli::propose_interpretation(env, globals, &request, task)?
+            }))
+        }
+        Command::Propose {
+            kind:
+                Propose::Reference {
+                    reference,
+                    to,
+                    name,
+                    matters,
+                    matters_file,
+                    rationale,
+                    author_role,
+                    author_model,
+                    run,
+                    brief,
+                    task,
+                },
+        } => {
+            let matters = match (matters, matters_file) {
+                (Some(matters), _) => Some(matters),
+                (None, Some(path)) => Some(read_text_file(env, &path, "--matters-file")?),
+                (None, None) => None,
+            };
+            let request = PromoteRequest {
+                reference,
+                to,
+                name,
+                matters,
+                rationale,
+                author_role,
+                author_model,
+                run,
+                login: None,
+                actor: None,
+                now: now(),
+                git: process_git(env),
+            };
+            let task = task.as_deref();
+            Outcome::Proposal(Box::new(if brief {
+                specengine_cli::propose_reference_brief(env, globals, &request, task)?
+            } else {
+                specengine_cli::propose_reference(env, globals, &request, task)?
             }))
         }
         Command::Propose {

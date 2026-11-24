@@ -1054,8 +1054,9 @@ fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     make(&pair, "Light the lamp", &["--discipline", "development"]);
     link(&pair, "C-0001", &["T-0001"]);
     // 16 over this build's 15 since docs/features/comments.md CM1; 17 over
-    // 16 since docs/features/work-references.md RF1.
-    pair.sql("PRAGMA user_version = 17;");
+    // 16 since docs/features/work-references.md RF1; 18 over 17 since
+    // docs/features/reference-promotion.md.
+    pair.sql("PRAGMA user_version = 18;");
     let rows = pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;");
     for args in [
         &["card", "show", "C-0001"][..],
@@ -1064,10 +1065,10 @@ fn ct4_a_queue_of_schema_11_is_refused_naming_11_and_10() {
     ] {
         let message = cannot(&pair, args);
         assert!(
-            message.contains("schema version 17, this build knows 16"),
+            message.contains("schema version 18, this build knows 17"),
             "{args:?}: {message}"
         );
-        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "17", "{args:?}");
+        assert_eq!(pair.sql("PRAGMA user_version;").trim(), "18", "{args:?}");
         assert_eq!(
             pair.sql("SELECT * FROM cards; SELECT * FROM tasks; SELECT * FROM events;"),
             rows,

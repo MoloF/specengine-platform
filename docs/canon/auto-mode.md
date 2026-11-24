@@ -3,14 +3,14 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, plugin, ui]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-23
 ---
 
 # Auto mode: a committed rule approves, applies and lands
 
 Decided 2026-11-15, ADR-0081 (local) and ADR-0082 (hub), on the owner's word of that day (08 s2 Phase 7, "Owner's word, 2026-11-15"); working answers, his review open. Shipped that day by `auto-rule`, `hub-auto`, `auto-land`, `auto-runner`, `auto-feed` (RM-0120 to RM-0124, plugin 0.47.0); 0.46.1 and older refuse a file holding `[auto]` (`hub-ops.md` "Auto" orders the upgrade). With no `[auto]` table every output, route body, event and queue row stays 0.46.1's. Commands: `spec-auto.md`, `spec-auto-land.md`; the hub: `hub-auto.md`; the runner: `auto-runner.md`; the feed: `spec-feed.md`.
 
-Delegated, nothing else: locally, approving the tasks of a pack the owner started with one terminal `[y/N]`, and landing each finished one (its code committed, its covered task-bound `update` and `create` applied, `spec check` clean on the merge, a `--no-ff` merge into the rule's branch); on a hub, applying the sole `owner` login's covered `update` and `create` raised over `/mcp`. Agents only report through today's tools; SpecEngine's code alone judges, a function of the rule, the queue and git. Never delegated: a deciding kind, an interpretation, an amendment, a drift item, a stage, `spec.lock`, tests or `verified` (ADR-0041, ADR-0044), a card, a push.
+Delegated, nothing else: locally, approving the tasks of a pack the owner started with one terminal `[y/N]`, and landing each finished one (its code committed, its covered task-bound `update` and `create` applied, `spec check` clean on the merge, a `--no-ff` merge into the rule's branch); on a hub, applying the sole `owner` login's covered `update` and `create` raised over `/mcp`. Agents only report through today's tools; SpecEngine's code alone judges, a function of the rule, the queue and git. Never delegated: a deciding kind, an interpretation, an amendment, a `reference` (a file into git: ADR-0089), a drift item, a stage, `spec.lock`, tests or `verified` (ADR-0041, ADR-0044), a card, a push.
 
 ## Rule
 

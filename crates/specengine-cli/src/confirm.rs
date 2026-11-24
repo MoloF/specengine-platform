@@ -510,7 +510,8 @@ fn outside(
 
 /// Every path a confirm of `proposal` names: `target_path` for a kind that
 /// applies, and for an `amendment` the holder of every node its `amends`
-/// links name; every target's holder for a kind that decides (its
+/// links name, for a `reference` the file it promotes (task spec
+/// `reference-promotion`, "On a hub"); every target's holder for a kind that decides (its
 /// `target_path` is the first target's alone); and a staged `canon` REF's
 /// holder. Each holder is resolved now, in the recorded root's refreshed
 /// index, read only when one is needed; else why one has none.
@@ -526,6 +527,9 @@ fn named_paths(
     let mut paths = BTreeSet::new();
     if !decides {
         paths.insert(proposal.target_path.clone());
+    }
+    if proposal.kind == specengine_store::ProposalKind::Reference {
+        paths.insert(crate::promote::promoted_file(proposal));
     }
     if !decides && !amends && canon.is_none() {
         return Ok(paths);

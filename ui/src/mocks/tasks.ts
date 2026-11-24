@@ -103,6 +103,8 @@ export function task(fields: Pick<StoredTask, "id" | "project" | "status" | "cre
     comments: fields.comments ?? { total: 0, listed: [] },
     // Nor its references (docs/features/work-references.md "A card's context and the task package").
     references: fields.references ?? { total: 0, listed: [] },
+    // Nor the files in the spec beside its nodes' documents (docs/canon/work-references-promotion-surfaces.md "Documents and text").
+    spec_references: fields.spec_references ?? { total: 0, listed: [] },
     roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at,
@@ -724,6 +726,7 @@ export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]
     practices: stored.practices,
     comments: stored.comments,
     references: stored.references,
+    spec_references: stored.spec_references,
     roadmap,
     author: stored.author,
     created_at: stored.created_at,

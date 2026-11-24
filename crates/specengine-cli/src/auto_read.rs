@@ -260,7 +260,10 @@ pub(crate) fn proposal_facts(
         };
         (which, staged.at.clone())
     });
-    let applies = proposal.kind.family() == KindFamily::Applies;
+    // A promotion waits for a person whatever its text (task spec
+    // `reference-promotion`, "[auto]"): no preview is read for it.
+    let applies = proposal.kind.family() == KindFamily::Applies
+        && proposal.kind != specengine_store::ProposalKind::Reference;
     let mut text = TextState::Applies;
     let mut document_id = None;
     if applies {

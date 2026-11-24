@@ -53,8 +53,10 @@ use specengine_cli::{
 /// "Data"'s `propose_change` line of the instructions, with its LF; without
 /// ` (base null)` since docs/features/comments.md CM15 (the schema still
 /// says it).
-const CHANGE_LINE: &str = "- propose_change = spec propose update|create|interpretation|amendment: a \
-node's new text against its span_hash; create: new ID sections in it, or a new file.\n";
+// docs/canon/work-references-promotion-surfaces.md "MCP": `|reference` named, the
+// create clause trimmed.
+const CHANGE_LINE: &str = "- propose_change = spec propose update|create|interpretation|amendment|\
+reference: a node's new text against its span_hash; create: new sections or a new file.\n";
 
 /// "Data"'s new file.
 const R13: &str = "docs/records/R/R-13.md";
@@ -356,14 +358,17 @@ fn ac10_the_schema_takes_create_and_a_nullable_base() {
     let change = tool(&list, "propose_change");
     let schema = &change["inputSchema"];
     let kind = &schema["properties"]["kind"];
-    // Four since docs/features/kind-amendment.md.
+    // Four since docs/features/kind-amendment.md; five since
+    // docs/features/reference-promotion.md.
     assert_eq!(
         kind["enum"],
         json!([
             UPDATE_KIND,
             CREATE_KIND,
             INTERPRETATION_KIND,
-            AMENDMENT_KIND
+            AMENDMENT_KIND,
+            // docs/canon/work-references-promotion-surfaces.md "MCP": the fifth.
+            "reference"
         ]),
         "{kind}"
     );

@@ -42,6 +42,10 @@ pub(crate) struct FileRows {
     /// `practice::kept_disciplines`; task spec `department-practices`): the
     /// `disciplines` table.
     pub disciplines: Vec<String>,
+    /// Its document's kept `references:` entries, root-relative, in written
+    /// order (core's `promote::document_entries`; task spec
+    /// `reference-promotion`): the `promoted` table.
+    pub promoted: Vec<specengine_core::promote::Entry>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -189,6 +193,10 @@ impl FileRows {
                 .document()
                 .map(specengine_core::practice::document_disciplines)
                 .unwrap_or_default(),
+            promoted: parsed
+                .document()
+                .map(|document| specengine_core::promote::document_entries(document, &parsed.path))
+                .unwrap_or_default(),
         })
     }
 
@@ -208,6 +216,7 @@ impl FileRows {
             diagnostics: Vec::new(),
             names: names_of(path, None),
             disciplines: Vec::new(),
+            promoted: Vec::new(),
         }
     }
 }

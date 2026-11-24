@@ -549,7 +549,9 @@ fn the_input_schema_takes_dry_run_and_the_description_stays() {
         assert!(!required.contains(&json!("dry_run")), "{required:?}");
         let description = change["description"].as_str().expect("a description");
         assert!(!description.contains("dry_run"), "{description}");
-        assert_eq!(description.len(), 2_048 - 7, "{description}");
+        // 2 048 - 2 since docs/canon/work-references-promotion-surfaces.md
+        // "MCP".
+        assert_eq!(description.len(), 2_048 - 2, "{description}");
         drop(session.finish());
     }
 }

@@ -77,8 +77,8 @@ describe("ledger-api's drift item (UI-1 of drift-queue)", () => {
   it("serves its review: 55 keys (the card and why since card-questions, L1, similar since intake-similar, IS10; the gist and why it matters since plain-questions, PQ10; the pair since collision-pairs, PP8; the cited IDs since department-practices, DP13), drift after revisions as {hash, rows, more}; the lock its path; no texts, diff, preview or revisions; the note", async () => {
     const review = await mock().getProposal(SLUG, DRIFT_ITEM);
     const keys = Object.keys(review);
-    // 56 since comments' `comment_id` (docs/features/comments.md "HTTP").
-    expect(keys).toHaveLength(56);
+    // 56 since comments' `comment_id` (docs/features/comments.md "HTTP"); 57 since reference-promotion's `ref_id` (docs/canon/work-references-promotion-surfaces.md "Documents and text").
+    expect(keys).toHaveLength(57);
     expect(keys.slice(keys.indexOf("revisions"), keys.indexOf("revisions") + 3)).toEqual(["revisions", "drift", "decided_by"]);
     expect(review).toMatchObject({
       id: DRIFT_ITEM,

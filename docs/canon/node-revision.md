@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-11-20
+reviewed: 2026-11-23
 ---
 
 # Node revision and meaning hash
@@ -75,7 +75,7 @@ Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (lin
 <type> path:<path>[#<anchor>]                                a canon: path target
 ```
 
-**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`, `stage`, `tags`, `disciplines`, `summarises`) or untyped (`extra`); a heading; a revision.
+**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`, `stage`, `tags`, `disciplines`, `summarises`, `references`) or untyped (`extra`); a heading; a revision.
 
 **Bytes**, framed as `specengine-hash/v2` (`crates/specengine-code/README.md` "Hash recipe"):
 
@@ -122,12 +122,12 @@ frame("Hold the sprint key to run; each second drains stamina (see\n[[MEC-STAMIN
 - `spec show`: ` | norm b3:<hex>` right before ` | span`, omitted when null; JSON `norm_hash` between `sections` and `span_hash`, a string or `null` (`spec-cli-read.md`). From a fresh parse of the bytes printed, never the stored column: a document's covers its own text and links, its `span_hash` the whole file printed.
 - The same key in MCP `get_node` (`mcp-read.md`), the daemon's show JSON and the UI's provisional `ShownNode.norm_hash`. A proposal's base stays `span_hash`: a `norm_hash` sent as `base` meets the stale-base refusal naming the current `span_hash` (untested).
 
-Determinism: the same bytes under the same `[ids]` give the same input from any root, cwd or creation order; an `[ids]` kind or width change keeps every input.
+Determinism: equal bytes under the same `[ids]` give the same input from any root, cwd or order; an `[ids]` kind or width change keeps every input.
 
 ## Known limits
 
 - Lone-CR line endings: a lone CR ending a heading line or a front-matter fence changes the parse (the fence needs LF; pulldown-cmark ends no ATX heading at a lone CR: `# Title\rBody\r` is one heading), so such a file hashes unlike its LF form; a CR inside text is plain LF.
 - A `status: superseded-by <the document's own ID>` written with YAML escapes has no verbatim `src_span` and counts as a `supersedes` link.
-- False changes accepted: reflow, comment edits, bullet style, NFC against NFD, an alias prefix rewritten (`--editorial` is the escape); false sameness avoided (indentation kept).
+- False changes accepted: reflow, comment edits, bullet style, NFC against NFD, a rewritten alias prefix (`--editorial` the escape); false sameness avoided (indentation kept).
 - A project's own front-matter keys never count in v1 (later a `specengine.toml` list, so v2).
 - A reference the scheme cannot parse nulls its document.

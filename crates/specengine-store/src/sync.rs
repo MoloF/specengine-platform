@@ -26,9 +26,16 @@
 //!   checkout or `MERGE_HEAD`, ever.
 //! - **The push** ([`SyncGit::push`]): `refs/heads/<b>:refs/heads/<m>`,
 //!   `--porcelain`, never forced, `pre-push` run; read from its ref line.
+//! - **The LFS upload** ([`SyncGit::lfs_upload`]; task spec
+//!   `reference-promotion`, "On a hub"): before the push, `git lfs push
+//!   --dry-run <r> refs/heads/<b>` lists the objects the outgoing commits
+//!   add (local); some listed, `git lfs push <r> refs/heads/<b>` under the
+//!   deadline. No git-lfs: no step.
 //! - **Ahead and behind** ([`ahead_behind`]), per status read.
 //!
-//! Every child but `fetch` and `push` has `GIT_NO_LAZY_FETCH=1`.
+//! Every child but `fetch`, `push` and the LFS upload has
+//! `GIT_NO_LAZY_FETCH=1`; every child has `GIT_LFS_SKIP_SMUDGE=1`, so a
+//! fast-forward or a merge writes pointers and fetches nothing.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -263,6 +270,73 @@ pub enum Pushed {
     Deadline,
 }
 
+/// What a sync's LFS upload did ([`SyncGit::lfs_upload`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LfsUpload {
+    /// git-lfs is not installed: no step.
+    Absent,
+    /// The outgoing commits add no LFS object.
+    Nothing,
+    /// The objects listed were uploaded, and git-lfs ended cleanly.
+    Uploaded,
+    /// The listing or the upload failed: its stderr.
+    Failed(String),
+    /// The deadline passed: the child was killed.
+    Deadline,
+}
+
+/// The hooks git-lfs 3.x installs on its first command in a repository.
+const LFS_HOOKS: [&str; 4] = ["pre-push", "post-checkout", "post-commit", "post-merge"];
+
+/// git-lfs 3.x's own hook for `name`, byte for byte as git-lfs 3.8.0
+/// writes it (`git lfs install --local`), without its final line feed: a
+/// guard line naming the hook, then `git lfs <name> "$@"`.
+fn lfs_hook_template(name: &str) -> String {
+    format!(
+        "#!/bin/sh\ncommand -v git-lfs >/dev/null 2>&1 || {{ printf >&2 \"\\n%s\\n\\n\" \
+         \"This repository is configured for Git LFS but 'git-lfs' was not found on your path. If \
+         you no longer wish to use Git LFS, remove this hook by deleting the '{name}' file in the \
+         hooks directory (set by 'core.hookspath'; usually '.git/hooks').\"; exit 2; }}\ngit lfs \
+         {name} \"$@\""
+    )
+}
+
+/// Each of git-lfs's hooks in `dir` (among `only` when given) whose whole
+/// text is git-lfs's own template for its name ([`lfs_hook_template`], a
+/// final line feed allowed) removed. A hook is read only when it is a
+/// regular file (no symlink, FIFO or device: a FIFO would hang the sync)
+/// no longer than the template and its line feed. A hook a person merged
+/// git-lfs's lines into (as `git lfs update --manual` tells them to)
+/// differs, so it is never touched; nor is any other file.
+fn remove_lfs_hooks(dir: &Path, only: Option<&[&str]>) {
+    for name in LFS_HOOKS {
+        if only.is_some_and(|only| !only.contains(&name)) {
+            continue;
+        }
+        let hook = dir.join(name);
+        let template = lfs_hook_template(name);
+        let regular = std::fs::symlink_metadata(&hook).is_ok_and(|meta| {
+            meta.file_type().is_file() && meta.len() <= template.len() as u64 + 1
+        });
+        if !regular {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&hook) else {
+            continue;
+        };
+        let own = bytes
+            .strip_suffix(b"\n")
+            .unwrap_or(&bytes)
+            .eq(template.as_bytes());
+        if own {
+            let _ = std::fs::remove_file(&hook);
+        }
+    }
+}
+
+/// The variable every sync child carries: no smudge on checkout.
+pub const LFS_SKIP_SMUDGE: (&str, &str) = ("GIT_LFS_SKIP_SMUDGE", "1");
+
 /// Git in a checkout's top for a sync: each child with its own deadline.
 #[derive(Debug, Clone)]
 pub struct SyncGit {
@@ -275,7 +349,8 @@ impl SyncGit {
     /// Git in the worktree's top `top` with `env`'s variables, each child
     /// stopped past `deadline` (SIGTERM, then SIGKILL 2 s later).
     pub fn open(top: &Path, env: &GitEnv, deadline: Duration) -> Result<Self, GitError> {
-        let git = WorktreeGit::new_until(top, env, Instant::now() + deadline)?;
+        let git = WorktreeGit::new_until(top, env, Instant::now() + deadline)?
+            .with_var(LFS_SKIP_SMUDGE.0, LFS_SKIP_SMUDGE.1);
         Ok(Self {
             git,
             top: top.to_path_buf(),
@@ -886,6 +961,117 @@ impl SyncGit {
             }
         }
         Ok(changed)
+    }
+
+    /// The LFS upload before a push (see the module documentation): `git
+    /// lfs push --dry-run <r> refs/heads/<b>` lists the objects the
+    /// outgoing commits add; none listed, [`LfsUpload::Nothing`]; else `git
+    /// lfs push <r> refs/heads/<b>` under the deadline. git-lfs missing
+    /// (`git: 'lfs' is not a git command`): [`LfsUpload::Absent`].
+    pub fn lfs_upload(&self, upstream: &Upstream) -> LfsUpload {
+        // git-lfs 3.x installs its four hooks into the repository's hooks
+        // directory on a push (`core.hooksPath` or `.git/hooks`). A hub
+        // never configures git-lfs, so every hook that is git-lfs's own
+        // (its text) goes, git-lfs installed or not: one a killed upload
+        // left, before; one this upload wrote, after. A hook of anyone else
+        // is never touched.
+        // A hooks directory outside the repository (a global
+        // `core.hooksPath`) is shared: there only a hook this upload wrote
+        // (absent before it) goes.
+        let dir = self.hooks_dir();
+        let inside = dir.as_ref().is_some_and(|dir| self.holds(dir));
+        let absent: Vec<&str> = dir.as_ref().map_or_else(Vec::new, |dir| {
+            LFS_HOOKS
+                .into_iter()
+                .filter(|name| std::fs::symlink_metadata(dir.join(name)).is_err())
+                .collect()
+        });
+        if inside && let Some(dir) = &dir {
+            remove_lfs_hooks(dir, None);
+        }
+        // No git-lfs, asked as `git lfs version` (never git's words): no
+        // step.
+        let uploaded = match self.child().lfs_version() {
+            Ok(Some(_)) => self.lfs_upload_steps(upstream),
+            Ok(None) => LfsUpload::Absent,
+            Err(GitError::Deadline) => LfsUpload::Deadline,
+            Err(error) => LfsUpload::Failed(upstream.redacted(&error.to_string())),
+        };
+        if let Some(dir) = &dir {
+            remove_lfs_hooks(dir, (!inside).then_some(absent.as_slice()));
+        }
+        uploaded
+    }
+
+    /// `dir` lies under the repository: its common dir or the worktree's
+    /// top, both canonical; `false` when either cannot be read.
+    fn holds(&self, dir: &Path) -> bool {
+        let Ok(dir) = std::fs::canonicalize(dir) else {
+            return false;
+        };
+        let common = self
+            .output(&["rev-parse", "--git-common-dir"], true)
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| {
+                one_line(&output.stdout)
+                    .and_then(|line| std::str::from_utf8(line).ok())
+                    .map(|line| self.top.join(line))
+            })
+            .and_then(|common| std::fs::canonicalize(common).ok());
+        let top = std::fs::canonicalize(&self.top).ok();
+        [common, top]
+            .into_iter()
+            .flatten()
+            .any(|root| dir.starts_with(root))
+    }
+
+    /// The repository's hooks directory (`rev-parse --git-path hooks`,
+    /// `core.hooksPath` honoured); `None` when git cannot say.
+    fn hooks_dir(&self) -> Option<PathBuf> {
+        let output = self
+            .output(&["rev-parse", "--git-path", "hooks"], true)
+            .ok()?;
+        let line = one_line(&output.stdout)
+            .and_then(|line| std::str::from_utf8(line).ok())
+            .filter(|_| output.status.success())?;
+        Some(self.top.join(line))
+    }
+
+    /// [`Self::lfs_upload`]'s two git-lfs children.
+    fn lfs_upload_steps(&self, upstream: &Upstream) -> LfsUpload {
+        let from = format!("refs/heads/{}", upstream.branch);
+        let listed = match self.output(
+            &[
+                "lfs",
+                "push",
+                "--dry-run",
+                upstream.remote.as_str(),
+                from.as_str(),
+            ],
+            false,
+        ) {
+            Ok(output) => output,
+            Err(GitError::Deadline) => return LfsUpload::Deadline,
+            Err(error) => return LfsUpload::Failed(upstream.redacted(&error.to_string())),
+        };
+        if !listed.status.success() {
+            return LfsUpload::Failed(spoken(upstream, &listed));
+        }
+        let any = String::from_utf8_lossy(&listed.stdout)
+            .lines()
+            .any(|line| !line.trim().is_empty());
+        if !any {
+            return LfsUpload::Nothing;
+        }
+        let args = ["lfs", "push", upstream.remote.as_str(), from.as_str()];
+        let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+        match self.child().network_output(&args) {
+            Ok(output) if output.status.success() => LfsUpload::Uploaded,
+            Ok(output) => LfsUpload::Failed(spoken(upstream, &output)),
+            Err(GitError::Deadline) => LfsUpload::Deadline,
+            Err(error) => LfsUpload::Failed(upstream.redacted(&error.to_string())),
+        }
     }
 
     /// `push --porcelain --no-follow-tags --recurse-submodules=no <r>

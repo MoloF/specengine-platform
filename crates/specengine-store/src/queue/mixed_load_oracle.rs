@@ -154,7 +154,14 @@ fn mx2_list_readable_is_heads_read_for_every_filter() {
         .iter()
         .map(|proposal| (proposal.kind, proposal.status))
         .collect();
-    for kind in ProposalKind::ALL {
+    // The scene predates the `reference` kind (task spec
+    // `reference-promotion`): it holds every other kind in every state; a
+    // reference row's decode is the store's own tests'
+    // (`tests/reference_promotion.rs`), and HEAD's oracle never read one.
+    for kind in ProposalKind::ALL
+        .into_iter()
+        .filter(|kind| *kind != ProposalKind::Reference)
+    {
         for status in ProposalStatus::ALL {
             assert!(held.contains(&(kind, status)), "no {kind:?} {status:?}");
         }

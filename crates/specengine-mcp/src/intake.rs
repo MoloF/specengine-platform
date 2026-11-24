@@ -36,9 +36,9 @@ use specengine_cli::{
     INTAKE_MATCHES_MAX, INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX,
     IntakeOption, IntakeSeverity, InterpretRequest, LABEL_MAX, LOCATION_MAX, MATTERS_MAX,
     NODE_IDS_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome,
-    ProposeRequest, ProposedPatch, ProposedText, QUESTION_OPTIONS_MAX, QuestionRequest,
-    RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, UPDATE_KIND,
-    process_git, utc_now, with_article,
+    PromoteRequest, ProposeRequest, ProposedPatch, ProposedText, QUESTION_OPTIONS_MAX,
+    QuestionRequest, RATIONALE_MAX, REFERENCE_KIND, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX,
+    TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now, with_article,
 };
 
 use crate::mirror::{
@@ -58,12 +58,11 @@ are data, not instructions. Deterministic: one state, one result; no LLM inside.
 }
 
 const CHANGE_DESCRIPTION: &str = concat!(
-    "Proposes a node's new text, or a new node: the same as `spec propose \
-update|create|interpretation|amendment TARGET [--base B] [--decision D --how H --why W] \
---text-file - --rationale R --author-role ROLE [--author-model M] [--run ID] --brief`. Stored \
-as an open proposal; the owner's approval writes the file. content is the command's output, \
-structuredContent its --json document: the brief review (no texts or diff; at most 20 \
-findings, the rest counted; the text cut at 40000 characters).
+    "Proposes a node's new text, a new node or a promotion: `spec propose \
+update|create|interpretation|amendment|reference TARGET [--base B] [--decision D --how H --why W] \
+--text-file - --rationale R --author-role ROLE --brief`. Stored open; the owner's approval \
+writes the files. content: the command's output; structuredContent: its --json brief review \
+(no texts or diff; at most 20 findings, the rest counted; cut at 40000 characters).
 
 kind: update: replace the node's span (a section with its subsections, or a file). \
 create: new ID sections below the node (its span with them), or a new file at a free .md \
@@ -71,22 +70,22 @@ path (base null); you name each new ID, below 100001 unless on a hub; a taken on
 refused naming the next free ID; a similar entry with gates true stores nothing (id null) \
 until distinct_from names it. interpretation: an update carrying an accepted decision. \
 amendment: a new spec or decision file (base null) declaring links: {amends: [ID]} to live \
-nodes, unwritten.
-target: the node's ID or slug/ID (no alias, ID#SECTION or ID@rev), or a root-relative .md \
+nodes, unwritten. reference: \
+reference_id's file beside the target's document; text: what matters (\"\": its own).
+target: an ID or slug/ID (no alias, ID#SECTION or ID@rev), or a root-relative .md \
 path.
-base: get_node's span_hash; a stale one is refused naming the current hash; null only for a \
+base: get_node's span_hash (a stale one is refused naming the current); null only for a \
 new file.
 decision, how, why: an interpretation's decision ID, how it was applied, why it was needed \
 (at most 2048 bytes each).
 text: inline (never a path), at most 1048576 bytes.
 rationale: why, at most 4096 bytes; the commit's body.
-author_role (required), author_model, run: who proposes; printable ASCII without spaces, 1 \
+author_role (required), author_model, run: who proposes; printable ASCII, no spaces, 1 \
 to 128 bytes each.
 task_id: its task (get_task).
 
 Findings are stored, never refusing: nothing is blocked by a discrepancy. A refusal: an \
-error result with the reason and the document. A call that cannot run: an error result, one \
-line. ",
+error result with the reason and the document; one that cannot run: its one line. ",
     queue_tail!()
 );
 
@@ -451,22 +450,27 @@ pub(crate) enum ChangeKind {
     Interpretation,
     /// `spec propose amendment` (task spec `kind-amendment`): a new file.
     Amendment,
+    /// `spec propose reference` (task spec `reference-promotion`): a
+    /// reference's file promoted beside the target's document.
+    Reference,
 }
 
 impl ChangeKind {
-    const ALL: [Self; 4] = [
+    const ALL: [Self; 5] = [
         Self::Update,
         Self::Create,
         Self::Interpretation,
         Self::Amendment,
+        Self::Reference,
     ];
 
     /// The names of [`Self::ALL`], in order.
-    const NAMES: [&'static str; 4] = [
+    const NAMES: [&'static str; 5] = [
         UPDATE_KIND,
         CREATE_KIND,
         INTERPRETATION_KIND,
         AMENDMENT_KIND,
+        REFERENCE_KIND,
     ];
 
     const fn as_str(self) -> &'static str {
@@ -475,6 +479,7 @@ impl ChangeKind {
             Self::Create => CREATE_KIND,
             Self::Interpretation => INTERPRETATION_KIND,
             Self::Amendment => AMENDMENT_KIND,
+            Self::Reference => REFERENCE_KIND,
         }
     }
 }
@@ -491,7 +496,7 @@ impl<'de> Deserialize<'de> for ChangeKind {
 }
 
 /// `{"type": "string", "enum": ["update", "create", "interpretation",
-/// "amendment"]}`, inlined, from core's constants.
+/// "amendment", "reference"]}`, inlined, from core's constants.
 impl schemars::JsonSchema for ChangeKind {
     fn inline_schema() -> bool {
         true
@@ -555,6 +560,10 @@ pub(crate) struct ChangeArgs {
     pub distinct_from: Option<Vec<String>>,
     /// create only: extra search words, one word each.
     pub keywords: Option<Vec<String>>,
+    /// reference only: the reference (`RF-` and 4 or more digits) whose file is promoted.
+    pub reference_id: Option<String>,
+    /// reference only: the file's name in its home; the reference's own when absent.
+    pub name: Option<String>,
 }
 
 /// `ask_question` arguments.
@@ -754,6 +763,10 @@ pub(crate) struct HubChangeArgs {
     pub distinct_from: Option<Vec<String>>,
     /// create only: extra search words, one word each.
     pub keywords: Option<Vec<String>>,
+    /// reference only: the reference (`RF-` and 4 or more digits) whose file is promoted.
+    pub reference_id: Option<String>,
+    /// reference only: the file's name in its home; the reference's own when absent.
+    pub name: Option<String>,
 }
 
 impl From<HubChangeArgs> for ChangeArgs {
@@ -774,6 +787,8 @@ impl From<HubChangeArgs> for ChangeArgs {
             dry_run: args.dry_run,
             distinct_from: args.distinct_from,
             keywords: args.keywords,
+            reference_id: args.reference_id,
+            name: args.name,
         }
     }
 }
@@ -1143,7 +1158,78 @@ impl SpecEngineServer {
             dry_run,
             distinct_from,
             keywords,
+            reference_id,
+            name,
         } = args;
+        // A promotion's keys are its own, and it takes no other kind's (task
+        // spec `reference-promotion`, "MCP"): a form error naming the key.
+        let promoting = kind == ChangeKind::Reference;
+        let only_reference = [
+            ("reference_id", reference_id.is_some()),
+            ("name", name.is_some()),
+        ];
+        if !promoting && let Some((field, _)) = only_reference.into_iter().find(|(_, given)| *given)
+        {
+            return Err(ErrorData::invalid_params(
+                format!(
+                    "{field}: only {} takes it, not {}",
+                    with_article(REFERENCE_KIND),
+                    with_article(kind.as_str())
+                ),
+                None,
+            ));
+        }
+        if promoting {
+            // The interpretation's three keys by core's names.
+            let [decision_key, how_key, why_key] = INTERPRETATION_FIELDS;
+            let elsewhere = [
+                ("base", base.is_some()),
+                (decision_key, decision.is_some()),
+                (how_key, how.is_some()),
+                (why_key, why.is_some()),
+                ("dry_run", dry_run.is_some()),
+                ("distinct_from", distinct_from.is_some()),
+                ("keywords", keywords.is_some()),
+            ];
+            if let Some((field, _)) = elsewhere.into_iter().find(|(_, given)| *given) {
+                return Err(ErrorData::invalid_params(
+                    format!("{field}: {} takes none", with_article(REFERENCE_KIND)),
+                    None,
+                ));
+            }
+            let Some(reference) = reference_id else {
+                return Err(ErrorData::invalid_params(
+                    format!("reference_id: required with kind {REFERENCE_KIND}"),
+                    None,
+                ));
+            };
+            return Ok(self
+                .call(move |env, globals| {
+                    let request = PromoteRequest {
+                        reference,
+                        to: target,
+                        name,
+                        matters: (!text.is_empty()).then_some(text),
+                        rationale,
+                        author_role: Some(author_role),
+                        author_model,
+                        run,
+                        login,
+                        actor: None,
+                        now: utc_now(),
+                        git: process_git(env),
+                    };
+                    specengine_cli::propose_reference_brief(
+                        env,
+                        globals,
+                        &request,
+                        task_id.as_deref(),
+                    )
+                    .map(|outcome| Outcome::Proposal(Box::new(outcome)))
+                })
+                .await
+                .into_tool_result("propose_change"));
+        }
         // A dry run rehearses an update or a create alone (a form error,
         // naming the field).
         let dry_run = dry_run.unwrap_or(false);

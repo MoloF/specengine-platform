@@ -11,7 +11,7 @@ The project's CLAUDE.md and its roles take precedence over this skill.
 
 1. Read the target with `get_node`: its text and its `span_hash`, the `base` you send. The target is an ID as the spec writes it (not an alias), or a spec document's root-relative path; a section's span holds its subsections, a document's is its whole file. The header line and the link lines `with` adds are not the span.
 2. A cut answer: target a smaller ID section, or read the file, `line` to `end_line`.
-3. Write the span's whole new text, not a diff: keep every ID heading and its level, add no heading at the section's level or above it, change only what must change. Keep every rev as you read it: approval sets revisions. If you believe the change is editorial (wording, no meaning), say "editorial" in the rationale; the owner decides.
+3. Write the span's whole new text, not a diff: keep every ID heading and its level, add no heading at the section's level or above it, change only what must change. Keep every rev as you read it: approval sets revisions. If it is editorial (wording, no meaning), say "editorial" in the rationale; the owner decides.
 4. Call `propose_change` with the target, the `span_hash` you read as `base`, the new text, a `rationale` (why; the commit's body) and your `author_role` as the project names it.
 5. Read the reply: its `id` and `diagnostics`, the findings your text would add, which never refuse it; fix a mistake with a corrected text (below).
 
@@ -20,35 +20,32 @@ The project's CLAUDE.md and its roles take precedence over this skill.
 The same call with `"kind": "create"` adds what is not in the spec yet:
 
 - New ID sections in a node: its `span_hash` as `base`, the text its span plus new ID headings below its own level.
-- A new spec file: `target` a free root-relative .md path inside the spec's directories; `"base": null`; the text the whole file, its ID in the front-matter's `id:`, if any.
+- A new spec file: `target` a free root-relative .md path inside the spec's directories; `"base": null`; the text the whole file, its ID in `id:`, if any.
 - You name each new ID: its kind's prefix (never a legacy alias), in Latin, numbered as the project writes its IDs, a hub's range above a terminal's; look it up with `get_node` first. A taken or other-range one is refused naming its holder or range and, for a number, the next free ID: held by the spec or another's proposal, resend with that one.
-- Held by your own earlier proposal: never take the next free ID (it adds the node twice); name that proposal in your report, ask the owner to reject it, resend once `get_proposal` shows it rejected.
-- Your new IDs are held while the proposal is open; the reply's `target_ids` lists the target and them.
-- The reply's `similar` lists what yours may repeat, with why: prefer an update of it. One with `gates` true keeps yours unstored (`id` null) until you resend naming it in `distinct_from`.
+- Held by your own earlier proposal: never take the next free ID (it adds the node twice); name it in your report, ask the owner to reject it, resend once it is rejected.
+- Your new IDs are held while the proposal is open (the reply's `target_ids`).
+- The reply's `similar` lists what yours may repeat: prefer an update of it. One with `gates` true keeps yours unstored (`id` null) until you resend naming it in `distinct_from`.
 - A document amending a live node: `"kind": "amendment"`, a new spec or decision file (`"base": null`) whose front-matter declares `links: {amends: [ID]}`, each ID as the spec writes it. Approval adds only your file, the node unwritten; the amendment counts as applied once your document is shipped, abandoned or superseded.
 
 ## Carrying an accepted decision into a rule
 
-When an accepted decision becomes a rule only through your reading of it, send the update as `"kind": "interpretation"` with `decision` (its ID), `how` (how you applied it) and `why` (why it needed interpreting), a short paragraph each. A superseded decision is refused naming its successor: resend with that one.
+When an accepted decision becomes a rule only through your reading, send the update as `"kind": "interpretation"` with `decision` (its ID), `how` (how you applied it) and `why` (why it needed interpreting), a short paragraph each. A superseded decision is refused naming its successor: resend with that one.
+
+## Promoting a reference
+
+Asked to promote a stored file: `"kind": "reference"`, `reference_id` (`RF-…`), `target` its document, `text` what matters (`""`: the reference's own), no `base`.
 
 ## After sending
 
 - On approval SpecEngine writes and commits the file; never edit it yourself.
-- `get_proposal` with its `id` as `proposal_id` gives its `status` and the owner's `decision_note`.
+- `get_proposal` with its `id` gives its `status` and the owner's `decision_note`.
 - Refused for a stale `base`: read the span again, redo your text, resend.
 - Refused for the span's headings: an ID section to add is a create (above), one to remove a question for the owner (the ask-owner skill).
-- A corrected text is a new proposal, the earlier one open beside it: name the one it replaces in its `rationale` and your report; a corrected create's earlier one holds its IDs (above).
-- Nothing waits for the owner: keep working; name the proposal and its new IDs in your report where your work assumes them.
+- A corrected text is a new proposal beside the earlier one: name the one it replaces in its `rationale` and report; a corrected create's earlier one holds its IDs.
+- Nothing waits for the owner: keep working; name the proposal and its new IDs in your report.
 - On a task, pass its `task_id` with each proposal.
 
 Arguments of `propose_change`:
 ```json
-{
-  "kind": "update",
-  "target": "<ID>",
-  "base": "<its span_hash>",
-  "text": "<the span's whole new text>",
-  "rationale": "<why>",
-  "author_role": "<your-role>"
-}
+{"kind": "update", "target": "<ID>", "base": "<its span_hash>", "text": "<the span's whole new text>", "rationale": "<why>", "author_role": "<your-role>"}
 ```

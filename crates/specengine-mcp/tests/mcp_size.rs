@@ -961,9 +961,12 @@ fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
 // `,"references":{"total":0,"listed":[],"images":[]}` (49 characters) on a
 // card with none;
 // docs/canon/work-references-surfaces.md "A card's context and the brief".
+// 467 682 since docs/features/reference-promotion.md (PR6): the context's
+// `,"spec_references":{"total":0,"listed":[]}` (42 characters) on a card
+// whose targets' documents keep none.
 // The text is at its 40 000 cut and stays 40 261.
 // MAX_RESULT_CHARS is 500 000.
-const CARD_CONTEXT_MAXIMUM: usize = 467_640;
+const CARD_CONTEXT_MAXIMUM: usize = 467_682;
 
 /// The clock of every write of the card scenes.
 const CARD_CLOCK: &str = "2026-11-12T09:00:00Z";

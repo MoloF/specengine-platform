@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin]
 owner: owner
-reviewed: 2026-11-12
+reviewed: 2026-11-24
 ---
 
 # Proposal kinds: create
 
-Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kind `create` adds a new spec file (**file form**) or new `{#ID}` sections in one node's span (**section form**), applied by `spec approve` as one commit where it was raised (ADR-0004, ADR-0005, ADR-0032). The proposer names the path and every new ID (ADR-0008); the queue reserves them while the proposal is live. `update` keeps its node set (`proposal-queue.md` "Creation" 3); deciding kinds: `agent-intake.md`, `decision-record.md`; `interpretation`, `decision`, `amendment` (a new file too, sharing this page's rules): `proposal-<kind>.md`. Code: core `create.rs` (`id_sites`, `written_id`, `add_sections`), `record_form`; store `ProposalKind::Create`, `reserved()`; CLI `create.rs` (propose, the new file's apply), `propose.rs` (`SpanRule::Sections`), `preflight.rs` (section steps, `file_commit`); MCP `intake.rs`.
+Phase 2 slice 6: a node comes into existence through the queue. Kind `create` adds a new spec file (**file form**) or new `{#ID}` sections in one node's span (**section form**), applied by `spec approve` as one commit where it was raised (ADR-0004, ADR-0005, ADR-0032). The proposer names the path and every new ID (ADR-0008); the queue reserves them while the proposal is live. `update` keeps its node set (`proposal-queue.md` "Creation" 3); deciding kinds: `agent-intake.md`, `decision-record.md`; `interpretation`, `decision`, `amendment` (a new file too, sharing this page's rules): `proposal-<kind>.md`. Code: core `create.rs` (`id_sites`, `written_id`, `add_sections`), `record_form`; store `ProposalKind::Create`, `reserved()`; CLI `create.rs` (propose, the new file's apply), `propose.rs` (`SpanRule::Sections`), `preflight.rs` (section steps, `file_commit`); MCP `intake.rs`.
 
 ## Forms
 
@@ -61,7 +61,7 @@ Store: `ProposalKind::Create` (`family()` `Applies`, `adds_nodes()` true, `amend
 
 ## MCP and plugin
 
-`propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?, dry_run?, distinct_from?, keywords?}` (a create's last two: `proposal-similar.md`): `kind` required, enum `["update", "create", "interpretation", "amendment"]` from core `*_KIND` (`ChangeKind`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> -32602 `base: ...`. `dry_run` = `--dry-run` (`propose_dry_run_brief`, `propose_create_dry_run_brief`; the output schema unchanged, `id` and `status` nullable); `true` with `interpretation` or `amendment` -> -32602 `dry_run: only an update or a create takes it, not an amendment`, nothing stored. Its description names the range, `below 100001 unless on a hub` (a hub's: `from 100001 on this hub`), a `holds_number` assert tying it to `HUB_ID_START`. `INSTRUCTIONS`: `mcp-read.md` "Texts".
+`propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?, dry_run?, distinct_from?, keywords?}` (a create's last two: `proposal-similar.md`): `kind` required, enum `["update", "create", "interpretation", "amendment", "reference"]` from core `*_KIND` (`ChangeKind`; `reference`: `work-references-promotion-surfaces.md`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> -32602 `base: ...`. `dry_run` = `--dry-run` (`propose_dry_run_brief`, `propose_create_dry_run_brief`; the output schema unchanged, `id` and `status` nullable); `true` with `interpretation` or `amendment` -> -32602 `dry_run: only an update or a create takes it, not an amendment`, nothing stored. Its description names the range, `below 100001 unless on a hub` (a hub's: `from 100001 on this hub`), a `holds_number` assert tying it to `HUB_ID_START`. `INSTRUCTIONS`: `mcp-read.md` "Texts".
 
 Plugin: `plugin.md` "Skills", `propose-spec-change`.
 
@@ -71,8 +71,8 @@ Kind names from core constants only (`CREATE_KIND` beside `QUESTION_KIND`); no `
 
 ## Known limits
 
-- An ID created outside the queue on another branch: `id-taken` at merge; spec IDs' limits: `spec-ids.md` "Known limits". A stale open create holds its IDs until rejected; a wrong guess costs one refused call.
+- An ID created outside the queue on another branch: `id-taken` at merge; spec IDs' limits: `spec-ids.md` "Known limits". A stale open create holds its IDs until rejected.
 - Apply's limits: `proposal-create-apply.md`.
-- A generated directory or index outside the walk gets the walk's wording, not its own (exit 1 either way).
-- A holder on another branch or clone also filters the finding (`proposal-rehearsal` D10): nothing is refused, and `spec check` still reports the reference.
+- A generated directory or index outside the walk gets the walk's wording (exit 1 either way).
+- A holder on another branch or clone also filters the finding (`proposal-rehearsal` D10); `spec check` still reports the reference.
 - The held note is not stored, so `spec review` shows none: declining A and pressing `y` on B applies B with a dangling reference, no note in sight (`proposal-apply.md` "Known limits").

@@ -4,7 +4,10 @@ import { MockClient } from "./MockClient";
 
 // docs/features/work-references.md "UI", The mock: harbor-sim's references in memory, uploads kept up to
 // 8 MiB under made-up 64-hex names, each type sniffed from its first bytes; an attach, a delete and the
-// file's address answered as the daemon would, refused in its words.
+// file's address answered as the daemon would, refused in its words. docs/canon/work-references-promotion-surfaces.md
+// "UI": a list's "In the spec" from its documents' keys (a card's targets' documents, a node's own, a
+// proposal's none); a promotion stored as a `reference` proposal, judged and refused in the CLI's
+// words, writing nothing else until a hub's confirm adds its entry to the document's key.
 
 const AT = Date.parse("2026-11-23T12:00:00Z");
 
@@ -79,5 +82,57 @@ describe("the mock's references", () => {
     expect(await refusal(client.deleteReference("harbor-sim", made.id))).toEqual([409, `${made.id} is deleted: nothing changed`]);
     const hub = new MockClient("hub", { now: () => AT });
     expect((await hub.deleteReference("harbor-sim", "RF-0001")).deleted?.by).toBe("mira");
+  });
+});
+
+describe("the mock's promotions (docs/canon/work-references-promotion-surfaces.md \"UI\")", () => {
+  it("lists the night passage's key under C-0003, whose target it is, and under the node; a proposal none", async () => {
+    const client = new MockClient("normal", { now: () => AT });
+    const card = await client.getReferences("harbor-sim", { on: "C-0003" });
+    expect(card.in_spec.map((row) => [row.node, row.document, row.path, row.matters === null])).toEqual([
+      ["MEC-NIGHT-PASSAGE", "docs/spec/fairway/night.md", "docs/spec/fairway/media/buoys-at-night.png", false],
+      ["MEC-NIGHT-PASSAGE", "docs/spec/fairway/night.md", "docs/spec/fairway/media/signal-lights.wav", false],
+      ["MEC-NIGHT-PASSAGE", "docs/spec/fairway/night.md", "docs/spec/fairway/media/chart-2019.pdf", true],
+    ]);
+    expect((await client.getReferences("harbor-sim", { on: "MEC-NIGHT-PASSAGE" })).in_spec).toEqual(card.in_spec);
+    expect((await client.getReferences("harbor-sim", { on: "PR-0049" })).in_spec).toEqual([]);
+  });
+
+  it("stores a stored file's promotion as an open `reference` proposal with its note, nothing else; the Inbox lists it; a live twin is refused", async () => {
+    const client = new MockClient("normal", { now: () => AT });
+    const body = { to: "MEC-NIGHT-PASSAGE", name: null, matters: null, rationale: "Promote RF-0002 beside MEC-NIGHT-PASSAGE", as: "ivo" };
+    const review = await client.promoteReference("harbor-sim", "RF-0002", body);
+    expect([review.kind, review.status, review.target_id, review.target_path, review.ref_id, review.new_text, review.preview]).toEqual([
+      "reference",
+      "open",
+      "MEC-NIGHT-PASSAGE",
+      "docs/spec/fairway/night.md",
+      "RF-0002",
+      "media/harbour.png | The light on the water, not the boats.",
+      "applies",
+    ]);
+    expect(review.notes).toEqual(["adds docs/spec/fairway/media/harbour.png: RF-0002, image/png 82 B, LFS"]);
+    expect(review.diff).toContain('+  - "media/harbour.png | The light on the water, not the boats."');
+    const inbox = await client.getInbox("harbor-sim");
+    expect(inbox.proposals.filter((entry) => entry.id === review.id).map((entry) => entry.kind)).toEqual(["reference"]);
+    // Nothing written: the key and the list are as they were.
+    expect((await client.getReferences("harbor-sim", { on: "C-0003" })).in_spec).toHaveLength(3);
+    expect(await refusal(client.promoteReference("harbor-sim", "RF-0002", body))).toEqual([409, `RF-0002 is already proposed for \`MEC-NIGHT-PASSAGE\` by ${review.id ?? ""} (open)`]);
+  });
+
+  it("refuses in the CLI's words: a link, a lost file, a deleted one, an unknown one, a home no kind takes, a name off its type; notes a section", async () => {
+    const client = new MockClient("normal", { now: () => AT });
+    const body = { to: "MEC-NIGHT-PASSAGE", name: null, matters: null, rationale: "R", as: null };
+    expect(await refusal(client.promoteReference("harbor-sim", "RF-0001", body))).toEqual([409, "RF-0001 is a link: only a file is promoted into git"]);
+    expect(await refusal(client.promoteReference("harbor-sim", "RF-0003", body))).toEqual([409, "RF-0003's file is not on this host: nothing to promote"]);
+    expect(await refusal(client.promoteReference("harbor-sim", "RF-0004", body))).toEqual([409, "RF-0004 is deleted: nothing to promote"]);
+    expect(await refusal(client.promoteReference("harbor-sim", "RF-0099", body))).toEqual([404, "no reference RF-0099"]);
+    expect(await refusal(client.promoteReference("harbor-sim", "RF-0002", { ...body, to: "DOM-HARBOR" }))).toEqual([
+      503,
+      "spec: no [references] home takes kind `domain` (`DOM-HARBOR`): add one to [[references.homes]] in specengine.toml; nothing stored",
+    ]);
+    expect(await refusal(client.promoteReference("harbor-sim", "RF-0002", { ...body, name: "harbour.jpg" }))).toEqual([409, "name `harbour.jpg` does not end in an extension of image/png (.png): give one with --name"]);
+    const section = await client.promoteReference("harbor-sim", "RF-0002", { ...body, to: "MEC-NIGHT-PASSAGE#RULE-FAIRWAY-SPEED", name: "speed.png" });
+    expect(section.notes[0]).toBe("`RULE-FAIRWAY-SPEED` is a section of `MEC-NIGHT-PASSAGE`: the file goes beside the document");
   });
 });

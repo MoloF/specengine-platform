@@ -1,6 +1,7 @@
 import { ClientError, type ReferencesOptions, type UploadProgress } from "../api/client";
-import type { BlobStored, Reference, ReferenceAddBody, ReferenceList, ReferenceMeta } from "../api/types";
-import { fakeHex, stamp } from "./build";
+import type { Author, BlobStored, InSpec, PromoteBody, Reference, ReferenceAddBody, ReferenceList, ReferenceMeta } from "../api/types";
+import { fakeHex, proposal, stamp, type MockCorpus, type MockDocument, type MockProposal, type StoredReview } from "./build";
+import { resolveRef } from "./corpus";
 
 // The mock's references (docs/features/work-references.md "Data", "HTTP"; ADR-0088): harbor-sim's
 // material under a task, held in memory until a reload, answered as `spec serve` would: a list oldest
@@ -8,7 +9,10 @@ import { fakeHex, stamp } from "./build";
 // (a refusal naming "the upload", as a PUT carries no name),
 // kept in memory up to 8 MiB in all, named by a made-up 64-hex digest of their bytes (not BLAKE3, so
 // equal bytes are one file); an attach and a delete refused in the CLI's words. A file a seed names
-// with no bytes reads `lost`.
+// with no bytes reads `lost`. A promotion (docs/canon/work-references-promotion-surfaces.md "HTTP") stores a
+// `reference` proposal in the project's queue, judged as `spec propose reference` judges it, the
+// mock's `[[references.homes]]` taking `mechanic` documents into `media`, which its `.gitattributes`
+// gives to LFS; a hub's confirm of one adds its entry to the document's key, read back as `in_spec`.
 
 /** The most references a page lists (`REF_PAGE_MAX`). */
 const PAGE = 100;
@@ -72,7 +76,38 @@ export interface MockReferences {
   blobs: Map<string, StoredBlob>;
   /** Each file's address for an `<img>`, an `<audio>`, a `<video>` or a download, made once. */
   urls: Map<string, string>;
+  /** The entries the documents' `references:` keys keep, in each document's written order. */
+  promoted: InSpec[];
 }
+
+/** The most `in_spec` rows a list carries (`IN_SPEC_MAX`). */
+export const IN_SPEC_MAX = 64;
+
+/** The mock's `[[references.homes]]`: a kind's directory under its document's. */
+const HOMES: Readonly<Record<string, string>> = { mechanic: "media" };
+
+/** The homes its `.gitattributes` gives to LFS: every `media` directory under `docs/spec`, `filter=lfs`. */
+const LFS_HOMES: ReadonlySet<string> = new Set(["media"]);
+
+/** The extensions a promoted file's name may end in, by media type, in the daemon's order. */
+const EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
+  "image/png": [".png"],
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/gif": [".gif"],
+  "image/webp": [".webp"],
+  "audio/wav": [".wav"],
+  "audio/flac": [".flac"],
+  "audio/ogg": [".ogg", ".oga", ".opus"],
+  "audio/mpeg": [".mp3"],
+  "video/mp4": [".mp4", ".m4v"],
+  "video/webm": [".webm"],
+  "model/gltf-binary": [".glb"],
+  "application/x-blender": [".blend"],
+  "application/pdf": [".pdf"],
+};
+
+/** The most characters an entry's text holds. */
+const ENTRY_TEXT_MAX = 512;
 
 function numberOf(id: string): number {
   return Number(id.replace(/^\D+-/, ""));
@@ -109,7 +144,7 @@ function agentReady(stored: Pick<StoredBlob, "class" | "meta">, size: number): b
 
 /** harbor-sim's material: under C-0003 lev's link, ivo's harbour image, tomas's sound lost with its host and a deleted one. */
 export function mockReferences(slug: string, now: number): MockReferences {
-  const store: MockReferences = { rows: [], blobs: new Map(), urls: new Map() };
+  const store: MockReferences = { rows: [], blobs: new Map(), urls: new Map(), promoted: [] };
   if (slug !== "harbor-sim") {
     return store;
   }
@@ -145,22 +180,199 @@ export function mockReferences(slug: string, now: number): MockReferences {
     },
     { ...base, id: "RF-0004", actor: "mira", author: person("mira"), kind: "file", title: null, size: 40_960, media: "application/pdf", class: "pdf", inline: false, created_at: at(90), deleted: { by: "mira", at: at(80) } },
   );
+  // The night passage's key, written by an earlier promotion and by hand: C-0003's target inherits it.
+  store.promoted.push(
+    { node: "MEC-NIGHT-PASSAGE", document: "docs/spec/fairway/night.md", path: "docs/spec/fairway/media/buoys-at-night.png", matters: "The order of the lit buoys, not their colours." },
+    // "Signal lights" in Russian, escaped: an entry's text is shown as written, any script (ADR-0072).
+    { node: "MEC-NIGHT-PASSAGE", document: "docs/spec/fairway/night.md", path: "docs/spec/fairway/media/signal-lights.wav", matters: "\u0421\u0438\u0433\u043d\u0430\u043b\u044c\u043d\u044b\u0435 \u043e\u0433\u043d\u0438: two short, one long." },
+    { node: "MEC-NIGHT-PASSAGE", document: "docs/spec/fairway/night.md", path: "docs/spec/fairway/media/chart-2019.pdf", matters: null },
+  );
   return store;
 }
 
-/** A target's page: the newest `limit` older than `before`, oldest first. */
-export function referencesIn(store: MockReferences, options: ReferencesOptions, kind: string): ReferenceList {
+/**
+ * A target's page: the newest `limit` older than `before`, oldest first; on every page the entries
+ * `documents` keep (their paths, each once, in order: a card's targets' documents, a node's own), at
+ * most IN_SPEC_MAX, a note saying how many more.
+ */
+export function referencesIn(store: MockReferences, options: ReferencesOptions, kind: string, documents: readonly string[] = []): ReferenceList {
   const all = store.rows.filter((reference) => reference.on.id === options.on).sort((a, b) => numberOf(a.id) - numberOf(b.id));
   const older = options.before === undefined ? all : all.filter((reference) => numberOf(reference.id) < numberOf(options.before ?? ""));
   const page = older.slice(-(options.limit ?? PAGE));
   const first = page[0];
+  const kept = [...new Set(documents)].flatMap((document) => store.promoted.filter((entry) => entry.document === document));
+  const more = kept.length - IN_SPEC_MAX;
   return {
     on: { kind, id: options.on },
     total: all.length,
     references: structuredClone(page),
     next_before: first !== undefined && older.length > page.length ? first.id : null,
-    notes: [],
+    notes: more > 0 ? [`${String(more)} more in the spec not shown: their documents list them`] : [],
+    in_spec: structuredClone(kept.slice(0, IN_SPEC_MAX)),
   };
+}
+
+/** The document a REF lands in, as the mock's corpus resolves it, a section to its document; null when it names none. */
+export function documentOf(corpus: MockCorpus, ref: string): { file: MockDocument; section: string | null } | null {
+  const resolved = resolveRef(corpus, ref);
+  if ("reason" in resolved) {
+    return null;
+  }
+  const holder = resolved.holders[0];
+  const file = holder === undefined ? undefined : corpus.documents.find((document) => document.path === holder.path);
+  return file === undefined || holder === undefined ? null : { file, section: holder.isDocument ? null : holder.id };
+}
+
+/** A path's directory: all before its last `/`, `""` at the root. */
+function directoryOf(path: string): string {
+  const slash = path.lastIndexOf("/");
+  return slash < 0 ? "" : path.slice(0, slash);
+}
+
+/** Paths joined by `/`, empty parts left out. */
+function joined(...parts: string[]): string {
+  return parts.filter((part) => part !== "").join("/");
+}
+
+/** A refusal (exit 1): the route's 409 `{id, reason}`, the client's message its reason. */
+function refused(reason: string): ClientError {
+  return new ClientError({ status: 409, message: reason });
+}
+
+/** Cannot run (exit 2): the route's 503, the CLI's line. */
+function cannot(line: string): ClientError {
+  return new ClientError({ status: 503, message: `spec: ${line}` });
+}
+
+/** A size as the daemon's lines print it: one decimal past bytes, in binary units. */
+function sizeLine(bytes: number): string {
+  if (bytes < 1024) {
+    return `${String(bytes)} B`;
+  }
+  return bytes < 1_048_576 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1_048_576).toFixed(1)} MiB`;
+}
+
+/** An entry as the key writes it, quoted, `\` and `"` escaped. */
+function quoted(entry: string): string {
+  return `"${entry.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+/** The unified hunk adding `entry` before the front-matter's closing fence, three lines of context; null when the file has no front-matter. */
+function entryDiff(file: MockDocument, entry: string): string | null {
+  const close = file.lines.indexOf("---", 1);
+  if (file.lines[0] !== "---" || close < 0) {
+    return null;
+  }
+  const from = Math.max(0, close - 3);
+  const to = Math.min(file.lines.length, close + 4);
+  const before = file.lines.slice(from, close).map((line) => ` ${line}`);
+  const after = file.lines.slice(close, to).map((line) => ` ${line}`);
+  const head = `@@ -${String(from + 1)},${String(to - from)} +${String(from + 1)},${String(to - from + 2)} @@`;
+  return [`--- a/${file.path}`, `+++ b/${file.path}`, head, ...before, "+references:", `+  - ${quoted(entry)}`, ...after, ""].join("\n");
+}
+
+/**
+ * `spec propose reference RF --to REF`, as the route answers it: the reference live, a file and
+ * stored; the document's kind given a home; the name keeping its type's extension; the entry's text
+ * within 512 characters; no live twin; then the `reference` row stored in `queue` and its review
+ * document answered. Each refusal in the CLI's words: 404 an unknown reference or target, 409 a rule,
+ * 503 what cannot run. Nothing else changes: the file and the key wait for a person's confirm.
+ */
+export function promoteIn(
+  store: MockReferences,
+  queue: MockProposal[],
+  corpus: MockCorpus,
+  project: string,
+  id: string,
+  body: PromoteBody,
+  author: Author,
+  at: string,
+): StoredReview {
+  const reference = stored(store, id);
+  if (reference.deleted !== null) {
+    throw refused(`${id} is deleted: nothing to promote`);
+  }
+  if (reference.kind === "link") {
+    throw refused(`${id} is a link: only a file is promoted into git`);
+  }
+  const blob = reference.b3 === null ? undefined : store.blobs.get(reference.b3);
+  if (reference.file !== "stored" || blob === undefined) {
+    throw refused(`${id}'s file is not on this host: nothing to promote`);
+  }
+  if (body.rationale.trim() === "") {
+    throw new ClientError({ status: 400, message: "spec: rationale: blank: give a value" });
+  }
+  const found = documentOf(corpus, body.to);
+  if (found === null) {
+    throw new ClientError({ status: 404, message: `\`${body.to}\` resolves to no ID and no alias` });
+  }
+  const { file, section } = found;
+  const document = file.node.id ?? file.path;
+  const kind = file.node.kind;
+  if (kind === null) {
+    throw cannot(`\`${file.path}\` has no kind: a [references] home is chosen by kind`);
+  }
+  const home = HOMES[kind];
+  if (home === undefined) {
+    throw cannot(`no [references] home takes kind \`${kind}\` (\`${document}\`): add one to [[references.homes]] in specengine.toml; nothing stored`);
+  }
+  const name = body.name ?? reference.name ?? "";
+  const extensions = EXTENSIONS[blob.media] ?? [];
+  if (name.includes("|") || name.startsWith(".") || name.endsWith(".") || name.endsWith(" ")) {
+    throw refused(`name \`${name}\` holds a \`|\`, starts with \`.\` or ends in a space or \`.\`: give another with --name`);
+  }
+  if (!extensions.some((extension) => name.toLowerCase().endsWith(extension))) {
+    throw refused(`name \`${name}\` does not end in an extension of ${blob.media} (${extensions.join(", ")}): give one with --name`);
+  }
+  const text = (body.matters ?? reference.matters ?? "").replace(/[\r\n]+/g, " ").trim();
+  const characters = Array.from(text).length;
+  if (characters > ENTRY_TEXT_MAX) {
+    throw refused(`${id}'s what matters is ${String(characters)} characters: an entry holds at most 512; give one with --matters`);
+  }
+  const twin = queue.find(({ review }) => review.ref_id === id && review.target_id === document && (review.status === "open" || review.status === "changes_requested" || review.status === "approved"));
+  if (twin !== undefined) {
+    throw refused(`${id} is already proposed for \`${document}\` by ${twin.review.id} (${twin.review.status})`);
+  }
+  const relative = joined(home, name);
+  const path = joined(directoryOf(file.path), relative);
+  if (store.promoted.some((entry) => entry.document === file.path && entry.path === path)) {
+    throw refused(`\`${relative}\` is already listed in \`${document}\`'s references`);
+  }
+  const entry = text === "" ? relative : `${relative} | ${text}`;
+  const highest = queue.reduce((most, { review }) => Math.max(most, numberOf(review.id)), 0);
+  const made = proposal({
+    id: `PR-${String(highest + 1).padStart(4, "0")}`,
+    project,
+    kind: "reference",
+    created_at: at,
+    target_id: document,
+    target_path: file.path,
+    base_hash: `b3:${fakeHex(`${file.path}\n${file.lines.join("\n")}`, 64)}`,
+    new_text: entry,
+    patch_hash: `b3:${fakeHex(`${document}\n${entry}`, 64)}`,
+    rationale: body.rationale,
+    author,
+    diff: entryDiff(file, entry),
+    preview: "applies",
+    revisions: [],
+    ref_id: id,
+    notes: [
+      ...(section === null ? [] : [`\`${section}\` is a section of \`${document}\`: the file goes beside the document`]),
+      `adds ${path}: ${id}, ${blob.media} ${sizeLine(blob.bytes.length)}, ${LFS_HOMES.has(home) ? "LFS" : "plain"}`,
+    ],
+  });
+  queue.push(made);
+  return made.review;
+}
+
+/** A hub's confirm of a `reference` proposal: its entry joins its document's key, the path root-relative. */
+export function promotedIn(store: MockReferences, review: Pick<StoredReview, "target_id" | "target_path" | "new_text">): void {
+  if (review.target_path === null || review.new_text === null) {
+    return;
+  }
+  const split = review.new_text.indexOf(" | ");
+  const relative = split < 0 ? review.new_text : review.new_text.slice(0, split);
+  store.promoted.push({ node: review.target_id ?? review.target_path, document: review.target_path, path: joined(directoryOf(review.target_path), relative), matters: split < 0 ? null : review.new_text.slice(split + 3) });
 }
 
 function cancelled(): DOMException {

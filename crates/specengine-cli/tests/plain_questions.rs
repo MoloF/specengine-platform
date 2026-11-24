@@ -95,7 +95,7 @@ const OPTION_LINES: &str = "options: 2\n  [0] Restart the wait | Short rests do 
 /// after `summary`; 54 since docs/features/collision-pairs.md PP8 (`pair`
 /// after `evidence`); 55 since docs/features/department-practices.md
 /// "Proposals: `cited`" (`cited` last).
-const REVIEW_KEYS: [&str; 56] = [
+const REVIEW_KEYS: [&str; 57] = [
     "id",
     "project",
     "kind",
@@ -150,6 +150,7 @@ const REVIEW_KEYS: [&str; 56] = [
     "why",
     // docs/features/comments.md: after `why`.
     "comment_id",
+    "ref_id",
     "similar",
     "notes",
     "cited",
@@ -1713,15 +1714,15 @@ fn without_plain_columns(line: &str) -> String {
 fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
     // 8 and 15 since docs/features/comments.md CM13, CM1; 9 and 16 since
     // docs/features/work-references.md RF17, RF1.
-    assert_eq!(STATE_FORMAT, 9);
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 51);
+    assert_eq!(STATE_FORMAT, 10);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 52);
     let pair = Pair::new("pq-pq8", "spec-a");
     mixed_queue(&pair);
     let dumps = pair.scratch.dir("dumps");
     let lines = export(&pair, &pair.home, &dumps.join("seven.jsonl"));
     assert!(
-        lines[0].starts_with("{\"format\":9,\"queue_schema\":16,\"project\":\"lantern-keep\","),
+        lines[0].starts_with("{\"format\":10,\"queue_schema\":17,\"project\":\"lantern-keep\","),
         "{}",
         lines[0]
     );
@@ -1760,7 +1761,7 @@ fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
     assert_eq!(first["proposals"]["matters"], json!(MATTERS));
     // `comment_id` after them since docs/features/comments.md CM1.
     assert!(lines[rows[0]].ends_with(&format!(
-        ",\"gist\":{},\"matters\":{},\"comment_id\":null}}}}",
+        ",\"gist\":{},\"matters\":{},\"comment_id\":null,\"ref_id\":null}}}}",
         json!(GIST),
         json!(MATTERS)
     )));
@@ -1779,7 +1780,7 @@ fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
     let mut six = lines.clone();
     six[0] = six[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":6,\"queue_schema\":12,",
             1,
         )
@@ -1809,7 +1810,7 @@ fn pq8_format_7_carries_the_two_columns_and_format_6_imports_them_null() {
     for index in 1..lines.len() {
         let want = if rows.contains(&index) {
             format!(
-                "{},\"gist\":null,\"matters\":null,\"comment_id\":null}}}}",
+                "{},\"gist\":null,\"matters\":null,\"comment_id\":null,\"ref_id\":null}}}}",
                 &six[index][..six[index].len() - 2]
             )
         } else {
@@ -1837,7 +1838,7 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
     // alone) at schema 12.
     header_12[0] = header_12[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":7,\"queue_schema\":12,",
             1,
         )
@@ -1848,7 +1849,7 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
     let mut six_with_gist = lines.clone();
     six_with_gist[0] = six_with_gist[0]
         .replacen(
-            "\"format\":9,\"queue_schema\":16,",
+            "\"format\":10,\"queue_schema\":17,",
             "\"format\":6,\"queue_schema\":12,",
             1,
         )
@@ -1859,7 +1860,7 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
         }
     }
     let mut eight = lines.clone();
-    eight[0] = eight[0].replacen("\"format\":9,", "\"format\":10,", 1);
+    eight[0] = eight[0].replacen("\"format\":10,", "\"format\":11,", 1);
     for (name, bad, line, says) in [
         (
             "header-12",
@@ -1885,16 +1886,16 @@ fn pq8_a_mismatched_dump_or_a_newer_queue_is_refused() {
 
     // A queue a newer build stepped: refused, left at 17 (this build's 16
     // since docs/features/work-references.md RF1).
-    pair.sql("PRAGMA user_version = 17;");
+    pair.sql("PRAGMA user_version = 18;");
     let run = pair.spec_piped(&pair.linked, &["inbox"], b"");
     assert_eq!(run.code, 2, "{}", run.show());
     assert!(
         run.stderr
-            .contains("schema version 17, this build knows 16"),
+            .contains("schema version 18, this build knows 17"),
         "{}",
         run.stderr
     );
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "17");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "18");
 }
 
 // ----------------------------------------------------------------- PQ10

@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-15
+reviewed: 2026-11-24
 ---
 
 # Proposal apply: consent and steps
 
-`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; completion, reject: `proposal-completion.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`; a `drift` item `spec.lock` alone, by its node's lock accept: `proposal-drift.md` "Approve"), beside it the index's changed outputs (`proposal-outputs.md`), and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, `--open`, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
+`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; completion, reject: `proposal-completion.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`; a `drift` item `spec.lock` alone, by its node's lock accept: `proposal-drift.md` "Approve"; a `reference` also its file: `work-references-promotion.md`), beside it the index's changed outputs (`proposal-outputs.md`), and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, `--open`, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
 
 ## Consent
 
@@ -64,14 +64,14 @@ Proposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown
 Base-commit: <40 or 64 hex>
 ```
 
-`Decided-by`: the step-7 identity (a hub's confirm: `<login> <email>` from `[team]`). `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`, then ` login=<login>` on a hub's departing accept alone. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply". `Revision:`, `Lock:`, `Lock-mode:` follow `Base-commit:`. `spec show --history` reads them back (`spec-history.md`).
+`Decided-by`: the step-7 identity (a hub's confirm: `<login> <email>` from `[team]`). `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`, then ` login=<login>` on a hub's departing accept alone. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply". `Revision:`, `Lock:`, `Lock-mode:`, a promotion's `Reference:` follow `Base-commit:`. `spec show --history` reads them back (`spec-history.md`).
 
 ## Known limits
 
 None blocks; completion's and reject's: `proposal-completion.md` "Known limits"; the inbox's: `proposal-review.md`.
 
 - Racing terminals meet git's `index.lock` (reported); hooks or signing needing stdin fail (bytes restored); revisions: `proposal-revisions.md`.
-- A path target follows no rename (step 3 refuses; no re-targeting).
+- A path target follows no rename (step 3 refuses).
 - After a failed commit an update's target is put back unconditionally (`replace_file`), not only while it holds this run's bytes as `--editorial`'s files and the outputs are: an edit made in that window is lost.
 - `--open`'s order puts a holder before its dependant only without a decline: declining A and pressing `y` on B applies B with a dangling reference. `spec check` reports it, a project's commit hook may refuse it, and the review showed no note: the held note is not stored (`proposal-kinds.md` "Known limits").
 - Plain `spec approve PR` on a row with a reject staged is unchanged: it prints `note: the choice staged <at> is not used: the typed flags decide`, and `y` applies. The note never says it was a reject; left out of `proposal-rehearsal`.

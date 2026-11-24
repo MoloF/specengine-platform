@@ -14,5 +14,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 
 - [docs/canon/comments-surfaces.md](canon/comments-surfaces.md) Comments: the surfaces · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/comments.md](canon/comments.md) Comments: talk under cards, nodes and proposals · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
+- [docs/canon/work-references-promotion-surfaces.md](canon/work-references-promotion-surfaces.md) Work references: promotion's formats and surfaces · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, scripts/deploy, ui · tier 2
+- [docs/canon/work-references-promotion.md](canon/work-references-promotion.md) Work references: promotion into git · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, scripts/deploy, ui · tier 2
 - [docs/canon/work-references-surfaces.md](canon/work-references-surfaces.md) Work references: the surfaces · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, scripts/deploy, ui · tier 2
 - [docs/canon/work-references.md](canon/work-references.md) Work references: files and links attached to work · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, scripts/deploy, ui · tier 2

@@ -252,6 +252,9 @@ pub struct ProposalDocument {
     /// The comment a question, discrepancy or decision was raised from;
     /// `null` on any other (task spec `comments`, "MCP").
     pub comment_id: Option<String>,
+    /// The reference a `reference` proposal promotes; `null` on any other
+    /// (task spec `reference-promotion`, "Documents and text").
+    pub ref_id: Option<String>,
     /// What a create may repeat (task spec `intake-similar`, IS1, IS10):
     /// a list on a create's propose answer (stored, not stored or
     /// rehearsed), `[]` when nothing is found; `null` on every other kind,
@@ -350,6 +353,7 @@ impl ProposalDocument {
             card_id: proposal.card_id.clone(),
             why: intake.and_then(|intake| intake.why.clone()),
             comment_id: proposal.comment_id.clone(),
+            ref_id: proposal.ref_id.clone(),
             similar: None,
             notes: Vec::new(),
             cited: None,
@@ -491,6 +495,7 @@ pub(crate) fn rehearsed(
         task_id: task.map(str::to_owned),
         card_id: None,
         comment_id: None,
+        ref_id: None,
         staged: None,
         interpretation: None,
         drift: None,
@@ -782,6 +787,11 @@ pub(crate) fn fill_diff(
     if proposal.kind.family() != KindFamily::Applies {
         return;
     }
+    // A promotion: the document with its entry, and what it adds.
+    if proposal.kind == specengine_store::ProposalKind::Reference {
+        crate::promote::fill_promotion(document, proposal, git_env, scratch);
+        return;
+    }
     let hunks = WorktreeGit::new(scratch, git_env).and_then(|git| {
         git.diff_hunks(
             scratch,
@@ -1068,6 +1078,7 @@ fn review_text(document: &ProposalDocument) -> String {
     line(&mut out, "card_id", document.card_id.as_deref());
     line(&mut out, "why", document.why.as_deref());
     line(&mut out, "comment_id", document.comment_id.as_deref());
+    line(&mut out, "ref_id", document.ref_id.as_deref());
     list(&mut out, "notes", Some(document.notes.clone()));
     out
 }

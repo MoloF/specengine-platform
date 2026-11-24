@@ -59,11 +59,15 @@ use specengine_mcp::{
 // steps back to the value this slice pinned, `7de2fdaa…`).
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
-const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/canon/work-references-promotion-surfaces.md "MCP": the
+// `propose_change` line names `reference` (its create clause trimmed).
+const INSTRUCTIONS_B3: &str = "8ba19da38733c3ad0a51d1d6d5bbe8124cba6e3aaef4755c8e420c974a862225";
 // Re-pinned by docs/features/work-references.md RF20: the hub's text names
 // `list_references`, `get_reference` and `add_reference`.
+// Re-pinned by docs/canon/work-references-promotion-surfaces.md "MCP": the hub's
+// `propose_change` line names `reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
+    "f2cadf741aff02cc8db12aa163a7a71ade67eaf2cddfdd8ffc918407730c6950";
 
 /// The "Text" example's file and its note.
 const ENDURANCE: &str = "docs/spec/movement/endurance.md";
@@ -118,7 +122,9 @@ const EDITS: [(&str, &str); 7] = [
     ),
     (
         "base: get_node's span_hash of the target; a stale",
-        "base: get_node's span_hash; a stale",
+        // Trimmed since docs/canon/work-references-promotion-surfaces.md
+        // "MCP": the `reference` kind's words in, within 2 048 bytes.
+        "base: get_node's span_hash (a stale",
     ),
 ];
 
@@ -557,7 +563,8 @@ fn is8_the_description_takes_the_edits_and_the_instructions_stay() {
         1,
         "{description}"
     );
-    assert_eq!(description.len(), 2041, "{description}");
+    // 2 046 since docs/canon/work-references-promotion-surfaces.md "MCP".
+    assert_eq!(description.len(), 2046, "{description}");
     assert_eq!(blake3_hex(INSTRUCTIONS.as_bytes()), INSTRUCTIONS_B3);
     assert_eq!(blake3_hex(HUB_INSTRUCTIONS.as_bytes()), HUB_INSTRUCTIONS_B3);
 }
@@ -754,7 +761,9 @@ async fn is8_a_hub_answers_the_is1_call_alike() {
         1,
         "{description}"
     );
-    assert_eq!(description.len(), 2037, "{description}");
+    // 2042 since docs/features/reference-promotion.md (PR16: the
+    // `reference` kind and its fields named).
+    assert_eq!(description.len(), 2042, "{description}");
     let input = &tool(&hub[0], "propose_change")["inputSchema"];
     assert_eq!(
         input["properties"]["distinct_from"]["description"],

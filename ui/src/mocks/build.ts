@@ -313,6 +313,7 @@ export function proposal(fields: Pick<StoredReview, "id" | "project" | "kind" | 
       card_id: null,
       why: null,
       comment_id: null,
+      ref_id: null,
       similar: null,
       notes: [],
       // Filled per read by `getProposal`, as the daemon's `proposals/:id` does (docs/features/department-practices.md "Acceptance criteria", DP13).
@@ -410,6 +411,7 @@ export function noReview(id: string): Proposal {
     card_id: null,
     why: null,
     comment_id: null,
+    ref_id: null,
     similar: null,
     notes: [`no proposal \`${id}\` in this project's queue`],
     cited: null,

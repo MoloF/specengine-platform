@@ -262,9 +262,11 @@ pub fn without_empty_task_practices(text: &str) -> String {
     // docs/features/comments.md "The card context and the task package":
     // the empty `comments` after `practices` of a task no card lists, taken
     // out with it; docs/features/work-references.md (RF15): its empty
-    // `references` after `comments`, likewise.
+    // `references` after `comments`, likewise; and docs/features/
+    // reference-promotion.md (PR6): its empty `spec_references` after them.
     let empty = "},\"practices\":[],\"comments\":{\"total\":0,\"listed\":[]},\
-                 \"references\":{\"total\":0,\"listed\":[]},\"roadmap\":";
+                 \"references\":{\"total\":0,\"listed\":[]},\
+                 \"spec_references\":{\"total\":0,\"listed\":[]},\"roadmap\":";
     assert_eq!(
         without.matches(empty).count(),
         1,

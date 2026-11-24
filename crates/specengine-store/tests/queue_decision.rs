@@ -234,7 +234,8 @@ fn ac_r1_a_decision_decides_and_never_applies() {
     assert_eq!(DECISION_KIND, "decision");
     // Eight since docs/features/drift-queue.md appends `drift` (seven
     // since docs/features/kind-amendment.md appended `amendment`).
-    assert_eq!(ProposalKind::ALL.len(), 8);
+    // Nine since docs/features/reference-promotion.md appends `reference`.
+    assert_eq!(ProposalKind::ALL.len(), 9);
     assert_eq!(ProposalKind::ALL[5], ProposalKind::Decision);
     let kind = ProposalKind::Decision;
     assert_eq!(kind.as_str(), DECISION_KIND);

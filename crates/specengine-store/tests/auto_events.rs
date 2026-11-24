@@ -106,7 +106,7 @@ fn rl12_each_auto_event_round_trips_in_the_canons_key_order() {
         ["auto.started", "auto.bound", "auto.held", "auto.landed"]
     );
     assert_eq!(
-        QUEUE_SCHEMA_VERSION, 16,
+        QUEUE_SCHEMA_VERSION, 17,
         "comments (RM-0136) added step 15, work-references (RM-0137) step 16; auto-mode added none"
     );
     let scratch = Scratch::new("auto-events");
@@ -241,8 +241,8 @@ fn rl12_each_auto_event_round_trips_in_the_canons_key_order() {
         queue.auto_events(COMMON).unwrap()
     );
     for path in [&db, &fresh] {
-        assert_eq!(sqlite3(path, "PRAGMA user_version"), "16");
-        assert_eq!(queue.schema_version().unwrap(), 16);
+        assert_eq!(sqlite3(path, "PRAGMA user_version"), "17");
+        assert_eq!(queue.schema_version().unwrap(), 17);
     }
 }
 

@@ -158,7 +158,8 @@ fn ac_r1_the_kind_is_named_appended_applies_and_adds_nodes() {
     assert_eq!(ProposalKind::parse(AMENDMENT_KIND), Some(kind));
     assert_eq!(ProposalKind::parse("Amendment"), None);
     // Eight since docs/features/drift-queue.md appends `drift` after it.
-    assert_eq!(ProposalKind::ALL.len(), 8);
+    // Nine since docs/features/reference-promotion.md appends `reference`.
+    assert_eq!(ProposalKind::ALL.len(), 9);
     assert_eq!(ProposalKind::ALL[6], kind, "appended after the decision");
     assert_eq!(
         kind.family(),
@@ -645,8 +646,8 @@ fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     // Schema 11 and 48 columns since docs/features/card-questions.md S1 (an
     // amendment still adds none); schema 12 since
     // docs/features/task-mandate.md M5, `proposals` unchanged.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 16);
-    assert_eq!(PROPOSAL_COLUMNS.len(), 51);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 17);
+    assert_eq!(PROPOSAL_COLUMNS.len(), 52);
     let scratch = Scratch::new("qa-schema");
     let db = scratch.db("q");
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
@@ -664,10 +665,10 @@ fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "16");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "17");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
-        "51"
+        "52"
     );
     assert_eq!(
         sqlite3(&db, "SELECT kind, status FROM proposals ORDER BY id;"),

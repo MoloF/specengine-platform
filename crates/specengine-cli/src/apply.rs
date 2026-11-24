@@ -723,6 +723,18 @@ pub(crate) fn run_approve_as(
     if let Some(reason) = flag_on_apply(&proposal, flags) {
         return Err(CliError::spec(reason));
     }
+    // A promotion: its document's entry and its file, one commit (task
+    // spec `reference-promotion`, "Apply").
+    if proposal.kind == ProposalKind::Reference {
+        return crate::promote::approve_reference(
+            env,
+            request,
+            &mut context,
+            &proposal,
+            &staging,
+            consent,
+        );
+    }
     if proposal.new_file() {
         return create::approve_file(env, request, &mut context, &proposal, &staging, consent);
     }
@@ -1291,7 +1303,15 @@ pub(crate) fn run_approve_as(
 /// when not given or it goes.
 pub(crate) fn editorial_refusal(proposal: &Proposal, editorial: bool) -> Option<String> {
     // "Writes no existing node": a deciding kind or a new file (a drift
-    // item's `--editorial` is its accept's).
+    // item's `--editorial` is its accept's); a promotion raises no
+    // revision (its key is uncounted).
+    if editorial && proposal.kind == ProposalKind::Reference {
+        let id = &proposal.id;
+        return Some(format!(
+            "`--{EDITORIAL}` keeps the revisions of the nodes an apply changes; `{id}` is a \
+             reference, whose entry raises none: `spec approve {id}` without it; nothing changed"
+        ));
+    }
     if !editorial || !(proposal.kind.family() == KindFamily::Decides || proposal.new_file()) {
         return None;
     }
@@ -1702,7 +1722,7 @@ pub(crate) fn complete(
 /// given) or `applied`, refreshing the task's snapshot when `refresh` is
 /// given and vouching for an editorial change on the cards, in the same
 /// transaction; the nodes refreshed and the cards changed.
-fn record_applied(
+pub(crate) fn record_applied(
     context: &mut QueueContext,
     id: &str,
     commit: &str,

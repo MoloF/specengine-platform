@@ -27,6 +27,7 @@ use super::working_set::worst_w;
 use super::{generated, graph, links, rules};
 use crate::library::judge_tags;
 use crate::practice::{DISCIPLINES_KEY, PRACTICE_DISCIPLINE, judge_disciplines};
+use crate::promote::{REFERENCE_ENTRY, REFERENCES_KEY, judge_entries};
 use crate::record::{HUB_ID_START, record_id};
 use crate::{Paths, is_under};
 
@@ -542,6 +543,40 @@ impl FileCheck<'_, '_> {
         self.tags(document);
         self.disciplines(document);
         self.summarises(document);
+        self.promoted(document);
+    }
+
+    /// `reference-entry`, a warning per `references:` entry left out
+    /// ([`judge_entries`]; task spec `reference-promotion`, "The
+    /// `references:` key"), at the key's line, subject `references`. A
+    /// `references:` that is no list is the parser's `frontmatter-type`
+    /// alone. Never an error: a promotion gates nothing (ADR-0012).
+    fn promoted(&mut self, document: &Node) {
+        let Some(written) = document
+            .fields
+            .as_ref()
+            .and_then(|fields| fields.references.as_deref())
+        else {
+            return;
+        };
+        let problems = judge_entries(written).problems;
+        if problems.is_empty() {
+            return;
+        }
+        let line = self.key_line(REFERENCES_KEY);
+        for problem in problems {
+            self.findings.push(Finding {
+                code: REFERENCE_ENTRY.to_owned(),
+                severity: Severity::Warning,
+                path: self.file.path.clone(),
+                line,
+                subject: REFERENCES_KEY.to_owned(),
+                message: problem.message,
+                fix: None,
+                debt: None,
+                introduced: None,
+            });
+        }
     }
 
     /// `summary-stale`, a warning per `summarises:` entry (task spec

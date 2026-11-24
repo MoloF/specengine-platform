@@ -3,8 +3,8 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-23
-summarises: [docs/canon/cards.md#commands, docs/canon/cards.md#who-acts, docs/canon/card-flows.md#config, docs/canon/card-flows.md#the-rule, docs/canon/card-split.md#the-rule, docs/canon/card-tasks.md#the-rule, docs/canon/card-context.md#the-rule, docs/canon/workspaces.md#the-lens, docs/canon/hub-department.md#config, docs/canon/comments.md#the-rule, docs/canon/comments.md#delete, docs/canon/work-references.md#the-rule, docs/canon/work-references.md#delete]
+reviewed: 2026-11-24
+summarises: [docs/canon/cards.md#commands, docs/canon/cards.md#who-acts, docs/canon/card-flows.md#config, docs/canon/card-flows.md#the-rule, docs/canon/card-split.md#the-rule, docs/canon/card-tasks.md#the-rule, docs/canon/card-context.md#the-rule, docs/canon/workspaces.md#the-lens, docs/canon/hub-department.md#config, docs/canon/comments.md#the-rule, docs/canon/comments.md#delete, docs/canon/work-references.md#the-rule, docs/canon/work-references.md#delete, docs/canon/work-references-promotion.md#the-rule]
 ---
 
 # Cards, departments and flows
@@ -43,11 +43,11 @@ $ spec card accept C-0013 --as mira --briefed
 
 ### MCP
 
-`list_cards`, `get_card {card_id, context: true}`, `create_card`, `split_card`, `edit_card` and `move_card`. A tool acts as `agent` locally and as your login on a hub. No tool accepts, assigns, cancels or clears a card: those are a person's acts. `list_comments` reads a thread and `add_comment` writes one as an agent (on a hub, under your login); `ask_question`, `report_discrepancy` and `report_decision` take a `comment_id`. No tool edits or deletes a comment. `list_references` and `get_reference` read references, an image arriving as an image; `add_reference` attaches a link. No tool uploads a file or deletes a reference.
+`list_cards`, `get_card {card_id, context: true}`, `create_card`, `split_card`, `edit_card` and `move_card`. A tool acts as `agent` locally and as your login on a hub. No tool accepts, assigns, cancels or clears a card: those are a person's acts. `list_comments` reads a thread and `add_comment` writes one as an agent (on a hub, under your login); `ask_question`, `report_discrepancy` and `report_decision` take a `comment_id`. No tool edits or deletes a comment. `list_references` and `get_reference` read references, an image arriving as an image; `add_reference` attaches a link; `propose_change` with kind `reference` proposes a file's promotion. No tool uploads a file or deletes a reference.
 
 ### Screen
 
-Each department's Board shows its flows' columns. The UI's words: a department is a workspace, a Task is a card, a Subtask a child card, an Agent task a `T-` task. A card opens as a modal or a page, with Hand off (`h`), Split, Move and, for its reviewer, Accept. A parent shows each child as handed off, taken, returned or accepted. Every task, document and proposal has a Comments part: write with a preview, mention someone as `@mira`, reply, edit your own, delete through a dialog, or Turn into… a question, a decision or a discrepancy, prefilled. Mentions, beside Activity in the navigation, lists the comments naming you, its badge counting the new ones. A References part, above Comments, shows images, plays sound and video, offers models and PDFs to download, and adds a file, with its progress, or a link.
+Each department's Board shows its flows' columns. The UI's words: a department is a workspace, a Task is a card, a Subtask a child card, an Agent task a `T-` task. A card opens as a modal or a page, with Hand off (`h`), Split, Move and, for its reviewer, Accept. A parent shows each child as handed off, taken, returned or accepted. Every task, document and proposal has a Comments part: write with a preview, mention someone as `@mira`, reply, edit your own, delete through a dialog, or Turn into… a question, a decision or a discrepancy, prefilled. Mentions, beside Activity in the navigation, lists the comments naming you, its badge counting the new ones. A References part, above Comments, shows images, plays sound and video, offers models and PDFs to download, and adds a file, with its progress, or a link; Promote to canon proposes a file into the spec, and "In the spec" lists what the card's documents already hold.
 
 ## Where it lives
 
@@ -103,7 +103,7 @@ A comment moves no card and opens no gate, and an agent reads it as people's wor
 
 ### A reference is material, never truth {#GD-CARDS-REFERENCES-ARE-MATERIAL}
 
-A photo, a sound, a model or a link on a task, a document or a proposal frames the work for its people and its agent, who reads it as data, never instructions. It moves no card, and it enters the spec only through a proposal a person confirms. An agent sees an image but cannot hear a sound or open a model, so say what matters in it. A file is kept once, by its content, on the hub's host alone: no backup carries it, so keep your originals. On a hub its author or an `owner` deletes it.
+A photo, a sound, a model or a link on a task, a document or a proposal frames the work for its people and its agent, who reads it as data, never instructions. It moves no card. A file enters the spec only when a person confirms its promotion: Promote to canon (`spec propose reference RF-0012 --to LOC-HARBOUR`) proposes it beside that document, in the home `[references]` names for the document's kind, as an LFS pointer when `.gitattributes` says so, and every card on the document then lists it "In the spec". An agent sees an image but cannot hear a sound or open a model, so say what matters in it. A file is kept once, by its content, on the hub's host alone: no backup carries it, so keep your originals. On a hub its author or an `owner` deletes it.
 
 ### A department is a lens, not a right {#GD-CARDS-DEPARTMENT-IS-A-LENS}
 

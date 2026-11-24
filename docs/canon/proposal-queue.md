@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 ---
 
 # Proposal queue: commands, states, store
@@ -54,7 +54,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, never below a hub's floor (`queue-backup.md`), in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON (core `Author`); `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 16; higher: `SchemaTooNew`, exit 2), all due in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 51). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 17; higher: `SchemaTooNew`, exit 2), all due in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 52). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -71,6 +71,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 14 | `collision_marks`, never dumped | 50 | `collision-pass.md` "Ledger" |
 | 15 | `comments`, `comment_versions`; `comment_id` | 51 | `comments.md` |
 | 16 | `refs` | 51 | `work-references.md` |
+| 17 | `ref_id` | 52 | `work-references-promotion-surfaces.md` |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly. Not derived: backup `queue-backup.md` (ADR-0003).
 
@@ -79,6 +80,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | Op | Does |
 |---|---|
 | `create(&NewProposal, now)` | `open` under the next ID, `proposal.created`; a kind whose `family()` is not `Applies` -> `Invalid`; a reserved new ID -> `Reserved` |
+| `create_promotion(&NewProposal, ref_id, task, now)` | a `reference` row; a live twin refused in its transaction |
 | `create_drift(&[NewDrift], now)` | a raise's drift items, deduplicated (`proposal-drift-item.md` "Dedup") |
 | `get`, `list(&ProposalFilter {git_common_dir, statuses})` | by ID number; a corrupt row fails, named |
 | `list_readable`, `each_readable` | `list` skipping a corrupt row into `ProposalList.unreadable` (`UnreadableRow {id, column, reason}`), read row by row (`proposal-review.md` "Inbox") |

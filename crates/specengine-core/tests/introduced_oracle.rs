@@ -209,7 +209,8 @@ fn every_fixture_document_under_every_family() {
     let started = Instant::now();
     let mut tally = Tally::default();
     let corpora = corpora();
-    assert_eq!(corpora.len(), 31, "the fixture corpora");
+    // 32 since docs/features/reference-promotion.md (`promote-mini`).
+    assert_eq!(corpora.len(), 32, "the fixture corpora");
     for corpus in &corpora {
         // A corpus whose walk reads no document (`corpus-mini`'s roots hold
         // none) gives no case.

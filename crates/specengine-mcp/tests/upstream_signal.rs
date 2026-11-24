@@ -58,11 +58,15 @@ use upstream_scene::{Scene, Stop, data_upstream};
 // steps back to the value this slice pinned, `7de2fdaa…`).
 // Re-pinned by docs/features/comments.md CM15: the comments line in both
 // texts; stdio's hints sentence and the hub's resources sentence out.
-const INSTRUCTIONS_B3: &str = "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb";
+// Re-pinned by docs/canon/work-references-promotion-surfaces.md "MCP": the
+// `propose_change` line names `reference` (its create clause trimmed).
+const INSTRUCTIONS_B3: &str = "8ba19da38733c3ad0a51d1d6d5bbe8124cba6e3aaef4755c8e420c974a862225";
 // Re-pinned by docs/features/work-references.md RF20: the hub's text names
 // `list_references`, `get_reference` and `add_reference`.
+// Re-pinned by docs/canon/work-references-promotion-surfaces.md "MCP": the hub's
+// `propose_change` line names `reference`.
 const HUB_INSTRUCTIONS_B3: &str =
-    "be939cb7682e29de0e68a9282878010cd6ce167a1694eda96109bd501988a693";
+    "f2cadf741aff02cc8db12aa163a7a71ade67eaf2cddfdd8ffc918407730c6950";
 
 /// US-11: `get_card`'s two edits and `list_cards`' sentence, as the spec's data
 /// gives them.

@@ -2135,8 +2135,10 @@ fn excluded(patterns: &[(bool, Vec<String>)], path: &str) -> bool {
 /// stage's Rust tag starts with the root `Cargo.toml`'s `rust-version`; the
 /// Node stage's tag starts `24.`; the UI is built, and its `dist` copied into
 /// the build stage, before `cargo build --locked`; the last stage is Debian
-/// 13 slim, installs `git`, `openssh-client` and `ca-certificates` and never
-/// `git-lfs`, copies from the build stage exactly `spec` and
+/// 13 slim, installs `git`, `openssh-client` and `ca-certificates` and, since
+/// docs/features/reference-promotion.md D8, `git-lfs`, which no `RUN` ever
+/// configures (`git lfs install`), with `ENV GIT_LFS_SKIP_SMUDGE=1`; copies
+/// from the build stage exactly `spec` and
 /// `specengine-http`, and has a `USER` neither `root` nor `0` and the label
 /// `org.opencontainers.image.source` =
 /// `https://github.com/MoloF/specengine-platform` (iteration 2);
@@ -2144,8 +2146,9 @@ fn excluded(patterns: &[(bool, Vec<String>)], path: &str) -> bool {
 /// and `node_modules`. As docs/features/hub-ops.md "Acceptance criteria"
 /// OP23 rewrites it: three scripts copied into the image, `health.sh` as
 /// `specengine-health` beside the entrypoint and the clone, and the context
-/// keeps all three. M: add `git-lfs`; remove `USER`; build the UI after
-/// cargo; `rust:1.91`; drop the source label; drop the probe's `COPY`.
+/// keeps all three. M: drop `git-lfs`; a `git lfs install`; drop
+/// `GIT_LFS_SKIP_SMUDGE`; remove `USER`; build the UI after cargo;
+/// `rust:1.91`; drop the source label; drop the probe's `COPY`.
 #[test]
 fn d14_the_image_three_pinned_stages_and_its_context() {
     let path = deploy().join("Dockerfile");
@@ -2246,18 +2249,27 @@ fn d14_the_image_three_pinned_stages_and_its_context() {
         runtime.image
     );
     let packages = installed(runtime);
-    for package in ["git", "openssh-client", "ca-certificates"] {
+    for package in ["git", "git-lfs", "openssh-client", "ca-certificates"] {
         assert!(packages.contains(package), "{package}: {packages:?}");
     }
+    // D8: git-lfs is never configured as a filter, and no checkout smudges.
+    let install = Regex::new(r"git\s+lfs\s+install|git-lfs\s+install").expect("a pattern");
     for stage in &stages {
         for instruction in &stage.body {
             assert!(
-                !instruction.args.contains("git-lfs"),
-                "line {}: git-lfs",
+                !install.is_match(&instruction.args),
+                "line {}: git lfs install",
                 instruction.line
             );
         }
     }
+    assert_eq!(
+        settings(runtime, "ENV")
+            .get("GIT_LFS_SKIP_SMUDGE")
+            .map(String::as_str),
+        Some("1"),
+        "the runtime sets GIT_LFS_SKIP_SMUDGE=1"
+    );
     let build_refs = stages[rust].refs(rust);
     let mut from_build: Vec<String> = runtime
         .of("COPY")
@@ -2467,6 +2479,57 @@ fn gu13_the_image_context_carries_the_guide() {
                 && line.contains("spec")
         }),
         "image.yml runs the built image's `spec guide`"
+    );
+}
+
+/// docs/canon/work-references-promotion-surfaces.md "Image, plugin, guide", PR18: the
+/// `build` job's smoke asserts git-lfs 3.0 or later in the built image and
+/// that its system config sets no `filter.lfs.*` (`git config --system
+/// --get-regexp '^filter\.lfs\.'` printing nothing), and no longer refuses
+/// git-lfs. M: the old "git lfs is in the image" refusal kept; no filter
+/// check.
+#[test]
+fn pr18_the_smoke_asserts_git_lfs_and_no_filter() {
+    let workflow = workflow();
+    let jobs = workflow.get("jobs").expect("jobs");
+    let build = jobs.get("build").expect("a build job");
+    let smoke: Vec<&str> = steps(build)
+        .into_iter()
+        .filter(|step| {
+            step.get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name.starts_with("Smoke"))
+        })
+        .filter_map(run_text)
+        .collect();
+    assert_eq!(smoke.len(), 1, "one smoke step: {smoke:?}");
+    let smoke = smoke[0];
+    assert!(
+        !smoke.contains("git lfs is in the image"),
+        "M: the old refusal kept:\n{smoke}"
+    );
+    let version = smoke
+        .lines()
+        .position(|line| line.contains("lfs version") && line.contains("REF"))
+        .unwrap_or_else(|| panic!("the smoke runs `git lfs version` in the image:\n{smoke}"));
+    let after: String = smoke
+        .lines()
+        .skip(version)
+        .take(6)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        after.contains('3') && (after.contains("exit 1") || after.contains("awk")),
+        "the version is held to 3.0 or later:\n{after}"
+    );
+    assert!(
+        smoke.lines().any(|line| line.contains("REF")
+            && line.contains("config")
+            && line.contains("--system")
+            && line.contains("--get-regexp")
+            && line.contains("filter")
+            && line.contains("lfs")),
+        "the smoke asks the system config for filter.lfs:\n{smoke}"
     );
 }
 

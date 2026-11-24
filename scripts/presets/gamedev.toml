@@ -117,6 +117,17 @@ sections = ["inbox", "roadmap", "board", "flow", "tree", "documents", "graph", "
 # kind = "scene"
 # disciplines = ["narrative", "level-design", "sound", "development"]
 
+# A promoted reference's home: an approved photo, sound or model goes into
+# git beside its document, under `dir` in the document's directory, through
+# a proposal a person confirms; the document lists it in its `references:`
+# key. Use your project's own kinds; give the homes to LFS in .gitattributes
+# (`docs/spec/**/media/** filter=lfs diff=lfs merge=lfs -text`), else a file
+# git keeps plainly takes at most 50 MiB. Add it only once every terminal,
+# plugin and hub runs a build that reads `homes`.
+# [[references.homes]]
+# kinds = ["character", "scene"]
+# dir = "media"
+
 # [ids] PRA = { kind = "practice", shape = "name" }
 # [zones] practices = ["docs/spec/practices/**"]   # a lead's zones may name it
 # [auto] exclude_zones = ["practices"]             # no delegated apply edits a practice

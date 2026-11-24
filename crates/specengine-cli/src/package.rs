@@ -89,9 +89,9 @@ use specengine_core::{GroupKind, Plan, PlanTask, RoadmapConfig, plan, task_item}
 use specengine_model::{
     BindingRow, IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackageComment,
     PackageCommentAuthor, PackageComments, PackagePractice, PackageProposal, PackageReference,
-    PackageReferenceMeta, PackageReferences, PackageTarget, SnapshotDiff, SnapshotNode,
-    SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskCriterion,
-    TaskPackage, TaskRoadmap, TaskRun,
+    PackageReferenceMeta, PackageReferences, PackageSpecReference, PackageSpecReferences,
+    PackageTarget, SnapshotDiff, SnapshotNode, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION,
+    TaskAuthor, TaskAuthorType, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
 };
 use specengine_store::{
     Decoded, GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
@@ -112,8 +112,9 @@ use crate::tested::tested_line;
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line};
 
 /// The brief's sections, in print order; Practices only when the package
-/// lists a practice, Bindings only when it lists a row.
-pub const SECTIONS: [&str; 14] = [
+/// lists a practice, Bindings only when it lists a row, In the spec only
+/// when its nodes' documents keep an entry.
+pub const SECTIONS: [&str; 15] = [
     "Goal",
     "Criteria",
     "Targets",
@@ -126,6 +127,7 @@ pub const SECTIONS: [&str; 14] = [
     "Practices",
     "Comments",
     "References",
+    "In the spec",
     "Bindings",
     "Bundle",
 ];
@@ -744,6 +746,7 @@ pub(crate) fn assemble(
     let disciplines = task_disciplines(&cards);
     let comments = task_comments(context, &cards, &mut notes);
     let references = task_references(context, &cards, &mut notes);
+    let spec_references = task_spec_references(env, context, &task.targets, &mut notes);
     let read = TaskRead {
         env,
         globals,
@@ -825,6 +828,7 @@ pub(crate) fn assemble(
         practices,
         comments,
         references,
+        spec_references,
         roadmap,
         author: task_author(&task.author),
         created_at: task.created_at.clone(),
@@ -1135,6 +1139,46 @@ fn task_comments(
     }
 }
 
+/// The files in the spec beside the documents of the task's nodes, under a
+/// card context's caps (task spec `reference-promotion`, "Documents and
+/// text"); a read that fails is a note and none.
+fn task_spec_references(
+    env: &Env,
+    context: &QueueContext,
+    nodes: &[String],
+    notes: &mut Vec<String>,
+) -> PackageSpecReferences {
+    let nodes: Vec<&str> = nodes.iter().map(String::as_str).collect();
+    let mut messages = Vec::new();
+    match crate::promote::in_spec_of(env, &context.project, &nodes, &mut messages) {
+        Ok(rows) => {
+            let fitted = crate::promote::ContextSpecReferences::of(rows);
+            PackageSpecReferences {
+                total: fitted.total,
+                listed: fitted
+                    .listed
+                    .into_iter()
+                    .map(|row| PackageSpecReference {
+                        node: row.node,
+                        document: row.document,
+                        path: row.path,
+                        matters: row.matters,
+                    })
+                    .collect(),
+            }
+        }
+        Err(error) => {
+            let cause = error
+                .message
+                .strip_prefix("spec: ")
+                .unwrap_or(&error.message)
+                .to_owned();
+            notes.push(one_line(&format!("spec references: not read: {cause}")));
+            PackageSpecReferences::default()
+        }
+    }
+}
+
 /// The newest live references of `cards` under a card context's bounds,
 /// each naming its card, text alone (task spec `work-references`, "A
 /// card's context and the task package"); a queue that cannot be read is a
@@ -1372,6 +1416,7 @@ pub(crate) fn render_brief(package: &TaskPackage) -> String {
             "Practices" => !package.practices.is_empty(),
             "Comments" => package.comments.total > 0,
             "References" => package.references.total > 0,
+            "In the spec" => package.spec_references.total > 0,
             "Bindings" => {
                 !package.bindings.is_empty()
                     || package
@@ -1499,6 +1544,25 @@ fn section(package: &TaskPackage, name: &str) -> String {
                 out.push_str(&format!("  {}\n", reference.line));
             }
             out.push_str("  get_reference shows a file's details and its image\n");
+        }
+        "In the spec" => {
+            let spec = &package.spec_references;
+            out.push_str(&format!(
+                " {} of {}, from the nodes' documents; {}\n",
+                spec.listed.len(),
+                spec.total,
+                specengine_core::promote::IN_THE_SPEC
+            ));
+            for row in &spec.listed {
+                out.push_str(&format!(
+                    "  {}\n",
+                    specengine_core::promote::in_spec_line(
+                        &row.node,
+                        &row.path,
+                        row.matters.as_deref()
+                    )
+                ));
+            }
         }
         "Bindings" => {
             out.push_str(&format!(" {}\n", package.bindings.len()));

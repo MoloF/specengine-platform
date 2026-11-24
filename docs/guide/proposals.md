@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [guide]
 owner: owner
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 summarises: [docs/canon/architecture.md#apply, docs/canon/architecture.md#control, docs/canon/proposal-apply.md#consent, docs/canon/proposal-queue.md#commands, docs/canon/agent-intake.md#tools, docs/canon/decision-staging.md#rule, docs/canon/hub-confirm.md#rules]
 ---
 
@@ -36,7 +36,7 @@ PR-0007
 introduced: 0
 ```
 
-The kinds are `update`, `create`, `interpretation` and `amendment`, which apply text, and `question`, `discrepancy` and `decision`, which are answered by a decision record (`guide:features#GD-FEATURES-PROMOTION`). `introduced` counts the check findings the change would add; they are shown, never refused.
+The kinds are `update`, `create`, `interpretation` and `amendment`, which apply text, `reference`, which puts a reference's file beside its document (`guide:cards#GD-CARDS-REFERENCES-ARE-MATERIAL`), and `question`, `discrepancy` and `decision`, which are answered by a decision record (`guide:features#GD-FEATURES-PROMOTION`). `introduced` counts the check findings the change would add; they are shown, never refused.
 
 The owner decides on a terminal:
 

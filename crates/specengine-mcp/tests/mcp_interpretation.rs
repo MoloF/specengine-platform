@@ -205,7 +205,9 @@ fn ac_r11_the_kind_enum_and_the_three_fields_are_listed() {
             UPDATE_KIND,
             CREATE_KIND,
             INTERPRETATION_KIND,
-            AMENDMENT_KIND
+            AMENDMENT_KIND,
+            // docs/canon/work-references-promotion-surfaces.md "MCP": the fifth.
+            "reference"
         ])
     );
     for field in ["decision", "how", "why"] {
@@ -415,7 +417,7 @@ fn ac_r11_propose_change_takes_an_interpretation_as_its_twin() {
     // 56 since docs/features/comments.md (`comment_id`).
     assert_eq!(
         document.as_object().map(|object| object.len()),
-        Some(56),
+        Some(57),
         "{document}"
     );
     assert_eq!(document["similar"], Value::Null, "{document}");

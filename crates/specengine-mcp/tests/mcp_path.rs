@@ -410,14 +410,17 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     // 1 935 and 2 043 since docs/features/comments.md CM15 (the comments
     // line in, 54 bytes; 57 cut: `get_impact`'s and `find_symbols`' last
     // hints, the create's ` (base null)`, the intake line's last clause).
+    // The same lengths, re-pinned, since
+    // docs/canon/work-references-promotion-surfaces.md "MCP": `|reference` in
+    // the `propose_change` line, its create clause trimmed by as much.
     assert_eq!(before.len(), 1935);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "bfff8eb22425ed85d5b06038857f86630b12b13f8e77add9cef49b16328657ff"
+        "b81e6bf72e4ef212b419df4afd9b0de3ea32c91214eab3f022538e6736e9b916"
     );
     assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2043);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "470dc5456a143b53fa927ab1aa07ce417ac700ba6dd6daf4abb3735cf2ff70bb"
+        "8ba19da38733c3ad0a51d1d6d5bbe8124cba6e3aaef4755c8e420c974a862225"
     );
 }
