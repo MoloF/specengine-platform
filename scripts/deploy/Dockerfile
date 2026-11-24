@@ -39,8 +39,12 @@ RUN cargo build --locked --release -p specengine-cli -p specengine-http
 FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 # GHCR links the package to the repository it names.
 LABEL org.opencontainers.image.source=https://github.com/MoloF/specengine-platform
+# Debian's git-lfs package writes `filter.lfs.*` into the system config on
+# install; the section is removed so git never runs git-lfs as a filter (the
+# smoke asserts it is absent).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git git-lfs openssh-client \
+    && (git config --system --remove-section filter.lfs 2>/dev/null || true) \
     && rm -rf /var/lib/apt/lists/*
 # uid and gid 10001 own /data and /projects, so a fresh named volume takes
 # that ownership, and the user's home, a system path under /var/lib.
